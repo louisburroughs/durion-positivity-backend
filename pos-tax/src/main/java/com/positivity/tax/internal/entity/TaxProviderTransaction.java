@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -20,9 +21,12 @@ import lombok.NoArgsConstructor;
 /**
  * Provider tax-document lifecycle log (story T6, decision D-T3).
  * <p>
- * One row per source document ({@code reference_id}, unique). The estimate-and-true-up
- * policy records a {@link TaxProviderTransactionStatus#PENDING_COMMIT} row when a commit
- * cannot be applied so a scheduled job can re-attempt it without ever blocking the sale;
+ * One row per source document ({@code reference_id}, unique). The
+ * estimate-and-true-up
+ * policy records a {@link TaxProviderTransactionStatus#PENDING_COMMIT} row when
+ * a commit
+ * cannot be applied so a scheduled job can re-attempt it without ever blocking
+ * the sale;
  * {@code attempts}/{@code last_error} make the true-up lag observable.
  */
 @Data
@@ -43,7 +47,10 @@ public class TaxProviderTransaction {
     @Column(name = "reference_id", nullable = false, updatable = false)
     private UUID referenceId;
 
-    /** Source transaction type label (e.g. {@code INVOICE}); free text for flexibility. */
+    /**
+     * Source transaction type label (e.g. {@code INVOICE}); free text for
+     * flexibility.
+     */
     @Column(name = "reference_type", length = 32)
     private String referenceType;
 
@@ -78,7 +85,7 @@ public class TaxProviderTransaction {
 
     @PrePersist
     void onCreate() {
-        Instant now = Instant.now();
+        Instant now = Instant.now(Clock.systemUTC());
         if (createdAt == null) {
             createdAt = now;
         }
@@ -87,6 +94,6 @@ public class TaxProviderTransaction {
 
     @PreUpdate
     void onUpdate() {
-        updatedAt = Instant.now();
+        updatedAt = Instant.now(Clock.systemUTC());
     }
 }

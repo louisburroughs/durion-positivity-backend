@@ -1,12 +1,19 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.domainevents.inventory.BackorderCreatedV1;
+import com.positivity.domainevents.inventory.BackorderResolvedV1;
 import com.positivity.domainevents.inventory.ConsumptionRecordedV1;
+import com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1;
 import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
 import com.positivity.domainevents.inventory.LeadTimeUpdatedV1;
+import com.positivity.domainevents.inventory.LotExpiryAlertV1;
 import com.positivity.domainevents.inventory.PickListUpdatedV1;
 import com.positivity.domainevents.inventory.PickTaskUpdatedV1;
+import com.positivity.domainevents.inventory.ProductValueChangedV1;
+import com.positivity.domainevents.inventory.ScrapPostedV1;
 import com.positivity.domainevents.inventory.StorageLocationOnHandUpdatedV1;
+import com.positivity.domainevents.inventory.TransferOrderUpdatedV1;
 import com.positivity.inventory.internal.config.OutboxEventWriter;
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LeadTimeView;
@@ -140,6 +147,98 @@ public class InventoryFactPublisher {
         pending.consumptions.add(fact);
     }
 
+    /**
+     * Record an expected-supply-dropped occurrence fact (odoo-parity A4, issue #1028): a
+     * purchase order reached CLOSED/CANCELLED with open quantity. Queued as-is — this is an
+     * occurrence, not a snapshot, and is never re-emitted.
+     */
+    public void recordExpectedSupplyDropped(@NonNull ExpectedSupplyDroppedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.expectedSupplyDrops.add(fact);
+    }
+
+    /**
+     * Record a scrap-posted occurrence fact (odoo-parity D1, issue #1030): a scrap document's
+     * {@code SCRAP_OUT} entry reached the ledger. Queued as-is — this is an occurrence, not a
+     * snapshot, and is never re-emitted. pos-accounting consumes it for shrinkage GL posting.
+     */
+    public void recordScrapPosted(@NonNull ScrapPostedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.scrapPosts.add(fact);
+    }
+
+    /**
+     * Record a product-value-changed occurrence fact (odoo-parity J4, issue #1054): a manual cost
+     * revaluation was applied to a SKU's cost state. Queued as-is — this is an occurrence, not a
+     * snapshot, and is never re-emitted. pos-accounting consumes it to post the revaluation JE.
+     */
+    public void recordProductValueChanged(@NonNull ProductValueChangedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.productValueChanges.add(fact);
+    }
+
+    /**
+     * Record a transfer-order lifecycle occurrence fact (odoo-parity C1, issue #1035): one fact
+     * per state change (create, approve, dispatch, receive, short-close, cancel). Queued as-is —
+     * this is an occurrence, not a snapshot, and is never re-emitted.
+     */
+    public void recordTransferOrderUpdated(@NonNull TransferOrderUpdatedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.transferOrderUpdates.add(fact);
+    }
+
+    /**
+     * Record a backorder-created occurrence fact (odoo-parity G1, issue #1046): a backorder was
+     * opened for short demand. Queued as-is — this is an occurrence, not a snapshot, and is never
+     * re-emitted. pos-workorder consumes it read-side for workorder-line shortage visibility.
+     */
+    public void recordBackorderCreated(@NonNull BackorderCreatedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.backorderCreations.add(fact);
+    }
+
+    /**
+     * Record a backorder-resolved occurrence fact (odoo-parity G1, issue #1046): an open backorder
+     * was resolved. Queued as-is — this is an occurrence, not a snapshot, and is never re-emitted; a
+     * backorder resolves at most once, so the fact is emitted exactly once per backorder.
+     */
+    public void recordBackorderResolved(@NonNull BackorderResolvedV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.backorderResolutions.add(fact);
+    }
+
+    /**
+     * Record a lot-expiry alert occurrence fact (odoo-parity E3, issue #1047): the daily
+     * {@code LotExpiryScheduler} raised an EXPIRING/EXPIRED transition for a lot. Queued as-is —
+     * this is an occurrence, not a snapshot, and the scheduler's emit-once bookkeeping guarantees
+     * exactly one fact per lot per transition.
+     */
+    public void recordLotExpiryAlert(@NonNull LotExpiryAlertV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.lotExpiryAlerts.add(fact);
+    }
+
     private @Nullable Pending pending() {
         if (outboxEventWriter.getIfAvailable() == null
                 || !TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -179,6 +278,7 @@ public class InventoryFactPublisher {
                 publish(
                         writer,
                         InventoryAvailabilityUpdatedV1.EVENT_TYPE,
+                        InventoryAvailabilityUpdatedV1.SCHEMA_VERSION,
                         availabilityAggregateId(key),
                         new InventoryAvailabilityUpdatedV1(
                                 key.stockItemId(),
@@ -186,7 +286,10 @@ public class InventoryFactPublisher {
                                 view.getOnHandQuantity(),
                                 view.getAllocatedQuantity(),
                                 view.getAvailableToPromiseQuantity(),
-                                view.getUnitOfMeasure()));
+                                view.getUnitOfMeasure(),
+                                zeroIfNull(view.getIncomingQty()),
+                                zeroIfNull(view.getOutgoingQty()),
+                                zeroIfNull(view.getProjectedAvailable())));
             } catch (Exception e) {
                 // A snapshot that cannot be computed must not roll back the business write;
                 // the next mutation or a manifest replay repairs the replica.
@@ -200,8 +303,10 @@ public class InventoryFactPublisher {
                 publish(
                         writer,
                         StorageLocationOnHandUpdatedV1.EVENT_TYPE,
+                        StorageLocationOnHandUpdatedV1.SCHEMA_VERSION,
                         storageLocationId,
-                        new StorageLocationOnHandUpdatedV1(storageLocationId, inquiry.getOnHandQuantity()));
+                        new StorageLocationOnHandUpdatedV1(
+                                storageLocationId, Math.toIntExact(inquiry.getOnHandQuantity())));
             } catch (Exception e) {
                 log.warn("Skipping storage-location on-hand fact for {}: {}", storageLocationId, e.getMessage());
             }
@@ -216,6 +321,7 @@ public class InventoryFactPublisher {
                 publish(
                         writer,
                         PickListUpdatedV1.EVENT_TYPE,
+                        PickListUpdatedV1.SCHEMA_VERSION,
                         pickListId,
                         new PickListUpdatedV1(
                                 pickListId,
@@ -238,6 +344,7 @@ public class InventoryFactPublisher {
                 publish(
                         writer,
                         PickTaskUpdatedV1.EVENT_TYPE,
+                        PickTaskUpdatedV1.SCHEMA_VERSION,
                         pickTaskId,
                         new PickTaskUpdatedV1(
                                 pickTaskId,
@@ -255,9 +362,94 @@ public class InventoryFactPublisher {
         }
         for (ConsumptionRecordedV1 consumption : pending.consumptions) {
             try {
-                publish(writer, ConsumptionRecordedV1.EVENT_TYPE, consumption.consumptionId(), consumption);
+                publish(
+                        writer,
+                        ConsumptionRecordedV1.EVENT_TYPE,
+                        ConsumptionRecordedV1.SCHEMA_VERSION,
+                        consumption.consumptionId(),
+                        consumption);
             } catch (Exception e) {
                 log.warn("Skipping consumption fact for {}: {}", consumption.consumptionId(), e.getMessage());
+            }
+        }
+        for (ExpectedSupplyDroppedV1 drop : pending.expectedSupplyDrops) {
+            try {
+                publish(
+                        writer,
+                        ExpectedSupplyDroppedV1.EVENT_TYPE,
+                        ExpectedSupplyDroppedV1.SCHEMA_VERSION,
+                        drop.poId(),
+                        drop);
+            } catch (Exception e) {
+                log.warn("Skipping expected-supply-dropped fact for {}: {}", drop.poId(), e.getMessage());
+            }
+        }
+        for (ScrapPostedV1 scrapPost : pending.scrapPosts) {
+            try {
+                publish(writer, ScrapPostedV1.EVENT_TYPE, ScrapPostedV1.SCHEMA_VERSION, scrapPost.scrapId(), scrapPost);
+            } catch (Exception e) {
+                log.warn("Skipping scrap-posted fact for {}: {}", scrapPost.scrapId(), e.getMessage());
+            }
+        }
+        for (ProductValueChangedV1 valueChange : pending.productValueChanges) {
+            try {
+                publish(
+                        writer,
+                        ProductValueChangedV1.EVENT_TYPE,
+                        ProductValueChangedV1.SCHEMA_VERSION,
+                        valueChange.revaluationId(),
+                        valueChange);
+            } catch (Exception e) {
+                log.warn("Skipping product-value-changed fact for {}: {}", valueChange.revaluationId(), e.getMessage());
+            }
+        }
+        for (TransferOrderUpdatedV1 transferUpdate : pending.transferOrderUpdates) {
+            try {
+                publish(
+                        writer,
+                        TransferOrderUpdatedV1.EVENT_TYPE,
+                        TransferOrderUpdatedV1.SCHEMA_VERSION,
+                        transferUpdate.transferOrderId(),
+                        transferUpdate);
+            } catch (Exception e) {
+                log.warn("Skipping transfer-order fact for {}: {}", transferUpdate.transferOrderId(), e.getMessage());
+            }
+        }
+        for (BackorderCreatedV1 backorderCreated : pending.backorderCreations) {
+            try {
+                publish(
+                        writer,
+                        BackorderCreatedV1.EVENT_TYPE,
+                        BackorderCreatedV1.SCHEMA_VERSION,
+                        backorderCreated.backorderId(),
+                        backorderCreated);
+            } catch (Exception e) {
+                log.warn("Skipping backorder-created fact for {}: {}", backorderCreated.backorderId(), e.getMessage());
+            }
+        }
+        for (BackorderResolvedV1 backorderResolved : pending.backorderResolutions) {
+            try {
+                publish(
+                        writer,
+                        BackorderResolvedV1.EVENT_TYPE,
+                        BackorderResolvedV1.SCHEMA_VERSION,
+                        backorderResolved.backorderId(),
+                        backorderResolved);
+            } catch (Exception e) {
+                log.warn(
+                        "Skipping backorder-resolved fact for {}: {}", backorderResolved.backorderId(), e.getMessage());
+            }
+        }
+        for (LotExpiryAlertV1 lotExpiryAlert : pending.lotExpiryAlerts) {
+            try {
+                publish(
+                        writer,
+                        LotExpiryAlertV1.EVENT_TYPE,
+                        LotExpiryAlertV1.SCHEMA_VERSION,
+                        lotExpiryAlert.lotId(),
+                        lotExpiryAlert);
+            } catch (Exception e) {
+                log.warn("Skipping lot-expiry-alert fact for {}: {}", lotExpiryAlert.lotId(), e.getMessage());
             }
         }
         for (UUID productId : pending.leadTimeProductIds) {
@@ -266,6 +458,7 @@ public class InventoryFactPublisher {
                 publish(
                         writer,
                         LeadTimeUpdatedV1.EVENT_TYPE,
+                        LeadTimeUpdatedV1.SCHEMA_VERSION,
                         productId,
                         new LeadTimeUpdatedV1(
                                 productId,
@@ -282,10 +475,26 @@ public class InventoryFactPublisher {
     }
 
     private void publish(
-            @NonNull OutboxEventWriter writer, @NonNull String eventType, @NonNull UUID aggregateId, Object payload) {
+            @NonNull OutboxEventWriter writer,
+            @NonNull String eventType,
+            int schemaVersion,
+            @NonNull UUID aggregateId,
+            Object payload) {
         DomainEventEnvelope<Object> envelope = DomainEventEnvelope.of(
-                eventType, 1, aggregateId, Instant.now(clock).toEpochMilli(), SOURCE, null, null, payload, clock);
+                eventType,
+                schemaVersion,
+                aggregateId,
+                Instant.now(clock).toEpochMilli(),
+                SOURCE,
+                null,
+                null,
+                payload,
+                clock);
         writer.publish(eventsTopic, envelope);
+    }
+
+    private static long zeroIfNull(@Nullable Long value) {
+        return value == null ? 0L : value;
     }
 
     /** Deterministic aggregate identity for a (stockItemId, locationId) availability key. */
@@ -304,5 +513,12 @@ public class InventoryFactPublisher {
         private final Set<UUID> pickListIds = new LinkedHashSet<>();
         private final Set<UUID> pickTaskIds = new LinkedHashSet<>();
         private final List<ConsumptionRecordedV1> consumptions = new ArrayList<>();
+        private final List<ExpectedSupplyDroppedV1> expectedSupplyDrops = new ArrayList<>();
+        private final List<ScrapPostedV1> scrapPosts = new ArrayList<>();
+        private final List<ProductValueChangedV1> productValueChanges = new ArrayList<>();
+        private final List<TransferOrderUpdatedV1> transferOrderUpdates = new ArrayList<>();
+        private final List<BackorderCreatedV1> backorderCreations = new ArrayList<>();
+        private final List<BackorderResolvedV1> backorderResolutions = new ArrayList<>();
+        private final List<LotExpiryAlertV1> lotExpiryAlerts = new ArrayList<>();
     }
 }

@@ -178,23 +178,19 @@
             <artifactId>caffeine</artifactId>
         </dependency>
 
-        <!-- LangChain4j core + Ollama integration (Spring Boot 4 starter) -->
         <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-ollama-spring-boot4-starter</artifactId>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-ollama</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-vector-store-pgvector</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-chat-memory-repository-jdbc</artifactId>
         </dependency>
 
-        <!-- pgvector embedding store for RAG -->
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-pgvector</artifactId>
-        </dependency>
-
-        <!-- LangChain4j Spring Boot 4 starter (AiServices, memory, tools) -->
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-spring-boot4-starter</artifactId>
-        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-configuration-processor</artifactId>
@@ -277,7 +273,7 @@
                                     <useTestClasspath>true</useTestClasspath>
                                     <arguments>
                                         <argument>--server.port=8086</argument>
-                                        <argument>--spring.profiles.active=test</argument>
+                                        <argument>--spring.profiles.active=test,openapi</argument>
                                         <argument>--spring.main.lazy-initialization=true</argument>
                                         <argument>--spring.flyway.enabled=false</argument>
                                         <argument>--eureka.client.enabled=false</argument>

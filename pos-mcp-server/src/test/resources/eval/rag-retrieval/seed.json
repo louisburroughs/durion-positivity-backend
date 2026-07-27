@@ -6,6 +6,7 @@
       "query": "fitment rules for VIN 1GCEK14T34Z123456",
       "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["crm:vehicle:view"] },
       "expected": { "doc_ids": ["vehicle.fitment"], "k": 5 },
+      "rag_scope": "master",
       "tags": ["exact-id"],
       "notes": "Exact VIN - exercises hybrid BM25 path (Phase 5)."
     },
@@ -14,6 +15,7 @@
       "query": "how do recievables get reconcilled",
       "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:je:view"] },
       "expected": { "doc_ids": ["accounting.de-bookkeeping"], "k": 5 },
+      "rag_scope": "accounting",
       "tags": ["misspelling"],
       "notes": "Two misspellings; dense retrieval should still recall."
     },
@@ -22,6 +24,7 @@
       "query": "how does a WO become an invoice",
       "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["workorder:workorder:view", "invoice:manage"] },
       "expected": { "doc_ids": ["workflow.estimate-to-invoice", "shop.management"], "k": 5 },
+      "rag_scope": "master",
       "tags": ["abbreviation", "cross-domain"],
       "notes": "WO = workorder; needs glossary + workflow playbook (added Phase 5)."
     },
@@ -33,6 +36,7 @@
         "doc_ids": [],
         "forbidden_doc_ids": ["admin.governance", "security.role-permission-matrix"]
       },
+      "rag_scope": "master",
       "tags": ["visibility-negative"],
       "notes": "Admin-only docs must not surface to a technician (permission-aware filter)."
     }

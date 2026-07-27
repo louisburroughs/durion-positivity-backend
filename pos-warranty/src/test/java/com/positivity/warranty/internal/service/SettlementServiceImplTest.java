@@ -14,7 +14,6 @@ import static org.mockito.Mockito.when;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.warranty.WarrantyClaimSettledV1;
 import com.positivity.warranty.internal.client.InvoiceClient;
-import com.positivity.warranty.internal.client.WorkorderClient;
 import com.positivity.warranty.internal.config.OutboxEventWriter;
 import com.positivity.warranty.internal.dto.SettlementCreateRequest;
 import com.positivity.warranty.internal.dto.SettlementResponse;
@@ -33,13 +32,13 @@ import com.positivity.warranty.internal.exception.WarrantyUnprocessableException
 import com.positivity.warranty.internal.repository.ClaimNoteRepository;
 import com.positivity.warranty.internal.repository.ClaimSettlementRepository;
 import com.positivity.warranty.internal.repository.ClaimStatusHistoryRepository;
+import com.positivity.warranty.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -88,7 +87,7 @@ class SettlementServiceImplTest {
     private InvoiceClient invoiceClient;
 
     @Mock
-    private WorkorderClient workorderClient;
+    private ExtWorkorderReplicaRepository extWorkorderReplicaRepository;
 
     @Mock
     private EntityManager entityManager;
@@ -112,7 +111,7 @@ class SettlementServiceImplTest {
                 statusHistoryRepository,
                 noteRepository,
                 invoiceClient,
-                workorderClient,
+                extWorkorderReplicaRepository,
                 claimSnapshotPublisher,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 entityManager,
@@ -192,7 +191,7 @@ class SettlementServiceImplTest {
             assertThatThrownBy(() -> service.create(CLAIM_ID, request(SettlementType.NO_ACTION)))
                     .isInstanceOf(WarrantyNotFoundException.class)
                     .hasFieldOrPropertyWithValue("code", SettlementServiceImpl.CLAIM_NOT_FOUND_CODE);
-            verifyNoInteractions(settlementRepository, invoiceClient, workorderClient);
+            verifyNoInteractions(settlementRepository, invoiceClient, extWorkorderReplicaRepository);
         }
 
         @Test
@@ -202,7 +201,8 @@ class SettlementServiceImplTest {
             assertThatThrownBy(() -> service.create(CLAIM_ID, request(SettlementType.NO_ACTION)))
                     .isInstanceOf(IllegalClaimStateException.class)
                     .hasFieldOrPropertyWithValue("code", SettlementServiceImpl.CLAIM_STATE_CODE);
-            verifyNoInteractions(settlementRepository, invoiceClient, workorderClient, statusHistoryRepository);
+            verifyNoInteractions(
+                    settlementRepository, invoiceClient, extWorkorderReplicaRepository, statusHistoryRepository);
         }
     }
 
@@ -213,9 +213,7 @@ class SettlementServiceImplTest {
         void linksValidatedWorkorderAndCompletesImmediately() {
             stubClaim(ClaimStatus.APPROVED);
             stubSaveEcho();
-            when(workorderClient.getWorkorderDetail(WORKORDER_ID))
-                    .thenReturn(Optional.of(new WorkorderClient.WorkorderDetail(
-                            WORKORDER_ID, "WO-100", CUSTOMER_ID, null, List.of(), List.of())));
+            when(extWorkorderReplicaRepository.existsById(WORKORDER_ID)).thenReturn(true);
             when(outboxEventWriterProvider.getIfAvailable()).thenReturn(null);
 
             SettlementResponse response = service.create(CLAIM_ID, request(SettlementType.REPLACEMENT_WORKORDER));
@@ -235,13 +233,13 @@ class SettlementServiceImplTest {
             assertThatThrownBy(() -> service.create(CLAIM_ID, request))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("replacementWorkorderId");
-            verifyNoInteractions(settlementRepository, workorderClient);
+            verifyNoInteractions(settlementRepository, extWorkorderReplicaRepository);
         }
 
         @Test
         void unresolvableWorkorderIs422AndNothingIsPersisted() {
             stubClaim(ClaimStatus.APPROVED);
-            when(workorderClient.getWorkorderDetail(WORKORDER_ID)).thenReturn(Optional.empty());
+            when(extWorkorderReplicaRepository.existsById(WORKORDER_ID)).thenReturn(false);
 
             assertThatThrownBy(() -> service.create(CLAIM_ID, request(SettlementType.REPLACEMENT_WORKORDER)))
                     .isInstanceOf(WarrantyUnprocessableException.class)
@@ -431,9 +429,7 @@ class SettlementServiceImplTest {
             stubSaveEcho();
             when(claimRepository.save(any(WarrantyClaim.class))).thenAnswer(inv -> inv.getArgument(0));
             when(outboxEventWriterProvider.getIfAvailable()).thenReturn(outboxEventWriter);
-            when(workorderClient.getWorkorderDetail(WORKORDER_ID))
-                    .thenReturn(Optional.of(new WorkorderClient.WorkorderDetail(
-                            WORKORDER_ID, "WO-100", CUSTOMER_ID, null, List.of(), List.of())));
+            when(extWorkorderReplicaRepository.existsById(WORKORDER_ID)).thenReturn(true);
 
             service.create(CLAIM_ID, request(SettlementType.REPLACEMENT_WORKORDER));
 

@@ -1,5 +1,6 @@
 package com.positivity.tax.common.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.positivity.tax.common.enums.ExemptionReasonCode;
 import com.positivity.tax.common.enums.TaxCalculationType;
 import com.positivity.tax.common.enums.TaxReferenceType;
@@ -8,6 +9,7 @@ import com.positivity.tax.common.validation.IsoCurrencyCode;
 import com.positivity.tax.common.validation.ValidSubdivisionForCountry;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -172,6 +174,43 @@ public class TaxCalculationRequest {
             example = "ESTIMATE",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private TaxReferenceType referenceType;
+
+    /**
+     * Whether this calculation will bind to the provider commit/void lifecycle (#984).
+     *
+     * <p>Defaults to {@code false} (a throwaway read-only estimate — a quote or workorder
+     * estimate that never finalizes). When {@code true} the result is destined to be finalized,
+     * so the provider document must be created under a caller-reproducible code: providers MUST
+     * reject a {@code null} {@link #referenceId} in that case, because commit-by-code (source
+     * document id == provider document code) is the idempotency contract and an auto-assigned
+     * code can never be resolved by a later {@code commit(referenceId)}/{@code void(referenceId)}.
+     */
+    @Schema(
+            description = "True when this calculation will be finalized (committed) rather than a throwaway estimate; "
+                    + "requires referenceId to be present",
+            example = "false",
+            defaultValue = "false",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private boolean committable;
+
+    /**
+     * Cross-field Bean Validation guard (#986): a {@link #committable} calculation MUST carry a
+     * {@link #referenceId}, because commit-by-code idempotency requires a caller-reproducible
+     * provider document code. Runs on {@code @Valid} request bodies at the controller boundary.
+     * The adapter guard in {@code AvalaraTaxProvider.buildCreateModel} is retained as defense in
+     * depth for direct (non-validated) service calls.
+     *
+     * <p>Named/annotated so it is neither serialized ({@link JsonIgnore}) nor emitted into the
+     * OpenAPI schema ({@link Schema} hidden), keeping it a pure validation rule.
+     *
+     * @return {@code true} when the request is not committable or a referenceId is present
+     */
+    @JsonIgnore
+    @Schema(hidden = true)
+    @AssertTrue(message = "referenceId is required for a committable tax calculation")
+    public boolean isReferenceIdPresentWhenCommittable() {
+        return !committable || referenceId != null;
+    }
 
     /** Convenience accessor used by internal tax logic. */
     public String getPostalCode() {

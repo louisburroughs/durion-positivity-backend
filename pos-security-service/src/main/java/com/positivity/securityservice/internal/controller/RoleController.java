@@ -4,9 +4,11 @@ import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
+import com.positivity.securityservice.internal.dto.RoleDefaultPermissionsResponse;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.dto.RolePermissionGrantRequest;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
+import com.positivity.securityservice.service.RoleAuthorityService;
 import com.positivity.securityservice.service.RoleManagementService;
 import com.positivity.securityservice.service.RolePermissionService;
 import com.positivity.shared.error.ApiError;
@@ -46,6 +48,7 @@ public class RoleController {
 
     private final RoleManagementService roleManagementService;
     private final RolePermissionService rolePermissionService;
+    private final RoleAuthorityService roleAuthorityService;
 
     /**
      * Create a new role
@@ -245,6 +248,28 @@ public class RoleController {
     public ResponseEntity<Set<PermissionDto>> getUserPermissionsByUserId(@PathVariable UUID userId) {
         Set<PermissionDto> permissions = roleManagementService.getUserPermissions(userId);
         return ResponseEntity.ok(permissions);
+    }
+
+    /**
+     * Get the default authority codes a role expands to (#782).
+     *
+     * <p>Consumed by pos-mcp-server to prebuild per-role agent tool caches with the role's real
+     * permission set instead of an AUTHENTICATED-only warm-up.
+     */
+    @GetMapping("/{role}/default-permissions")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"security:role:view"})
+    @PreAuthorize("hasAuthority('security:role:view')")
+    @Operation(
+            summary = "Get a role's default permissions",
+            description = "Returns the authority codes (ROLE_* plus domain permission codes) that the given role "
+                    + "expands to, used by clients to prebuild per-role tool/permission caches.")
+    @ApiResponse(responseCode = "200", description = "Role default permissions returned")
+    public ResponseEntity<RoleDefaultPermissionsResponse> getRoleDefaultPermissions(@PathVariable String role) {
+        Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(Set.of(role));
+        List<String> permissions = authorities.stream().sorted().toList();
+        return ResponseEntity.ok(new RoleDefaultPermissionsResponse(role, permissions));
     }
 
     /**

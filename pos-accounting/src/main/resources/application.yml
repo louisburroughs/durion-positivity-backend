@@ -65,6 +65,10 @@ pos:
       invoice-events-topic: ${POS_ACCOUNTING_KAFKA_INVOICE_EVENTS_TOPIC:invoice.events.v1}
       # Warranty reimbursement expected-credit feed (#927)
       warranty-events-topic: ${POS_ACCOUNTING_KAFKA_WARRANTY_EVENTS_TOPIC:warranty.events.v1}
+      # Inventory scrap fact feed for shrinkage GL posting (#1043)
+      inventory-events-topic: ${POS_ACCOUNTING_KAFKA_INVENTORY_EVENTS_TOPIC:inventory.events.v1}
+      # Order fact feed for register-session over/short GL posting (odoo-parity G3, #1083)
+      order-events-topic: ${POS_ACCOUNTING_KAFKA_ORDER_EVENTS_TOPIC:order.events.v1}
       workorder-commands-topic: ${POS_ACCOUNTING_KAFKA_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
       consumer-group: ${POS_ACCOUNTING_KAFKA_CONSUMER_GROUP:${spring.application.name}-payments}
 

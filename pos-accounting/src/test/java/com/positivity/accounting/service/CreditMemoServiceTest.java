@@ -14,10 +14,13 @@ import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.dto.CreditMemoResponse;
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.entity.ExtInvoice;
+import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.service.AccountingPeriodServiceImpl;
 import com.positivity.accounting.internal.service.CreditMemoServiceImpl;
+import com.positivity.accounting.internal.service.CreditMemoTaxAttributionService;
 import com.positivity.accounting.internal.service.GLPostingServiceImpl;
 import com.positivity.accounting.internal.service.InvoiceBalanceCalculator;
 import java.math.BigDecimal;
@@ -63,6 +66,12 @@ class CreditMemoServiceTest {
 
     @Mock
     private CreditMemoRepository creditMemoRepository;
+
+    @Mock
+    private ExtInvoiceTaxRepository extInvoiceTaxRepository;
+
+    @Mock
+    private CreditMemoTaxAttributionService creditMemoTaxAttributionService;
 
     @Mock
     private InvoiceBalanceCalculator invoiceBalanceCalculator;
@@ -518,6 +527,44 @@ class CreditMemoServiceTest {
     }
 
     @Test
+    @DisplayName("D1 breakdown-upgrade: tax reversal sums the ext_invoice_tax replica, not the scalar rollup")
+    void testBreakdown_SourcedFromReplicaNotScalar() {
+        // Given - the scalar ExtInvoice.tax is ABSENT (null), but the authoritative
+        // ext_invoice_tax replica carries the frozen per-jurisdiction breakdown summing to 35.59
+        // (STATE 30.00 + COUNTY 5.59). If the code read the scalar it would reverse 0.00; sourcing
+        // from the breakdown reverses 35.59.
+        testInvoice = replicaInvoice("FINALIZED", "235.59", null, Instant.now(TEST_CLOCK));
+        stubReplica(testInvoice, "235.59");
+        stubSaveEcho();
+        when(extInvoiceTaxRepository.findByInvoiceId(testInvoiceId))
+                .thenReturn(List.of(breakdownRow("STATE", "30.00"), breakdownRow("COUNTY", "5.59")));
+        // Full-net credit → final-line residual reverses the entire frozen tax.
+        testRequest.setCreditAmount(new BigDecimal("200.00"));
+
+        // When
+        CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
+
+        // Then
+        assertThat(response.getTaxAmountReversed()).isEqualByComparingTo("35.59");
+        assertThat(response.getTotalAmount()).isEqualByComparingTo("235.59");
+    }
+
+    private ExtInvoiceTax breakdownRow(String jurisdictionType, String taxAmount) {
+        return ExtInvoiceTax.builder()
+                .invoiceId(testInvoiceId)
+                .lineItemId("1")
+                .jurisdictionType(jurisdictionType)
+                .jurisdictionCode(jurisdictionType)
+                .rate(new BigDecimal("0.0000"))
+                .taxableBase(new BigDecimal("0.00"))
+                .taxAmount(new BigDecimal(taxAmount))
+                .exempt(false)
+                .aggregateVersion(1L)
+                .updatedAt(Instant.now(TEST_CLOCK))
+                .build();
+    }
+
+    @Test
     @DisplayName("Partial credit rounds pro-rated stored tax HALF_UP at currency scale (35.59 * 0.5 -> 17.80)")
     void testStoredTax_RatioRoundingHalfUp() {
         // Given - tax 35.59 on net 200.00 (total 235.59); credit half the net
@@ -692,5 +739,78 @@ class CreditMemoServiceTest {
             memo.setCreditMemoId(testCreditMemoId);
             return memo;
         });
+    }
+
+    // ===== Void (issue #997 symmetry) =====
+
+    @Test
+    @DisplayName("void: POSTED memo flips to VOIDED and posts the mirror GL entry")
+    void voidPostedMemo() {
+        when(creditMemoRepository.findWithLockByCreditMemoId(testCreditMemoId))
+                .thenReturn(java.util.Optional.of(testCreditMemo));
+        when(creditMemoRepository.save(any(CreditMemo.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(invoiceBalanceCalculator.findInvoice(testInvoiceId)).thenReturn(java.util.Optional.of(testInvoice));
+        when(invoiceBalanceCalculator.balanceDue(testInvoice)).thenReturn(new BigDecimal("110.00"));
+
+        CreditMemoResponse response = service.voidCreditMemo(testCreditMemoId, "Wrong invoice", "void-user");
+
+        assertThat(response.getStatus()).isEqualTo(CreditMemoStatus.VOIDED);
+        assertThat(response.getVoidedTimestamp()).isEqualTo(Instant.now(TEST_CLOCK));
+        assertThat(response.getVoidedByUserId()).isEqualTo("void-user");
+        assertThat(response.getVoidReason()).isEqualTo("Wrong invoice");
+        assertThat(response.getInvoiceBalanceAfter()).isEqualByComparingTo("110.00");
+        // Mirror entry: Dr AR total / Cr Revenue creditAmount + Cr Tax taxReversed.
+        verify(glPostingService)
+                .postCreditMemoVoid(
+                        eq(testCreditMemoId),
+                        eq(testRevenueAccountId),
+                        eq(testTaxAccountId),
+                        eq(testArAccountId),
+                        eq(new BigDecimal("50.00")),
+                        eq(new BigDecimal("5.00")),
+                        anyString());
+    }
+
+    @Test
+    @DisplayName("void: APPLIED memo is rejected 409 (consumed), nothing saved or posted")
+    void voidAppliedMemoRejected() {
+        testCreditMemo.setStatus(CreditMemoStatus.APPLIED);
+        when(creditMemoRepository.findWithLockByCreditMemoId(testCreditMemoId))
+                .thenReturn(java.util.Optional.of(testCreditMemo));
+
+        assertThatThrownBy(() -> service.voidCreditMemo(testCreditMemoId, "reason", "void-user"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(
+                                ((ResponseStatusException) ex).getStatusCode().value())
+                        .isEqualTo(409));
+        verify(creditMemoRepository, org.mockito.Mockito.never()).save(any());
+        verify(glPostingService, org.mockito.Mockito.never())
+                .postCreditMemoVoid(any(), any(), any(), any(), any(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("void: already-VOIDED memo is rejected 409 (terminal)")
+    void voidVoidedMemoRejected() {
+        testCreditMemo.setStatus(CreditMemoStatus.VOIDED);
+        when(creditMemoRepository.findWithLockByCreditMemoId(testCreditMemoId))
+                .thenReturn(java.util.Optional.of(testCreditMemo));
+
+        assertThatThrownBy(() -> service.voidCreditMemo(testCreditMemoId, "reason", "void-user"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(
+                                ((ResponseStatusException) ex).getStatusCode().value())
+                        .isEqualTo(409));
+    }
+
+    @Test
+    @DisplayName("void: unknown memo -> 404")
+    void voidUnknownMemo() {
+        when(creditMemoRepository.findWithLockByCreditMemoId(testCreditMemoId)).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> service.voidCreditMemo(testCreditMemoId, "reason", "void-user"))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(
+                                ((ResponseStatusException) ex).getStatusCode().value())
+                        .isEqualTo(404));
     }
 }

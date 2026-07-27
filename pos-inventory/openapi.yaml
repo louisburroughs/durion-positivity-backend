@@ -12,6 +12,8 @@ servers:
 tags:
 - name: Inventory Locations
   description: Read inventory facts for storage locations
+- name: Lots
+  description: Lot master records captured on inbound receipts, with per-lot on-hand
 - name: Reallocation
   description: Allocation rebalancing endpoints
 - name: Cycle Count Plans
@@ -26,6 +28,8 @@ tags:
   description: Location roster sync trigger and audit log endpoints
 - name: Inventory Reservations
   description: Reserve, promote, and cancel inventory allocations for workorder lines
+- name: Traceability
+  description: Upstream/downstream traceability for lots and serial units
 - name: Shortage Resolution
   description: Shortage resolution recommendation endpoints
 - name: Inventory Rollup
@@ -36,10 +40,20 @@ tags:
   description: Inventory return-to-stock endpoints
 - name: Inventory Reference Data
   description: Inventory reference-data read endpoints
+- name: Inventory Revaluation
+  description: Approval-gated manual cost revaluation (odoo-parity J4)
 - name: Cycle Count Operations
   description: Cycle count submission and recount operations
 - name: Inventory Management
   description: Operations related to inventory location management
+- name: Inventory Valuation
+  description: On-hand valuation read endpoints (odoo-parity J2)
+- name: Transfer Orders
+  description: Cross-site transfer orders with in-transit tracking
+- name: Scraps
+  description: Scrap (write-off) documents with value-threshold approval and SCRAP_OUT posting
+- name: Purchase Suggestions
+  description: Purchase suggestion listing and lifecycle endpoints
 - name: ASN
   description: Advanced Shipping Notice and goods receipt endpoints
 - name: Putaway
@@ -54,12 +68,22 @@ tags:
   description: Replenishment task and policy endpoints
 - name: Cycle Count Query
   description: Query endpoints for cycle count tasks and history
+- name: Backorders
+  description: Unfulfilled workorder-line demand held open until availability covers it
+- name: Cycle Count Schedules
+  description: Recurring cycle-count schedule management endpoints
 - name: Purchase Orders
   description: Purchase order creation, lifecycle, and receiving endpoints
 - name: Cycle Count Adjustments
   description: Manage inventory adjustments from cycle counts
+- name: Valuation Methods
+  description: Costing method configuration endpoints (odoo-parity J1)
 - name: Receiving
   description: Receiving session creation, item receiving, and cross-dock execution endpoints
+- name: Serial Units
+  description: Serial unit master records enumerated on inbound receipts for SERIAL-tracked SKUs
+- name: Sourcing Strategies
+  description: Sourcing/removal strategy configuration endpoints
 - name: Inventory Sites
   description: Site inventory configuration endpoints. Inventory Sites represent physical locations that hold inventory.
 - name: Inventory Ledger
@@ -67,6 +91,132 @@ tags:
 - name: Stock Movements
   description: Inventory ledger movement recording and adjustment endpoints
 paths:
+  /v1/inventory/valuation/methods:
+    get:
+      tags:
+      - Valuation Methods
+      summary: List costing method configurations
+      description: Lists all costing method configuration rows (active and inactive), ordered by scope. Resolution precedence at posting time is SKU, then SKU_CATEGORY, then DEFAULT, then the deployment default pos.inventory.valuation.default-method (AVERAGE).
+      operationId: listConfigs
+      responses:
+        '200':
+          description: Costing method configurations returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CostingMethodConfigResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:admin
+      x-required-permissions:
+      - inventory:location:admin
+    put:
+      tags:
+      - Valuation Methods
+      summary: Upsert costing method configuration
+      description: Creates or updates the costing method for one scope (SKU, SKU_CATEGORY, or DEFAULT) and reactivates it. A method change is recorded in the who/when/from/to change log. At most one row exists per scope. The new method applies going forward only; opening-value restatement is the J4 revaluation workflow.
+      operationId: upsertConfig
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CostingMethodConfigRequest'
+        required: true
+      responses:
+        '200':
+          description: Costing method configuration upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostingMethodConfigResponse'
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:admin
+      x-required-permissions:
+      - inventory:location:admin
+  /v1/inventory/sourcing-strategies:
+    get:
+      tags:
+      - Sourcing Strategies
+      summary: List sourcing strategy configurations
+      description: Lists all sourcing strategy configuration rows (active and inactive), ordered by scope. Resolution precedence at decision time is SKU_CATEGORY, then SITE, then DEFAULT, then the platform default FIFO.
+      operationId: listConfigs_1
+      responses:
+        '200':
+          description: Sourcing strategy configurations returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SourcingStrategyConfigResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:admin
+      x-required-permissions:
+      - inventory:location:admin
+    put:
+      tags:
+      - Sourcing Strategies
+      summary: Upsert sourcing strategy configuration
+      description: Creates or updates the sourcing strategy for one scope (SKU_CATEGORY, SITE, or DEFAULT) and reactivates it. At most one row exists per scope.
+      operationId: upsertConfig_1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourcingStrategyConfigRequest'
+        required: true
+      responses:
+        '200':
+          description: Sourcing strategy configuration upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcingStrategyConfigResponse'
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:admin
+      x-required-permissions:
+      - inventory:location:admin
   /v1/inventory/sites/{siteId}/defaultLocations:
     get:
       tags:
@@ -138,6 +288,816 @@ paths:
         - inventory:location:admin
       x-required-permissions:
       - inventory:location:admin
+  /v1/inventory/replenishment/policies/{policyId}:
+    put:
+      tags:
+      - Replenishment
+      summary: Update replenishment policy
+      description: Full-replace update of a policy's min/max thresholds and tuning fields (order multiple, lead-time override, preferred source type, active flag). Omitted optional fields are cleared or reset to defaults. Location, SKU, and snooze state are not updatable here; snooze is managed by the snooze endpoint.
+      operationId: updateReplenishmentPolicy
+      parameters:
+      - name: policyId
+        in: path
+        description: Replenishment policy identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateReplenishmentPolicyRequest'
+        required: true
+      responses:
+        '200':
+          description: Replenishment policy updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+        '404':
+          description: Policy not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+      security:
+      - bearerAuth:
+        - inventory:replenishment:manage
+      x-required-permissions:
+      - inventory:replenishment:manage
+  /v1/inventory/lots/{lotId}/expiration:
+    put:
+      tags:
+      - Lots
+      summary: Set lot expiration
+      description: Sets or clears a lot's expiration date and alert-window date. Re-dating resets the emit-once alert bookkeeping so the daily expiry scan can alert the new dates.
+      operationId: updateLotExpiration
+      parameters:
+      - name: lotId
+        in: path
+        description: Lot ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LotExpirationUpdateRequest'
+        required: true
+      responses:
+        '200':
+          description: Lot expiration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotResponse'
+        '403':
+          description: Missing inventory:lot:manage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Lot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:lot:manage
+      x-required-permissions:
+      - inventory:lot:manage
+  /v1/inventory/cycleCountSchedules/{scheduleId}:
+    get:
+      tags:
+      - Cycle Count Schedules
+      summary: Get cycle count schedule
+      description: Returns a cycle-count schedule by identifier.
+      operationId: getSchedule
+      parameters:
+      - name: scheduleId
+        in: path
+        description: Cycle count schedule identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Cycle count schedule returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '404':
+          description: Cycle count schedule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:view
+      x-required-permissions:
+      - inventory:cycle_count:view
+    put:
+      tags:
+      - Cycle Count Schedules
+      summary: Update cycle count schedule
+      description: Partially updates a cycle-count schedule (frequency, filters, next due date, auto-create, active flag); null fields are left unchanged.
+      operationId: updateSchedule
+      parameters:
+      - name: scheduleId
+        in: path
+        description: Cycle count schedule identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCycleCountScheduleRequest'
+        required: true
+      responses:
+        '200':
+          description: Cycle count schedule updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '404':
+          description: Cycle count schedule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:initiate
+      x-required-permissions:
+      - inventory:cycle_count:initiate
+    delete:
+      tags:
+      - Cycle Count Schedules
+      summary: Deactivate cycle count schedule
+      description: 'Soft delete: marks the schedule inactive so it stops firing; the row is never removed.'
+      operationId: deactivateSchedule
+      parameters:
+      - name: scheduleId
+        in: path
+        description: Cycle count schedule identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Cycle count schedule deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '404':
+          description: Cycle count schedule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:initiate
+      x-required-permissions:
+      - inventory:cycle_count:initiate
+  /v1/inventory/cycleCountPlans/{planId}/status:
+    put:
+      tags:
+      - Cycle Count Plans
+      summary: Transition cycle count plan status
+      description: 'Moves a plan through its lifecycle (PLANNED → STARTED → COMPLETED_PENDING_APPROVAL → APPROVED/REJECTED; PLANNED/STARTED may be CANCELLED). Approving a schedule-created plan restamps the originating schedule''s next due date (odoo-parity I1, #1031).'
+      operationId: updatePlanStatus
+      parameters:
+      - name: planId
+        in: path
+        description: Cycle count plan identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCycleCountPlanStatusRequest'
+        required: true
+      responses:
+        '200':
+          description: Cycle count plan status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountPlanResponse'
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountPlanResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountPlanResponse'
+        '404':
+          description: Cycle count plan not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountPlanResponse'
+        '409':
+          description: Invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountPlanResponse'
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:complete
+      x-required-permissions:
+      - inventory:cycle_count:complete
+  /v1/inventory/valuation/revaluations:
+    get:
+      tags:
+      - Inventory Revaluation
+      summary: List revaluations
+      description: Lists revaluation documents filtered by SKU and lifecycle status, newest first
+      operationId: listRevaluations
+      parameters:
+      - name: stockItemId
+        in: query
+        description: Filter by SKU / stock item identifier
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        description: Filter by lifecycle status
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - AUTO_APPLIED
+          - APPLIED
+          - REJECTED
+      responses:
+        '200':
+          description: Revaluations retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RevaluationResponse'
+      security:
+      - bearerAuth:
+        - inventory:valuation:view
+        - inventory:valuation:adjust
+      x-required-permissions:
+      - inventory:valuation:view
+      - inventory:valuation:adjust
+    post:
+      tags:
+      - Inventory Revaluation
+      summary: Submit cost revaluation
+      description: Submits a manual cost revaluation for a SKU. Below the configured value-delta thresholds the revaluation is auto-applied (cost state restated and ProductValueChangedV1 emitted) in the same transaction; at or above them it enters PENDING_APPROVAL with no cost change.
+      operationId: createRevaluation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRevaluationRequest'
+        required: true
+      responses:
+        '201':
+          description: Revaluation created (AUTO_APPLIED or PENDING_APPROVAL)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevaluationResponse'
+        '400':
+          description: Invalid request (e.g. neither/both of newUnitCost and costDelta, or a negative result)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:valuation:adjust
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:valuation:adjust
+      x-required-permissions:
+      - inventory:valuation:adjust
+  /v1/inventory/valuation/revaluations/{revaluationId}/reject:
+    post:
+      tags:
+      - Inventory Revaluation
+      summary: Reject cost revaluation
+      description: Rejects a pending revaluation with a reason. The SKU cost state is untouched.
+      operationId: rejectRevaluation
+      parameters:
+      - name: revaluationId
+        in: path
+        description: Revaluation document ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectRevaluationRequest'
+        required: true
+      responses:
+        '200':
+          description: Revaluation rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevaluationResponse'
+        '404':
+          description: Revaluation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Revaluation is not in a rejectable state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:valuation:adjust
+      x-required-permissions:
+      - inventory:valuation:adjust
+  /v1/inventory/valuation/revaluations/{revaluationId}/approve:
+    post:
+      tags:
+      - Inventory Revaluation
+      summary: Approve cost revaluation
+      description: Approves a pending revaluation, restating the SKU cost state and emitting ProductValueChangedV1
+      operationId: approveRevaluation
+      parameters:
+      - name: revaluationId
+        in: path
+        description: Revaluation document ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Revaluation approved and applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevaluationResponse'
+        '403':
+          description: Missing inventory:valuation:adjust
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Revaluation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Revaluation is not in an approvable state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:valuation:adjust
+      x-required-permissions:
+      - inventory:valuation:adjust
+  /v1/inventory/transfer-orders:
+    get:
+      tags:
+      - Transfer Orders
+      summary: List transfer orders
+      description: Lists transfer orders filtered by status, source site, and destination site
+      operationId: listTransferOrders
+      parameters:
+      - name: status
+        in: query
+        description: Filter by lifecycle status
+        required: false
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - APPROVED
+          - DISPATCHED
+          - PARTIALLY_RECEIVED
+          - RECEIVED
+          - SHORT_CLOSED
+          - CANCELLED
+      - name: sourceLocationId
+        in: query
+        description: Filter by source site
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: destinationLocationId
+        in: query
+        description: Filter by destination site
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Transfer orders retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TransferOrderResponse'
+      security:
+      - bearerAuth:
+        - inventory:transfer:view
+      x-required-permissions:
+      - inventory:transfer:view
+    post:
+      tags:
+      - Transfer Orders
+      summary: Create transfer order
+      description: Creates a cross-site transfer order in DRAFT. Source and destination must be different sites, both ACTIVE in the location roster (DECISION-INVENTORY-009), with at least one positive-quantity line.
+      operationId: createTransferOrder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransferOrderRequest'
+        required: true
+      responses:
+        '201':
+          description: Transfer order created in DRAFT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '400':
+          description: Invalid request (same source and destination site, empty lines, non-positive quantity, or a storage location outside its site)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:transfer:create
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Source or destination site is not in the location roster
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: 'Source or destination site is not eligible for movement (TRANSFER_LOCATION_NOT_ELIGIBLE: INACTIVE/PENDING per DECISION-INVENTORY-009)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:create
+      x-required-permissions:
+      - inventory:transfer:create
+  /v1/inventory/transfer-orders/{transferOrderId}/short-close:
+    post:
+      tags:
+      - Transfer Orders
+      summary: Short-close transfer order
+      description: 'Short-closes a DISPATCHED or PARTIALLY_RECEIVED order whose in-transit remainder will never be received normally (parity-C3). One whole-order disposition resolves every line''s remainder (dispatched minus received): LOST_IN_TRANSIT writes it off through the ledger funnel (paired constructive TRANSFER_IN + SCRAP_OUT with reason LOST at the destination — global on-hand drops, no scrap document is created); RETURNED_TO_SOURCE restores it to source on-hand (constructive TRANSFER_IN, TRANSFER_OUT back, TRANSFER_IN at source). Either way the destination in-transit quantity zeroes atomically and the order reaches the terminal SHORT_CLOSED status; reason and notes are mandatory. The terminal TransferOrderUpdatedV1 fact carries the disposition.'
+      operationId: shortCloseTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShortCloseTransferOrderRequest'
+        required: true
+      responses:
+        '200':
+          description: Transfer order short-closed (terminal)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '400':
+          description: Missing disposition, reason, or notes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:transfer:short_close
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Order is not short-closable (not DISPATCHED/PARTIALLY_RECEIVED, or no outstanding in-transit remainder)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: 'RETURNED_TO_SOURCE only: the source site is not movement-eligible (TRANSFER_LOCATION_NOT_ELIGIBLE per DECISION-INVENTORY-009)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:short_close
+      x-required-permissions:
+      - inventory:transfer:short_close
+  /v1/inventory/transfer-orders/{transferOrderId}/receive:
+    post:
+      tags:
+      - Transfer Orders
+      summary: Receive transfer order
+      description: 'Receives dispatched quantities at the destination: posts one TRANSFER_IN per line through the ledger funnel (sourceTransactionId = transferOrderId), raising destination on-hand and draining the in-transit quantity. Status becomes RECEIVED when every line is fully received, else PARTIALLY_RECEIVED (the remainder stays in transit). Per-line quantities default to the full un-received remainder and must not exceed it.'
+      operationId: receiveTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiveTransferOrderRequest'
+      responses:
+        '200':
+          description: Receipt recorded (RECEIVED or PARTIALLY_RECEIVED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '400':
+          description: Unknown or duplicate line id in the request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:transfer:receive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Order is not receivable (not yet dispatched, cancelled, short-closed, or already fully received)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Received quantity exceeds the un-received dispatched remainder (TRANSFER_RECEIVE_EXCEEDS_DISPATCHED), or the destination site is not movement-eligible (TRANSFER_LOCATION_NOT_ELIGIBLE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:receive
+      x-required-permissions:
+      - inventory:transfer:receive
+  /v1/inventory/transfer-orders/{transferOrderId}/dispatch:
+    post:
+      tags:
+      - Transfer Orders
+      summary: Dispatch transfer order
+      description: 'Dispatches the order from the source site: posts one TRANSFER_OUT per line through the ledger funnel (sourceTransactionId = transferOrderId), decrements source on-hand, and raises the destination key''s in-transit quantity. Per-line quantities default to the full requested quantity and must not exceed it.'
+      operationId: dispatchTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchTransferOrderRequest'
+      responses:
+        '200':
+          description: Transfer order dispatched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '400':
+          description: Unknown or duplicate line id in the request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:transfer:dispatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Order is not dispatchable (already dispatched/terminal, or awaiting approval)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Dispatch quantity exceeds requested (TRANSFER_DISPATCH_EXCEEDS_REQUESTED), source on-hand insufficient (INSUFFICIENT_STOCK — TRANSFER_OUT is blocked below zero), or a site is not movement-eligible (TRANSFER_LOCATION_NOT_ELIGIBLE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:dispatch
+      x-required-permissions:
+      - inventory:transfer:dispatch
+  /v1/inventory/transfer-orders/{transferOrderId}/cancel:
+    post:
+      tags:
+      - Transfer Orders
+      summary: Cancel transfer order
+      description: 'Cancels a transfer order before dispatch (DRAFT/APPROVED to CANCELLED). After dispatch the stock has physically moved: cancellation returns 409 and discrepancies resolve via short-close (parity-C3).'
+      operationId: cancelTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Transfer order cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '403':
+          description: Missing inventory:transfer:create
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Order already dispatched (or terminal) — cancellation is only allowed before dispatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:create
+      x-required-permissions:
+      - inventory:transfer:create
+  /v1/inventory/transfer-orders/{transferOrderId}/approve:
+    post:
+      tags:
+      - Transfer Orders
+      summary: Approve transfer order
+      description: Approves a DRAFT transfer order (DRAFT to APPROVED). Only available when pos.inventory.transfer.approval-required=true; with the flag off (default), DRAFT orders dispatch directly and this endpoint returns 409 (decision D-8).
+      operationId: approveTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Transfer order approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '403':
+          description: Missing inventory:transfer:dispatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Approval step disabled, or order is not in DRAFT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:dispatch
+      x-required-permissions:
+      - inventory:transfer:dispatch
   /v1/inventory/stock-movements:
     post:
       tags:
@@ -206,6 +1166,222 @@ paths:
         - inventory:shortage:resolve
       x-required-permissions:
       - inventory:shortage:resolve
+  /v1/inventory/scraps:
+    get:
+      tags:
+      - Scraps
+      summary: List scraps
+      description: Lists scrap documents filtered by reason, status, location, and creation-date range
+      operationId: listScraps
+      parameters:
+      - name: reasonCode
+        in: query
+        description: Filter by scrap reason
+        required: false
+        schema:
+          type: string
+          enum:
+          - DAMAGED
+          - EXPIRED
+          - LOST
+          - RECALLED
+          - CONTAMINATED
+          - WARRANTY_DESTROYED
+          - OTHER
+      - name: status
+        in: query
+        description: Filter by lifecycle status
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - AUTO_APPROVED
+          - APPROVED
+          - POSTED
+          - REJECTED
+          - FAILED
+      - name: locationId
+        in: query
+        description: Filter by location
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: createdFrom
+        in: query
+        description: Inclusive lower creation-time bound
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: createdTo
+        in: query
+        description: Inclusive upper creation-time bound
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: Scraps retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScrapResponse'
+      security:
+      - bearerAuth:
+        - inventory:scrap:view
+        - inventory:scrap:approve
+      x-required-permissions:
+      - inventory:scrap:view
+      - inventory:scrap:approve
+    post:
+      tags:
+      - Scraps
+      summary: Create scrap document
+      description: Creates a scrap (write-off) document. Below the configured value thresholds the scrap is auto-approved and posted as SCRAP_OUT in the same transaction; above them (or when no cost is derivable) it enters PENDING_APPROVAL.
+      operationId: createScrap
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScrapRequest'
+        required: true
+      responses:
+        '201':
+          description: Scrap created (AUTO_APPROVED/POSTED or PENDING_APPROVAL)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapResponse'
+        '400':
+          description: Invalid request (e.g. OTHER reason without notes)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:scrap:create, or override requested without inventory:adjustment:override
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: 'Insufficient on-hand for the auto-approved posting (SCRAP_INSUFFICIENT_STOCK): reconcile via cycle count or adjustment, or use an authorized negative-stock override'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:scrap:create
+      x-required-permissions:
+      - inventory:scrap:create
+  /v1/inventory/scraps/{scrapId}/reject:
+    post:
+      tags:
+      - Scraps
+      summary: Reject scrap
+      description: Rejects a pending scrap with a reason. No inventory changes are made.
+      operationId: rejectScrap
+      parameters:
+      - name: scrapId
+        in: path
+        description: Scrap document ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectScrapRequest'
+        required: true
+      responses:
+        '200':
+          description: Scrap rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapResponse'
+        '404':
+          description: Scrap not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Scrap is not in a rejectable state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:scrap:approve
+      x-required-permissions:
+      - inventory:scrap:approve
+  /v1/inventory/scraps/{scrapId}/approve:
+    post:
+      tags:
+      - Scraps
+      summary: Approve scrap
+      description: Approves a pending scrap and posts its SCRAP_OUT entry to the inventory ledger
+      operationId: approveScrap
+      parameters:
+      - name: scrapId
+        in: path
+        description: Scrap document ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveScrapRequest'
+        required: true
+      responses:
+        '200':
+          description: Scrap approved and posted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapResponse'
+        '403':
+          description: Missing inventory:scrap:approve, or override requested without inventory:adjustment:override
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Scrap not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Scrap is not in an approvable state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: 'Insufficient on-hand (SCRAP_INSUFFICIENT_STOCK): reconcile via cycle count or adjustment, or use an authorized negative-stock override'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:scrap:approve
+      x-required-permissions:
+      - inventory:scrap:approve
   /v1/inventory/returns/submit-to-stock:
     post:
       tags:
@@ -351,6 +1527,25 @@ paths:
         - inventory:adjustment:create
       x-required-permissions:
       - inventory:adjustment:create
+  /v1/inventory/replenishment/scan:
+    post:
+      tags:
+      - Replenishment
+      summary: Run the batch replenishment scan
+      description: 'Evaluates every replenishment policy against current on-hand and creates or refreshes batch-triggered replenishment tasks for below-minimum pick faces. Idempotent per (policy, day): repeated runs on the same day never create duplicate open tasks. Returns a summary of the scan run.'
+      operationId: runReplenishmentScan
+      responses:
+        '200':
+          description: Scan completed; summary returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplenishmentScanResultResponse'
+      security:
+      - bearerAuth:
+        - inventory:replenishment:manage
+      x-required-permissions:
+      - inventory:replenishment:manage
   /v1/inventory/replenishment/policies:
     get:
       tags:
@@ -411,9 +1606,54 @@ paths:
                 $ref: '#/components/schemas/ReplenishmentPolicyResponse'
       security:
       - bearerAuth:
-        - inventory:adjustment:create
+        - inventory:replenishment:manage
       x-required-permissions:
-      - inventory:adjustment:create
+      - inventory:replenishment:manage
+  /v1/inventory/replenishment/policies/{policyId}/snooze:
+    post:
+      tags:
+      - Replenishment
+      summary: Snooze or unsnooze a replenishment policy
+      description: Excludes the policy from scan, event, and needs evaluation until the given future instant (Odoo orderpoint snooze). A null snoozedUntil clears an existing snooze — there is no separate unsnooze endpoint. A non-null instant that is not in the future is rejected with 422.
+      operationId: snoozeReplenishmentPolicy
+      parameters:
+      - name: policyId
+        in: path
+        description: Replenishment policy identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SnoozeReplenishmentPolicyRequest'
+        required: true
+      responses:
+        '200':
+          description: Snooze state updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+        '404':
+          description: Policy not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+        '422':
+          description: snoozedUntil is not in the future
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplenishmentPolicyResponse'
+      security:
+      - bearerAuth:
+        - inventory:replenishment:manage
+      x-required-permissions:
+      - inventory:replenishment:manage
   /v1/inventory/receiving/sessions:
     post:
       tags:
@@ -694,6 +1934,159 @@ paths:
         - inventory:putaway:generate
       x-required-permissions:
       - inventory:putaway:generate
+  /v1/inventory/purchase-suggestions/{suggestionId}/dismiss:
+    post:
+      tags:
+      - Purchase Suggestions
+      summary: Dismiss a purchase suggestion
+      description: Dismisses a SUGGESTED or ACCEPTED suggestion with a mandatory reason. Dismissal is terminal and per-instance; suppressing future suggestions is the policy snooze's job.
+      operationId: dismissPurchaseSuggestion
+      parameters:
+      - name: suggestionId
+        in: path
+        description: Purchase suggestion identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DismissPurchaseSuggestionRequest'
+        required: true
+      responses:
+        '200':
+          description: Purchase suggestion dismissed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseSuggestionResponse'
+        '400':
+          description: Missing or blank dismissal reason
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: User lacks required replenishment manage authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Purchase suggestion not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Suggestion is already CONVERTED or DISMISSED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:replenishment:manage
+      x-required-permissions:
+      - inventory:replenishment:manage
+  /v1/inventory/purchase-suggestions/{suggestionId}/accept:
+    post:
+      tags:
+      - Purchase Suggestions
+      summary: Accept a purchase suggestion
+      description: 'Human-mandatory accept gate (plan D-3): transitions SUGGESTED → ACCEPTED, making the suggestion eligible for conversion into a DRAFT purchase order. The replenishment scan never accepts suggestions.'
+      operationId: acceptPurchaseSuggestion
+      parameters:
+      - name: suggestionId
+        in: path
+        description: Purchase suggestion identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Purchase suggestion accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseSuggestionResponse'
+        '403':
+          description: User lacks required replenishment manage authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Purchase suggestion not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Suggestion is not in SUGGESTED status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:replenishment:manage
+      x-required-permissions:
+      - inventory:replenishment:manage
+  /v1/inventory/purchase-suggestions/convert:
+    post:
+      tags:
+      - Purchase Suggestions
+      summary: Convert accepted purchase suggestions into a DRAFT purchase order
+      description: Creates ONE multi-line DRAFT purchase order from ACCEPTED suggestions sharing a single vendor, then stamps each suggestion CONVERTED. The DRAFT order still passes the existing purchase order approval workflow — conversion never approves spend. Requires BOTH inventory:replenishment:manage AND inventory:purchase_order:create.
+      operationId: convertPurchaseSuggestions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConvertPurchaseSuggestionsRequest'
+        required: true
+      responses:
+        '201':
+          description: DRAFT purchase order created and suggestions stamped CONVERTED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConvertPurchaseSuggestionsResponse'
+        '400':
+          description: Validation failure (empty suggestion list)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: User lacks replenishment manage and/or purchase order create authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: A listed purchase suggestion was not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: 'Conversion precondition violated: a suggestion is not ACCEPTED, suggestions mix vendors or ship-to sites, or a suggestion lacks a vendor or feed price'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:replenishment:manage
+        - inventory:purchase_order:create
+      x-required-permissions:
+      - inventory:replenishment:manage
+      - inventory:purchase_order:create
   /v1/inventory/purchase-orders:
     get:
       tags:
@@ -1192,6 +2585,57 @@ paths:
         - inventory:pick_list:execute
       x-required-permissions:
       - inventory:pick_list:execute
+  /v1/inventory/lots/{lotId}/status:
+    post:
+      tags:
+      - Lots
+      summary: Change lot status
+      description: Quarantines, recalls, or releases a lot back to ACTIVE. QUARANTINED and RECALLED lots are blocked from lot suggestion and outbound movement. Status flip only — physically moving stock to the site's quarantine bin is a separate operator-driven transfer. CONSUMED is rejected (reconciler-owned).
+      operationId: updateLotStatus
+      parameters:
+      - name: lotId
+        in: path
+        description: Lot ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LotStatusUpdateRequest'
+        required: true
+      responses:
+        '200':
+          description: Lot status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotResponse'
+        '400':
+          description: Invalid target status (e.g. CONSUMED) or missing reason
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Missing inventory:lot:manage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Lot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:lot:manage
+      x-required-permissions:
+      - inventory:lot:manage
   /v1/inventory/locations/{locationId}/deactivate:
     post:
       tags:
@@ -1329,6 +2773,110 @@ paths:
         - inventory:goods_receipt:create
       x-required-permissions:
       - inventory:goods_receipt:create
+  /v1/inventory/cycleCountSchedules:
+    get:
+      tags:
+      - Cycle Count Schedules
+      summary: List cycle count schedules
+      description: Lists one page of cycle-count schedules, newest first, optionally filtered by location and/or active flag. due=true restricts to active schedules whose next due date has arrived (the due-for-count view).
+      operationId: listSchedules
+      parameters:
+      - name: locationId
+        in: query
+        description: Filter by location identifier
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: active
+        in: query
+        description: Filter by active flag
+        required: false
+        schema:
+          type: boolean
+      - name: due
+        in: query
+        description: Restrict to active schedules currently due for counting
+        required: false
+        schema:
+          type: boolean
+          default: false
+      - name: page
+        in: query
+        description: Page index (0-based)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: Page size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+          exclusiveMinimum: 0
+      responses:
+        '200':
+          description: Cycle count schedules returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CycleCountScheduleResponse'
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:view
+      x-required-permissions:
+      - inventory:cycle_count:view
+    post:
+      tags:
+      - Cycle Count Schedules
+      summary: Create cycle count schedule
+      description: Creates a recurring cycle-count schedule for a location.
+      operationId: createSchedule
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCycleCountScheduleRequest'
+        required: true
+      responses:
+        '201':
+          description: Cycle count schedule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountScheduleResponse'
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:initiate
+      x-required-permissions:
+      - inventory:cycle_count:initiate
   /v1/inventory/cycleCountPlans:
     get:
       tags:
@@ -1756,7 +3304,7 @@ paths:
       tags:
       - Inventory Availability
       summary: Query inventory availability
-      description: Returns per-location availability for a product.
+      description: 'Returns per-location availability for a product, including forecast quantities (incomingQty, outgoingQty, projectedAvailable) computed from open purchase orders, ASNs, reservations, and released pick tasks (odoo-parity A2). With ''asOf'', returns historical on-hand per location computed by direct ledger aggregation (timestamp <= asOf) instead: availableToPromiseQuantity and the forecast fields are null, because historical allocation state is not reliably reconstructable from ATP-neutral ledger events. As-of requests additionally require the ''inventory:ledger:view'' authority (history exposure) and reject future instants with 422; ''asOf'' cannot be combined with ''horizon''.'
       operationId: getInventoryAvailability
       parameters:
       - name: productId
@@ -1766,6 +3314,20 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: horizon
+        in: query
+        description: Optional forecast horizon (ISO-8601 instant). Bounds incomingQty to supply expected on or before this instant and outgoingQty to reservations due by it; documents without an expected date are excluded from horizon-bounded results.
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: asOf
+        in: query
+        description: Optional historical instant (ISO-8601). Returns on-hand as of this instant by direct ledger aggregation; ATP and forecast fields are null. Requires 'inventory:ledger:view'; future instants are rejected (422). Cannot be combined with 'horizon'.
+        required: false
+        schema:
+          type: string
+          format: date-time
       responses:
         '200':
           description: Availability returned
@@ -2054,6 +3616,132 @@ paths:
         - inventory:pick_list:execute
       x-required-permissions:
       - inventory:pick_list:execute
+  /v1/inventory/valuation:
+    get:
+      tags:
+      - Inventory Valuation
+      summary: Get inventory valuation
+      description: Returns on-hand value (on-hand × current unit cost) per SKU with a total. Optionally site-scoped via 'locationId' and/or restricted to one SKU via 'sku'. The unit cost is sourced from each SKU's running cost state per its resolved costing method (AVERAGE or STANDARD); uncosted SKUs report a null unit cost and zero value. With 'asOf', the valuation is reconstructed from the ledger as of that instant (on-hand and unit cost both replayed); as-of requests additionally require 'inventory:ledger:view', reject future instants with 422, and may reject uncapped full-catalog requests with 422 when the SKU fan-out exceeds the configured safety cap.
+      operationId: getInventoryValuation
+      parameters:
+      - name: locationId
+        in: query
+        description: Restrict valuation to one site
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: sku
+        in: query
+        description: Restrict valuation to one SKU / stock-item identifier
+        required: false
+        schema:
+          type: string
+      - name: asOf
+        in: query
+        description: Optional historical instant (ISO-8601). Reconstructs on-hand and unit cost from the ledger as of this instant. Requires 'inventory:ledger:view'; future instants are rejected (422).
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: Valuation report returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValuationReportResponse'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: User lacks required valuation view authority (or ledger view for as-of)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: As-of instant is in the future
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:valuation:view
+      x-required-permissions:
+      - inventory:valuation:view
+  /v1/inventory/valuation/revaluations/{revaluationId}:
+    get:
+      tags:
+      - Inventory Revaluation
+      summary: Get revaluation details
+      description: Retrieves one revaluation document
+      operationId: getRevaluation
+      parameters:
+      - name: revaluationId
+        in: path
+        description: Revaluation document ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Revaluation found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevaluationResponse'
+        '404':
+          description: Revaluation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:valuation:view
+        - inventory:valuation:adjust
+      x-required-permissions:
+      - inventory:valuation:view
+      - inventory:valuation:adjust
+  /v1/inventory/transfer-orders/{transferOrderId}:
+    get:
+      tags:
+      - Transfer Orders
+      summary: Get transfer order
+      description: Retrieves one transfer order with its lines
+      operationId: getTransferOrder
+      parameters:
+      - name: transferOrderId
+        in: path
+        description: Transfer order ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Transfer order found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferOrderResponse'
+        '404':
+          description: Transfer order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:transfer:view
+      x-required-permissions:
+      - inventory:transfer:view
   /v1/inventory/sync-logs:
     get:
       tags:
@@ -2273,13 +3961,43 @@ paths:
     get:
       tags:
       - Shortage Resolution
-      summary: List shortage options
-      description: Returns available shortage resolution options for an allocation.
+      summary: List computed shortage options
+      description: Computes the resolution options (backorder, substitute, transfer-in, emergency purchase, cancel) for a shortage, each with an expected-resolution date and a cost delta where computable.
       operationId: listShortageOptions
       parameters:
       - name: allocationId
         in: query
+        description: Allocation experiencing the shortage
         required: true
+        schema:
+          type: string
+          format: uuid
+      - name: sku
+        in: query
+        description: SKU / stock-item identifier that is short
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      - name: shortQuantity
+        in: query
+        description: Quantity that is short
+        required: true
+        schema:
+          type: integer
+          format: int32
+          exclusiveMinimum: 0
+      - name: workorderLineId
+        in: query
+        description: Workorder line whose demand is short
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: locationId
+        in: query
+        description: Site the demand is short at
+        required: false
         schema:
           type: string
           format: uuid
@@ -2309,6 +4027,170 @@ paths:
         - inventory:shortage:view
       x-required-permissions:
       - inventory:shortage:view
+  /v1/inventory/serial-units:
+    get:
+      tags:
+      - Serial Units
+      summary: List serial units
+      description: Lists serial unit master records filtered by stock item, status, and serial number, newest first
+      operationId: listSerialUnits
+      parameters:
+      - name: stockItemId
+        in: query
+        description: Filter by stock item (catalog product id)
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        description: Filter by lifecycle status
+        required: false
+        schema:
+          type: string
+          enum:
+          - IN_STOCK
+          - ISSUED
+          - RETURNED
+          - SCRAPPED
+      - name: serialNumber
+        in: query
+        description: Filter by exact serial number
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Serial units retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SerialUnitResponse'
+        '403':
+          description: Missing inventory:on_hand:view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
+  /v1/inventory/serial-units/{serialUnitId}:
+    get:
+      tags:
+      - Serial Units
+      summary: Get serial unit
+      description: Retrieves one serial unit master record with its current status, location, lot linkage, and consumption/workorder linkage
+      operationId: getSerialUnit
+      parameters:
+      - name: serialUnitId
+        in: path
+        description: Serial unit ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Serial unit found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SerialUnitResponse'
+        '403':
+          description: Missing inventory:on_hand:view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Serial unit not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
+  /v1/inventory/serial-units/{serialUnitId}/traceability:
+    get:
+      tags:
+      - Traceability
+      summary: Serial traceability
+      description: Returns a serial unit's upstream origin (PO / ASN / goods receipt via its lot) and its downstream chain (receipt → issue → workorder → return/scrap) from the serial's receipt and consumption ledger linkages, plus any warranty-hold linkage joined by serial number
+      operationId: getSerialTraceability
+      parameters:
+      - name: serialUnitId
+        in: path
+        description: Serial unit ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Serial traceability assembled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SerialTraceabilityResponse'
+        '403':
+          description: Missing inventory:ledger:view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Serial unit not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:ledger:view
+      x-required-permissions:
+      - inventory:ledger:view
+  /v1/inventory/scraps/{scrapId}:
+    get:
+      tags:
+      - Scraps
+      summary: Get scrap details
+      description: Retrieves one scrap document
+      operationId: getScrap
+      parameters:
+      - name: scrapId
+        in: path
+        description: Scrap document ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Scrap found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapResponse'
+        '404':
+          description: Scrap not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:scrap:view
+        - inventory:scrap:approve
+      x-required-permissions:
+      - inventory:scrap:view
+      - inventory:scrap:approve
   /v1/inventory/returns/returnable-items:
     get:
       tags:
@@ -2397,6 +4279,27 @@ paths:
         - inventory:on_hand:view
       x-required-permissions:
       - inventory:on_hand:view
+  /v1/inventory/replenishment/needs:
+    get:
+      tags:
+      - Replenishment
+      summary: Replenishment needs report
+      description: 'Side-effect-free orderpoint evaluation of every active, non-snoozed replenishment policy: projected availability at the lead-time horizon, whether a scan would trigger, the multiple-rounded suggested quantity, and the projected stock-out deadline. Never creates or refreshes tasks — ops review before running the scan.'
+      operationId: listReplenishmentNeeds
+      responses:
+        '200':
+          description: Replenishment needs returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReplenishmentNeedResponse'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
   /v1/inventory/receiving/sessions/{sessionId}:
     get:
       tags:
@@ -2472,6 +4375,96 @@ paths:
         - inventory:putaway:view
       x-required-permissions:
       - inventory:putaway:view
+  /v1/inventory/purchase-suggestions:
+    get:
+      tags:
+      - Purchase Suggestions
+      summary: List purchase suggestions
+      description: Lists purchase suggestions, optionally filtered by status, SKU, and destination location.
+      operationId: listPurchaseSuggestions
+      parameters:
+      - name: status
+        in: query
+        description: Lifecycle status filter (SUGGESTED, ACCEPTED, CONVERTED, DISMISSED)
+        required: false
+        schema:
+          type: string
+      - name: sku
+        in: query
+        description: Stock item (SKU) filter
+        required: false
+        schema:
+          type: string
+      - name: locationId
+        in: query
+        description: Destination location filter
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Pageable'
+      responses:
+        '200':
+          description: Purchase suggestions returned (paged)
+          content:
+            application/json:
+              schema:
+                type: string
+                description: Page of purchase suggestions
+        '403':
+          description: User lacks required view authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
+  /v1/inventory/purchase-suggestions/{suggestionId}:
+    get:
+      tags:
+      - Purchase Suggestions
+      summary: Get purchase suggestion
+      description: Retrieves one purchase suggestion by identifier.
+      operationId: getPurchaseSuggestion
+      parameters:
+      - name: suggestionId
+        in: path
+        description: Purchase suggestion identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Purchase suggestion returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseSuggestionResponse'
+        '403':
+          description: User lacks required view authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Purchase suggestion not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
   /v1/inventory/purchase-orders/{poId}:
     get:
       tags:
@@ -2653,6 +4646,135 @@ paths:
         - inventory:location:view
       x-required-permissions:
       - inventory:location:view
+  /v1/inventory/lots:
+    get:
+      tags:
+      - Lots
+      summary: List lots
+      description: Lists lot master records filtered by stock item, status, and lot number, newest received first
+      operationId: listLots
+      parameters:
+      - name: stockItemId
+        in: query
+        description: Filter by stock item (catalog product id)
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        description: Filter by lifecycle status
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - QUARANTINED
+          - RECALLED
+          - CONSUMED
+      - name: lotNumber
+        in: query
+        description: Filter by exact lot number
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Lots retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LotResponse'
+        '403':
+          description: Missing inventory:on_hand:view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
+  /v1/inventory/lots/{lotId}:
+    get:
+      tags:
+      - Lots
+      summary: Get lot details
+      description: Retrieves one lot master record with its per-location on-hand from the per-lot stock summary rows
+      operationId: getLot
+      parameters:
+      - name: lotId
+        in: path
+        description: Lot ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Lot found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotDetailResponse'
+        '403':
+          description: Missing inventory:on_hand:view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Lot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:on_hand:view
+      x-required-permissions:
+      - inventory:on_hand:view
+  /v1/inventory/lots/{lotId}/traceability:
+    get:
+      tags:
+      - Traceability
+      summary: Lot traceability
+      description: Returns a lot's upstream origin (PO / ASN / goods receipt, vendor, receipt date) and its downstream movement chain (putaway → pick → consumption → return → scrap → transfer), reconstructed from the lot-tagged ledger entries in chronological order
+      operationId: getLotTraceability
+      parameters:
+      - name: lotId
+        in: path
+        description: Lot ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Lot traceability assembled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotTraceabilityResponse'
+        '403':
+          description: Missing inventory:ledger:view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Lot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:ledger:view
+      x-required-permissions:
+      - inventory:ledger:view
   /v1/inventory/locations:
     get:
       tags:
@@ -2786,7 +4908,7 @@ paths:
       tags:
       - Inventory Locations
       summary: List location inventory contents
-      description: Returns the on-hand stock items (positive quantity) at a storage location.
+      description: Returns the on-hand stock items (positive quantity) at a storage location. With 'asOf', returns the historical contents as of that instant by direct ledger aggregation. As-of requests additionally require the 'inventory:ledger:view' authority and reject future instants with 422.
       operationId: listLocationInventoryItems
       parameters:
       - name: locationId
@@ -2796,6 +4918,13 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: asOf
+        in: query
+        description: Optional historical instant (ISO-8601). Returns the location contents as of this instant by direct ledger aggregation. Requires 'inventory:ledger:view'; future instants are rejected (422).
+        required: false
+        schema:
+          type: string
+          format: date-time
       responses:
         '200':
           description: Location inventory contents returned
@@ -2825,7 +4954,7 @@ paths:
       tags:
       - Inventory Locations
       summary: Get location inventory summary
-      description: Returns on-hand quantity aggregated for a storage location.
+      description: Returns on-hand quantity aggregated for a storage location. With 'asOf', returns historical on-hand as of that instant by direct ledger aggregation; availableToPromiseQuantity is null because historical allocation state is not reliably reconstructable from ATP-neutral ledger events. As-of requests additionally require the 'inventory:ledger:view' authority and reject future instants with 422.
       operationId: getLocationInventory
       parameters:
       - name: locationId
@@ -2841,6 +4970,13 @@ paths:
         required: false
         schema:
           type: string
+      - name: asOf
+        in: query
+        description: Optional historical instant (ISO-8601). Returns on-hand as of this instant by direct ledger aggregation; availableToPromiseQuantity is null. Requires 'inventory:ledger:view'; future instants are rejected (422).
+        required: false
+        schema:
+          type: string
+          format: date-time
       responses:
         '200':
           description: Location inventory returned
@@ -3225,6 +5361,42 @@ paths:
         - inventory:cycle_count:view
       x-required-permissions:
       - inventory:cycle_count:view
+  /v1/inventory/cycleCount/task/{taskId}/interfering-movements:
+    get:
+      tags:
+      - Cycle Count Query
+      - Cycle Count API
+      summary: List interfering movements for a cycle count task
+      description: 'Returns the on-hand-affecting ledger entries for the task''s SKU/location recorded between task creation and now — the movements that make the task''s expected-quantity snapshot stale (CONFLICT). Design note: freezing stock movements during counts was rejected as it contradicts continuous shop operation; conflict detection with this listing replaces freezing.'
+      operationId: getInterferingMovements
+      parameters:
+      - name: taskId
+        in: path
+        description: Task ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Interfering movements retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InterferingMovementResponse'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:view
+      x-required-permissions:
+      - inventory:cycle_count:view
   /v1/inventory/cycleCount/task/{taskId}/history:
     get:
       tags:
@@ -3280,6 +5452,91 @@ paths:
         - inventory:cycle_count:view
       x-required-permissions:
       - inventory:cycle_count:view
+  /v1/inventory/backorders:
+    get:
+      tags:
+      - Backorders
+      summary: List backorders
+      description: Lists backorders filtered by status, SKU, location, and workorder line
+      operationId: listBackorders
+      parameters:
+      - name: status
+        in: query
+        description: Filter by lifecycle status
+        required: false
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - RESOLVED
+          - CANCELLED
+      - name: sku
+        in: query
+        description: Filter by SKU / stock-item identifier
+        required: false
+        schema:
+          type: string
+      - name: locationId
+        in: query
+        description: Filter by site
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: workorderLineId
+        in: query
+        description: Filter by workorder line
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Backorders retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BackorderResponse'
+      security:
+      - bearerAuth:
+        - inventory:shortage:view
+      x-required-permissions:
+      - inventory:shortage:view
+  /v1/inventory/backorders/{backorderId}:
+    get:
+      tags:
+      - Backorders
+      summary: Get backorder details
+      description: Retrieves one backorder
+      operationId: getBackorder
+      parameters:
+      - name: backorderId
+        in: path
+        description: Backorder ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Backorder found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackorderResponse'
+        '404':
+          description: Backorder not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:shortage:view
+      x-required-permissions:
+      - inventory:shortage:view
   /v1/inventory/availability:
     get:
       tags:
@@ -3318,6 +5575,13 @@ paths:
           - WAREHOUSE
           - SUPPLIER
           - TRANSIT
+      - name: horizon
+        in: query
+        description: Optional forecast horizon (ISO-8601 instant) bounding incomingQty/outgoingQty; documents without an expected date are excluded from horizon-bounded results.
+        required: false
+        schema:
+          type: string
+          format: date-time
       responses:
         '200':
           description: Availability list returned
@@ -3473,6 +5737,13 @@ paths:
           - WAREHOUSE
           - SUPPLIER
           - TRANSIT
+      - name: horizon
+        in: query
+        description: Optional forecast horizon (ISO-8601 instant) bounding incomingQty/outgoingQty; documents without an expected date are excluded from horizon-bounded results.
+        required: false
+        schema:
+          type: string
+          format: date-time
       responses:
         '200':
           description: Availability view returned
@@ -3550,6 +5821,45 @@ paths:
         - inventory:asn:view
       x-required-permissions:
       - inventory:asn:view
+  /v1/inventory/sourcing-strategies/{configId}:
+    delete:
+      tags:
+      - Sourcing Strategies
+      summary: Deactivate sourcing strategy configuration
+      description: 'Soft delete: marks the configuration row inactive so it stops participating in strategy resolution; the row is never removed.'
+      operationId: deactivateConfig
+      parameters:
+      - name: configId
+        in: path
+        description: Sourcing strategy configuration identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Sourcing strategy configuration deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcingStrategyConfigResponse'
+        '403':
+          description: User lacks required permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Sourcing strategy configuration not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:location:admin
+      x-required-permissions:
+      - inventory:location:admin
   /v1/inventory/reservations/{workorderLineId}:
     delete:
       tags:
@@ -3587,111 +5897,81 @@ paths:
       - inventory:adjustment:create
 components:
   schemas:
-    RecordMovementRequest:
+    CostingMethodConfigRequest:
       type: object
-      description: Request body for recording a directional stock movement in the inventory ledger
+      description: Upsert of the costing method configured for one scope (odoo-parity J1)
       properties:
-        productSku:
+        scopeType:
           type: string
-          description: Stock keeping unit code of the product being moved
-          example: SKU-10042
-          minLength: 1
-        fromLocationId:
-          type: string
-          format: uuid
-          description: Identifier of the location the stock moves from
-          example: 01960003-0000-7000-8000-000000000130
-        toLocationId:
-          type: string
-          format: uuid
-          description: Identifier of the destination location; required for TRANSFER movements
-          example: 01960003-0000-7000-8000-000000000131
-        movementType:
-          type: string
-          description: Direct ledger movement type. ADJUST is workflow-only and must use /v1/inventory/adjustments endpoints.
+          description: Configuration scope kind
           enum:
-          - RECEIVE
-          - PUT_AWAY
-          - PICK
-          - ISSUE
-          - RETURN
-          - TRANSFER
-          example: RECEIVE
-        quantity:
-          type: integer
-          format: int32
-          description: Quantity of units being moved
-          example: 12
-        unitOfMeasure:
+          - SKU
+          - SKU_CATEGORY
+          - DEFAULT
+          example: DEFAULT
+        scopeValue:
           type: string
-          description: Unit of measure for the quantity
-          example: EACH
-        sourceTransactionId:
+          description: 'Scope key: the stock item id for SKU, the category string for SKU_CATEGORY, omitted for DEFAULT'
+          example: 01960003-0000-7000-8000-000000000010
+        method:
           type: string
-          description: Reference to the originating system transaction that caused the movement
-          example: 01960003-0000-7000-8000-000000000132
+          description: Costing method applied at this scope
+          enum:
+          - STANDARD
+          - AVERAGE
+          example: AVERAGE
       required:
-      - fromLocationId
-      - movementType
-      - productSku
-      - quantity
-    ShortageResolveRequest:
+      - method
+      - scopeType
+    CostingMethodConfigResponse:
       type: object
-      description: Request to resolve an inventory shortage on an allocation
+      description: One costing method configuration row (odoo-parity J1)
       properties:
-        allocationId:
+        configId:
           type: string
           format: uuid
-          description: Identifier of the allocation to resolve
+          description: Unique identifier of the configuration row
           example: 01960003-0000-7000-8000-000000000001
-        allocationLineId:
+        scopeType:
           type: string
-          format: uuid
-          description: Identifier of the specific allocation line to resolve, when line-scoped
-          example: 01960003-0000-7000-8000-000000000002
-        resolution:
+          description: Configuration scope kind
+          enum:
+          - SKU
+          - SKU_CATEGORY
+          - DEFAULT
+          example: DEFAULT
+        scopeValue:
           type: string
-          description: Resolution strategy to apply to the shortage
-          example: SUBSTITUTE
-          minLength: 1
-        substituteSku:
+          description: 'Scope key: stock item id, category string, or null for DEFAULT'
+          example: 01960003-0000-7000-8000-000000000010
+        method:
           type: string
-          description: Substitute stock-keeping unit to use, when the resolution is a substitution
-          example: SKU-10043
-        notes:
-          type: string
-          description: Optional free-text notes explaining the resolution
-          example: Customer approved substitute item
-      required:
-      - allocationId
-      - resolution
-    ShortageResolutionResultDto:
-      type: object
-      description: Result of applying a resolution to an inventory shortage
-      properties:
-        allocationId:
-          type: string
-          format: uuid
-          description: Identifier of the allocation that was resolved
-          example: 01960003-0000-7000-8000-000000000001
-        resolution:
-          type: string
-          description: Resolution strategy that was applied
-          example: SUBSTITUTE
-        resolvedAt:
+          description: Costing method applied at this scope
+          enum:
+          - STANDARD
+          - AVERAGE
+          example: AVERAGE
+        active:
+          type: boolean
+          description: Whether this row participates in resolution
+          example: true
+        createdAt:
           type: string
           format: date-time
-          description: Timestamp when the shortage was resolved
-          example: 2026-01-15 09:30:00+00:00
-        status:
+          description: Timestamp when the row was created
+          example: 2026-07-01 00:00:00+00:00
+        updatedAt:
           type: string
-          description: Resulting status of the allocation after resolution
-          example: RESOLVED
+          format: date-time
+          description: Timestamp when the row was last updated
+          example: 2026-07-01 00:00:00+00:00
       required:
-      - allocationId
-      - resolution
-      - resolvedAt
-      - status
+      - active
+      - configId
+      - createdAt
+      - method
+      - scopeType
+      - updatedAt
     ApiError:
       type: object
       description: Standard error response envelope returned by all Durion backend APIs
@@ -3755,6 +6035,1166 @@ components:
       required:
       - field
       - message
+    SourcingStrategyConfigRequest:
+      type: object
+      description: Upsert of the sourcing strategy configured for one scope (odoo-parity H1)
+      properties:
+        scopeType:
+          type: string
+          description: Configuration scope kind
+          enum:
+          - SKU_CATEGORY
+          - SITE
+          - DEFAULT
+          example: SITE
+        scopeValue:
+          type: string
+          description: 'Scope key: the SKU category string for SKU_CATEGORY, the site UUID as text for SITE, omitted for DEFAULT'
+          example: 01960003-0000-7000-8000-000000000010
+        strategy:
+          type: string
+          description: Sourcing strategy applied at this scope
+          enum:
+          - FIFO
+          - FEFO
+          - PROXIMITY
+          - HIGHEST_STOCK
+          example: PROXIMITY
+      required:
+      - scopeType
+      - strategy
+    SourcingStrategyConfigResponse:
+      type: object
+      description: One sourcing strategy configuration row (odoo-parity H1)
+      properties:
+        configId:
+          type: string
+          format: uuid
+          description: Unique identifier of the configuration row
+          example: 01960003-0000-7000-8000-000000000001
+        scopeType:
+          type: string
+          description: Configuration scope kind
+          enum:
+          - SKU_CATEGORY
+          - SITE
+          - DEFAULT
+          example: SITE
+        scopeValue:
+          type: string
+          description: 'Scope key: category string, site UUID as text, or null for DEFAULT'
+          example: 01960003-0000-7000-8000-000000000010
+        strategy:
+          type: string
+          description: Sourcing strategy applied at this scope
+          enum:
+          - FIFO
+          - FEFO
+          - PROXIMITY
+          - HIGHEST_STOCK
+          example: PROXIMITY
+        active:
+          type: boolean
+          description: Whether this row participates in resolution
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the row was created
+          example: 2026-07-01 00:00:00+00:00
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the row was last updated
+          example: 2026-07-01 00:00:00+00:00
+      required:
+      - active
+      - configId
+      - createdAt
+      - scopeType
+      - strategy
+      - updatedAt
+    UpdateReplenishmentPolicyRequest:
+      type: object
+      description: Full-replace update of a replenishment policy's thresholds and tuning fields. Omitted optional fields are cleared or reset to defaults; location, SKU, and snooze state are not updatable here.
+      properties:
+        minimumQuantity:
+          type: integer
+          format: int32
+          description: Minimum on-hand quantity that triggers replenishment when reached
+          example: 5
+          minimum: 0
+        maximumQuantity:
+          type: integer
+          format: int32
+          description: Maximum on-hand quantity replenishment aims to restock up to
+          example: 50
+          minimum: 1
+        orderMultiple:
+          type: integer
+          format: int32
+          description: Round the computed replenishment quantity up to the nearest multiple of this value; omit to clear (no rounding)
+          example: 6
+          minimum: 1
+        leadTimeDaysOverride:
+          type: integer
+          format: int32
+          description: Per-policy lead-time override in days; omit to clear (vendor-feed/default lead time applies)
+          example: 3
+          minimum: 0
+        preferredSourceType:
+          type: string
+          description: Preferred sourcing channel for replenishing this policy's pick face; omit to reset to EITHER
+          enum:
+          - INTERNAL_TRANSFER
+          - PURCHASE
+          - EITHER
+          example: EITHER
+        active:
+          type: boolean
+          description: Whether the policy participates in replenishment evaluation; omit to reset to true
+          example: true
+        minimumLessThanMaximum:
+          type: boolean
+      required:
+      - maximumQuantity
+      - minimumQuantity
+    ReplenishmentPolicyResponse:
+      type: object
+      description: Representation of a replenishment policy defining min/max stock thresholds for an item at a location
+      properties:
+        policyId:
+          type: string
+          description: Unique identifier of the replenishment policy
+          example: 01960003-0000-7000-8000-000000000001
+        locationId:
+          type: string
+          format: uuid
+          description: Identifier of the location the replenishment policy applies to
+          example: 01960003-0000-7000-8000-000000000002
+        itemSKU:
+          type: string
+          description: SKU of the item the replenishment policy applies to
+          example: SKU-10042
+        minimumQuantity:
+          type: integer
+          format: int32
+          description: Minimum on-hand quantity that triggers replenishment when reached
+          example: 5
+        maximumQuantity:
+          type: integer
+          format: int32
+          description: Maximum on-hand quantity replenishment aims to restock up to
+          example: 50
+        orderMultiple:
+          type: integer
+          format: int32
+          description: Round the computed replenishment quantity up to the nearest multiple of this value; absent means no rounding
+          example: 6
+        leadTimeDaysOverride:
+          type: integer
+          format: int32
+          description: Per-policy lead-time override in days; absent means vendor-feed/default lead time applies
+          example: 3
+        preferredSourceType:
+          type: string
+          description: Preferred sourcing channel for replenishing this policy's pick face
+          example: EITHER
+        snoozedUntil:
+          type: string
+          description: Instant until which the policy is snoozed (excluded from replenishment evaluation); absent or past means the policy is evaluated normally
+          example: 2026-02-01 00:00:00+00:00
+        active:
+          type: boolean
+          description: Whether the policy participates in replenishment evaluation
+          example: true
+        createdAt:
+          type: string
+          description: Timestamp at which the replenishment policy was created
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - active
+      - createdAt
+      - itemSKU
+      - locationId
+      - maximumQuantity
+      - minimumQuantity
+      - policyId
+      - preferredSourceType
+    LotExpirationUpdateRequest:
+      type: object
+      description: Set or clear a lot's expiration date and alert-window date
+      properties:
+        expirationDate:
+          type: string
+          format: date
+          description: Expiration date of the lot (null clears it)
+          example: 2027-01-31
+        alertDate:
+          type: string
+          format: date
+          description: Date the lot enters its expiring-soon alert window (null means no early alert)
+          example: 2027-01-01
+    LotResponse:
+      type: object
+      description: An inventory lot master record (odoo-parity E1)
+      properties:
+        lotId:
+          type: string
+          format: uuid
+          description: Identifier of the lot
+          example: 01980003-0000-7000-8000-000000000001
+        stockItemId:
+          type: string
+          description: Stock item (catalog product id) the lot belongs to
+          example: 01980003-0000-7000-8000-000000000002
+        lotNumber:
+          type: string
+          description: Vendor/manufacturer lot or batch number
+          example: LOT-2026-0042
+        receivedAt:
+          type: string
+          format: date-time
+          description: When the lot was first received into stock
+          example: 2026-07-01 12:00:00+00:00
+        vendorId:
+          type: string
+          format: uuid
+          description: Vendor the lot was first received from, when known
+          example: 01980003-0000-7000-8000-000000000003
+        expirationDate:
+          type: string
+          format: date
+          description: Expiration date; null until the expiry flows (E3) populate it
+          example: 2027-01-31
+        status:
+          type: string
+          description: Lifecycle status of the lot
+          enum:
+          - ACTIVE
+          - QUARANTINED
+          - RECALLED
+          - CONSUMED
+          example: ACTIVE
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last modification timestamp
+      required:
+      - lotId
+      - lotNumber
+      - receivedAt
+      - status
+      - stockItemId
+    UpdateCycleCountScheduleRequest:
+      type: object
+      description: Partial update of a recurring cycle-count schedule; null fields are left unchanged
+      properties:
+        zoneId:
+          type: string
+          format: uuid
+          description: New single-zone filter within the location
+          example: 01960003-0000-7000-8000-000000000002
+        skuCategory:
+          type: string
+          description: New SKU-category filter
+          example: BRAKES
+          maxLength: 100
+          minLength: 0
+        frequencyDays:
+          type: integer
+          format: int32
+          description: New count frequency in days
+          example: 14
+        nextDueDate:
+          type: string
+          format: date
+          description: New next due date
+          example: 2026-09-01
+        autoCreatePlan:
+          type: boolean
+          description: Whether the scheduled runner auto-creates the next cycle-count plan when due
+          example: false
+        active:
+          type: boolean
+          description: Whether the schedule is active
+          example: true
+    CycleCountScheduleResponse:
+      type: object
+      description: A recurring cycle-count schedule and its current due state
+      properties:
+        scheduleId:
+          type: string
+          format: uuid
+          description: Unique identifier of the schedule
+          example: 01960003-0000-7000-8000-000000000001
+        locationId:
+          type: string
+          format: uuid
+          description: Identifier of the location the schedule applies to
+          example: 01960003-0000-7000-8000-000000000002
+        zoneId:
+          type: string
+          format: uuid
+          description: Optional single-zone filter within the location
+          example: 01960003-0000-7000-8000-000000000003
+        skuCategory:
+          type: string
+          description: Optional SKU-category filter
+          example: BRAKES
+        frequencyDays:
+          type: integer
+          format: int32
+          description: Count frequency in days
+          example: 30
+        nextDueDate:
+          type: string
+          format: date
+          description: Next date the schedule is due for counting
+          example: 2026-08-01
+        autoCreatePlan:
+          type: boolean
+          description: Whether the scheduled runner auto-creates the next cycle-count plan when due
+          example: true
+        active:
+          type: boolean
+          description: Whether the schedule is active
+          example: true
+        createdBy:
+          type: string
+          description: Identifier of the user who created the schedule
+          example: user-10042
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the schedule was created
+          example: 2026-07-01 09:30:00+00:00
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the schedule was last updated
+          example: 2026-07-15 10:05:00+00:00
+      required:
+      - active
+      - autoCreatePlan
+      - createdAt
+      - createdBy
+      - frequencyDays
+      - locationId
+      - nextDueDate
+      - scheduleId
+      - updatedAt
+    UpdateCycleCountPlanStatusRequest:
+      type: object
+      description: Request to transition a cycle count plan to a new lifecycle status
+      properties:
+        status:
+          type: string
+          description: Target lifecycle status
+          enum:
+          - PLANNED
+          - STARTED
+          - COMPLETED_PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - CANCELLED
+          example: STARTED
+      required:
+      - status
+    CycleCountPlanResponse:
+      type: object
+      description: A cycle count plan describing scheduled counts for a location and its current state
+      properties:
+        planId:
+          type: string
+          format: uuid
+          description: Unique identifier of the cycle count plan
+          example: 01960003-0000-7000-8000-000000000001
+        locationId:
+          type: string
+          format: uuid
+          description: Identifier of the location the plan applies to
+          example: 01960003-0000-7000-8000-000000000002
+        zoneIds:
+          type: array
+          description: Identifiers of the zones within the location covered by the plan
+          example:
+          - 01960003-0000-7000-8000-000000000003
+          items:
+            type: string
+            format: uuid
+        planName:
+          type: string
+          description: Human-readable name of the cycle count plan
+          example: Q1 perishables count
+        scheduledDate:
+          type: string
+          format: date
+          description: Date on which the cycle count is scheduled to occur
+          example: 2026-01-15
+        status:
+          type: string
+          description: Current lifecycle status of the plan
+          example: SCHEDULED
+        scheduleId:
+          type: string
+          format: uuid
+          description: Identifier of the recurring schedule that created this plan (null for manual plans)
+          example: 01960003-0000-7000-8000-000000000004
+        dueDate:
+          type: string
+          format: date
+          description: Due date this schedule-created plan covers (null for manual plans)
+          example: 2026-08-01
+        createdBy:
+          type: string
+          description: Identifier of the user who created the plan
+          example: user-10042
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the plan was created
+          example: 2026-01-15 09:30:00+00:00
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the plan was last updated
+          example: 2026-01-15 10:05:00+00:00
+      required:
+      - createdAt
+      - createdBy
+      - locationId
+      - planId
+      - planName
+      - scheduledDate
+      - status
+      - updatedAt
+    CreateRevaluationRequest:
+      type: object
+      description: Request to manually revalue a SKU's inventory unit cost
+      properties:
+        stockItemId:
+          type: string
+          description: SKU / stock item identifier to revalue
+          example: OIL-5W30-5QT
+          minLength: 1
+        newUnitCost:
+          type: number
+          description: Absolute corrected unit cost. Supply exactly one of newUnitCost or costDelta. Must be zero or positive
+          example: 5.5
+        costDelta:
+          type: number
+          description: Signed adjustment applied to the SKU's current cost (may be negative for a write-down). Supply exactly one of newUnitCost or costDelta
+          example: -0.75
+        reason:
+          type: string
+          description: Justification for the correction; recorded in the audit log
+          example: Q3 physical recount valuation correction
+          maxLength: 1000
+          minLength: 0
+      required:
+      - reason
+      - stockItemId
+    RevaluationResponse:
+      type: object
+      description: A manual cost-revaluation document with its approval/application state
+      properties:
+        revaluationId:
+          type: string
+          format: uuid
+          description: Revaluation document identifier
+        stockItemId:
+          type: string
+          description: SKU / stock item identifier that was revalued
+        costingMethod:
+          type: string
+          description: Resolved costing method whose cost was corrected
+          enum:
+          - STANDARD
+          - AVERAGE
+        previousUnitCost:
+          type: number
+          description: Unit cost before the revaluation; null when the SKU was uncosted
+        newUnitCost:
+          type: number
+          description: Corrected unit cost
+        onHandQuantity:
+          type: integer
+          format: int64
+          description: On-hand quantity the engine had costed at revaluation time (delta basis)
+        valueDelta:
+          type: number
+          description: 'Signed inventory value change: (newUnitCost - previousUnitCost) x onHandQuantity'
+        reason:
+          type: string
+          description: Justification for the correction
+        status:
+          type: string
+          description: Lifecycle status
+          enum:
+          - PENDING_APPROVAL
+          - AUTO_APPLIED
+          - APPLIED
+          - REJECTED
+        requiredApprovalTier:
+          type: string
+          description: Required approval tier; null when auto-applied
+          enum:
+          - TIER_1_MANAGER
+          - TIER_2_DIRECTOR
+        createdBy:
+          type: string
+          description: Actor who submitted the revaluation
+        approvedBy:
+          type: string
+          description: Actor who approved and applied the revaluation
+        rejectedBy:
+          type: string
+          description: Actor who rejected the revaluation
+        rejectionReason:
+          type: string
+          description: Reason the revaluation was rejected
+        createdAt:
+          type: string
+          format: date-time
+          description: When the document was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the document was last updated
+        appliedAt:
+          type: string
+          format: date-time
+          description: When the revaluation was applied to the cost state
+        rejectedAt:
+          type: string
+          format: date-time
+          description: When the revaluation was rejected
+    RejectRevaluationRequest:
+      type: object
+      description: Request to reject a pending revaluation; the SKU cost state is untouched
+      properties:
+        rejectionReason:
+          type: string
+          description: Reason explaining why the revaluation is being rejected
+          example: Recount disputed; leave standard price unchanged
+          maxLength: 1000
+          minLength: 0
+      required:
+      - rejectionReason
+    CreateTransferOrderRequest:
+      type: object
+      description: Request to create a cross-site transfer order in DRAFT
+      properties:
+        sourceLocationId:
+          type: string
+          format: uuid
+          description: Source site the transfer ships from
+          example: 01960004-0001-7000-8000-00000000000a
+        sourceStorageLocationId:
+          type: string
+          format: uuid
+          description: Optional bin-level source storage location under the source site
+          example: 01960004-0001-7000-8000-00000000000b
+        destinationLocationId:
+          type: string
+          format: uuid
+          description: Destination site the transfer ships to
+          example: 01960004-0001-7000-8000-00000000000c
+        destinationStorageLocationId:
+          type: string
+          format: uuid
+          description: Optional bin-level destination storage location under the destination site
+          example: 01960004-0001-7000-8000-00000000000d
+        lines:
+          type: array
+          description: Requested SKU lines; at least one
+          items:
+            $ref: '#/components/schemas/TransferOrderLineRequest'
+          minItems: 1
+        notes:
+          type: string
+          description: Free-text notes
+          example: Weekly resupply run
+          maxLength: 2000
+          minLength: 0
+      required:
+      - destinationLocationId
+      - lines
+      - sourceLocationId
+    TransferOrderLineRequest:
+      type: object
+      description: Requested SKU line of a transfer order
+      properties:
+        sku:
+          type: string
+          description: SKU / stock item identifier to transfer
+          example: OIL-5W30-5QT
+          minLength: 1
+        requestedQty:
+          type: integer
+          format: int32
+          description: Quantity requested for transfer; must be positive
+          example: 6
+      required:
+      - requestedQty
+      - sku
+    TransferOrderLineResponse:
+      type: object
+      description: SKU line of a transfer order with requested/dispatched/received quantities
+      properties:
+        lineId:
+          type: string
+          format: uuid
+          description: Line identifier
+        lineNumber:
+          type: integer
+          format: int32
+          description: Position of the line within the order (1-based)
+        sku:
+          type: string
+          description: SKU / stock item identifier
+        requestedQty:
+          type: integer
+          format: int32
+          description: Quantity requested for transfer
+        dispatchedQty:
+          type: integer
+          format: int32
+          description: Quantity dispatched from the source so far
+        receivedQty:
+          type: integer
+          format: int32
+          description: Quantity received at the destination so far
+        lotId:
+          type: string
+          format: uuid
+          description: Lot the dispatched units were drawn from (LOT-tracked SKUs, pinned at dispatch)
+        lotNumber:
+          type: string
+          description: Lot number matching lotId, kept for audit/display
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    TransferOrderResponse:
+      type: object
+      description: Cross-site transfer order with lifecycle status and quantity lines
+      properties:
+        transferOrderId:
+          type: string
+          format: uuid
+          description: Transfer order identifier
+        sourceLocationId:
+          type: string
+          format: uuid
+          description: Source site the transfer ships from
+        sourceStorageLocationId:
+          type: string
+          format: uuid
+          description: Bin-level source storage location, when bin-scoped
+        destinationLocationId:
+          type: string
+          format: uuid
+          description: Destination site the transfer ships to
+        destinationStorageLocationId:
+          type: string
+          format: uuid
+          description: Bin-level destination storage location, when bin-scoped
+        status:
+          type: string
+          description: Lifecycle status
+          enum:
+          - DRAFT
+          - APPROVED
+          - DISPATCHED
+          - PARTIALLY_RECEIVED
+          - RECEIVED
+          - SHORT_CLOSED
+          - CANCELLED
+        lines:
+          type: array
+          description: SKU lines
+          items:
+            $ref: '#/components/schemas/TransferOrderLineResponse'
+        notes:
+          type: string
+          description: Free-text notes
+        createdBy:
+          type: string
+          description: User who created the order
+        approvedBy:
+          type: string
+          description: User who approved the order, when the approval step is enabled
+        dispatchedBy:
+          type: string
+          description: User who dispatched the order
+        shortCloseDisposition:
+          type: string
+          description: Disposition of the undelivered remainder; set only when SHORT_CLOSED
+          enum:
+          - LOST_IN_TRANSIT
+          - RETURNED_TO_SOURCE
+        shortCloseReason:
+          type: string
+          description: Short-close reason; set only when SHORT_CLOSED
+        shortCloseNotes:
+          type: string
+          description: Short-close notes; set only when SHORT_CLOSED
+        shortClosedBy:
+          type: string
+          description: User who short-closed the order; set only when SHORT_CLOSED
+        shortClosedAt:
+          type: string
+          format: date-time
+          description: When the order was short-closed; set only when SHORT_CLOSED
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    ShortCloseTransferOrderRequest:
+      type: object
+      description: Request to short-close a transfer order, resolving the undelivered remainder with a whole-order disposition
+      properties:
+        disposition:
+          type: string
+          description: 'Disposition of the undelivered remainder: LOST_IN_TRANSIT writes it off (SCRAP_OUT, reason LOST); RETURNED_TO_SOURCE restores it to source on-hand'
+          enum:
+          - LOST_IN_TRANSIT
+          - RETURNED_TO_SOURCE
+        reason:
+          type: string
+          description: Reason for the short-close (mandatory)
+          maxLength: 100
+          minLength: 0
+        notes:
+          type: string
+          description: Free-text notes explaining the short-close (mandatory)
+          maxLength: 2000
+          minLength: 0
+      required:
+      - disposition
+      - notes
+      - reason
+    ReceiveTransferOrderRequest:
+      type: object
+      description: Request to receive a transfer order; omitted lines receive their full remainder
+      properties:
+        lines:
+          type: array
+          description: Explicit per-line received quantities; omitted lines receive their full remainder
+          items:
+            $ref: '#/components/schemas/TransferQuantityLineRequest'
+    TransferQuantityLineRequest:
+      type: object
+      description: Explicit per-line quantity for a transfer dispatch or receive
+      properties:
+        lineId:
+          type: string
+          format: uuid
+          description: Transfer order line identifier
+        quantity:
+          type: integer
+          format: int32
+          description: Quantity to dispatch/receive on this line; must be positive
+        lotNumber:
+          type: string
+          description: Lot number the dispatched units are drawn from (dispatch only; receive and short-close reuse the lot recorded at dispatch). Required (422 LOT_NUMBER_REQUIRED) when the SKU is LOT-tracked; must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE) lot. Ignored for untracked SKUs
+          example: LOT-2026-A
+          maxLength: 128
+          minLength: 0
+      required:
+      - lineId
+      - quantity
+    DispatchTransferOrderRequest:
+      type: object
+      description: Request to dispatch a transfer order; omitted lines dispatch their full requested quantity
+      properties:
+        lines:
+          type: array
+          description: Explicit per-line dispatch quantities; omitted lines dispatch full requested
+          items:
+            $ref: '#/components/schemas/TransferQuantityLineRequest'
+    RecordMovementRequest:
+      type: object
+      description: Request body for recording a directional stock movement in the inventory ledger
+      properties:
+        productSku:
+          type: string
+          description: Stock keeping unit code of the product being moved
+          example: SKU-10042
+          minLength: 1
+        fromLocationId:
+          type: string
+          format: uuid
+          description: Identifier of the location the stock moves from
+          example: 01960003-0000-7000-8000-000000000130
+        toLocationId:
+          type: string
+          format: uuid
+          description: Identifier of the destination location; required for TRANSFER movements
+          example: 01960003-0000-7000-8000-000000000131
+        movementType:
+          type: string
+          description: Direct ledger movement type. ADJUST is workflow-only and must use /v1/inventory/adjustments endpoints.
+          enum:
+          - RECEIVE
+          - PUT_AWAY
+          - PICK
+          - ISSUE
+          - RETURN
+          - TRANSFER
+          example: RECEIVE
+        quantity:
+          type: integer
+          format: int32
+          description: Quantity of units being moved
+          example: 12
+        unitOfMeasure:
+          type: string
+          description: Unit of measure for the quantity
+          example: EACH
+        sourceTransactionId:
+          type: string
+          description: Reference to the originating system transaction that caused the movement
+          example: 01960003-0000-7000-8000-000000000132
+      required:
+      - fromLocationId
+      - movementType
+      - productSku
+      - quantity
+    ShortageResolveRequest:
+      type: object
+      description: Request to resolve an inventory shortage by executing a chosen option
+      properties:
+        idempotencyKey:
+          type: string
+          description: Retry-safe idempotency key; a replay with the same key returns the original result
+          example: shortage-resolve-01960003-0001
+          minLength: 1
+        allocationId:
+          type: string
+          format: uuid
+          description: Identifier of the allocation to resolve
+          example: 01960003-0000-7000-8000-000000000001
+        optionType:
+          type: string
+          description: The resolution option to execute
+          enum:
+          - BACKORDER
+          - SUBSTITUTE
+          - TRANSFER_IN
+          - EMERGENCY_PURCHASE
+          - CANCEL_LINE
+          example: BACKORDER
+        sku:
+          type: string
+          description: SKU / stock-item identifier that is short
+          example: 01960003-0000-7000-8000-000000000002
+          minLength: 1
+        shortQuantity:
+          type: integer
+          format: int32
+          description: Quantity that is short and to be resolved
+          example: 3
+        locationId:
+          type: string
+          format: uuid
+          description: Site the demand is short at (required for BACKORDER / TRANSFER_IN)
+          example: 01960004-0001-7000-8000-00000000000c
+        workorderLineId:
+          type: string
+          format: uuid
+          description: Workorder line whose demand was short (required for BACKORDER / SUBSTITUTE / CANCEL_LINE)
+          example: 01960003-0000-7000-8000-000000000003
+        substituteSku:
+          type: string
+          description: Substitute SKU to reserve; required when optionType is SUBSTITUTE
+          example: 01960003-0000-7000-8000-000000000099
+        sourceLocationId:
+          type: string
+          format: uuid
+          description: Source site to pull surplus from; required when optionType is TRANSFER_IN
+          example: 01960004-0001-7000-8000-00000000000a
+        notes:
+          type: string
+          description: Optional free-text notes explaining the resolution
+          example: Customer approved substitute item
+      required:
+      - allocationId
+      - idempotencyKey
+      - optionType
+      - shortQuantity
+      - sku
+    ShortageResolutionResultDto:
+      type: object
+      description: Result of applying a resolution to an inventory shortage
+      properties:
+        allocationId:
+          type: string
+          format: uuid
+          description: Identifier of the allocation that was resolved
+          example: 01960003-0000-7000-8000-000000000001
+        optionType:
+          type: string
+          description: The resolution option that was executed
+          enum:
+          - BACKORDER
+          - SUBSTITUTE
+          - TRANSFER_IN
+          - EMERGENCY_PURCHASE
+          - CANCEL_LINE
+          example: BACKORDER
+        idempotencyKey:
+          type: string
+          description: Idempotency key the resolution was recorded under
+        artifactType:
+          type: string
+          description: Kind of artifact created (BACKORDER, RESERVATION, TRANSFER_ORDER, PURCHASE_SUGGESTION, NONE)
+          example: BACKORDER
+        artifactId:
+          type: string
+          format: uuid
+          description: Identifier of the created artifact; null for CANCEL_LINE
+          example: 01960003-0000-7000-8000-0000000000aa
+        resolvedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the shortage was resolved
+          example: 2026-01-15 09:30:00+00:00
+        status:
+          type: string
+          description: Resulting status of the resolution
+          example: RESOLVED
+      required:
+      - allocationId
+      - artifactType
+      - idempotencyKey
+      - optionType
+      - resolvedAt
+      - status
+    CreateScrapRequest:
+      type: object
+      description: Request to scrap (write off) stock at a location
+      properties:
+        stockItemId:
+          type: string
+          description: SKU / stock item identifier being scrapped
+          example: OIL-5W30-5QT
+          minLength: 1
+        quantity:
+          type: integer
+          format: int32
+          description: Quantity to write off; must be positive
+          example: 3
+        locationId:
+          type: string
+          format: uuid
+          description: Location the stock is scrapped from
+          example: 96dd346a-047c-86f5-3c9a-7c8cac53da86
+        storageLocationId:
+          type: string
+          format: uuid
+          description: Bin-level storage location, when the scrap is bin-scoped
+          example: 01960004-0001-7000-8000-000000000009
+        reasonCode:
+          type: string
+          description: Scrap reason; OTHER requires notes
+          enum:
+          - DAMAGED
+          - EXPIRED
+          - LOST
+          - RECALLED
+          - CONTAMINATED
+          - WARRANTY_DESTROYED
+          - OTHER
+          example: DAMAGED
+        notes:
+          type: string
+          description: Free-text notes; mandatory when reasonCode is OTHER
+          example: Dropped during putaway, casing cracked
+          maxLength: 2000
+          minLength: 0
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder the scrapped part belonged to, when linked
+          example: 01960005-0000-7000-8000-000000000001
+        lotNumber:
+          type: string
+          description: Lot number the scrapped units belong to. Required (422 LOT_NUMBER_REQUIRED) when the SKU is LOT-tracked; must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE) lot. Ignored for untracked SKUs
+          example: LOT-2026-A
+          maxLength: 128
+          minLength: 0
+        attachmentReference:
+          type: string
+          description: Photo/attachment reference (storage out of scope)
+          example: s3://scrap-evidence/2026/07/scrap-123.jpg
+          maxLength: 500
+          minLength: 0
+        shouldReplenish:
+          type: boolean
+          description: When true, posting triggers a pick-face replenishment evaluation for the SKU/location
+          example: false
+        negativeStockOverride:
+          type: boolean
+          description: Explicit negative-stock override for the auto-approve posting path; honored only when the caller holds inventory:adjustment:override
+          example: false
+      required:
+      - locationId
+      - quantity
+      - reasonCode
+      - stockItemId
+    ScrapResponse:
+      type: object
+      description: Scrap document with its approval and posting state
+      properties:
+        scrapId:
+          type: string
+          format: uuid
+          description: Scrap document identifier
+        stockItemId:
+          type: string
+          description: SKU / stock item identifier
+        quantity:
+          type: integer
+          format: int32
+          description: Quantity written off
+        locationId:
+          type: string
+          format: uuid
+          description: Location the stock is scrapped from
+        storageLocationId:
+          type: string
+          format: uuid
+          description: Bin-level storage location, when bin-scoped
+        reasonCode:
+          type: string
+          description: Scrap reason
+          enum:
+          - DAMAGED
+          - EXPIRED
+          - LOST
+          - RECALLED
+          - CONTAMINATED
+          - WARRANTY_DESTROYED
+          - OTHER
+        notes:
+          type: string
+          description: Free-text notes
+        workorderId:
+          type: string
+          format: uuid
+          description: Linked workorder, when the part was damaged during a job
+        lotId:
+          type: string
+          format: uuid
+          description: Lot the scrapped units belong to (LOT-tracked SKUs)
+        attachmentReference:
+          type: string
+          description: Photo/attachment reference
+        unitCostSnapshot:
+          type: number
+          description: Unit cost snapshot at creation; null when unknown
+        costSource:
+          type: string
+          description: Origin of the cost snapshot (LATEST_RECEIPT or NONE)
+          enum:
+          - LATEST_RECEIPT
+          - NONE
+        scrapValue:
+          type: number
+          description: Monetary value of the scrap (quantity x cost snapshot); null when cost is unknown
+        shouldReplenish:
+          type: boolean
+          description: Whether posting triggers a pick-face replenishment evaluation
+        status:
+          type: string
+          description: Lifecycle status
+          enum:
+          - PENDING_APPROVAL
+          - AUTO_APPROVED
+          - APPROVED
+          - POSTED
+          - REJECTED
+          - FAILED
+        requiredApprovalTier:
+          type: string
+          description: Required approval tier; null when auto-approved
+          enum:
+          - TIER_1_MANAGER
+          - TIER_2_DIRECTOR
+        createdBy:
+          type: string
+          description: User who created the scrap
+        approvedBy:
+          type: string
+          description: User who approved the scrap (SYSTEM for auto-approval)
+        rejectedBy:
+          type: string
+          description: User who rejected the scrap
+        rejectionReason:
+          type: string
+          description: Reason the scrap was rejected
+        ledgerEntryId:
+          type: string
+          format: uuid
+          description: SCRAP_OUT ledger entry created when posted
+        errorMessage:
+          type: string
+          description: Error message when status is FAILED
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+        approvedAt:
+          type: string
+          format: date-time
+          description: Approval timestamp
+        rejectedAt:
+          type: string
+          format: date-time
+          description: Rejection timestamp
+        postedAt:
+          type: string
+          format: date-time
+          description: Ledger posting timestamp
+    RejectScrapRequest:
+      type: object
+      description: Request to reject a pending scrap document; no inventory changes are made
+      properties:
+        rejectionReason:
+          type: string
+          description: Reason explaining why the scrap is being rejected
+          example: Part was recovered and restocked
+          maxLength: 1000
+          minLength: 0
+      required:
+      - rejectionReason
+    ApproveScrapRequest:
+      type: object
+      description: Request to approve a pending scrap document and post it to the ledger
+      properties:
+        negativeStockOverride:
+          type: boolean
+          description: Explicit negative-stock override for the posting; honored only when the caller holds inventory:adjustment:override
+          example: false
     ReturnLineDto:
       type: object
       description: 'A single line of a return submission: item, quantity, reason and disposition location'
@@ -3919,6 +7359,58 @@ components:
           example: Reserved for scheduled workorder pick
       required:
       - storageLocationId
+    ReplenishmentScanResultResponse:
+      type: object
+      description: Summary of a batch replenishment scan run over all replenishment policies
+      properties:
+        policiesEvaluated:
+          type: integer
+          format: int32
+          description: Number of replenishment policies evaluated by the scan
+          example: 42
+        policiesBelowMinimum:
+          type: integer
+          format: int32
+          description: Number of policies whose on-hand quantity was below the configured minimum
+          example: 5
+        tasksCreated:
+          type: integer
+          format: int32
+          description: Number of new replenishment tasks created by the scan
+          example: 3
+        tasksRefreshed:
+          type: integer
+          format: int32
+          description: Number of already-open replenishment tasks whose quantity was refreshed to the current need
+          example: 2
+        suggestionsCreated:
+          type: integer
+          format: int32
+          description: Number of new purchase suggestions created for PURCHASE-preferring policies (odoo-parity F4)
+          example: 1
+        suggestionsRefreshed:
+          type: integer
+          format: int32
+          description: Number of already-open purchase suggestions whose quantity was refreshed to the current need (odoo-parity F4)
+          example: 0
+        policiesSkipped:
+          type: integer
+          format: int32
+          description: Number of policies skipped without evaluation because they are inactive or snoozed
+          example: 1
+        scanAt:
+          type: string
+          description: Timestamp at which the scan ran
+          example: 2026-01-15 09:30:00+00:00
+      required:
+      - policiesBelowMinimum
+      - policiesEvaluated
+      - policiesSkipped
+      - scanAt
+      - suggestionsCreated
+      - suggestionsRefreshed
+      - tasksCreated
+      - tasksRefreshed
     CreateReplenishmentPolicyRequest:
       type: object
       description: Request to create a replenishment policy defining min/max stock thresholds for an item at a location
@@ -3945,6 +7437,30 @@ components:
           description: Maximum on-hand quantity replenishment aims to restock up to
           example: 50
           minimum: 1
+        orderMultiple:
+          type: integer
+          format: int32
+          description: Round the computed replenishment quantity up to the nearest multiple of this value. When omitted, defaults to the vendor-feed pack size for the SKU when one is known (greater than 1); otherwise no rounding is applied.
+          example: 6
+          minimum: 1
+        leadTimeDaysOverride:
+          type: integer
+          format: int32
+          description: Per-policy lead-time override in days; takes precedence over vendor-feed lead-time estimates and the configured default
+          example: 3
+          minimum: 0
+        preferredSourceType:
+          type: string
+          description: Preferred sourcing channel for replenishing this policy's pick face; defaults to EITHER
+          enum:
+          - INTERNAL_TRANSFER
+          - PURCHASE
+          - EITHER
+          example: EITHER
+        active:
+          type: boolean
+          description: Whether the policy participates in replenishment evaluation; defaults to true
+          example: true
         minimumLessThanMaximum:
           type: boolean
       required:
@@ -3952,44 +7468,15 @@ components:
       - locationId
       - maximumQuantity
       - minimumQuantity
-    ReplenishmentPolicyResponse:
+    SnoozeReplenishmentPolicyRequest:
       type: object
-      description: Representation of a replenishment policy defining min/max stock thresholds for an item at a location
+      description: Request to snooze a replenishment policy until a future instant, or clear an existing snooze by sending a null snoozedUntil
       properties:
-        policyId:
+        snoozedUntil:
           type: string
-          description: Unique identifier of the replenishment policy
-          example: 01960003-0000-7000-8000-000000000001
-        locationId:
-          type: string
-          format: uuid
-          description: Identifier of the location the replenishment policy applies to
-          example: 01960003-0000-7000-8000-000000000002
-        itemSKU:
-          type: string
-          description: SKU of the item the replenishment policy applies to
-          example: SKU-10042
-        minimumQuantity:
-          type: integer
-          format: int32
-          description: Minimum on-hand quantity that triggers replenishment when reached
-          example: 5
-        maximumQuantity:
-          type: integer
-          format: int32
-          description: Maximum on-hand quantity replenishment aims to restock up to
-          example: 50
-        createdAt:
-          type: string
-          description: Timestamp at which the replenishment policy was created
-          example: 2026-01-15 09:30:00+00:00
-      required:
-      - createdAt
-      - itemSKU
-      - locationId
-      - maximumQuantity
-      - minimumQuantity
-      - policyId
+          format: date-time
+          description: Future instant until which the policy is excluded from replenishment evaluation; null clears an existing snooze
+          example: 2026-02-01 00:00:00+00:00
     CreateReceivingSessionRequest:
       type: object
       description: Request to open a new inventory receiving session against a source document
@@ -4038,6 +7525,22 @@ components:
           type: string
           description: Identifier of the workorder line the receiving line fulfils, when applicable
           example: 01960003-0000-7000-8000-000000000004
+        lotNumber:
+          type: string
+          description: Lot or batch number recorded on receipt; linked to the lot master for LOT-tracked products
+          example: LOT-2026-0042
+        documentUom:
+          type: string
+          description: UoM the line was keyed in when it differed from the product's base UoM
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity as keyed in documentUom; receivedQuantity holds the derived base quantity
+          example: 1
+        conversionFactor:
+          type: number
+          description: Effective base-per-document-unit conversion factor applied at posting time
+          example: 12
       required:
       - lineId
       - productId
@@ -4117,12 +7620,36 @@ components:
           example: 01960003-0000-7000-8000-000000000001
         receivedQuantity:
           type: number
-          description: Quantity actually received for the line; may be zero
+          description: Quantity actually received for the line, in the product's base UoM; may be zero. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 8
           minimum: 0.0
+        lotNumber:
+          type: string
+          description: Lot or batch number of the received stock. Required (422 LOT_NUMBER_REQUIRED) when the product is LOT-tracked per the catalog replica; ignored for tracking purposes otherwise
+          example: LOT-2026-0042
+        documentUom:
+          type: string
+          description: Optional UoM the line is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at posting time; a UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity received expressed in documentUom; must be supplied together with documentUom
+          example: 1
+        expirationDate:
+          type: string
+          format: date
+          description: Optional expiration date of the received lot (odoo-parity E3). Stamped on the lot on first receipt for LOT-tracked products; ignored for untracked products and for lots that already exist (correct an existing lot via the lot-management endpoint)
+          example: 2027-01-31
+        serialNumbers:
+          type: array
+          description: 'Serial numbers of the received units (odoo-parity E4). Required for SERIAL-tracked products: the list size must equal the received base quantity (422 SERIAL_COUNT_MISMATCH otherwise), and each serial is enumerated as an in-stock unit. Ignored for untracked and LOT-tracked products'
+          example:
+          - SN-0001
+          - SN-0002
+          items:
+            type: string
       required:
       - lineId
-      - receivedQuantity
     ReceiveItemsResponse:
       type: object
       description: Result of recording received quantities for a receiving session
@@ -4209,6 +7736,12 @@ components:
           type: string
           description: Optional free-text note describing the cross-dock action
           example: Cross-docked at dock door 3 for urgent workorder
+        lotNumber:
+          type: string
+          description: Lot or batch number of the cross-docked stock. Required (422 LOT_NUMBER_REQUIRED) when the product is LOT-tracked (falls back to the lot number already keyed on the receiving line); the lot is found-or-created like any receipt and stamped on BOTH paired ledger entries. Ignored for untracked products
+          example: LOT-2026-A
+          maxLength: 128
+          minLength: 0
       required:
       - quantity
       - workorderId
@@ -4487,6 +8020,165 @@ components:
       required:
       - productId
       - quantity
+    DismissPurchaseSuggestionRequest:
+      type: object
+      description: Request to dismiss a purchase suggestion; the reason is mandatory
+      properties:
+        reason:
+          type: string
+          description: Why the suggestion is being dismissed
+          example: Vendor contract under renegotiation
+          maxLength: 255
+          minLength: 0
+      required:
+      - reason
+    PurchaseSuggestionResponse:
+      type: object
+      description: A scan-generated suggestion to purchase stock for a PURCHASE-preferring replenishment policy. Lifecycle SUGGESTED → ACCEPTED → CONVERTED | DISMISSED; acceptance is human-mandatory and conversion produces a DRAFT purchase order subject to the normal approval workflow
+      properties:
+        suggestionId:
+          type: string
+          format: uuid
+          description: Purchase suggestion identifier
+          example: 01980003-0000-7000-8000-000000000001
+        policyId:
+          type: string
+          format: uuid
+          description: Replenishment policy the suggestion was computed for
+          example: 01980003-0000-7000-8000-000000000002
+        itemSKU:
+          type: string
+          description: Stock item (SKU) to purchase
+          example: SKU-12345
+        locationId:
+          type: string
+          format: uuid
+          description: Destination location the purchased stock is for
+          example: 01980003-0000-7000-8000-000000000003
+        suggestedQuantity:
+          type: integer
+          format: int32
+          description: Quantity to purchase after MOQ/pack/order-multiple rounding
+          example: 24
+        suggestedVendorType:
+          type: string
+          description: Which normalized vendor feed the selected vendor came from; null when no vendor was selectable
+          enum:
+          - MANUFACTURER
+          - DISTRIBUTOR
+          example: MANUFACTURER
+        vendorRefId:
+          type: string
+          format: uuid
+          description: Selected manufacturer or distributor identifier; null when no vendor was selectable
+          example: 01980003-0000-7000-8000-000000000004
+        unitCostMinor:
+          type: integer
+          format: int64
+          description: Per-unit cost in minor currency units from the vendor feed; null when the feed carries no price
+          example: 1499
+        unitCostCurrency:
+          type: string
+          description: ISO 4217 currency of unitCostMinor
+          example: USD
+        vendorPackSize:
+          type: integer
+          format: int32
+          description: Selected vendor's pack size captured at suggestion time
+          example: 6
+        leadTimeDays:
+          type: integer
+          format: int32
+          description: Vendor lead-time estimate in days (MAX-day estimate, consistent with the replenishment horizon math)
+          example: 5
+        earliestExpectedDate:
+          type: string
+          format: date
+          description: Earliest date the purchase could plausibly arrive (suggestion date + lead time)
+          example: 2026-08-01
+        selectionReason:
+          type: string
+          description: Explainable record of the deterministic vendor-ranking inputs
+          example: 'MANUFACTURER 0198…: avail 40>=12, lead 5d, price 1499 USD-minor/unit; beat DISTRIBUTOR 0199…: avail 30>=12, lead 7d, price n/a'
+        status:
+          type: string
+          description: Lifecycle status
+          enum:
+          - SUGGESTED
+          - ACCEPTED
+          - CONVERTED
+          - DISMISSED
+          example: SUGGESTED
+        dismissalReason:
+          type: string
+          description: Human-entered reason captured when the suggestion was dismissed
+          example: Vendor contract under renegotiation
+        convertedPurchaseOrderId:
+          type: string
+          format: uuid
+          description: The DRAFT purchase order the suggestion was converted into
+          example: 01980003-0000-7000-8000-000000000005
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: 2026-07-23 09:30:00+00:00
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: 2026-07-23 09:30:00+00:00
+      required:
+      - createdAt
+      - itemSKU
+      - locationId
+      - policyId
+      - selectionReason
+      - status
+      - suggestedQuantity
+      - suggestionId
+      - updatedAt
+    ConvertPurchaseSuggestionsRequest:
+      type: object
+      description: Request to convert one or more ACCEPTED purchase suggestions into a single multi-line DRAFT purchase order. All suggestions must be ACCEPTED and share one vendor
+      properties:
+        suggestionIds:
+          type: array
+          description: Identifiers of the ACCEPTED suggestions to convert; all must share one vendor
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+      required:
+      - suggestionIds
+    ConvertPurchaseSuggestionsResponse:
+      type: object
+      description: Result of converting accepted purchase suggestions into a DRAFT purchase order
+      properties:
+        purchaseOrderId:
+          type: string
+          format: uuid
+          description: Identifier of the created DRAFT purchase order
+          example: 01980003-0000-7000-8000-000000000005
+        poNumber:
+          type: string
+          description: Human-readable purchase order number
+          example: PO-000123
+        purchaseOrderStatus:
+          type: string
+          description: Status of the created purchase order (always DRAFT; the existing approval workflow applies)
+          example: DRAFT
+        convertedSuggestionIds:
+          type: array
+          description: Suggestions stamped CONVERTED by this call
+          items:
+            type: string
+            format: uuid
+      required:
+      - convertedSuggestionIds
+      - poNumber
+      - purchaseOrderId
+      - purchaseOrderStatus
     CreatePurchaseOrderRequest:
       type: object
       description: Request to create a new purchase order for a vendor with one or more order lines
@@ -4560,7 +8252,7 @@ components:
           minLength: 1
         quantity:
           type: number
-          description: Quantity of the item being ordered on this line
+          description: Quantity of the item being ordered on this line, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 12
         unitCostMinor:
           type: integer
@@ -4575,10 +8267,17 @@ components:
           type: string
           description: Identifier of the general ledger account this line posts to
           example: GL-5000
+        documentUom:
+          type: string
+          description: Optional UoM the line is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at derivation time via the catalog conversion factors; unitCostMinor then refers to one documentUom unit. A UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity ordered expressed in documentUom; must be supplied together with documentUom
+          example: 1
       required:
       - description
       - lineNumber
-      - quantity
       - unitCostMinor
     PurchaseOrderLineResponse:
       type: object
@@ -4626,6 +8325,18 @@ components:
           type: number
           description: Quantity on this line not yet received
           example: 4
+        documentUom:
+          type: string
+          description: UoM the line was keyed in when it differed from the product's base UoM
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity as keyed in documentUom; quantityDecimal holds the derived base quantity
+          example: 1
+        conversionFactor:
+          type: number
+          description: Effective base-per-document-unit conversion factor applied at derivation time
+          example: 12
       required:
       - lineId
       - lineNumber
@@ -4820,16 +8531,27 @@ components:
           example: 01960003-0000-7000-8000-000000000020
         quantityReceived:
           type: number
-          description: Quantity received for this line
+          description: Quantity received for this line, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 4
         unitCostMinor:
           type: integer
           format: int64
-          description: Actual unit cost of the received goods in the smallest currency unit (e.g. cents)
+          description: Actual unit cost of the received goods in the smallest currency unit (e.g. cents). When documentUom is present this refers to one documentUom unit
           example: 1499
+        documentUom:
+          type: string
+          description: Optional UoM the receipt is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at posting time; a UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity received expressed in documentUom; must be supplied together with documentUom
+          example: 1
+        lotNumber:
+          type: string
+          description: Lot or batch number of the received stock. Required (422 LOT_NUMBER_REQUIRED) when the line's product is LOT-tracked per the catalog replica; ignored for tracking purposes otherwise
+          example: LOT-2026-0042
       required:
       - lineId
-      - quantityReceived
     ReceivePurchaseOrderRequest:
       type: object
       description: Request to record receipt of goods against one or more purchase order lines
@@ -4998,6 +8720,12 @@ components:
           format: int32
           description: Quantity of units actually picked at the scanned location
           example: 12
+        lotNumber:
+          type: string
+          description: Lot number the units were picked from. Required (422 LOT_NUMBER_REQUIRED) when the SKU is LOT-tracked; must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE) lot. May differ from the task's advisory suggestedLotNumber. Ignored for untracked SKUs
+          example: LOT-2026-A
+          maxLength: 128
+          minLength: 0
       required:
       - quantityPicked
       - scannedLocationId
@@ -5050,6 +8778,15 @@ components:
           format: int32
           description: Ordinal position of this task in the pick sequence
           example: 1
+        suggestedLotNumber:
+          type: string
+          description: Advisory lot suggestion for LOT-tracked SKUs (FIFO by lot receivedAt at the suggested location; FEFO once expiry data exists). Null for untracked SKUs or when no lot has stock
+          example: LOT-2026-A
+        pickedLotId:
+          type: string
+          format: uuid
+          description: Identifier of the lot actually keyed at pick confirmation for LOT-tracked SKUs; null for untracked SKUs and before confirmation
+          example: 01960003-0000-7000-8000-000000000044
       required:
       - locationId
       - pickListId
@@ -5058,6 +8795,27 @@ components:
       - quantityRequired
       - skuId
       - sortOrder
+      - status
+    LotStatusUpdateRequest:
+      type: object
+      description: 'Lot status change: QUARANTINE/RECALL a lot or release it back to ACTIVE'
+      properties:
+        status:
+          type: string
+          description: Target lifecycle status. One of ACTIVE (release), QUARANTINED, RECALLED. CONSUMED is rejected (reconciler-owned).
+          enum:
+          - ACTIVE
+          - QUARANTINED
+          - RECALLED
+          - CONSUMED
+          example: QUARANTINED
+        reason:
+          type: string
+          description: Reason for the status change (mandatory; recorded for traceability)
+          example: Supplier recall notice R-2026-014
+          minLength: 1
+      required:
+      - reason
       - status
     DeactivateLocationRequest:
       type: object
@@ -5194,7 +8952,7 @@ components:
           minLength: 1
         quantityReceived:
           type: number
-          description: Whole-unit quantity of the SKU received in this goods receipt
+          description: Whole-unit quantity of the SKU received, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 8
         unitCostMinor:
           type: integer
@@ -5205,8 +8963,23 @@ components:
           type: string
           description: Lot or batch number associated with the received product
           example: LOT-2026-0042
+        documentUom:
+          type: string
+          description: Optional UoM the receipt line is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at posting time and the ledger posts the base quantity; unitCostMinor then refers to one documentUom unit. A UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity received expressed in documentUom; must be supplied together with documentUom
+          example: 1
+        serialNumbers:
+          type: array
+          description: 'Serial numbers of the received units (odoo-parity E4). Required for SERIAL-tracked products: the list size must equal the received base quantity (422 SERIAL_COUNT_MISMATCH otherwise), and each serial is enumerated as an in-stock unit. Ignored for untracked and LOT-tracked products'
+          example:
+          - SN-0001
+          - SN-0002
+          items:
+            type: string
       required:
-      - quantityReceived
       - sku
       - unitCostMinor
     CreateGoodsReceiptRequest:
@@ -5269,6 +9042,18 @@ components:
           format: int64
           description: Total accrued cost for this line expressed in minor currency units (quantity multiplied by unit cost)
           example: 11992
+        documentUom:
+          type: string
+          description: UoM the line was keyed in when it differed from the product's base UoM
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity as keyed in documentUom; quantityReceived holds the derived base quantity
+          example: 1
+        conversionFactor:
+          type: number
+          description: Effective base-per-document-unit conversion factor applied at posting time
+          example: 12
       required:
       - quantityReceived
       - receiptLineId
@@ -5326,6 +9111,44 @@ components:
       - poId
       - receiptId
       - receiptNumber
+    CreateCycleCountScheduleRequest:
+      type: object
+      description: Request to create a recurring cycle-count schedule for a location
+      properties:
+        locationId:
+          type: string
+          format: uuid
+          description: Identifier of the location the schedule applies to
+          example: 01960003-0000-7000-8000-000000000001
+        zoneId:
+          type: string
+          format: uuid
+          description: Optional single-zone filter within the location
+          example: 01960003-0000-7000-8000-000000000002
+        skuCategory:
+          type: string
+          description: Optional SKU-category filter (plain string, metadata-only in v1)
+          example: BRAKES
+          maxLength: 100
+          minLength: 0
+        frequencyDays:
+          type: integer
+          format: int32
+          description: Count frequency in days
+          example: 30
+        nextDueDate:
+          type: string
+          format: date
+          description: First date the schedule is due for counting
+          example: 2026-08-01
+        autoCreatePlan:
+          type: boolean
+          description: Whether the scheduled runner auto-creates the next cycle-count plan when due (false = the schedule only appears in the due-for-count view); defaults to false
+          example: true
+      required:
+      - frequencyDays
+      - locationId
+      - nextDueDate
     CreateCycleCountPlanRequest:
       type: object
       description: Request to create a cycle count plan scheduling counts across a location and zones
@@ -5357,64 +9180,6 @@ components:
       - locationId
       - planName
       - scheduledDate
-    CycleCountPlanResponse:
-      type: object
-      description: A cycle count plan describing scheduled counts for a location and its current state
-      properties:
-        planId:
-          type: string
-          format: uuid
-          description: Unique identifier of the cycle count plan
-          example: 01960003-0000-7000-8000-000000000001
-        locationId:
-          type: string
-          format: uuid
-          description: Identifier of the location the plan applies to
-          example: 01960003-0000-7000-8000-000000000002
-        zoneIds:
-          type: array
-          description: Identifiers of the zones within the location covered by the plan
-          example:
-          - 01960003-0000-7000-8000-000000000003
-          items:
-            type: string
-            format: uuid
-        planName:
-          type: string
-          description: Human-readable name of the cycle count plan
-          example: Q1 perishables count
-        scheduledDate:
-          type: string
-          format: date
-          description: Date on which the cycle count is scheduled to occur
-          example: 2026-01-15
-        status:
-          type: string
-          description: Current lifecycle status of the plan
-          example: SCHEDULED
-        createdBy:
-          type: string
-          description: Identifier of the user who created the plan
-          example: user-10042
-        createdAt:
-          type: string
-          format: date-time
-          description: Timestamp when the plan was created
-          example: 2026-01-15 09:30:00+00:00
-        updatedAt:
-          type: string
-          format: date-time
-          description: Timestamp when the plan was last updated
-          example: 2026-01-15 10:05:00+00:00
-      required:
-      - createdAt
-      - createdBy
-      - locationId
-      - planId
-      - planName
-      - scheduledDate
-      - status
-      - updatedAt
     CreateAdjustmentRequest:
       type: object
       description: Request to create a new inventory adjustment from a cycle count variance
@@ -5424,6 +9189,11 @@ components:
           format: uuid
           description: Identifier of the stock item being adjusted
           example: 01960003-0000-7000-8000-000000000001
+        taskId:
+          type: string
+          format: uuid
+          description: Cycle count task this adjustment settles, if created from a task. Enables approval-time conflict detection and variance recomputation against current on-hand.
+          example: 01960003-0000-7000-8000-000000000009
         reasonCode:
           type: string
           description: Reason code explaining why the adjustment is being made
@@ -5461,6 +9231,11 @@ components:
       type: object
       description: Result of a cycle count inventory adjustment, including approval state and posting outcome
       properties:
+        taskId:
+          type: string
+          format: uuid
+          description: Cycle count task this adjustment settles, if created from a task
+          example: 01960003-0000-7000-8000-000000000009
         adjustmentId:
           type: string
           format: uuid
@@ -5674,6 +9449,7 @@ components:
           enum:
           - ASSIGNED
           - COUNTED_PENDING_REVIEW
+          - CONFLICT
           - REQUIRES_INVESTIGATION
           - APPROVED
           - REJECTED
@@ -5748,6 +9524,12 @@ components:
           format: int32
           description: Quantity of the SKU to consume
           example: 4
+        lotNumber:
+          type: string
+          description: 'Optional lot override for LOT-tracked SKUs: must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE) lot. When absent, the lot recorded at pick confirmation is used; a LOT-tracked SKU with neither is rejected (422 LOT_NUMBER_REQUIRED). Ignored for untracked SKUs'
+          example: LOT-2026-A
+          maxLength: 128
+          minLength: 0
       required:
       - pickTaskId
       - quantity
@@ -6002,7 +9784,7 @@ components:
           minLength: 1
         quantityShipped:
           type: number
-          description: Quantity of the SKU declared as shipped on the ASN
+          description: Quantity of the SKU declared as shipped on the ASN, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 12
         unitOfMeasure:
           type: string
@@ -6017,9 +9799,16 @@ components:
           type: string
           description: Lot or batch number associated with the shipped product
           example: LOT-2026-0042
+        documentUom:
+          type: string
+          description: Optional UoM the line is keyed in (e.g. CASE). When present, documentQuantity is converted to the product's base UoM at derivation time; a UoM with no conversion path is rejected with 422 UOM_CONVERSION_UNDEFINED
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity shipped expressed in documentUom; must be supplied together with documentUom
+          example: 1
       required:
       - poId
-      - quantityShipped
       - sku
     CreateAsnRequest:
       type: object
@@ -6098,6 +9887,18 @@ components:
           type: string
           description: Lot or batch number associated with the shipped product
           example: LOT-2026-0042
+        documentUom:
+          type: string
+          description: UoM the line was keyed in when it differed from the product's base UoM
+          example: CASE
+        documentQuantity:
+          type: number
+          description: Quantity as keyed in documentUom; quantityShipped holds the derived base quantity
+          example: 1
+        conversionFactor:
+          type: number
+          description: Effective base-per-document-unit conversion factor applied at derivation time
+          example: 12
       required:
       - asnLineId
       - poId
@@ -6296,6 +10097,64 @@ components:
           example: IN_PROGRESS
       required:
       - status
+    ValuationReportResponse:
+      type: object
+      description: Inventory valuation report with SKU-level rows and a total
+      properties:
+        locationId:
+          type: string
+          format: uuid
+          description: Location filter applied, or null for all sites
+        asOf:
+          type: string
+          format: date-time
+          description: Historical instant the valuation was reconstructed at, or null for current state
+        rows:
+          type: array
+          description: SKU-level valuation rows
+          items:
+            $ref: '#/components/schemas/ValuationRow'
+        totalOnHandValue:
+          type: number
+          description: Sum of onHandValue across all rows (uncosted rows contribute 0)
+          example: 120.0
+      required:
+      - rows
+      - totalOnHandValue
+    ValuationRow:
+      type: object
+      description: SKU-level inventory valuation row
+      properties:
+        stockItemId:
+          type: string
+          description: SKU / stock-item identifier
+        onHand:
+          type: integer
+          format: int64
+          description: On-hand quantity contributing to the value (site-scoped when a location filter is applied)
+          example: 20
+        costingMethod:
+          type: string
+          description: Resolved costing method for the SKU (AVERAGE or STANDARD)
+          example: AVERAGE
+        unitCostCurrent:
+          type: number
+          description: Current unit cost per the resolved method; null when the SKU is uncosted
+          example: 6.0
+        onHandValue:
+          type: number
+          description: 'On-hand value: onHand × unitCostCurrent (0 when uncosted)'
+          example: 120.0
+        uncosted:
+          type: boolean
+          description: True when the SKU has no derivable unit cost, so its value is reported as 0
+          example: false
+      required:
+      - costingMethod
+      - onHand
+      - onHandValue
+      - stockItemId
+      - uncosted
     SyncLogResponse:
       type: object
       description: Location sync audit log entry
@@ -6471,40 +10330,313 @@ components:
       - storageLocationId
     ShortageOptionDto:
       type: object
-      description: A candidate option for resolving an inventory shortage on an allocation
+      description: A computed option for resolving an inventory shortage on an allocation
       properties:
         allocationId:
           type: string
           format: uuid
           description: Identifier of the allocation the option applies to
           example: 01960003-0000-7000-8000-000000000001
-        allocationLineId:
+        optionType:
           type: string
-          format: uuid
-          description: Identifier of the specific allocation line, when the option is line-scoped
-          example: 01960003-0000-7000-8000-000000000002
-        resolution:
-          type: string
-          description: Resolution strategy offered for the shortage
+          description: The computed resolution strategy
+          enum:
+          - BACKORDER
+          - SUBSTITUTE
+          - TRANSFER_IN
+          - EMERGENCY_PURCHASE
+          - CANCEL_LINE
           example: SUBSTITUTE
         description:
           type: string
           description: Human-readable description of the resolution option
-          example: Substitute with equivalent SKU available at main warehouse
+          example: Substitute with group member 0196... (12 available at site)
         substituteSku:
           type: string
-          description: Substitute stock-keeping unit offered, when the resolution is a substitution
-          example: SKU-10043
-        estimatedDays:
+          description: Substitute stock-keeping unit offered, when the option is SUBSTITUTE
+          example: 01960003-0000-7000-8000-000000000099
+        sourceLocationId:
+          type: string
+          format: uuid
+          description: Source site surplus can be pulled from, when the option is TRANSFER_IN
+          example: 01960004-0001-7000-8000-00000000000a
+        availableQuantity:
           type: integer
-          format: int32
-          description: Estimated number of days to fulfill using this option
-          example: 3
+          format: int64
+          description: Quantity available toward the shortage for SUBSTITUTE / TRANSFER_IN options
+          example: 12
+        expectedResolutionDate:
+          type: string
+          format: date
+          description: Estimated date the shortage would be resolved via this option
+          example: 2026-08-01
+        costDelta:
+          type: number
+          description: Per-unit cost delta versus the original SKU, when computable (positive = costs more)
+          example: 4.5
       required:
       - allocationId
       - description
-      - estimatedDays
-      - resolution
+      - optionType
+    SerialUnitResponse:
+      type: object
+      description: A serial unit master record for a SERIAL-tracked stock item (odoo-parity E4)
+      properties:
+        serialUnitId:
+          type: string
+          format: uuid
+          description: Identifier of the serial unit
+          example: 01990003-0000-7000-8000-000000000001
+        stockItemId:
+          type: string
+          description: Stock item (catalog product id) the unit belongs to
+          example: 01990003-0000-7000-8000-000000000002
+        serialNumber:
+          type: string
+          description: Manufacturer/vendor serial number, unique per stock item
+        status:
+          type: string
+          description: Lifecycle status of the unit
+          enum:
+          - IN_STOCK
+          - ISSUED
+          - RETURNED
+          - SCRAPPED
+          example: IN_STOCK
+        locationId:
+          type: string
+          format: uuid
+          description: Current location while IN_STOCK; null once the unit has left stock
+        lotId:
+          type: string
+          format: uuid
+          description: Optional lot linkage
+        workorderId:
+          type: string
+          description: Workorder the unit was consumed to, when known
+        receiptLedgerEntryId:
+          type: string
+          format: uuid
+          description: The receipt ledger entry that enumerated (or last re-stocked) this unit
+        consumptionLedgerEntryId:
+          type: string
+          format: uuid
+          description: The outbound ledger entry that last consumed this unit
+        receivedAt:
+          type: string
+          format: date-time
+          description: When the unit was received into stock
+        consumedAt:
+          type: string
+          format: date-time
+          description: When the unit last left stock
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+      - serialNumber
+      - serialUnitId
+      - status
+      - stockItemId
+    SerialTraceabilityResponse:
+      type: object
+      description: Upstream/downstream traceability for a serial unit (odoo-parity E5)
+      properties:
+        serialUnitId:
+          type: string
+          format: uuid
+          description: Identifier of the serial unit
+        stockItemId:
+          type: string
+          description: Stock item (catalog product id) the unit belongs to
+        serialNumber:
+          type: string
+          description: Manufacturer/vendor serial number
+        serialStatus:
+          type: string
+          description: Lifecycle status of the unit
+          enum:
+          - IN_STOCK
+          - ISSUED
+          - RETURNED
+          - SCRAPPED
+          example: ISSUED
+        lotId:
+          type: string
+          format: uuid
+          description: Lot the unit belongs to, when lot-linked
+        workorderId:
+          type: string
+          description: Workorder the unit was consumed to, when known
+        upstream:
+          $ref: '#/components/schemas/TraceabilityUpstream'
+        downstream:
+          type: array
+          description: Downstream movement chain, oldest first
+          items:
+            $ref: '#/components/schemas/TraceabilityMovement'
+        warrantyHolds:
+          type: array
+          description: Warranty part-return holds joined by serial number
+          items:
+            $ref: '#/components/schemas/WarrantyHoldRef'
+      required:
+      - downstream
+      - serialNumber
+      - serialUnitId
+      - stockItemId
+      - upstream
+      - warrantyHolds
+    TraceabilityDocumentRef:
+      type: object
+      description: An upstream source-document reference (PO / ASN / goods receipt)
+      properties:
+        documentType:
+          type: string
+          description: Kind of source document
+          enum:
+          - PURCHASE_ORDER
+          - ASN
+          - GOODS_RECEIPT
+          example: PURCHASE_ORDER
+        documentId:
+          type: string
+          format: uuid
+          description: Identifier of the source document
+        reference:
+          type: string
+          description: Human-readable document reference (PO number, ASN reference, receipt number)
+          example: PO-000123
+      required:
+      - documentId
+      - documentType
+    TraceabilityMovement:
+      type: object
+      description: One ledger movement in a lot/serial downstream chain
+      properties:
+        ledgerEntryId:
+          type: string
+          format: uuid
+          description: Identifier of the ledger entry
+        eventType:
+          type: string
+          description: Ledger event type
+          enum:
+          - GOODS_RECEIPT
+          - TRANSFER_IN
+          - PUTAWAY
+          - RETURN_TO_STOCK
+          - ADJUSTMENT_IN
+          - COUNT_VARIANCE_IN
+          - GOODS_ISSUE
+          - WORKORDER_CONSUMPTION
+          - TRANSFER_OUT
+          - SCRAP_OUT
+          - ADJUSTMENT_OUT
+          - COUNT_VARIANCE_OUT
+          - ADJUST_CYCLE_COUNT
+          - RESERVATION_CREATED
+          - RESERVATION_RELEASED
+          - ALLOCATION_CREATED
+          - ALLOCATION_RELEASED
+          - BACKORDER_CREATED
+          - BACKORDER_RESOLVED
+          - PICK_TASK_CREATED
+          - PICK_TASK_COMPLETED
+          example: PUTAWAY
+        timestamp:
+          type: string
+          format: date-time
+          description: When the movement was posted
+        changeInQuantity:
+          type: integer
+          format: int32
+          description: Signed quantity change (positive inbound, negative outbound)
+        quantityAfter:
+          type: integer
+          format: int32
+          description: On-hand quantity after this movement at its location
+        locationId:
+          type: string
+          format: uuid
+          description: Location the movement affected
+        fromLocationId:
+          type: string
+          format: uuid
+          description: Source location for a paired move (putaway/transfer out)
+        toLocationId:
+          type: string
+          format: uuid
+          description: Destination location for a paired move (putaway/transfer in)
+        lotId:
+          type: string
+          format: uuid
+          description: Lot stamped on the movement, when lot-tracked
+        sourceTransactionId:
+          type: string
+          description: Source transaction/document reference the posting carried
+        notes:
+          type: string
+          description: Free-text note recorded on the ledger entry
+      required:
+      - changeInQuantity
+      - eventType
+      - ledgerEntryId
+      - timestamp
+    TraceabilityUpstream:
+      type: object
+      description: 'Upstream origin: vendor, receipt date, and source documents (PO / ASN / goods receipt)'
+      properties:
+        vendorId:
+          type: string
+          format: uuid
+          description: Vendor the lot/serial was first received from, when known
+        receivedAt:
+          type: string
+          format: date-time
+          description: When the lot/serial was first received into stock
+        documents:
+          type: array
+          description: Upstream source documents, PO first then ASN then goods receipt
+          items:
+            $ref: '#/components/schemas/TraceabilityDocumentRef'
+      required:
+      - documents
+    WarrantyHoldRef:
+      type: object
+      description: A warranty part-return hold linked to the serial
+      properties:
+        partReturnId:
+          type: string
+          format: uuid
+          description: Identifier of the warranty part-return hold
+        claimId:
+          type: string
+          format: uuid
+          description: Warranty claim the part return belongs to
+        status:
+          type: string
+          description: Hold status
+          example: REQUESTED
+        disposition:
+          type: string
+          description: Disposition of the returned part, when known
+        requestedAt:
+          type: string
+          format: date-time
+          description: When the part return was requested
+        shippedAt:
+          type: string
+          format: date-time
+          description: When the part was shipped back to the provider
+      required:
+      - partReturnId
+      - status
     ReturnableItemDto:
       type: object
       description: An item eligible to be returned, with the quantity still returnable
@@ -6603,6 +10735,10 @@ components:
           type: string
           description: Identifier or name of the user the replenishment task is assigned to
           example: user-jdoe
+        deadlineDate:
+          type: string
+          description: Earliest date at which the projected available quantity goes below zero (stock-out deadline used for prioritization); absent when no stock-out is projected within the lead-time horizon
+          example: 2026-01-20
         createdAt:
           type: string
           description: Timestamp at which the replenishment task was created
@@ -6614,6 +10750,85 @@ components:
       - quantity
       - status
       - taskId
+    ReplenishmentNeedResponse:
+      type: object
+      description: 'Current computed replenishment state of one active, non-snoozed policy: the same orderpoint evaluation the batch scan applies, with no side effects'
+      properties:
+        policyId:
+          type: string
+          description: Unique identifier of the replenishment policy
+          example: 01960003-0000-7000-8000-000000000001
+        itemSKU:
+          type: string
+          description: SKU of the item the policy applies to
+          example: SKU-10042
+        locationId:
+          type: string
+          format: uuid
+          description: Identifier of the location the policy applies to
+          example: 01960003-0000-7000-8000-000000000002
+        onHand:
+          type: integer
+          format: int64
+          description: Current on-hand quantity at the policy's location
+          example: 3
+        projectedAvailable:
+          type: integer
+          format: int64
+          description: Projected available quantity at the lead-time horizon (on-hand + expected supply - open demand)
+          example: 3
+        leadHorizonDate:
+          type: string
+          description: UTC date of the lead-time horizon the projection was evaluated at
+          example: 2026-01-20
+        leadTimeSource:
+          type: string
+          description: Where the resolved lead time came from
+          enum:
+          - POLICY_OVERRIDE
+          - FEED
+          - DEFAULT
+          example: POLICY_OVERRIDE
+        minimumQuantity:
+          type: integer
+          format: int32
+          description: Minimum on-hand quantity that triggers replenishment when reached
+          example: 5
+        maximumQuantity:
+          type: integer
+          format: int32
+          description: Maximum on-hand quantity replenishment aims to restock up to
+          example: 50
+        wouldTrigger:
+          type: boolean
+          description: Whether a batch scan run now would consider this policy triggered (projected available below minimum)
+          example: true
+        suggestedQuantity:
+          type: integer
+          format: int32
+          description: 'Quantity a scan would replenish now: replenish-to-max after in-progress netting, rounded up to the policy''s order multiple; zero when in-progress supply already covers the need or the policy is not triggered'
+          example: 12
+        deadlineDate:
+          type: string
+          description: Earliest date at which the projected available quantity goes below zero; absent when the policy is not triggered or no stock-out is projected within the lead-time horizon
+          example: 2026-01-20
+        preferredSourceType:
+          type: string
+          description: Preferred sourcing channel configured on the policy
+          example: EITHER
+      required:
+      - itemSKU
+      - leadHorizonDate
+      - leadTimeSource
+      - locationId
+      - maximumQuantity
+      - minimumQuantity
+      - onHand
+      - policyId
+      - preferredSourceType
+      - projectedAvailable
+      - suggestedQuantity
+      - wouldTrigger
     ListPurchaseOrdersRequest:
       type: object
       description: Optional filter criteria for listing purchase orders
@@ -6702,6 +10917,77 @@ components:
           type: boolean
         unsorted:
           type: boolean
+    LotDetailResponse:
+      type: object
+      description: An inventory lot with its per-location on-hand balances (odoo-parity E1)
+      properties:
+        lot:
+          $ref: '#/components/schemas/LotResponse'
+        locations:
+          type: array
+          description: Per-location on-hand of this lot, from the per-lot stock summary rows; locations with fully consumed balances may report zero
+          items:
+            $ref: '#/components/schemas/LotLocationOnHand'
+      required:
+      - lot
+    LotLocationOnHand:
+      type: object
+      description: On-hand quantity of a lot at one location
+      properties:
+        locationId:
+          type: string
+          format: uuid
+          description: Location holding the lot; null for postings recorded without a location
+          example: 01980003-0000-7000-8000-000000000004
+        onHand:
+          type: integer
+          format: int64
+          description: On-hand quantity of the lot at the location
+          example: 12
+        inTransitQty:
+          type: integer
+          format: int64
+          description: Quantity of the lot in transit toward the location
+          example: 0
+      required:
+      - inTransitQty
+      - onHand
+    LotTraceabilityResponse:
+      type: object
+      description: Upstream/downstream traceability for a lot (odoo-parity E5)
+      properties:
+        lotId:
+          type: string
+          format: uuid
+          description: Identifier of the lot
+        stockItemId:
+          type: string
+          description: Stock item (catalog product id) the lot belongs to
+        lotNumber:
+          type: string
+          description: Vendor/manufacturer lot number
+        lotStatus:
+          type: string
+          description: Lifecycle status of the lot
+          enum:
+          - ACTIVE
+          - QUARANTINED
+          - RECALLED
+          - CONSUMED
+          example: ACTIVE
+        upstream:
+          $ref: '#/components/schemas/TraceabilityUpstream'
+        downstream:
+          type: array
+          description: Downstream movement chain, oldest first
+          items:
+            $ref: '#/components/schemas/TraceabilityMovement'
+      required:
+      - downstream
+      - lotId
+      - lotNumber
+      - stockItemId
+      - upstream
     LocationInventoryRollupResponse:
       type: object
       description: Parent-location inventory rollup aggregating site totals across all descendant sites
@@ -6792,16 +11078,15 @@ components:
           description: Storage location identifier
         onHandQuantity:
           type: integer
-          format: int32
+          format: int64
           description: Current on-hand quantity across all stock items at the location
           example: 12
         availableToPromiseQuantity:
           type: integer
-          format: int32
-          description: 'Quantity available to promise after pending allocations. Note: reservation events are not yet factored in.'
+          format: int64
+          description: 'Quantity available to promise after pending allocations. Note: reservation events are not yet factored in. Null for as-of (historical) requests: historical allocation state is not reliably reconstructable from ATP-neutral ledger events, so as-of responses carry on-hand only.'
           example: 8
       required:
-      - availableToPromiseQuantity
       - locationId
       - onHandQuantity
     LedgerPage:
@@ -6968,6 +11253,7 @@ components:
           enum:
           - ASSIGNED
           - COUNTED_PENDING_REVIEW
+          - CONFLICT
           - REQUIRES_INVESTIGATION
           - APPROVED
           - REJECTED
@@ -7001,6 +11287,73 @@ components:
       - status
       - taskId
       - updatedAt
+    InterferingMovementResponse:
+      type: object
+      description: Ledger movement recorded between cycle-count task creation and now for the task's SKU/location
+      properties:
+        ledgerEntryId:
+          type: string
+          format: uuid
+          description: Unique identifier of the ledger entry
+          example: 01960003-0000-7000-8000-000000000001
+        eventType:
+          type: string
+          description: Type of inventory ledger event recorded
+          enum:
+          - GOODS_RECEIPT
+          - TRANSFER_IN
+          - PUTAWAY
+          - RETURN_TO_STOCK
+          - ADJUSTMENT_IN
+          - COUNT_VARIANCE_IN
+          - GOODS_ISSUE
+          - WORKORDER_CONSUMPTION
+          - TRANSFER_OUT
+          - SCRAP_OUT
+          - ADJUSTMENT_OUT
+          - COUNT_VARIANCE_OUT
+          - ADJUST_CYCLE_COUNT
+          - RESERVATION_CREATED
+          - RESERVATION_RELEASED
+          - ALLOCATION_CREATED
+          - ALLOCATION_RELEASED
+          - BACKORDER_CREATED
+          - BACKORDER_RESOLVED
+          - PICK_TASK_CREATED
+          - PICK_TASK_COMPLETED
+          example: GOODS_ISSUE
+        changeInQuantity:
+          type: integer
+          format: int32
+          description: Signed change in quantity applied by this entry (positive inbound, negative outbound)
+          example: -3
+        quantityAfter:
+          type: integer
+          format: int32
+          description: Running quantity after this entry was applied
+          example: 7
+        locationId:
+          type: string
+          format: uuid
+          description: Location the entry applies to
+          example: 01960003-0000-7000-8000-000000000004
+        timestamp:
+          type: string
+          format: date-time
+          description: Business timestamp of the inventory event
+          example: 2026-01-15 09:30:00+00:00
+        transactionUserId:
+          type: string
+          description: Identifier of the user who initiated the transaction
+          example: user-10042
+        notes:
+          type: string
+          description: Free-text notes recorded with the entry
+      required:
+      - changeInQuantity
+      - eventType
+      - ledgerEntryId
+      - timestamp
     CountEntryResponse:
       type: object
       description: A single recorded count entry in a cycle count task's history
@@ -7063,6 +11416,58 @@ components:
       - recount
       - recountSequenceNumber
       - variance
+    BackorderResponse:
+      type: object
+      description: 'A backorder: unfulfilled workorder-line demand held open until availability covers it'
+      properties:
+        backorderId:
+          type: string
+          format: uuid
+          description: Backorder record identifier
+        workorderLineId:
+          type: string
+          format: uuid
+          description: Workorder line whose demand was short
+        sku:
+          type: string
+          description: SKU / stock-item identifier that was short
+        locationId:
+          type: string
+          format: uuid
+          description: Site the demand is short at
+        quantityShort:
+          type: integer
+          format: int32
+          description: Quantity that could not be fulfilled (positive)
+        status:
+          type: string
+          description: 'Lifecycle status: OPEN, RESOLVED, or CANCELLED'
+          enum:
+          - OPEN
+          - RESOLVED
+          - CANCELLED
+        resolutionSource:
+          type: string
+          description: What drove resolution; null while OPEN or CANCELLED
+          enum:
+          - AVAILABILITY
+          - REPLENISHMENT_RECEIPT
+          - MANUAL
+        createdBy:
+          type: string
+          description: Actor that opened the backorder
+        createdAt:
+          type: string
+          format: date-time
+          description: When the backorder was opened
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the backorder was last updated
+        resolvedAt:
+          type: string
+          format: date-time
+          description: When the backorder was resolved; null otherwise
     AvailabilityView:
       type: object
       description: Read-only view of on-hand and available-to-promise quantities for a product at a specific location scope
@@ -7100,6 +11505,21 @@ components:
           type: string
           description: Unit of measure code for the quantities (e.g. EACH, KG)
           example: EACH
+        incomingQty:
+          type: integer
+          format: int64
+          description: 'Open expected supply: approved purchase-order open line quantity plus un-received ASN remainder. Site-level when a location scope is given. Bounded by the ''horizon'' query parameter when present (documents without an expected date are excluded from horizon-bounded results). Omitted for as-of (historical) requests.'
+          example: 25
+        outgoingQty:
+          type: integer
+          format: int64
+          description: 'Open expected demand not yet decremented from on-hand: unallocated reservation remainders plus released-not-picked pick-task remainders. Reservation demand carries no site and is included in every scope. Omitted for as-of (historical) requests.'
+          example: 10
+        projectedAvailable:
+          type: integer
+          format: int64
+          description: 'Projected availability: onHandQuantity + incomingQty - outgoingQty. Omitted for as-of (historical) requests.'
+          example: 135
       required:
       - allocatedQuantity
       - availableToPromiseQuantity
@@ -7128,10 +11548,24 @@ components:
         availableToPromiseQuantity:
           type: integer
           format: int32
-          description: Available-to-promise quantity at the location
+          description: 'Available-to-promise quantity at the location. Null for as-of (historical) requests: historical allocation state is not reliably reconstructable from ATP-neutral ledger events, so as-of responses carry on-hand only.'
           example: 90
+        incomingQty:
+          type: integer
+          format: int64
+          description: 'Open expected supply at the site: approved purchase-order open line quantity plus un-received ASN remainder. Bounded by the ''horizon'' query parameter when present (documents without an expected date are excluded from horizon-bounded results). Omitted for as-of requests.'
+          example: 25
+        outgoingQty:
+          type: integer
+          format: int64
+          description: 'Open expected demand not yet decremented from on-hand: unallocated reservation remainders plus released-not-picked pick-task remainders. Reservation demand carries no site and is included in every site row. Omitted for as-of requests.'
+          example: 10
+        projectedAvailable:
+          type: integer
+          format: int64
+          description: 'Projected availability: onHandQuantity + incomingQty - outgoingQty (Odoo virtual_available). Omitted for as-of requests.'
+          example: 135
       required:
-      - availableToPromiseQuantity
       - locationId
       - locationName
       - onHandQuantity

@@ -20,32 +20,25 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
+import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
+import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
+import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.output.Response;
-import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.store.embedding.EmbeddingSearchResult;
-import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,6 +48,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClient;
 
@@ -66,7 +66,7 @@ import org.springframework.web.client.RestClient;
  * never
  * instantiates it during slice tests. Here we construct it directly via
  * {@code new},
- * bypassing the profile gate, and supply Mockito mocks for all LangChain4j
+ * bypassing the profile gate, and supply Mockito mocks for all assistant runtime
  * dependencies.
  *
  * <p>
@@ -76,7 +76,7 @@ import org.springframework.web.client.RestClient;
  * {@link ExaWebSearchTool}
  * instance (empty API key, never makes HTTP calls) is used rather than a
  * Mockito mock.
- * Using a Mockito mock would trigger a LangChain4j "Duplicated definition for
+ * Using a Mockito mock would trigger an assistant runtime "Duplicated definition for
  * tool: webSearch"
  * error because Mockito subclasses inherit and re-expose the parent's
  * {@code @Tool} annotation.
@@ -94,7 +94,7 @@ class SessionAgentManagerTest {
     private EmbeddingModel embeddingModel;
 
     @Mock
-    private PgVectorEmbeddingStore embeddingStore;
+    private PgVectorStore embeddingStore;
 
     @Mock
     private MasterAgentRegistry toolRegistry;
@@ -114,8 +114,11 @@ class SessionAgentManagerTest {
     @Mock
     private NltiTelemetryEmitter telemetryEmitter;
 
+    @Mock
+    private NltiWorkflowStateService workflowStateService;
+
     // Real instance required: Mockito subclasses cause @Tool duplicate registration
-    // in LangChain4j
+    // in the assistant runtime
     private ExaWebSearchTool exaWebSearchTool;
     private InventoryFacadeTool inventoryFacadeTool;
     private OrderFacadeTool orderFacadeTool;
@@ -137,12 +140,13 @@ class SessionAgentManagerTest {
         lenient()
                 .when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString()))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of()));
+        // #778: default to session-less so existing tests exercise the message-heuristic path.
+        lenient().when(workflowStateService.resolveActiveState(anyString())).thenReturn(Optional.empty());
         lenient().when(rolePromptResolver.resolvePrompt(anyString())).thenReturn("Default role prompt");
         lenient()
                 .when(rolePromptResolver.assemble(anyString(), anyString()))
                 .thenReturn(new RolePromptResolver.AssembledPrompt("prompt", List.of("BASE", "ROLE")));
-        lenient().when(embeddingModel.embed(anyString())).thenReturn(Response.from(Embedding.from(new float[] {0.1f})));
-        lenient().when(embeddingStore.search(any())).thenReturn(new EmbeddingSearchResult<>(List.of()));
+        lenient().when(embeddingModel.embed(anyString())).thenReturn(new float[] {0.1f});
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
         inventoryFacadeTool = new InventoryFacadeTool(
                 RestClient.builder(),
@@ -157,7 +161,7 @@ class SessionAgentManagerTest {
                 "/order/v1/orders/search?q={query}");
         simpleChatClassifier = new SimpleChatClassifier(SimpleChatRuleDefaults.defaultCatalog());
         sharedOrchestrationSupport = new SharedOrchestrationSupport();
-        ContentRetriever scopedRetriever = mock(ContentRetriever.class);
+        QueryDocumentRetriever scopedRetriever = mock(QueryDocumentRetriever.class);
         lenient().when(toolRegistry.sharedTools()).thenReturn(List.of());
         lenient()
                 .when(toolSelectionEngine.fullFallbackTools())
@@ -181,8 +185,11 @@ class SessionAgentManagerTest {
                 rolePromptResolver,
                 simpleChatClassifier,
                 telemetryEmitter,
-                null,
-                null,
+                null, // openApiToolProvider
+                null, // answerResolutionLadder
+                null, // requestScopedUserContext
+                null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 30,
                 500,
@@ -252,10 +259,7 @@ class SessionAgentManagerTest {
     @Test
     @DisplayName("chat with greeting uses simple no-tool model path")
     void chat_withGreeting_usesSimpleModelPath() {
-        when(chatModel.chat(org.mockito.ArgumentMatchers.<List<ChatMessage>>any()))
-                .thenReturn(ChatResponse.builder()
-                        .aiMessage(AiMessage.from("Hello!"))
-                        .build());
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Hello!"));
 
         String response = manager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), "hello");
 
@@ -275,10 +279,7 @@ class SessionAgentManagerTest {
         when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
                 .thenReturn(List.of(inventoryToolMetadata()));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
-        when(chatModel.chat(any(ChatRequest.class)))
-                .thenReturn(ChatResponse.builder()
-                        .aiMessage(AiMessage.from("Stock found"))
-                        .build());
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Stock found"));
         SessionAgentManager selectorManager = managerWithToolSelectionEngine(realToolSelectionEngine);
         clearInvocations(toolRegistryService);
         clearInvocations(scopedContentRetrieverFactory);
@@ -305,10 +306,7 @@ class SessionAgentManagerTest {
         when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
                 .thenReturn(List.of(inventoryToolMetadata()));
         when(toolRegistry.resolveToolsByName(List.of("inventoryFacadeTool"))).thenReturn(List.of(inventoryFacadeTool));
-        when(chatModel.chat(any(ChatRequest.class)))
-                .thenReturn(ChatResponse.builder()
-                        .aiMessage(AiMessage.from("Stock found"))
-                        .build());
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Stock found"));
         SessionAgentManager selectorManager = managerWithToolSelectionEngine(realToolSelectionEngine);
 
         selectorManager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), message);
@@ -339,10 +337,7 @@ class SessionAgentManagerTest {
                 .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
         when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
                 .thenReturn(List.of());
-        when(chatModel.chat(any(ChatRequest.class)))
-                .thenReturn(ChatResponse.builder()
-                        .aiMessage(AiMessage.from("Stock found"))
-                        .build());
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("Stock found"));
         SessionAgentManager selectorManager = managerWithToolSelectionEngine(realToolSelectionEngine);
         clearInvocations(toolRegistryService);
         clearInvocations(scopedContentRetrieverFactory);
@@ -355,6 +350,28 @@ class SessionAgentManagerTest {
         verify(scopedContentRetrieverFactory).create("master", 10, 0.6);
         verify(scopedContentRetrieverFactory).create("master", 20, 0.55);
         assertThat(roleAgentCacheKeys(selectorManager)).contains("ROLE_ADMIN::InventoryFacadeTool+OrderFacadeTool");
+    }
+
+    @Test
+    @DisplayName("chat threads the persisted non-IDLE session workflow state into tool selection (#778)")
+    void chat_usesPersistedWorkflowState_whenSessionPresent() {
+        String message = "create a purchase order for vendor acme";
+        when(workflowStateService.resolveActiveState("user-1")).thenReturn(Optional.of(WorkflowState.CREATING_PO));
+        when(toolSelectionEngine.selectRoleTools(anyString(), anySet(), anyString(), any(WorkflowState.class)))
+                .thenReturn(
+                        new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.CREATING_PO));
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("ok"));
+
+        manager.chat(userContext("user-1", USER_ID, "ROLE_ADMIN"), message);
+
+        // The persisted session state (not a message heuristic) gates selection.
+        verify(toolSelectionEngine)
+                .selectRoleTools(
+                        eq("ROLE_ADMIN"),
+                        eq(Set.of("AUTHENTICATED", "mcp:chat:execute")),
+                        eq(message),
+                        eq(WorkflowState.CREATING_PO));
+        verify(toolSelectionEngine, never()).selectRoleTools(anyString(), anySet(), anyString());
     }
 
     @Test
@@ -373,8 +390,11 @@ class SessionAgentManagerTest {
                 rolePromptResolver,
                 simpleChatClassifier,
                 telemetryEmitter,
-                null,
-                null,
+                null, // openApiToolProvider
+                null, // answerResolutionLadder
+                null, // requestScopedUserContext
+                null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 0,
                 500,
@@ -412,8 +432,11 @@ class SessionAgentManagerTest {
                 rolePromptResolver,
                 simpleChatClassifier,
                 telemetryEmitter,
-                null,
-                null,
+                null, // openApiToolProvider
+                null, // answerResolutionLadder
+                null, // requestScopedUserContext
+                null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 30,
                 500,
@@ -444,6 +467,10 @@ class SessionAgentManagerTest {
                 200,
                 true,
                 "inventoryFacadeTool");
+    }
+
+    private static ChatResponse chatResponse(String text) {
+        return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
     }
 
     private static String ragScopeFor(java.util.Collection<?> tools) {

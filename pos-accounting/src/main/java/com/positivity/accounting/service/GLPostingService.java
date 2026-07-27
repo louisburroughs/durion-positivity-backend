@@ -65,6 +65,31 @@ public interface GLPostingService {
             @Nullable String overrideJustification);
 
     /**
+     * Post the mirror of a Credit Memo reversal when the memo is voided (issue #997 symmetry):
+     * {@code Dr AR (creditAmount + taxReversed) / Cr Revenue (creditAmount) + Cr Sales-Tax
+     * Payable (taxReversed)}, dated at void time in the current open period (period gate
+     * applies). Together with the T8 report's void-period restoration term this keeps GL drift
+     * at zero across the POSTED → VOIDED transition without restating the posting period.
+     *
+     * @param creditMemoId       Voided credit memo id (source event)
+     * @param revenueAccountId   Revenue account (credit side of the void)
+     * @param taxPayableAccountId Sales-Tax Payable account (credit side of the void)
+     * @param arAccountId        Accounts Receivable account (debit side of the void)
+     * @param creditAmount       Revenue portion originally credited
+     * @param taxReversed        Tax portion originally reversed
+     * @param description        Journal entry description
+     * @return Posted journal entry
+     */
+    JournalEntry postCreditMemoVoid(
+            @NonNull UUID creditMemoId,
+            @NonNull UUID revenueAccountId,
+            @NonNull UUID taxPayableAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal creditAmount,
+            @NonNull BigDecimal taxReversed,
+            @NonNull String description);
+
+    /**
      * Post a payment application (AR cash receipt) to GL.
      *
      * Creates journal entry with:
@@ -111,6 +136,125 @@ public interface GLPostingService {
             @NonNull UUID paymentApplicationId,
             @NonNull UUID undepositedFundsAccountId,
             @NonNull UUID arAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification);
+
+    /**
+     * Post a customer-credit issuance (overpayment excess) to GL (parity-C1,
+     * issue #975): {@code Dr Undeposited Funds / Cr Customer Credit Liability}
+     * for the credit amount. Recognizes the overpayment cash as an asset and the
+     * matching obligation to the customer as a liability, so the excess is no
+     * longer a pure subledger row with no ledger linkage.
+     *
+     * @param sourceEventId              deterministic JE source id for the
+     *                                   issuance (namespaced per credit leg so it
+     *                                   never collides with the AR cash-receipt
+     *                                   entry sharing the same request id)
+     * @param undepositedFundsAccountId  GL account for Undeposited Funds (debit)
+     * @param creditLiabilityAccountId   GL account for Customer Credit Liability
+     *                                   (credit)
+     * @param amount                     credit (overpayment excess) amount
+     * @param transactionDate            business transaction date (the payment
+     *                                   application timestamp) used as the journal
+     *                                   entry date; must not be derived from
+     *                                   processing/clock time so outbox retries
+     *                                   post into the correct period
+     * @param description                entry description
+     * @param overrideJustification      optional CLOSED-period override justification
+     * @return posted journal entry
+     */
+    JournalEntry postCustomerCreditIssuance(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID creditId,
+            @NonNull UUID undepositedFundsAccountId,
+            @NonNull UUID creditLiabilityAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification);
+
+    /**
+     * Post a customer-credit <em>relief</em> to GL (parity-C1 follow-on, issue
+     * #992): {@code Dr Customer Credit Liability / Cr <contra>} for the drawn-down
+     * amount. This is the mirror of {@link #postCustomerCreditIssuance}, which only
+     * recognizes the liability; the contra account is what distinguishes the two
+     * relief flavours:
+     *
+     * <ul>
+     *   <li><b>application</b> — contra = Accounts Receivable: the credit settles a
+     *       later invoice, so liability and receivable both go down;</li>
+     *   <li><b>refund</b> — contra = Undeposited Funds: the liability goes down and
+     *       cash goes out.</li>
+     * </ul>
+     *
+     * <p>Both accounts are resolved by the caller through posting-category /
+     * mapping-key configuration, never hardcoded. Across issuance → relief the
+     * Customer Credit Liability control account nets to zero for a fully-consumed
+     * credit.
+     *
+     * @param sourceEventId            deterministic JE source id for this relief
+     *                                 (namespaced per relief type so it never
+     *                                 collides with any other entry deriving from
+     *                                 the same request id)
+     * @param creditId                 the customer credit being relieved (audit
+     *                                 label on the entry lines)
+     * @param creditLiabilityAccountId GL account for Customer Credit Liability (debit)
+     * @param contraAccountId          GL account credited — Accounts Receivable for an
+     *                                 application, Undeposited Funds for a refund
+     * @param amount                   drawn-down amount
+     * @param transactionDate          business transaction date (the draw-down
+     *                                 timestamp) used as the journal entry date; must
+     *                                 not be derived from processing/clock time so
+     *                                 outbox retries post into the correct period
+     * @param description              entry description
+     * @param contraLineLabel          audit label for the credited line (e.g.
+     *                                 {@code "AR Reduction"} / {@code "Credit Refund"})
+     * @param overrideJustification    optional CLOSED-period override justification
+     * @return posted journal entry
+     */
+    JournalEntry postCustomerCreditRelief(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID creditId,
+            @NonNull UUID creditLiabilityAccountId,
+            @NonNull UUID contraAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @NonNull String contraLineLabel,
+            @Nullable String overrideJustification);
+
+    /**
+     * Post an inventory shrinkage write-off to GL (odoo-parity D2, issue #1043):
+     * {@code Dr Inventory Shrinkage (expense) / Cr Inventory (asset)} for
+     * {@code quantity x unitCost} of a posted scrap document. Consumed from the
+     * {@code inventory.scrap.posted} fact on {@code inventory.events.v1}; both
+     * accounts are resolved by the caller through the {@code INVENTORY_SHRINKAGE}
+     * posting category's mapping keys, never hardcoded.
+     *
+     * @param sourceEventId         deterministic JE source id derived from the
+     *                              scrap id (namespaced so it never collides with
+     *                              another entry deriving from the same id)
+     * @param scrapId               the scrap document being expensed (audit label
+     *                              on the entry lines)
+     * @param shrinkageAccountId    GL account for Inventory Shrinkage expense (debit)
+     * @param inventoryAccountId    GL account for the Inventory asset (credit)
+     * @param amount                write-off amount ({@code quantity x unitCost})
+     * @param transactionDate       business transaction date (the scrap's
+     *                              {@code occurredAt}) used as the journal entry
+     *                              date; must not be derived from processing/clock
+     *                              time so Kafka redeliveries post into the correct
+     *                              period
+     * @param description           entry description (carries the scrap reason code)
+     * @param overrideJustification optional CLOSED-period override justification
+     * @return posted journal entry
+     */
+    JournalEntry postInventoryShrinkage(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID scrapId,
+            @NonNull UUID shrinkageAccountId,
+            @NonNull UUID inventoryAccountId,
             @NonNull BigDecimal amount,
             @NonNull LocalDateTime transactionDate,
             @NonNull String description,
@@ -171,6 +315,34 @@ public interface GLPostingService {
             @NonNull UUID sourceEventId,
             @NonNull UUID suspenseAccountId,
             @NonNull UUID undepositedFundsAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification);
+
+    /**
+     * Post a register-session drawer over/short variance (odoo-parity G3, issue #1083): a balanced
+     * two-line entry {@code Dr debitAccount / Cr creditAccount} of {@code amount}. The caller picks
+     * the accounts by direction — a shortage debits the Cash Short expense and credits the register
+     * cash-clearing account; an overage debits cash-clearing and credits the Cash Over income
+     * account. Per-order revenue postings remain authoritative; this carries only the drawer
+     * variance (spec §14), never a consolidated closing entry.
+     *
+     * @param sourceEventId deterministic JE source id derived from the session id
+     * @param sessionId register session the variance belongs to (for the line labels)
+     * @param debitAccountId account to debit
+     * @param creditAccountId account to credit
+     * @param amount positive variance amount ({@code abs(overShort)})
+     * @param transactionDate business transaction date (the session's close time)
+     * @param description entry description
+     * @param overrideJustification optional CLOSED-period override justification
+     * @return posted journal entry
+     */
+    JournalEntry postRegisterOverShort(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID sessionId,
+            @NonNull UUID debitAccountId,
+            @NonNull UUID creditAccountId,
             @NonNull BigDecimal amount,
             @NonNull LocalDateTime transactionDate,
             @NonNull String description,

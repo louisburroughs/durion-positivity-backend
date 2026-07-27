@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import dev.langchain4j.agent.tool.P;
-import dev.langchain4j.agent.tool.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -29,8 +29,8 @@ public class CustomerFacadeTool {
         this.customerHistoryUriTemplate = customerHistoryUriTemplate;
     }
 
-    @Tool("Get customer profile details by customer ID")
-    public String getCustomer(@P("The customer ID") @NonNull String customerId) {
+    @Tool(description = "Get customer profile details by customer ID")
+    public String getCustomer(@ToolParam(description = "The customer ID") @NonNull String customerId) {
         return restClient
                 .get()
                 .uri(customerUriTemplate, Map.of("customerId", customerId))
@@ -38,8 +38,8 @@ public class CustomerFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Search customers by name, phone number, email, or other criteria")
-    public String searchCustomers(@P("Search query for customers") @NonNull String query) {
+    @Tool(description = "Search customers by name, phone number, email, or other criteria")
+    public String searchCustomers(@ToolParam(description = "Search query for customers") @NonNull String query) {
         return restClient
                 .get()
                 .uri(customerSearchUriTemplate, Map.of("query", query))
@@ -47,8 +47,8 @@ public class CustomerFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Get account history and interaction timeline for a customer")
-    public String getCustomerHistory(@P("The customer ID") @NonNull String customerId) {
+    @Tool(description = "Get account history and interaction timeline for a customer")
+    public String getCustomerHistory(@ToolParam(description = "The customer ID") @NonNull String customerId) {
         return restClient
                 .get()
                 .uri(customerHistoryUriTemplate, Map.of("customerId", customerId))

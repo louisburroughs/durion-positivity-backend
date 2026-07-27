@@ -5,20 +5,28 @@ import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest
 import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.RejectAdjustmentRequest;
 import com.positivity.inventory.internal.entity.CycleCountAdjustment;
+import com.positivity.inventory.internal.entity.CycleCountTask;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.AdjustmentStatus;
 import com.positivity.inventory.internal.enums.ApprovalTier;
+import com.positivity.inventory.internal.enums.CostingMethod;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import com.positivity.inventory.internal.enums.TaskStatus;
 import com.positivity.inventory.internal.event.AuditActorRef;
 import com.positivity.inventory.internal.event.AuditAggregateRef;
 import com.positivity.inventory.internal.event.InventoryAuditEvent;
 import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
+import com.positivity.inventory.internal.exception.CycleCountConflictException;
+import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
+import com.positivity.inventory.internal.repository.CycleCountTaskRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.SkuCostStateRepository;
 import com.positivity.inventory.service.ApprovalThresholdEvaluator;
 import com.positivity.inventory.service.CycleCountAdjustmentService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -45,9 +53,14 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
 
     private final CycleCountAdjustmentRepository adjustmentRepository;
     private final InventoryLedgerEntryRepository ledgerRepository;
+    private final LedgerPostingService ledgerPostingService;
     private final ApprovalThresholdEvaluator thresholdEvaluator;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
+    private final CycleCountTaskRepository taskRepository;
+    private final CycleCountConflictDetector conflictDetector;
+    private final SkuCostStateRepository costStateRepository;
+    private final CostingMethodResolver methodResolver;
 
     @Override
     @Transactional
@@ -63,11 +76,23 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
             throw new IllegalArgumentException("No adjustment needed - counted quantity matches system quantity");
         }
 
+        if (request.getTaskId() != null && !taskRepository.existsById(request.getTaskId())) {
+            throw new TaskNotFoundException(request.getTaskId());
+        }
+
+        // odoo-parity J3 (#1053): source costAtTimeOfAdjustment from the J1 costing engine's
+        // per-SKU running cost (ADR-0048) instead of the interim client/latest-receipt source.
+        // The engine value is authoritative when present; a request-supplied cost is the fallback
+        // for a SKU the engine has not yet costed (no sku_cost_state row / null running cost).
+        BigDecimal engineCost = resolveEngineCost(request.getStockItemId());
+        BigDecimal costAtTimeOfAdjustment = engineCost != null ? engineCost : request.getCostAtTimeOfAdjustment();
+
         CycleCountAdjustment adjustment = CycleCountAdjustment.builder()
                 .stockItemId(request.getStockItemId())
+                .taskId(request.getTaskId())
                 .reasonCode(request.getReasonCode())
                 .quantityChange(quantityChange)
-                .costAtTimeOfAdjustment(request.getCostAtTimeOfAdjustment())
+                .costAtTimeOfAdjustment(costAtTimeOfAdjustment)
                 .quantityOnHandBefore(request.getQuantityOnHandBefore())
                 .countedQuantity(request.getCountedQuantity())
                 .createdByUserId(request.getCreatedByUserId())
@@ -91,7 +116,10 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
             adjustment = adjustmentRepository.save(adjustment);
 
             log.info("Adjustment {} auto-approved (below thresholds)", adjustment.getAdjustmentId());
-            postAdjustmentToLedger(adjustment);
+            // Auto-approval is still an approval: the conflict gate applies
+            // (odoo-parity I2, #1026) before anything posts to the ledger.
+            guardConflictAndRecompute(adjustment);
+            postApprovedAdjustment(adjustment);
         }
 
         return toResponse(adjustment);
@@ -114,6 +142,12 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
             throw new IllegalStateException("Cannot approve adjustment in status: " + adjustment.getStatus());
         }
 
+        // Conflict gate (odoo-parity I2, #1026): a first approval attempt that
+        // detects in-window movements flags the task CONFLICT and aborts;
+        // approving a CONFLICT task recomputes the variance against CURRENT
+        // on-hand — never the stale snapshot.
+        guardConflictAndRecompute(adjustment);
+
         Instant occurredAt = Instant.now(clock);
         adjustment.setStatus(AdjustmentStatus.APPROVED);
         adjustment.setApprovedByUserId(actorUserId);
@@ -121,7 +155,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
         adjustment = adjustmentRepository.save(adjustment);
 
         log.info("Adjustment {} approved by {} ({})", adjustmentId, actorUsername, actorUserId);
-        postAdjustmentToLedger(adjustment);
+        postApprovedAdjustment(adjustment);
         publishMovementAdjustedEvent(adjustment, occurredAt, actorUserId, actorUsername, correlationId);
 
         return toResponse(adjustment);
@@ -177,6 +211,88 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
         return adjustmentRepository.countByStatus(status);
     }
 
+    /**
+     * Conflict gate applied at every approval (odoo-parity I2, #1026), for
+     * adjustments linked to a cycle-count task:
+     * <ul>
+     *   <li>task already {@code CONFLICT} — the reviewer's approval IS the
+     *       explicit "accept" choice, so the variance is recomputed against
+     *       CURRENT on-hand (never the stale snapshot) before posting;</li>
+     *   <li>task not yet flagged but in-window movements exist — the task is
+     *       flagged {@code CONFLICT} (in its own transaction, surviving this
+     *       rollback) and the approval is rejected so the reviewer must choose
+     *       explicitly: recount, or re-approve with recomputation.</li>
+     * </ul>
+     */
+    private void guardConflictAndRecompute(CycleCountAdjustment adjustment) {
+        if (adjustment.getTaskId() == null) {
+            return;
+        }
+        CycleCountTask task = taskRepository
+                .findById(adjustment.getTaskId())
+                .orElseThrow(() -> new TaskNotFoundException(adjustment.getTaskId()));
+
+        if (task.getStatus() == TaskStatus.CONFLICT) {
+            recomputeVarianceAgainstCurrentOnHand(adjustment);
+            return;
+        }
+
+        int movementDelta = conflictDetector.movementDeltaSinceSnapshot(task);
+        if (movementDelta != 0) {
+            conflictDetector.flagConflict(task.getTaskId());
+            throw new CycleCountConflictException(task.getTaskId(), movementDelta);
+        }
+    }
+
+    /**
+     * Replaces the stale snapshot math with current-on-hand math: quantityChange
+     * becomes countedQuantity - currentOnHand, using the same global on-hand
+     * aggregation the posting path uses for quantityAfter. The funnel's
+     * floor-at-zero matrix still applies when the recomputed variance posts.
+     */
+    private void recomputeVarianceAgainstCurrentOnHand(CycleCountAdjustment adjustment) {
+        Integer currentOnHand = ledgerRepository.calculateOnHandQuantity(adjustment.getStockItemId());
+        int recomputedChange = adjustment.getCountedQuantity() - currentOnHand;
+        log.info(
+                "Adjustment {} approved on CONFLICT task {}: variance recomputed against current on-hand"
+                        + " {} (stale snapshot {}): quantityChange {} -> {}",
+                adjustment.getAdjustmentId(),
+                adjustment.getTaskId(),
+                currentOnHand,
+                adjustment.getQuantityOnHandBefore(),
+                adjustment.getQuantityChange(),
+                recomputedChange);
+        adjustment.setQuantityOnHandBefore(currentOnHand);
+        adjustment.setQuantityChange(recomputedChange);
+    }
+
+    /**
+     * Posts an approved adjustment and closes out its linked task. A recomputed
+     * zero variance (count matches current on-hand — the movements fully explain
+     * the original delta) has nothing to post: the adjustment stays approved
+     * without a ledger entry.
+     */
+    private void postApprovedAdjustment(CycleCountAdjustment adjustment) {
+        if (adjustment.getQuantityChange() != 0) {
+            postAdjustmentToLedger(adjustment);
+        } else {
+            log.info(
+                    "Adjustment {} has zero recomputed variance; nothing to post to the ledger",
+                    adjustment.getAdjustmentId());
+        }
+        markLinkedTaskApproved(adjustment);
+    }
+
+    private void markLinkedTaskApproved(CycleCountAdjustment adjustment) {
+        if (adjustment.getTaskId() == null) {
+            return;
+        }
+        taskRepository.findById(adjustment.getTaskId()).ifPresent(task -> {
+            task.setStatus(TaskStatus.APPROVED);
+            taskRepository.save(task);
+        });
+    }
+
     private void postAdjustmentToLedger(CycleCountAdjustment adjustment) {
         log.info("Posting adjustment {} to inventory ledger", adjustment.getAdjustmentId());
 
@@ -202,7 +318,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                     .notes(String.format("Cycle count adjustment: %s", adjustment.getReasonCode()))
                     .build();
 
-            ledgerEntry = ledgerRepository.save(ledgerEntry);
+            ledgerEntry = ledgerPostingService.post(ledgerEntry);
             adjustment.setLedgerEntryId(ledgerEntry.getLedgerEntryId());
             adjustment.setStatus(AdjustmentStatus.POSTED);
             adjustment.setPostedAt(Instant.now(clock));
@@ -222,6 +338,23 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
             throw new AdjustmentLedgerPostingException(
                     adjustment.getAdjustmentId(), "Failed to post adjustment to ledger", e);
         }
+    }
+
+    /**
+     * The J1 engine's per-SKU running cost at adjustment time (odoo-parity J3, ADR-0048): the
+     * configured {@code standardCost} under STANDARD (falling back to the running
+     * average/latest-receipt memo when unset), otherwise the running weighted-average cost. Returns
+     * {@code null} when the SKU has no {@code sku_cost_state} row or no derivable cost, so the
+     * caller can fall back to the request-supplied cost.
+     */
+    private @Nullable BigDecimal resolveEngineCost(@NonNull UUID stockItemId) {
+        String sku = stockItemId.toString();
+        return costStateRepository
+                .findByStockItemId(sku)
+                .map(state -> methodResolver.resolve(sku) == CostingMethod.STANDARD
+                        ? (state.getStandardCost() != null ? state.getStandardCost() : state.getAvgCost())
+                        : state.getAvgCost())
+                .orElse(null);
     }
 
     private void publishMovementAdjustedEvent(
@@ -258,6 +391,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
         return AdjustmentResponse.builder()
                 .adjustmentId(adjustment.getAdjustmentId())
                 .stockItemId(adjustment.getStockItemId())
+                .taskId(adjustment.getTaskId())
                 .reasonCode(adjustment.getReasonCode())
                 .quantityChange(adjustment.getQuantityChange())
                 .costAtTimeOfAdjustment(adjustment.getCostAtTimeOfAdjustment())

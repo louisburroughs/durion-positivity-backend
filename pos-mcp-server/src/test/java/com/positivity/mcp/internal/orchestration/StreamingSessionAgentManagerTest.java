@@ -21,21 +21,20 @@ import static org.mockito.Mockito.when;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
+import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
+import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
+import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
-import dev.langchain4j.model.chat.StreamingChatModel;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.lang.reflect.Member;
 import java.time.Clock;
 import java.time.Instant;
@@ -43,6 +42,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +52,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.chat.model.StreamingChatModel;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClient;
 import reactor.core.publisher.Flux;
@@ -66,7 +69,7 @@ import reactor.core.publisher.Flux;
  *
  * <p>
  * A real {@link ExaWebSearchTool} instance (empty API key, never makes HTTP
- * calls) is used rather than a Mockito mock to avoid LangChain4j's
+ * calls) is used rather than a Mockito mock to avoid the assistant runtime's
  * "Duplicated definition for tool: webSearch" error caused by Mockito
  * subclasses
  * re-exposing the parent {@code @Tool} annotation.
@@ -91,7 +94,7 @@ class StreamingSessionAgentManagerTest {
     private EmbeddingModel embeddingModel;
 
     @Mock
-    private PgVectorEmbeddingStore embeddingStore;
+    private PgVectorStore embeddingStore;
 
     @Mock
     private MasterAgentRegistry toolRegistry;
@@ -110,6 +113,9 @@ class StreamingSessionAgentManagerTest {
 
     @Mock
     private NltiTelemetryEmitter telemetryEmitter;
+
+    @Mock
+    private NltiWorkflowStateService workflowStateService;
 
     // Real instance required to prevent @Tool duplicate registration
     private ExaWebSearchTool exaWebSearchTool;
@@ -130,6 +136,8 @@ class StreamingSessionAgentManagerTest {
         // bleed
         when(toolRegistry.resolveDomainTools(any())).thenAnswer(inv -> new ArrayList<>());
         when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER", "ROLE_MANAGER"));
+        // #778: default to session-less so existing tests exercise the message-heuristic path.
+        lenient().when(workflowStateService.resolveActiveState(any())).thenReturn(Optional.empty());
         lenient().when(rolePromptResolver.resolvePrompt(any())).thenReturn("Default role prompt");
         lenient()
                 .when(rolePromptResolver.assemble(any(), any()))
@@ -150,7 +158,7 @@ class StreamingSessionAgentManagerTest {
                 "/order/v1/orders/{orderId}",
                 "/order/v1/orders/search?q={query}");
         sharedOrchestrationSupport = new SharedOrchestrationSupport();
-        ContentRetriever scopedRetriever = mock(ContentRetriever.class);
+        QueryDocumentRetriever scopedRetriever = mock(QueryDocumentRetriever.class);
         lenient().when(toolRegistry.sharedTools()).thenReturn(List.of());
         lenient()
                 .when(toolSelectionEngine.fullFallbackTools())
@@ -172,6 +180,8 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 30,
                 500,
@@ -270,6 +280,25 @@ class StreamingSessionAgentManagerTest {
     }
 
     @Test
+    @DisplayName("streamChat threads the persisted non-IDLE session workflow state into tool selection (#778)")
+    void streamChat_usesPersistedWorkflowState_whenSessionPresent() {
+        String message = "create a purchase order for vendor acme";
+        when(workflowStateService.resolveActiveState("user-1")).thenReturn(Optional.of(WorkflowState.CREATING_PO));
+        when(toolSelectionEngine.selectRoleTools(
+                        eq("ROLE_CASHIER"), eq(PERMISSION_CODES), eq(message), eq(WorkflowState.CREATING_PO)))
+                .thenReturn(
+                        new ToolSelectionEngine.ToolSelectionResult(List.of(), List.of(), WorkflowState.CREATING_PO));
+
+        Flux<String> result = manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), message);
+
+        assertThat(result).isNotNull();
+        // The persisted session state (not a message heuristic) gates selection, via the 4-arg overload.
+        verify(toolSelectionEngine)
+                .selectRoleTools(eq("ROLE_CASHIER"), eq(PERMISSION_CODES), eq(message), eq(WorkflowState.CREATING_PO));
+        verify(toolSelectionEngine, never()).selectRoleTools("ROLE_CASHIER", PERMISSION_CODES, message);
+    }
+
+    @Test
     @DisplayName("streamChat uses shared tool selection even when registry service is unavailable")
     void streamChat_withoutRegistryService_usesSharedSelectionPath() {
         String message = "latest internet sales report";
@@ -344,6 +373,8 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 30,
                 500,
@@ -407,6 +438,8 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 0,
                 500,
@@ -440,6 +473,8 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
+                null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 30,
                 500,
@@ -500,6 +535,8 @@ class StreamingSessionAgentManagerTest {
                 telemetryEmitter,
                 openApiToolProvider,
                 requestContext,
+                null, // roleDefaultPermissionsClient
+                workflowStateService,
                 FIXED_CLOCK,
                 30,
                 500,

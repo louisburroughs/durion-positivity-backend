@@ -8,7 +8,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.warranty.internal.client.VehicleInventoryClient;
 import com.positivity.warranty.internal.dto.ClaimActionRequest;
 import com.positivity.warranty.internal.dto.ClaimCreateRequest;
 import com.positivity.warranty.internal.dto.ClaimDecisionRequest;
@@ -17,6 +16,7 @@ import com.positivity.warranty.internal.dto.ClaimResponse;
 import com.positivity.warranty.internal.dto.ClaimUpdateRequest;
 import com.positivity.warranty.internal.entity.ClaimNote;
 import com.positivity.warranty.internal.entity.ClaimStatusHistory;
+import com.positivity.warranty.internal.entity.ExtVehicleReplica;
 import com.positivity.warranty.internal.entity.PartReturn;
 import com.positivity.warranty.internal.entity.VendorReimbursement;
 import com.positivity.warranty.internal.entity.WarrantyClaim;
@@ -35,6 +35,7 @@ import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
 import com.positivity.warranty.internal.repository.ClaimNoteRepository;
 import com.positivity.warranty.internal.repository.ClaimSettlementRepository;
 import com.positivity.warranty.internal.repository.ClaimStatusHistoryRepository;
+import com.positivity.warranty.internal.repository.ExtVehicleReplicaRepository;
 import com.positivity.warranty.internal.repository.PartReturnRepository;
 import com.positivity.warranty.internal.repository.VendorReimbursementRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
@@ -101,7 +102,7 @@ class ClaimServiceImplTest {
     private EligibilityService eligibilityService;
 
     @Mock
-    private VehicleInventoryClient vehicleInventoryClient;
+    private ExtVehicleReplicaRepository extVehicleReplicaRepository;
 
     @Mock
     private ClaimSnapshotPublisher claimSnapshotPublisher;
@@ -120,7 +121,7 @@ class ClaimServiceImplTest {
                 partReturnRepository,
                 claimCodeService,
                 eligibilityService,
-                vehicleInventoryClient,
+                extVehicleReplicaRepository,
                 claimSnapshotPublisher,
                 Clock.fixed(Instant.parse("2026-07-15T12:00:00Z"), ZoneOffset.UTC));
     }
@@ -201,9 +202,16 @@ class ClaimServiceImplTest {
         @Test
         void freezesVehicleSnapshotAndAllocatesClaimCode() {
             when(claimCodeService.nextClaimCode()).thenReturn(CLAIM_CODE);
-            when(vehicleInventoryClient.getVehicle(VEHICLE_ID))
-                    .thenReturn(Optional.of(
-                            new VehicleInventoryClient.VehicleSnapshot("1HGCM82633A004352", 42_000, "MILES")));
+            when(extVehicleReplicaRepository.findById(VEHICLE_ID))
+                    .thenReturn(Optional.of(ExtVehicleReplica.builder()
+                            .vehicleId(VEHICLE_ID)
+                            .vin("1HGCM82633A004352")
+                            .odometerValue(42_000)
+                            .odometerUnit("MILES")
+                            .active(true)
+                            .aggregateVersion(0L)
+                            .updatedAt(Instant.parse("2026-07-15T12:00:00Z"))
+                            .build()));
             stubSaveEcho();
 
             ClaimResponse response = service.create(createRequest(INVOICE_ID, List.of("https://p/1.jpg")));
@@ -227,7 +235,7 @@ class ClaimServiceImplTest {
         @Test
         void survivesVehicleLookupOutageWithNullSnapshot() {
             when(claimCodeService.nextClaimCode()).thenReturn(CLAIM_CODE);
-            when(vehicleInventoryClient.getVehicle(VEHICLE_ID)).thenReturn(Optional.empty());
+            when(extVehicleReplicaRepository.findById(VEHICLE_ID)).thenReturn(Optional.empty());
             stubSaveEcho();
 
             ClaimResponse response = service.create(createRequest(INVOICE_ID, null));
@@ -240,7 +248,7 @@ class ClaimServiceImplTest {
         @Test
         void walkInWithoutOriginIsFlaggedOriginUnverified() {
             when(claimCodeService.nextClaimCode()).thenReturn(CLAIM_CODE);
-            when(vehicleInventoryClient.getVehicle(VEHICLE_ID)).thenReturn(Optional.empty());
+            when(extVehicleReplicaRepository.findById(VEHICLE_ID)).thenReturn(Optional.empty());
             stubSaveEcho();
 
             ClaimResponse response = service.create(createRequest(null, null));
@@ -253,7 +261,7 @@ class ClaimServiceImplTest {
         @Test
         void locatedOriginIsNotFlaggedUnverified() {
             when(claimCodeService.nextClaimCode()).thenReturn(CLAIM_CODE);
-            when(vehicleInventoryClient.getVehicle(VEHICLE_ID)).thenReturn(Optional.empty());
+            when(extVehicleReplicaRepository.findById(VEHICLE_ID)).thenReturn(Optional.empty());
             stubSaveEcho();
 
             ClaimResponse response = service.create(createRequest(INVOICE_ID, null));

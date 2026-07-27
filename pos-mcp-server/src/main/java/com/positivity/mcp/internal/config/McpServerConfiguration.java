@@ -19,7 +19,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Configuration
-@EnableConfigurationProperties({McpServerProperties.class, LlmApiProperties.class})
+@EnableConfigurationProperties({McpServerProperties.class, LlmApiProperties.class, HybridRetrievalProperties.class})
 public class McpServerConfiguration {
 
     @Bean

@@ -106,6 +106,16 @@ public class CreditMemo {
     @Column(name = "currency", nullable = false, length = 3)
     private String currency;
 
+    /** When the memo was voided (issue #997 symmetry); null unless status is VOIDED. */
+    @Column(name = "voided_timestamp")
+    private Instant voidedTimestamp;
+
+    @Column(name = "voided_by_user_id", length = 50)
+    private String voidedByUserId;
+
+    @Column(name = "void_reason", length = 1000)
+    private String voidReason;
+
     @PrePersist
     protected void onCreate() {
         if (creationTimestamp == null) {

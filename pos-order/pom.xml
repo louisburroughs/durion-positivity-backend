@@ -92,6 +92,26 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Cross-module domain event contracts (ADR-0044) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-domain-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Shared tax DTOs for the pos-tax calculate call (parity story B3) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-tax-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Kafka (transactional outbox publisher; gated by pos.order.kafka.enabled) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka</artifactId>
+        </dependency>
+
         <!-- Security Common (Gateway Authentication) -->
         <dependency>
             <groupId>com.positivity</groupId>

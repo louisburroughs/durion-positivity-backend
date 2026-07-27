@@ -840,7 +840,8 @@ class TestModeTaxCalculatorTest {
                 .lineItems(List.of(intrinsicExempt, createLineItem("2", "Taxable", "1", "100")))
                 .destinationAddress(createAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
                 .customerId("CUST-1")
-                .customerExemption(TaxCalculationRequest.CustomerExemption.builder().build())
+                .customerExemption(
+                        TaxCalculationRequest.CustomerExemption.builder().build())
                 .build();
 
         // When
@@ -869,7 +870,8 @@ class TestModeTaxCalculatorTest {
                 .lineItems(List.of(createLineItem("1", "Plain taxable", "1", "100")))
                 .destinationAddress(createAddress(TEST_POSTAL_CODE, "CA", "Los Angeles", "US"))
                 .customerId("CUST-1")
-                .customerExemption(TaxCalculationRequest.CustomerExemption.builder().build())
+                .customerExemption(
+                        TaxCalculationRequest.CustomerExemption.builder().build())
                 .build();
 
         // When

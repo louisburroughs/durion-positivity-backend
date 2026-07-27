@@ -1,7 +1,6 @@
 package com.positivity.warranty.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
-import com.positivity.warranty.internal.client.VehicleInventoryClient;
 import com.positivity.warranty.internal.domain.ClaimStateMachine;
 import com.positivity.warranty.internal.dto.ClaimActionRequest;
 import com.positivity.warranty.internal.dto.ClaimCreateRequest;
@@ -27,6 +26,7 @@ import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
 import com.positivity.warranty.internal.repository.ClaimNoteRepository;
 import com.positivity.warranty.internal.repository.ClaimSettlementRepository;
 import com.positivity.warranty.internal.repository.ClaimStatusHistoryRepository;
+import com.positivity.warranty.internal.repository.ExtVehicleReplicaRepository;
 import com.positivity.warranty.internal.repository.PartReturnRepository;
 import com.positivity.warranty.internal.repository.VendorReimbursementRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
@@ -90,7 +90,7 @@ public class ClaimServiceImpl implements ClaimService {
     private final PartReturnRepository partReturnRepository;
     private final ClaimCodeService claimCodeService;
     private final EligibilityService eligibilityService;
-    private final VehicleInventoryClient vehicleInventoryClient;
+    private final ExtVehicleReplicaRepository extVehicleReplicaRepository;
     private final ClaimSnapshotPublisher claimSnapshotPublisher;
     private final Clock clock;
 
@@ -100,11 +100,10 @@ public class ClaimServiceImpl implements ClaimService {
     @NonNull
     @Transactional
     public ClaimResponse create(@NonNull ClaimCreateRequest request) {
-        // Vehicle snapshot (PRD §3.4): VIN + odometer read from pos-vehicle-inventory and frozen.
-        // The read client degrades to empty on outage; the claim is still created (walk-in
-        // resilience) and the snapshot stays null. Fetched BEFORE the claim code is allocated
-        // so the per-year claim_code_sequence row lock is never held across the remote call.
-        var vehicleSnapshot = vehicleInventoryClient.getVehicle(request.vehicleId());
+        // Vehicle snapshot (PRD §3.4): VIN + odometer read from the event-fed ext_vehicle replica
+        // (ADR-0044 §6, #924) and frozen. The replica is empty until the vehicle.events.v1 fact
+        // arrives; the claim is still created (walk-in resilience) and the snapshot stays null.
+        var vehicleSnapshot = extVehicleReplicaRepository.findById(request.vehicleId());
 
         WarrantyClaim claim = WarrantyClaim.builder()
                 .claimCode(claimCodeService.nextClaimCode())
@@ -125,12 +124,12 @@ public class ClaimServiceImpl implements ClaimService {
                 .build();
 
         vehicleSnapshot.ifPresent(snapshot -> {
-            claim.setVin(snapshot.vin());
+            claim.setVin(snapshot.getVin());
             claim.setOdometerAtClaim(
-                    snapshot.odometerValue() == null
+                    snapshot.getOdometerValue() == null
                             ? null
-                            : snapshot.odometerValue().longValue());
-            claim.setOdometerUnit(snapshot.odometerUnit());
+                            : snapshot.getOdometerValue().longValue());
+            claim.setOdometerUnit(snapshot.getOdometerUnit());
         });
 
         if (request.lines() != null) {

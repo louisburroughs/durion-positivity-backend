@@ -24,12 +24,14 @@ public class LocationInventoryInquiryResponse {
             description = "Current on-hand quantity across all stock items at the location",
             example = "12",
             requiredMode = Schema.RequiredMode.REQUIRED)
-    private int onHandQuantity;
+    private long onHandQuantity;
 
     @Schema(
             description =
-                    "Quantity available to promise after pending allocations. Note: reservation events are not yet factored in.",
+                    "Quantity available to promise after pending allocations. Note: reservation events are not yet factored in. "
+                            + "Null for as-of (historical) requests: historical allocation state is not reliably "
+                            + "reconstructable from ATP-neutral ledger events, so as-of responses carry on-hand only.",
             example = "8",
-            requiredMode = Schema.RequiredMode.REQUIRED)
-    private int availableToPromiseQuantity;
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private Long availableToPromiseQuantity;
 }

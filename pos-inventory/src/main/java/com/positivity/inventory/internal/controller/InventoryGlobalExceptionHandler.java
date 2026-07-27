@@ -1,6 +1,9 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.inventory.internal.exception.AdjustmentLedgerPostingException;
+import com.positivity.inventory.internal.exception.AsOfInFutureException;
+import com.positivity.inventory.internal.exception.CrossSiteTransferRequiresOrderException;
+import com.positivity.inventory.internal.exception.CycleCountConflictException;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.exception.DuplicateAsnException;
 import com.positivity.inventory.internal.exception.InsufficientAtpException;
@@ -14,21 +17,41 @@ import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.LocationServiceUnavailableException;
+import com.positivity.inventory.internal.exception.LotInsufficientStockException;
+import com.positivity.inventory.internal.exception.LotNotAvailableException;
+import com.positivity.inventory.internal.exception.LotNumberRequiredException;
+import com.positivity.inventory.internal.exception.LotUnknownException;
+import com.positivity.inventory.internal.exception.NegativeStockPolicyViolationException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
 import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.PickScanMismatchException;
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.exception.PurchaseOrderNotApprovedException;
+import com.positivity.inventory.internal.exception.PurchaseSuggestionConversionException;
+import com.positivity.inventory.internal.exception.PurchaseSuggestionStateException;
 import com.positivity.inventory.internal.exception.PutawayValidationException;
 import com.positivity.inventory.internal.exception.ReceivingSessionNotFoundException;
 import com.positivity.inventory.internal.exception.RecountLimitExceededException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
 import com.positivity.inventory.internal.exception.RollupExpansionTooLargeException;
+import com.positivity.inventory.internal.exception.ScrapInsufficientStockException;
+import com.positivity.inventory.internal.exception.ScrapLedgerPostingException;
+import com.positivity.inventory.internal.exception.ScrapNotFoundException;
+import com.positivity.inventory.internal.exception.SerialAlreadyInStockException;
+import com.positivity.inventory.internal.exception.SerialCountMismatchException;
+import com.positivity.inventory.internal.exception.SerialNotAvailableException;
+import com.positivity.inventory.internal.exception.ShortageResolutionException;
+import com.positivity.inventory.internal.exception.SnoozeUntilNotInFutureException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
+import com.positivity.inventory.internal.exception.TransferLocationNotEligibleException;
+import com.positivity.inventory.internal.exception.TransferOrderNotFoundException;
+import com.positivity.inventory.internal.exception.TransferQuantityExceededException;
+import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
+import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
 import com.positivity.shared.error.ApiError;
@@ -147,9 +170,40 @@ public class InventoryGlobalExceptionHandler {
         return build(HttpStatus.valueOf(422), "INSUFFICIENT_STOCK", ex.getMessage());
     }
 
+    @ExceptionHandler(NegativeStockPolicyViolationException.class)
+    public ResponseEntity<ApiError> handleNegativeStockPolicyViolation(NegativeStockPolicyViolationException ex) {
+        // odoo-parity K1 (#1027): deterministic per-case code from the exception
+        // (NEGATIVE_STOCK_OVERRIDE_REQUIRED / NEGATIVE_STOCK_FLOOR_VIOLATION).
+        return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(CycleCountConflictException.class)
+    public ResponseEntity<ApiError> handleCycleCountConflict(CycleCountConflictException ex) {
+        // odoo-parity I2 (#1026): approval rejected — task flagged CONFLICT,
+        // reviewer must explicitly choose recount or recomputed approval.
+        return build(HttpStatus.CONFLICT, "CYCLE_COUNT_CONFLICT", ex.getMessage());
+    }
+
     @ExceptionHandler(RecountLimitExceededException.class)
     public ResponseEntity<ApiError> handleRecountLimitExceeded(RecountLimitExceededException ex) {
         return build(HttpStatus.BAD_REQUEST, "RECOUNT_LIMIT_EXCEEDED", ex.getMessage());
+    }
+
+    @ExceptionHandler(AsOfInFutureException.class)
+    public ResponseEntity<ApiError> handleAsOfInFuture(AsOfInFutureException ex) {
+        // odoo-parity A3 (#1029): deterministic 422 for future-dated point-in-time queries.
+        return build(HttpStatus.valueOf(422), "AS_OF_IN_FUTURE", ex.getMessage());
+    }
+
+    @ExceptionHandler(ValuationAsOfSkuCapExceededException.class)
+    public ResponseEntity<ApiError> handleValuationAsOfSkuCapExceeded(ValuationAsOfSkuCapExceededException ex) {
+        return build(HttpStatus.valueOf(422), ValuationAsOfSkuCapExceededException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(SnoozeUntilNotInFutureException.class)
+    public ResponseEntity<ApiError> handleSnoozeUntilNotInFuture(SnoozeUntilNotInFutureException ex) {
+        // odoo-parity F3 (#1041): deterministic 422 for non-future snooze instants.
+        return build(HttpStatus.valueOf(422), SnoozeUntilNotInFutureException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(InsufficientPermissionException.class)
@@ -180,6 +234,48 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(AdjustmentLedgerPostingException.class)
     public ResponseEntity<ApiError> handleAdjustmentLedgerPosting(AdjustmentLedgerPostingException ex) {
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "ADJUSTMENT_LEDGER_POST_FAILED", ex.getMessage());
+    }
+
+    @ExceptionHandler(TransferQuantityExceededException.class)
+    public ResponseEntity<ApiError> handleTransferQuantityExceeded(TransferQuantityExceededException ex) {
+        // odoo-parity C2 (#1036): deterministic per-bound 422
+        // (TRANSFER_DISPATCH_EXCEEDS_REQUESTED / TRANSFER_RECEIVE_EXCEEDS_DISPATCHED).
+        return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(CrossSiteTransferRequiresOrderException.class)
+    public ResponseEntity<ApiError> handleCrossSiteTransferRequiresOrder(CrossSiteTransferRequiresOrderException ex) {
+        // odoo-parity C2/spec C7 (#1036): immediate stock movements are intra-site only.
+        return build(HttpStatus.valueOf(422), CrossSiteTransferRequiresOrderException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(TransferOrderNotFoundException.class)
+    public ResponseEntity<ApiError> handleTransferOrderNotFound(TransferOrderNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(TransferLocationNotEligibleException.class)
+    public ResponseEntity<ApiError> handleTransferLocationNotEligible(TransferLocationNotEligibleException ex) {
+        // odoo-parity C1/C5 (#1035): deterministic 422 for movement-ineligible sites
+        // (DECISION-INVENTORY-009: INACTIVE/PENDING blocked for movement).
+        return build(HttpStatus.valueOf(422), TransferLocationNotEligibleException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(ScrapNotFoundException.class)
+    public ResponseEntity<ApiError> handleScrapNotFound(ScrapNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(ScrapInsufficientStockException.class)
+    public ResponseEntity<ApiError> handleScrapInsufficientStock(ScrapInsufficientStockException ex) {
+        // odoo-parity D1 (#1030): guided-reconciliation 422 mirroring the putaway
+        // source-on-hand rule (docs/putaway-validation-rules.md).
+        return build(HttpStatus.valueOf(422), ScrapInsufficientStockException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(ScrapLedgerPostingException.class)
+    public ResponseEntity<ApiError> handleScrapLedgerPosting(ScrapLedgerPostingException ex) {
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "SCRAP_LEDGER_POST_FAILED", ex.getMessage());
     }
 
     @ExceptionHandler({
@@ -217,9 +313,82 @@ public class InventoryGlobalExceptionHandler {
         return build(HttpStatus.FORBIDDEN, "PART_MATCH_PERMISSION_REQUIRED", ex.getMessage());
     }
 
+    @ExceptionHandler(UomConversionUndefinedException.class)
+    public ResponseEntity<ApiError> handleUomConversionUndefined(UomConversionUndefinedException ex) {
+        // odoo-parity B1/B4 (#1033): no conversion path to base UoM is a deterministic 422,
+        // never a silent 1:1 assumption.
+        return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(LotNumberRequiredException.class)
+    public ResponseEntity<ApiError> handleLotNumberRequired(LotNumberRequiredException ex) {
+        // odoo-parity E1 (#1038): a receipt of a LOT-tracked product without a lot number is a
+        // deterministic 422, never a silently untracked posting. Since E2 (#1042) the same
+        // code gates the outbound flows (pick confirm, consumption, transfer dispatch, scrap).
+        return build(HttpStatus.valueOf(422), LotNumberRequiredException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(LotUnknownException.class)
+    public ResponseEntity<ApiError> handleLotUnknown(LotUnknownException ex) {
+        // odoo-parity E2 (#1042): outbound flows never create lots — an unknown lot number is
+        // a deterministic 422.
+        return build(HttpStatus.valueOf(422), LotUnknownException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(LotNotAvailableException.class)
+    public ResponseEntity<ApiError> handleLotNotAvailable(LotNotAvailableException ex) {
+        // odoo-parity E2 (#1042): QUARANTINED/RECALLED/CONSUMED lots cannot leave stock.
+        return build(HttpStatus.valueOf(422), LotNotAvailableException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(LotInsufficientStockException.class)
+    public ResponseEntity<ApiError> handleLotInsufficientStock(LotInsufficientStockException ex) {
+        // odoo-parity E2 (#1042): the per-lot negative floor is absolute — no override.
+        return build(HttpStatus.valueOf(422), LotInsufficientStockException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(SerialCountMismatchException.class)
+    public ResponseEntity<ApiError> handleSerialCountMismatch(SerialCountMismatchException ex) {
+        // odoo-parity E4 (#1050): a serialized posting must enumerate exactly |quantity| serials —
+        // a deterministic 422, the whole posting rolls back.
+        return build(HttpStatus.valueOf(422), SerialCountMismatchException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(SerialAlreadyInStockException.class)
+    public ResponseEntity<ApiError> handleSerialAlreadyInStock(SerialAlreadyInStockException ex) {
+        return build(HttpStatus.valueOf(422), SerialAlreadyInStockException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(SerialNotAvailableException.class)
+    public ResponseEntity<ApiError> handleSerialNotAvailable(SerialNotAvailableException ex) {
+        // odoo-parity E4 (#1050): an outbound posting naming an unknown or already-consumed serial
+        // (double-issue) is a deterministic 422.
+        return build(HttpStatus.valueOf(422), SerialNotAvailableException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(PurchaseSuggestionConversionException.class)
+    public ResponseEntity<ApiError> handlePurchaseSuggestionConversion(PurchaseSuggestionConversionException ex) {
+        // odoo-parity F4 (#1044): deterministic per-case 422 for convert preconditions
+        // (NOT_ACCEPTED / VENDOR_MISMATCH / SITE_MISMATCH / MISSING_VENDOR / MISSING_UNIT_COST).
+        return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(PurchaseSuggestionStateException.class)
+    public ResponseEntity<ApiError> handlePurchaseSuggestionState(PurchaseSuggestionStateException ex) {
+        // odoo-parity F4 (#1044): accept/dismiss from a terminal status is a 409 conflict.
+        return build(HttpStatus.CONFLICT, PurchaseSuggestionStateException.ERROR_CODE, ex.getMessage());
+    }
+
     @ExceptionHandler(InvalidParamCombinationException.class)
     public ResponseEntity<ApiError> handleInvalidParamCombination(InvalidParamCombinationException ex) {
         return build(HttpStatus.BAD_REQUEST, "INVALID_PARAM_COMBINATION", ex.getMessage());
+    }
+
+    @ExceptionHandler(ShortageResolutionException.class)
+    public ResponseEntity<ApiError> handleShortageResolution(ShortageResolutionException ex) {
+        // odoo-parity G2 (#1049): deterministic per-case 422 for resolve preconditions
+        // (MISSING_FIELD / SUBSTITUTE_UNAVAILABLE / INVALID_IDENTIFIER).
+        return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

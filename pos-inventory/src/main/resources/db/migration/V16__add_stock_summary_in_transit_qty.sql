@@ -1,0 +1,15 @@
+-- odoo-parity C2 (#1036, spec §4): in-transit stock on the summary read model.
+--
+-- in_transit_qty tracks goods dispatched toward a key but not yet received there: it is
+-- keyed on the DESTINATION posting location of a transfer. Maintained by
+-- LedgerPostingService from ledger shape alone:
+--   * TRANSFER_OUT with a to_location_id contributes -change_in_quantity (i.e. +qty) to the
+--     (stock_item_id, to_location_id) key — goods left the source and are inbound to the
+--     destination;
+--   * TRANSFER_IN contributes -change_in_quantity (i.e. -qty) to its own
+--     (stock_item_id, location_id) key — goods arrived and moved into on_hand.
+-- Intra-site bin moves post both entries in one transaction, so their contributions cancel
+-- and only cross-site transfer orders (whose receive lags dispatch) leave a residual.
+-- The invariant conserved at every step: source on_hand + destination in_transit_qty +
+-- destination on_hand is constant across dispatch → partial receive → final receive.
+ALTER TABLE inventory_stock_summary ADD COLUMN in_transit_qty bigint DEFAULT 0 NOT NULL;

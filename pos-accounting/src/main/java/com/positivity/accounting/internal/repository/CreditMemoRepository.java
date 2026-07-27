@@ -2,11 +2,15 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
+import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 
 /**
  * Repository for CreditMemo entity.
@@ -21,6 +25,52 @@ public interface CreditMemoRepository extends JpaRepository<CreditMemo, UUID> {
      * @return list of credit memos
      */
     List<CreditMemo> findByOriginalInvoiceId(UUID originalInvoiceId);
+
+    /**
+     * Find every credit memo that <em>posted</em> within the inclusive instant range,
+     * whatever lifecycle status it currently carries. Used by the Sales-Tax Liability
+     * report (story T8, issue #966) to net credit-memo tax reversals by the credit's
+     * posting period (accrual basis).
+     *
+     * <p><b>Why not filter on {@code POSTED} (issue #997).</b> Posting a credit memo
+     * writes a {@code Dr 2200} journal entry that stays on the ledger permanently. A
+     * later lifecycle transition ({@code POSTED → APPLIED} when the credit is consumed
+     * against another invoice, or {@code → VOIDED}) does not remove that entry, so
+     * selecting on the <em>current</em> status would silently drop the credit from the
+     * period it posted in and surface as GL drift on an otherwise-clean ledger. The
+     * accounting ruling is therefore: a credit counts toward the period it posted in,
+     * regardless of where it ends up. A void that should reverse the tax must post its
+     * own reversing entry (which then nets in the period of the reversal).
+     *
+     * @param excludedStatus the status to exclude — always {@code DRAFT}, which by
+     *                       definition has never posted to the ledger
+     * @param start          inclusive lower bound (start-of-day of the period start, UTC)
+     * @param end            inclusive upper bound (end-of-day of the period end, UTC)
+     * @return matching credit memos (unordered)
+     */
+    List<CreditMemo> findByStatusNotAndPostedTimestampBetween(
+            CreditMemoStatus excludedStatus, Instant start, Instant end);
+
+    /**
+     * Credit memos voided within the window — the T8 report's void-period restoration term
+     * (issue #997 symmetry): a void posts a reversing {@code Cr 2200} entry when it happens, so
+     * the report restores the reversed tax in that same period.
+     *
+     * @param status always {@code VOIDED}
+     * @param start  inclusive lower bound (start-of-day of the period start, UTC)
+     * @param end    inclusive upper bound (end-of-day of the period end, UTC)
+     * @return matching credit memos (unordered)
+     */
+    List<CreditMemo> findByStatusAndVoidedTimestampBetween(CreditMemoStatus status, Instant start, Instant end);
+
+    /**
+     * Locked variant ({@code SELECT ... FOR UPDATE}) for the void transition (issue #997
+     * symmetry): concurrent voids of the same memo serialize on the row, so exactly one posts
+     * the mirror GL entry and the loser sees VOIDED (409). Must run inside an active
+     * transaction.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<CreditMemo> findWithLockByCreditMemoId(UUID creditMemoId);
 
     /**
      * Find all credit memos for an invoice with pagination.

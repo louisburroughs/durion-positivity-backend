@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import com.positivity.inventory.internal.service.LedgerPostingService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -49,9 +51,16 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     @Autowired
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
+    @Autowired
+    private InventoryStockSummaryRepository inventoryStockSummaryRepository;
+
+    @Autowired
+    private LedgerPostingService ledgerPostingService;
+
     @BeforeEach
     void setUp() {
         inventoryLedgerEntryRepository.deleteAll();
+        inventoryStockSummaryRepository.deleteAll();
     }
 
     // Issue CAP-215: AC-1 — on-hand and ATP returned correctly when stock exists
@@ -187,7 +196,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     // -------------------------------------------------------------------------
 
     private void seedGoodsReceipt(String productSku, UUID locationId, int quantity) {
-        inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
+        ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productSku)
                 .locationId(locationId)
                 .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
@@ -200,7 +209,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     }
 
     private void seedAllocationCreated(String productSku, UUID locationId, int quantity) {
-        inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
+        ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productSku)
                 .locationId(locationId)
                 .eventType(InventoryLedgerEventType.ALLOCATION_CREATED)
@@ -213,7 +222,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     }
 
     private void seedAllocationReleased(String productSku, UUID locationId, int quantity) {
-        inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
+        ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productSku)
                 .locationId(locationId)
                 .eventType(InventoryLedgerEventType.ALLOCATION_RELEASED)
@@ -226,7 +235,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     }
 
     private void seedReservationCreated(String productSku, UUID locationId, int quantity) {
-        inventoryLedgerEntryRepository.save(InventoryLedgerEntry.builder()
+        ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productSku)
                 .locationId(locationId)
                 .eventType(InventoryLedgerEventType.RESERVATION_CREATED)

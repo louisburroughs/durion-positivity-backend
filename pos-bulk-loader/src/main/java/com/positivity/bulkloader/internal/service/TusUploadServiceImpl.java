@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -35,17 +36,20 @@ public class TusUploadServiceImpl implements TusUploadService {
     private final Path storageRoot;
     private final Path tusRoot;
     private final int expiryHours;
+    private final Clock clock;
 
     public TusUploadServiceImpl(
             TusUploadRepository tusUploadRepository,
             BulkLoadJobService bulkLoadJobService,
             @Value("${bulk-loader.storage.local-root:/tmp/bulk-loader}") String storageRootPath,
-            @Value("${bulk-loader.tus.expiry-hours:24}") int expiryHours) {
+            @Value("${bulk-loader.tus.expiry-hours:24}") int expiryHours,
+            Clock clock) {
         this.tusUploadRepository = tusUploadRepository;
         this.bulkLoadJobService = bulkLoadJobService;
         this.storageRoot = Paths.get(storageRootPath);
         this.tusRoot = this.storageRoot.resolve(".tus");
         this.expiryHours = expiryHours;
+        this.clock = clock;
         try {
             Files.createDirectories(this.tusRoot);
         } catch (IOException e) {
@@ -64,7 +68,7 @@ public class TusUploadServiceImpl implements TusUploadService {
         upload.setTotalSize(totalSize);
         upload.setUploadOffset(0L);
         upload.setCompleted(false);
-        upload.setExpiresAt(Instant.now().plus(expiryHours, ChronoUnit.HOURS));
+        upload.setExpiresAt(Instant.now(clock).plus(expiryHours, ChronoUnit.HOURS));
         TusUpload saved = tusUploadRepository.save(upload);
 
         try {
@@ -88,7 +92,7 @@ public class TusUploadServiceImpl implements TusUploadService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = IOException.class)
     public long appendChunk(@NonNull UUID uploadId, long expectedOffset, @NonNull InputStream data, long chunkLength)
             throws IOException {
         TusUpload upload = findOrThrow(uploadId);
@@ -96,7 +100,7 @@ public class TusUploadServiceImpl implements TusUploadService {
         if (upload.isCompleted()) {
             throw new IllegalStateException("Upload is already complete: " + uploadId);
         }
-        if (Instant.now().isAfter(upload.getExpiresAt())) {
+        if (Instant.now(clock).isAfter(upload.getExpiresAt())) {
             throw new TusUploadExpiredException(uploadId);
         }
         if (upload.getUploadOffset() != expectedOffset) {
@@ -133,7 +137,7 @@ public class TusUploadServiceImpl implements TusUploadService {
     @Scheduled(fixedDelayString = "${bulk-loader.tus.cleanup-interval-ms:3600000}")
     @Transactional
     public void cleanupExpiredUploads() {
-        List<TusUpload> expired = tusUploadRepository.findByExpiresAtBeforeAndCompletedFalse(Instant.now());
+        List<TusUpload> expired = tusUploadRepository.findByExpiresAtBeforeAndCompletedFalse(Instant.now(clock));
         for (TusUpload upload : expired) {
             try {
                 deleteTempFile(upload.getId());

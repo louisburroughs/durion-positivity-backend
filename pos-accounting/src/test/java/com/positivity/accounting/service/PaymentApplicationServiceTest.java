@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.dto.CustomerCreditIssuanceGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
@@ -33,6 +34,7 @@ import com.positivity.accounting.internal.service.PaymentApplicationServiceImpl;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -548,6 +550,92 @@ class PaymentApplicationServiceTest {
         assertThat(event.getCurrency()).isEqualTo("USD");
         assertThat(event.getAppliedAmount()).isEqualByComparingTo("500.00");
         assertThat(event.getApplicationTimestamp()).isEqualTo(Instant.now(TEST_CLOCK));
+    }
+
+    @Test
+    @DisplayName("Overpayment enqueues a CUSTOMER_CREDIT_ISSUANCE GL posting work item for the excess (Issue #975)")
+    void testApplyPaymentToInvoices_Overpayment_EnqueuesCreditIssuanceGLPostingWorkItem() {
+        // Arrange: payment 1000 applied against an invoice with only 400 due ->
+        // 400 applied, 600 excess converted to a CustomerCredit.
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId, List.of(createInvoiceApplication(testInvoiceId, "1000.00")));
+
+        UUID creditId = UUID.fromString("00000000-0000-0000-0000-0000000c1975");
+        when(paymentApplicationRepository.existsByApplicationRequestId(testApplicationRequestId))
+                .thenReturn(false);
+        when(receivablePaymentRepository.findById(testPaymentId)).thenReturn(Optional.of(testPayment));
+        when(paymentApplicationRepository.save(any(PaymentApplication.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(receivablePaymentRepository.save(any(ReceivablePayment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(customerCreditRepository.save(any(CustomerCredit.class))).thenAnswer(invocation -> {
+            CustomerCredit credit = invocation.getArgument(0);
+            credit.setCreditId(creditId);
+            return credit;
+        });
+        stubInvoice(testInvoiceId, "400.00");
+
+        // Act
+        PaymentApplicationResponse response = service.applyPaymentToInvoices(testPaymentId, request);
+
+        // A CustomerCredit was recorded for the 600 excess.
+        verify(customerCreditRepository).save(any(CustomerCredit.class));
+        assertThat(response.getCustomerCredit()).isNotNull();
+        assertThat(response.getCustomerCredit().getAmount()).isEqualByComparingTo("600.00");
+
+        // Both legs enqueued: AR cash receipt (400) and credit issuance (600).
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(outboxService)
+                .saveToOutbox(
+                        any(UUID.class),
+                        eq("CustomerCreditIssuance"),
+                        eq(testPaymentId),
+                        eq(CustomerCreditIssuanceGLPostingEvent.class.getName()),
+                        eventCaptor.capture());
+
+        CustomerCreditIssuanceGLPostingEvent issuance = (CustomerCreditIssuanceGLPostingEvent) eventCaptor.getValue();
+        assertThat(issuance.getEventId()).isNotNull();
+        assertThat(issuance.getApplicationRequestId()).isEqualTo(testApplicationRequestId);
+        assertThat(issuance.getCreditId()).isEqualTo(creditId);
+        assertThat(issuance.getPaymentId()).isEqualTo(testPaymentId);
+        assertThat(issuance.getCustomerId()).isEqualTo(testCustomerId);
+        assertThat(issuance.getCurrency()).isEqualTo("USD");
+        assertThat(issuance.getCreditAmount()).isEqualByComparingTo("600.00");
+        assertThat(issuance.getApplicationTimestamp()).isEqualTo(Instant.now(TEST_CLOCK));
+
+        // The AR cash-receipt leg is still enqueued for the applied portion.
+        verify(outboxService)
+                .saveToOutbox(
+                        any(UUID.class),
+                        eq("PaymentApplication"),
+                        eq(testPaymentId),
+                        eq(PaymentApplicationGLPostingEvent.class.getName()),
+                        any());
+    }
+
+    @Test
+    @DisplayName("Exact application (no excess) enqueues no credit-issuance work item (Issue #975, AC-6)")
+    void testApplyPaymentToInvoices_ExactApplication_NoCreditIssuanceWorkItem() {
+        // Arrange: 500 applied against a 1000-due invoice -> no excess, no credit.
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId, List.of(createInvoiceApplication(testInvoiceId, "500.00")));
+
+        stubAppliableRequest();
+        stubInvoice(testInvoiceId, "1000.00");
+
+        // Act
+        PaymentApplicationResponse response = service.applyPaymentToInvoices(testPaymentId, request);
+
+        // No credit created, and only the AR cash-receipt leg reaches the outbox.
+        assertThat(response.getCustomerCredit()).isNull();
+        verify(customerCreditRepository, never()).save(any(CustomerCredit.class));
+        verify(outboxService, never())
+                .saveToOutbox(
+                        any(UUID.class),
+                        eq("CustomerCreditIssuance"),
+                        any(UUID.class),
+                        eq(CustomerCreditIssuanceGLPostingEvent.class.getName()),
+                        any());
     }
 
     @Test
@@ -1181,6 +1269,95 @@ class PaymentApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("OLDEST_FIRST keys on finalizedAt, not invoiceCreatedAt, when the two orders differ (Issue #976)")
+    void testApplyPaymentToInvoices_OldestFirst_OrdersByFinalizedAtNotCreatedAt() {
+        // Issue #976 worked example: A created Jan 1, finalized Mar 1; B created Feb 1, finalized
+        // Feb 5. By invoiceCreatedAt, A is older; by finalizedAt, B became the receivable first.
+        // "Oldest first" must allocate to B before A.
+        UUID invoiceA = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+        UUID invoiceB = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId,
+                List.of(createInvoiceApplication(invoiceA, "300.00"), createInvoiceApplication(invoiceB, "400.00")));
+        request.setAllocationStrategy(AllocationStrategy.OLDEST_FIRST);
+
+        stubAppliableRequest();
+        // A: created earliest, finalized latest.
+        stubInvoice(invoiceA, "1000.00", Instant.parse("2023-01-01T00:00:00Z"), Instant.parse("2023-03-01T00:00:00Z"));
+        // B: created later, finalized earliest -> the older receivable.
+        stubInvoice(invoiceB, "1000.00", Instant.parse("2023-02-01T00:00:00Z"), Instant.parse("2023-02-05T00:00:00Z"));
+
+        // Act
+        service.applyPaymentToInvoices(testPaymentId, request);
+
+        // Assert: allocation follows finalizedAt (B before A), the opposite of invoiceCreatedAt order.
+        verify(paymentApplicationRepository, times(2)).save(paymentApplicationCaptor.capture());
+        assertThat(paymentApplicationCaptor.getAllValues())
+                .extracting(PaymentApplication::getInvoiceId)
+                .containsExactly(invoiceB, invoiceA);
+    }
+
+    @Test
+    @DisplayName("OLDEST_FIRST ages by due date, not finalizedAt, when the two orders differ (Issue #993)")
+    void testApplyPaymentToInvoices_OldestFirst_OrdersByDueDateNotFinalizedAt() {
+        // Issue #993 worked example: A finalized Jan 1 on NET_60 (due Mar 2); B finalized Feb 1
+        // net-0 (due Feb 1). By finalizedAt, A is older; by due date, B is more overdue.
+        // Collections "oldest first" must allocate to B before A.
+        UUID invoiceA = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+        UUID invoiceB = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId,
+                List.of(createInvoiceApplication(invoiceA, "300.00"), createInvoiceApplication(invoiceB, "400.00")));
+        request.setAllocationStrategy(AllocationStrategy.OLDEST_FIRST);
+
+        stubAppliableRequest();
+        stubInvoiceWithDueDate(
+                invoiceA, "1000.00", Instant.parse("2023-01-01T00:00:00Z"), LocalDate.parse("2023-03-02"));
+        stubInvoiceWithDueDate(
+                invoiceB, "1000.00", Instant.parse("2023-02-01T00:00:00Z"), LocalDate.parse("2023-02-01"));
+
+        // Act
+        service.applyPaymentToInvoices(testPaymentId, request);
+
+        // Assert: allocation follows due date (B before A), the opposite of finalizedAt order.
+        verify(paymentApplicationRepository, times(2)).save(paymentApplicationCaptor.capture());
+        assertThat(paymentApplicationCaptor.getAllValues())
+                .extracting(PaymentApplication::getInvoiceId)
+                .containsExactly(invoiceB, invoiceA);
+    }
+
+    @Test
+    @DisplayName("OLDEST_FIRST falls back to finalizedAt for a replica without a due date (Issue #993, defensive)")
+    void testApplyPaymentToInvoices_OldestFirst_MixedDueDatePresence_FallsBackToFinalizedAt() {
+        // Defensive edge case (greenfield: every finalized invoice carries a due date; a missing
+        // one means a producer bug or a pre-enrichment event). The bare invoice competes on its
+        // finalizedAt, compared on the same axis as due dates at UTC start-of-day.
+        UUID withDueDate = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+        UUID withoutDueDate = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+        PaymentApplicationRequest request = createApplicationRequest(
+                testApplicationRequestId,
+                List.of(
+                        createInvoiceApplication(withDueDate, "300.00"),
+                        createInvoiceApplication(withoutDueDate, "400.00")));
+        request.setAllocationStrategy(AllocationStrategy.OLDEST_FIRST);
+
+        stubAppliableRequest();
+        // Due date Jun 1 vs bare finalizedAt Feb 1: the bare invoice is the older receivable.
+        stubInvoiceWithDueDate(
+                withDueDate, "1000.00", Instant.parse("2023-01-01T00:00:00Z"), LocalDate.parse("2023-06-01"));
+        stubInvoice(withoutDueDate, "1000.00", Instant.parse("2023-02-01T00:00:00Z"));
+
+        // Act
+        service.applyPaymentToInvoices(testPaymentId, request);
+
+        // Assert
+        verify(paymentApplicationRepository, times(2)).save(paymentApplicationCaptor.capture());
+        assertThat(paymentApplicationCaptor.getAllValues())
+                .extracting(PaymentApplication::getInvoiceId)
+                .containsExactly(withoutDueDate, withDueDate);
+    }
+
+    @Test
     @DisplayName("Should keep unappliedAmount math unchanged for OLDEST_FIRST partial allocation")
     void testApplyPaymentToInvoices_OldestFirst_PartialAllocation_UnappliedMathUnchanged() {
         // Arrange: 700.00 requested of 1000.00 available, caller order [newer, older]
@@ -1256,12 +1433,49 @@ class PaymentApplicationServiceTest {
 
     /**
      * Stub variant that also sets the replica invoice date, used by allocation-strategy tests
-     * (Issue #955).
+     * (Issue #955). {@code OLDEST_FIRST} orders by the issue/finalization date (Issue #976), so the
+     * supplied date is set as {@code finalizedAt} (and mirrored on {@code invoiceCreatedAt}).
      */
-    private void stubInvoice(@NonNull UUID invoiceId, @NonNull String balanceDue, @Nullable Instant invoiceCreatedAt) {
+    private void stubInvoice(@NonNull UUID invoiceId, @NonNull String balanceDue, @Nullable Instant finalizedAt) {
+        stubInvoice(invoiceId, balanceDue, finalizedAt, finalizedAt);
+    }
+
+    /**
+     * Stub variant that sets {@code invoiceCreatedAt} and {@code finalizedAt} independently, so
+     * allocation-ordering tests can prove {@code OLDEST_FIRST} keys on the finalization date rather
+     * than the record-creation date (Issue #976, AC-2).
+     */
+    private void stubInvoice(
+            @NonNull UUID invoiceId,
+            @NonNull String balanceDue,
+            @Nullable Instant invoiceCreatedAt,
+            @Nullable Instant finalizedAt) {
+        stubInvoice(invoiceId, balanceDue, invoiceCreatedAt, finalizedAt, null);
+    }
+
+    /**
+     * Stub variant that also sets the replica due date (Issue #993), so allocation-ordering tests
+     * can prove {@code OLDEST_FIRST} prefers the due date over {@code finalizedAt}.
+     */
+    private void stubInvoiceWithDueDate(
+            @NonNull UUID invoiceId,
+            @NonNull String balanceDue,
+            @Nullable Instant finalizedAt,
+            @Nullable LocalDate dueDate) {
+        stubInvoice(invoiceId, balanceDue, finalizedAt, finalizedAt, dueDate);
+    }
+
+    private void stubInvoice(
+            @NonNull UUID invoiceId,
+            @NonNull String balanceDue,
+            @Nullable Instant invoiceCreatedAt,
+            @Nullable Instant finalizedAt,
+            @Nullable LocalDate dueDate) {
         ExtInvoice invoice = ExtInvoice.builder()
                 .invoiceId(invoiceId)
                 .invoiceCreatedAt(invoiceCreatedAt)
+                .finalizedAt(finalizedAt)
+                .dueDate(dueDate)
                 .workorderId(UUID.fromString("00000000-0000-0000-0000-0000000000ff"))
                 .partyId(testCustomerId.toString())
                 .status("FINALIZED")

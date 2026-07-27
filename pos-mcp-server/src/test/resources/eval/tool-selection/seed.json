@@ -21,11 +21,11 @@
         "permission_codes": ["crm:party:search", "crm:vehicle:view", "workorder:workorder:create"]
       },
       "expected": {
-        "tool_ids": ["crm_getallcustomers", "crm_listvehiclesforcustomer", "workorders_createworkorder"],
+        "tool_ids": ["CustomerFacadeTool", "VehicleFacadeTool", "WorkorderFacadeTool"],
         "k": 5
       },
-      "tags": ["multi-domain"],
-      "notes": "Requires customer->vehicle->workorder chaining; all three should be in candidate set."
+      "tags": ["multi-domain", "facade"],
+      "notes": "Requires customer->vehicle->workorder chaining; all three facade tools should be in the candidate set. Live tool names are facade class names (mcp_tool.name), retargeted from the pre-discovery op-id form (crm_getallcustomers -> CustomerFacadeTool, crm_listvehiclesforcustomer -> VehicleFacadeTool, workorders_createworkorder -> WorkorderFacadeTool)."
     },
     {
       "fixture_id": "technician-denied-accounting",
@@ -47,9 +47,9 @@
         "permission_codes": ["inventory:goods_receipt:create"],
         "workflow_state": "PROCESSING_RETURN"
       },
-      "expected": { "tool_ids": ["inventory_submitreturntostock"], "k": 5 },
-      "tags": ["workflow-gated"],
-      "notes": "Tool only valid in non-IDLE PROCESSING_RETURN state (Phase 2C)."
+      "expected": { "tool_ids": ["InventoryFacadeTool"], "k": 5 },
+      "tags": ["workflow-gated", "facade"],
+      "notes": "Return-to-stock is served by InventoryFacadeTool, gated to the non-IDLE PROCESSING_RETURN state (Phase 2C). Retargeted from the pre-discovery op-id form (inventory_submitreturntostock -> InventoryFacadeTool)."
     }
   ]
 }

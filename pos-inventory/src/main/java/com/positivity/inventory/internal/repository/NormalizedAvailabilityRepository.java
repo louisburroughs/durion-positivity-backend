@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.NormalizedAvailability;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,6 +18,19 @@ public interface NormalizedAvailabilityRepository extends JpaRepository<Normaliz
 
     Optional<NormalizedAvailability> findByProductIdAndManufacturerIdAndAsOf(
             UUID productId, UUID manufacturerId, Instant asOf);
+
+    /**
+     * Most recent availability snapshot for a product across manufacturers (odoo-parity F3,
+     * issue #1041): the pack-size seed source for a newly created replenishment policy's
+     * {@code orderMultiple} default.
+     */
+    Optional<NormalizedAvailability> findFirstByProductIdOrderByAsOfDesc(UUID productId);
+
+    /**
+     * All availability snapshots for a product, newest first (odoo-parity F4, issue #1044):
+     * the vendor-selection input — callers keep the first (latest) row per manufacturer.
+     */
+    List<NormalizedAvailability> findByProductIdOrderByAsOfDesc(UUID productId);
 
     @Query("""
             SELECT MIN(n.leadTimeDaysMin) AS minDays,

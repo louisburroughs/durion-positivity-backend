@@ -2,6 +2,17 @@
 spring:
   application:
     name: order
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: pos-order-events
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   datasource:
     url: ${SPRING_DATASOURCE_URL:}
     username: ${SPRING_DATASOURCE_USERNAME:}
@@ -48,6 +59,47 @@ logging:
       springframework:
         web: INFO
       hibernate: INFO
+pos:
+  order:
+    kafka:
+      # Domain-event publishing + replica feeds (ADR-0044, parity stories D1/I2). Off until the
+      # broker is provisioned; flip POS_ORDER_KAFKA_ENABLED per environment.
+      enabled: ${POS_ORDER_KAFKA_ENABLED:false}
+      # CRM replica feeds (ADR-0044 §6): ext_customer / ext_vehicle
+      customer-events-topic: ${POS_ORDER_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
+      customer-events-consumer-group: ${POS_ORDER_CUSTOMER_EVENTS_CONSUMER_GROUP:pos-order-customer-events}
+      vehicle-events-topic: ${POS_ORDER_VEHICLE_EVENTS_TOPIC:vehicle.events.v1}
+      vehicle-events-consumer-group: ${POS_ORDER_VEHICLE_EVENTS_CONSUMER_GROUP:pos-order-vehicle-events}
+      # Catalog/location reference replicas (parity stories B1/B3)
+      catalog-events-topic: ${POS_ORDER_CATALOG_EVENTS_TOPIC:catalog.events.v1}
+      catalog-events-consumer-group: ${POS_ORDER_CATALOG_EVENTS_CONSUMER_GROUP:pos-order-catalog-events}
+      location-events-topic: ${POS_ORDER_LOCATION_EVENTS_TOPIC:location.events.v1}
+      location-events-consumer-group: ${POS_ORDER_LOCATION_EVENTS_CONSUMER_GROUP:pos-order-location-events}
+      # Settlement handshake (parity story C3): pos-invoice per-payment settlement facts
+      payment-events-topic: ${POS_ORDER_PAYMENT_EVENTS_TOPIC:payment.events.v1}
+      payment-events-consumer-group: ${POS_ORDER_PAYMENT_EVENTS_CONSUMER_GROUP:pos-order-payment-events}
+      # Source-document replicas (parity story E1): estimate/workorder snapshots
+      workorder-events-topic: ${POS_ORDER_WORKORDER_EVENTS_TOPIC:workorder.events.v1}
+      workorder-events-consumer-group: ${POS_ORDER_WORKORDER_EVENTS_CONSUMER_GROUP:pos-order-workorder-events}
+    pricing:
+      # PriceQuoteRequest requires a customerTierId; served from config until a customer→tier
+      # mapping feed exists (the ext_customer replica carries only the tier name). Story B1.
+      default-customer-tier-id: ${POS_ORDER_DEFAULT_CUSTOMER_TIER_ID:00000000-0000-0000-0000-000000000000}
+    quote:
+      # Counter-quote validity horizon (ISO-8601 duration; parity story A3)
+      validity: ${POS_ORDER_QUOTE_VALIDITY:P7D}
+    session:
+      # Register session over/short (counted − theoretical cash) beyond this absolute amount at
+      # close requires the order:session:approve_variance authority (parity story G2, spec R6.4).
+      authorized-difference-limit: ${POS_ORDER_SESSION_AUTHORIZED_DIFFERENCE_LIMIT:5.00}
+  price:
+    base-url: ${POS_PRICE_BASE_URL:http://pos-price:8080}
+  tax:
+    base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}
+  invoice:
+    # Scoped ADR-0044 exception (checkout invoice creation + saga payment reversal)
+    base-url: ${POS_INVOICE_BASE_URL:http://pos-invoice:8080}
+
 springdoc:
   api-docs:
     enabled: true

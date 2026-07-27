@@ -35,6 +35,16 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1credit-memos
   /v1/accounting/credit-memos/{creditMemoId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1credit-memos~1{creditMemoId}
+  /v1/accounting/credit-memos/{creditMemoId}/void:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1credit-memos~1{creditMemoId}~1void
+  /v1/accounting/customer-credits:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1customer-credits
+  /v1/accounting/customer-credits/{creditId}:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1customer-credits~1{creditId}
+  /v1/accounting/customer-credits/{creditId}/applications:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1customer-credits~1{creditId}~1applications
+  /v1/accounting/customer-credits/{creditId}/refunds:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1customer-credits~1{creditId}~1refunds
   /v1/accounting/default-mappings:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1default-mappings
   /v1/accounting/default-mappings/global:
@@ -163,6 +173,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1export
   /v1/accounting/reports/export/{exportId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1export~1{exportId}
+  /v1/accounting/reports/export/{exportId}/download:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1export~1{exportId}~1download
   /v1/accounting/reports/financial/aged-payables:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1aged-payables
   /v1/accounting/reports/financial/aged-receivables:
@@ -177,6 +189,14 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1general-ledger
   /v1/accounting/reports/financial/income-statement:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1income-statement
+  /v1/accounting/reports/financial/tax-liability:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1tax-liability
+  /v1/accounting/reports/financial/tax-liability/snapshots:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1tax-liability~1snapshots
+  /v1/accounting/reports/financial/tax-liability/snapshots/{snapshotId}:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1tax-liability~1snapshots~1{snapshotId}
+  /v1/accounting/reports/financial/tax-liability/snapshots/{snapshotId}/verify:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1tax-liability~1snapshots~1{snapshotId}~1verify
   /v1/accounting/reports/financial/trial-balance:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1reports~1financial~1trial-balance
   /v1/accounting/reports/location/labor-overhead:
@@ -289,6 +309,14 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1services~1search
   /v1/products/services/{serviceId}:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1services~1{serviceId}
+  /v1/products/substitution-groups:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1substitution-groups
+  /v1/products/substitution-groups/{groupId}:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1substitution-groups~1{groupId}
+  /v1/products/substitution-groups/{groupId}/members:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1substitution-groups~1{groupId}~1members
+  /v1/products/substitution-groups/{groupId}/members/{productId}:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1substitution-groups~1{groupId}~1members~1{productId}
   /v1/products/supplier-costs:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1supplier-costs
   /v1/products/supplier-costs/{id}:
@@ -313,6 +341,12 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1{productId}~1replacements
   /v1/products/{productId}/substitutes:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1{productId}~1substitutes
+  /v1/products/{productId}/tracking-level:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1{productId}~1tracking-level
+  /v1/products/{productId}/uoms:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1{productId}~1uoms
+  /v1/products/{productId}/uoms/{uomId}:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1{productId}~1uoms~1{uomId}
   /v1/crm:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm
   /v1/crm/accounts/parties:
@@ -419,6 +453,10 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1availability~1lead-time
   /v1/inventory/availability/{productId}:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1availability~1{productId}
+  /v1/inventory/backorders:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1backorders
+  /v1/inventory/backorders/{backorderId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1backorders~1{backorderId}
   /v1/inventory/bulk-ingest:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1bulk-ingest
   /v1/inventory/consumption:
@@ -433,6 +471,8 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCount~1task~1{taskId}
   /v1/inventory/cycleCount/task/{taskId}/history:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCount~1task~1{taskId}~1history
+  /v1/inventory/cycleCount/task/{taskId}/interfering-movements:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCount~1task~1{taskId}~1interfering-movements
   /v1/inventory/cycleCountAdjustments:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountAdjustments
   /v1/inventory/cycleCountAdjustments/pending:
@@ -449,6 +489,12 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountPlans
   /v1/inventory/cycleCountPlans/{planId}:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountPlans~1{planId}
+  /v1/inventory/cycleCountPlans/{planId}/status:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountPlans~1{planId}~1status
+  /v1/inventory/cycleCountSchedules:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountSchedules
+  /v1/inventory/cycleCountSchedules/{scheduleId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountSchedules~1{scheduleId}
   /v1/inventory/goods-receipts:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1goods-receipts
   /v1/inventory/goods-receipts/{receiptId}:
@@ -471,6 +517,16 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1locations~1{locationId}~1inventory-items
   /v1/inventory/locations/{locationId}/inventory-rollup:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1locations~1{locationId}~1inventory-rollup
+  /v1/inventory/lots:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1lots
+  /v1/inventory/lots/{lotId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1lots~1{lotId}
+  /v1/inventory/lots/{lotId}/expiration:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1lots~1{lotId}~1expiration
+  /v1/inventory/lots/{lotId}/status:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1lots~1{lotId}~1status
+  /v1/inventory/lots/{lotId}/traceability:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1lots~1{lotId}~1traceability
   /v1/inventory/meta/storage-types:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1meta~1storage-types
   /v1/inventory/pick-lists:
@@ -499,6 +555,16 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-orders~1{poId}~1receive
   /v1/inventory/purchase-orders/{poId}/revisions:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-orders~1{poId}~1revisions
+  /v1/inventory/purchase-suggestions:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-suggestions
+  /v1/inventory/purchase-suggestions/convert:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-suggestions~1convert
+  /v1/inventory/purchase-suggestions/{suggestionId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-suggestions~1{suggestionId}
+  /v1/inventory/purchase-suggestions/{suggestionId}/accept:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-suggestions~1{suggestionId}~1accept
+  /v1/inventory/purchase-suggestions/{suggestionId}/dismiss:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-suggestions~1{suggestionId}~1dismiss
   /v1/inventory/putaway/tasks:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1putaway~1tasks
   /v1/inventory/putaway/tasks/generate:
@@ -515,8 +581,16 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1receiving~1sessions~1{sessionId}~1lines~1{lineId}~1cross-dock
   /v1/inventory/receiving/sessions/{sessionId}/receive:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1receiving~1sessions~1{sessionId}~1receive
+  /v1/inventory/replenishment/needs:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1replenishment~1needs
   /v1/inventory/replenishment/policies:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1replenishment~1policies
+  /v1/inventory/replenishment/policies/{policyId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1replenishment~1policies~1{policyId}
+  /v1/inventory/replenishment/policies/{policyId}/snooze:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1replenishment~1policies~1{policyId}~1snooze
+  /v1/inventory/replenishment/scan:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1replenishment~1scan
   /v1/inventory/replenishment/tasks:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1replenishment~1tasks
   /v1/inventory/reservations:
@@ -531,6 +605,20 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1returns~1returnable-items
   /v1/inventory/returns/submit-to-stock:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1returns~1submit-to-stock
+  /v1/inventory/scraps:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1scraps
+  /v1/inventory/scraps/{scrapId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1scraps~1{scrapId}
+  /v1/inventory/scraps/{scrapId}/approve:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1scraps~1{scrapId}~1approve
+  /v1/inventory/scraps/{scrapId}/reject:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1scraps~1{scrapId}~1reject
+  /v1/inventory/serial-units:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1serial-units
+  /v1/inventory/serial-units/{serialUnitId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1serial-units~1{serialUnitId}
+  /v1/inventory/serial-units/{serialUnitId}/traceability:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1serial-units~1{serialUnitId}~1traceability
   /v1/inventory/shortage/options:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1shortage~1options
   /v1/inventory/shortage/resolve:
@@ -539,6 +627,10 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1sites~1{siteId}~1defaultLocations
   /v1/inventory/sites/{siteId}/inventory-rollup:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1sites~1{siteId}~1inventory-rollup
+  /v1/inventory/sourcing-strategies:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1sourcing-strategies
+  /v1/inventory/sourcing-strategies/{configId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1sourcing-strategies~1{configId}
   /v1/inventory/stock-movements:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1stock-movements
   /v1/inventory/storage-locations:
@@ -547,12 +639,46 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1sync-logs
   /v1/inventory/sync-logs/{syncLogId}:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1sync-logs~1{syncLogId}
+  /v1/inventory/transfer-orders:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1transfer-orders
+  /v1/inventory/transfer-orders/{transferOrderId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1transfer-orders~1{transferOrderId}
+  /v1/inventory/transfer-orders/{transferOrderId}/approve:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1transfer-orders~1{transferOrderId}~1approve
+  /v1/inventory/transfer-orders/{transferOrderId}/cancel:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1transfer-orders~1{transferOrderId}~1cancel
+  /v1/inventory/transfer-orders/{transferOrderId}/dispatch:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1transfer-orders~1{transferOrderId}~1dispatch
+  /v1/inventory/transfer-orders/{transferOrderId}/receive:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1transfer-orders~1{transferOrderId}~1receive
+  /v1/inventory/transfer-orders/{transferOrderId}/short-close:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1transfer-orders~1{transferOrderId}~1short-close
+  /v1/inventory/valuation:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1valuation
+  /v1/inventory/valuation/methods:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1valuation~1methods
+  /v1/inventory/valuation/revaluations:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1valuation~1revaluations
+  /v1/inventory/valuation/revaluations/{revaluationId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1valuation~1revaluations~1{revaluationId}
+  /v1/inventory/valuation/revaluations/{revaluationId}/approve:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1valuation~1revaluations~1{revaluationId}~1approve
+  /v1/inventory/valuation/revaluations/{revaluationId}/reject:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1valuation~1revaluations~1{revaluationId}~1reject
   /v1/billing/auth/elevate:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1billing~1auth~1elevate
   /v1/billing/rules/{partyId}:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1billing~1rules~1{partyId}
   /v1/invoices:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices
+  /v1/invoices/deposits:
+    $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1deposits
+  /v1/invoices/deposits/{depositCreditId}:
+    $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1deposits~1{depositCreditId}
+  /v1/invoices/deposits/{depositCreditId}/refund:
+    $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1deposits~1{depositCreditId}~1refund
+  /v1/invoices/from-order:
+    $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1from-order
   /v1/invoices/items/search:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1items~1search
   /v1/invoices/search:
@@ -567,6 +693,8 @@ paths:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1artifacts~1{artifactRefId}~1download
   /v1/invoices/{invoiceId}/artifacts/{artifactRefId}/download-token:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1artifacts~1{artifactRefId}~1download-token
+  /v1/invoices/{invoiceId}/cancel:
+    $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1cancel
   /v1/invoices/{invoiceId}/finalize:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1finalize
   /v1/invoices/{invoiceId}/payments:
@@ -585,8 +713,12 @@ paths:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1receipts~1{receiptId}~1print
   /v1/invoices/{invoiceId}/receipts/{receiptId}/reprint:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1receipts~1{receiptId}~1reprint
+  /v1/invoices/{invoiceId}/refunds:
+    $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1refunds
   /v1/invoices/{invoiceId}/revert:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1revert
+  /v1/refunds:
+    $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1refunds
   /v1/locations:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1locations
   /v1/locations/bulk-ingest:
@@ -653,6 +785,8 @@ paths:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1nlt~1audit
   /v1/nlt/requests:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1nlt~1requests
+  /v1/nlt/sessions/{sessionId}/workflow-state:
+    $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1nlt~1sessions~1{sessionId}~1workflow-state
   /v1/prompts:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1prompts
   /v1/prompts/{id}:
@@ -667,10 +801,16 @@ paths:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1carts~1{orderId}~1cancel
   /v1/orders/carts/{orderId}/cancel/retry:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1carts~1{orderId}~1cancel~1retry
+  /v1/orders/carts/{orderId}/discount:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1carts~1{orderId}~1discount
   /v1/orders/carts/{orderId}/items:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1carts~1{orderId}~1items
   /v1/orders/carts/{orderId}/items/{lineId}:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1carts~1{orderId}~1items~1{lineId}
+  /v1/orders/carts/{orderId}/quote:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1carts~1{orderId}~1quote
+  /v1/orders/carts/{orderId}/quote/reopen:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1carts~1{orderId}~1quote~1reopen
   /v1/orders/carts/{orderId}/source:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1carts~1{orderId}~1source
   /v1/orders/price-overrides:
@@ -683,6 +823,40 @@ paths:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1price-overrides~1{overrideId}~1approve
   /v1/orders/price-overrides/{overrideId}/reject:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1price-overrides~1{overrideId}~1reject
+  /v1/orders/sessions:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1sessions
+  /v1/orders/sessions/current:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1sessions~1current
+  /v1/orders/sessions/{sessionId}:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1sessions~1{sessionId}
+  /v1/orders/sessions/{sessionId}/begin-close:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1sessions~1{sessionId}~1begin-close
+  /v1/orders/sessions/{sessionId}/cash-movements:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1sessions~1{sessionId}~1cash-movements
+  /v1/orders/sessions/{sessionId}/confirm-close:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1sessions~1{sessionId}~1confirm-close
+  /v1/orders/sessions/{sessionId}/x-report:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1sessions~1{sessionId}~1x-report
+  /v1/orders/sessions/{sessionId}/z-report:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1sessions~1{sessionId}~1z-report
+  /v1/orders/{orderId}/checkout:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1{orderId}~1checkout
+  /v1/orders/{orderId}/void:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1{orderId}~1void
+  /v1/returns:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1returns
+  /v1/returns/returnable:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1returns~1returnable
+  /v1/returns/{returnOrderId}:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1returns~1{returnOrderId}
+  /v1/returns/{returnOrderId}/approve:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1returns~1{returnOrderId}~1approve
+  /v1/returns/{returnOrderId}/process:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1returns~1{returnOrderId}~1process
+  /v1/returns/{returnOrderId}/reject:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1returns~1{returnOrderId}~1reject
+  /v1/returns/{returnOrderId}/retry:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1returns~1{returnOrderId}~1retry
   /v1/people:
     $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people
   /v1/people/by-ids:
@@ -893,6 +1067,8 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1{roleId}~1permissions~1grant
   /v1/roles/{roleId}/permissions/{permissionKey}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1{roleId}~1permissions~1{permissionKey}
+  /v1/roles/{role}/default-permissions:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1{role}~1default-permissions
   /v1/self-registration/review-cases:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1self-registration~1review-cases
   /v1/self-registration/review-cases/{caseId}:
@@ -947,6 +1123,8 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1roles~1{roleId}~1permissions~1grant
   /v1/users/roles/{roleId}/permissions/{permissionKey}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1roles~1{roleId}~1permissions~1{permissionKey}
+  /v1/users/roles/{role}/default-permissions:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1roles~1{role}~1default-permissions
   /v1/users/{id}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1{id}
   /v1/users/{id}/account-state:
@@ -989,8 +1167,16 @@ paths:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop~1audit~1{id}
   /v1/tax/calculate:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1calculate
+  /v1/tax/exemption-certificates:
+    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1exemption-certificates
+  /v1/tax/exemption-certificates/{id}:
+    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1exemption-certificates~1{id}
   /v1/tax/mode:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1mode
+  /v1/tax/transactions/{referenceId}/commit:
+    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1transactions~1{referenceId}~1commit
+  /v1/tax/transactions/{referenceId}/void:
+    $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1transactions~1{referenceId}~1void
   /v1/fitments/bulk-ingest:
     $ref: ../../pos-vehicle-fitment/openapi.yaml#/paths/~1v1~1fitments~1bulk-ingest
   /v1/vehicle-fitment/hints:
@@ -1081,6 +1267,8 @@ paths:
     $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1registrations~1{id}
   /v1/warranty/reimbursements:
     $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1reimbursements
+  /v1/warranty/settlements/reconciliation:
+    $ref: ../../pos-warranty/openapi.yaml#/paths/~1v1~1warranty~1settlements~1reconciliation
   /v1/workexec:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workexec
   /v1/workexec/approvalConfigurations:
@@ -1119,6 +1307,8 @@ paths:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1changeRequests~1{changeId}~1decline
   /v1/workorders/changeRequests/{changeId}/emergency-override:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1changeRequests~1{changeId}~1emergency-override
+  /v1/workorders/count:
+    $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1count
   /v1/workorders/estimates:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1estimates
   /v1/workorders/estimates/customer/{customerId}:

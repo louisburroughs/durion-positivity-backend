@@ -25,6 +25,9 @@ import com.positivity.accounting.internal.exception.SettlementLineNotFoundExcept
 import com.positivity.accounting.internal.exception.SettlementLineNotUnmatchedException;
 import com.positivity.accounting.internal.exception.SettlementNotPostedException;
 import com.positivity.accounting.internal.exception.SettlementWriteOffThresholdExceededException;
+import com.positivity.accounting.internal.exception.TaxSnapshotConflictException;
+import com.positivity.accounting.internal.exception.TaxSnapshotNotFoundException;
+import com.positivity.accounting.internal.exception.TaxSnapshotPeriodNotClosedException;
 import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -156,6 +159,24 @@ public class AccountingExceptionHandler {
                 ? "PERIOD_ALREADY_CLOSED"
                 : "PERIOD_ALREADY_OPEN";
         return build(HttpStatus.CONFLICT, code, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(TaxSnapshotNotFoundException.class)
+    public ResponseEntity<ApiError> handleTaxSnapshotNotFound(
+            TaxSnapshotNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "TAX_SNAPSHOT_NOT_FOUND", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(TaxSnapshotPeriodNotClosedException.class)
+    public ResponseEntity<ApiError> handleTaxSnapshotPeriodNotClosed(
+            TaxSnapshotPeriodNotClosedException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "TAX_SNAPSHOT_PERIOD_NOT_CLOSED", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(TaxSnapshotConflictException.class)
+    public ResponseEntity<ApiError> handleTaxSnapshotConflict(
+            TaxSnapshotConflictException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "TAX_SNAPSHOT_ALREADY_EXISTS", ex.getMessage(), request);
     }
 
     @ExceptionHandler(PeriodCloseBlockedException.class)

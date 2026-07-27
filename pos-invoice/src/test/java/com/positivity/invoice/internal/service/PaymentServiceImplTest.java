@@ -93,6 +93,9 @@ class PaymentServiceImplTest {
     @Mock
     private PaymentIntentRepository paymentIntentRepository;
 
+    @Mock
+    private com.positivity.invoice.internal.config.PaymentEventPublisher paymentEventPublisher;
+
     @InjectMocks
     private PaymentServiceImpl paymentService;
 

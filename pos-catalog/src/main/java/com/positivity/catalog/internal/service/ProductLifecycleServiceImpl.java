@@ -1,5 +1,6 @@
 package com.positivity.catalog.internal.service;
 
+import com.positivity.catalog.internal.config.CatalogFactPublisher;
 import com.positivity.catalog.internal.dto.ProductLifecycleResponse;
 import com.positivity.catalog.internal.dto.ProductLifecycleUpdateRequest;
 import com.positivity.catalog.internal.dto.ProductReplacementRequest;
@@ -45,19 +46,22 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
     private final Counter lifecycleUpdateDeniedCounter;
     private final Clock clock;
     private final ProductDetailCacheInvalidationPublisher productDetailCacheInvalidationPublisher;
+    private final CatalogFactPublisher catalogFactPublisher;
 
     public ProductLifecycleServiceImpl(
             ProductRepository productRepository,
             ProductReplacementRepository productReplacementRepository,
             MeterRegistry meterRegistry,
             Clock clock,
-            ProductDetailCacheInvalidationPublisher productDetailCacheInvalidationPublisher) {
+            ProductDetailCacheInvalidationPublisher productDetailCacheInvalidationPublisher,
+            CatalogFactPublisher catalogFactPublisher) {
         this.productRepository = productRepository;
         this.productReplacementRepository = productReplacementRepository;
         this.lifecycleUpdateSuccessCounter = meterRegistry.counter("product.lifecycle.state_change.success.count");
         this.lifecycleUpdateDeniedCounter = meterRegistry.counter("product.lifecycle.state_change.denied.count");
         this.clock = clock;
         this.productDetailCacheInvalidationPublisher = productDetailCacheInvalidationPublisher;
+        this.catalogFactPublisher = catalogFactPublisher;
     }
 
     @Override
@@ -192,6 +196,7 @@ public class ProductLifecycleServiceImpl implements ProductLifecycleService {
         product.setLifecycleOverrideReason(request.getOverrideReason());
         ProductEntity saved = productRepository.save(product);
         productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
+        catalogFactPublisher.publishProductUpdated(saved);
 
         lifecycleUpdateSuccessCounter.increment();
         log.info(

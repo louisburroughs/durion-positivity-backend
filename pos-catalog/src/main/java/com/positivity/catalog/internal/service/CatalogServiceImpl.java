@@ -342,6 +342,7 @@ public class CatalogServiceImpl implements CatalogService {
         dto.setDescription(entity.getDescription());
         dto.setUnitOfMeasure(entity.getUnitOfMeasure());
         dto.setStatus(entity.getStatus());
+        dto.setTrackingLevel(entity.getTrackingLevel());
         dto.setLifecycleState(entity.getLifecycleState());
         dto.setLifecycleStateEffectiveAt(entity.getLifecycleStateEffectiveAt());
         dto.setLastStateChangedBy(entity.getLastStateChangedBy());

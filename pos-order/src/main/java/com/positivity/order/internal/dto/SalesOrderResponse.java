@@ -29,6 +29,30 @@ public class SalesOrderResponse {
     private String orderId;
 
     @Schema(
+            description = "Human-facing order number assigned at creation",
+            example = "SO-1A2B3C4D-2607-000042",
+            requiredMode = NOT_REQUIRED)
+    private String orderNumber;
+
+    @Schema(
+            description = "Shop location the order belongs to",
+            example = "01960003-0000-7000-8000-000000000090",
+            requiredMode = NOT_REQUIRED)
+    private String locationId;
+
+    @Schema(
+            description = "Parking label for resumable drafts",
+            example = "blue F-150 waiting on customer",
+            requiredMode = NOT_REQUIRED)
+    private String label;
+
+    @Schema(
+            description = "CRM validation state of the customer/vehicle references (VALIDATED or PENDING)",
+            example = "VALIDATED",
+            requiredMode = NOT_REQUIRED)
+    private String customerValidationStatus;
+
+    @Schema(
             description = "Identifier of the customer associated with the order",
             example = "01960003-0000-7000-8000-000000000070",
             requiredMode = NOT_REQUIRED)
@@ -57,10 +81,52 @@ public class SalesOrderResponse {
     private String status;
 
     @Schema(
-            description = "Subtotal of all order lines before taxes and fees",
+            description = "Σ line subtotals: post-line-discount, pre-order-discount, pre-tax",
             example = "59.97",
             requiredMode = NOT_REQUIRED)
     private BigDecimal subtotal;
+
+    @Schema(description = "Σ line discounts + allocated order discount", example = "6.00", requiredMode = NOT_REQUIRED)
+    private BigDecimal discountTotal;
+
+    @Schema(description = "Total tax (pos-tax authoritative)", example = "4.32", requiredMode = NOT_REQUIRED)
+    private BigDecimal taxTotal;
+
+    @Schema(description = "subtotal − order discount + taxTotal", example = "58.29", requiredMode = NOT_REQUIRED)
+    private BigDecimal grandTotal;
+
+    @Schema(
+            description = "True when mutations invalidated taxTotal; cleared by quote/checkout tax recompute",
+            example = "false",
+            requiredMode = NOT_REQUIRED)
+    private boolean taxStale;
+
+    @Schema(description = "Order discount flavor (PERCENT or AMOUNT)", requiredMode = NOT_REQUIRED)
+    private String orderDiscountType;
+
+    @Schema(description = "Order discount value per type", requiredMode = NOT_REQUIRED)
+    private BigDecimal orderDiscountValue;
+
+    @Schema(description = "Order discount reason code", requiredMode = NOT_REQUIRED)
+    private String orderDiscountReasonCode;
+
+    @Schema(description = "Order-level note", requiredMode = NOT_REQUIRED)
+    private String generalNote;
+
+    @Schema(description = "Quote validity horizon (QUOTED orders)", requiredMode = NOT_REQUIRED)
+    private Instant quoteExpiresAt;
+
+    @Schema(description = "Invoice fronting this order, set at checkout", requiredMode = NOT_REQUIRED)
+    private String invoiceId;
+
+    @Schema(description = "Human-facing invoice number", requiredMode = NOT_REQUIRED)
+    private String invoiceNumber;
+
+    @Schema(description = "Net settled amount (checkout onward)", requiredMode = NOT_REQUIRED)
+    private BigDecimal amountPaid;
+
+    @Schema(description = "Outstanding balance (checkout onward)", requiredMode = NOT_REQUIRED)
+    private BigDecimal balanceDue;
 
     @Schema(
             description = "Timestamp when the order was created (ISO 8601)",

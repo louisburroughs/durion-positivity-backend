@@ -9,13 +9,6 @@ import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import com.positivity.mcp.service.CurrentUserContext;
-import dev.langchain4j.agent.tool.ToolSpecification;
-import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.service.tool.ToolExecutor;
-import dev.langchain4j.service.tool.ToolProvider;
-import dev.langchain4j.service.tool.ToolProviderRequest;
-import dev.langchain4j.service.tool.ToolProviderResult;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -28,34 +21,33 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.definition.DefaultToolDefinition;
+import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.ai.tool.metadata.DefaultToolMetadata;
+import org.springframework.ai.tool.metadata.ToolMetadata;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * LangChain4j {@link ToolProvider} that exposes permission-eligible OpenAPI-discovered operations
+ * Spring AI callback resolver that exposes permission-eligible OpenAPI-discovered operations
  * as agent-callable tools (Gate 3).
  *
- * <p><strong>Leakage prevention:</strong> {@link #provideTools} is invoked per request
- * ({@link #isDynamic()} is true) and reads the current caller from {@link RequestScopedUserContext}.
+ * <p><strong>Leakage prevention:</strong> {@link #resolveToolCallbacks(String)} is invoked per request
+ * and reads the current caller from {@link RequestScopedUserContext}.
  * Permissions are never captured at agent-build time, so a cached agent cannot expose a prior,
- * higher-permission caller's tools. If no request context is present (e.g. the streaming/Reactor
- * path, whose context propagation is not yet wired), it returns <em>no</em> tools — fail-closed.
+ * higher-permission caller's tools. Both the synchronous and streaming managers publish the caller on
+ * the calling thread before tool resolution runs (the streaming assistant resolves callbacks
+ * synchronously at Flux-assembly time, while the context is still set), and clear it afterwards. If no
+ * request context is present, this returns <em>no</em> tools — fail-closed.
  */
 @Component
-public class OpenApiToolProvider implements ToolProvider {
+public class OpenApiToolProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenApiToolProvider.class);
 
     private static final Pattern PATH_PARAM_PATTERN = Pattern.compile("\\{([^}/]+)}");
-
-    private static final JsonObjectSchema QUERY_PARAMS_SCHEMA =
-            JsonObjectSchema.builder().description("Query-string parameters.").build();
-    private static final JsonObjectSchema HEADERS_SCHEMA = JsonObjectSchema.builder()
-            .description("Extra HTTP headers (auth is relayed automatically).")
-            .build();
-    private static final JsonObjectSchema BODY_SCHEMA = JsonObjectSchema.builder()
-            .description("Request body payload, for write operations.")
-            .build();
 
     /**
      * The request envelope {@link OperationProxyFactory} reads. Path parameters are typed from the
@@ -64,22 +56,30 @@ public class OpenApiToolProvider implements ToolProvider {
      * typed from the persisted {@code input_schema}; headers/body stay free-form objects. Method/path
      * themselves are fixed from the persisted coordinates.
      */
-    private JsonObjectSchema buildParameterSchema(@NonNull DiscoveredOperation op) {
+    private String buildParameterSchema(@NonNull DiscoveredOperation op) {
         List<String> pathParams = extractPathParams(op.httpPath());
-        JsonObjectSchema.Builder pathParamsSchema = JsonObjectSchema.builder().description("Path template parameters.");
+        Map<String, Object> pathParamsSchema = schemaObject("Path template parameters.");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> pathProperties = (Map<String, Object>) pathParamsSchema.get("properties");
         for (String name : pathParams) {
-            pathParamsSchema.addStringProperty(name, "Path parameter " + name);
+            pathProperties.put(name, schemaProperty("string", "Path parameter " + name));
         }
         if (!pathParams.isEmpty()) {
-            pathParamsSchema.required(pathParams);
+            pathParamsSchema.put("required", pathParams);
         }
-        return JsonObjectSchema.builder()
-                .description("Parameters for the gateway operation named in the tool description.")
-                .addProperty("pathParams", pathParamsSchema.build())
-                .addProperty("queryParams", buildQueryParamsSchema(op.inputSchema()))
-                .addProperty("headers", HEADERS_SCHEMA)
-                .addProperty("body", BODY_SCHEMA)
-                .build();
+        Map<String, Object> schema =
+                schemaObject("Parameters for the gateway operation named in the tool description.");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> properties = (Map<String, Object>) schema.get("properties");
+        properties.put("pathParams", pathParamsSchema);
+        properties.put("queryParams", buildQueryParamsSchema(op.inputSchema()));
+        properties.put("headers", schemaObject("Extra HTTP headers (auth is relayed automatically)."));
+        properties.put("body", schemaObject("Request body payload, for write operations."));
+        try {
+            return objectMapper.writeValueAsString(schema);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize OpenAPI tool schema for " + op.name(), e);
+        }
     }
 
     /**
@@ -87,16 +87,18 @@ public class OpenApiToolProvider implements ToolProvider {
      * ({@code {"query":[{"name","type","required"}]}}). Falls back to a free-form object when the
      * operation has no persisted query params or the JSON cannot be parsed.
      */
-    private JsonObjectSchema buildQueryParamsSchema(@Nullable String inputSchemaJson) {
+    private Map<String, Object> buildQueryParamsSchema(@Nullable String inputSchemaJson) {
         if (inputSchemaJson == null || inputSchemaJson.isBlank()) {
-            return QUERY_PARAMS_SCHEMA;
+            return schemaObject("Query-string parameters.");
         }
         try {
             JsonNode query = objectMapper.readTree(inputSchemaJson).get("query");
             if (query == null || !query.isArray() || query.isEmpty()) {
-                return QUERY_PARAMS_SCHEMA;
+                return schemaObject("Query-string parameters.");
             }
-            JsonObjectSchema.Builder builder = JsonObjectSchema.builder().description("Query-string parameters.");
+            Map<String, Object> builder = schemaObject("Query-string parameters.");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> properties = (Map<String, Object>) builder.get("properties");
             List<String> required = new ArrayList<>();
             for (JsonNode param : query) {
                 String name = param.path("name").asText(null);
@@ -104,24 +106,41 @@ public class OpenApiToolProvider implements ToolProvider {
                     continue;
                 }
                 String description = "Query parameter " + name;
-                switch (param.path("type").asText("string")) {
-                    case "integer" -> builder.addIntegerProperty(name, description);
-                    case "number" -> builder.addNumberProperty(name, description);
-                    case "boolean" -> builder.addBooleanProperty(name, description);
-                    default -> builder.addStringProperty(name, description);
-                }
+                properties.put(name, schemaProperty(param.path("type").asText("string"), description));
                 if (param.path("required").asBoolean(false)) {
                     required.add(name);
                 }
             }
             if (!required.isEmpty()) {
-                builder.required(required);
+                builder.put("required", required);
             }
-            return builder.build();
+            return builder;
         } catch (JsonProcessingException | RuntimeException e) {
             LOGGER.debug("MCP openapi query-param schema parse failed; using free-form object", e);
-            return QUERY_PARAMS_SCHEMA;
+            return schemaObject("Query-string parameters.");
         }
+    }
+
+    private static @NonNull Map<String, Object> schemaObject(@NonNull String description) {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("type", "object");
+        schema.put("description", description);
+        schema.put("properties", new LinkedHashMap<String, Object>());
+        return schema;
+    }
+
+    private static @NonNull Map<String, Object> schemaProperty(@NonNull String type, @NonNull String description) {
+        Map<String, Object> property = new LinkedHashMap<>();
+        property.put(
+                "type",
+                switch (type) {
+                    case "integer" -> "integer";
+                    case "number" -> "number";
+                    case "boolean" -> "boolean";
+                    default -> "string";
+                });
+        property.put("description", description);
+        return property;
     }
 
     private static List<String> extractPathParams(@Nullable String path) {
@@ -168,52 +187,75 @@ public class OpenApiToolProvider implements ToolProvider {
         this.executionTimeout = executionTimeout;
     }
 
-    @Override
-    public boolean isDynamic() {
-        return true;
-    }
-
-    @Override
-    public ToolProviderResult provideTools(ToolProviderRequest request) {
+    public @NonNull List<ToolCallback> resolveToolCallbacks(@Nullable String userMessage) {
         Optional<CurrentUserContext> maybe = userContext.current();
         if (maybe.isEmpty()) {
             LOGGER.debug("MCP openapi tool provider: no request-scoped user context; no tools (fail-closed)");
-            return new ToolProviderResult(Map.of());
+            return List.of();
         }
         CurrentUserContext caller = maybe.get();
         String authHeader = userContext.currentAuthHeader().orElse(null);
-        String userMessage =
-                request.userMessage() == null ? "" : request.userMessage().singleText();
         if (userMessage == null || userMessage.isBlank()) {
-            return new ToolProviderResult(Map.of());
+            return List.of();
         }
 
-        float[] embedding = embeddingModel.embed(userMessage).content().vector();
+        float[] embedding = embeddingModel.embed(userMessage);
         // Workflow state defaults to IDLE here; the session-owned state is threaded on the
         // NLTI-session path (Gate 2C). Permission gating still applies inside the query.
         List<DiscoveredOperation> ops = repository.findDiscoveredCandidatesForPermissions(
                 embedding, candidateLimit, caller.permissionCodes(), WorkflowState.DEFAULT.name());
 
-        Map<ToolSpecification, ToolExecutor> tools = new LinkedHashMap<>();
+        List<ToolCallback> tools = new ArrayList<>();
         for (DiscoveredOperation op : ops) {
             if (!op.isExecutable()) {
                 LOGGER.debug("MCP openapi op missing execution coordinates name={}; skipping", op.name());
                 continue;
             }
-            ToolSpecification spec = ToolSpecification.builder()
-                    .name(op.name())
-                    .description(describeOperation(op))
-                    .parameters(buildParameterSchema(op))
-                    .build();
-            tools.put(spec, new OpenApiOperationExecutor(proxyFactory, op, objectMapper, executionTimeout, authHeader));
+            OpenApiOperationExecutor executor =
+                    new OpenApiOperationExecutor(proxyFactory, op, objectMapper, executionTimeout, authHeader);
+            tools.add(new OpenApiSpringAiToolCallback(
+                    DefaultToolDefinition.builder()
+                            .name(op.name())
+                            .description(describeOperation(op))
+                            .inputSchema(buildParameterSchema(op))
+                            .build(),
+                    executor));
         }
-        userContext.recordDiscoveredOpenapiTools(
-                tools.keySet().stream().map(ToolSpecification::name).toList());
+        userContext.recordDiscoveredOpenapiTools(tools.stream()
+                .map(callback -> callback.getToolDefinition().name())
+                .toList());
         LOGGER.debug(
                 "MCP openapi tool provider role={} permissionCount={} discoveredTools={}",
                 caller.primaryRole(),
                 caller.permissionCodes().size(),
                 tools.size());
-        return new ToolProviderResult(tools);
+        return List.copyOf(tools);
+    }
+
+    private static final class OpenApiSpringAiToolCallback implements ToolCallback {
+
+        private final ToolDefinition toolDefinition;
+        private final OpenApiOperationExecutor executor;
+
+        private OpenApiSpringAiToolCallback(
+                @NonNull ToolDefinition toolDefinition, @NonNull OpenApiOperationExecutor executor) {
+            this.toolDefinition = toolDefinition;
+            this.executor = executor;
+        }
+
+        @Override
+        public ToolDefinition getToolDefinition() {
+            return toolDefinition;
+        }
+
+        @Override
+        public ToolMetadata getToolMetadata() {
+            return DefaultToolMetadata.builder().returnDirect(false).build();
+        }
+
+        @Override
+        public String call(String toolInput) {
+            return executor.execute(toolInput);
+        }
     }
 }

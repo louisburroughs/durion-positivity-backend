@@ -5,8 +5,10 @@ import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.dto.CreditMemoResponse;
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.entity.ExtInvoice;
+import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
+import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.service.AccountingPeriodService;
 import com.positivity.accounting.service.CreditMemoService;
 import com.positivity.accounting.service.GLPostingService;
@@ -14,6 +16,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,6 +67,8 @@ public class CreditMemoServiceImpl implements CreditMemoService {
     private static final BigDecimal ZERO_TAX = new BigDecimal("0.00");
 
     private final CreditMemoRepository creditMemoRepository;
+    private final ExtInvoiceTaxRepository extInvoiceTaxRepository;
+    private final CreditMemoTaxAttributionService creditMemoTaxAttributionService;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
     private final GLPostingService glPostingService;
     private final AccountingPeriodService periodService;
@@ -112,6 +117,15 @@ public class CreditMemoServiceImpl implements CreditMemoService {
                 creditMemo.getCreditMemoId(),
                 creditMemo.calculateTotalAmount());
 
+        // Freeze the per-jurisdiction attribution of the reversed tax alongside the memo
+        // (issue #996), so the T8 liability report reads an actual credit-side breakdown
+        // instead of re-deriving a pro-rata approximation on every run.
+        creditMemoTaxAttributionService.attribute(
+                creditMemo.getCreditMemoId(),
+                invoice.getInvoiceId(),
+                creditCalculation.taxReversed(),
+                creditCalculation.finalCredit());
+
         postGlEntries(creditMemo, request, creditCalculation.taxReversed(), priorPeriodInfo);
 
         // The balance is derived from accounting's own records (ADR-0044 R6): the POSTED memo
@@ -154,15 +168,23 @@ public class CreditMemoServiceImpl implements CreditMemoService {
     }
 
     private CreditAmountCalculation calculateCreditAmounts(CreateCreditMemoRequest request, ExtInvoice invoice) {
-        BigDecimal taxReversed = calculateTaxReversed(request.getCreditAmount(), invoice);
-        BigDecimal totalCreditAmount = request.getCreditAmount().add(taxReversed);
-        return new CreditAmountCalculation(taxReversed, totalCreditAmount);
+        TaxReversal reversal = calculateTaxReversed(request.getCreditAmount(), invoice);
+        BigDecimal totalCreditAmount = request.getCreditAmount().add(reversal.amount());
+        return new CreditAmountCalculation(reversal.amount(), totalCreditAmount, reversal.finalCredit());
     }
 
     /**
-     * Derive the tax to reverse from the invoice's STORED tax scalar (issue #953, Odoo parity
-     * decision D-4). Tax is frozen at invoice finalization and is never recomputed from rates at
-     * credit time (rate-drift protection).
+     * Derive the tax to reverse from the invoice's STORED, frozen tax (issue #953 interim scalar;
+     * D1 breakdown-upgrade, Odoo parity decision D-4). Tax is frozen at invoice finalization and is
+     * never recomputed from rates at credit time (rate-drift protection).
+     *
+     * <p>Source of the total tax (D1 upgrade): the authoritative per-line × per-jurisdiction
+     * {@code ext_invoice_tax} replica populated by tax-plan T5 ({@code Σ taxAmount} of its rows).
+     * When no replica rows exist — a pre-T5 invoice, or one whose breakdown was never emitted — it
+     * falls back to the scalar {@code ExtInvoice.tax} rollup (strictly better than the retired 10%
+     * heuristic, and equal to the breakdown sum by the T5 {@code scalar == Σ breakdown} invariant).
+     * Per D-4/D2 the GL posting still reverses a single sales-tax-payable account; the jurisdiction
+     * detail is report-time aggregation (tax-plan T8), not a per-jurisdiction credit posting.
      *
      * <p>The credit amount is the revenue (pre-tax) portion being reversed, so the pro-rating
      * ratio is {@code creditAmount / net} where {@code net = total − tax}, and
@@ -174,14 +196,13 @@ public class CreditMemoServiceImpl implements CreditMemoService {
      * split 50/50 posts 17.80 then 17.79).
      */
     @NonNull
-    private BigDecimal calculateTaxReversed(@NonNull BigDecimal creditAmount, @NonNull ExtInvoice invoice) {
-        BigDecimal storedTax = invoice.getTax();
-        if (storedTax == null || storedTax.signum() <= 0) {
-            return ZERO_TAX;
+    private TaxReversal calculateTaxReversed(@NonNull BigDecimal creditAmount, @NonNull ExtInvoice invoice) {
+        BigDecimal totalTax = resolveFrozenTax(invoice);
+        if (totalTax.signum() <= 0) {
+            return new TaxReversal(ZERO_TAX, false);
         }
-        BigDecimal totalTax = storedTax.setScale(CURRENCY_SCALE, RoundingMode.HALF_UP);
         BigDecimal total = invoice.getTotal() == null ? BigDecimal.ZERO : invoice.getTotal();
-        BigDecimal netAmount = total.subtract(storedTax);
+        BigDecimal netAmount = total.subtract(totalTax);
 
         BigDecimal previouslyCreditedNet = creditMemoRepository.sumCreditAmountByInvoiceIdAndStatus(
                 invoice.getInvoiceId(), CreditMemoStatus.POSTED);
@@ -193,12 +214,35 @@ public class CreditMemoServiceImpl implements CreditMemoService {
             BigDecimal previouslyReversed = creditMemoRepository.sumTaxReversedAmountByInvoiceIdAndStatus(
                     invoice.getInvoiceId(), CreditMemoStatus.POSTED);
             BigDecimal residual = totalTax.subtract(previouslyReversed);
-            return residual.signum() > 0 ? residual : ZERO_TAX;
+            // The final-credit flag drives the per-jurisdiction residual correction in
+            // CreditMemoTaxAttributionService (issue #996) — the jurisdiction-level
+            // counterpart of the scalar residual computed here.
+            return new TaxReversal(residual.signum() > 0 ? residual : ZERO_TAX, true);
         }
 
         // remainingNet > creditAmount > 0 implies netAmount > 0: division is safe.
         BigDecimal creditRatio = creditAmount.divide(netAmount, RATIO_SCALE, RoundingMode.HALF_UP);
-        return totalTax.multiply(creditRatio).setScale(CURRENCY_SCALE, RoundingMode.HALF_UP);
+        return new TaxReversal(totalTax.multiply(creditRatio).setScale(CURRENCY_SCALE, RoundingMode.HALF_UP), false);
+    }
+
+    /**
+     * The frozen total tax to reverse, at currency scale (D1 breakdown-upgrade). Prefers the
+     * authoritative {@code ext_invoice_tax} replica ({@code Σ taxAmount}); falls back to the scalar
+     * {@code ExtInvoice.tax} rollup when the invoice has no breakdown rows (pre-T5 invoices). A
+     * non-positive result (untaxed / fully exempt / absent) reverses no tax.
+     */
+    @NonNull
+    private BigDecimal resolveFrozenTax(@NonNull ExtInvoice invoice) {
+        List<ExtInvoiceTax> breakdown = extInvoiceTaxRepository.findByInvoiceId(invoice.getInvoiceId());
+        if (breakdown != null && !breakdown.isEmpty()) {
+            return breakdown.stream()
+                    .map(ExtInvoiceTax::getTaxAmount)
+                    .filter(java.util.Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .setScale(CURRENCY_SCALE, RoundingMode.HALF_UP);
+        }
+        BigDecimal storedTax = invoice.getTax();
+        return storedTax == null ? ZERO_TAX : storedTax.setScale(CURRENCY_SCALE, RoundingMode.HALF_UP);
     }
 
     private void validateCreditDoesNotExceedBalance(
@@ -367,6 +411,75 @@ public class CreditMemoServiceImpl implements CreditMemoService {
     }
 
     /**
+     * Void a POSTED Credit Memo (issue #997 symmetry). The memo's posting-period T8 contribution
+     * and its original journal entry are never touched; the void posts the mirror entry
+     * ({@code Dr AR / Cr Revenue + Cr Sales-Tax Payable}) dated now, and the T8 report restores
+     * the reversed tax in the void's period. Invoice balance restoration is automatic: every
+     * balance sum counts POSTED memos only.
+     */
+    @Override
+    public CreditMemoResponse voidCreditMemo(
+            @NonNull UUID creditMemoId, @NonNull String voidReason, @NonNull String currentUser) {
+
+        // Locked read (SELECT ... FOR UPDATE): two concurrent voids serialize here, so the
+        // second sees VOIDED and gets the 409 instead of double-posting the mirror GL entry.
+        CreditMemo creditMemo = creditMemoRepository
+                .findWithLockByCreditMemoId(creditMemoId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Credit Memo not found: " + creditMemoId));
+
+        if (creditMemo.getStatus() != CreditMemoStatus.POSTED) {
+            String detail = creditMemo.getStatus() == CreditMemoStatus.APPLIED
+                    ? "it has been consumed (APPLIED); handle through the customer-credit lifecycle"
+                    : "current status is " + creditMemo.getStatus();
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Credit Memo " + creditMemoId + " cannot be voided: " + detail);
+        }
+
+        creditMemo.setStatus(CreditMemoStatus.VOIDED);
+        creditMemo.setVoidedTimestamp(Instant.now(clock));
+        creditMemo.setVoidedByUserId(currentUser);
+        creditMemo.setVoidReason(voidReason);
+        creditMemoRepository.save(creditMemo);
+
+        try {
+            glPostingService.postCreditMemoVoid(
+                    creditMemo.getCreditMemoId(),
+                    glConfig.getRevenueAccountId(),
+                    glConfig.getTaxPayableAccountId(),
+                    glConfig.getArAccountId(),
+                    creditMemo.getCreditAmount(),
+                    creditMemo.getTaxAmountReversed(),
+                    "Void Credit Memo " + creditMemo.getCreditMemoId() + " - " + voidReason);
+        } catch (Exception e) {
+            log.error(
+                    "Failed to post VOID GL entries for Credit Memo {}: {}",
+                    creditMemo.getCreditMemoId(),
+                    e.getMessage(),
+                    e);
+            // Generic message only — the cause is logged above; raw exception text can leak
+            // internal details (DB messages, class names) to API callers.
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to post void GL entries for credit memo " + creditMemo.getCreditMemoId());
+        }
+
+        BigDecimal balanceAfter = invoiceBalanceCalculator
+                .findInvoice(creditMemo.getOriginalInvoiceId())
+                .map(invoiceBalanceCalculator::balanceDue)
+                .orElse(BigDecimal.ZERO);
+
+        log.info(
+                "Voided Credit Memo {} (invoice {}): AR restored by {}, tax liability restored by {}",
+                creditMemo.getCreditMemoId(),
+                creditMemo.getOriginalInvoiceId(),
+                creditMemo.calculateTotalAmount(),
+                creditMemo.getTaxAmountReversed());
+
+        return buildResponse(creditMemo, balanceAfter);
+    }
+
+    /**
      * Build CreditMemoResponse from entity.
      */
     private CreditMemoResponse buildResponse(CreditMemo creditMemo, BigDecimal invoiceBalanceAfter) {
@@ -386,11 +499,26 @@ public class CreditMemoServiceImpl implements CreditMemoService {
         response.setPriorPeriodAdjustment(creditMemo.isPriorPeriodAdjustment());
         response.setOriginalPeriodId(creditMemo.getOriginalPeriodId());
         response.setCurrency(creditMemo.getCurrency());
+        response.setVoidedTimestamp(creditMemo.getVoidedTimestamp());
+        response.setVoidedByUserId(creditMemo.getVoidedByUserId());
+        response.setVoidReason(creditMemo.getVoidReason());
         response.setInvoiceBalanceAfter(invoiceBalanceAfter);
         return response;
     }
 
-    public record CreditAmountCalculation(BigDecimal taxReversed, BigDecimal totalCreditAmount) {}
+    /**
+     * The credit's monetary split.
+     *
+     * @param taxReversed       tax reversed by this credit (frozen, never recomputed from rates)
+     * @param totalCreditAmount revenue credited + tax reversed
+     * @param finalCredit       true when this credit consumes the invoice's remaining net amount,
+     *                          so both the scalar and the per-jurisdiction reversal (#996) carry
+     *                          the residual rather than a pro-rata share
+     */
+    public record CreditAmountCalculation(BigDecimal taxReversed, BigDecimal totalCreditAmount, boolean finalCredit) {}
+
+    /** Result of the frozen-tax reversal calculation: the amount plus whether it is the final credit. */
+    private record TaxReversal(BigDecimal amount, boolean finalCredit) {}
 
     public record PriorPeriodInfo(boolean priorPeriod, String originalPeriodId) {}
 }

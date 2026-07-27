@@ -117,6 +117,7 @@ public class InvoiceEventsListener {
                 .adjustmentsAmount(payload.adjustmentsAmount())
                 .invoiceCreatedAt(payload.createdAt())
                 .finalizedAt(payload.finalizedAt())
+                .dueDate(payload.dueDate())
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());

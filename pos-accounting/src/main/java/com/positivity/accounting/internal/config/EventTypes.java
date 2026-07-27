@@ -16,7 +16,15 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the accounting module.
-     * Total: 81 event types (includes +10 from manual CSV bank reconciliation
+     * Total: 92 event types (includes +1 from the credit-memo void (issue #997
+     * symmetry): ACCOUNTING_CREDIT_MEMO_VOID, +4 from the customer-credit lifecycle
+     * (PR #1004): ACCOUNTING_CUSTOMER_CREDIT_LIST, ACCOUNTING_CUSTOMER_CREDIT_GET,
+     * ACCOUNTING_CUSTOMER_CREDIT_APPLY, ACCOUNTING_CUSTOMER_CREDIT_REFUND,
+     * +4 from the tax-liability period-close freeze
+     * (Issue #998 Phase-2 item 2): TAX_LIABILITY_SNAPSHOT_FREEZE,
+     * TAX_LIABILITY_SNAPSHOT_LIST, TAX_LIABILITY_SNAPSHOT_GET,
+     * TAX_LIABILITY_SNAPSHOT_VERIFY, +1 from the sales-tax liability report
+     * (Story T8, Issue #966): REPORT_TAX_LIABILITY_GENERATE, +10 from manual CSV bank reconciliation
      * (Story F2, Issue #965): ACCOUNTING_RECONCILIATION_IMPORT,
      * ACCOUNTING_RECONCILIATION_MATCH, ACCOUNTING_RECONCILIATION_UNMATCH,
      * ACCOUNTING_RECONCILIATION_ADJUSTMENT, ACCOUNTING_RECONCILIATION_FINALIZE,
@@ -126,9 +134,13 @@ public final class EventTypes {
                 EventTypeRegistration.write("ACCOUNTING_AUDIT_CANCELLATION", "Record an order or invoice cancellation")
                         .build(),
 
-                // CreditMemoController - 3 events (CAP-052)
+                // CreditMemoController - 4 events (CAP-052; +1 void, issue #997 symmetry)
                 EventTypeRegistration.write(
                                 "ACCOUNTING_CREDIT_MEMO_CREATE", "Create a credit memo to reverse invoice charges")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_CREDIT_MEMO_VOID",
+                                "Void a posted credit memo, restoring AR and the reversed tax liability")
                         .build(),
                 EventTypeRegistration.fastRead("ACCOUNTING_CREDIT_MEMO_LIST", "List credit memos with optional filters")
                         .build(),
@@ -167,6 +179,27 @@ public final class EventTypes {
                 EventTypeRegistration.search(
                                 "REPORT_AGED_PAYABLES_GENERATE",
                                 "Generate Aged Payables report (bucketed open vendor-bill balances)")
+                        .build(),
+
+                // FinancialReportingController sales-tax liability - 1 event (parity-T8, Issue #966)
+                EventTypeRegistration.search(
+                                "REPORT_TAX_LIABILITY_GENERATE",
+                                "Generate Sales-Tax Liability report (per-jurisdiction taxable/exempt base, net tax, GL drift)")
+                        .build(),
+
+                // TaxLiabilitySnapshotController - 4 events (Issue #998 Phase-2 item 2)
+                EventTypeRegistration.write(
+                                "TAX_LIABILITY_SNAPSHOT_FREEZE",
+                                "Freeze the Sales-Tax Liability report for a closed accounting period")
+                        .build(),
+                EventTypeRegistration.search("TAX_LIABILITY_SNAPSHOT_LIST", "List frozen Sales-Tax Liability snapshots")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "TAX_LIABILITY_SNAPSHOT_GET", "Get a frozen Sales-Tax Liability snapshot by id")
+                        .build(),
+                EventTypeRegistration.search(
+                                "TAX_LIABILITY_SNAPSHOT_VERIFY",
+                                "Re-derive a frozen Sales-Tax Liability snapshot from live data and compare hashes")
                         .build(),
 
                 // LaborOverheadReportController - 1 event (CAP-316)
@@ -244,12 +277,15 @@ public final class EventTypes {
                                 "ACCOUNTING_STATUS_VIEW", "View current accounting status for an invoice")
                         .build(),
 
-                // ReportExportController — 3 events (PRD missing endpoints)
+                // ReportExportController — 4 events (PRD missing endpoints + issue #999 download)
                 EventTypeRegistration.write("ACCOUNTING_REPORT_EXPORT_REQUEST", "Request async report export")
                         .build(),
                 EventTypeRegistration.fastRead("ACCOUNTING_REPORT_EXPORT_STATUS", "Get report export status by ID")
                         .build(),
                 EventTypeRegistration.search("ACCOUNTING_REPORT_EXPORT_LIST", "List report export history")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_REPORT_EXPORT_DOWNLOAD", "Download rendered report export artifact")
                         .build(),
 
                 // TimekeepingExportController — 1 event (Wave 4 SDK migration)
@@ -337,6 +373,23 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_RECONCILIATION_ADJUSTMENT_TYPES_LIST",
                                 "List the supported reconciliation adjustment types (decision D-6)")
+                        .build(),
+
+                // Customer credit lifecycle (issue #992) - 4 events
+                EventTypeRegistration.search(
+                                "ACCOUNTING_CUSTOMER_CREDIT_LIST",
+                                "List AR customer credits with their remaining open amounts")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_CUSTOMER_CREDIT_GET", "Get one AR customer credit and its open amount")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_CUSTOMER_CREDIT_APPLY",
+                                "Apply an open customer credit to an invoice (Dr credit liability / Cr AR)")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_CUSTOMER_CREDIT_REFUND",
+                                "Refund an open customer credit to the customer (Dr credit liability / Cr cash)")
                         .build());
     }
 }

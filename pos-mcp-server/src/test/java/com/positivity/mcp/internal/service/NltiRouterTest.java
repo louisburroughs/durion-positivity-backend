@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -11,9 +12,13 @@ import com.positivity.mcp.internal.domain.RequestComplexity;
 import com.positivity.mcp.internal.domain.RouterClassification;
 import com.positivity.mcp.internal.enums.NltiIntentType;
 import com.positivity.mcp.internal.enums.NltiRiskLevel;
-import dev.langchain4j.model.chat.ChatModel;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.Prompt;
 
 /** Gate 4: router JSON parsing, safe-default, and routing. */
 class NltiRouterTest {
@@ -52,12 +57,16 @@ class NltiRouterTest {
     @Test
     @DisplayName("route: simple read -> T2_SIMPLE; garbage model output -> T2_COMPLEX (safe)")
     void routeSelectsTier() {
-        when(chatModel.chat(anyString()))
-                .thenReturn(
-                        "{\"intentType\":\"QUERY\",\"riskLevel\":\"LOW\",\"complexity\":\"single-lookup\",\"domain\":\"customer\"}");
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(chatResponse(
+                        "{\"intentType\":\"QUERY\",\"riskLevel\":\"LOW\",\"complexity\":\"single-lookup\",\"domain\":\"customer\"}"));
         assertThat(router.route("look up customer ACME")).isEqualTo(ModelTier.T2_SIMPLE);
 
-        when(chatModel.chat(anyString())).thenReturn("garbage");
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("garbage"));
         assertThat(router.route("anything")).isEqualTo(ModelTier.T2_COMPLEX);
+    }
+
+    private static ChatResponse chatResponse(String text) {
+        return new ChatResponse(java.util.List.of(new Generation(new AssistantMessage(text))));
     }
 }

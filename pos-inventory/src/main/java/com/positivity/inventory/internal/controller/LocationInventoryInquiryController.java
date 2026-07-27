@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -38,7 +39,11 @@ public class LocationInventoryInquiryController {
     @Operation(
             operationId = "getLocationInventory",
             summary = "Get location inventory summary",
-            description = "Returns on-hand quantity aggregated for a storage location.",
+            description = "Returns on-hand quantity aggregated for a storage location. With 'asOf', returns "
+                    + "historical on-hand as of that instant by direct ledger aggregation; "
+                    + "availableToPromiseQuantity is null because historical allocation state is not reliably "
+                    + "reconstructable from ATP-neutral ledger events. As-of requests additionally require the "
+                    + "'inventory:ledger:view' authority and reject future instants with 422.",
             tags = {"Inventory Locations"})
     @ApiResponse(
             responseCode = "200",
@@ -54,7 +59,17 @@ public class LocationInventoryInquiryController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<LocationInventoryInquiryResponse> getLocationInventory(
             @Parameter(description = "Storage location identifier", required = true) @PathVariable UUID locationId,
-            @Parameter(description = "Product SKU filter") @RequestParam(required = false) String sku) {
+            @Parameter(description = "Product SKU filter") @RequestParam(required = false) String sku,
+            @Parameter(
+                            description =
+                                    "Optional historical instant (ISO-8601). Returns on-hand as of this instant by "
+                                            + "direct ledger aggregation; availableToPromiseQuantity is null. Requires "
+                                            + "'inventory:ledger:view'; future instants are rejected (422).")
+                    @RequestParam(required = false)
+                    Instant asOf) {
+        if (asOf != null) {
+            return ResponseEntity.ok(locationInventoryInquiryService.getLocationInventoryAsOf(locationId, sku, asOf));
+        }
         return ResponseEntity.ok(locationInventoryInquiryService.getLocationInventory(locationId, sku));
     }
 
@@ -66,7 +81,10 @@ public class LocationInventoryInquiryController {
     @Operation(
             operationId = "listLocationInventoryItems",
             summary = "List location inventory contents",
-            description = "Returns the on-hand stock items (positive quantity) at a storage location.",
+            description = "Returns the on-hand stock items (positive quantity) at a storage location. With 'asOf', "
+                    + "returns the historical contents as of that instant by direct ledger aggregation. As-of "
+                    + "requests additionally require the 'inventory:ledger:view' authority and reject future "
+                    + "instants with 422.",
             tags = {"Inventory Locations"})
     @ApiResponse(
             responseCode = "200",
@@ -84,7 +102,16 @@ public class LocationInventoryInquiryController {
             description = "User lacks required on-hand view authority",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<LocationInventoryItemsResponse> listLocationInventoryItems(
-            @Parameter(description = "Storage location identifier", required = true) @PathVariable UUID locationId) {
+            @Parameter(description = "Storage location identifier", required = true) @PathVariable UUID locationId,
+            @Parameter(
+                            description = "Optional historical instant (ISO-8601). Returns the location contents as of "
+                                    + "this instant by direct ledger aggregation. Requires "
+                                    + "'inventory:ledger:view'; future instants are rejected (422).")
+                    @RequestParam(required = false)
+                    Instant asOf) {
+        if (asOf != null) {
+            return ResponseEntity.ok(locationInventoryInquiryService.listLocationInventoryItemsAsOf(locationId, asOf));
+        }
         return ResponseEntity.ok(locationInventoryInquiryService.listLocationInventoryItems(locationId));
     }
 }

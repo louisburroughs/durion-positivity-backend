@@ -11,6 +11,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.order.service.SalesOrderService;
+import com.positivity.order.service.model.AddItemCommand;
+import com.positivity.order.service.model.CreateCartCommand;
+import com.positivity.order.service.model.CreateCartResult;
 import com.positivity.order.service.model.SalesOrderLineSummary;
 import com.positivity.order.service.model.SalesOrderSummary;
 import java.math.BigDecimal;
@@ -58,16 +61,46 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
     @MockitoBean
     private SalesOrderService salesOrderService;
 
+    @Override
+    protected String defaultAuthorities() {
+        // Parity story A4 (#1061): cart endpoints enforce order/line authorities.
+        return String.join(
+                ",",
+                "order:order:view",
+                "order:order:create",
+                "order:order:edit",
+                "order:line:create",
+                "order:line:edit",
+                "order:line:delete");
+    }
+
     @BeforeEach
     void mockServiceDefaults() {
         SalesOrderSummary fakeOrder = new SalesOrderSummary(
                 UUID.randomUUID().toString(),
+                "SO-TEST-2607-000001",
+                UUID.randomUUID().toString(),
+                null,
+                null,
                 null,
                 null,
                 "clerk-001",
                 "terminal-001",
                 "DRAFT",
                 BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -79,15 +112,26 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 "Test Product",
                 1,
                 BigDecimal.TEN,
+                null,
+                BigDecimal.ZERO,
+                BigDecimal.TEN,
+                BigDecimal.ZERO,
+                BigDecimal.TEN,
                 "AVAILABLE",
                 "PRICING_SERVICE",
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
                 null);
 
-        when(salesOrderService.createCart(any(), any(), any(), any())).thenReturn(fakeOrder);
-        when(salesOrderService.addItem(any(), any(), anyInt(), any(), any())).thenReturn(fakeLine);
+        when(salesOrderService.createCart(any(CreateCartCommand.class)))
+                .thenReturn(new CreateCartResult(fakeOrder, false));
+        when(salesOrderService.addItem(any(UUID.class), any(AddItemCommand.class)))
+                .thenReturn(fakeLine);
         when(salesOrderService.getOrder(any())).thenReturn(fakeOrder);
         when(salesOrderService.updateItemQuantity(any(), any(), anyInt())).thenReturn(fakeLine);
         doNothing().when(salesOrderService).removeItem(any(), any());
@@ -108,7 +152,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
         String body = """
                 {
                   "clerkId": "clerk-001",
-                  "terminalId": "terminal-001"
+                  "terminalId": "terminal-001",
+                  "locationId": "00000000-0000-0000-0000-0000000000aa"
                 }
                 """;
 
@@ -132,6 +177,7 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 {
                   "clerkId": "clerk-002",
                   "terminalId": "terminal-001",
+                  "locationId": "00000000-0000-0000-0000-0000000000aa",
                   "customerId": null
                 }
                 """;
@@ -330,7 +376,8 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
         String body = """
                 {
                   "clerkId": "clerk-001",
-                  "terminalId": "terminal-001"
+                  "terminalId": "terminal-001",
+                  "locationId": "00000000-0000-0000-0000-0000000000aa"
                 }
                 """;
 
@@ -352,12 +399,29 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
         UUID orderId = UUID.randomUUID();
         SalesOrderSummary linkedOrder = new SalesOrderSummary(
                 orderId.toString(),
+                "SO-TEST-2607-000002",
+                UUID.randomUUID().toString(),
+                null,
+                null,
                 null,
                 null,
                 "clerk-001",
                 "terminal-001",
                 "DRAFT",
                 BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -382,7 +446,7 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
     @DisplayName("SC-009: POST /v1/orders/carts/{orderId}/items when access denied returns 403 Forbidden")
     void addItem_whenAccessDenied_thenReturns403() throws Exception {
         UUID orderId = UUID.randomUUID();
-        when(salesOrderService.addItem(any(), any(), anyInt(), any(), any()))
+        when(salesOrderService.addItem(any(UUID.class), any(AddItemCommand.class)))
                 .thenThrow(new AccessDeniedException("Insufficient permissions"));
 
         // SC-009
@@ -392,5 +456,92 @@ class SalesOrderControllerTest extends BaseContractIntegrationTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ORDER_FORBIDDEN"))
                 .andExpect(jsonPath("$.status").value(403));
+    }
+
+    // ── Parity story C1 (#1071): checkout endpoint ───────────────────────────
+
+    private SalesOrderSummary checkedOutSummary(UUID orderId, UUID invoiceId) {
+        return new SalesOrderSummary(
+                orderId.toString(),
+                "SO-TEST-2607-000003",
+                UUID.randomUUID().toString(),
+                null,
+                null,
+                null,
+                null,
+                "clerk-001",
+                "terminal-001",
+                "PENDING_PAYMENT",
+                new BigDecimal("100.0000"),
+                BigDecimal.ZERO,
+                new BigDecimal("8.0000"),
+                new BigDecimal("108.0000"),
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                invoiceId.toString(),
+                "INV-1",
+                BigDecimal.ZERO,
+                new BigDecimal("108.0000"),
+                null,
+                null,
+                null,
+                null,
+                List.of());
+    }
+
+    @Test
+    @DisplayName("SC-010: POST /v1/orders/{orderId}/checkout with Idempotency-Key returns 201 + invoice ref")
+    void checkout_whenValid_returns201WithInvoiceRef() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        UUID invoiceId = UUID.randomUUID();
+        when(salesOrderService.checkout(any(UUID.class), anyString(), any()))
+                .thenReturn(new com.positivity.order.service.model.CheckoutResult(
+                        checkedOutSummary(orderId, invoiceId), false));
+
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/{orderId}/checkout", orderId).header("Idempotency-Key", "chk-1"),
+                        "order:order:checkout"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING_PAYMENT"))
+                .andExpect(jsonPath("$.invoiceId").value(invoiceId.toString()))
+                .andExpect(jsonPath("$.invoiceNumber").value("INV-1"))
+                .andExpect(jsonPath("$.balanceDue").value(108.0));
+    }
+
+    @Test
+    @DisplayName("SC-011: replayed Idempotency-Key returns 200 with the original checkout result")
+    void checkout_whenReplay_returns200() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        UUID invoiceId = UUID.randomUUID();
+        when(salesOrderService.checkout(any(UUID.class), anyString(), any()))
+                .thenReturn(new com.positivity.order.service.model.CheckoutResult(
+                        checkedOutSummary(orderId, invoiceId), true));
+
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/{orderId}/checkout", orderId).header("Idempotency-Key", "chk-1"),
+                        "order:order:checkout"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.invoiceId").value(invoiceId.toString()));
+    }
+
+    @Test
+    @DisplayName("SC-012: checkout without Idempotency-Key header returns 400")
+    void checkout_missingIdempotencyKey_returns400() throws Exception {
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/{orderId}/checkout", UUID.randomUUID()), "order:order:checkout"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("SC-013: checkout without the checkout authority returns 403")
+    void checkout_missingAuthority_returns403() throws Exception {
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/{orderId}/checkout", UUID.randomUUID()).header("Idempotency-Key", "chk-1"),
+                        "order:order:view"))
+                .andExpect(status().isForbidden());
     }
 }

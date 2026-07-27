@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import dev.langchain4j.agent.tool.P;
-import dev.langchain4j.agent.tool.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,8 +28,8 @@ public class TaxFacadeTool {
         this.taxSummaryUriTemplate = taxSummaryUriTemplate;
     }
 
-    @Tool("Get the tax rate for a specific location")
-    public String getTaxRate(@P("The location ID") @NonNull String locationId) {
+    @Tool(description = "Get the tax rate for a specific location")
+    public String getTaxRate(@ToolParam(description = "The location ID") @NonNull String locationId) {
         return restClient
                 .get()
                 .uri(taxRateUriTemplate, Map.of("locationId", locationId))
@@ -37,9 +37,9 @@ public class TaxFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Calculate estimated tax amount for an amount and location")
+    @Tool(description = "Calculate estimated tax amount for an amount and location")
     public String calculateTax(
-            @P("The taxable amount") @NonNull String amount, @P("The location ID") @NonNull String locationId) {
+            @ToolParam(description = "The taxable amount") @NonNull String amount, @ToolParam(description = "The location ID") @NonNull String locationId) {
         return restClient
                 .get()
                 .uri(taxCalculateUriTemplate, Map.of("amount", amount, "locationId", locationId))
@@ -47,8 +47,8 @@ public class TaxFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Get tax summary details for a reporting period")
-    public String getTaxSummary(@P("Tax reporting period") @NonNull String period) {
+    @Tool(description = "Get tax summary details for a reporting period")
+    public String getTaxSummary(@ToolParam(description = "Tax reporting period") @NonNull String period) {
         return restClient
                 .get()
                 .uri(taxSummaryUriTemplate, Map.of("period", period))

@@ -1,8 +1,11 @@
 spring:
   autoconfigure:
     exclude:
-      - dev.langchain4j.ollama.spring.OllamaAutoConfiguration
-      - dev.langchain4j.spring.LangChain4jAutoConfiguration
+      - org.springframework.ai.model.ollama.autoconfigure.OllamaApiAutoConfiguration
+      - org.springframework.ai.model.ollama.autoconfigure.OllamaChatAutoConfiguration
+      - org.springframework.ai.model.ollama.autoconfigure.OllamaEmbeddingAutoConfiguration
+      - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
+      - org.springframework.ai.model.chat.memory.repository.jdbc.autoconfigure.JdbcChatMemoryRepositoryAutoConfiguration
   datasource:
     url: jdbc:h2:mem:mcp;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
     driver-class-name: org.h2.Driver

@@ -73,6 +73,11 @@ springdoc:
   default-produces-media-type: application/json
 pos:
   inventory:
+    valuation:
+      # Deployment default costing method (odoo-parity J1, #1048; ADR-0048). Resolution order is
+      # per-SKU config -> per-SKU-category config (unresolvable until the catalog replica carries a
+      # category) -> DEFAULT config row -> this value. STANDARD or AVERAGE in v1; FIFO is v2.
+      default-method: ${POS_INVENTORY_VALUATION_DEFAULT_METHOD:AVERAGE}
     receiving:
       # Optional explicit upstream name (query param: service) for source document line lookups.
       # If blank, ReceivingServiceImpl falls back by source document type:
@@ -124,9 +129,20 @@ pos:
       workorder-manifest-topic: ${POS_INVENTORY_WORKORDER_MANIFEST_TOPIC:workorder.manifest.v1}
       workorder-manifest-consumer-group: ${POS_INVENTORY_WORKORDER_MANIFEST_CONSUMER_GROUP:pos-inventory-workorder-manifests}
       workorder-commands-topic: ${POS_INVENTORY_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
+      # Catalog product replica feed (odoo-parity B1, #1033): base UoM + conversion factors,
+      # tracking level, and substitution-group membership from catalog.product.updated v2 facts.
+      # No catalog-commands topic: pos-catalog has no replay-command listener yet (#1023), so
+      # manifest drift is detected (log + replica.drift metric) without requesting replay.
+      catalog-events-topic: ${POS_INVENTORY_CATALOG_EVENTS_TOPIC:catalog.events.v1}
+      catalog-events-consumer-group: ${POS_INVENTORY_CATALOG_EVENTS_CONSUMER_GROUP:pos-inventory-catalog-events}
+      catalog-manifest-topic: ${POS_INVENTORY_CATALOG_MANIFEST_TOPIC:catalog.manifest.v1}
+      catalog-manifest-consumer-group: ${POS_INVENTORY_CATALOG_MANIFEST_CONSUMER_GROUP:pos-inventory-catalog-manifests}
       # Warranty part-return quarantine/hold tracking feed (#927)
       warranty-events-topic: ${POS_INVENTORY_WARRANTY_EVENTS_TOPIC:warranty.events.v1}
       warranty-events-consumer-group: ${POS_INVENTORY_WARRANTY_EVENTS_CONSUMER_GROUP:pos-inventory-warranty-events}
+      # Counter-sale stock consumption (order parity story H2, #1079)
+      order-events-topic: ${POS_INVENTORY_ORDER_EVENTS_TOPIC:order.events.v1}
+      order-events-consumer-group: ${POS_INVENTORY_ORDER_EVENTS_CONSUMER_GROUP:pos-inventory-order-events}
       # Own fact publishing (ADR-0044 §6, #899): availability / storage-location on-hand /
       # lead-time facts via the transactional outbox, with manifests and replay commands.
       events-topic: ${POS_INVENTORY_EVENTS_TOPIC:inventory.events.v1}
@@ -140,5 +156,27 @@ pos:
     location:
       # Window the manual sync endpoint asks pos-location to re-emit (owner caps lookback).
       replay-lookback: ${POS_INVENTORY_LOCATION_REPLAY_LOOKBACK:P30D}
+    replenishment:
+      # Last-resort lead time for the forecast-aware orderpoint trigger (odoo-parity F2,
+      # #1040; decision D-4). Precedence: policy override (F3) -> vendor-feed MAX estimate
+      # -> this default. 0 projects to "now" (on-hand plus already-due supply minus open
+      # demand).
+      default-lead-time-days: ${POS_INVENTORY_REPLENISHMENT_DEFAULT_LEAD_TIME_DAYS:0}
+      scan:
+        # Scheduled batch replenishment scan (CAP-217 / odoo-parity F1, #1025).
+        # Off by default; flip per environment. The scan is idempotent per
+        # (policy, day) so the interval only controls freshness, not duplication.
+        enabled: ${POS_INVENTORY_REPLENISHMENT_SCAN_ENABLED:false}
+        interval-ms: ${POS_INVENTORY_REPLENISHMENT_SCAN_INTERVAL_MS:3600000}
+        initial-delay-ms: ${POS_INVENTORY_REPLENISHMENT_SCAN_INITIAL_DELAY_MS:600000}
+    cycle-count:
+      schedule:
+        # Recurring cycle-count schedule runner (odoo-parity I1, #1031).
+        # Off by default; flip per environment. The pass is idempotent per
+        # (schedule, dueDate) so the interval only controls freshness, not
+        # duplication.
+        enabled: ${POS_INVENTORY_CYCLE_COUNT_SCHEDULE_ENABLED:false}
+        interval-ms: ${POS_INVENTORY_CYCLE_COUNT_SCHEDULE_INTERVAL_MS:3600000}
+        initial-delay-ms: ${POS_INVENTORY_CYCLE_COUNT_SCHEDULE_INITIAL_DELAY_MS:600000}
   workorder:
     service-id: ${POS_WORKORDER_SERVICE_ID:workorder}

@@ -2,6 +2,7 @@ package com.positivity.domainevents.invoice;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -27,6 +28,19 @@ import org.jspecify.annotations.Nullable;
  * no dual-publish. It is {@code null} for producers/older events that carry no breakdown; the
  * scalar {@code tax} above remains the denormalized rollup (decision D-T6), and where the
  * breakdown is present {@code tax == Σ taxBreakdown.taxAmount} holds.
+ *
+ * <p>{@code lines} is the additive per-line-item detail (schema v1, #924) that lets consumers
+ * build a line-grained {@code ext_invoice} replica — pos-warranty's candidate-line search reads
+ * it in place of the retired synchronous {@code InvoiceClient.searchInvoiceLines}. Like
+ * {@code taxBreakdown} it is authoritative-empty vs. {@code null}: an empty list means the invoice
+ * genuinely has no items, {@code null} means the producer projected none (legacy/older events).
+ *
+ * <p>{@code dueDate} and {@code paymentTermsCode} (#993) are the collections-aging facts frozen
+ * at finalization: the due date is computed once from the finalization instant (in the location's
+ * timezone) plus the bill-to party's payment terms, and never drifts afterward. Both are additive
+ * within schema v1 (ADR-0044 §3) and {@code null} on drafts and on events from producers that
+ * predate the enrichment; consumers must tolerate their absence. {@code dueDate} is a business
+ * calendar date, not an instant — aging buckets are calendar-based.
  */
 public record InvoiceUpdatedV1(
         @NonNull UUID invoiceId,
@@ -42,8 +56,100 @@ public record InvoiceUpdatedV1(
         @Nullable BigDecimal adjustmentsAmount,
         @Nullable Instant createdAt,
         @Nullable Instant finalizedAt,
-        @Nullable List<TaxBreakdownLine> taxBreakdown) {
+        @Nullable List<TaxBreakdownLine> taxBreakdown,
+        @Nullable List<InvoiceLine> lines,
+        @Nullable LocalDate dueDate,
+        @Nullable String paymentTermsCode) {
 
     public static final String EVENT_TYPE = "invoice.invoice.updated";
     public static final int SCHEMA_VERSION = 1;
+
+    /**
+     * One invoice line item.
+     *
+     * @param invoiceItemId line-item identifier
+     * @param workorderItemId originating workorder line (null for lines not sourced from a workorder)
+     * @param itemType owner line {@code type} (e.g. {@code PART}/{@code LABOR}), null when unset
+     */
+    public record InvoiceLine(
+            @NonNull UUID invoiceItemId,
+            @Nullable String description,
+            @Nullable BigDecimal quantity,
+            @Nullable BigDecimal unitPrice,
+            @Nullable BigDecimal amount,
+            @Nullable UUID workorderItemId,
+            @Nullable String itemType) {}
+
+    /** Pre-#993 arity (no due-date facts): older producers/tests project no aging enrichment. */
+    public InvoiceUpdatedV1(
+            @NonNull UUID invoiceId,
+            @Nullable String invoiceNumber,
+            @NonNull UUID workorderId,
+            @Nullable UUID estimateId,
+            @Nullable UUID locationId,
+            @Nullable String partyId,
+            @NonNull String status,
+            @Nullable BigDecimal subtotal,
+            @Nullable BigDecimal tax,
+            @Nullable BigDecimal total,
+            @Nullable BigDecimal adjustmentsAmount,
+            @Nullable Instant createdAt,
+            @Nullable Instant finalizedAt,
+            @Nullable List<TaxBreakdownLine> taxBreakdown,
+            @Nullable List<InvoiceLine> lines) {
+        this(
+                invoiceId,
+                invoiceNumber,
+                workorderId,
+                estimateId,
+                locationId,
+                partyId,
+                status,
+                subtotal,
+                tax,
+                total,
+                adjustmentsAmount,
+                createdAt,
+                finalizedAt,
+                taxBreakdown,
+                lines,
+                null,
+                null);
+    }
+
+    /** Pre-#924 arity (no line detail): older producers/tests project no {@code lines}. */
+    public InvoiceUpdatedV1(
+            @NonNull UUID invoiceId,
+            @Nullable String invoiceNumber,
+            @NonNull UUID workorderId,
+            @Nullable UUID estimateId,
+            @Nullable UUID locationId,
+            @Nullable String partyId,
+            @NonNull String status,
+            @Nullable BigDecimal subtotal,
+            @Nullable BigDecimal tax,
+            @Nullable BigDecimal total,
+            @Nullable BigDecimal adjustmentsAmount,
+            @Nullable Instant createdAt,
+            @Nullable Instant finalizedAt,
+            @Nullable List<TaxBreakdownLine> taxBreakdown) {
+        this(
+                invoiceId,
+                invoiceNumber,
+                workorderId,
+                estimateId,
+                locationId,
+                partyId,
+                status,
+                subtotal,
+                tax,
+                total,
+                adjustmentsAmount,
+                createdAt,
+                finalizedAt,
+                taxBreakdown,
+                null,
+                null,
+                null);
+    }
 }

@@ -155,12 +155,12 @@ class GeneralLedgerAgedReportsContractBehaviorIT extends BaseContractIntegration
     }
 
     @Test
-    @DisplayName("Export round-trip: G2 report-type keys flow through request -> status")
+    @DisplayName("Export round-trip: G2 report-type keys render CSV and complete (issues #1014/#1015)")
     void exportRoundTripForG2ReportTypes() throws Exception {
         for (String reportType : new String[] {"GENERAL_LEDGER", "AGED_RECEIVABLES", "AGED_PAYABLES"}) {
             String body = """
                     {
-                      "format": "PDF",
+                      "format": "CSV",
                       "reportType": "%s",
                       "startDate": "2026-06-01",
                       "endDate": "2026-06-30",
@@ -175,7 +175,8 @@ class GeneralLedgerAgedReportsContractBehaviorIT extends BaseContractIntegration
                                     .accept(MediaType.APPLICATION_JSON))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.exportId").exists())
-                    .andExpect(jsonPath("$.status").value("PENDING"))
+                    .andExpect(jsonPath("$.status").value("COMPLETED"))
+                    .andExpect(jsonPath("$.downloadUrl").exists())
                     .andExpect(jsonPath("$.reportType").value(reportType))
                     .andReturn();
 
@@ -190,6 +191,7 @@ class GeneralLedgerAgedReportsContractBehaviorIT extends BaseContractIntegration
                             .accept(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.exportId").value(exportId))
+                    .andExpect(jsonPath("$.status").value("COMPLETED"))
                     .andExpect(jsonPath("$.reportType").value(reportType));
         }
     }

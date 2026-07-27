@@ -25,12 +25,42 @@ Order management service for the Durion Positivity ETSMS platform. Manages sales
 - `POST /v1/orders/carts/{orderId}/items` — add a line item
 - `PUT /v1/orders/carts/{orderId}/items/{lineId}` — update a line item
 - `DELETE /v1/orders/carts/{orderId}/items/{lineId}` — remove a line item
+- `PUT /v1/orders/carts/{orderId}/discount` / `DELETE …/discount` — order-level discount
+- `POST /v1/orders/carts/{orderId}/quote` / `POST …/quote/reopen` — counter-quote lifecycle
+- `POST /v1/orders/{orderId}/checkout` — freeze the cart, create the fronting invoice at
+  pos-invoice, enter `PENDING_PAYMENT` (`Idempotency-Key` header required; replay-safe).
+  Optional body `{"tenderType": "ON_ACCOUNT"}` charges a validated commercial customer's
+  account (permission `order:order:charge_on_account`) and completes the order synchronously —
+  the accepted AR invoice counts as settlement.
+- `POST /v1/orders/{orderId}/void` — terminal void of a PENDING_PAYMENT order before any
+  settlement; cancels the fronting invoice; 409 when settled payments exist (use cancel)
 - `POST /v1/orders/{orderId}/cancel` — cancel an order
 - `POST /v1/orders/price-overrides` — request a price override (idempotent via `idempotencyKey`)
 - `GET /v1/orders/price-overrides/{overrideId}` — retrieve an override
 - `GET /v1/orders/price-overrides/pending` — list pending approvals
 - `POST /v1/orders/price-overrides/{overrideId}/approve` — approve an override
 - `POST /v1/orders/price-overrides/{overrideId}/reject` — reject an override
+
+## Source-document import (parity story E1)
+
+Estimate and workorder lines import via `PATCH /v1/orders/carts/{orderId}/source` from the
+event-fed `ext_estimate(_line)` / `ext_workorder(_line)` replicas (fed by
+`workorder.events.v1` snapshots — ADR-0044 bars sync REST toward pos-workorder). Lines arrive
+priced-as-approved (`priceSource=SOURCE_DOCUMENT`, never repriced): estimates contribute only
+APPROVED items; workorders contribute non-declined lines with their explicit `returnable`
+flag. Tracked products (`ext_product.trackingLevel`) require serial/lot capture on counter
+lines before checkout (SERIAL: one per unit; LOT: at least one).
+
+## Settlement handshake (parity story C3)
+
+Checkout creates the invoice synchronously (scoped ADR-0044 exception, `pos.invoice.base-url`);
+settlement flows back asynchronously: a `payment.events.v1` consumer applies
+`payment.payment.settled` / `payment.payment.reversed` facts to the `order_payment_record`
+ledger, maintains `amountPaid`/`balanceDue`, and transitions
+`PENDING_PAYMENT → COMPLETED` exactly at zero balance, emitting `order.order.completed`.
+Over-settlement raises `order.payment.integrity-alert`. Applied price overrides emit
+`order.line.commission-impact`. All Kafka paths are gated by `pos.order.kafka.enabled`
+(default `false`).
 
 ## Configuration
 

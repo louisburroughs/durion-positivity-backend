@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.positivity.invoice.internal.client.TaxServiceClient;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;
@@ -23,7 +22,6 @@ import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.InvoiceLineItem;
-import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -51,10 +49,7 @@ class InvoiceServiceImplTest {
     private InvoiceRepository invoiceRepository;
 
     @Mock
-    private TaxServiceClient taxServiceClient;
-
-    @Mock
-    private LocationReferenceService locationReferenceService;
+    private InvoiceTaxCalculator invoiceTaxCalculator;
 
     @Mock
     private WorkorderReferenceService workorderReferenceService;
@@ -84,16 +79,6 @@ class InvoiceServiceImplTest {
     private UUID invoiceId;
     private UUID workorderId;
     private UUID locationId;
-
-    private static TaxAddress sampleTaxAddress() {
-        return TaxAddress.builder()
-                .countryCode("US")
-                .regionCode("NC")
-                .city("Charlotte")
-                .postalCode("28202")
-                .line1("100 Trade Street")
-                .build();
-    }
 
     @BeforeEach
     void setUp() {
@@ -239,8 +224,7 @@ class InvoiceServiceImplTest {
                 .build();
 
         when(invoiceRepository.findByWorkorderId(workorderId)).thenReturn(Optional.empty());
-        when(locationReferenceService.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
-        when(taxServiceClient.calculateTaxDetailed(any(), any(), any())).thenReturn(taxResponse(5));
+        when(invoiceTaxCalculator.calculateDraft(any())).thenReturn(taxResponse(5));
         when(invoiceRepository.save(any())).thenReturn(draftInvoice);
 
         InvoiceGenerationResponse response = invoiceService.createInvoice(request);
@@ -449,8 +433,7 @@ class InvoiceServiceImplTest {
         request.setAuthorizedBy("manager1");
 
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
-        when(locationReferenceService.resolveTaxAddress(any())).thenReturn(sampleTaxAddress());
-        when(taxServiceClient.calculateTaxDetailed(any(), any(), any())).thenReturn(taxResponse(8));
+        when(invoiceTaxCalculator.calculateDraft(any())).thenReturn(taxResponse(8));
         when(invoiceRepository.save(any())).thenReturn(draftInvoice);
 
         InvoiceDetailsResponse result = invoiceService.applyAdjustment(invoiceId, request);

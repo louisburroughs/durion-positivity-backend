@@ -63,6 +63,18 @@ public class AsnLineEntity {
 
     private String lotNumber;
 
+    /** UoM the line was keyed in, when it differed from base (odoo-parity B2, #1034). */
+    @Column(name = "document_uom", length = 32)
+    private String documentUom;
+
+    /** Quantity as keyed in {@code documentUom}; {@code quantityShipped} holds the base quantity. */
+    @Column(name = "document_quantity", precision = 18, scale = 6)
+    private BigDecimal documentQuantity;
+
+    /** Effective base-per-document-unit factor applied at conversion time (audit). */
+    @Column(name = "conversion_factor", precision = 20, scale = 6)
+    private BigDecimal conversionFactor;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

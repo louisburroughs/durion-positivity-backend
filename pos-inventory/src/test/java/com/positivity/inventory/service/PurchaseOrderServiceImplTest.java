@@ -70,6 +70,9 @@ class PurchaseOrderServiceImplTest {
     @Mock
     private EncumbranceEventPublisher encumbranceEventPublisher;
 
+    @Mock
+    private com.positivity.inventory.internal.service.InventoryFactPublisher inventoryFactPublisher;
+
     private PurchaseOrderServiceImpl purchaseOrderService;
 
     private Clock fixedClock = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
@@ -82,6 +85,12 @@ class PurchaseOrderServiceImplTest {
                 eventPublisher,
                 applicationContext,
                 encumbranceEventPublisher,
+                inventoryFactPublisher,
+                new com.positivity.inventory.internal.service.DocumentQuantityConverter(
+                        org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
+                // Lot gate answers "untracked" for every SKU in these unit tests (E1 #1038):
+                // a mock resolveReceiptLot returns null by default.
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryLotCaptureService.class),
                 fixedClock);
         ReflectionTestUtils.setField(purchaseOrderService, "encumbranceEnabled", false);
         ReflectionTestUtils.setField(purchaseOrderService, "defaultTaxRate", 0.10d);
@@ -98,7 +107,9 @@ class PurchaseOrderServiceImplTest {
                 BigDecimal.TEN,
                 1000L,
                 "TAX-10",
-                "GL-ACCOUNT-01");
+                "GL-ACCOUNT-01",
+                null,
+                null);
         CreatePurchaseOrderRequest request = new CreatePurchaseOrderRequest(
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 LocalDate.now(fixedClock),
@@ -273,6 +284,71 @@ class PurchaseOrderServiceImplTest {
     }
 
     @Test
+    @DisplayName("cancelPurchaseOrder emits ExpectedSupplyDroppedV1 per SKU with open quantity (#1028)")
+    void cancelPurchaseOrder_emitsExpectedSupplyDroppedForOpenQuantity() {
+        UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID skuA = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+        UUID skuB = UUID.fromString("00000000-0000-0000-0000-00000000000b");
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000051");
+        PurchaseOrderEntity po = PurchaseOrderEntity.builder()
+                .purchaseOrderId(poId)
+                .status(PurchaseOrderStatus.PARTIALLY_RECEIVED)
+                .shipToLocationId(siteId)
+                .lines(new ArrayList<>(List.of(
+                        // Two open lines of the same SKU aggregate into one fact.
+                        line(skuA, new BigDecimal("3.000000")),
+                        line(skuA, new BigDecimal("2.000000")),
+                        // Fully received line: no fact.
+                        line(skuB, BigDecimal.ZERO))))
+                .build();
+        when(purchaseOrderRepository.findById(poId)).thenReturn(Optional.of(po));
+        when(purchaseOrderRepository.save(any(PurchaseOrderEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        purchaseOrderService.cancelPurchaseOrder(poId, "canceller");
+
+        ArgumentCaptor<com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1> factCaptor =
+                ArgumentCaptor.forClass(com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1.class);
+        verify(inventoryFactPublisher).recordExpectedSupplyDropped(factCaptor.capture());
+        com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1 fact = factCaptor.getValue();
+        assertEquals(skuA.toString(), fact.sku());
+        assertEquals(siteId, fact.siteId());
+        assertEquals(0, fact.droppedQuantity().compareTo(new BigDecimal("5.000000")));
+        assertEquals(poId, fact.poId());
+        assertEquals("CANCELLED", fact.reason());
+    }
+
+    @Test
+    @DisplayName("cancelPurchaseOrder emits no drop fact for a DRAFT PO (never counted as supply)")
+    void cancelPurchaseOrder_emitsNoDropFactForDraftPo() {
+        UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        PurchaseOrderEntity po = PurchaseOrderEntity.builder()
+                .purchaseOrderId(poId)
+                .status(PurchaseOrderStatus.DRAFT)
+                .lines(new ArrayList<>(
+                        List.of(line(UUID.fromString("00000000-0000-0000-0000-00000000000a"), new BigDecimal("4")))))
+                .build();
+        when(purchaseOrderRepository.findById(poId)).thenReturn(Optional.of(po));
+        when(purchaseOrderRepository.save(any(PurchaseOrderEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        purchaseOrderService.cancelPurchaseOrder(poId, "canceller");
+
+        verify(inventoryFactPublisher, org.mockito.Mockito.never())
+                .recordExpectedSupplyDropped(any(com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1.class));
+    }
+
+    private PurchaseOrderLineEntity line(UUID skuId, BigDecimal openQuantity) {
+        return PurchaseOrderLineEntity.builder()
+                .lineNumber(1)
+                .skuId(skuId)
+                .description("line")
+                .quantityDecimal(openQuantity.max(BigDecimal.ONE))
+                .unitCostMinor(100L)
+                .lineTotalMinor(100L)
+                .openQuantityDecimal(openQuantity)
+                .build();
+    }
+
+    @Test
     @DisplayName("cancelPurchaseOrder should throw exception for non-cancellable PO")
     void cancelPurchaseOrder_shouldThrowExceptionForNonCancellablePo() {
         // Arrange
@@ -314,8 +390,8 @@ class PurchaseOrderServiceImplTest {
         when(purchaseOrderLineRepository.save(any(PurchaseOrderLineEntity.class)))
                 .thenAnswer(i -> i.getArgument(0));
 
-        var lineRequest =
-                new ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest(lineId, BigDecimal.valueOf(4), null);
+        var lineRequest = new ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest(
+                lineId, BigDecimal.valueOf(4), null, null, null, null);
         ReceivePurchaseOrderRequest request = new ReceivePurchaseOrderRequest(List.of(lineRequest));
 
         // Act
@@ -350,7 +426,8 @@ class PurchaseOrderServiceImplTest {
         when(purchaseOrderRepository.findById(poId)).thenReturn(Optional.of(po));
         when(purchaseOrderRepository.save(any(PurchaseOrderEntity.class))).thenAnswer(i -> i.getArgument(0));
 
-        var lineRequest = new ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest(lineId, BigDecimal.TEN, null);
+        var lineRequest = new ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest(
+                lineId, BigDecimal.TEN, null, null, null, null);
         ReceivePurchaseOrderRequest request = new ReceivePurchaseOrderRequest(List.of(lineRequest));
 
         // Act

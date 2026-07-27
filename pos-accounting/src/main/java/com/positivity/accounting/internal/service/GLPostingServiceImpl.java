@@ -156,6 +156,67 @@ public class GLPostingServiceImpl implements GLPostingService {
         return posted;
     }
 
+    @Override
+    public JournalEntry postCreditMemoVoid(
+            @NonNull UUID creditMemoId,
+            @NonNull UUID revenueAccountId,
+            @NonNull UUID taxPayableAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal creditAmount,
+            @NonNull BigDecimal taxReversed,
+            @NonNull String description) {
+
+        BigDecimal totalAmount = creditAmount.add(taxReversed);
+
+        log.info(
+                "Posting Credit Memo VOID GL entry {}: debit AR {}, credit revenue {}, credit tax {}",
+                creditMemoId,
+                totalAmount,
+                creditAmount,
+                taxReversed);
+
+        JournalEntry entry = new JournalEntry();
+        entry.setTransactionDate(LocalDateTime.now(clock));
+        entry.setDescription(description);
+        entry.setSourceEventId(creditMemoId);
+
+        List<JournalEntryLine> lines = new ArrayList<>();
+
+        // Line 1: Debit AR (restore the receivable the memo had reduced)
+        JournalEntryLine arLine = new JournalEntryLine();
+        arLine.setGlAccountId(arAccountId);
+        arLine.setDebitAmount(totalAmount);
+        arLine.setCreditAmount(BigDecimal.ZERO);
+        arLine.setDescription("AR Restoration - CM VOID#" + creditMemoId);
+        lines.add(arLine);
+
+        // Line 2: Credit Revenue (re-recognize the reversed revenue)
+        JournalEntryLine revenueLine = new JournalEntryLine();
+        revenueLine.setGlAccountId(revenueAccountId);
+        revenueLine.setDebitAmount(BigDecimal.ZERO);
+        revenueLine.setCreditAmount(creditAmount);
+        revenueLine.setDescription("Revenue Restoration - CM VOID#" + creditMemoId);
+        lines.add(revenueLine);
+
+        // Line 3: Credit Sales-Tax Payable (restore the reversed tax liability)
+        JournalEntryLine taxLine = new JournalEntryLine();
+        taxLine.setGlAccountId(taxPayableAccountId);
+        taxLine.setDebitAmount(BigDecimal.ZERO);
+        taxLine.setCreditAmount(taxReversed);
+        taxLine.setDescription("Tax Restoration - CM VOID#" + creditMemoId);
+        lines.add(taxLine);
+
+        entry.setLines(lines);
+
+        // Create and post entry (period gate applies inside post — voids land in an open period)
+        JournalEntry created = journalEntryService.createJournalEntry(entry);
+        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), null);
+
+        log.info("Posted Credit Memo VOID GL entry: journal entry ID {}", posted.getJournalEntryId());
+
+        return posted;
+    }
+
     /**
      * Post a payment application (AR cash receipt) to GL.
      *
@@ -240,6 +301,151 @@ public class GLPostingServiceImpl implements GLPostingService {
     }
 
     @Override
+    public JournalEntry postCustomerCreditIssuance(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID creditId,
+            @NonNull UUID undepositedFundsAccountId,
+            @NonNull UUID creditLiabilityAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification) {
+
+        log.info(
+                "Posting customer credit issuance GL entry {}: debit undeposited funds {}, "
+                        + "credit customer credit liability {}",
+                sourceEventId,
+                amount,
+                amount);
+
+        JournalEntry entry = new JournalEntry();
+        entry.setTransactionDate(transactionDate);
+        entry.setDescription(description);
+        entry.setSourceEventId(sourceEventId);
+
+        List<JournalEntryLine> lines = new ArrayList<>();
+
+        // Debit: Undeposited Funds (the overpayment cash received).
+        JournalEntryLine cashLine = new JournalEntryLine();
+        cashLine.setGlAccountId(undepositedFundsAccountId);
+        cashLine.setDebitAmount(amount);
+        cashLine.setCreditAmount(BigDecimal.ZERO);
+        cashLine.setDescription("Overpayment Cash - Credit#" + creditId);
+        lines.add(cashLine);
+
+        // Credit: Customer Credit Liability (obligation now owed to the customer).
+        JournalEntryLine liabilityLine = new JournalEntryLine();
+        liabilityLine.setGlAccountId(creditLiabilityAccountId);
+        liabilityLine.setDebitAmount(BigDecimal.ZERO);
+        liabilityLine.setCreditAmount(amount);
+        liabilityLine.setDescription("Customer Credit Issued - Credit#" + creditId);
+        lines.add(liabilityLine);
+
+        entry.setLines(lines);
+
+        JournalEntry created = journalEntryService.createJournalEntry(entry);
+        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
+
+        log.info("Posted customer credit issuance GL entry: journal entry ID {}", posted.getJournalEntryId());
+
+        return posted;
+    }
+
+    @Override
+    public JournalEntry postCustomerCreditRelief(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID creditId,
+            @NonNull UUID creditLiabilityAccountId,
+            @NonNull UUID contraAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @NonNull String contraLineLabel,
+            @Nullable String overrideJustification) {
+
+        log.info(
+                "Posting customer credit relief GL entry {}: debit customer credit liability {}, credit {} {}",
+                sourceEventId,
+                amount,
+                contraLineLabel,
+                amount);
+
+        JournalEntry entry = new JournalEntry();
+        entry.setTransactionDate(transactionDate);
+        entry.setDescription(description);
+        entry.setSourceEventId(sourceEventId);
+
+        List<JournalEntryLine> lines = new ArrayList<>();
+
+        // Debit: Customer Credit Liability (the obligation being discharged).
+        JournalEntryLine liabilityLine = new JournalEntryLine();
+        liabilityLine.setGlAccountId(creditLiabilityAccountId);
+        liabilityLine.setDebitAmount(amount);
+        liabilityLine.setCreditAmount(BigDecimal.ZERO);
+        liabilityLine.setDescription("Customer Credit Relieved - Credit#" + creditId);
+        lines.add(liabilityLine);
+
+        // Credit: AR (application) or Undeposited Funds (refund) — chosen by the caller
+        // through posting-category configuration, never hardcoded here.
+        JournalEntryLine contraLine = new JournalEntryLine();
+        contraLine.setGlAccountId(contraAccountId);
+        contraLine.setDebitAmount(BigDecimal.ZERO);
+        contraLine.setCreditAmount(amount);
+        contraLine.setDescription(contraLineLabel + " - Credit#" + creditId);
+        lines.add(contraLine);
+
+        entry.setLines(lines);
+
+        JournalEntry created = journalEntryService.createJournalEntry(entry);
+        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
+
+        log.info("Posted customer credit relief GL entry: journal entry ID {}", posted.getJournalEntryId());
+
+        return posted;
+    }
+
+    @Override
+    public JournalEntry postInventoryShrinkage(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID scrapId,
+            @NonNull UUID shrinkageAccountId,
+            @NonNull UUID inventoryAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification) {
+
+        log.info(
+                "Posting inventory shrinkage GL entry {}: amount {}, debit shrinkage expense account {},"
+                        + " credit inventory account {}",
+                sourceEventId,
+                amount,
+                shrinkageAccountId,
+                inventoryAccountId);
+
+        JournalEntry entry = new JournalEntry();
+        entry.setTransactionDate(transactionDate);
+        entry.setDescription(description);
+        entry.setSourceEventId(sourceEventId);
+
+        List<JournalEntryLine> lines = new ArrayList<>();
+
+        // Debit: Inventory Shrinkage expense (the write-off cost recognized).
+        addDebit(lines, shrinkageAccountId, amount, "Shrinkage Expense - Scrap#" + scrapId);
+        // Credit: Inventory asset (the stock value leaving the balance sheet).
+        addCredit(lines, inventoryAccountId, amount, "Inventory Relief - Scrap#" + scrapId);
+
+        entry.setLines(lines);
+
+        JournalEntry created = journalEntryService.createJournalEntry(entry);
+        JournalEntry posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
+
+        log.info("Posted inventory shrinkage GL entry: journal entry ID {}", posted.getJournalEntryId());
+
+        return posted;
+    }
+
+    @Override
     public JournalEntry postSettlement(@NonNull SettlementPostingCommand command) {
         log.info(
                 "Posting settlement GL entry {}: Dr Cash {}, Dr Fees {}, Cr Undeposited {}, Cr Suspense {}",
@@ -319,6 +525,27 @@ public class GLPostingServiceImpl implements GLPostingService {
                 description,
                 overrideJustification,
                 "Settlement Reclass");
+    }
+
+    @Override
+    public JournalEntry postRegisterOverShort(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID sessionId,
+            @NonNull UUID debitAccountId,
+            @NonNull UUID creditAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification) {
+        return postTwoLineReclass(
+                sourceEventId,
+                debitAccountId,
+                creditAccountId,
+                amount,
+                transactionDate,
+                description,
+                overrideJustification,
+                "Register Over/Short - Session#" + sessionId);
     }
 
     /**

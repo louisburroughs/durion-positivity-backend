@@ -59,4 +59,22 @@ public class AsnLineResponse {
             example = "LOT-2026-0042",
             requiredMode = NOT_REQUIRED)
     private String lotNumber;
+
+    @Schema(
+            description = "UoM the line was keyed in when it differed from the product's base UoM",
+            example = "CASE",
+            requiredMode = NOT_REQUIRED)
+    private String documentUom;
+
+    @Schema(
+            description = "Quantity as keyed in documentUom; quantityShipped holds the derived base quantity",
+            example = "1",
+            requiredMode = NOT_REQUIRED)
+    private BigDecimal documentQuantity;
+
+    @Schema(
+            description = "Effective base-per-document-unit conversion factor applied at derivation time",
+            example = "12",
+            requiredMode = NOT_REQUIRED)
+    private BigDecimal conversionFactor;
 }

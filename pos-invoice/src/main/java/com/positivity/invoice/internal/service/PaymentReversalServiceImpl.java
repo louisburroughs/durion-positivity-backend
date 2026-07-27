@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.service;
 
+import com.positivity.invoice.internal.config.PaymentEventPublisher;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.entity.RefundRecord;
@@ -50,6 +51,7 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
     private final RefundRecordRepository refundRecordRepository;
     private final InvoiceRepository invoiceRepository;
     private final PaymentGatewayPort paymentGatewayPort;
+    private final PaymentEventPublisher paymentEventPublisher;
     private final Clock clock;
 
     public PaymentReversalServiceImpl(
@@ -57,11 +59,13 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             @NonNull RefundRecordRepository refundRecordRepository,
             @NonNull InvoiceRepository invoiceRepository,
             @NonNull PaymentGatewayPort paymentGatewayPort,
+            @NonNull PaymentEventPublisher paymentEventPublisher,
             @NonNull Clock clock) {
         this.paymentIntentRepository = paymentIntentRepository;
         this.refundRecordRepository = refundRecordRepository;
         this.invoiceRepository = invoiceRepository;
         this.paymentGatewayPort = paymentGatewayPort;
+        this.paymentEventPublisher = paymentEventPublisher;
         this.clock = clock;
     }
 
@@ -110,6 +114,7 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
 
         paymentIntent.setStatus(PaymentIntentStatus.VOIDED);
         paymentIntentRepository.save(paymentIntent);
+        paymentEventPublisher.publishPaymentVoided(paymentIntent, reason.name());
     }
 
     @Override
@@ -192,6 +197,9 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         }
 
         RefundRecord saved = refundRecordRepository.save(refundRecord);
+        if (saved.getStatus() == RefundStatus.COMPLETED) {
+            paymentEventPublisher.publishPaymentRefunded(saved);
+        }
         return toResult(saved);
     }
 
@@ -314,7 +322,9 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         refundRecord.setRequestedAt(now);
         refundRecord.setStatus(RefundStatus.COMPLETED);
         refundRecord.setCompletedAt(now);
-        return toResult(refundRecordRepository.save(refundRecord));
+        RefundRecord saved = refundRecordRepository.save(refundRecord);
+        paymentEventPublisher.publishPaymentRefunded(saved);
+        return toResult(saved);
     }
 
     @NonNull

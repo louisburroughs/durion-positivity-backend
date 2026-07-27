@@ -1,9 +1,11 @@
 package com.positivity.catalog.internal.service;
 
+import com.positivity.catalog.internal.config.CatalogFactPublisher;
 import com.positivity.catalog.internal.dto.CategoryDto;
 import com.positivity.catalog.internal.dto.ProductCreateRequestDto;
 import com.positivity.catalog.internal.dto.ProductDto;
 import com.positivity.catalog.internal.dto.ProductSearchResultDto;
+import com.positivity.catalog.internal.dto.ProductTrackingLevelUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ProductUpdateRequestDto;
 import com.positivity.catalog.internal.entity.Category;
 import com.positivity.catalog.internal.entity.ProductCodeType;
@@ -31,6 +33,7 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ProductDetailCacheInvalidationPublisher productDetailCacheInvalidationPublisher;
+    private final CatalogFactPublisher catalogFactPublisher;
 
     @Override
     @Transactional
@@ -56,6 +59,7 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
 
         ProductEntity saved = productRepository.save(entity);
         productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
+        catalogFactPublisher.publishProductUpdated(saved);
         return toDto(saved);
     }
 
@@ -91,6 +95,7 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
 
         ProductEntity saved = productRepository.save(entity);
         productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
+        catalogFactPublisher.publishProductUpdated(saved);
         return toDto(saved);
     }
 
@@ -101,6 +106,19 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
         entity.setStatus(newStatus);
         ProductEntity saved = productRepository.save(entity);
         productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
+        catalogFactPublisher.publishProductUpdated(saved);
+        return toDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public ProductDto updateTrackingLevel(
+            @NonNull UUID productId, @NonNull ProductTrackingLevelUpdateRequestDto request) {
+        ProductEntity entity = findProduct(productId);
+        entity.setTrackingLevel(request.getTrackingLevel());
+        ProductEntity saved = productRepository.save(entity);
+        productDetailCacheInvalidationPublisher.invalidateProduct(saved.getId());
+        catalogFactPublisher.publishProductUpdated(saved);
         return toDto(saved);
     }
 
@@ -155,6 +173,7 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
         dto.setUpc(entity.getUpc());
         dto.setAttributes(entity.getAttributes());
         dto.setStatus(entity.getStatus());
+        dto.setTrackingLevel(entity.getTrackingLevel());
         dto.setLifecycleState(entity.getLifecycleState());
         dto.setLifecycleStateEffectiveAt(entity.getLifecycleStateEffectiveAt());
         dto.setLastStateChangedBy(entity.getLastStateChangedBy());

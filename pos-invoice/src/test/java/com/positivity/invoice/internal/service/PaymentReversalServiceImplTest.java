@@ -108,6 +108,9 @@ class PaymentReversalServiceImplTest {
     @Mock
     private PaymentGatewayPort paymentGatewayPort;
 
+    @Mock
+    private com.positivity.invoice.internal.config.PaymentEventPublisher paymentEventPublisher;
+
     @InjectMocks
     private PaymentReversalServiceImpl paymentReversalServiceImpl;
 

@@ -60,6 +60,18 @@ public class CycleCountPlanResponse {
     private String status;
 
     @Schema(
+            description = "Identifier of the recurring schedule that created this plan (null for manual plans)",
+            example = "01960003-0000-7000-8000-000000000004",
+            requiredMode = NOT_REQUIRED)
+    private UUID scheduleId;
+
+    @Schema(
+            description = "Due date this schedule-created plan covers (null for manual plans)",
+            example = "2026-08-01",
+            requiredMode = NOT_REQUIRED)
+    private LocalDate dueDate;
+
+    @Schema(
             description = "Identifier of the user who created the plan",
             example = "user-10042",
             requiredMode = REQUIRED)

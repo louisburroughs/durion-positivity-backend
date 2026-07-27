@@ -105,6 +105,7 @@ public class LocationEventsListener {
                 .region(payload.region())
                 .postalCode(payload.postalCode())
                 .country(payload.country())
+                .timezone(payload.timezone())
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());

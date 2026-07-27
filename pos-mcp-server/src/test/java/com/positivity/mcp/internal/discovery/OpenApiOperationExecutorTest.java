@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
-import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.net.URI;
 import java.time.Duration;
@@ -43,16 +42,12 @@ class OpenApiOperationExecutorTest {
                 "GET",
                 "/v1/accounting/invoices",
                 "http://api-gateway:8080",
-                null);
+                null,
+                List.of());
         OpenApiOperationExecutor executor =
                 new OpenApiOperationExecutor(proxyFactory, operation, new ObjectMapper(), TIMEOUT, null);
 
-        String result = executor.execute(
-                ToolExecutionRequest.builder()
-                        .name("accounting_listinvoices")
-                        .arguments("{}")
-                        .build(),
-                null);
+        String result = executor.execute("{}");
 
         assertThat(result).isEqualTo("[]");
         ArgumentCaptor<URI> uriCaptor = ArgumentCaptor.forClass(URI.class);
@@ -79,16 +74,12 @@ class OpenApiOperationExecutorTest {
                 "GET",
                 "/v1/accounting/invoices",
                 "http://api-gateway:8080",
-                null);
+                null,
+                List.of());
         OpenApiOperationExecutor executor =
                 new OpenApiOperationExecutor(proxyFactory, operation, new ObjectMapper(), TIMEOUT, "Bearer test-token");
 
-        executor.execute(
-                ToolExecutionRequest.builder()
-                        .name("accounting_listinvoices")
-                        .arguments("{}")
-                        .build(),
-                null);
+        executor.execute("{}");
 
         assertThat(captured.get()).isNotNull();
         Object headers = captured.get().arguments().get("headers");
@@ -103,16 +94,11 @@ class OpenApiOperationExecutorTest {
     void execute_missingServiceId_returnsControlledError() {
         OperationProxyFactory proxyFactory = mock(OperationProxyFactory.class);
         DiscoveredOperation operation = new DiscoveredOperation(
-                "accounting_listinvoices", "List invoices", "GET", "/v1/accounting/invoices", null, null);
+                "accounting_listinvoices", "List invoices", "GET", "/v1/accounting/invoices", null, null, List.of());
         OpenApiOperationExecutor executor =
                 new OpenApiOperationExecutor(proxyFactory, operation, new ObjectMapper(), TIMEOUT, null);
 
-        String result = executor.execute(
-                ToolExecutionRequest.builder()
-                        .name("accounting_listinvoices")
-                        .arguments("{}")
-                        .build(),
-                null);
+        String result = executor.execute("{}");
 
         assertThat(result).startsWith("Error:");
         verifyNoInteractions(proxyFactory);

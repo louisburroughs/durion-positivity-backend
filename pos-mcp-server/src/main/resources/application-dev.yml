@@ -13,23 +13,20 @@ spring:
       hibernate:
         jdbc:
           "[time_zone]": UTC
-
-langchain4j:
-  ollama:
-    chat-model:
+  ai:
+    ollama:
       base-url: ${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
-      model-name: ${OLLAMA_CHAT_MODEL:qwen3.5:cloud}
-      temperature: 0.2
-      timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
-    embedding-model:
-      base-url: ${OLLAMA_EMBEDDING_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
-      model-name: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
-      timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
-    streaming-chat-model:
-      base-url: ${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
-      model-name: ${OLLAMA_CHAT_MODEL:qwen3.5:cloud}
-      temperature: 0.2
-      timeout: ${OLLAMA_STREAMING_CHAT_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
+      chat:
+        options:
+          model: ${OLLAMA_CHAT_MODEL:gpt-oss:120b}
+          temperature: 0.2
+        timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
+        streaming-timeout: ${OLLAMA_STREAMING_CHAT_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
+      embedding:
+        base-url: ${OLLAMA_EMBEDDING_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
+        options:
+          model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+        timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
 
 eureka:
   client:

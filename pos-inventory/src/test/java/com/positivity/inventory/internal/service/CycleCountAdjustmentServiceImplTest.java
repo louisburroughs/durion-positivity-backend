@@ -11,8 +11,10 @@ import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest
 import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
 import com.positivity.inventory.internal.entity.CycleCountAdjustment;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
+import com.positivity.inventory.internal.entity.SkuCostState;
 import com.positivity.inventory.internal.enums.AdjustmentStatus;
 import com.positivity.inventory.internal.enums.ApprovalTier;
+import com.positivity.inventory.internal.enums.CostingMethod;
 import com.positivity.inventory.internal.repository.CycleCountAdjustmentRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.service.ApprovalThresholdEvaluator;
@@ -49,10 +51,25 @@ class CycleCountAdjustmentServiceImplTest {
     private InventoryLedgerEntryRepository ledgerRepository;
 
     @Mock
+    private LedgerPostingService ledgerPostingService;
+
+    @Mock
     private ApprovalThresholdEvaluator thresholdEvaluator;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private com.positivity.inventory.internal.repository.CycleCountTaskRepository taskRepository;
+
+    @Mock
+    private CycleCountConflictDetector conflictDetector;
+
+    @Mock
+    private com.positivity.inventory.internal.repository.SkuCostStateRepository costStateRepository;
+
+    @Mock
+    private CostingMethodResolver methodResolver;
 
     private CycleCountAdjustmentServiceImpl service;
     private Clock fixedClock = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
@@ -60,7 +77,16 @@ class CycleCountAdjustmentServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new CycleCountAdjustmentServiceImpl(
-                adjustmentRepository, ledgerRepository, thresholdEvaluator, eventPublisher, fixedClock);
+                adjustmentRepository,
+                ledgerRepository,
+                ledgerPostingService,
+                thresholdEvaluator,
+                eventPublisher,
+                fixedClock,
+                taskRepository,
+                conflictDetector,
+                costStateRepository,
+                methodResolver);
     }
 
     @AfterEach
@@ -109,7 +135,68 @@ class CycleCountAdjustmentServiceImplTest {
 
             assertThat(savedAdjustment.getStatus()).isEqualTo(AdjustmentStatus.PENDING_APPROVAL);
             assertThat(savedAdjustment.getRequiredApprovalTier()).isEqualTo(ApprovalTier.TIER_1_MANAGER);
-            verify(ledgerRepository, never()).save(any());
+            // Fallback: no sku_cost_state row → the request-supplied cost stands (engine returns null).
+            assertThat(savedAdjustment.getCostAtTimeOfAdjustment()).isEqualByComparingTo(BigDecimal.TEN);
+            verify(ledgerPostingService, never()).post(any());
+        }
+
+        @Test
+        @DisplayName("J3: costAtTimeOfAdjustment is sourced from the J1 engine, overriding a stale request cost")
+        void shouldSourceCostFromEngineOverRequest() {
+            UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000009");
+            CreateAdjustmentRequest request = CreateAdjustmentRequest.builder()
+                    .stockItemId(stockItemId)
+                    .countedQuantity(15)
+                    .quantityOnHandBefore(10)
+                    .costAtTimeOfAdjustment(new BigDecimal("99.0000")) // stale interim client value
+                    .build();
+
+            when(costStateRepository.findByStockItemId(stockItemId.toString()))
+                    .thenReturn(Optional.of(SkuCostState.builder()
+                            .stockItemId(stockItemId.toString())
+                            .avgCost(new BigDecimal("4.2500"))
+                            .build()));
+            when(methodResolver.resolve(stockItemId.toString())).thenReturn(CostingMethod.AVERAGE);
+            when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
+                    .thenReturn(Optional.of(ApprovalTier.TIER_1_MANAGER));
+            when(adjustmentRepository.save(any(CycleCountAdjustment.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
+
+            service.createAdjustment(request);
+
+            ArgumentCaptor<CycleCountAdjustment> captor = ArgumentCaptor.forClass(CycleCountAdjustment.class);
+            verify(adjustmentRepository).save(captor.capture());
+            assertThat(captor.getValue().getCostAtTimeOfAdjustment()).isEqualByComparingTo("4.25");
+        }
+
+        @Test
+        @DisplayName("J3: STANDARD-costed SKU sources the configured standard cost from the engine")
+        void shouldSourceStandardCostFromEngine() {
+            UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-00000000000a");
+            CreateAdjustmentRequest request = CreateAdjustmentRequest.builder()
+                    .stockItemId(stockItemId)
+                    .countedQuantity(8)
+                    .quantityOnHandBefore(10)
+                    .costAtTimeOfAdjustment(new BigDecimal("99.0000"))
+                    .build();
+
+            when(costStateRepository.findByStockItemId(stockItemId.toString()))
+                    .thenReturn(Optional.of(SkuCostState.builder()
+                            .stockItemId(stockItemId.toString())
+                            .avgCost(new BigDecimal("4.2500"))
+                            .standardCost(new BigDecimal("6.0000"))
+                            .build()));
+            when(methodResolver.resolve(stockItemId.toString())).thenReturn(CostingMethod.STANDARD);
+            when(thresholdEvaluator.evaluateRequiredApprovalTier(any(CycleCountAdjustment.class)))
+                    .thenReturn(Optional.of(ApprovalTier.TIER_1_MANAGER));
+            when(adjustmentRepository.save(any(CycleCountAdjustment.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
+
+            service.createAdjustment(request);
+
+            ArgumentCaptor<CycleCountAdjustment> captor = ArgumentCaptor.forClass(CycleCountAdjustment.class);
+            verify(adjustmentRepository).save(captor.capture());
+            assertThat(captor.getValue().getCostAtTimeOfAdjustment()).isEqualByComparingTo("6.00");
         }
 
         @Test
@@ -135,7 +222,7 @@ class CycleCountAdjustmentServiceImplTest {
             });
 
             when(ledgerRepository.calculateOnHandQuantity(stockItemId)).thenReturn(10);
-            when(ledgerRepository.save(any(InventoryLedgerEntry.class))).thenAnswer(invocation -> {
+            when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(invocation -> {
                 InventoryLedgerEntry entry = invocation.getArgument(0);
                 entry.setLedgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
                 return entry;
@@ -146,7 +233,7 @@ class CycleCountAdjustmentServiceImplTest {
             ArgumentCaptor<CycleCountAdjustment> adjustmentCaptor = ArgumentCaptor.forClass(CycleCountAdjustment.class);
             verify(adjustmentRepository, org.mockito.Mockito.times(2)).save(adjustmentCaptor.capture());
 
-            verify(ledgerRepository).save(any(InventoryLedgerEntry.class));
+            verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
 
             CycleCountAdjustment finalSave = adjustmentCaptor.getAllValues().get(1);
 

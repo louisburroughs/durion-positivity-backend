@@ -28,6 +28,12 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    /** Count workorders by status (open / specific statuses / all) */
+    public static final EventTypeRegistration WORKORDER_COUNT = EventTypeRegistration.fastRead(
+                    "WORKORDER_COUNT", "Count workorders by status (open, specific statuses, or all)")
+            .apiVersion("1")
+            .build();
+
     /** Batch-resolve workorder ids to human workorder numbers */
     public static final EventTypeRegistration WORKORDER_NUMBER_RESOLVE = EventTypeRegistration.fastRead(
                     "WORKORDER_NUMBER_RESOLVE", "Batch-resolve workorder ids to human workorder numbers")
@@ -514,6 +520,7 @@ public final class EventTypes {
             // Workorder events
             WORKORDER_LIST,
             WORKORDER_SEARCH,
+            WORKORDER_COUNT,
             WORKORDER_NUMBER_RESOLVE,
             WORKORDER_CREATE,
             WORKORDER_OUTBOX_REPLAY,

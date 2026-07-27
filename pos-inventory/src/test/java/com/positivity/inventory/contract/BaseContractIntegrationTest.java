@@ -53,7 +53,16 @@ public abstract class BaseContractIntegrationTest {
                                 "inventory:allocations:reallocate",
                                 "inventory:shortage:resolve",
                                 "inventory:return:write",
-                                "inventory:return:view"));
+                                "inventory:return:view",
+                                "inventory:replenishment:manage",
+                                "inventory:scrap:create",
+                                "inventory:scrap:view",
+                                "inventory:scrap:approve",
+                                "inventory:transfer:create",
+                                "inventory:transfer:view",
+                                "inventory:transfer:dispatch",
+                                "inventory:transfer:receive",
+                                "inventory:transfer:short_close"));
     }
 
     protected MockHttpServletRequestBuilder withApproveOnlyAuth(MockHttpServletRequestBuilder requestBuilder) {

@@ -25,6 +25,16 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- springdoc (optional): needed only to compile the shared OpenAPI OperationCustomizer (#781).
+             Optional so non-web consumers of this library are not forced onto springdoc; every service
+             that uses the auto-configured customizer already has springdoc on its runtime classpath. -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc-openapi.version}</version>
+            <optional>true</optional>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>

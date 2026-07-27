@@ -6,10 +6,13 @@ import com.positivity.mcp.internal.discovery.OpenApiToolMapper;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import com.positivity.mcp.service.ToolRegistrationService;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.modelcontextprotocol.server.McpAsyncServer;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.swagger.v3.oas.models.OpenAPI;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
@@ -34,6 +37,12 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
     private final McpAsyncServer mcpAsyncServer;
     private final ToolMetadataRepository toolMetadataRepository;
     private final String gatewayBaseUrl;
+    // #645: discovery/registration metrics. Meter names are dot-cased so Prometheus exposes them as
+    // tools_discovered_total / tools_registered_total.
+    private final Counter toolsDiscoveredTotal;
+    private final Counter toolsRegisteredTotal;
+    // #1121: orphan openapi rows pruned to reconcile the persisted set with the current spec.
+    private final Counter toolsPrunedTotal;
 
     public ToolRegistrationServiceImpl(
             @NonNull McpServerProperties properties,
@@ -41,7 +50,8 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
             @NonNull OpenApiToolMapper openApiToolMapper,
             @NonNull McpAsyncServer mcpAsyncServer,
             @NonNull ToolMetadataRepository toolMetadataRepository,
-            @Value("${mcp.server.gateway-base-url:http://api-gateway:8080}") @NonNull String gatewayBaseUrl) {
+            @Value("${mcp.server.gateway-base-url:http://api-gateway:8080}") @NonNull String gatewayBaseUrl,
+            @NonNull MeterRegistry meterRegistry) {
         this.properties = properties;
         this.openApiDocumentFetcher = openApiDocumentFetcher;
         this.openApiToolMapper = openApiToolMapper;
@@ -51,6 +61,15 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
         // Eureka service id): alpha's Eureka registry is empty, and facade tools already reach the
         // gateway by base URL. The Gate 3 executor (G3.2) will call handlerForBaseUri(this).
         this.gatewayBaseUrl = gatewayBaseUrl;
+        this.toolsDiscoveredTotal = Counter.builder("tools.discovered")
+                .description("OpenAPI operations discovered from the gateway aggregate and matched to MCP tools")
+                .register(meterRegistry);
+        this.toolsRegisteredTotal = Counter.builder("tools.registered")
+                .description("MCP tools successfully registered from discovery")
+                .register(meterRegistry);
+        this.toolsPrunedTotal = Counter.builder("tools.pruned")
+                .description("Stale openapi-discovered mcp_tool rows pruned to match the current spec (#1121)")
+                .register(meterRegistry);
     }
 
     @Override
@@ -59,40 +78,18 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
         warnIfIncludedServicesDeprecated();
         return openApiDocumentFetcher
                 .fetchAggregateSpec()
-                .switchIfEmpty(Mono.defer(() -> {
-                    log.warn("Aggregate OpenAPI spec unavailable — skipping auto-discovered tool registration");
-                    return Mono.empty();
-                }))
-                .flatMap(discovered -> {
-                    var specifications =
-                            openApiToolMapper.toAggregateToolSpecifications(discovered.baseUri(), discovered.openApi());
-                    if (specifications.isEmpty()) {
-                        log.warn(
-                                "No MCP tools matched the configured allowlist in the aggregate spec. Path prefixes: {}",
-                                properties.includedPathPrefixes());
-                        return Mono.<Void>empty();
-                    }
-
-                    String toolNames = specifications.stream()
-                            .map(specification -> specification.tool().name())
-                            .collect(Collectors.joining(", "));
-
-                    log.info(
-                            "Registering {} MCP tools from gateway aggregate spec: {}",
-                            specifications.size(),
-                            toolNames);
-
-                    return persistDiscoveredOperations(discovered.openApi())
-                            .then(Flux.fromIterable(specifications)
-                                    .flatMap(this::addToolWithTiming)
-                                    .then(mcpAsyncServer.notifyToolsListChanged()))
-                            .doOnSuccess(ignored -> log.info(
-                                    "Registered MCP tools from gateway aggregate spec in {} ms",
-                                    elapsedMs(totalStartNanos)));
-                })
+                .flatMap(discovered -> registerAggregate(discovered, totalStartNanos))
+                // Aggregate unavailable (fetch fail-soft to empty) or matched no tools → fall back to
+                // per-service Eureka discovery (#645), so a down/empty gateway aggregate endpoint does
+                // not leave the server with zero discovered tools when the services are individually
+                // reachable via the registry.
+                .defaultIfEmpty(Boolean.FALSE)
+                .flatMap(registered -> Boolean.TRUE.equals(registered)
+                        ? Mono.<Void>empty()
+                        : registerViaPerServiceFallback(totalStartNanos))
                 .onErrorResume(ex -> {
                     log.warn(
-                            "Failed to register tools from gateway aggregate spec after {} ms: {}",
+                            "Failed to register discovered tools after {} ms: {}",
                             elapsedMs(totalStartNanos),
                             ex.getMessage());
                     return Mono.empty();
@@ -100,16 +97,100 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
     }
 
     /**
+     * Registers tools from the gateway aggregate spec. Returns {@code true} when at least one tool was
+     * registered, {@code false} when the aggregate matched no tools (so the caller falls back to
+     * per-service Eureka discovery).
+     */
+    private @NonNull Mono<Boolean> registerAggregate(
+            OpenApiDocumentFetcher.@NonNull DiscoveredOpenApi discovered, long totalStartNanos) {
+        var specifications =
+                openApiToolMapper.toAggregateToolSpecifications(discovered.baseUri(), discovered.openApi());
+        if (specifications.isEmpty()) {
+            log.warn(
+                    "No MCP tools matched the configured allowlist in the aggregate spec. Path prefixes: {}",
+                    properties.includedPathPrefixes());
+            return Mono.just(Boolean.FALSE);
+        }
+
+        String toolNames = specifications.stream()
+                .map(specification -> specification.tool().name())
+                .collect(Collectors.joining(", "));
+
+        toolsDiscoveredTotal.increment(specifications.size());
+        log.info("Registering {} MCP tools from gateway aggregate spec: {}", specifications.size(), toolNames);
+
+        return persistDiscoveredOperations(discovered.openApi())
+                .then(Flux.fromIterable(specifications)
+                        .flatMap(this::addToolWithTiming)
+                        .then(mcpAsyncServer.notifyToolsListChanged()))
+                .doOnSuccess(ignored -> log.info(
+                        "Registered MCP tools from gateway aggregate spec in {} ms", elapsedMs(totalStartNanos)))
+                .thenReturn(Boolean.TRUE);
+    }
+
+    /**
+     * #645 fallback: when aggregate discovery yields no tools, discover each candidate service's own
+     * OpenAPI directly through Eureka ({@link OpenApiDocumentFetcher#fetchForService}) and register the
+     * resulting tools. Candidate services come from {@code mcp.server.included-services} when set,
+     * otherwise every registered service except the gateway. Fail-soft per service and overall: a
+     * service that is unreachable or serves no matching paths is skipped, never aborting the batch.
+     */
+    private @NonNull Mono<Void> registerViaPerServiceFallback(long totalStartNanos) {
+        List<String> serviceIds = openApiDocumentFetcher.fallbackServiceIds();
+        if (serviceIds.isEmpty()) {
+            log.warn("Per-service Eureka discovery fallback found no candidate services; no tools registered");
+            return Mono.empty();
+        }
+        log.info(
+                "Aggregate discovery yielded no tools; falling back to per-service Eureka discovery for {} service(s): {}",
+                serviceIds.size(),
+                String.join(", ", serviceIds));
+        return Flux.fromIterable(serviceIds)
+                .flatMap(serviceId -> openApiDocumentFetcher
+                        .fetchForService(serviceId)
+                        .map(discovered -> openApiToolMapper.toToolSpecifications(
+                                discovered.serviceId(), discovered.baseUri(), discovered.openApi()))
+                        .onErrorResume(ex -> {
+                            log.warn("Per-service discovery failed for {}: {}", serviceId, ex.getMessage());
+                            return Mono.empty();
+                        }))
+                .flatMapIterable(specs -> specs)
+                .collectList()
+                .flatMap(specifications -> {
+                    if (specifications.isEmpty()) {
+                        log.warn("Per-service Eureka fallback registered no tools (no reachable service specs)");
+                        return Mono.<Void>empty();
+                    }
+                    toolsDiscoveredTotal.increment(specifications.size());
+                    log.info("Registering {} MCP tools from per-service Eureka fallback", specifications.size());
+                    return Flux.fromIterable(specifications)
+                            .flatMap(this::addToolWithTiming)
+                            .then(mcpAsyncServer.notifyToolsListChanged())
+                            .doOnSuccess(ignored -> log.info(
+                                    "Registered per-service Eureka fallback MCP tools in {} ms",
+                                    elapsedMs(totalStartNanos)));
+                });
+    }
+
+    /**
      * Gate 3 (G3.1): persists each discovered operation as a {@code source='openapi'} {@code mcp_tool}
      * row and maps it to the IDLE workflow so it can be selected. Runs off the event loop
      * (boundedElastic) because the upsert is blocking JDBC. Embeddings are backfilled by
-     * {@code ToolEmbeddingInitializer}; required permissions are seeded separately (admin / #785), so
-     * until then discovered ops are fail-closed (never selected without a permission grant).
+     * {@code ToolEmbeddingInitializer}; required permissions are granted from each op's
+     * {@code x-required-permissions} extension (#781, fail-closed — an op with no extension gets no
+     * grant and is never selected until curated via the #785 admin surface).
      */
     private @NonNull Mono<Void> persistDiscoveredOperations(@NonNull OpenAPI openApi) {
         return Mono.fromRunnable(() -> {
                     List<DiscoveredOperation> operations =
                             openApiToolMapper.toDiscoveredOperations(gatewayBaseUrl, openApi);
+                    // Names of every op discovered this run — the desired persisted set for the #1121 prune
+                    // below. name is @NonNull by contract; the filter is a defensive guard so a stray null
+                    // can never enter the keep-set and turn the prune's NOT IN (...) into a silent no-op.
+                    Set<String> discoveredNames = operations.stream()
+                            .map(DiscoveredOperation::name)
+                            .filter(java.util.Objects::nonNull)
+                            .collect(Collectors.toSet());
                     int persisted = 0;
                     for (DiscoveredOperation operation : operations) {
                         String path = operation.httpPath();
@@ -120,6 +201,11 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                             UUID toolId = toolMetadataRepository.upsertDiscoveredOperation(
                                     operation, OpenApiToolMapper.extractDomain(path));
                             toolMetadataRepository.linkToolToWorkflow(toolId, DISCOVERED_WORKFLOW_STATE);
+                            // #781: grant the op's x-required-permissions (fail-closed — absent extension
+                            // grants nothing, so the op stays unselectable until curated via #785 admin).
+                            for (String permissionCode : operation.requiredPermissions()) {
+                                toolMetadataRepository.addToolPermission(toolId, permissionCode);
+                            }
                             persisted++;
                         } catch (RuntimeException exception) {
                             log.warn(
@@ -130,9 +216,21 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                     }
                     log.info(
                             "Persisted {} discovered openapi ops (source='openapi', {} workflow); "
-                                    + "embeddings backfilled by ToolEmbeddingInitializer, permissions seeded separately",
+                                    + "embeddings backfilled by ToolEmbeddingInitializer, permissions granted from "
+                                    + "x-required-permissions (fail-closed when absent)",
                             persisted,
                             DISCOVERED_WORKFLOW_STATE);
+                    // #1121: reconcile — delete any source='openapi' row absent from this run (orphans left
+                    // by a spec change or discovery-mode switch, since persistence is otherwise upsert-only).
+                    // Guarded on persisted > 0 so a run that wrote nothing (bad/empty spec, DB trouble) can
+                    // never wipe the catalog; pruneDiscoveredOperationsExcept also no-ops on an empty set.
+                    if (persisted > 0 && !discoveredNames.isEmpty()) {
+                        int pruned = toolMetadataRepository.pruneDiscoveredOperationsExcept(discoveredNames);
+                        if (pruned > 0) {
+                            toolsPrunedTotal.increment(pruned);
+                            log.info("Pruned {} stale openapi mcp_tool row(s) not in the current spec (#1121)", pruned);
+                        }
+                    }
                 })
                 .subscribeOn(Schedulers.boundedElastic())
                 .then();
@@ -151,9 +249,17 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
     private @NonNull Mono<Void> addToolWithTiming(McpServerFeatures.AsyncToolSpecification specification) {
         long startNanos = System.nanoTime();
         String toolName = specification.tool().name();
+        // Idempotent (re)registration so periodic refresh can re-add a tool without the server
+        // rejecting it as already-registered: remove any existing tool of the same name first
+        // (no-op / swallowed if absent), then add the current specification.
         return mcpAsyncServer
-                .addTool(specification)
-                .doOnSuccess(ignored -> log.info("Registered MCP tool {} in {} ms", toolName, elapsedMs(startNanos)));
+                .removeTool(toolName)
+                .onErrorResume(ignored -> Mono.empty())
+                .then(mcpAsyncServer.addTool(specification))
+                .doOnSuccess(ignored -> {
+                    toolsRegisteredTotal.increment();
+                    log.info("Registered MCP tool {} in {} ms", toolName, elapsedMs(startNanos));
+                });
     }
 
     private static long elapsedMs(long startNanos) {

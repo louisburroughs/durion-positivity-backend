@@ -19,6 +19,7 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryReturnRepository;
+import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.ReturnServiceImpl;
 import java.time.Clock;
 import java.time.Instant;
@@ -68,6 +69,9 @@ class ReturnServiceImplTest {
     @Mock
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
+    @Mock
+    private LedgerPostingService ledgerPostingService;
+
     @Captor
     private ArgumentCaptor<InventoryReturnEntity> entityCaptor;
 
@@ -84,7 +88,10 @@ class ReturnServiceImplTest {
         return new ReturnServiceImpl(
                 inventoryReturnRepository,
                 inventoryLedgerEntryRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
+                new com.positivity.inventory.internal.service.DocumentQuantityConverter(
+                        org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
                 clock);
     }
 
@@ -92,7 +99,10 @@ class ReturnServiceImplTest {
         return new ReturnServiceImpl(
                 inventoryReturnRepository,
                 inventoryLedgerEntryRepository,
+                ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
+                new com.positivity.inventory.internal.service.DocumentQuantityConverter(
+                        org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
                 clock);
     }
 
@@ -116,8 +126,8 @@ class ReturnServiceImplTest {
         // Issue #177: RS1 — service must return a properly populated ReturnResponse
         UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID skuId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        ReturnItemsRequest request =
-                new ReturnItemsRequest(workorderId, "Leftover brake pads", List.of(new ReturnItemLine(skuId, 2)));
+        ReturnItemsRequest request = new ReturnItemsRequest(
+                workorderId, "Leftover brake pads", List.of(new ReturnItemLine(skuId, 2, null, null)));
 
         when(inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
                         eq(skuId.toString()),
@@ -125,7 +135,7 @@ class ReturnServiceImplTest {
                         eq(workorderId.toString())))
                 .thenReturn(List.of(
                         InventoryLedgerEntry.builder().changeInQuantity(-100).build()));
-        when(inventoryLedgerEntryRepository.saveAll(anyList()))
+        when(ledgerPostingService.postAll(anyList()))
                 .thenReturn(List.of(InventoryLedgerEntry.builder()
                         .ledgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                         .build()));
@@ -163,7 +173,7 @@ class ReturnServiceImplTest {
         ReturnItemsRequest request = new ReturnItemsRequest(
                 workorderId,
                 "End of job surplus",
-                List.of(new ReturnItemLine(skuId1, 3), new ReturnItemLine(skuId2, 1)));
+                List.of(new ReturnItemLine(skuId1, 3, null, null), new ReturnItemLine(skuId2, 1, null, null)));
 
         when(inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
                         anyString(), any(), anyString()))
@@ -204,14 +214,14 @@ class ReturnServiceImplTest {
                 workorderId,
                 "Surplus parts",
                 List.of(
-                        new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"), 1),
-                        new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"), 2)));
+                        new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"), 1, null, null),
+                        new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"), 2, null, null)));
 
         when(inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
                         anyString(), any(), anyString()))
                 .thenReturn(List.of(
                         InventoryLedgerEntry.builder().changeInQuantity(-100).build()));
-        when(inventoryLedgerEntryRepository.saveAll(anyList()))
+        when(ledgerPostingService.postAll(anyList()))
                 .thenReturn(List.of(
                         InventoryLedgerEntry.builder()
                                 .ledgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -246,7 +256,7 @@ class ReturnServiceImplTest {
         ReturnItemsRequest request = new ReturnItemsRequest(
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 null,
-                List.of(new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"), 1)));
+                List.of(new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"), 1, null, null)));
 
         // RED: UnsupportedOperationException is thrown — not in isInstanceOfAny set
         assertThatThrownBy(() -> service().returnItemsToStock(request))
@@ -275,7 +285,7 @@ class ReturnServiceImplTest {
         ReturnItemsRequest request = new ReturnItemsRequest(
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 "Over-return attempt",
-                List.of(new ReturnItemLine(skuId, 999)));
+                List.of(new ReturnItemLine(skuId, 999, null, null)));
 
         // RED: UnsupportedOperationException is thrown, not
         // ReturnQuantityExceededException
@@ -293,7 +303,7 @@ class ReturnServiceImplTest {
         ReturnItemsRequest request = new ReturnItemsRequest(
                 workorderId,
                 "  Completed workorder return  ",
-                List.of(new ReturnItemLine(skuId1, 3), new ReturnItemLine(skuId2, 1)));
+                List.of(new ReturnItemLine(skuId1, 3, null, null), new ReturnItemLine(skuId2, 1, null, null)));
 
         InventoryReturnEntity saved = InventoryReturnEntity.builder()
                 .returnId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -317,7 +327,7 @@ class ReturnServiceImplTest {
                 InventoryLedgerEntry.builder().ledgerEntryId(firstLedgerId).build();
         InventoryLedgerEntry savedLedgerTwo =
                 InventoryLedgerEntry.builder().ledgerEntryId(null).build();
-        when(inventoryLedgerEntryRepository.saveAll(anyList())).thenReturn(List.of(savedLedgerOne, savedLedgerTwo));
+        when(ledgerPostingService.postAll(anyList())).thenReturn(List.of(savedLedgerOne, savedLedgerTwo));
 
         ReturnResponse result = serviceWithLedgerRepository().returnItemsToStock(request);
 
@@ -335,8 +345,8 @@ class ReturnServiceImplTest {
     void returnItemsToStock_withLedgerRepository_returnExceedsConsumed_throwsException() {
         UUID workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID skuId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        ReturnItemsRequest request =
-                new ReturnItemsRequest(workorderId, "Return attempt", List.of(new ReturnItemLine(skuId, 3)));
+        ReturnItemsRequest request = new ReturnItemsRequest(
+                workorderId, "Return attempt", List.of(new ReturnItemLine(skuId, 3, null, null)));
 
         when(inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
                         eq(skuId.toString()),
@@ -357,7 +367,7 @@ class ReturnServiceImplTest {
         ReturnItemsRequest request = new ReturnItemsRequest(
                 workorderId,
                 "Fallback return",
-                List.of(new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"), 1)));
+                List.of(new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"), 1, null, null)));
 
         when(inventoryLedgerEntryRepository.findByStockItemIdAndEventTypeAndNotesContainingIgnoreCase(
                         anyString(), any(), anyString()))
@@ -376,7 +386,7 @@ class ReturnServiceImplTest {
         ReturnItemsRequest request = new ReturnItemsRequest(
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 "Invalid return",
-                List.of(new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"), 0)));
+                List.of(new ReturnItemLine(UUID.fromString("00000000-0000-0000-0000-000000000001"), 0, null, null)));
 
         assertThatThrownBy(() -> service().returnItemsToStock(request))
                 .isInstanceOf(IllegalArgumentException.class)

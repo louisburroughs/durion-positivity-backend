@@ -14,6 +14,10 @@ tags:
   description: Cancel orders and retry failed cancellations
 - name: Price Overrides
   description: Price override management with approval workflow
+- name: Register Sessions
+  description: POS register session and cash management
+- name: Returns
+  description: Returns & refunds against completed orders
 - name: Sales Orders
   description: Sales order cart management
 paths:
@@ -53,7 +57,7 @@ paths:
       security:
       - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+      - order:line:edit
     delete:
       tags:
       - Sales Orders
@@ -79,7 +83,428 @@ paths:
       security:
       - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+      - order:line:delete
+  /v1/orders/carts/{orderId}/discount:
+    put:
+      tags:
+      - Sales Orders
+      summary: Apply an order-level discount
+      description: Apply or replace the order-level discount (PERCENT or AMOUNT), allocated pro-rata across lines. DRAFT orders only.
+      operationId: applyOrderDiscount
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderDiscountRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:order:discount
+    delete:
+      tags:
+      - Sales Orders
+      summary: Remove the order-level discount
+      description: Clear any order-level discount and recompute totals. DRAFT orders only.
+      operationId: clearOrderDiscount
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:order:discount
+  /v1/returns:
+    get:
+      tags:
+      - Returns
+      summary: List returns for an original order
+      description: Lists return orders created from the specified original order.
+      operationId: listReturns
+      parameters:
+      - name: originalOrderId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReturnOrderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:return:view
+    post:
+      tags:
+      - Returns
+      summary: Create a return against a completed order
+      description: 'Idempotency-Key header supported: a replayed key returns the original return. Over-cap requests return 422 listing each line''s returnableQty.'
+      operationId: createReturn
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        description: Client idempotency key; replays return the original return
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReturnRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReturnOrderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:return:create
+  /v1/returns/{returnOrderId}/retry:
+    post:
+      tags:
+      - Returns
+      summary: Retry a return saga after a refund failure
+      description: Retries return processing for a return currently in a retryable failed state.
+      operationId: retryReturn
+      parameters:
+      - name: returnOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReturnOrderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:return:create
+  /v1/returns/{returnOrderId}/reject:
+    post:
+      tags:
+      - Returns
+      summary: Reject a pending return
+      description: Rejects a pending return with a provided rejection reason.
+      operationId: rejectReturn
+      parameters:
+      - name: returnOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectReturnRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReturnOrderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:return:approve
+  /v1/returns/{returnOrderId}/process:
+    post:
+      tags:
+      - Returns
+      summary: Run the return orchestration saga (refund + restock signal)
+      description: 'From RETURN_REQUESTED: issues the refund and emits order.order.returned. A refund failure parks the return at REFUND_FAILED before any stock movement.'
+      operationId: processReturn
+      parameters:
+      - name: returnOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReturnOrderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:return:create
+  /v1/returns/{returnOrderId}/approve:
+    post:
+      tags:
+      - Returns
+      summary: Approve a pending return
+      description: Approves a pending return so it can continue through the return workflow.
+      operationId: approveReturn
+      parameters:
+      - name: returnOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReturnOrderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:return:approve
+  /v1/orders/{orderId}/void:
+    post:
+      tags:
+      - Sales Orders
+      summary: Void an unsettled order
+      description: 'Terminal void of a PENDING_PAYMENT order before any settlement: cancels the fronting pos-invoice invoice and transitions the order to VOIDED. Rejected with 409 when settled payments exist (use the cancellation flow) or from any other status (drafts are cancelled, not voided).'
+      operationId: voidOrder
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoidOrderRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:order:void
+  /v1/orders/{orderId}/checkout:
+    post:
+      tags:
+      - Sales Orders
+      summary: Check out a sales order
+      description: 'Freeze the cart and take it to PENDING_PAYMENT: validates lines/customer/availability, performs the final reprice and tax computation, and creates the fronting invoice at pos-invoice. The Idempotency-Key header is required; a replayed key returns the checked-out order with 200. Settlement completion is asynchronous — the order completes when payment events settle the balance to zero.'
+      operationId: checkout
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        description: Required checkout idempotency key; replays return the original result
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:order:checkout
+  /v1/orders/sessions:
+    post:
+      tags:
+      - Register Sessions
+      summary: Open a register session
+      description: Opens a new register session for the provided terminal, location, and clerk context.
+      operationId: openSession
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenSessionRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterSessionResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:session:open
+  /v1/orders/sessions/{sessionId}/confirm-close:
+    post:
+      tags:
+      - Register Sessions
+      summary: Confirm a register session close
+      description: Snapshots theoretical cash, computes over/short, and moves the session to CLOSED. An over/short beyond the authorized difference limit requires order:session:approve_variance.
+      operationId: confirmClose
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterSessionResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:session:close
+  /v1/orders/sessions/{sessionId}/cash-movements:
+    get:
+      tags:
+      - Register Sessions
+      summary: List a session's cash movements
+      description: Lists all recorded cash movements for the specified register session.
+      operationId: listCashMovements
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CashMovementResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:session:view
+    post:
+      tags:
+      - Register Sessions
+      summary: Record a drawer cash movement
+      description: Records a cash in/out drawer movement against the specified register session.
+      operationId: recordCashMovement
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashMovementRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashMovementResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:session:cash_movement
+  /v1/orders/sessions/{sessionId}/begin-close:
+    post:
+      tags:
+      - Register Sessions
+      summary: Begin closing a register session
+      description: Records the counted cash and moves the session to CLOSING. Blocked while any of its orders are in PENDING_PAYMENT.
+      operationId: beginClose
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BeginCloseRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterSessionResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:session:close
   /v1/orders/price-overrides:
     get:
       tags:
@@ -273,12 +698,71 @@ paths:
       x-required-permissions:
       - order:price_override:approve
   /v1/orders/carts:
+    get:
+      tags:
+      - Sales Orders
+      summary: List sales order carts
+      description: List carts filtered by clerk, terminal, and/or status — the draft-parking/resume surface. Line items are omitted from list results.
+      operationId: listCarts
+      parameters:
+      - name: clerkId
+        in: query
+        description: Filter by clerk identifier
+        required: false
+        schema:
+          type: string
+      - name: terminalId
+        in: query
+        description: Filter by terminal identifier
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        description: Filter by order status, e.g. DRAFT
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SalesOrderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:order:view
     post:
       tags:
       - Sales Orders
       summary: Create a sales order cart
-      description: Create a new sales order cart for a customer, terminal, and optional vehicle context.
+      description: 'Create a new sales order cart for a customer, terminal, and optional vehicle context. Supports the Idempotency-Key header: a replayed key returns the original cart with 200 instead of creating a duplicate; a replayed key with a different payload returns 409.'
       operationId: createCart
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        description: Client idempotency key; replays return the original cart
+        required: false
+        schema:
+          type: string
       requestBody:
         content:
           application/json:
@@ -295,13 +779,63 @@ paths:
       security:
       - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+      - order:order:create
+  /v1/orders/carts/{orderId}/quote:
+    post:
+      tags:
+      - Sales Orders
+      summary: Convert a cart to a counter quote
+      description: 'Final reprice + tax computation, then DRAFT → QUOTED with a validity horizon. Counter quotes only: workorder-linked orders are quoted via pos-workorder estimates and are rejected here (spec Q3).'
+      operationId: quote
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:order:quote
+  /v1/orders/carts/{orderId}/quote/reopen:
+    post:
+      tags:
+      - Sales Orders
+      summary: Reopen a counter quote
+      description: 'QUOTED → DRAFT: clears the validity horizon, best-effort reprices, and marks tax stale.'
+      operationId: reopenQuote
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:order:quote
   /v1/orders/carts/{orderId}/items:
     post:
       tags:
       - Sales Orders
       summary: Add an item to a sales order cart
-      description: Add a line item to an existing sales order cart using SKU, quantity, and optional pricing context.
+      description: 'Add a line item to an existing sales order cart using SKU, quantity, and optional pricing context. A client-supplied lineUuid makes the call replay-safe: a replay with a known lineUuid updates the existing line instead of duplicating it.'
       operationId: addItem
       parameters:
       - name: orderId
@@ -326,7 +860,7 @@ paths:
       security:
       - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+      - order:line:create
   /v1/orders/carts/{orderId}/cancel:
     post:
       tags:
@@ -462,7 +996,158 @@ paths:
       security:
       - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+      - order:order:edit
+  /v1/returns/{returnOrderId}:
+    get:
+      tags:
+      - Returns
+      summary: Get a return by id
+      description: Fetches a return order by return order identifier.
+      operationId: getReturn
+      parameters:
+      - name: returnOrderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReturnOrderResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:return:view
+  /v1/returns/returnable:
+    get:
+      tags:
+      - Returns
+      summary: Per-line returnable quantities for a completed order
+      description: Returns each completed-order line with its currently returnable quantity.
+      operationId: returnableLines
+      parameters:
+      - name: orderId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReturnableLineResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:return:view
+  /v1/orders/sessions/{sessionId}:
+    get:
+      tags:
+      - Register Sessions
+      summary: Get a register session by id
+      description: Retrieves register session details and balances for the given session id.
+      operationId: getSession
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterSessionResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:session:view
+  /v1/orders/sessions/{sessionId}/z-report:
+    get:
+      tags:
+      - Register Sessions
+      summary: Z-report (close summary)
+      description: Returns the end-of-session close summary, including totals and variance metrics.
+      operationId: zReport
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionReportResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:session:view
+  /v1/orders/sessions/{sessionId}/x-report:
+    get:
+      tags:
+      - Register Sessions
+      summary: X-report (mid-day figures for an open session)
+      description: Returns an interim session report for an open or in-progress register session.
+      operationId: xReport
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionReportResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:session:view
+  /v1/orders/sessions/current:
+    get:
+      tags:
+      - Register Sessions
+      summary: Get the current open session for a terminal
+      description: Returns the OPEN (or CLOSING) session on the terminal, or 204 if none is open.
+      operationId: currentSession
+      parameters:
+      - name: terminalId
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterSessionResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - order:session:view
   /v1/orders/price-overrides/{overrideId}:
     get:
       tags:
@@ -541,7 +1226,7 @@ paths:
       security:
       - bearerAuth: []
       x-required-permissions:
-      - AUTHENTICATED
+      - order:order:view
 components:
   schemas:
     UpdateItemRequest:
@@ -581,6 +1266,32 @@ components:
           type: number
           description: Unit price applied to the line
           example: 19.99
+        discountPercent:
+          type: number
+          description: Line-level discount percent (0-100)
+          example: 5
+        discountAmount:
+          type: number
+          description: Line discount plus this line's pro-rata share of the order discount
+          example: 2.0
+        lineSubtotal:
+          type: number
+          description: Extended amount post-line-discount, pre-order-discount, pre-tax
+          example: 37.98
+        taxAmount:
+          type: number
+          description: Tax for this line (pos-tax authoritative)
+          example: 3.04
+        lineTotal:
+          type: number
+          description: lineSubtotal minus order-discount allocation plus taxAmount
+          example: 39.02
+        customerNote:
+          type: string
+          description: Customer-visible line note
+        internalNote:
+          type: string
+          description: Shop-internal line note
         fulfillmentStatus:
           type: string
           description: Fulfillment status of the line
@@ -605,10 +1316,433 @@ components:
           type: string
           description: Identifier of the originating source line
           example: 01960003-0000-7000-8000-000000000006
+        serialNumbers:
+          type: array
+          description: Captured lot/serial numbers for tracked products
+          items:
+            type: string
+        returnable:
+          type: boolean
+          default: false
+          description: Explicit source-document returnability flag (imported lines only; null for counter lines)
       required:
       - itemSku
       - orderLineId
       - quantity
+    OrderDiscountRequest:
+      type: object
+      description: Request payload for applying an order-level discount (pro-rata across lines)
+      properties:
+        type:
+          type: string
+          description: Discount flavor
+          enum:
+          - PERCENT
+          - AMOUNT
+          example: PERCENT
+          minLength: 1
+        value:
+          type: number
+          description: Percent (0-100] or currency amount, per type
+          example: 10
+        reasonCode:
+          type: string
+          description: Business reason for the discount
+          example: GOODWILL_ADJUSTMENT
+      required:
+      - type
+      - value
+    SalesOrderResponse:
+      type: object
+      description: Response representing a sales order and its lines
+      properties:
+        orderId:
+          type: string
+          description: Unique identifier of the order
+          example: 01960003-0000-7000-8000-000000000001
+        orderNumber:
+          type: string
+          description: Human-facing order number assigned at creation
+          example: SO-1A2B3C4D-2607-000042
+        locationId:
+          type: string
+          description: Shop location the order belongs to
+          example: 01960003-0000-7000-8000-000000000090
+        label:
+          type: string
+          description: Parking label for resumable drafts
+          example: blue F-150 waiting on customer
+        customerValidationStatus:
+          type: string
+          description: CRM validation state of the customer/vehicle references (VALIDATED or PENDING)
+          example: VALIDATED
+        customerId:
+          type: string
+          description: Identifier of the customer associated with the order
+          example: 01960003-0000-7000-8000-000000000070
+        vehicleId:
+          type: string
+          description: Identifier of the vehicle associated with the order
+          example: 01960003-0000-7000-8000-000000000080
+        clerkId:
+          type: string
+          description: Identifier of the clerk who owns the order
+          example: 01960003-0000-7000-8000-000000000050
+        terminalId:
+          type: string
+          description: Identifier of the terminal where the order was created
+          example: 01960003-0000-7000-8000-000000000060
+        status:
+          type: string
+          description: Current status of the order
+          example: OPEN
+        subtotal:
+          type: number
+          description: 'Σ line subtotals: post-line-discount, pre-order-discount, pre-tax'
+          example: 59.97
+        discountTotal:
+          type: number
+          description: Σ line discounts + allocated order discount
+          example: 6.0
+        taxTotal:
+          type: number
+          description: Total tax (pos-tax authoritative)
+          example: 4.32
+        grandTotal:
+          type: number
+          description: subtotal − order discount + taxTotal
+          example: 58.29
+        taxStale:
+          type: boolean
+          default: false
+          description: True when mutations invalidated taxTotal; cleared by quote/checkout tax recompute
+          example: false
+        orderDiscountType:
+          type: string
+          description: Order discount flavor (PERCENT or AMOUNT)
+        orderDiscountValue:
+          type: number
+          description: Order discount value per type
+        orderDiscountReasonCode:
+          type: string
+          description: Order discount reason code
+        generalNote:
+          type: string
+          description: Order-level note
+        quoteExpiresAt:
+          type: string
+          format: date-time
+          description: Quote validity horizon (QUOTED orders)
+        invoiceId:
+          type: string
+          description: Invoice fronting this order, set at checkout
+        invoiceNumber:
+          type: string
+          description: Human-facing invoice number
+        amountPaid:
+          type: number
+          description: Net settled amount (checkout onward)
+        balanceDue:
+          type: number
+          description: Outstanding balance (checkout onward)
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the order was created (ISO 8601)
+          example: 2026-01-15 09:30:00+00:00
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the order was last updated (ISO 8601)
+          example: 2026-01-15 09:45:00+00:00
+        createdBy:
+          type: string
+          description: Identifier of the user who created the order
+          example: 01960003-0000-7000-8000-000000000050
+        updatedBy:
+          type: string
+          description: Identifier of the user who last updated the order
+          example: 01960003-0000-7000-8000-000000000051
+        lines:
+          type: array
+          description: Lines belonging to the order
+          items:
+            $ref: '#/components/schemas/SalesOrderLineResponse'
+      required:
+      - orderId
+      - status
+    CreateReturnRequest:
+      type: object
+      description: Request payload for creating a return against a completed order
+      properties:
+        originalOrderId:
+          type: string
+          format: uuid
+          description: The single COMPLETED order being returned against
+        refundMethod:
+          type: string
+          description: How the refund is issued
+          enum:
+          - ORIGINAL_TENDER
+          - STORE_CREDIT
+          - ON_ACCOUNT_CREDIT
+          minLength: 1
+        reasonCode:
+          type: string
+          description: Return reason code
+        lines:
+          type: array
+          description: Return lines
+          items:
+            $ref: '#/components/schemas/ReturnLineRequest'
+          minItems: 1
+      required:
+      - lines
+      - originalOrderId
+      - refundMethod
+    ReturnLineRequest:
+      type: object
+      description: One requested return line
+      properties:
+        originalOrderLineId:
+          type: string
+          format: uuid
+          description: The sold line (order line id) being returned against
+        returnQty:
+          type: integer
+          format: int32
+          description: Units to return (capped at the un-refunded remainder)
+          example: 1
+        condition:
+          type: string
+          description: Disposition of the returned item
+          enum:
+          - RESTOCK
+          - SCRAP
+          - WARRANTY
+          minLength: 1
+        serialNumbers:
+          type: array
+          description: Returned serials, when the sale captured them
+          items:
+            type: string
+            minLength: 1
+      required:
+      - condition
+      - originalOrderLineId
+      - returnQty
+    Line:
+      type: object
+      description: One returned line
+      properties:
+        returnLineId:
+          type: string
+          format: uuid
+        originalOrderLineId:
+          type: string
+          format: uuid
+        itemSku:
+          type: string
+        returnQty:
+          type: integer
+          format: int32
+        condition:
+          type: string
+        lineRefund:
+          type: number
+        serialNumbers:
+          type: array
+          items:
+            type: string
+    ReturnOrderResponse:
+      type: object
+      description: A return order and its lines
+      properties:
+        returnOrderId:
+          type: string
+          format: uuid
+        originalOrderId:
+          type: string
+          format: uuid
+        originalOrderNumber:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        refundMethod:
+          type: string
+        status:
+          type: string
+        reasonCode:
+          type: string
+        totalRefund:
+          type: number
+        failureReason:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/Line'
+        returnedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    RejectReturnRequest:
+      type: object
+      description: Request payload for rejecting a pending return
+      properties:
+        reason:
+          type: string
+          description: Reason for the rejection
+          minLength: 1
+      required:
+      - reason
+    VoidOrderRequest:
+      type: object
+      description: Request payload for voiding an unsettled order
+      properties:
+        reason:
+          type: string
+          description: Reason the order is being voided
+          example: Customer walked away before payment
+    CheckoutRequest:
+      type: object
+      description: Optional checkout options
+      properties:
+        tenderType:
+          type: string
+          description: 'Tender intent: DEFAULT (asynchronous settlement via payments) or ON_ACCOUNT (charge a validated commercial customer''s account; requires order:order:charge_on_account and the order completes with the balance carried by the AR invoice)'
+          example: ON_ACCOUNT
+    OpenSessionRequest:
+      type: object
+      description: Request payload for opening a register session
+      properties:
+        terminalId:
+          type: string
+          description: Terminal the drawer belongs to; one open session per terminal
+          example: 01960003-0000-7000-8000-000000000060
+          minLength: 1
+        openedByClerkId:
+          type: string
+          description: Clerk opening the session
+          example: 01960003-0000-7000-8000-000000000050
+          minLength: 1
+        locationId:
+          type: string
+          format: uuid
+          description: Shop location; defaults from the terminal's previous session when omitted
+          example: 01960003-0000-7000-8000-000000000090
+        openingFloat:
+          type: number
+          description: Starting drawer cash; defaults to the terminal's previous counted close when omitted
+          example: 150.0
+      required:
+      - openedByClerkId
+      - terminalId
+    RegisterSessionResponse:
+      type: object
+      description: Register session state
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        terminalId:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        openedByClerkId:
+          type: string
+        status:
+          type: string
+        openingFloat:
+          type: number
+        countedCash:
+          type: number
+        theoreticalCash:
+          type: number
+        overShort:
+          type: number
+        varianceApproved:
+          type: boolean
+        closedByClerkId:
+          type: string
+        openedAt:
+          type: string
+          format: date-time
+        closingStartedAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: string
+          format: date-time
+    CashMovementRequest:
+      type: object
+      description: Request payload for recording a drawer cash movement
+      properties:
+        movementType:
+          type: string
+          description: Movement direction
+          enum:
+          - PAID_IN
+          - PAID_OUT
+          example: PAID_OUT
+          minLength: 1
+        amount:
+          type: number
+          description: Positive cash amount moved
+          example: 40.0
+        reason:
+          type: string
+          description: Reason for the movement
+          example: petty cash to office
+          minLength: 1
+        clerkId:
+          type: string
+          description: Clerk recording the movement
+          example: 01960003-0000-7000-8000-000000000050
+          minLength: 1
+      required:
+      - amount
+      - clerkId
+      - movementType
+      - reason
+    CashMovementResponse:
+      type: object
+      description: A drawer cash movement
+      properties:
+        movementId:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+          format: uuid
+        movementType:
+          type: string
+        amount:
+          type: number
+        reason:
+          type: string
+        clerkId:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+    BeginCloseRequest:
+      type: object
+      description: Request payload for beginning a register session close
+      properties:
+        countedCash:
+          type: number
+          description: Physical cash counted in the drawer
+          example: 310.0
+      required:
+      - countedCash
     ApplyPriceOverrideRequest:
       type: object
       description: Request payload for applying a price override to an order line
@@ -892,6 +2026,19 @@ components:
           description: Identifier of the clerk creating the cart
           example: 01960003-0000-7000-8000-000000000050
           minLength: 1
+        locationId:
+          type: string
+          format: uuid
+          description: Shop location the cart is created at; drives order-number assignment. Optional when the terminal has an open register session (the session supplies the location); required otherwise.
+          example: 01960003-0000-7000-8000-000000000090
+        label:
+          type: string
+          description: Optional parking label for resumable drafts
+          example: blue F-150 waiting on customer
+        generalNote:
+          type: string
+          description: Optional order-level note
+          example: Customer will pick up after 5pm
         terminalId:
           type: string
           description: Identifier of the terminal where the cart is created
@@ -905,67 +2052,21 @@ components:
           type: string
           description: Identifier of the vehicle associated with the cart, when applicable
           example: 01960003-0000-7000-8000-000000000080
+        depositSourceType:
+          type: string
+          description: When this cart takes a deposit / down payment (odoo-parity story E4), the source document type it is held against; pos-invoice registers a deposit credit at checkout.
+          enum:
+          - ESTIMATE
+          - WORKORDER
+          - ORDER
+        depositSourceId:
+          type: string
+          format: uuid
+          description: Source document id the deposit is held against (required with depositSourceType).
+          example: 01960003-0000-7000-8000-000000000011
       required:
       - clerkId
       - terminalId
-    SalesOrderResponse:
-      type: object
-      description: Response representing a sales order and its lines
-      properties:
-        orderId:
-          type: string
-          description: Unique identifier of the order
-          example: 01960003-0000-7000-8000-000000000001
-        customerId:
-          type: string
-          description: Identifier of the customer associated with the order
-          example: 01960003-0000-7000-8000-000000000070
-        vehicleId:
-          type: string
-          description: Identifier of the vehicle associated with the order
-          example: 01960003-0000-7000-8000-000000000080
-        clerkId:
-          type: string
-          description: Identifier of the clerk who owns the order
-          example: 01960003-0000-7000-8000-000000000050
-        terminalId:
-          type: string
-          description: Identifier of the terminal where the order was created
-          example: 01960003-0000-7000-8000-000000000060
-        status:
-          type: string
-          description: Current status of the order
-          example: OPEN
-        subtotal:
-          type: number
-          description: Subtotal of all order lines before taxes and fees
-          example: 59.97
-        createdAt:
-          type: string
-          format: date-time
-          description: Timestamp when the order was created (ISO 8601)
-          example: 2026-01-15 09:30:00+00:00
-        updatedAt:
-          type: string
-          format: date-time
-          description: Timestamp when the order was last updated (ISO 8601)
-          example: 2026-01-15 09:45:00+00:00
-        createdBy:
-          type: string
-          description: Identifier of the user who created the order
-          example: 01960003-0000-7000-8000-000000000050
-        updatedBy:
-          type: string
-          description: Identifier of the user who last updated the order
-          example: 01960003-0000-7000-8000-000000000051
-        lines:
-          type: array
-          description: Lines belonging to the order
-          items:
-            $ref: '#/components/schemas/SalesOrderLineResponse'
-      required:
-      - orderId
-      - status
     AddItemRequest:
       type: object
       description: Request payload for adding an item line to a cart
@@ -989,6 +2090,27 @@ components:
           type: number
           description: Manual unit price override for the item, when applicable
           example: 19.99
+        lineUuid:
+          type: string
+          format: uuid
+          description: Client-supplied stable line identity; a replayed add with a known lineUuid updates the existing line instead of duplicating it
+          example: 01960003-0000-7000-8000-0000000000aa
+        customerNote:
+          type: string
+          description: Customer-visible line note
+          example: Front wipers only
+        internalNote:
+          type: string
+          description: Shop-internal line note
+          example: 'Price-matched to invoice #123'
+        serialNumbers:
+          type: array
+          description: Captured lot/serial numbers for tracked products (count must not exceed quantity; SERIAL-tracked products require one per unit at checkout, LOT-tracked at least one)
+          example:
+          - SN-0001
+          - SN-0002
+          items:
+            type: string
       required:
       - itemSku
       - quantity
@@ -1006,11 +2128,6 @@ components:
           format: uuid
           description: Identifier of the associated workorder, when applicable
           example: 01960003-0000-7000-8000-000000000004
-        paymentId:
-          type: string
-          format: uuid
-          description: Identifier of the associated payment, when applicable
-          example: 01960003-0000-7000-8000-000000000005
         idempotencyKey:
           type: string
           description: Optional idempotency key for duplicate cancellation prevention
@@ -1057,6 +2174,79 @@ components:
       required:
       - sourceId
       - sourceType
+    ReturnableLineResponse:
+      type: object
+      description: Per-line returnable remainder for a completed order
+      properties:
+        orderLineId:
+          type: string
+          format: uuid
+        itemSku:
+          type: string
+        soldQty:
+          type: integer
+          format: int32
+        alreadyReturned:
+          type: integer
+          format: int32
+        returnableQty:
+          type: integer
+          format: int32
+        returnable:
+          type: boolean
+    SessionReportResponse:
+      type: object
+      description: X-report (mid-day) or Z-report (close summary) for a register session
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        terminalId:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        reportType:
+          type: string
+        openingFloat:
+          type: number
+        tenderTotals:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenderTotal'
+        cashSettlements:
+          type: number
+        cashMovements:
+          type: number
+        theoreticalCash:
+          type: number
+        countedCash:
+          type: number
+        overShort:
+          type: number
+        orderCount:
+          type: integer
+          format: int64
+        movements:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashMovementResponse'
+        openedAt:
+          type: string
+          format: date-time
+        generatedAt:
+          type: string
+          format: date-time
+    TenderTotal:
+      type: object
+      description: Net settled amount for one tender method
+      properties:
+        methodType:
+          type: string
+        amount:
+          type: number
   securitySchemes:
     bearerAuth:
       type: http

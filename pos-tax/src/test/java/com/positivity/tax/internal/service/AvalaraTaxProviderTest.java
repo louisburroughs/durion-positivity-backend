@@ -265,6 +265,173 @@ class AvalaraTaxProviderTest {
         f.server().verify();
     }
 
+    @Test
+    @DisplayName("#984a: effective rate is tax over the non-exempt taxable base, and the exempt line is flagged")
+    void exemptLineAwareEffectiveRate() {
+        Fixture f = fixture();
+        // Line 1 (100.00) taxable @ 7.25; line 2 (50.00) is exempt → no tax, no jurisdictions.
+        // AvaTax reports totalTaxable=100.00 (exempt line excluded).
+        TaxCalculationRequest request = TaxCalculationRequest.builder()
+                .lineItems(List.of(
+                        TaxLineItem.builder()
+                                .lineItemId("1")
+                                .description("Oil Change Service")
+                                .quantity(BigDecimal.ONE)
+                                .unitPrice(new BigDecimal("100.00"))
+                                .taxCategory("SERVICES")
+                                .build(),
+                        TaxLineItem.builder()
+                                .lineItemId("2")
+                                .description("Resale Part")
+                                .quantity(BigDecimal.ONE)
+                                .unitPrice(new BigDecimal("50.00"))
+                                .taxExempt(true)
+                                .build()))
+                .destinationAddress(TaxAddress.builder()
+                        .countryCode("US")
+                        .regionCode("CA")
+                        .city("Los Angeles")
+                        .postalCode("90001")
+                        .line1("123 Main St")
+                        .build())
+                .currencyCode("USD")
+                .referenceId(UUID.fromString("550e8400-e29b-41d4-a716-446655440000"))
+                .transactionDate("2026-02-21T09:30:00Z")
+                .build();
+
+        f.server()
+                .expect(once(), requestTo(BASE_URL + "/api/v2/transactions/create"))
+                .andRespond(withSuccess(exemptLineResponseJson(), MediaType.APPLICATION_JSON));
+
+        TaxCalculationResponse response = f.provider().estimate(request);
+        f.server().verify();
+
+        // Gross subtotal still spans both lines.
+        assertThat(response.getSubtotal()).isEqualByComparingTo("150.00");
+        assertThat(response.getTotalTax()).isEqualByComparingTo("7.25");
+        // 7.25 / 100.00 (taxable base) = 7.25, NOT 7.25 / 150.00 = 4.83 (diluted by the exempt line).
+        assertThat(response.getEffectiveTaxRate()).isEqualByComparingTo("7.25");
+        assertThat(response.getLineItemTaxes()).hasSize(2);
+        assertThat(response.getLineItemTaxes().get(0).isTaxExempt()).isFalse();
+        assertThat(response.getLineItemTaxes().get(1).isTaxExempt()).isTrue();
+        assertThat(response.getLineItemTaxes().get(1).getTaxAmount()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    @DisplayName("#984b: a committable calculation with a null referenceId is rejected before any AvaTax call")
+    void committableRequiresReferenceId() {
+        Fixture f = fixture();
+        TaxCalculationRequest request = sampleRequest();
+        request.setReferenceId(null);
+        request.setCommittable(true);
+
+        assertThatThrownBy(() -> f.provider().estimate(request))
+                .isInstanceOf(TaxCalculationException.class)
+                .hasMessageContaining("referenceId is required");
+        // No HTTP was attempted — the mock server expected nothing.
+        f.server().verify();
+    }
+
+    @Test
+    @DisplayName("#985: a committable calculation creates a PERSISTED SalesInvoice (uncommitted) via createoradjust,"
+            + " keyed by code == referenceId")
+    void committableEstimateCreatesPersistedSalesInvoice() {
+        Fixture f = fixture();
+        f.server()
+                .expect(once(), requestTo(BASE_URL + "/api/v2/transactions/createoradjust"))
+                .andExpect(method(HttpMethod.POST))
+                // SalesInvoice (persisted document), NOT SalesOrder (throwaway estimate).
+                .andExpect(jsonPath("$.createTransactionModel.type").value("SalesInvoice"))
+                // Option A: still uncommitted — the lifecycle commit() promotes it.
+                .andExpect(jsonPath("$.createTransactionModel.commit").value(false))
+                .andExpect(jsonPath("$.createTransactionModel.code").value("550e8400-e29b-41d4-a716-446655440000"))
+                .andExpect(jsonPath("$.createTransactionModel.companyCode").value("DEFAULT"))
+                .andRespond(withSuccess(estimateResponseJson(), MediaType.APPLICATION_JSON));
+
+        TaxCalculationRequest request = sampleRequest();
+        request.setCommittable(true);
+        TaxCalculationResponse response = f.provider().estimate(request);
+        f.server().verify();
+
+        assertThat(response.getTotalTax()).isEqualByComparingTo("10.88");
+        assertThat(response.getCalculationType()).isEqualTo(TaxCalculationType.SALE);
+    }
+
+    @Test
+    @DisplayName("#985 behavioral contract: create-then-commit resolves by the same document code")
+    void createThenCommitResolvesByCode() {
+        Fixture f = fixture();
+        UUID ref = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        // 1) Finalization-time committable calculation persists the document under code == ref.
+        f.server()
+                .expect(once(), requestTo(BASE_URL + "/api/v2/transactions/createoradjust"))
+                .andExpect(jsonPath("$.createTransactionModel.code").value(ref.toString()))
+                .andRespond(withSuccess(estimateResponseJson(), MediaType.APPLICATION_JSON));
+        // 2) The lifecycle commit resolves that document BY CODE (path variable == ref).
+        f.server()
+                .expect(once(), requestTo(containsString("/api/v2/companies/DEFAULT/transactions/" + ref + "/commit")))
+                .andExpect(jsonPath("$.commit").value(true))
+                .andRespond(withSuccess(
+                        "{\"id\":987654321,\"code\":\"" + ref + "\",\"status\":\"Committed\"}",
+                        MediaType.APPLICATION_JSON));
+
+        TaxCalculationRequest request = sampleRequest();
+        request.setCommittable(true);
+        f.provider().estimate(request);
+        TaxProviderTransactionResult result = f.provider().commit(ref);
+        f.server().verify();
+
+        assertThat(result.status()).isEqualTo(TaxProviderTransactionStatus.COMMITTED);
+        assertThat(result.referenceId()).isEqualTo(ref);
+    }
+
+    @Test
+    @DisplayName("#984b: a read-only estimate (committable=false) still permits a null referenceId")
+    void estimatePermitsNullReferenceId() {
+        Fixture f = fixture();
+        TaxCalculationRequest request = sampleRequest();
+        request.setReferenceId(null);
+        f.server()
+                .expect(once(), requestTo(BASE_URL + "/api/v2/transactions/create"))
+                .andExpect(jsonPath("$.code").doesNotExist())
+                .andRespond(withSuccess(estimateResponseJson(), MediaType.APPLICATION_JSON));
+
+        TaxCalculationResponse response = f.provider().estimate(request);
+        f.server().verify();
+        assertThat(response.getTotalTax()).isEqualByComparingTo("10.88");
+    }
+
+    private String exemptLineResponseJson() {
+        return """
+                {
+                  "id": 987654321,
+                  "code": "550e8400-e29b-41d4-a716-446655440000",
+                  "status": "Temporary",
+                  "totalAmount": 150.00,
+                  "totalTax": 7.25,
+                  "totalTaxable": 100.00,
+                  "lines": [
+                    {
+                      "lineNumber": "1",
+                      "lineAmount": 100.00,
+                      "tax": 7.25,
+                      "taxableAmount": 100.00,
+                      "details": [
+                        {"jurisdictionType": "State", "jurisCode": "06", "jurisName": "CALIFORNIA", "rate": 0.0725, "tax": 7.25, "taxName": "CA STATE TAX"}
+                      ]
+                    },
+                    {
+                      "lineNumber": "2",
+                      "lineAmount": 50.00,
+                      "tax": 0.00,
+                      "taxableAmount": 0.00,
+                      "details": []
+                    }
+                  ]
+                }
+                """;
+    }
+
     private String estimateResponseJson() {
         return """
                 {

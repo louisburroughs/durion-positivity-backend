@@ -1,7 +1,7 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import dev.langchain4j.agent.tool.P;
-import dev.langchain4j.agent.tool.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -29,8 +29,8 @@ public class ShopManagerFacadeTool {
         this.shopSearchUriTemplate = shopSearchUriTemplate;
     }
 
-    @Tool("Get overall status for a shop location")
-    public String getShopStatus(@P("The shop ID") @NonNull String shopId) {
+    @Tool(description = "Get overall status for a shop location")
+    public String getShopStatus(@ToolParam(description = "The shop ID") @NonNull String shopId) {
         return restClient
                 .get()
                 .uri(shopStatusUriTemplate, Map.of("shopId", shopId))
@@ -38,8 +38,8 @@ public class ShopManagerFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Get the active queue and workflow load for a shop")
-    public String getShopQueue(@P("The shop ID") @NonNull String shopId) {
+    @Tool(description = "Get the active queue and workflow load for a shop")
+    public String getShopQueue(@ToolParam(description = "The shop ID") @NonNull String shopId) {
         return restClient
                 .get()
                 .uri(shopQueueUriTemplate, Map.of("shopId", shopId))
@@ -47,8 +47,8 @@ public class ShopManagerFacadeTool {
                 .body(String.class);
     }
 
-    @Tool("Search shops by name, region, status, or manager")
-    public String searchShops(@P("Search query for shops") @NonNull String query) {
+    @Tool(description = "Search shops by name, region, status, or manager")
+    public String searchShops(@ToolParam(description = "Search query for shops") @NonNull String query) {
         return restClient
                 .get()
                 .uri(shopSearchUriTemplate, Map.of("query", query))

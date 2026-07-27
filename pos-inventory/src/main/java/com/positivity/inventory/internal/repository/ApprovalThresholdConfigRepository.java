@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.ApprovalThresholdConfig;
+import com.positivity.inventory.internal.enums.ApprovalFlowType;
 import com.positivity.inventory.internal.enums.ApprovalTier;
 import java.util.List;
 import java.util.Optional;
@@ -26,4 +27,13 @@ public interface ApprovalThresholdConfigRepository extends JpaRepository<Approva
      * @return list of active threshold configurations
      */
     List<ApprovalThresholdConfig> findByActiveTrueOrderByApprovalTierAsc();
+
+    /**
+     * Find the active configurations of one approval workflow, ordered by tier
+     * (odoo-parity D1, issue #1030).
+     *
+     * @param flowType the approval workflow the configurations belong to
+     * @return list of active threshold configurations for the flow
+     */
+    List<ApprovalThresholdConfig> findByFlowTypeAndActiveTrueOrderByApprovalTierAsc(ApprovalFlowType flowType);
 }

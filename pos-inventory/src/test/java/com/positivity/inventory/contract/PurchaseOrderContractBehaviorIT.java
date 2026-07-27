@@ -277,8 +277,8 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
         UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         // Two lines: 5 units * 10_000 = 50_000, tax = 5_000 (10%)
-        PurchaseOrderLineRequest line =
-                new PurchaseOrderLineRequest(1, null, "Widget A", BigDecimal.valueOf(5), 10_000L, "TAX-10", null);
+        PurchaseOrderLineRequest line = new PurchaseOrderLineRequest(
+                1, null, "Widget A", BigDecimal.valueOf(5), 10_000L, "TAX-10", null, null, null);
 
         CreatePurchaseOrderRequest request = new CreatePurchaseOrderRequest(
                 vendorId,
@@ -382,8 +382,8 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
         UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-        PurchaseOrderLineRequest revisedLine =
-                new PurchaseOrderLineRequest(1, null, "Widget A revised", BigDecimal.valueOf(5), 12_000L, null, null);
+        PurchaseOrderLineRequest revisedLine = new PurchaseOrderLineRequest(
+                1, null, "Widget A revised", BigDecimal.valueOf(5), 12_000L, null, null, null, null);
 
         RevisePurchaseOrderRequest reviseRequest = new RevisePurchaseOrderRequest(
                 LocalDate.now(TEST_CLOCK),
@@ -569,7 +569,8 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                 null,
                 null,
                 null,
-                List.of(new PurchaseOrderLineRequest(1, null, "Widget", BigDecimal.ONE, 1_000L, null, null))));
+                List.of(new PurchaseOrderLineRequest(
+                        1, null, "Widget", BigDecimal.ONE, 1_000L, null, null, null, null))));
 
         // Omit purchase_order:create authority explicitly (view-only authority is
         // insufficient).

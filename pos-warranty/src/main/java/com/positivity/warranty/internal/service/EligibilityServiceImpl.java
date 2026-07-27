@@ -1,8 +1,8 @@
 package com.positivity.warranty.internal.service;
 
-import com.positivity.warranty.internal.client.CatalogClient;
 import com.positivity.warranty.internal.dto.EligibilityEvaluation;
 import com.positivity.warranty.internal.dto.ProrationOutcome;
+import com.positivity.warranty.internal.entity.ExtCatalogReplica;
 import com.positivity.warranty.internal.entity.WarrantyClaim;
 import com.positivity.warranty.internal.entity.WarrantyClaimLine;
 import com.positivity.warranty.internal.entity.WarrantyPolicy;
@@ -13,10 +13,12 @@ import com.positivity.warranty.internal.enums.EligibilityResult;
 import com.positivity.warranty.internal.enums.ProrationMethod;
 import com.positivity.warranty.internal.enums.RegistrationStatus;
 import com.positivity.warranty.internal.exception.WarrantyNotFoundException;
+import com.positivity.warranty.internal.repository.ExtCatalogReplicaRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
 import com.positivity.warranty.internal.repository.WarrantyPolicyRepository;
 import com.positivity.warranty.internal.repository.WarrantyRegistrationRepository;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -37,11 +39,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Eligibility suggestion engine (PRD §6). Candidate policies are matched most-specific-first
- * (PRODUCT_LIST &gt; MANUFACTURER &gt; CATEGORY &gt; ALL) among policies in effect on the
- * original sale date whose {@code coverageType} matches the claim type. Each structured term
- * produces a reason map {@code {term, required, actual, pass}} (pass {@code null} +
- * {@code indeterminate: true} when a fact is missing). Results are persisted onto the claim and
+ * Eligibility suggestion engine (PRD §6). Candidate policies are matched
+ * most-specific-first
+ * (PRODUCT_LIST &gt; MANUFACTURER &gt; CATEGORY &gt; ALL) among policies in
+ * effect on the
+ * original sale date whose {@code coverageType} matches the claim type. Each
+ * structured term
+ * produces a reason map {@code {term, required, actual, pass}} (pass
+ * {@code null} +
+ * {@code indeterminate: true} when a fact is missing). Results are persisted
+ * onto the claim and
  * its lines; the human decision stays with staff — this only suggests.
  */
 @Slf4j
@@ -54,8 +61,9 @@ public class EligibilityServiceImpl implements EligibilityService {
     private final WarrantyClaimRepository claimRepository;
     private final WarrantyPolicyRepository policyRepository;
     private final WarrantyRegistrationRepository registrationRepository;
-    private final CatalogClient catalogClient;
+    private final ExtCatalogReplicaRepository extCatalogReplicaRepository;
     private final ProrationService prorationService;
+    private final Clock clock;
 
     @Override
     @NonNull
@@ -68,7 +76,8 @@ public class EligibilityServiceImpl implements EligibilityService {
 
         List<Map<String, Object>> reasons = new ArrayList<>();
 
-        // --- Origin verification (PRD §6 step 2: "origin verified?") -----------------------
+        // --- Origin verification (PRD §6 step 2: "origin verified?")
+        // -----------------------
         boolean originUnverified = Boolean.TRUE.equals(claim.getOriginUnverified());
         reasons.add(reason(
                 "originVerified",
@@ -76,15 +85,15 @@ public class EligibilityServiceImpl implements EligibilityService {
                 !originUnverified,
                 originUnverified ? null : Boolean.TRUE));
 
-        // --- Candidate policy matching (PRD §6 step 1) --------------------------------------
+        // --- Candidate policy matching (PRD §6 step 1)
+        // --------------------------------------
         LocalDate saleDate = claim.getOriginSaleDate();
         ProductFacts facts = resolveProductFacts(claim);
         WarrantyPolicy policy = null;
         if (saleDate == null) {
             reasons.add(reason("originSaleDate", "known original sale date", null, null));
         } else {
-            CoverageType coverageType =
-                    CoverageType.valueOf(claim.getClaimType().name());
+            CoverageType coverageType = CoverageType.valueOf(claim.getClaimType().name());
             List<WarrantyPolicy> effective = policyRepository.findEffectiveOn(saleDate).stream()
                     .filter(p -> p.getCoverageType() == coverageType)
                     .toList();
@@ -130,8 +139,10 @@ public class EligibilityServiceImpl implements EligibilityService {
             }
         }
 
-        // Select coverage onto the claim only when a single policy wins (PRD §6 / contract);
-        // otherwise clear any coverage a previous evaluation selected so a re-run after intake
+        // Select coverage onto the claim only when a single policy wins (PRD §6 /
+        // contract);
+        // otherwise clear any coverage a previous evaluation selected so a re-run after
+        // intake
         // edits (e.g. claimType change) or a registration lapse never leaves stale
         // policy/provider/registration pointers behind.
         if (policy != null) {
@@ -143,9 +154,11 @@ public class EligibilityServiceImpl implements EligibilityService {
             claim.setRegistrationId(null);
         }
 
-        // --- Per-line proration (PRD §6 table) -----------------------------------------------
+        // --- Per-line proration (PRD §6 table)
+        // -----------------------------------------------
         Long monthsElapsed = saleDate != null ? ChronoUnit.MONTHS.between(saleDate, referenceDate(claim)) : null;
-        // Sale-time odometer is not captured anywhere upstream today, so the delta is unknown.
+        // Sale-time odometer is not captured anywhere upstream today, so the delta is
+        // unknown.
         Long milesDriven = null;
         BigDecimal totalRequested = BigDecimal.ZERO.setScale(4);
         boolean anyAmountUnknown = false;
@@ -190,7 +203,8 @@ public class EligibilityServiceImpl implements EligibilityService {
             perLine.add(lineEntry);
         }
 
-        // --- Overall result --------------------------------------------------------------------
+        // --- Overall result
+        // --------------------------------------------------------------------
         EligibilityResult result = overallResult(reasons);
 
         Map<String, Object> suggested = new LinkedHashMap<>();
@@ -211,16 +225,20 @@ public class EligibilityServiceImpl implements EligibilityService {
     }
 
     // -----------------------------------------------------------------------------------------
-    // Term checks (PRD §6 step 2) — every check appends a {term, required, actual, pass} map
+    // Term checks (PRD §6 step 2) — every check appends a {term, required, actual,
+    // pass} map
     // -----------------------------------------------------------------------------------------
 
     private void checkTerms(
             WarrantyClaim claim, WarrantyPolicy policy, LocalDate saleDate, List<Map<String, Object>> reasons) {
         LocalDate referenceDate = referenceDate(claim);
 
-        // Duration: within durationMonths of the original sale (null = unlimited). Compared as
-        // dates — ChronoUnit.MONTHS truncates partial months, which would grant up to ~30 days
-        // of grace past the true expiry. Coverage ends at (and includes) saleDate + duration.
+        // Duration: within durationMonths of the original sale (null = unlimited).
+        // Compared as
+        // dates — ChronoUnit.MONTHS truncates partial months, which would grant up to
+        // ~30 days
+        // of grace past the true expiry. Coverage ends at (and includes) saleDate +
+        // duration.
         Integer durationMonths = policy.getDurationMonths();
         if (durationMonths == null) {
             reasons.add(reason("duration", "unlimited", "n/a", Boolean.TRUE));
@@ -234,7 +252,8 @@ public class EligibilityServiceImpl implements EligibilityService {
                     !referenceDate.isAfter(coverageEnd)));
         }
 
-        // Mileage: odometer delta since sale <= mileageLimit. The sale-time odometer is not
+        // Mileage: odometer delta since sale <= mileageLimit. The sale-time odometer is
+        // not
         // recorded upstream, so a set limit is indeterminate until that fact exists.
         Integer mileageLimit = policy.getMileageLimit();
         if (mileageLimit == null) {
@@ -249,7 +268,8 @@ public class EligibilityServiceImpl implements EligibilityService {
                     null));
         }
 
-        // Tread depth: measured remaining depth must exceed the pull point (tires only).
+        // Tread depth: measured remaining depth must exceed the pull point (tires
+        // only).
         Integer pullPoint = policy.getTreadPullPointThirtySeconds();
         if (pullPoint != null) {
             for (WarrantyClaimLine line : claim.getLines()) {
@@ -263,9 +283,12 @@ public class EligibilityServiceImpl implements EligibilityService {
             }
         }
 
-        // Registration-bound coverage: ROAD_HAZARD / EXTENDED_PLAN require an active registration.
-        // Evaluation owns the pointer: set when found, cleared when the registration lapsed or
-        // the governing coverage is not registration-bound, so a re-run never leaves a stale id.
+        // Registration-bound coverage: ROAD_HAZARD / EXTENDED_PLAN require an active
+        // registration.
+        // Evaluation owns the pointer: set when found, cleared when the registration
+        // lapsed or
+        // the governing coverage is not registration-bound, so a re-run never leaves a
+        // stale id.
         if (policy.getCoverageType() == CoverageType.ROAD_HAZARD
                 || policy.getCoverageType() == CoverageType.EXTENDED_PLAN) {
             Optional<WarrantyRegistration> registration = findActiveRegistration(claim, policy, referenceDate);
@@ -310,8 +333,10 @@ public class EligibilityServiceImpl implements EligibilityService {
     }
 
     /**
-     * Whether a catalog-scoped (MANUFACTURER/CATEGORY) effective policy more specific than the
-     * winning rank failed to match while product facts were incomplete — i.e. its scope could
+     * Whether a catalog-scoped (MANUFACTURER/CATEGORY) effective policy more
+     * specific than the
+     * winning rank failed to match while product facts were incomplete — i.e. its
+     * scope could
      * not actually be evaluated, so a broader policy must not silently win.
      */
     private static boolean moreSpecificScopeUnevaluated(
@@ -324,7 +349,8 @@ public class EligibilityServiceImpl implements EligibilityService {
     }
 
     /**
-     * ALL always matches; scoped policies match when any claim line resolves to the policy's
+     * ALL always matches; scoped policies match when any claim line resolves to the
+     * policy's
      * scope (product id, manufacturer id, or pos-catalog category id).
      */
     private static boolean matchesAppliesTo(WarrantyPolicy policy, ProductFacts facts) {
@@ -342,7 +368,10 @@ public class EligibilityServiceImpl implements EligibilityService {
         };
     }
 
-    /** Most-specific-first ordering: PRODUCT_LIST &gt; MANUFACTURER &gt; CATEGORY &gt; ALL. */
+    /**
+     * Most-specific-first ordering: PRODUCT_LIST &gt; MANUFACTURER &gt; CATEGORY
+     * &gt; ALL.
+     */
     private static int specificityRank(AppliesToType type) {
         return switch (type) {
             case PRODUCT_LIST -> 0;
@@ -352,27 +381,35 @@ public class EligibilityServiceImpl implements EligibilityService {
         };
     }
 
-    /** Product facts (manufacturer + category ids) resolved from pos-catalog for lines carrying a product id. */
+    /**
+     * Product facts (manufacturer + category ids) resolved from pos-catalog for
+     * lines carrying a product id.
+     */
     private ProductFacts resolveProductFacts(WarrantyClaim claim) {
         Set<UUID> productIds = new HashSet<>();
         Set<UUID> manufacturerIds = new HashSet<>();
         Set<UUID> categoryIds = new HashSet<>();
         boolean incomplete = false;
-        Map<UUID, Optional<CatalogClient.ProductInfo>> cache = new HashMap<>();
+        Map<UUID, Optional<ExtCatalogReplica>> cache = new HashMap<>();
         for (WarrantyClaimLine line : claim.getLines()) {
             UUID productEntityId = line.getProductEntityId();
             if (productEntityId == null) {
                 continue;
             }
             productIds.add(productEntityId);
-            Optional<CatalogClient.ProductInfo> product =
-                    cache.computeIfAbsent(productEntityId, catalogClient::getProduct);
+            // Resolved from the event-fed ext_catalog replica (ADR-0044 §6, #924). A
+            // product not yet
+            // in the replica leaves manufacturer/category facts incomplete — the
+            // eligibility scope
+            // matcher treats that as it did a failed CatalogClient read.
+            Optional<ExtCatalogReplica> product = cache.computeIfAbsent(productEntityId,
+                    extCatalogReplicaRepository::findById);
             if (product.isPresent()) {
-                if (product.get().manufacturerId() != null) {
-                    manufacturerIds.add(product.get().manufacturerId());
+                if (product.get().getManufacturerId() != null) {
+                    manufacturerIds.add(product.get().getManufacturerId());
                 }
-                if (product.get().categoryId() != null) {
-                    categoryIds.add(product.get().categoryId());
+                if (product.get().getCategoryId() != null) {
+                    categoryIds.add(product.get().getCategoryId());
                 }
             } else {
                 incomplete = true;
@@ -385,12 +422,18 @@ public class EligibilityServiceImpl implements EligibilityService {
     // Helpers
     // -----------------------------------------------------------------------------------------
 
-    /** Failure date when captured, otherwise today — the moment eligibility is judged against. */
-    private static LocalDate referenceDate(WarrantyClaim claim) {
-        return claim.getFailureDate() != null ? claim.getFailureDate() : LocalDate.now();
+    /**
+     * Failure date when captured, otherwise today — the moment eligibility is
+     * judged against.
+     */
+    private LocalDate referenceDate(WarrantyClaim claim) {
+        return claim.getFailureDate() != null ? claim.getFailureDate() : LocalDate.now(clock);
     }
 
-    /** INELIGIBLE on any hard fail, else INDETERMINATE on any missing fact, else ELIGIBLE. */
+    /**
+     * INELIGIBLE on any hard fail, else INDETERMINATE on any missing fact, else
+     * ELIGIBLE.
+     */
     private static EligibilityResult overallResult(List<Map<String, Object>> reasons) {
         boolean anyFail = reasons.stream().anyMatch(r -> Boolean.FALSE.equals(r.get("pass")));
         if (anyFail) {
@@ -427,7 +470,11 @@ public class EligibilityServiceImpl implements EligibilityService {
         return map;
     }
 
-    /** Facts resolved from claim lines; {@code incomplete} = at least one catalog lookup failed. */
+    /**
+     * Facts resolved from claim lines; {@code incomplete} = at least one catalog
+     * lookup failed.
+     */
     private record ProductFacts(
-            Set<UUID> productIds, Set<UUID> manufacturerIds, Set<UUID> categoryIds, boolean incomplete) {}
+            Set<UUID> productIds, Set<UUID> manufacturerIds, Set<UUID> categoryIds, boolean incomplete) {
+    }
 }

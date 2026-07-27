@@ -14,6 +14,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -63,7 +64,24 @@ public class ReplenishmentTask {
     @Enumerated(EnumType.STRING)
     private ReplenishmentSourcingReason sourcingReason;
 
+    /**
+     * Cross-site {@link TransferOrder} that materializes this need's internal sourcing
+     * (odoo-parity F5, issue #1045); set only when the sourcing engine resolved the need to a
+     * WS-C transfer. {@code null} for same-site bin-move tasks and for BACKSTOCK_UNAVAILABLE
+     * tasks. Advisory linkage — no cross-table FK (module convention).
+     */
+    @Column(name = "source_transfer_order_id")
+    private UUID sourceTransferOrderId;
+
     private String assignedTo;
+
+    /**
+     * Earliest date the horizon-bounded stock-out projection goes negative (odoo-parity F3,
+     * issue #1041 — Odoo orderpoint deadline analogue), computed at task creation/refresh
+     * for prioritization; {@code null} when the projection never dips below zero within the
+     * lead horizon (or for pre-F3 tasks).
+     */
+    private LocalDate deadlineDate;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)

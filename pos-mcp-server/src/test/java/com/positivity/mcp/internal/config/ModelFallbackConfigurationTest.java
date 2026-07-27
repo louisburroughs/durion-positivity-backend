@@ -2,10 +2,10 @@ package com.positivity.mcp.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.langchain4j.model.chat.ChatModel;
 import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.model.ChatModel;
 
 /**
  * Unit tests for {@link ModelFallbackConfiguration}.

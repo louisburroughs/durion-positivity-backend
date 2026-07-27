@@ -25,4 +25,13 @@ public interface PutawayTaskRepository extends JpaRepository<PutawayTask, UUID> 
 
     boolean existsByProductIdAndSuggestedDestinationLocationIdAndStatusIn(
             UUID productId, UUID locationId, List<PutawayTaskStatus> statuses);
+
+    /**
+     * Most recently completed putaway task for a SKU that landed in a concrete
+     * destination bin (odoo-parity K2, issue #1055 — the LAST_USED strategy).
+     * Ordered by {@code updatedAt} descending so the freshest successful
+     * putaway wins; {@code actualDestinationLocationId} is guaranteed non-null.
+     */
+    Optional<PutawayTask> findFirstByProductIdAndStatusAndActualDestinationLocationIdIsNotNullOrderByUpdatedAtDesc(
+            UUID productId, PutawayTaskStatus status);
 }

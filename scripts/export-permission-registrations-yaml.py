@@ -280,7 +280,9 @@ def build_report_yaml(root: Path, manifests: List[PermissionManifest], issues: L
 
     lines: List[str] = []
     append_yaml_line(lines, 0, f'generatedAt: {yaml_quote(datetime.now(timezone.utc).isoformat())}')
-    append_yaml_line(lines, 0, f'root: {yaml_quote(str(root))}')
+    # Repo-relative marker, not the absolute scan path: embedding the machine-local
+    # path made the committed report differ per machine/CI run for no content change.
+    append_yaml_line(lines, 0, 'root: "."')
     append_yaml_line(lines, 0, "summary:")
     append_yaml_line(lines, 1, f"manifestCount: {len(manifests)}")
     append_yaml_line(lines, 1, f"permissionCount: {len(flattened)}")

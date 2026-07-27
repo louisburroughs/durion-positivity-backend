@@ -8,4 +8,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface NltiSessionRepository extends JpaRepository<NltiSession, UUID> {
 
     Optional<NltiSession> findByIdAndSubjectId(UUID id, String subjectId);
+
+    /**
+     * The subject's most-recently-updated session — treated as their active session when the
+     * session-less chat path resolves the persisted workflow state (#778).
+     */
+    Optional<NltiSession> findFirstBySubjectIdOrderByUpdatedAtDesc(String subjectId);
 }

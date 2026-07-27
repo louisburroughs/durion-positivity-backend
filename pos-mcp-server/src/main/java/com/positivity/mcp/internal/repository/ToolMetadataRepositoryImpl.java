@@ -4,19 +4,22 @@ import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.postgresql.util.PGobject;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
-@Profile("!test")
+@Profile({"!test", "openapi"})
 public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
 
     private final JdbcTemplate jdbcTemplate;
@@ -54,9 +57,12 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 this::mapRow);
     }
 
-    // Gate 2B / #780: findAllRoleNames() and findEnabledByRoleAndWorkflow() removed — the legacy
-    // mcp_role / mcp_tool_role tables are no longer queried at runtime. Candidate gating runs
-    // solely through findTopKByEmbeddingForPermissions (permission codes + workflow state).
+    // Gate 2B / #780: findAllRoleNames() and findEnabledByRoleAndWorkflow() removed
+    // — the legacy
+    // mcp_role / mcp_tool_role tables are no longer queried at runtime. Candidate
+    // gating runs
+    // solely through findTopKByEmbeddingForPermissions (permission codes + workflow
+    // state).
 
     @Override
     public @NonNull List<ToolMetadata> findEnabledByWorkflow(@NonNull String workflowState) {
@@ -150,9 +156,12 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
 
     @Override
     public @NonNull UUID upsertDiscoveredOperation(@NonNull DiscoveredOperation operation, @NonNull String domain) {
-        // Embedding is intentionally NOT written here: it is owned by ToolEmbeddingInitializer, which
-        // backfills rows WHERE embedding IS NULL. ON CONFLICT preserves any existing embedding so
-        // re-discovery on restart does not clear it (and does not re-embed ~hundreds of ops each boot).
+        // Embedding is intentionally NOT written here: it is owned by
+        // ToolEmbeddingInitializer, which
+        // backfills rows WHERE embedding IS NULL. ON CONFLICT preserves any existing
+        // embedding so
+        // re-discovery on restart does not clear it (and does not re-embed ~hundreds of
+        // ops each boot).
         String sql = """
                 INSERT INTO mcp_tool (name, display_name, description, domain, source,
                                       http_method, http_path, service_id, input_schema, enabled)
@@ -181,6 +190,35 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 operation.serviceId(),
                 operation.inputSchema());
         return Objects.requireNonNull(id, "upsertDiscoveredOperation returned no id");
+    }
+
+    @Override
+    @Transactional
+    public int pruneDiscoveredOperationsExcept(@NonNull Collection<String> keptNames) {
+        // Safety: never prune against an empty keep-set — that would delete the entire discovered
+        // catalog. The caller only invokes this after a successful, non-empty discovery run.
+        if (keptNames.isEmpty()) {
+            return 0;
+        }
+        String keptPlaceholders = keptNames.stream().map(name -> "?").collect(Collectors.joining(", "));
+        Object[] keptArgs = keptNames.toArray();
+        List<UUID> orphanIds = jdbcTemplate.query(
+                "SELECT id FROM mcp_tool WHERE source = 'openapi' AND name NOT IN (" + keptPlaceholders + ")",
+                (rs, rowNum) -> rs.getObject("id", UUID.class),
+                keptArgs);
+        if (orphanIds.isEmpty()) {
+            return 0;
+        }
+        String idPlaceholders = orphanIds.stream().map(id -> "?").collect(Collectors.joining(", "));
+        Object[] idArgs = orphanIds.toArray();
+        // Clear FK children explicitly (portable across Postgres and the H2 test schema, which may not
+        // declare ON DELETE CASCADE): permission grants and workflow links are deleted; the nullable
+        // invocation log's tool_id is nulled so historical audit rows survive the tool's removal.
+        jdbcTemplate.update("DELETE FROM mcp_tool_permission WHERE tool_id IN (" + idPlaceholders + ")", idArgs);
+        jdbcTemplate.update("DELETE FROM mcp_tool_workflow WHERE tool_id IN (" + idPlaceholders + ")", idArgs);
+        jdbcTemplate.update(
+                "UPDATE mcp_tool_invocation_log SET tool_id = NULL WHERE tool_id IN (" + idPlaceholders + ")", idArgs);
+        return jdbcTemplate.update("DELETE FROM mcp_tool WHERE id IN (" + idPlaceholders + ")", idArgs);
     }
 
     @Override
@@ -231,7 +269,9 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 rs.getString("http_method"),
                 rs.getString("http_path"),
                 rs.getString("service_id"),
-                rs.getString("input_schema"));
+                rs.getString("input_schema"),
+                // Execution reconstruction: permissions live in mcp_tool_permission, not on the row.
+                java.util.List.of());
     }
 
     @Override

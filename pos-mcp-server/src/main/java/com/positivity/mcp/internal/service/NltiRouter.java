@@ -8,11 +8,15 @@ import com.positivity.mcp.internal.domain.RequestComplexity;
 import com.positivity.mcp.internal.domain.RouterClassification;
 import com.positivity.mcp.internal.enums.NltiIntentType;
 import com.positivity.mcp.internal.enums.NltiRiskLevel;
-import dev.langchain4j.model.chat.ChatModel;
 import java.util.Locale;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -46,7 +50,9 @@ public class NltiRouter {
     private final TierSelector tierSelector;
 
     public NltiRouter(
-            @NonNull ChatModel chatModel, @NonNull ObjectMapper objectMapper, @NonNull TierSelector tierSelector) {
+            @Qualifier("chatModel") @NonNull ChatModel chatModel,
+            @NonNull ObjectMapper objectMapper,
+            @NonNull TierSelector tierSelector) {
         this.chatModel = chatModel;
         this.objectMapper = objectMapper;
         this.tierSelector = tierSelector;
@@ -55,7 +61,12 @@ public class NltiRouter {
     /** Routes a request to a model tier. Any failure defaults to {@link ModelTier#T2_COMPLEX}. */
     public @NonNull ModelTier route(@NonNull String message) {
         try {
-            String output = chatModel.chat(SYSTEM_PROMPT + "\n\nUser request:\n" + message);
+            String output = chatModel.call(new Prompt(
+                            new SystemMessage(SYSTEM_PROMPT),
+                            new UserMessage("User request:\n" + message)))
+                    .getResult()
+                    .getOutput()
+                    .getText();
             return tierSelector.select(parse(output));
         } catch (RuntimeException exception) {
             LOGGER.warn("MCP router classification failed; defaulting to T2_COMPLEX error={}", exception.toString());

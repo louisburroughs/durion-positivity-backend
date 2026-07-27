@@ -1,0 +1,2289 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "fixture_id": "ts-workorderfacadetool-pos-1",
+      "utterance": "Show me the open workorders.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "WorkorderFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "WorkorderFacadeTool is gated by ['workorder:workorder:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-workorderfacadetool-pos-2",
+      "utterance": "What's the status of workorder WO-1042?",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "WorkorderFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "WorkorderFacadeTool is gated by ['workorder:workorder:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-workorderfacadetool-pos-3",
+      "utterance": "List today's workorders for bay 3.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "WorkorderFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "WorkorderFacadeTool is gated by ['workorder:workorder:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-workorderfacadetool-pos-4",
+      "utterance": "Find the workorder for the Silverado.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "WorkorderFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "WorkorderFacadeTool is gated by ['workorder:workorder:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-inventoryfacadetool-pos-1",
+      "utterance": "How many brake pads are on hand?",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "inventory:on_hand:view",
+          "inventory:on_hand:search"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "InventoryFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "InventoryFacadeTool is gated by ['inventory:on_hand:view', 'inventory:on_hand:search'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-inventoryfacadetool-pos-2",
+      "utterance": "Check stock for SKU BRK-9920.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "inventory:on_hand:view",
+          "inventory:on_hand:search"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "InventoryFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "InventoryFacadeTool is gated by ['inventory:on_hand:view', 'inventory:on_hand:search'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-inventoryfacadetool-pos-3",
+      "utterance": "What inventory do we have at the downtown location?",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "inventory:on_hand:view",
+          "inventory:on_hand:search"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "InventoryFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "InventoryFacadeTool is gated by ['inventory:on_hand:view', 'inventory:on_hand:search'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-inventoryfacadetool-pos-4",
+      "utterance": "Show low-stock items.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "inventory:on_hand:view",
+          "inventory:on_hand:search"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "InventoryFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "InventoryFacadeTool is gated by ['inventory:on_hand:view', 'inventory:on_hand:search'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-customerfacadetool-pos-1",
+      "utterance": "Look up the customer ACME Fleet.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:party:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "CustomerFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "CustomerFacadeTool is gated by ['crm:party:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-customerfacadetool-pos-2",
+      "utterance": "Find the account for John Rivera.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:party:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "CustomerFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "CustomerFacadeTool is gated by ['crm:party:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-customerfacadetool-pos-3",
+      "utterance": "Show the contact details for customer C-3391.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:party:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "CustomerFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "CustomerFacadeTool is gated by ['crm:party:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-customerfacadetool-pos-4",
+      "utterance": "Search customers named Delgado.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:party:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "CustomerFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "CustomerFacadeTool is gated by ['crm:party:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-vehiclefacadetool-pos-1",
+      "utterance": "Show the vehicles for ACME Fleet.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:vehicle:view",
+          "crm:vehicle:search"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "VehicleFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "VehicleFacadeTool is gated by ['crm:vehicle:view', 'crm:vehicle:search'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-vehiclefacadetool-pos-2",
+      "utterance": "Look up VIN 1GCEK14T34Z123456.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:vehicle:view",
+          "crm:vehicle:search"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "VehicleFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "VehicleFacadeTool is gated by ['crm:vehicle:view', 'crm:vehicle:search'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-vehiclefacadetool-pos-3",
+      "utterance": "What vehicles does customer C-3391 own?",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:vehicle:view",
+          "crm:vehicle:search"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "VehicleFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "VehicleFacadeTool is gated by ['crm:vehicle:view', 'crm:vehicle:search'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-vehiclefacadetool-pos-4",
+      "utterance": "Find the Silverado on this account.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:vehicle:view",
+          "crm:vehicle:search"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "VehicleFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "VehicleFacadeTool is gated by ['crm:vehicle:view', 'crm:vehicle:search'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-accountingfacadetool-pos-1",
+      "utterance": "Show the chart of accounts.",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "accounting:coa:view",
+          "accounting:je:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "AccountingFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "AccountingFacadeTool is gated by ['accounting:coa:view', 'accounting:je:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-accountingfacadetool-pos-2",
+      "utterance": "Look up journal entry JE-4000.",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "accounting:coa:view",
+          "accounting:je:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "AccountingFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "AccountingFacadeTool is gated by ['accounting:coa:view', 'accounting:je:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-accountingfacadetool-pos-3",
+      "utterance": "What's the balance of the AR control account?",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "accounting:coa:view",
+          "accounting:je:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "AccountingFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "AccountingFacadeTool is gated by ['accounting:coa:view', 'accounting:je:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-accountingfacadetool-pos-4",
+      "utterance": "List the accounting periods.",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "accounting:coa:view",
+          "accounting:je:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "AccountingFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "AccountingFacadeTool is gated by ['accounting:coa:view', 'accounting:je:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-invoicefacadetool-pos-1",
+      "utterance": "Show invoice INV-9921.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "invoice:invoice:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "InvoiceFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "InvoiceFacadeTool is gated by ['invoice:invoice:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-invoicefacadetool-pos-2",
+      "utterance": "List unpaid invoices for ACME Fleet.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "invoice:invoice:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "InvoiceFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "InvoiceFacadeTool is gated by ['invoice:invoice:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-invoicefacadetool-pos-3",
+      "utterance": "What's the total on invoice INV-1002?",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "invoice:invoice:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "InvoiceFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "InvoiceFacadeTool is gated by ['invoice:invoice:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-invoicefacadetool-pos-4",
+      "utterance": "Find invoices due this week.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "invoice:invoice:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "InvoiceFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "InvoiceFacadeTool is gated by ['invoice:invoice:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-orderfacadetool-pos-1",
+      "utterance": "Show order ORD-5521.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "OrderFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "OrderFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-orderfacadetool-pos-2",
+      "utterance": "List open orders for this customer.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "OrderFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "OrderFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-orderfacadetool-pos-3",
+      "utterance": "What's on the cart for order ORD-3300?",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "OrderFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "OrderFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-orderfacadetool-pos-4",
+      "utterance": "Find recent orders for ACME Fleet.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "OrderFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "OrderFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-pricingfacadetool-pos-1",
+      "utterance": "What's the price of a tire rotation?",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "PricingFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "PricingFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-pricingfacadetool-pos-2",
+      "utterance": "Show the price book for retail.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "PricingFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "PricingFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-pricingfacadetool-pos-3",
+      "utterance": "List active pricing rules.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "PricingFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "PricingFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-pricingfacadetool-pos-4",
+      "utterance": "What discount rules apply to fleet customers?",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "PricingFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "PricingFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-catalogfacadetool-pos-1",
+      "utterance": "Look up product BRK-9920 in the catalog.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "CatalogFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "CatalogFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-catalogfacadetool-pos-2",
+      "utterance": "Search the catalog for brake pads.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "CatalogFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "CatalogFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-catalogfacadetool-pos-3",
+      "utterance": "Show product details for a cabin air filter.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "CatalogFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "CatalogFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-catalogfacadetool-pos-4",
+      "utterance": "What products are in the tires category?",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "CatalogFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "CatalogFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-hrfacadetool-pos-1",
+      "utterance": "Show employee E-2201.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "people:employee:view",
+          "people:person:view",
+          "people:availability:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "HrFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "HrFacadeTool is gated by ['people:employee:view', 'people:person:view', 'people:availability:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-hrfacadetool-pos-2",
+      "utterance": "List technicians at this location.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "people:employee:view",
+          "people:person:view",
+          "people:availability:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "HrFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "HrFacadeTool is gated by ['people:employee:view', 'people:person:view', 'people:availability:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-hrfacadetool-pos-3",
+      "utterance": "Who are the service advisors on staff?",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "people:employee:view",
+          "people:person:view",
+          "people:availability:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "HrFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "HrFacadeTool is gated by ['people:employee:view', 'people:person:view', 'people:availability:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-hrfacadetool-pos-4",
+      "utterance": "Find the employee record for Maria Ruiz.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "people:employee:view",
+          "people:person:view",
+          "people:availability:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "HrFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "HrFacadeTool is gated by ['people:employee:view', 'people:person:view', 'people:availability:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-reportingfacadetool-pos-1",
+      "utterance": "Show the daily sales dashboard.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "workorder:dashboard:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "ReportingFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "ReportingFacadeTool is gated by ['workorder:dashboard:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-reportingfacadetool-pos-2",
+      "utterance": "Export the monthly revenue report.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "workorder:dashboard:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "ReportingFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "ReportingFacadeTool is gated by ['workorder:dashboard:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-reportingfacadetool-pos-3",
+      "utterance": "What were the workorder completion metrics last week?",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "workorder:dashboard:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "ReportingFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "ReportingFacadeTool is gated by ['workorder:dashboard:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-reportingfacadetool-pos-4",
+      "utterance": "Give me the technician productivity report.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "workorder:dashboard:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "ReportingFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "ReportingFacadeTool is gated by ['workorder:dashboard:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-locationfacadetool-pos-1",
+      "utterance": "List our store locations.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "inventory:location:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "LocationFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "LocationFacadeTool is gated by ['inventory:location:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-locationfacadetool-pos-2",
+      "utterance": "Show details for the downtown location.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "inventory:location:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "LocationFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "LocationFacadeTool is gated by ['inventory:location:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-locationfacadetool-pos-3",
+      "utterance": "What are the hours for location L-12?",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "inventory:location:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "LocationFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "LocationFacadeTool is gated by ['inventory:location:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-locationfacadetool-pos-4",
+      "utterance": "Find the nearest service center.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "inventory:location:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "LocationFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "LocationFacadeTool is gated by ['inventory:location:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-shopmanagerfacadetool-pos-1",
+      "utterance": "Show the bay schedule for today.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "shop:location:view",
+          "shop:schedule:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "ShopManagerFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "ShopManagerFacadeTool is gated by ['shop:location:view', 'shop:schedule:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-shopmanagerfacadetool-pos-2",
+      "utterance": "What's the shop workload this afternoon?",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "shop:location:view",
+          "shop:schedule:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "ShopManagerFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "ShopManagerFacadeTool is gated by ['shop:location:view', 'shop:schedule:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-shopmanagerfacadetool-pos-3",
+      "utterance": "List the service bays at this location.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "shop:location:view",
+          "shop:schedule:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "ShopManagerFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "ShopManagerFacadeTool is gated by ['shop:location:view', 'shop:schedule:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-shopmanagerfacadetool-pos-4",
+      "utterance": "Show technician assignments for tomorrow.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "shop:location:view",
+          "shop:schedule:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "ShopManagerFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "ShopManagerFacadeTool is gated by ['shop:location:view', 'shop:schedule:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-taxfacadetool-pos-1",
+      "utterance": "What's the tax mode for this location?",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "TaxFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "TaxFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-taxfacadetool-pos-2",
+      "utterance": "Show the tax rate for parts.",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "TaxFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "TaxFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-taxfacadetool-pos-3",
+      "utterance": "How is labor taxed in this jurisdiction?",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "TaxFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "TaxFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-taxfacadetool-pos-4",
+      "utterance": "List the configured tax categories.",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "TaxFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "TaxFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-adminfacadetool-pos-1",
+      "utterance": "Show the MCP tool permission mappings.",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "security:user:view",
+          "security:permission:view",
+          "security:audit:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "AdminFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "AdminFacadeTool is gated by ['security:user:view', 'security:permission:view', 'security:audit:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-adminfacadetool-pos-2",
+      "utterance": "List the registered assistant tools.",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "security:user:view",
+          "security:permission:view",
+          "security:audit:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "AdminFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "AdminFacadeTool is gated by ['security:user:view', 'security:permission:view', 'security:audit:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-adminfacadetool-pos-3",
+      "utterance": "What permissions gate the accounting tools?",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "security:user:view",
+          "security:permission:view",
+          "security:audit:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "AdminFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "AdminFacadeTool is gated by ['security:user:view', 'security:permission:view', 'security:audit:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-adminfacadetool-pos-4",
+      "utterance": "Show admin configuration for the assistant.",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "security:user:view",
+          "security:permission:view",
+          "security:audit:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "AdminFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "AdminFacadeTool is gated by ['security:user:view', 'security:permission:view', 'security:audit:view'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-eventsfacadetool-pos-1",
+      "utterance": "Show recent assistant audit events.",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "EventsFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "EventsFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-eventsfacadetool-pos-2",
+      "utterance": "What events were emitted for order ORD-5521?",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "EventsFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "EventsFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-eventsfacadetool-pos-3",
+      "utterance": "List event types registered by the order service.",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "EventsFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "EventsFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-eventsfacadetool-pos-4",
+      "utterance": "Show the observability event stream.",
+      "actor": {
+        "role": "ROLE_ADMIN",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "EventsFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "facade"
+      ],
+      "notes": "EventsFacadeTool is gated by ['AUTHENTICATED'] (V18); caller holds it, so it should be a candidate."
+    },
+    {
+      "fixture_id": "ts-workorderfacadetool-authenticated-baseline",
+      "utterance": "Show the open workorders.",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "tool_ids": [
+          "WorkorderFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "authenticated-baseline",
+        "facade"
+      ],
+      "notes": "WorkorderFacadeTool carries an AUTHENTICATED grant (V18 union: its getWorkorderStatus op is @PreAuthorize(isAuthenticated())), so any authenticated user is legitimately offered the facade at the selection layer; per-operation authorization (e.g. the list/search ops needing workorder:workorder:view) is enforced downstream at the gateway. Retargeted from a false permission-negative — see the facade-AUTHENTICATED-grant finding."
+    },
+    {
+      "fixture_id": "ts-inventoryfacadetool-neg-role-technician",
+      "utterance": "Check stock for SKU BRK-9920.",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "InventoryFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_TECHNICIAN lacks ['inventory:on_hand:view', 'inventory:on_hand:search']; InventoryFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-inventoryfacadetool-neg-role-user",
+      "utterance": "Check stock for SKU BRK-9920.",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "InventoryFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_USER lacks ['inventory:on_hand:view', 'inventory:on_hand:search']; InventoryFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-inventoryfacadetool-neg-role-dispatcher",
+      "utterance": "Check stock for SKU BRK-9920.",
+      "actor": {
+        "role": "ROLE_DISPATCHER",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "InventoryFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_DISPATCHER lacks ['inventory:on_hand:view', 'inventory:on_hand:search']; InventoryFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-customerfacadetool-neg-role-technician",
+      "utterance": "Look up the customer ACME Fleet.",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "CustomerFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_TECHNICIAN lacks ['crm:party:view']; CustomerFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-customerfacadetool-neg-role-user",
+      "utterance": "Look up the customer ACME Fleet.",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "CustomerFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_USER lacks ['crm:party:view']; CustomerFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-customerfacadetool-neg-role-dispatcher",
+      "utterance": "Look up the customer ACME Fleet.",
+      "actor": {
+        "role": "ROLE_DISPATCHER",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "CustomerFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_DISPATCHER lacks ['crm:party:view']; CustomerFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-vehiclefacadetool-neg-role-technician",
+      "utterance": "Show the vehicles for ACME Fleet.",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "VehicleFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_TECHNICIAN lacks ['crm:vehicle:view', 'crm:vehicle:search']; VehicleFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-vehiclefacadetool-neg-role-user",
+      "utterance": "Show the vehicles for ACME Fleet.",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "VehicleFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_USER lacks ['crm:vehicle:view', 'crm:vehicle:search']; VehicleFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-vehiclefacadetool-neg-role-dispatcher",
+      "utterance": "Show the vehicles for ACME Fleet.",
+      "actor": {
+        "role": "ROLE_DISPATCHER",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "VehicleFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_DISPATCHER lacks ['crm:vehicle:view', 'crm:vehicle:search']; VehicleFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-accountingfacadetool-neg-role-technician",
+      "utterance": "Show me journal entry JE-4000.",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "AccountingFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_TECHNICIAN lacks ['accounting:coa:view', 'accounting:je:view']; AccountingFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-accountingfacadetool-neg-role-user",
+      "utterance": "Show me journal entry JE-4000.",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "AccountingFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_USER lacks ['accounting:coa:view', 'accounting:je:view']; AccountingFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-accountingfacadetool-neg-role-dispatcher",
+      "utterance": "Show me journal entry JE-4000.",
+      "actor": {
+        "role": "ROLE_DISPATCHER",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "AccountingFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_DISPATCHER lacks ['accounting:coa:view', 'accounting:je:view']; AccountingFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-invoicefacadetool-neg-role-technician",
+      "utterance": "Show invoice INV-9921.",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "InvoiceFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_TECHNICIAN lacks ['invoice:invoice:view']; InvoiceFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-invoicefacadetool-neg-role-user",
+      "utterance": "Show invoice INV-9921.",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "InvoiceFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_USER lacks ['invoice:invoice:view']; InvoiceFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-invoicefacadetool-neg-role-dispatcher",
+      "utterance": "Show invoice INV-9921.",
+      "actor": {
+        "role": "ROLE_DISPATCHER",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "InvoiceFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_DISPATCHER lacks ['invoice:invoice:view']; InvoiceFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-hrfacadetool-neg-role-technician",
+      "utterance": "Show employee E-2201.",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "HrFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_TECHNICIAN lacks ['people:employee:view', 'people:person:view', 'people:availability:view']; HrFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-hrfacadetool-neg-role-user",
+      "utterance": "Show employee E-2201.",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "HrFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_USER lacks ['people:employee:view', 'people:person:view', 'people:availability:view']; HrFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-hrfacadetool-neg-role-dispatcher",
+      "utterance": "Show employee E-2201.",
+      "actor": {
+        "role": "ROLE_DISPATCHER",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "HrFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_DISPATCHER lacks ['people:employee:view', 'people:person:view', 'people:availability:view']; HrFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-reportingfacadetool-neg-role-technician",
+      "utterance": "Export the monthly revenue report.",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "ReportingFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_TECHNICIAN lacks ['workorder:dashboard:view']; ReportingFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-reportingfacadetool-neg-role-user",
+      "utterance": "Export the monthly revenue report.",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "ReportingFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_USER lacks ['workorder:dashboard:view']; ReportingFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-reportingfacadetool-neg-role-dispatcher",
+      "utterance": "Export the monthly revenue report.",
+      "actor": {
+        "role": "ROLE_DISPATCHER",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "ReportingFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_DISPATCHER lacks ['workorder:dashboard:view']; ReportingFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-locationfacadetool-neg-role-technician",
+      "utterance": "Show details for the downtown location.",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "LocationFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_TECHNICIAN lacks ['inventory:location:view']; LocationFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-locationfacadetool-neg-role-user",
+      "utterance": "Show details for the downtown location.",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "LocationFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_USER lacks ['inventory:location:view']; LocationFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-locationfacadetool-neg-role-dispatcher",
+      "utterance": "Show details for the downtown location.",
+      "actor": {
+        "role": "ROLE_DISPATCHER",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "LocationFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_DISPATCHER lacks ['inventory:location:view']; LocationFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-shopmanagerfacadetool-neg-role-technician",
+      "utterance": "Show the bay schedule for today.",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "ShopManagerFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_TECHNICIAN lacks ['shop:location:view', 'shop:schedule:view']; ShopManagerFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-shopmanagerfacadetool-neg-role-user",
+      "utterance": "Show the bay schedule for today.",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "ShopManagerFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_USER lacks ['shop:location:view', 'shop:schedule:view']; ShopManagerFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-shopmanagerfacadetool-neg-role-dispatcher",
+      "utterance": "Show the bay schedule for today.",
+      "actor": {
+        "role": "ROLE_DISPATCHER",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "ShopManagerFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_DISPATCHER lacks ['shop:location:view', 'shop:schedule:view']; ShopManagerFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-adminfacadetool-neg-role-technician",
+      "utterance": "Show me that data.",
+      "actor": {
+        "role": "ROLE_TECHNICIAN",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "AdminFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_TECHNICIAN lacks ['security:user:view', 'security:permission:view', 'security:audit:view']; AdminFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-adminfacadetool-authenticated-baseline",
+      "utterance": "Show me the system status.",
+      "actor": {
+        "role": "ROLE_USER",
+        "permission_codes": [
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "tool_ids": [
+          "AdminFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "positive",
+        "authenticated-baseline",
+        "facade"
+      ],
+      "notes": "AdminFacadeTool carries an AUTHENTICATED grant (V18 union: its getSystemStatus op has no downstream call and is isAuthenticated()-level), so any authenticated user is legitimately offered the facade; the privileged security:* operations remain gateway-enforced per operation. Retargeted from a false permission-negative — see the facade-AUTHENTICATED-grant finding, which flags whether offering AdminFacadeTool this broadly at the selection layer is desirable."
+    },
+    {
+      "fixture_id": "ts-adminfacadetool-neg-role-dispatcher",
+      "utterance": "Show me that data.",
+      "actor": {
+        "role": "ROLE_DISPATCHER",
+        "permission_codes": [
+          "workorder:workorder:view"
+        ]
+      },
+      "expected": {
+        "tool_ids": [],
+        "none": true,
+        "forbidden_tool_ids": [
+          "AdminFacadeTool"
+        ]
+      },
+      "tags": [
+        "negative",
+        "permission-negative",
+        "facade"
+      ],
+      "notes": "ROLE_DISPATCHER lacks ['security:user:view', 'security:permission:view', 'security:audit:view']; AdminFacadeTool must be gated out (fail-closed)."
+    },
+    {
+      "fixture_id": "ts-multidomain-workorder-chain",
+      "utterance": "Create a workorder for the Silverado on ACME Fleet.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:party:view",
+          "crm:vehicle:view",
+          "workorder:workorder:create"
+        ]
+      },
+      "expected": {
+        "tool_ids": [
+          "CustomerFacadeTool",
+          "VehicleFacadeTool",
+          "WorkorderFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "multi-domain"
+      ],
+      "notes": "customer -> vehicle -> workorder chaining."
+    },
+    {
+      "fixture_id": "ts-multidomain-order-invoice",
+      "utterance": "Turn order ORD-5521 into an invoice.",
+      "actor": {
+        "role": "ROLE_ACCOUNT_MANAGER",
+        "permission_codes": [
+          "order:order:view",
+          "invoice:invoice:create"
+        ]
+      },
+      "expected": {
+        "tool_ids": [
+          "OrderFacadeTool",
+          "InvoiceFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "multi-domain"
+      ],
+      "notes": "order lookup + invoice creation candidates."
+    },
+    {
+      "fixture_id": "ts-multidomain-vehicle-pricing",
+      "utterance": "Price a tire rotation for the Silverado.",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": [
+          "crm:vehicle:view",
+          "AUTHENTICATED"
+        ]
+      },
+      "expected": {
+        "tool_ids": [
+          "VehicleFacadeTool",
+          "PricingFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "multi-domain"
+      ],
+      "notes": "vehicle context + pricing lookup."
+    },
+    {
+      "fixture_id": "ts-workflow-creating-po-receive",
+      "utterance": "Receive the ASN for this purchase order.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "inventory:on_hand:view",
+          "inventory:goods_receipt:create"
+        ],
+        "workflow_state": "CREATING_PO"
+      },
+      "expected": {
+        "tool_ids": [
+          "InventoryFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "workflow-gated"
+      ],
+      "notes": "inventory tools active while creating a PO."
+    },
+    {
+      "fixture_id": "ts-workflow-return-to-stock",
+      "utterance": "Put these returned parts back into stock.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "inventory:on_hand:view",
+          "inventory:goods_receipt:create"
+        ],
+        "workflow_state": "PROCESSING_RETURN"
+      },
+      "expected": {
+        "tool_ids": [
+          "InventoryFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "workflow-gated"
+      ],
+      "notes": "return handling in PROCESSING_RETURN state."
+    },
+    {
+      "fixture_id": "ts-workflow-inventory-recon",
+      "utterance": "Reconcile the counted quantities against the system.",
+      "actor": {
+        "role": "ROLE_LOCATION_MANAGER",
+        "permission_codes": [
+          "inventory:on_hand:view"
+        ],
+        "workflow_state": "INVENTORY_RECON"
+      },
+      "expected": {
+        "tool_ids": [
+          "InventoryFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "workflow-gated"
+      ],
+      "notes": "reconciliation in INVENTORY_RECON state."
+    }
+  ]
+}

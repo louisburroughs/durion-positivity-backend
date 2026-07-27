@@ -10,6 +10,8 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
 import com.positivity.warranty.internal.entity.ProcessedEvent;
+import com.positivity.warranty.internal.repository.ExtWorkorderLineReplicaRepository;
+import com.positivity.warranty.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.warranty.internal.repository.ProcessedEventRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -37,13 +39,21 @@ class WorkorderEventsListenerTest {
 
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final AutoRegistrationService autoRegistrationService = mock(AutoRegistrationService.class);
+    private final ExtWorkorderReplicaRepository extWorkorderReplica = mock(ExtWorkorderReplicaRepository.class);
+    private final ExtWorkorderLineReplicaRepository extWorkorderLineReplica =
+            mock(ExtWorkorderLineReplicaRepository.class);
 
     private WorkorderEventsListener listener;
 
     @BeforeEach
     void setUp() {
-        listener =
-                new WorkorderEventsListener(TEST_CLOCK, new ObjectMapper(), processedEvents, autoRegistrationService);
+        listener = new WorkorderEventsListener(
+                TEST_CLOCK,
+                new ObjectMapper(),
+                processedEvents,
+                autoRegistrationService,
+                extWorkorderReplica,
+                extWorkorderLineReplica);
     }
 
     private static String updatedEvent(String eventId) {

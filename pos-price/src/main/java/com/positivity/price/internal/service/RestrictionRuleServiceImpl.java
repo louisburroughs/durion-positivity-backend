@@ -6,6 +6,7 @@ import com.positivity.price.internal.entity.RestrictionRule;
 import com.positivity.price.internal.exception.RestrictionRuleNotFoundException;
 import com.positivity.price.internal.repository.RestrictionRuleRepository;
 import com.positivity.price.service.RestrictionRuleService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -18,9 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class RestrictionRuleServiceImpl implements RestrictionRuleService {
 
     private final RestrictionRuleRepository repository;
+    private final Clock clock;
 
-    public RestrictionRuleServiceImpl(RestrictionRuleRepository repository) {
+    public RestrictionRuleServiceImpl(RestrictionRuleRepository repository, Clock clock) {
         this.repository = repository;
+        this.clock = clock;
     }
 
     @Override
@@ -52,7 +55,7 @@ public class RestrictionRuleServiceImpl implements RestrictionRuleService {
         if (!entity.isActive()) {
             throw new IllegalStateException("Rule already inactive: " + ruleId);
         }
-        entity.setEffectiveTo(LocalDate.now());
+        entity.setEffectiveTo(LocalDate.now(clock));
         entity.setActive(false);
         return toResponse(repository.save(entity));
     }

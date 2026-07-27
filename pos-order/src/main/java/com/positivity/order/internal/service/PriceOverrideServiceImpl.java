@@ -1,5 +1,6 @@
 package com.positivity.order.internal.service;
 
+import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.entity.ApprovalRecord;
 import com.positivity.order.internal.entity.OverrideStatus;
 import com.positivity.order.internal.entity.PriceOverride;
@@ -54,6 +55,7 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
     private final SalesOrderRepository salesOrderRepository;
     private final SalesOrderLineRepository salesOrderLineRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final OrderDomainEventPublisher domainEventPublisher;
 
     // Business rule: Discount percentage threshold requiring approval
     private static final BigDecimal APPROVAL_THRESHOLD_PERCENTAGE = BigDecimal.valueOf(10.0);
@@ -104,6 +106,12 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
         SalesOrder order = salesOrderRepository
                 .findById(orderId)
                 .orElseThrow(() -> new InvalidPriceOverrideException("Order not found: " + orderId));
+        if (order.getStatus() != null
+                && order.getStatus() != com.positivity.order.internal.entity.SalesOrderStatus.DRAFT) {
+            // Spec R2.5 (plan story A1): overrides only while the cart is editable.
+            throw new InvalidPriceOverrideException(
+                    "Price overrides are only allowed while the order is DRAFT; current status: " + order.getStatus());
+        }
         SalesOrderLine orderLine = salesOrderLineRepository
                 .findById(orderLineId)
                 .orElseThrow(() -> new InvalidPriceOverrideException("Order line not found: " + orderLineId));
@@ -141,6 +149,8 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
             SalesOrderLine line = savedOverride.getOrderLine();
             line.setUnitPrice(savedOverride.getOverridePrice());
             salesOrderLineRepository.save(line);
+            // The override price has landed on the line: stamp appliedAt (plan story A4).
+            savedOverride.setAppliedAt(Instant.now(clock));
 
             // Recalculate order subtotal.
             var persistedOrder = savedOverride.getOrder();
@@ -163,10 +173,9 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
                     savedOverride.getOverridePrice(),
                     actorUsername));
 
-            // Commission broker event emission is pending async integration.
-            log.warn(
-                    "COMMISSION_EVENT_TODO: override {} affects commission; broker integration pending",
-                    savedOverride.getOverrideId());
+            // Resolved Q7 (plan story D3): the commission impact is an explicit contract, emitted
+            // exactly once when the override lands on the line.
+            domainEventPublisher.publishCommissionImpact(savedOverride);
         }
 
         log.info(
@@ -209,6 +218,10 @@ public class PriceOverrideServiceImpl implements PriceOverrideService {
                 .build();
 
         approvalRecordRepository.save(approvalRecord);
+
+        // Resolved Q7 (plan story D3): approved-after-pending overrides emit the same commission
+        // fact as auto-approved ones; rejected overrides never emit.
+        domainEventPublisher.publishCommissionImpact(override);
 
         log.info("Price override {} approved by {} ({})", overrideId, approverUserId, command.approverRole());
 

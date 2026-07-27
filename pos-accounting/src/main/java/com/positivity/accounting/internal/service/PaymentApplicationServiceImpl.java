@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.CustomerCreditIssuanceGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationGLPostingEvent;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
@@ -23,6 +24,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -32,6 +34,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -216,6 +219,22 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
             BigDecimal unappliedAfterApplication = payment.getUnappliedAmount();
 
             creditInfo = createCustomerCredit(payment, unappliedAfterApplication, applicationTimestamp);
+
+            // Enqueue the credit-issuance GL posting work item in the SAME
+            // transaction as the CustomerCredit insert (transactional outbox,
+            // issue #975). The async consumer posts Dr Undeposited Funds / Cr
+            // Customer Credit Liability for the excess, so the overpayment cash
+            // and the customer-credit liability both reach the ledger. Keyed on
+            // the application request id (namespaced for the credit leg), so a
+            // replay never double-posts; if this transaction rolls back, the work
+            // item rolls back with it.
+            enqueueCustomerCreditIssuanceGLPostingWorkItem(
+                    paymentId,
+                    request.getApplicationRequestId(),
+                    payment,
+                    creditInfo.getCreditId(),
+                    unappliedAfterApplication,
+                    applicationTimestamp);
 
             // Mark payment as fully applied by converting remaining balance to credit
             // This ensures payment status becomes FULLY_APPLIED
@@ -585,6 +604,49 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
     }
 
     /**
+     * Persist a {@link CustomerCreditIssuanceGLPostingEvent} work item to the
+     * transactional outbox (issue #975). Runs inside the surrounding application
+     * transaction ({@code saveToOutbox} uses MANDATORY propagation), guaranteeing
+     * the issuance ledger work item exists iff the {@code CustomerCredit}
+     * committed. The application request id travels on the event as the posting
+     * idempotency-key basis (namespaced for the credit leg); the credit id links
+     * the entry back to the subledger row it backs.
+     */
+    private void enqueueCustomerCreditIssuanceGLPostingWorkItem(
+            @NonNull UUID paymentId,
+            @NonNull String applicationRequestId,
+            @NonNull ReceivablePayment payment,
+            @NonNull UUID creditId,
+            @NonNull BigDecimal creditAmount,
+            @NonNull Instant applicationTimestamp) {
+        CustomerCreditIssuanceGLPostingEvent issuanceEvent = CustomerCreditIssuanceGLPostingEvent.builder()
+                .eventId(UUIDv7Generator.generate())
+                .applicationRequestId(applicationRequestId)
+                .creditId(creditId)
+                .paymentId(paymentId)
+                .customerId(payment.getCustomerId())
+                .currency(payment.getCurrency())
+                .creditAmount(creditAmount)
+                .applicationTimestamp(applicationTimestamp)
+                .build();
+
+        outboxService.saveToOutbox(
+                issuanceEvent.getEventId(),
+                "CustomerCreditIssuance",
+                paymentId,
+                issuanceEvent.getClass().getName(),
+                issuanceEvent);
+
+        log.info(
+                "Customer credit issuance GL posting work item persisted to outbox | applicationRequestId={} "
+                        + "| eventId={} | creditId={} | creditAmount={}",
+                applicationRequestId,
+                issuanceEvent.getEventId(),
+                creditId,
+                creditAmount);
+    }
+
+    /**
      * Validate an invoice application against the {@code ext_invoice} replica and accounting's
      * derived balance (ADR-0044, #842). The invoice must exist in the replica, be in an
      * AR-eligible lifecycle state (FINALIZED/POSTED), and still carry a positive balance. No
@@ -715,13 +777,18 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
     }
 
     /**
-     * Resolve the allocation iteration order per the request's effective strategy (Issue #955).
+     * Resolve the allocation iteration order per the request's effective strategy (Issue #955,
+     * refined by Issues #976 and #993).
      *
      * <p>{@code CALLER_ORDER} (including an absent strategy) returns the caller-supplied list
      * untouched, keeping behavior byte-identical to requests predating the field.
-     * {@code OLDEST_FIRST} returns a sorted copy ordered by ascending replica invoice date
-     * ({@link ExtInvoice#getInvoiceCreatedAt()}); invoices with no replica date sort last, and
-     * equal dates tie-break deterministically by ascending invoice id. Reordering affects
+     * {@code OLDEST_FIRST} returns a sorted copy ordered by ascending <em>due date</em>
+     * ({@link ExtInvoice#getDueDate()} — the collections-aging key frozen at finalization by
+     * pos-invoice, #993). An invoice whose replica carries no due date (defensive: a producer
+     * bug or an event predating the enrichment) falls back to its <em>issue/finalization
+     * instant</em> ({@link ExtInvoice#getFinalizedAt()}, the #976 behavior), compared on the
+     * same axis as due dates taken at UTC start-of-day. Invoices with neither key sort last,
+     * and equal keys tie-break deterministically by ascending invoice id. Reordering affects
      * allocation order only — validation, capping, and idempotency semantics are unchanged.
      *
      * @param request the application request (strategy resolved via
@@ -736,24 +803,37 @@ public class PaymentApplicationServiceImpl implements com.positivity.accounting.
             return applications;
         }
 
-        Map<UUID, Instant> invoiceDates = new HashMap<>();
+        Map<UUID, Instant> agingKeys = new HashMap<>();
         for (PaymentApplicationRequest.InvoiceApplication invoiceApp : applications) {
             UUID invoiceId = invoiceApp.getInvoiceId();
-            if (!invoiceDates.containsKey(invoiceId)) {
-                invoiceDates.put(
+            if (!agingKeys.containsKey(invoiceId)) {
+                agingKeys.put(
                         invoiceId,
                         invoiceBalanceCalculator
                                 .findInvoice(invoiceId)
-                                .map(ExtInvoice::getInvoiceCreatedAt)
+                                .map(PaymentApplicationServiceImpl::agingKey)
                                 .orElse(null));
             }
         }
 
-        Comparator<PaymentApplicationRequest.InvoiceApplication> byInvoiceDateThenId = Comparator.comparing(
-                        (PaymentApplicationRequest.InvoiceApplication app) -> invoiceDates.get(app.getInvoiceId()),
+        Comparator<PaymentApplicationRequest.InvoiceApplication> byAgingKeyThenId = Comparator.comparing(
+                        (PaymentApplicationRequest.InvoiceApplication app) -> agingKeys.get(app.getInvoiceId()),
                         Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(PaymentApplicationRequest.InvoiceApplication::getInvoiceId);
-        return applications.stream().sorted(byInvoiceDateThenId).toList();
+        return applications.stream().sorted(byAgingKeyThenId).toList();
+    }
+
+    /**
+     * The {@code OLDEST_FIRST} aging key (#993): the due date (as UTC start-of-day, aging is
+     * calendar-based) when present, else the finalization instant — cheap defense against a
+     * producer that projected no due date, not a transition mechanism.
+     */
+    @Nullable
+    private static Instant agingKey(@NonNull ExtInvoice invoice) {
+        if (invoice.getDueDate() != null) {
+            return invoice.getDueDate().atStartOfDay(ZoneOffset.UTC).toInstant();
+        }
+        return invoice.getFinalizedAt();
     }
 
     private void applySingleInvoiceApplication(

@@ -18,6 +18,7 @@ import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -42,8 +43,13 @@ public class Invoice {
     @Column(name = "invoice_number", length = 64)
     private String invoiceNumber;
 
-    @Column(name = "workorder_id", columnDefinition = "UUID", nullable = false)
+    /** Nullable since the counter-sale from-order path (parity story C2): order-only invoices have no workorder. */
+    @Column(name = "workorder_id", columnDefinition = "UUID")
     private UUID workorderId;
+
+    /** Sales order that fronted this invoice (from-order path, parity story C2); idempotency anchor. */
+    @Column(name = "order_id", columnDefinition = "UUID", unique = true)
+    private UUID orderId;
 
     @Column(name = "estimate_id", columnDefinition = "UUID")
     private UUID estimateId;
@@ -86,6 +92,18 @@ public class Invoice {
 
     @Column(name = "finalized_by", length = 64)
     private String finalizedBy;
+
+    /**
+     * Collections-aging due date (#993): computed from {@code finalizedAt} (in the location's
+     * timezone) + the bill-to party's payment terms, frozen at finalization. Null on drafts;
+     * later {@code BillingRules} changes never move it.
+     */
+    @Column(name = "due_date")
+    private LocalDate dueDate;
+
+    /** The payment-terms rule (validated {@link com.positivity.invoice.internal.enums.PaymentTerms} code) frozen with {@link #dueDate}. */
+    @Column(name = "payment_terms_code", length = 20)
+    private String paymentTermsCode;
 
     // Pending Flyway migration: keep these fields transient until DB columns exist.
     @Transient

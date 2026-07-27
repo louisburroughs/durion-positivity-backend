@@ -3,7 +3,7 @@ package com.positivity.gateway.config;
 public final class GatewayPermissionCatalog {
     private GatewayPermissionCatalog() {}
 
-    public static final int CATALOG_VERSION = 26;
+    public static final int CATALOG_VERSION = 37;
 
     protected static final String[] AUTHORITY_BY_BIT = {
         "PERM_accounting:je:view",
@@ -433,7 +433,52 @@ public final class GatewayPermissionCatalog {
         "PERM_tax:exemption:view", // 387
 
         // ── New batch (bit 388) ───────────────────────────────────────────────
-        "PERM_tax:commit" // 388
+        "PERM_tax:commit", // 388
+
+        // ── New batch (bits 389–391) ──────────────────────────────────────────
+        "PERM_accounting:customer-credit:view", // 389
+        "PERM_accounting:customer-credit:apply", // 390
+        "PERM_accounting:customer-credit:refund", // 391
+
+        // ── New batch (bits 392–392) ──────────────────────────────────────────
+        "PERM_accounting:tax-snapshot:freeze", // 392
+
+        // ── New batch (bits 393–393) ──────────────────────────────────────────
+        "PERM_accounting:credit-memo:void", // 393
+
+        // ── New batch (bits 394–396) ──────────────────────────────────────────
+        "PERM_inventory:scrap:approve", // 394
+        "PERM_inventory:scrap:create", // 395
+        "PERM_inventory:scrap:view", // 396
+
+        // ── New batch (bits 397–401) ──────────────────────────────────────────
+        "PERM_inventory:transfer:create", // 397
+        "PERM_inventory:transfer:dispatch", // 398
+        "PERM_inventory:transfer:receive", // 399
+        "PERM_inventory:transfer:short_close", // 400
+        "PERM_inventory:transfer:view", // 401
+        "PERM_order:order:discount", // 402
+        "PERM_order:order:quote", // 403
+        "PERM_order:order:checkout", // 404
+        "PERM_order:order:void", // 405
+        "PERM_order:order:charge_on_account", // 406
+        "PERM_order:session:open", // 407
+        "PERM_order:session:view", // 408
+        "PERM_order:session:cash_movement", // 409
+        "PERM_order:session:close", // 410
+        "PERM_order:session:approve_variance", // 411
+        "PERM_order:return:create", // 412
+        "PERM_order:return:approve", // 413
+        "PERM_order:return:view", // 414
+
+        // ── New batch (bits 415–415) ──────────────────────────────────────────
+        "PERM_inventory:lot:manage", // 415
+
+        // ── New batch (bits 416–416) ──────────────────────────────────────────
+        "PERM_inventory:valuation:view", // 416
+
+        // ── New batch (bits 417–417) ──────────────────────────────────────────
+        "PERM_inventory:valuation:adjust" // 417
     };
 
     public static String authorityForBit(int bitIndex) {

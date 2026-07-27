@@ -8,6 +8,7 @@ import com.positivity.mcp.internal.orchestration.agent.DomainAgentDefinition;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistryFactory;
 import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
+import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,8 +29,7 @@ class MasterAgentRegistryTest {
         when(registryFactory.loadRegistryDefinition())
                 .thenReturn(new MasterAgentRegistryFactory.LoadedMasterAgentRegistry(
                         List.of(sharedTool),
-                        List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool))),
-                        java.util.Map.of("ROLE_MANAGER", List.of(inventoryTool))));
+                        List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool)))));
 
         MasterAgentRegistry registry = new MasterAgentRegistry(registryFactory);
 
@@ -38,8 +38,9 @@ class MasterAgentRegistryTest {
                 .extracting(DomainAgentDefinition::agentName)
                 .containsExactly("inventory");
         assertThat(registry.resolveMasterTools()).containsExactly(sharedTool);
-        assertThat(registry.resolveDomainTools("ROLE_MANAGER")).containsExactly(inventoryTool);
         assertThat(registry.resolveDomainTools("inventory")).containsExactly(inventoryTool);
+        // Gate 2B / #780: role names are not domain agents and resolve nothing (no role preassignment).
+        assertThat(registry.resolveDomainTools("ROLE_MANAGER")).isEmpty();
     }
 
     @Test
@@ -73,18 +74,6 @@ class MasterAgentRegistryTest {
     }
 
     @Test
-    void resolveDomainToolsWithSelectedNamesFiltersMatchingTools() {
-        Object sharedTool = new SharedToolStub();
-        Object domainTool = new InventoryFacadeToolStub();
-        MasterAgentRegistry registry = new MasterAgentRegistry(
-                List.of(sharedTool), List.of(new DomainAgentDefinition("inventory", "inventory", List.of(domainTool))));
-
-        List<Object> tools = registry.resolveDomainTools("inventory", List.of("inventoryFacadeToolStub"));
-
-        assertThat(tools).containsExactly(domainTool);
-    }
-
-    @Test
     void resolveToolsByNameSearchesAllDomainsIgnoringRoleScope() {
         Object sharedTool = new SharedToolStub();
         Object inventoryTool = new InventoryFacadeToolStub();
@@ -96,10 +85,7 @@ class MasterAgentRegistryTest {
                         new DomainAgentDefinition("orders", "orders", List.of(orderTool))));
 
         // Regression (facade tool binding): permission gating + scoring run upstream, so the
-        // name->bean step must search the full registered set. A role caller (ROLE_ADMIN) resolves
-        // nothing via the role-scoped overload because tools are bucketed by domain, never by role.
-        assertThat(registry.resolveDomainTools("ROLE_ADMIN", List.of("orderFacadeToolStub")))
-                .isEmpty();
+        // name->bean step must search the full registered set across every domain, not role-scoped.
         assertThat(registry.resolveToolsByName(
                         List.of("orderFacadeToolStub", "inventoryFacadeToolStub", "sharedToolStub")))
                 .containsExactlyInAnyOrder(orderTool, inventoryTool, sharedTool);
@@ -126,49 +112,16 @@ class MasterAgentRegistryTest {
     }
 
     @Test
-    void preloadableRoleIdentifiersUnionCanonicalSetWithAssignments() {
+    void preloadableRoleIdentifiersReturnsCanonicalRoleSet() {
         Object inventoryTool = new InventoryFacadeToolStub();
         MasterAgentRegistry registry = new MasterAgentRegistry(
-                List.of(),
-                List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool))),
-                java.util.Map.of(
-                        "ROLE_MANAGER", List.of(inventoryTool),
-                        "ROLE_CASHIER", List.of(inventoryTool)));
+                List.of(), List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool))));
 
-        // Gate 2A (#639): preload covers the canonical role set (MCP_ROLE_PRIORITY + ROLE_USER)
-        // unioned with any configured assignments — so ROLE_TECHNICIAN/ROLE_USER are never omitted.
+        // Gate 2A (#639): preload covers the canonical role set (MCP_ROLE_PRIORITY + ROLE_USER) so
+        // ROLE_TECHNICIAN/ROLE_USER are never omitted. Gate 2B (#780): role->tool preassignment retired,
+        // so there are no configured assignments to union — the canonical set is returned as-is.
         assertThat(registry.preloadableRoleIdentifiers())
-                .contains("ROLE_CASHIER", "ROLE_MANAGER", "ROLE_USER", "ROLE_TECHNICIAN", "ROLE_SERVICE_ADVISOR");
-    }
-
-    @Test
-    void resolveDomainToolsPrefersRoleAssignmentsWhenPresent() {
-        Object sharedTool = new SharedToolStub();
-        Object inventoryTool = new InventoryFacadeToolStub();
-        Object orderTool = new OrderFacadeToolStub();
-        MasterAgentRegistry registry = new MasterAgentRegistry(
-                List.of(sharedTool),
-                List.of(
-                        new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool)),
-                        new DomainAgentDefinition("orders", "orders", List.of(orderTool))),
-                java.util.Map.of("ROLE_MANAGER", List.of(inventoryTool, orderTool)));
-
-        assertThat(registry.resolveDomainTools("ROLE_MANAGER")).containsExactly(inventoryTool, orderTool);
-        assertThat(registry.resolveDomainTools("orders")).containsExactly(orderTool);
-    }
-
-    @Test
-    void resolveDomainToolsUsesRawRoleNameNoAliasing() {
-        Object inventoryTool = new InventoryFacadeToolStub();
-        MasterAgentRegistry registry = new MasterAgentRegistry(
-                List.of(),
-                List.of(new DomainAgentDefinition("inventory", "inventory", List.of(inventoryTool))),
-                java.util.Map.of("ROLE_SERVICE_WRITER", List.of(inventoryTool)));
-
-        // Gate 2B (#780): ToolRegistryRoleMapper role aliasing retired — lookup is by the raw role
-        // name, no ROLE_SERVICE_ADVISOR -> ROLE_SERVICE_WRITER normalization.
-        assertThat(registry.resolveDomainTools("ROLE_SERVICE_WRITER")).containsExactly(inventoryTool);
-        assertThat(registry.resolveDomainTools("ROLE_SERVICE_ADVISOR")).isEmpty();
+                .containsExactlyInAnyOrderElementsOf(SystemPromptDefaults.PRELOADABLE_ROLE_IDENTIFIERS);
     }
 
     @Test

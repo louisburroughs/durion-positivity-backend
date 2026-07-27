@@ -2915,10 +2915,10 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
         first:
           type: boolean
         last:
@@ -2934,6 +2934,8 @@ components:
         offset:
           type: integer
           format: int64
+        sort:
+          $ref: '#/components/schemas/SortObject'
         paged:
           type: boolean
         pageNumber:
@@ -2942,8 +2944,6 @@ components:
         pageSize:
           type: integer
           format: int32
-        sort:
-          $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
     SortObject:
@@ -3041,6 +3041,18 @@ components:
           type: string
           description: Vehicle trim.
           example: XL
+        odometerValue:
+          type: integer
+          format: int32
+          description: Last recorded odometer reading value.
+          example: 45210
+        odometerUnit:
+          type: string
+          description: Unit of the odometer reading (MILES or KILOMETERS).
+          enum:
+          - MILES
+          - KILOMETERS
+          example: MILES
         isActive:
           type: boolean
           description: Whether vehicle is active.

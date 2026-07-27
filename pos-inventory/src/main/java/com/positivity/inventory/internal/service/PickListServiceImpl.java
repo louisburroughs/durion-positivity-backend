@@ -16,6 +16,8 @@ import com.positivity.shared.id.UUIDv7Generator;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,14 +29,31 @@ public class PickListServiceImpl implements PickListService {
     private final PickListRepository pickListRepository;
     private final PickTaskRepository pickTaskRepository;
     private final InventoryFactPublisher inventoryFactPublisher;
+    private final @Nullable InventoryLotOutboundService lotOutboundService;
 
+    @Autowired
+    public PickListServiceImpl(
+            PickListRepository pickListRepository,
+            PickTaskRepository pickTaskRepository,
+            InventoryFactPublisher inventoryFactPublisher,
+            InventoryLotOutboundService lotOutboundService) {
+        this.pickListRepository = pickListRepository;
+        this.pickTaskRepository = pickTaskRepository;
+        this.inventoryFactPublisher = inventoryFactPublisher;
+        this.lotOutboundService = lotOutboundService;
+    }
+
+    /**
+     * Lot-gate-less constructor kept for the pre-E2 unit-test fixtures: without an
+     * {@link InventoryLotOutboundService} every SKU behaves untracked (no lot validation,
+     * null {@code pickedLotId}) — identical to the service's behavior for NONE-tracked
+     * products, which is all those fixtures exercise.
+     */
     public PickListServiceImpl(
             PickListRepository pickListRepository,
             PickTaskRepository pickTaskRepository,
             InventoryFactPublisher inventoryFactPublisher) {
-        this.pickListRepository = pickListRepository;
-        this.pickTaskRepository = pickTaskRepository;
-        this.inventoryFactPublisher = inventoryFactPublisher;
+        this(pickListRepository, pickTaskRepository, inventoryFactPublisher, null);
     }
 
     @Override
@@ -111,7 +130,8 @@ public class PickListServiceImpl implements PickListService {
             @NonNull UUID pickTaskId,
             @NonNull UUID scannedSkuId,
             @NonNull UUID scannedLocationId,
-            int quantityPicked) {
+            int quantityPicked,
+            @Nullable String lotNumber) {
         PickListEntity pickList = pickListRepository
                 .findById(pickListId)
                 .orElseThrow(() -> new ResourceNotFoundException(PICK_LIST, pickListId.toString()));
@@ -134,10 +154,20 @@ public class PickListServiceImpl implements PickListService {
                     "Quantity exceeds required: " + task.getQuantityRequired() + " (quantity)");
         }
 
+        // odoo-parity E2 (#1042): LOT-tracked SKUs must key the lot the units were taken from
+        // (422 LOT_NUMBER_REQUIRED / LOT_UNKNOWN / LOT_NOT_AVAILABLE); the suggestion recorded
+        // at generation is advisory only — the keyed lot wins and is what consumption posts.
+        // Untracked SKUs resolve to null, byte-identical to pre-E2. Pick confirmation itself
+        // posts no ledger entries; the pickedLotId travels to the consumption posting.
+        UUID pickedLotId = lotOutboundService == null
+                ? null
+                : lotOutboundService.resolveOutboundLot(task.getProductId().toString(), lotNumber);
+
         task.setStatus(PickTaskStatus.PICKED);
         task.setQuantityPicked(quantityPicked);
         UUID actualLocationId = scannedLocationId;
         task.setSuggestedLocationId(actualLocationId);
+        task.setPickedLotId(pickedLotId);
         PickTaskEntity savedTask = pickTaskRepository.save(task);
         inventoryFactPublisher.markPickTaskChanged(savedTask.getPickTaskId());
 
@@ -190,6 +220,8 @@ public class PickListServiceImpl implements PickListService {
                 entity.getQuantityRequired(),
                 entity.getQuantityPicked(),
                 entity.getStatus(),
-                entity.getSortOrder());
+                entity.getSortOrder(),
+                entity.getSuggestedLotNumber(),
+                entity.getPickedLotId());
     }
 }

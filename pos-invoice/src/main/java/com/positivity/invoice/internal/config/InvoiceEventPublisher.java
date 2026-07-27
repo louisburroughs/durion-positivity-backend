@@ -7,6 +7,7 @@ import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
 import com.positivity.domainevents.invoice.TaxBreakdownLine;
 import com.positivity.invoice.internal.entity.BillingRules;
 import com.positivity.invoice.internal.entity.Invoice;
+import com.positivity.invoice.internal.entity.InvoiceItem;
 import com.positivity.invoice.internal.entity.InvoiceLineTax;
 import com.positivity.invoice.internal.repository.InvoiceLineTaxRepository;
 import jakarta.persistence.EntityManager;
@@ -62,7 +63,10 @@ public class InvoiceEventPublisher {
                 invoice.getAdjustmentsAmount(),
                 invoice.getCreatedAt(),
                 invoice.getFinalizedAt(),
-                buildTaxBreakdown(invoice.getId()));
+                buildTaxBreakdown(invoice.getId()),
+                buildLines(invoice),
+                invoice.getDueDate(),
+                invoice.getPaymentTermsCode());
         DomainEventEnvelope<InvoiceUpdatedV1> envelope = DomainEventEnvelope.of(
                 InvoiceUpdatedV1.EVENT_TYPE,
                 InvoiceUpdatedV1.SCHEMA_VERSION,
@@ -79,8 +83,14 @@ public class InvoiceEventPublisher {
 
     /**
      * Projects the persisted {@code invoice_line_tax} rows onto the additive event breakdown
-     * (story T5b). Returns {@code null} when there are no rows so downstream replicas leave any
-     * existing tax rows untouched (matches the accounting listener's null-tolerant contract).
+     * (story T5b).
+     *
+     * <p>Null-vs-empty contract (#982): this producer is authoritative over an invoice's tax
+     * rows, so it emits the <em>actual</em> row set — including an empty list when the invoice
+     * genuinely has none. The accounting listener treats an empty list as "clear the replica"
+     * and {@code null} as "leave existing rows untouched"; emitting empty (not null) is what
+     * lets a taxed&rarr;untaxed transition clear {@code ext_invoice_tax}. {@code null} is
+     * reserved for the one case where no set can be projected at all: a null {@code invoiceId}.
      */
     @Nullable
     private List<TaxBreakdownLine> buildTaxBreakdown(@Nullable UUID invoiceId) {
@@ -89,7 +99,8 @@ public class InvoiceEventPublisher {
         }
         List<InvoiceLineTax> rows = invoiceLineTaxRepository.findByInvoiceId(invoiceId);
         if (rows.isEmpty()) {
-            return null;
+            // Authoritative empty set → clears the accounting replica on taxed→untaxed (#982).
+            return List.of();
         }
         return rows.stream()
                 .map(r -> new TaxBreakdownLine(
@@ -101,6 +112,28 @@ public class InvoiceEventPublisher {
                         r.getTaxAmount(),
                         r.isExempt(),
                         r.getExemptionReasonCode()))
+                .toList();
+    }
+
+    /**
+     * Projects the invoice's line items onto the additive event line detail (#924) that feeds
+     * pos-warranty's line-grained {@code ext_invoice} replica. Authoritative-empty vs. null,
+     * matching {@link #buildTaxBreakdown}: an empty list is a genuine no-line invoice.
+     */
+    private List<InvoiceUpdatedV1.InvoiceLine> buildLines(@NonNull Invoice invoice) {
+        List<InvoiceItem> items = invoice.getItems();
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream()
+                .map(item -> new InvoiceUpdatedV1.InvoiceLine(
+                        item.getId(),
+                        item.getDescription(),
+                        item.getQuantity(),
+                        item.getUnitPrice(),
+                        item.getLineTotal(),
+                        item.getWorkorderItemId(),
+                        item.getType()))
                 .toList();
     }
 

@@ -504,13 +504,52 @@ public enum PermissionCode {
     TAX__EXEMPTION__MANAGE(386, "tax:exemption:manage"),
     TAX__EXEMPTION__VIEW(387, "tax:exemption:view"),
     // ── Tax provider lifecycle (new) ─────────────────────────────────────────────
-    TAX__COMMIT(388, "tax:commit");
+    TAX__COMMIT(388, "tax:commit"),
+    // ── Accounting customer-credit lifecycle (issue #992) ────────────────────────
+    ACCOUNTING__CUSTOMER_CREDIT__VIEW(389, "accounting:customer-credit:view"),
+    ACCOUNTING__CUSTOMER_CREDIT__APPLY(390, "accounting:customer-credit:apply"),
+    ACCOUNTING__CUSTOMER_CREDIT__REFUND(391, "accounting:customer-credit:refund"),
+    // ── Accounting (new) ───────────────────────────────────────────────────────
+    ACCOUNTING__TAX_SNAPSHOT__FREEZE(392, "accounting:tax-snapshot:freeze"),
+    // ── Accounting (new) ───────────────────────────────────────────────────────
+    ACCOUNTING__CREDIT_MEMO__VOID(393, "accounting:credit-memo:void"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__SCRAP__APPROVE(394, "inventory:scrap:approve"),
+    INVENTORY__SCRAP__CREATE(395, "inventory:scrap:create"),
+    INVENTORY__SCRAP__VIEW(396, "inventory:scrap:view"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__TRANSFER__CREATE(397, "inventory:transfer:create"),
+    INVENTORY__TRANSFER__DISPATCH(398, "inventory:transfer:dispatch"),
+    INVENTORY__TRANSFER__RECEIVE(399, "inventory:transfer:receive"),
+    INVENTORY__TRANSFER__SHORT_CLOSE(400, "inventory:transfer:short_close"),
+    INVENTORY__TRANSFER__VIEW(401, "inventory:transfer:view"),
+    ORDER__ORDER__DISCOUNT(402, "order:order:discount"),
+    ORDER__ORDER__QUOTE(403, "order:order:quote"),
+    ORDER__ORDER__CHECKOUT(404, "order:order:checkout"),
+    ORDER__ORDER__VOID(405, "order:order:void"),
+    ORDER__ORDER__CHARGE_ON_ACCOUNT(406, "order:order:charge_on_account"),
+    // ── Order register sessions & cash management (odoo-parity G1/G2) ─────────────
+    ORDER__SESSION__OPEN(407, "order:session:open"),
+    ORDER__SESSION__VIEW(408, "order:session:view"),
+    ORDER__SESSION__CASH_MOVEMENT(409, "order:session:cash_movement"),
+    ORDER__SESSION__CLOSE(410, "order:session:close"),
+    ORDER__SESSION__APPROVE_VARIANCE(411, "order:session:approve_variance"),
+    // ── Order returns & refunds (odoo-parity F1/F2) ──────────────────────────────
+    ORDER__RETURN__CREATE(412, "order:return:create"),
+    ORDER__RETURN__APPROVE(413, "order:return:approve"),
+    ORDER__RETURN__VIEW(414, "order:return:view"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__LOT__MANAGE(415, "inventory:lot:manage"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__VALUATION__VIEW(416, "inventory:valuation:view"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__VALUATION__ADJUST(417, "inventory:valuation:adjust");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 26;
+    public static final int CATALOG_VERSION = 37;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

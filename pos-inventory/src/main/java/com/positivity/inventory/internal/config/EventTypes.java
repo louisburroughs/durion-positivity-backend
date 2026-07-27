@@ -30,16 +30,99 @@ public final class EventTypes {
                                 "INVENTORY_CYCLE_COUNT_ADJUSTMENT_REJECT", "Reject a pending cycle count adjustment")
                         .build(),
 
+                // ScrapController - 3 events (odoo-parity D1, #1030)
+                EventTypeRegistration.write("INVENTORY_SCRAP_CREATE", "Create a scrap (write-off) document")
+                        .build(),
+                EventTypeRegistration.approval("INVENTORY_SCRAP_APPROVE", "Approve a pending scrap document")
+                        .build(),
+                EventTypeRegistration.approval("INVENTORY_SCRAP_REJECT", "Reject a pending scrap document")
+                        .build(),
+
+                // TransferOrderController - 6 events (odoo-parity C1/C2/C3, #1035/#1036/#1039)
+                EventTypeRegistration.write("INVENTORY_TRANSFER_ORDER_CREATE", "Create a cross-site transfer order")
+                        .build(),
+                EventTypeRegistration.approval("INVENTORY_TRANSFER_ORDER_APPROVE", "Approve a DRAFT transfer order")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_TRANSFER_ORDER_CANCEL", "Cancel a transfer order before dispatch")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_TRANSFER_ORDER_DISPATCH",
+                                "Dispatch a transfer order (posts TRANSFER_OUT into transit)")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_TRANSFER_ORDER_RECEIVE",
+                                "Receive dispatched transfer quantities at the destination (posts TRANSFER_IN)")
+                        .build(),
+                // Approval preset: short-close accepts a stock loss or reverses a movement
+                // (odoo-parity C3, #1039).
+                EventTypeRegistration.approval(
+                                "INVENTORY_TRANSFER_ORDER_SHORT_CLOSE",
+                                "Short-close a transfer order's undelivered remainder with a loss or return"
+                                        + " disposition")
+                        .build(),
+
+                // SourcingStrategyController - 3 events (odoo-parity H1, #1037)
+                EventTypeRegistration.fastRead(
+                                "INVENTORY_SOURCING_STRATEGY_LIST", "List sourcing strategy configurations")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_SOURCING_STRATEGY_UPSERT",
+                                "Create or update the sourcing strategy for one scope")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_SOURCING_STRATEGY_DEACTIVATE",
+                                "Deactivate a sourcing strategy configuration row")
+                        .build(),
+
+                // CostingMethodController - 2 events (odoo-parity J1, #1048)
+                EventTypeRegistration.fastRead("INVENTORY_VALUATION_METHOD_LIST", "List costing method configurations")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_VALUATION_METHOD_UPSERT",
+                                "Create or update the costing method for one scope")
+                        .build(),
+
+                // RevaluationController - 3 events (odoo-parity J4, #1054)
+                EventTypeRegistration.write(
+                                "INVENTORY_REVALUATION_CREATE",
+                                "Submit a manual cost revaluation (auto-applies below threshold)")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "INVENTORY_REVALUATION_APPROVE",
+                                "Approve a pending cost revaluation and restate the SKU cost state")
+                        .build(),
+                EventTypeRegistration.approval("INVENTORY_REVALUATION_REJECT", "Reject a pending cost revaluation")
+                        .build(),
+
                 // CycleCountController - 2 events
                 EventTypeRegistration.write("INVENTORY_CYCLE_COUNT_SUBMIT", "Submit a count for a cycle count task")
                         .build(),
                 EventTypeRegistration.write("INVENTORY_CYCLE_COUNT_RECOUNT", "Submit a recount for a cycle count task")
                         .build(),
 
-                // CycleCountPlanController - 2 events
+                // CycleCountPlanController - 3 events
                 EventTypeRegistration.write("INVENTORY_CYCLE_COUNT_PLAN_CREATE", "Create a cycle count plan")
                         .build(),
                 EventTypeRegistration.fastRead("INVENTORY_CYCLE_COUNT_PLAN_LIST", "List cycle count plans")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_CYCLE_COUNT_PLAN_STATUS_UPDATE", "Transition a cycle count plan status")
+                        .build(),
+
+                // CycleCountScheduleController - 4 events (odoo-parity I1, #1031)
+                EventTypeRegistration.write(
+                                "INVENTORY_CYCLE_COUNT_SCHEDULE_CREATE", "Create a recurring cycle count schedule")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "INVENTORY_CYCLE_COUNT_SCHEDULE_LIST", "List recurring cycle count schedules")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_CYCLE_COUNT_SCHEDULE_UPDATE", "Update a recurring cycle count schedule")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_CYCLE_COUNT_SCHEDULE_DEACTIVATE",
+                                "Deactivate a recurring cycle count schedule")
                         .build(),
 
                 // InventoryAvailabilityController - 2 events
@@ -81,10 +164,40 @@ public final class EventTypes {
                 EventTypeRegistration.write("INVENTORY_PUTAWAY_TASK_CLAIM", "Claim a putaway task for execution")
                         .build(),
 
-                // ReplenishmentController - 1 event
+                // ReplenishmentController - 5 events
                 EventTypeRegistration.write(
                                 "INVENTORY_REPLENISHMENT_POLICY_CREATE",
                                 "Create replenishment policy used for task generation")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_REPLENISHMENT_POLICY_UPDATE",
+                                "Update a replenishment policy's thresholds and tuning fields")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_REPLENISHMENT_POLICY_SNOOZE", "Snooze or unsnooze a replenishment policy")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "INVENTORY_REPLENISHMENT_NEEDS_LIST",
+                                "List the side-effect-free replenishment needs report")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_REPLENISHMENT_SCAN_RUN",
+                                "Run the batch replenishment scan over all replenishment policies")
+                        .build(),
+
+                // PurchaseSuggestionController - 3 events (odoo-parity F4, #1044)
+                EventTypeRegistration.write(
+                                "INVENTORY_PURCHASE_SUGGESTION_ACCEPT",
+                                "Accept a purchase suggestion (human-mandatory gate, plan D-3)")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_PURCHASE_SUGGESTION_DISMISS",
+                                "Dismiss a purchase suggestion with a mandatory reason")
+                        .build(),
+                // Approval preset: conversion opens spend (a DRAFT PO) against the PO domain.
+                EventTypeRegistration.approval(
+                                "INVENTORY_PURCHASE_SUGGESTION_CONVERT",
+                                "Convert accepted purchase suggestions into a single DRAFT purchase order")
                         .build(),
 
                 // StockMovementController - 3 events
@@ -118,6 +231,17 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead("INVENTORY_PURCHASE_ORDER_GET", "Get purchase order")
                         .build(),
                 EventTypeRegistration.fastRead("INVENTORY_PURCHASE_ORDER_LIST", "List purchase orders")
+                        .build(),
+                EventTypeRegistration.fastRead("INVENTORY_LOT_LIST", "List inventory lots")
+                        .build(),
+                EventTypeRegistration.fastRead("INVENTORY_LOT_GET", "Get an inventory lot with per-location on-hand")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_LOT_STATUS_UPDATE", "Quarantine, recall, or release an inventory lot")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_LOT_EXPIRATION_SET",
+                                "Set or clear an inventory lot's expiration/alert dates")
                         .build(),
                 EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_APPROVE", "Approve a purchase order")
                         .build(),

@@ -14,6 +14,8 @@ tags:
   description: Manager-approval elevation for controlled finalization
 - name: Payment
   description: Card payment initiation and capture endpoints
+- name: Deposit Credits
+  description: Deposit / down-payment credits and their application to settlements
 - name: Invoice
   description: Invoice generation and lifecycle management
 - name: Invoice Search
@@ -96,6 +98,36 @@ paths:
         - invoice:billing-rules
       x-required-permissions:
       - invoice:billing-rules
+  /v1/refunds:
+    post:
+      tags:
+      - StandaloneRefund
+      summary: Record standalone refund for a customer party
+      description: Record a refund anchored to a customer party when no invoice exists in the system; the disbursement itself happens out of band
+      operationId: refundPartyStandalone
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartyStandaloneRefundRequest'
+        required: true
+      responses:
+        '201':
+          description: Refund recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundPaymentResponse'
+        '400':
+          description: Missing party anchor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundPaymentResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/invoices:
     post:
       tags:
@@ -154,6 +186,83 @@ paths:
       x-required-permissions:
       - invoice:manage
       - invoice:finalize
+  /v1/invoices/{invoiceId}/refunds:
+    get:
+      tags:
+      - PaymentReversal
+      summary: List refunds for an invoice
+      description: Return every refund record anchored to the invoice — payment-intent refunds whose intent belongs to the invoice and standalone invoice-anchored refunds alike — for warranty settlement reconciliation
+      operationId: listRefunds
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Refund records returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvoiceRefundResponse'
+        '404':
+          description: Invoice not found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvoiceRefundResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - invoice:manage
+    post:
+      tags:
+      - StandaloneRefund
+      summary: Record standalone refund for an invoice
+      description: Record a refund against an invoice whose original payment is not in the system; the disbursement itself happens out of band
+      operationId: refundInvoiceStandalone
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StandaloneRefundRequest'
+        required: true
+      responses:
+        '201':
+          description: Refund recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundPaymentResponse'
+        '404':
+          description: Invoice not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundPaymentResponse'
+        '422':
+          description: Insufficient refundable amount
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundPaymentResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/invoices/{invoiceId}/receipts:
     post:
       tags:
@@ -541,6 +650,38 @@ paths:
       x-required-permissions:
       - invoice:manage
       - invoice:finalize
+  /v1/invoices/{invoiceId}/cancel:
+    post:
+      tags:
+      - Invoice
+      summary: Cancel a draft invoice
+      description: Terminal cancel of a DRAFT invoice before any money moved (order-void path). Rejected with 409 when the invoice has left DRAFT or carries an authorized/captured payment. Idempotent — cancelling a CANCELLED invoice returns 200.
+      operationId: cancelInvoice
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Invoice cancelled (or already cancelled)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderInvoiceResponse'
+        '409':
+          description: Invoice not cancellable in its current state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderInvoiceResponse'
+      security:
+      - bearerAuth:
+        - invoice:manage
+      x-required-permissions:
+      - invoice:manage
   /v1/invoices/{invoiceId}/artifacts/{artifactRefId}/download-token:
     post:
       tags:
@@ -607,6 +748,122 @@ paths:
       security:
       - bearerAuth:
         - invoice:manage
+      x-required-permissions:
+      - invoice:manage
+  /v1/invoices/from-order:
+    post:
+      tags:
+      - Invoice
+      summary: Create invoice from a sales order
+      description: Create the invoice fronting a sales order at checkout (counter sale). Idempotent on orderId — a replay returns the existing invoice with 200. When workorderId is present and a workorder invoice already exists, that invoice is returned for tender instead of creating a duplicate.
+      operationId: createInvoiceFromOrder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderInvoiceCreationRequest'
+        required: true
+      responses:
+        '201':
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderInvoiceResponse'
+        '200':
+          description: Existing invoice returned (replay or workorder dedupe)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderInvoiceResponse'
+      security:
+      - bearerAuth:
+        - invoice:manage
+      x-required-permissions:
+      - invoice:manage
+  /v1/invoices/deposits:
+    get:
+      tags:
+      - Deposit Credits
+      summary: List deposit credits held against a source document
+      description: Lists all deposit credits associated with the given source type and source id.
+      operationId: listBySource
+      parameters:
+      - name: sourceType
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: sourceId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DepositCreditResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - invoice:manage
+    post:
+      tags:
+      - Deposit Credits
+      summary: Register a deposit credit taken by a sales order
+      description: Creates a deposit credit record tied to the provided source transaction.
+      operationId: createDeposit
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDepositRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositCreditResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - invoice:manage
+  /v1/invoices/deposits/{depositCreditId}/refund:
+    post:
+      tags:
+      - Deposit Credits
+      summary: Refund a deposit credit's remaining balance
+      description: Used when the deposit's source is cancelled after the deposit was taken (spec R7.4).
+      operationId: refundDeposit
+      parameters:
+      - name: depositCreditId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: reason
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositCreditResponse'
+      security:
+      - bearerAuth: []
       x-required-permissions:
       - invoice:manage
   /v1/billing/auth/elevate:
@@ -842,6 +1099,31 @@ paths:
         - invoice:manage
       x-required-permissions:
       - invoice:manage
+  /v1/invoices/deposits/{depositCreditId}:
+    get:
+      tags:
+      - Deposit Credits
+      summary: Get a deposit credit by id
+      description: Retrieves a single deposit credit by its identifier.
+      operationId: getDeposit
+      parameters:
+      - name: depositCreditId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositCreditResponse'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - invoice:manage
 components:
   schemas:
     BillingRulesDTO:
@@ -911,6 +1193,117 @@ components:
       - updatedAt
       - updatedBy
       - version
+    PartyStandaloneRefundRequest:
+      type: object
+      description: Request to record a standalone refund anchored to a customer party
+      properties:
+        partyId:
+          type: string
+          description: Customer party the refund is anchored to
+          example: party-000123
+          maxLength: 64
+          minLength: 0
+        amount:
+          type: number
+          description: Amount to refund
+          example: 25.0
+        reason:
+          type: string
+          description: Reason the refund is being issued
+          enum:
+          - CUSTOMER_RETURN
+          - SERVICE_ERROR
+          - OVERCHARGE
+          - DAMAGED_GOODS
+          - GOODWILL
+          - CHARGEBACK_AVOIDANCE
+          - FRAUD_PREVENTION
+          - MANAGER_DISCRETION
+          - OTHER
+          example: CUSTOMER_RETURN
+        notes:
+          type: string
+          description: Optional free-text notes explaining the refund
+          example: Vendor-paid warranty settlement, no invoice on file
+        externalReference:
+          type: string
+          description: Optional correlation id to an external record (e.g. a warranty claim settlement)
+          example: WC-2026-000042
+          maxLength: 64
+          minLength: 0
+      required:
+      - amount
+      - partyId
+      - reason
+    RefundPaymentResponse:
+      type: object
+      description: Result of processing a refund against an invoice payment
+      properties:
+        refundId:
+          type: string
+          format: uuid
+          description: Unique identifier of the refund
+          example: 01960003-0000-7000-8000-000000000070
+        invoiceId:
+          type: string
+          format: uuid
+          description: Identifier of the invoice being refunded; absent for party-anchored standalone refunds
+          example: 01960003-0000-7000-8000-000000000040
+        paymentIntentId:
+          type: string
+          format: uuid
+          description: Identifier of the originating payment intent; absent for standalone refunds
+          example: 01960003-0000-7000-8000-000000000020
+        partyId:
+          type: string
+          description: Customer party associated with the refund — the anchor for standalone refunds, derived from the invoice for invoice- and payment-anchored refunds
+          example: party-000123
+        amount:
+          type: number
+          description: Refunded amount
+          example: 50.0
+        reason:
+          type: string
+          description: Reason for the refund
+          enum:
+          - CUSTOMER_RETURN
+          - SERVICE_ERROR
+          - OVERCHARGE
+          - DAMAGED_GOODS
+          - GOODWILL
+          - CHARGEBACK_AVOIDANCE
+          - FRAUD_PREVENTION
+          - MANAGER_DISCRETION
+          - OTHER
+          example: CUSTOMER_REQUEST
+        notes:
+          type: string
+          description: Free-text notes accompanying the refund
+          example: Partial refund for unused service
+        status:
+          type: string
+          description: Current status of the refund
+          enum:
+          - PENDING
+          - COMPLETED
+          - FAILED
+          example: COMPLETED
+        gatewayReference:
+          type: string
+          description: Gateway reference identifier for the refund
+          example: re_3NXyZ2eZvKYlo2Ca
+        externalReference:
+          type: string
+          description: Optional correlation id to an external record (e.g. a warranty claim settlement)
+          example: WC-2026-000042
+        completedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the refund completed
+          example: 2026-01-17 10:15:00+00:00
+      required:
+      - refundId
+      - status
     InvoiceCreationRequest:
       type: object
       description: Internal service payload for creating invoice drafts.
@@ -1131,6 +1524,7 @@ components:
           - FINALIZED
           - POSTED
           - ERROR
+          - CANCELLED
           example: FINALIZED
         subtotal:
           type: number
@@ -1232,6 +1626,41 @@ components:
           type: string
           description: Line item type (e.g. PART, LABOR, FEE, TAX)
           example: LABOR
+    StandaloneRefundRequest:
+      type: object
+      description: Request to record a standalone refund against an invoice
+      properties:
+        amount:
+          type: number
+          description: Amount to refund
+          example: 25.0
+        reason:
+          type: string
+          description: Reason the refund is being issued
+          enum:
+          - CUSTOMER_RETURN
+          - SERVICE_ERROR
+          - OVERCHARGE
+          - DAMAGED_GOODS
+          - GOODWILL
+          - CHARGEBACK_AVOIDANCE
+          - FRAUD_PREVENTION
+          - MANAGER_DISCRETION
+          - OTHER
+          example: CUSTOMER_RETURN
+        notes:
+          type: string
+          description: Optional free-text notes explaining the refund
+          example: Walk-in warranty claim on a predecessor-system cash sale
+        externalReference:
+          type: string
+          description: Optional correlation id to an external record (e.g. a warranty claim settlement)
+          example: WC-2026-000042
+          maxLength: 64
+          minLength: 0
+      required:
+      - amount
+      - reason
     GenerateReceiptRequest:
       type: object
       description: Request to generate a receipt for an invoice payment
@@ -1457,72 +1886,6 @@ components:
       required:
       - amount
       - reason
-    RefundPaymentResponse:
-      type: object
-      description: Result of processing a refund against an invoice payment
-      properties:
-        refundId:
-          type: string
-          format: uuid
-          description: Unique identifier of the refund
-          example: 01960003-0000-7000-8000-000000000070
-        invoiceId:
-          type: string
-          format: uuid
-          description: Identifier of the invoice being refunded
-          example: 01960003-0000-7000-8000-000000000040
-        paymentIntentId:
-          type: string
-          format: uuid
-          description: Identifier of the originating payment intent
-          example: 01960003-0000-7000-8000-000000000020
-        amount:
-          type: number
-          description: Refunded amount
-          example: 50.0
-        reason:
-          type: string
-          description: Reason for the refund
-          enum:
-          - CUSTOMER_RETURN
-          - SERVICE_ERROR
-          - OVERCHARGE
-          - DAMAGED_GOODS
-          - GOODWILL
-          - CHARGEBACK_AVOIDANCE
-          - FRAUD_PREVENTION
-          - MANAGER_DISCRETION
-          - OTHER
-          example: CUSTOMER_REQUEST
-        notes:
-          type: string
-          description: Free-text notes accompanying the refund
-          example: Partial refund for unused service
-        status:
-          type: string
-          description: Current status of the refund
-          enum:
-          - PENDING
-          - COMPLETED
-          - FAILED
-          example: COMPLETED
-        gatewayReference:
-          type: string
-          description: Gateway reference identifier for the refund
-          example: re_3NXyZ2eZvKYlo2Ca
-        externalReference:
-          type: string
-          description: Optional correlation id to an external record (e.g. a warranty claim settlement)
-          example: WC-2026-000042
-        completedAt:
-          type: string
-          format: date-time
-          description: Timestamp when the refund completed
-          example: 2026-01-17 10:15:00+00:00
-      required:
-      - invoiceId
-      - refundId
-      - status
     CaptureAmountRequest:
       type: object
       description: Request to capture all or part of an authorized payment hold
@@ -1551,6 +1914,46 @@ components:
           type: string
           description: Free-text reason for overriding the amount limit
           example: Customer pre-approved by branch manager
+    OrderInvoiceResponse:
+      type: object
+      description: Response returned after creating (or replaying) an invoice from a sales order.
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+          description: Invoice identifier.
+        invoiceNumber:
+          type: string
+          description: Human-facing invoice number.
+          example: INV-1770000000000-01960003
+        status:
+          type: string
+          description: Invoice status.
+          example: DRAFT
+        subtotal:
+          type: number
+          description: Invoice subtotal.
+          example: 120.0
+        taxAmount:
+          type: number
+          description: Invoice tax amount.
+          example: 9.6
+        totalAmount:
+          type: number
+          description: Invoice total.
+          example: 129.6
+        depositApplied:
+          type: number
+          description: Deposit / down-payment credit applied to this invoice at creation (odoo-parity story E4); zero when no deposit was held against the source.
+          example: 50.0
+        existing:
+          type: boolean
+          default: false
+          description: True when an existing invoice was returned (orderId replay or workorder dedupe).
+      required:
+      - existing
+      - invoiceId
+      - status
     ArtifactDownloadToken:
       type: object
       description: Short-lived signed token for downloading an invoice artifact
@@ -1601,6 +2004,187 @@ components:
       - authorizedBy
       - reason
       - type
+    OrderInvoiceCreationRequest:
+      type: object
+      description: Payload for creating an invoice from a sales order at checkout.
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          description: Sales order the invoice fronts; idempotency anchor (one invoice per order).
+          example: 01960003-0000-7000-8000-000000000010
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder being settled through this order, when the order fronts a workorder settlement; the existing workorder invoice is returned instead of creating a duplicate.
+          example: 01960003-0000-7000-8000-000000000011
+        customerId:
+          type: string
+          format: uuid
+          description: Customer party; null for anonymous counter sales.
+          example: 01960003-0000-7000-8000-000000000012
+        locationId:
+          type: string
+          format: uuid
+          description: Shop location of the sale.
+          example: 01960003-0000-7000-8000-000000000013
+        subtotal:
+          type: number
+          description: Order subtotal (post-discount, pre-tax).
+          example: 120.0
+        taxAmount:
+          type: number
+          description: Order tax total (pos-tax authoritative).
+          example: 9.6
+        totalAmount:
+          type: number
+          description: Order grand total.
+          example: 129.6
+        lines:
+          type: array
+          description: Order lines as sold.
+          items:
+            $ref: '#/components/schemas/OrderInvoiceLineItem'
+          minItems: 1
+        depositSourceType:
+          type: string
+          description: When this order is a deposit / down-payment take (odoo-parity story E4), the source document type the deposit is held against; pos-invoice registers a deposit credit.
+          enum:
+          - ESTIMATE
+          - WORKORDER
+          - ORDER
+        depositSourceId:
+          type: string
+          format: uuid
+          description: Source document id the deposit is held against (required when depositSourceType is set).
+        depositAmount:
+          type: number
+          description: Deposit amount to register as a credit; when set, the order is a deposit take.
+          example: 200.0
+      required:
+      - lines
+      - orderId
+      - subtotal
+      - taxAmount
+      - totalAmount
+    OrderInvoiceLineItem:
+      type: object
+      description: Sales order line for invoice creation.
+      properties:
+        orderLineId:
+          type: string
+          format: uuid
+          description: Sales order line identifier, carried for settlement reconciliation.
+          example: 01960003-0000-7000-8000-000000000020
+        description:
+          type: string
+          description: Line description as sold.
+          example: Brake pad set
+        quantity:
+          type: number
+          description: Quantity sold.
+          example: 2
+        unitPrice:
+          type: number
+          description: Applied unit price.
+          example: 45.0
+        amount:
+          type: number
+          description: Extended line amount (post-line-discount, pre-tax).
+          example: 90.0
+        taxAmount:
+          type: number
+          description: Per-line tax amount.
+          example: 7.2
+        type:
+          type: string
+          description: Line item type (e.g. PART, LABOR, FEE).
+          example: PART
+      required:
+      - amount
+      - description
+      - quantity
+      - unitPrice
+    CreateDepositRequest:
+      type: object
+      description: Request payload for registering a deposit / down-payment credit
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          description: Sales order that took the deposit (idempotency anchor)
+        sourceType:
+          type: string
+          description: Source document type the deposit is held against
+          enum:
+          - ESTIMATE
+          - WORKORDER
+          - ORDER
+          minLength: 1
+        sourceId:
+          type: string
+          format: uuid
+          description: Source document id
+        partyId:
+          type: string
+          description: Bill-to party, when known
+        amount:
+          type: number
+          description: Deposit amount
+          example: 200.0
+        currencyCode:
+          type: string
+          description: ISO-4217 currency; defaults to USD
+          example: USD
+      required:
+      - amount
+      - orderId
+      - sourceId
+      - sourceType
+    Application:
+      type: object
+      description: One draw-down of the credit against a settlement invoice
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+        amountApplied:
+          type: number
+        appliedAt:
+          type: string
+          format: date-time
+    DepositCreditResponse:
+      type: object
+      description: A deposit / down-payment credit and its application-audit trail
+      properties:
+        depositCreditId:
+          type: string
+          format: uuid
+        sourceType:
+          type: string
+        sourceId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        partyId:
+          type: string
+        currencyCode:
+          type: string
+        originalAmount:
+          type: number
+        remainingBalance:
+          type: number
+        status:
+          type: string
+        applications:
+          type: array
+          items:
+            $ref: '#/components/schemas/Application'
+        createdAt:
+          type: string
+          format: date-time
     ElevateRequest:
       type: object
       description: Request payload for minting a manager-approval elevation token
@@ -1632,6 +2216,45 @@ components:
       required:
       - elevationToken
       - expiresAt
+    InvoiceRefundResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        paymentIntentId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        status:
+          type: string
+          enum:
+          - PENDING
+          - COMPLETED
+          - FAILED
+        reason:
+          type: string
+          enum:
+          - CUSTOMER_RETURN
+          - SERVICE_ERROR
+          - OVERCHARGE
+          - DAMAGED_GOODS
+          - GOODWILL
+          - CHARGEBACK_AVOIDANCE
+          - FRAUD_PREVENTION
+          - MANAGER_DISCRETION
+          - OTHER
+        externalReference:
+          type: string
+        gatewayReference:
+          type: string
+        requestedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
     InvoiceArtifact:
       type: object
       description: A downloadable document associated with an invoice
@@ -1763,6 +2386,7 @@ components:
           - FINALIZED
           - POSTED
           - ERROR
+          - CANCELLED
           example: DRAFT
         total:
           type: number

@@ -200,7 +200,8 @@ public class PickListController {
                 taskId,
                 request.getScannedSkuId(),
                 request.getScannedLocationId(),
-                request.getQuantityPicked()));
+                request.getQuantityPicked(),
+                request.getLotNumber()));
     }
 
     @GetMapping("/{pickListId}/tasks")

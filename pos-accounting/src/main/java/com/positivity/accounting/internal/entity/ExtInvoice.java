@@ -9,6 +9,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -71,6 +72,15 @@ public class ExtInvoice {
 
     @Column(name = "finalized_at")
     private Instant finalizedAt;
+
+    /**
+     * Collections-aging due date (#993), frozen at finalization by pos-invoice (party payment
+     * terms over the finalization business date). Null on drafts and on events predating the
+     * enrichment; {@code OLDEST_FIRST} allocation ages by this, falling back to
+     * {@link #finalizedAt}.
+     */
+    @Column(name = "due_date")
+    private LocalDate dueDate;
 
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;

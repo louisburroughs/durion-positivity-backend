@@ -34,12 +34,16 @@ tags:
   description: Manage chart of accounts including lifecycle actions.
 - name: Bank Reconciliation
   description: 'Manual CSV bank reconciliation: import a statement, match lines to posted GL entries, record adjustments, and finalize when balanced.'
+- name: Financial Reporting for Tax Liability
+  description: Period-close-aligned freeze of the Sales-Tax Liability report
 - name: Accounting Periods
   description: 'Accounting period lifecycle: list periods, close a period, reopen a closed period, and manage the org-level hard-lock date.'
 - name: Settlement Reconciliation
   description: 'Processor settlement reconciliation review: list settlement lines, manually match an unmatched line to a receivable payment, and write off small unmatched lines.'
 - name: Vendor Directory API
   description: Vendor search and lookup endpoints for name-to-vendorId resolution (typeahead support)
+- name: Customer Credits
+  description: 'AR customer credits: balances, application to invoices, and refunds'
 - name: Location Cost Reporting
   description: Read-only location Labor & Overhead Cost Report (CAP-316)
 - name: AP Payments
@@ -870,6 +874,160 @@ paths:
         - accounting:reconciliation:adjust
       x-required-permissions:
       - accounting:reconciliation:adjust
+  /v1/accounting/reports/financial/tax-liability/snapshots:
+    get:
+      tags:
+      - Financial Reporting
+      - Financial Reporting for Tax Liability
+      summary: List Sales-Tax Liability snapshots
+      description: List snapshot summaries (no rows), newest freeze first, optionally filtered by period code.
+      operationId: listSnapshots
+      parameters:
+      - name: periodCode
+        in: query
+        description: Optional accounting period code filter (YYYY-MM)
+        required: false
+        schema:
+          type: string
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
+        example: 2026-06
+      responses:
+        '200':
+          description: Snapshot summaries (empty list when none exist)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaxLiabilitySnapshotSummary'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
+    post:
+      tags:
+      - Financial Reporting
+      - Financial Reporting for Tax Liability
+      summary: Freeze the Sales-Tax Liability report for a closed period
+      description: Generate the Sales-Tax Liability report over the accounting period's exact date range and persist it as an immutable snapshot with a canonical SHA-256 content hash. The period must be CLOSED. If an ACTIVE snapshot already exists for the period the request fails with 409 unless supersede=true, which demotes the prior snapshot to SUPERSEDED (reopen → adjust → re-close flow) and preserves history.
+      operationId: freezeSnapshot
+      parameters:
+      - name: periodCode
+        in: query
+        description: Accounting period code (YYYY-MM)
+        required: true
+        schema:
+          type: string
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
+        example: 2026-06
+      - name: supersede
+        in: query
+        description: Supersede an existing ACTIVE snapshot for the period
+        required: false
+        schema:
+          type: boolean
+          default: false
+      responses:
+        '201':
+          description: Snapshot frozen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxLiabilitySnapshotResponse'
+        '400':
+          description: Invalid period code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing accounting:tax-snapshot:freeze
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Accounting period not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Period not CLOSED, or an ACTIVE snapshot exists and supersede was not set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:tax-snapshot:freeze
+      x-required-permissions:
+      - accounting:tax-snapshot:freeze
+  /v1/accounting/reports/financial/tax-liability/snapshots/{snapshotId}/verify:
+    post:
+      tags:
+      - Financial Reporting
+      - Financial Reporting for Tax Liability
+      summary: Verify a snapshot against live data
+      description: 'Re-derive the Sales-Tax Liability report for the snapshot''s period from the live replicas and compare canonical hashes. Read-only: the snapshot is never mutated. Inconsistency means underlying data moved after the freeze (e.g. postings into a reopened period); re-freeze with supersede=true once the period is closed again.'
+      operationId: verifySnapshot
+      parameters:
+      - name: snapshotId
+        in: path
+        description: Snapshot id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Verification result (consistent=true when hashes match)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxLiabilitySnapshotVerification'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Snapshot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/reports/export:
     get:
       tags:
@@ -2739,6 +2897,108 @@ paths:
         - accounting:default-mapping:create
       x-required-permissions:
       - accounting:default-mapping:create
+  /v1/accounting/customer-credits/{creditId}/refunds:
+    post:
+      tags:
+      - Customer Credits
+      summary: Refund customer credit
+      description: Refund an open customer credit as cash back to the customer. Posts Dr Customer Credit Liability / Cr Undeposited Funds for the refunded amount. Idempotent on requestId.
+      operationId: refundCustomerCredit
+      parameters:
+      - name: creditId
+        in: path
+        description: Credit identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerCreditRefundRequest'
+        required: true
+      responses:
+        '200':
+          description: Credit refunded (or the original refund replayed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerCreditTransactionResponse'
+        '400':
+          description: Amount missing or non-positive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Credit not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Insufficient open credit, accounting period not open, or the request id was already used for a different operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:customer-credit:refund
+      x-required-permissions:
+      - accounting:customer-credit:refund
+  /v1/accounting/customer-credits/{creditId}/applications:
+    post:
+      tags:
+      - Customer Credits
+      summary: Apply customer credit to an invoice
+      description: Draw an open customer credit down against an outstanding invoice. Posts Dr Customer Credit Liability / Cr Accounts Receivable for the applied amount. Idempotent on requestId.
+      operationId: applyCustomerCredit
+      parameters:
+      - name: creditId
+        in: path
+        description: Credit identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerCreditApplicationRequest'
+        required: true
+      responses:
+        '200':
+          description: Credit applied (or the original application replayed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerCreditTransactionResponse'
+        '400':
+          description: Amount missing or non-positive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Credit or invoice not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Insufficient open credit, invoice not AR-eligible, invoice belongs to another customer, amount exceeds the invoice balance, accounting period not open, or the request id was already used for a different operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:customer-credit:apply
+      x-required-permissions:
+      - accounting:customer-credit:apply
   /v1/accounting/credit-memos:
     get:
       tags:
@@ -2837,6 +3097,57 @@ paths:
         - accounting:credit-memo:create
       x-required-permissions:
       - accounting:credit-memo:create
+  /v1/accounting/credit-memos/{creditMemoId}/void:
+    post:
+      tags:
+      - Credit Memos
+      summary: Void a posted credit memo
+      description: 'Void a POSTED Credit Memo: posts the mirror GL entry (Dr AR / Cr Revenue + Cr Sales-Tax Payable) dated at void time and restores the invoice''s outstanding balance. The memo''s original posting-period figures are never restated; the tax-liability report restores the reversed tax in the void''s period. Only POSTED memos are voidable — APPLIED memos have been consumed and VOIDED is terminal.'
+      operationId: voidCreditMemo
+      parameters:
+      - name: creditMemoId
+        in: path
+        description: Credit Memo id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoidCreditMemoRequest'
+        required: true
+      responses:
+        '200':
+          description: Credit memo voided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditMemoResponse'
+        '400':
+          description: Missing or invalid void reason
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Credit memo not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Credit memo is not in POSTED status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:credit-memo:void
+      x-required-permissions:
+      - accounting:credit-memo:void
   /v1/accounting/audit/refund:
     post:
       tags:
@@ -3346,6 +3657,106 @@ paths:
         - reporting:view:financial-statements
       x-required-permissions:
       - reporting:view:financial-statements
+  /v1/accounting/reports/financial/tax-liability:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Generate Sales-Tax Liability report
+      description: 'Generate the reconciliation-grade sales-tax liability report for a date range: per-jurisdiction (state/county/city/special) taxable base, exempt base with reasons, gross tax collected, POSTED credit-memo reversals netted pro-rata, and net tax; plus a GL-drift column reconciling total net tax against the Sales-Tax Payable (2200) account activity. Accrual basis: invoice tax bucketed by finalization period, credits by posting period.'
+      operationId: generateTaxLiability
+      parameters:
+      - name: startDate
+        in: query
+        description: Period start date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-06-01
+      - name: endDate
+        in: query
+        description: Period end date (YYYY-MM-DD)
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-06-30
+      responses:
+        '200':
+          description: Tax liability report generated successfully (rows empty when no in-period tax exists)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxLiabilityReport'
+        '400':
+          description: Invalid date range
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
+  /v1/accounting/reports/financial/tax-liability/snapshots/{snapshotId}:
+    get:
+      tags:
+      - Financial Reporting
+      - Financial Reporting for Tax Liability
+      summary: Get a Sales-Tax Liability snapshot
+      description: Full frozen snapshot including per-jurisdiction rows, totals, reconciliation, and hash.
+      operationId: getSnapshot
+      parameters:
+      - name: snapshotId
+        in: path
+        description: Snapshot id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Snapshot found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxLiabilitySnapshotResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Snapshot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/reports/financial/income-statement:
     get:
       tags:
@@ -3786,6 +4197,62 @@ paths:
         - accounting:report:export
       x-required-permissions:
       - accounting:report:export
+  /v1/accounting/reports/export/{exportId}/download:
+    get:
+      tags:
+      - Financial Reporting
+      summary: Download rendered export artifact
+      description: Download the rendered CSV or PDF artifact of a COMPLETED export job.
+      operationId: downloadExport
+      parameters:
+      - name: exportId
+        in: path
+        description: Export job UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Rendered artifact returned (content type matches the export format, e.g. text/csv or application/pdf)
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
+        '403':
+          description: Forbidden - missing reporting:view:financial-statements
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
+        '404':
+          description: Export job or artifact not found
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
+        '409':
+          description: Export job is not COMPLETED
+          content:
+            application/json:
+              schema:
+                type: string
+                format: byte
+      security:
+      - bearerAuth:
+        - accounting:report:export
+      x-required-permissions:
+      - reporting:view:financial-statements
   /v1/accounting/reconciliations:
     get:
       tags:
@@ -4592,6 +5059,81 @@ paths:
         - accounting:default-mapping:view
       x-required-permissions:
       - accounting:default-mapping:view
+  /v1/accounting/customer-credits:
+    get:
+      tags:
+      - Customer Credits
+      summary: List customer credits
+      description: List AR customer credits with their remaining open amounts, optionally filtered by customer and consumption state.
+      operationId: listCustomerCredits
+      parameters:
+      - name: customerId
+        in: query
+        description: Filter by customer
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        description: Filter by consumption state
+        required: false
+        schema:
+          type: string
+          enum:
+          - AVAILABLE
+          - PARTIALLY_CONSUMED
+          - CONSUMED
+      - name: pageable
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/Pageable'
+      responses:
+        '200':
+          description: Credits returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageCustomerCreditResponse'
+      security:
+      - bearerAuth:
+        - accounting:customer-credit:view
+      x-required-permissions:
+      - accounting:customer-credit:view
+  /v1/accounting/customer-credits/{creditId}:
+    get:
+      tags:
+      - Customer Credits
+      summary: Get customer credit
+      description: Fetch one AR customer credit with its applied/refunded totals and remaining open amount.
+      operationId: getCustomerCredit
+      parameters:
+      - name: creditId
+        in: path
+        description: Credit identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Credit returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerCreditResponse'
+        '404':
+          description: Credit not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - accounting:customer-credit:view
+      x-required-permissions:
+      - accounting:customer-credit:view
   /v1/accounting/credit-memos/{creditMemoId}:
     get:
       tags:
@@ -6301,6 +6843,231 @@ components:
           example: 01936e5e-7890-7a3d-8b6e-4d5678901234
       required:
       - receivablePaymentId
+    TaxLiabilityReconciliation:
+      type: object
+      description: Reconciliation of report net tax against the Sales-Tax Payable (2200) GL account period activity
+      properties:
+        taxPayableAccountCode:
+          type: string
+          description: Sales-Tax Payable GL account code being reconciled against
+          example: '2200'
+        glNetActivity:
+          type: number
+          description: Credit-normal net activity of account 2200 in the period (Σ credit - Σ debit of POSTED lines); zero when the account has no activity or is not seeded
+          example: 948.75
+        reportNetTax:
+          type: number
+          description: Report's total net tax across all jurisdictions (echoes report totals.netTax)
+          example: 948.75
+        unattributedCredits:
+          type: number
+          description: Credit-memo tax that could not be attributed to any jurisdiction (the credit carries no frozen breakdown and its original invoice has no attributable tax rows). Excluded from the jurisdiction rows by design, so it accounts for exactly this much of the drift
+          example: 0.0
+        drift:
+          type: number
+          description: 'GL drift: reportNetTax - glNetActivity. Zero on a clean ledger; non-zero flags a mismatch'
+          example: 0.0
+        reconciled:
+          type: boolean
+          description: True when the UNEXPLAINED drift (drift - unattributedCredits) is within the 0.01 reconciliation tolerance. Unattributed credits inflate drift by exactly their own value, so that portion is explained and does not flag the ledger as out of balance
+          example: true
+      required:
+      - drift
+      - glNetActivity
+      - reconciled
+      - reportNetTax
+      - taxPayableAccountCode
+      - unattributedCredits
+    TaxLiabilityRow:
+      type: object
+      description: Per-jurisdiction sales-tax liability row (taxable/exempt base, gross, credits netted, net tax)
+      properties:
+        jurisdictionType:
+          type: string
+          description: 'Jurisdiction level: STATE, COUNTY, CITY, or SPECIAL'
+          example: STATE
+        jurisdictionCode:
+          type: string
+          description: Jurisdiction code as reported by the tax engine
+          example: WA
+        jurisdictionName:
+          type: string
+          description: Human-readable jurisdiction name when available; null when the replica carries only the code
+          example: Washington
+        taxableBase:
+          type: number
+          description: Sum of taxable base for non-exempt lines in this jurisdiction
+          example: 12500.0
+        exemptBase:
+          type: number
+          description: Sum of taxable base for exempt / zero-rate lines in this jurisdiction
+          example: 1500.0
+        exemptionReasons:
+          type: array
+          description: Distinct exemption reason codes contributing to the exempt base (ascending); empty when none
+          items:
+            type: string
+        taxCollectedGross:
+          type: number
+          description: Gross tax collected (Σ tax_amount of non-exempt lines) before credits
+          example: 1031.25
+        creditsNetted:
+          type: number
+          description: Credit/refund tax netted against this jurisdiction — POSTED credit-memo reversals allocated pro-rata to collected tax
+          example: 82.5
+        netTax:
+          type: number
+          description: 'Net tax owed for this jurisdiction: taxCollectedGross - creditsNetted'
+          example: 948.75
+      required:
+      - creditsNetted
+      - exemptBase
+      - exemptionReasons
+      - jurisdictionCode
+      - jurisdictionType
+      - netTax
+      - taxCollectedGross
+      - taxableBase
+    TaxLiabilitySnapshotResponse:
+      type: object
+      description: Frozen Sales-Tax Liability snapshot for a closed accounting period
+      properties:
+        snapshotId:
+          type: string
+          format: uuid
+          description: Snapshot id
+        periodId:
+          type: string
+          format: uuid
+          description: Accounting period id the snapshot freezes
+        periodCode:
+          type: string
+          description: Accounting period code (YYYY-MM)
+          example: 2026-06
+        startDate:
+          type: string
+          format: date
+          description: Period start date (inclusive)
+          example: 2026-06-01
+        endDate:
+          type: string
+          format: date
+          description: Period end date (inclusive)
+          example: 2026-06-30
+        status:
+          type: string
+          description: 'Snapshot lifecycle status: ACTIVE or SUPERSEDED'
+          example: ACTIVE
+        periodClosedAt:
+          type: string
+          format: date-time
+          description: The period's closedAt at freeze time
+        frozenAt:
+          type: string
+          format: date-time
+          description: Freeze timestamp
+        frozenBy:
+          type: string
+          description: User who froze the snapshot
+          example: controller
+        contentHash:
+          type: string
+          description: SHA-256 (lowercase hex) over the canonical report serialization
+        rows:
+          type: array
+          description: Frozen per-jurisdiction rows in report order
+          items:
+            $ref: '#/components/schemas/TaxLiabilityRow'
+        totalTaxableBase:
+          type: number
+          description: Grand total taxable base
+        totalExemptBase:
+          type: number
+          description: Grand total exempt base
+        totalTaxCollectedGross:
+          type: number
+          description: Grand total gross tax collected
+        totalCreditsNetted:
+          type: number
+          description: Grand total credits netted
+        totalNetTax:
+          type: number
+          description: Grand total net tax
+        reconciliation:
+          $ref: '#/components/schemas/TaxLiabilityReconciliation'
+        supersedesSnapshotId:
+          type: string
+          format: uuid
+          description: Id of the ACTIVE snapshot this one superseded at freeze time; null for a first freeze
+        supersededAt:
+          type: string
+          format: date-time
+          description: When this snapshot was superseded; null while ACTIVE
+        supersededBy:
+          type: string
+          description: User whose re-freeze superseded this snapshot; null while ACTIVE
+      required:
+      - contentHash
+      - endDate
+      - frozenAt
+      - frozenBy
+      - periodClosedAt
+      - periodCode
+      - periodId
+      - reconciliation
+      - rows
+      - snapshotId
+      - startDate
+      - status
+      - totalCreditsNetted
+      - totalExemptBase
+      - totalNetTax
+      - totalTaxCollectedGross
+      - totalTaxableBase
+    TaxLiabilitySnapshotVerification:
+      type: object
+      description: Re-derivation check of a frozen Sales-Tax Liability snapshot against live data
+      properties:
+        snapshotId:
+          type: string
+          format: uuid
+          description: Snapshot id verified
+        periodCode:
+          type: string
+          description: Accounting period code (YYYY-MM)
+          example: 2026-06
+        verifiedAt:
+          type: string
+          format: date-time
+          description: Verification timestamp
+        snapshotContentHash:
+          type: string
+          description: Canonical hash stored at freeze time
+        recomputedContentHash:
+          type: string
+          description: Canonical hash of the report re-derived from live data
+        consistent:
+          type: boolean
+          description: True when the re-derived report hashes identically to the frozen snapshot
+        frozenTotalNetTax:
+          type: number
+          description: Total net tax as frozen
+        recomputedTotalNetTax:
+          type: number
+          description: Total net tax re-derived from live data
+        netTaxDelta:
+          type: number
+          description: recomputedTotalNetTax - frozenTotalNetTax; zero when amounts agree even if row detail moved
+      required:
+      - consistent
+      - frozenTotalNetTax
+      - netTaxDelta
+      - periodCode
+      - recomputedContentHash
+      - recomputedTotalNetTax
+      - snapshotContentHash
+      - snapshotId
+      - verifiedAt
     ReportExportRequest:
       type: object
       description: Request payload for exporting a financial report
@@ -6316,8 +7083,8 @@ components:
           example: CSV
         reportType:
           type: string
-          description: Report type key
-          example: JOURNAL_LINES
+          description: 'Report type key. Renderable types: TAX_LIABILITY, INCOME_STATEMENT, BALANCE_SHEET, TRIAL_BALANCE, GENERAL_LEDGER, AGED_RECEIVABLES, AGED_PAYABLES.'
+          example: INCOME_STATEMENT
           maxLength: 100
           minLength: 0
         startDate:
@@ -6328,13 +7095,18 @@ components:
         endDate:
           type: string
           format: date
-          description: Period end date (inclusive, YYYY-MM-DD)
+          description: Period end date (inclusive, YYYY-MM-DD). For the as-of reports (BALANCE_SHEET, TRIAL_BALANCE, AGED_RECEIVABLES, AGED_PAYABLES) this date is used as the as-of date.
           example: 2026-03-31
         organizationId:
           type: string
           format: uuid
           description: Organization UUID to scope the export
           example: d10217f9-3ec6-46b9-9c87-e7066c100c24
+        accountId:
+          type: string
+          format: uuid
+          description: Optional GL account UUID filter, honored by GENERAL_LEDGER exports only; null spans all accounts
+          example: 123e4567-e89b-12d3-a456-426614174000
         filename:
           type: string
           description: Optional output filename without extension
@@ -6388,6 +7160,10 @@ components:
           - XLSX
           - JSON
           example: CSV
+        failureReason:
+          type: string
+          description: Failure reason (only present when status is FAILED)
+          example: Rendering is not supported for reportType 'INCOME_STATEMENT'
         reportType:
           type: string
           description: Report type that was exported
@@ -7654,6 +8430,100 @@ components:
           example: Mapping rules corrected after vendor GL update
       required:
       - triggeredByUserId
+    CustomerCreditRefundRequest:
+      type: object
+      description: Refund an open customer credit as cash back to the customer
+      properties:
+        requestId:
+          type: string
+          description: Caller-supplied idempotency key. Replaying the same key returns the original refund instead of relieving the credit liability twice
+          example: credit-refund-2026-07-22-0001
+          maxLength: 100
+          minLength: 0
+        amount:
+          type: number
+          description: Amount to refund. Must not exceed the credit's open amount
+          example: 50.0
+          minimum: 0.01
+        note:
+          type: string
+          description: Optional audit note explaining why the credit is being refunded
+          maxLength: 500
+          minLength: 0
+      required:
+      - amount
+      - requestId
+    CustomerCreditTransactionResponse:
+      type: object
+      description: A single customer-credit draw-down and the credit state it left behind
+      properties:
+        creditTransactionId:
+          type: string
+          format: uuid
+          description: Draw-down identifier
+        creditId:
+          type: string
+          format: uuid
+          description: Credit that was drawn down
+        transactionType:
+          type: string
+          description: Whether the credit settled an invoice or was refunded as cash
+          enum:
+          - APPLICATION
+          - REFUND
+        invoiceId:
+          type: string
+          format: uuid
+          description: Invoice settled by an APPLICATION; null for a REFUND
+        amount:
+          type: number
+          description: Amount drawn down
+          example: 20.0
+        currency:
+          type: string
+          description: Currency (ISO 4217)
+          example: USD
+        requestId:
+          type: string
+          description: Caller-supplied idempotency key this draw-down was recorded under
+        creditOpenAmountAfter:
+          type: number
+          description: Credit's remaining open amount after this draw-down
+          example: 30.0
+        invoiceBalanceAfter:
+          type: number
+          description: Invoice balance after the credit was applied; null for a REFUND
+          example: 80.0
+        createdAt:
+          type: string
+          format: date-time
+          description: When the draw-down was recorded
+        replayed:
+          type: boolean
+          description: True when this response replays an already-processed request id rather than recording a new draw-down
+    CustomerCreditApplicationRequest:
+      type: object
+      description: Apply an open customer credit to an outstanding invoice
+      properties:
+        requestId:
+          type: string
+          description: Caller-supplied idempotency key. Replaying the same key returns the original application instead of relieving the credit liability twice
+          example: credit-apply-2026-07-22-0001
+          maxLength: 100
+          minLength: 0
+        invoiceId:
+          type: string
+          format: uuid
+          description: Invoice the credit settles. Must exist in the invoice replica, be AR-eligible, and have a positive balance
+        amount:
+          type: number
+          description: Amount to apply. Must not exceed the credit's open amount, nor the invoice's remaining balance
+          example: 50.0
+          minimum: 0.01
+      required:
+      - amount
+      - invoiceId
+      - requestId
     CreateCreditMemoRequest:
       type: object
       description: Request to create a credit memo against a finalized invoice
@@ -7758,6 +8628,16 @@ components:
           type: string
           description: ISO 4217 currency code
           example: USD
+        voidedTimestamp:
+          type: string
+          format: date-time
+          description: When the memo was voided; null unless status is VOIDED
+        voidedByUserId:
+          type: string
+          description: User who voided the memo; null unless status is VOIDED
+        voidReason:
+          type: string
+          description: Reason the memo was voided; null unless status is VOIDED
         invoiceBalanceAfter:
           type: number
           description: Invoice outstanding balance after the credit was applied
@@ -7768,6 +8648,18 @@ components:
       - creditMemoId
       - originalInvoiceId
       - status
+    VoidCreditMemoRequest:
+      type: object
+      description: Void a POSTED credit memo, restoring AR and the reversed tax liability
+      properties:
+        voidReason:
+          type: string
+          description: Reason the memo is being voided (audit trail)
+          example: Issued against the wrong invoice
+          maxLength: 1000
+          minLength: 0
+      required:
+      - voidReason
     RefundRequest:
       type: object
       description: Request to record a refund audit event
@@ -8598,6 +9490,105 @@ components:
       - balance
       - totalCredit
       - totalDebit
+    TaxLiabilityReport:
+      type: object
+      description: 'Sales-Tax Liability report: per-jurisdiction taxable/exempt base, gross, credits, net tax, and GL drift'
+      properties:
+        startDate:
+          type: string
+          format: date
+          description: Period start date (inclusive)
+          example: 2026-06-01
+        endDate:
+          type: string
+          format: date
+          description: Period end date (inclusive)
+          example: 2026-06-30
+        generatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the report was generated (ISO 8601)
+          example: 2026-06-30 08:00:00+00:00
+        rows:
+          type: array
+          description: Per-jurisdiction rows ordered by level (state/county/city/special) then code; empty when no in-period tax exists
+          items:
+            $ref: '#/components/schemas/TaxLiabilityRow'
+        totalTaxableBase:
+          type: number
+          description: Grand total taxable base across all jurisdictions
+          example: 12500.0
+        totalExemptBase:
+          type: number
+          description: Grand total exempt base across all jurisdictions
+          example: 1500.0
+        totalTaxCollectedGross:
+          type: number
+          description: Grand total gross tax collected across all jurisdictions
+          example: 1031.25
+        totalCreditsNetted:
+          type: number
+          description: Grand total credits netted across all jurisdictions
+          example: 82.5
+        totalNetTax:
+          type: number
+          description: Grand total net tax across all jurisdictions
+          example: 948.75
+        reconciliation:
+          $ref: '#/components/schemas/TaxLiabilityReconciliation'
+      required:
+      - endDate
+      - generatedAt
+      - reconciliation
+      - rows
+      - startDate
+      - totalCreditsNetted
+      - totalExemptBase
+      - totalNetTax
+      - totalTaxCollectedGross
+      - totalTaxableBase
+    TaxLiabilitySnapshotSummary:
+      type: object
+      description: Sales-Tax Liability snapshot list item (no rows)
+      properties:
+        snapshotId:
+          type: string
+          format: uuid
+          description: Snapshot id
+        periodCode:
+          type: string
+          description: Accounting period code (YYYY-MM)
+          example: 2026-06
+        status:
+          type: string
+          description: 'Snapshot lifecycle status: ACTIVE or SUPERSEDED'
+          example: ACTIVE
+        frozenAt:
+          type: string
+          format: date-time
+          description: Freeze timestamp
+        frozenBy:
+          type: string
+          description: User who froze the snapshot
+          example: controller
+        totalNetTax:
+          type: number
+          description: Grand total net tax as frozen
+        reconciled:
+          type: boolean
+          description: Whether GL drift was within tolerance at freeze time
+        contentHash:
+          type: string
+          description: SHA-256 canonical content hash
+      required:
+      - contentHash
+      - frozenAt
+      - frozenBy
+      - periodCode
+      - reconciled
+      - snapshotId
+      - status
+      - totalNetTax
     IncomeStatementReport:
       type: object
       description: Income statement (Profit & Loss) report built from POSTED journal entries
@@ -9811,6 +10802,85 @@ components:
       - size
       - totalElements
       - totalPages
+    CustomerCreditResponse:
+      type: object
+      description: AR customer credit with its remaining open amount
+      properties:
+        creditId:
+          type: string
+          format: uuid
+          description: Credit identifier
+        customerId:
+          type: string
+          format: uuid
+          description: Customer the credit belongs to
+        currency:
+          type: string
+          description: Currency (ISO 4217)
+          example: USD
+        amount:
+          type: number
+          description: Amount originally issued
+          example: 50.0
+        appliedAmount:
+          type: number
+          description: Cumulative amount applied against invoices
+          example: 20.0
+        refundedAmount:
+          type: number
+          description: Cumulative amount refunded to the customer
+          example: 0.0
+        openAmount:
+          type: number
+          description: Remaining credit owed to the customer (amount - applied - refunded); this is the credit's contribution to the Customer Credit Liability (2300) control account
+          example: 30.0
+        status:
+          type: string
+          description: Consumption state derived from the applied/refunded totals
+          enum:
+          - AVAILABLE
+          - PARTIALLY_CONSUMED
+          - CONSUMED
+        sourcePaymentId:
+          type: string
+          format: uuid
+          description: Payment whose overpayment created the credit
+        createdAt:
+          type: string
+          format: date-time
+          description: When the credit was issued
+    PageCustomerCreditResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerCreditResponse'
+        number:
+          type: integer
+          format: int32
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+          format: int32
+        empty:
+          type: boolean
     PageCreditMemoResponse:
       type: object
       properties:

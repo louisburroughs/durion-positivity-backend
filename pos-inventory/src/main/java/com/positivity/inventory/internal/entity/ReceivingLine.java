@@ -67,6 +67,22 @@ public class ReceivingLine {
     @Column(name = "workorder_line_id", length = 255)
     private String workorderLineId;
 
+    /** Lot/batch number keyed on receipt; validated + linked for LOT-tracked products (odoo-parity E1, #1038). */
+    @Column(name = "lot_number", length = 128)
+    private String lotNumber;
+
+    /** UoM the line was keyed in, when it differed from base (odoo-parity B2, #1034). */
+    @Column(name = "document_uom", length = 32)
+    private String documentUom;
+
+    /** Quantity as keyed in {@code documentUom}; {@code receivedQuantity} holds the base quantity. */
+    @Column(name = "document_quantity", precision = 18, scale = 6)
+    private BigDecimal documentQuantity;
+
+    /** Effective base-per-document-unit factor applied at conversion time (audit). */
+    @Column(name = "conversion_factor", precision = 20, scale = 6)
+    private BigDecimal conversionFactor;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

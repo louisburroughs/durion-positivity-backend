@@ -117,6 +117,36 @@ public class InventoryPermissionRegistry {
      */
     public static final String PUTAWAY_OVERRIDE_LOCATION_CAPACITY = "inventory:putaway:override_location_capacity";
 
+    // ==================== TRANSFER ORDER PERMISSIONS ====================
+
+    /**
+     * Create or cancel a cross-site transfer order (odoo-parity C1, issue #1035).
+     * Cancellation is only allowed before dispatch.
+     */
+    public static final String TRANSFER_CREATE = "inventory:transfer:create";
+
+    /**
+     * View transfer orders, their lines, and lifecycle status.
+     */
+    public static final String TRANSFER_VIEW = "inventory:transfer:view";
+
+    /**
+     * Approve and dispatch a transfer order (posts TRANSFER_OUT at the source into transit).
+     * Approval (config-flagged, decision D-8) rides on the dispatch authority.
+     */
+    public static final String TRANSFER_DISPATCH = "inventory:transfer:dispatch";
+
+    /**
+     * Receive dispatched transfer quantities at the destination (posts TRANSFER_IN).
+     */
+    public static final String TRANSFER_RECEIVE = "inventory:transfer:receive";
+
+    /**
+     * Short-close a dispatched transfer order with a loss/return disposition
+     * (parity-C3; registered now so the catalog needs no second bump).
+     */
+    public static final String TRANSFER_SHORT_CLOSE = "inventory:transfer:short_close";
+
     // ==================== CYCLE COUNT PERMISSIONS ====================
 
     /**
@@ -136,6 +166,22 @@ public class InventoryPermissionRegistry {
      */
     public static final String CYCLE_COUNT_COMPLETE = "inventory:cycle_count:complete";
 
+    // ==================== REPLENISHMENT PERMISSIONS ====================
+
+    /**
+     * Manage replenishment: create/maintain replenishment policies and run the
+     * batch replenishment scan (CAP-217 / odoo-parity F1, issue #1025).
+     */
+    public static final String REPLENISHMENT_MANAGE = "inventory:replenishment:manage";
+
+    // ==================== LOT PERMISSIONS ====================
+
+    /**
+     * Manage lot lifecycle: quarantine/recall/release a lot and set its expiration/alert dates
+     * (odoo-parity E3, issue #1047).
+     */
+    public static final String LOT_MANAGE = "inventory:lot:manage";
+
     // ==================== INVENTORY VIEW PERMISSIONS ====================
 
     /**
@@ -147,6 +193,24 @@ public class InventoryPermissionRegistry {
      * Search inventory across locations.
      */
     public static final String INVENTORY_SEARCH = "inventory:on_hand:search";
+
+    // ==================== VALUATION PERMISSIONS ====================
+
+    /**
+     * View inventory valuation (on-hand × current unit cost) at SKU level, including the as-of
+     * variant (odoo-parity J2, issue #1052). Quantities × cost are doubly sensitive
+     * (DECISION-INVENTORY-011), so valuation is gated separately from on-hand view and never
+     * exposed under {@link #INVENTORY_VIEW} alone.
+     */
+    public static final String VALUATION_VIEW = "inventory:valuation:view";
+
+    /**
+     * Submit, approve, or reject a manual cost revaluation (standard-price / AVCO correction),
+     * odoo-parity J4 (issue #1054). Distinct from the read-only {@link #VALUATION_VIEW}: revaluation
+     * restates inventory value and posts a revaluation JE, so it gates all mutating revaluation
+     * actions.
+     */
+    public static final String VALUATION_ADJUST = "inventory:valuation:adjust";
 
     // ==================== PERMISSION REGISTRATION ====================
 
@@ -234,9 +298,58 @@ public class InventoryPermissionRegistry {
                 permission(CYCLE_COUNT_VIEW, "View cycle count tasks and results", "LOW"),
                 permission(CYCLE_COUNT_COMPLETE, "Complete and submit cycle count results", "MEDIUM"),
 
+                // Transfer order permissions (5)
+                permission(
+                        TRANSFER_CREATE,
+                        "Create or cancel a cross-site transfer order (DRAFT; cancel only before dispatch)",
+                        "MEDIUM",
+                        "Issue #1035"),
+                permission(TRANSFER_VIEW, "View transfer orders, their lines, and lifecycle status", "LOW"),
+                permission(
+                        TRANSFER_DISPATCH,
+                        "Approve and dispatch a transfer order (posts TRANSFER_OUT at the source into transit)",
+                        "HIGH",
+                        "Issue #1035"),
+                permission(
+                        TRANSFER_RECEIVE,
+                        "Receive dispatched transfer quantities at the destination (posts TRANSFER_IN)",
+                        "HIGH",
+                        "Issue #1036"),
+                permission(
+                        TRANSFER_SHORT_CLOSE,
+                        "Short-close a dispatched transfer order with a loss/return disposition (parity-C3)",
+                        "HIGH",
+                        "Issue #1035"),
+
+                // Replenishment permissions (1)
+                permission(
+                        REPLENISHMENT_MANAGE,
+                        "Manage replenishment policies and run the batch replenishment scan",
+                        "MEDIUM",
+                        "Issue #1025"),
+
+                // Lot permissions (1)
+                permission(
+                        LOT_MANAGE,
+                        "Manage lot lifecycle: quarantine/recall/release and set expiration/alert dates",
+                        "MEDIUM",
+                        "Issue #1047"),
+
                 // Inventory view permissions (2)
                 permission(INVENTORY_VIEW, "View on-hand inventory levels at locations", "LOW"),
-                permission(INVENTORY_SEARCH, "Search inventory across multiple locations", "LOW"));
+                permission(INVENTORY_SEARCH, "Search inventory across multiple locations", "LOW"),
+
+                // Valuation permissions (2)
+                permission(
+                        VALUATION_VIEW,
+                        "View inventory valuation (on-hand x current unit cost) at SKU level, including as-of",
+                        "MEDIUM",
+                        "Issue #1052"),
+                permission(
+                        VALUATION_ADJUST,
+                        "Submit, approve, or reject a manual cost revaluation (standard-price / AVCO correction)",
+                        "HIGH",
+                        "Issue #1054"));
     }
 
     /**
@@ -316,5 +429,33 @@ public class InventoryPermissionRegistry {
      */
     public static List<String> inventoryViewPermissions() {
         return Arrays.asList(INVENTORY_VIEW, INVENTORY_SEARCH);
+    }
+
+    /**
+     * Valuation permissions
+     */
+    public static List<String> valuationPermissions() {
+        return Arrays.asList(VALUATION_VIEW, VALUATION_ADJUST);
+    }
+
+    /**
+     * Replenishment permissions
+     */
+    public static List<String> replenishmentPermissions() {
+        return Arrays.asList(REPLENISHMENT_MANAGE);
+    }
+
+    /**
+     * Lot management permissions
+     */
+    public static List<String> lotPermissions() {
+        return Arrays.asList(LOT_MANAGE);
+    }
+
+    /**
+     * Transfer order permissions
+     */
+    public static List<String> transferOrderPermissions() {
+        return Arrays.asList(TRANSFER_CREATE, TRANSFER_VIEW, TRANSFER_DISPATCH, TRANSFER_RECEIVE, TRANSFER_SHORT_CLOSE);
     }
 }

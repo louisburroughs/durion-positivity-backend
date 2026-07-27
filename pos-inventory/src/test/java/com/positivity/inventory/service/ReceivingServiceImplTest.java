@@ -29,6 +29,7 @@ import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryVarianceRepository;
 import com.positivity.inventory.internal.repository.ReceivingSessionRepository;
+import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.ReceivingServiceImpl;
 import com.positivity.inventory.internal.service.SiteDefaultsService;
 import com.positivity.inventory.internal.service.WorkorderValidationService;
@@ -76,6 +77,9 @@ class ReceivingServiceImplTest {
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
     @Mock
+    private LedgerPostingService ledgerPostingService;
+
+    @Mock
     private SourceDocumentStubClient sourceDocumentStubClient;
 
     @Mock
@@ -86,6 +90,16 @@ class ReceivingServiceImplTest {
 
     @org.mockito.Mock
     private com.positivity.inventory.internal.service.InventoryFactPublisher inventoryFactPublisher;
+
+    @Spy
+    private com.positivity.inventory.internal.service.DocumentQuantityConverter documentQuantityConverter =
+            new com.positivity.inventory.internal.service.DocumentQuantityConverter(
+                    org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class));
+
+    // Lot gate answers "untracked" for every SKU in these unit tests (E1 #1038): the mock's
+    // resolveReceiptLot returns null by default.
+    @Mock
+    private com.positivity.inventory.internal.service.InventoryLotCaptureService lotCaptureService;
 
     @InjectMocks
     private ReceivingServiceImpl receivingService;
@@ -196,7 +210,7 @@ class ReceivingServiceImplTest {
     void receiveItemsIntoStaging_exactQuantity_returnsLinesProcessedAndEmptyVariances() {
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        ReceiveLineRequest line = new ReceiveLineRequest(lineId, new BigDecimal("10"));
+        ReceiveLineRequest line = new ReceiveLineRequest(lineId, new BigDecimal("10"), null, null, null);
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(line));
 
         // Mock the session repository to return a session
@@ -224,7 +238,7 @@ class ReceivingServiceImplTest {
     void receiveItemsIntoStaging_shortQuantity_returnsShortageVariance() {
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        ReceiveLineRequest line = new ReceiveLineRequest(lineId, new BigDecimal("8"));
+        ReceiveLineRequest line = new ReceiveLineRequest(lineId, new BigDecimal("8"), null, null, null);
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(line));
 
         // Mock the session repository to return a session
@@ -258,7 +272,7 @@ class ReceivingServiceImplTest {
     void receiveItemsIntoStaging_overQuantity_returnsOverageVariance() {
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        ReceiveLineRequest line = new ReceiveLineRequest(lineId, new BigDecimal("12"));
+        ReceiveLineRequest line = new ReceiveLineRequest(lineId, new BigDecimal("12"), null, null, null);
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(line));
 
         // Mock the session repository to return a session
@@ -291,8 +305,8 @@ class ReceivingServiceImplTest {
     @Test
     void receiveItemsIntoStaging_sessionNotFound_throwsNotFoundException() {
         UUID unknownSessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        ReceiveLineRequest line =
-                new ReceiveLineRequest(UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("5"));
+        ReceiveLineRequest line = new ReceiveLineRequest(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("5"), null, null, null);
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(line));
 
         // We need to mock the repository to throw the exception
@@ -319,8 +333,10 @@ class ReceivingServiceImplTest {
                 .build();
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
 
-        ReceiveLineRequest knownLineRequest = new ReceiveLineRequest(knownLineId, new BigDecimal("10"));
-        ReceiveLineRequest unknownLineRequest = new ReceiveLineRequest(unknownLineId, new BigDecimal("5"));
+        ReceiveLineRequest knownLineRequest =
+                new ReceiveLineRequest(knownLineId, new BigDecimal("10"), null, null, null);
+        ReceiveLineRequest unknownLineRequest =
+                new ReceiveLineRequest(unknownLineId, new BigDecimal("5"), null, null, null);
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(knownLineRequest, unknownLineRequest));
 
         ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
@@ -357,8 +373,8 @@ class ReceivingServiceImplTest {
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(inventoryVarianceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        ReceiveLineRequest req1 = new ReceiveLineRequest(lineId1, new BigDecimal("10")); // Exact
-        ReceiveLineRequest req2 = new ReceiveLineRequest(lineId2, new BigDecimal("15")); // Short
+        ReceiveLineRequest req1 = new ReceiveLineRequest(lineId1, new BigDecimal("10"), null, null, null); // Exact
+        ReceiveLineRequest req2 = new ReceiveLineRequest(lineId2, new BigDecimal("15"), null, null, null); // Short
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(req1, req2));
 
         ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
@@ -395,7 +411,7 @@ class ReceivingServiceImplTest {
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
 
-        ReceiveLineRequest req1 = new ReceiveLineRequest(lineId1, new BigDecimal("10")); // Exact
+        ReceiveLineRequest req1 = new ReceiveLineRequest(lineId1, new BigDecimal("10"), null, null, null); // Exact
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(req1));
 
         ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
@@ -429,8 +445,8 @@ class ReceivingServiceImplTest {
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
 
-        ReceiveLineRequest req1 = new ReceiveLineRequest(lineId1, new BigDecimal("10"));
-        ReceiveLineRequest req2 = new ReceiveLineRequest(lineId2, new BigDecimal("20"));
+        ReceiveLineRequest req1 = new ReceiveLineRequest(lineId1, new BigDecimal("10"), null, null, null);
+        ReceiveLineRequest req2 = new ReceiveLineRequest(lineId2, new BigDecimal("20"), null, null, null);
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(req1, req2));
 
         ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
@@ -508,7 +524,7 @@ class ReceivingServiceImplTest {
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
 
-        ReceiveLineRequest req1 = new ReceiveLineRequest(lineId1, new BigDecimal("10"));
+        ReceiveLineRequest req1 = new ReceiveLineRequest(lineId1, new BigDecimal("10"), null, null, null);
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(req1));
 
         ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
@@ -537,7 +553,7 @@ class ReceivingServiceImplTest {
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        ReceiveLineRequest lineReq = new ReceiveLineRequest(lineId, new BigDecimal("10"));
+        ReceiveLineRequest lineReq = new ReceiveLineRequest(lineId, new BigDecimal("10"), null, null, null);
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(lineReq));
 
         ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
@@ -569,17 +585,17 @@ class ReceivingServiceImplTest {
         line.setSession(session);
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(inventoryLedgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", STAGING_LOCATION_ID))
                 .thenReturn(7);
 
-        ReceiveItemsRequest request =
-                new ReceiveItemsRequest(List.of(new ReceiveLineRequest(lineId, new BigDecimal("10"))));
+        ReceiveItemsRequest request = new ReceiveItemsRequest(
+                List.of(new ReceiveLineRequest(lineId, new BigDecimal("10"), null, null, null)));
 
         receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
 
         ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
-        verify(inventoryLedgerEntryRepository).save(ledgerCaptor.capture());
+        verify(ledgerPostingService).post(ledgerCaptor.capture());
         InventoryLedgerEntry savedLedgerEntry = ledgerCaptor.getValue();
 
         assertThat(savedLedgerEntry.getLocationId()).isEqualTo(STAGING_LOCATION_ID);
@@ -615,17 +631,17 @@ class ReceivingServiceImplTest {
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(siteDefaultsService.getDefaultStagingLocationId(siteId))
                 .thenReturn(Optional.of(siteDefaultStagingLocationId));
-        when(inventoryLedgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", siteDefaultStagingLocationId))
                 .thenReturn(7);
 
-        ReceiveItemsRequest request =
-                new ReceiveItemsRequest(List.of(new ReceiveLineRequest(lineId, new BigDecimal("10"))));
+        ReceiveItemsRequest request = new ReceiveItemsRequest(
+                List.of(new ReceiveLineRequest(lineId, new BigDecimal("10"), null, null, null)));
 
         receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
 
         ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
-        verify(inventoryLedgerEntryRepository).save(ledgerCaptor.capture());
+        verify(ledgerPostingService).post(ledgerCaptor.capture());
         InventoryLedgerEntry savedLedgerEntry = ledgerCaptor.getValue();
 
         assertThat(savedLedgerEntry.getLocationId()).isEqualTo(siteDefaultStagingLocationId);
@@ -655,7 +671,7 @@ class ReceivingServiceImplTest {
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryVarianceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        ReceiveLineRequest lineReq = new ReceiveLineRequest(lineId, new BigDecimal("8"));
+        ReceiveLineRequest lineReq = new ReceiveLineRequest(lineId, new BigDecimal("8"), null, null, null);
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(lineReq));
 
         ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
@@ -689,7 +705,7 @@ class ReceivingServiceImplTest {
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryVarianceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        ReceiveLineRequest lineReq = new ReceiveLineRequest(lineId, new BigDecimal("12"));
+        ReceiveLineRequest lineReq = new ReceiveLineRequest(lineId, new BigDecimal("12"), null, null, null);
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(lineReq));
 
         ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
@@ -729,8 +745,8 @@ class ReceivingServiceImplTest {
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ReceiveItemsRequest request = new ReceiveItemsRequest(List.of(
-                new ReceiveLineRequest(lineId1, new BigDecimal("10")),
-                new ReceiveLineRequest(lineId2, new BigDecimal("5"))));
+                new ReceiveLineRequest(lineId1, new BigDecimal("10"), null, null, null),
+                new ReceiveLineRequest(lineId2, new BigDecimal("5"), null, null, null)));
 
         ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
         assertThat(response.getSessionStatus()).isEqualTo("COMPLETED");
@@ -900,7 +916,7 @@ class ReceivingServiceImplTest {
                 () -> receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "actor-user"));
 
         assertThat(exception.getMessage()).contains("exceeds expected quantity");
-        verify(inventoryLedgerEntryRepository, never()).save(any());
+        verify(ledgerPostingService, never()).post(any());
         verify(receivingSessionRepository, never()).save(any(ReceivingSession.class));
     }
 
@@ -1109,7 +1125,7 @@ class ReceivingServiceImplTest {
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(inventoryLedgerEntryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
                 .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", CROSS_DOCK_LOCATION_ID))
@@ -1121,7 +1137,7 @@ class ReceivingServiceImplTest {
         receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "actor-user");
 
         ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
-        verify(inventoryLedgerEntryRepository, times(2)).save(ledgerCaptor.capture());
+        verify(ledgerPostingService, times(2)).post(ledgerCaptor.capture());
         List<InventoryLedgerEntry> savedEntries = ledgerCaptor.getAllValues();
 
         InventoryLedgerEntry receiptEntry = savedEntries.get(0);
@@ -1164,8 +1180,8 @@ class ReceivingServiceImplTest {
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        ReceiveItemsRequest request =
-                new ReceiveItemsRequest(List.of(new ReceiveLineRequest(lineId1, new BigDecimal("10"))));
+        ReceiveItemsRequest request = new ReceiveItemsRequest(
+                List.of(new ReceiveLineRequest(lineId1, new BigDecimal("10"), null, null, null)));
 
         ReceiveItemsResponse response = receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
         assertThat(response.getSessionStatus()).isEqualTo("IN_PROGRESS");
@@ -1191,8 +1207,8 @@ class ReceivingServiceImplTest {
 
         when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
 
-        ReceiveItemsRequest request =
-                new ReceiveItemsRequest(List.of(new ReceiveLineRequest(lineId, new BigDecimal("2.75"))));
+        ReceiveItemsRequest request = new ReceiveItemsRequest(
+                List.of(new ReceiveLineRequest(lineId, new BigDecimal("2.75"), null, null, null)));
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,

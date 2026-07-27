@@ -8,63 +8,86 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.order.internal.client.BillingPort;
 import com.positivity.order.internal.client.CancelWorkorderCommand;
+import com.positivity.order.internal.client.InvoicingPort;
 import com.positivity.order.internal.client.PaymentReversalResult;
 import com.positivity.order.internal.client.ReversePaymentCommand;
 import com.positivity.order.internal.client.WorkexecPort;
 import com.positivity.order.internal.client.WorkorderCancelResult;
 import com.positivity.order.internal.client.WorkorderStatusResult;
+import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
+import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
 import com.positivity.order.internal.service.OrderCancellationServiceImpl;
 import com.positivity.order.service.model.CancelOrderCommand;
 import com.positivity.order.service.model.CancellationResult;
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 /**
- * Unit tests for {@link OrderCancellationServiceImpl} covering the POS
- * cancellation
- * saga: state gating, Workexec gating, billing reversal, idempotency, and retry
- * path.
+ * Unit tests for {@link OrderCancellationServiceImpl} covering the POS cancellation saga: state
+ * gating, Workexec gating, ledger-driven payment reversal (spec R4.6, story C3), idempotency, and
+ * the retry path.
  *
- * <p>
- * Issue: #19
+ * <p>Issues: #19, #1072.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-@DisplayName("OrderCancellationServiceImpl Unit Tests — Issue #19")
+@DisplayName("OrderCancellationServiceImpl Unit Tests")
 class OrderCancellationServiceImplTest {
 
     @Mock
     private SalesOrderRepository salesOrderRepository;
 
     @Mock
+    private OrderPaymentRecordRepository paymentRecordRepository;
+
+    @Mock
     private WorkexecPort workexecPort;
 
     @Mock
-    private BillingPort billingPort;
+    private InvoicingPort invoicingPort;
 
-    @InjectMocks
+    @Mock
+    private com.positivity.order.internal.repository.OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+    @Mock
+    private com.positivity.order.internal.config.OrderDomainEventPublisher orderDomainEventPublisher;
+
     private OrderCancellationServiceImpl orderCancellationService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        orderCancellationService = new OrderCancellationServiceImpl(
+                salesOrderRepository,
+                paymentRecordRepository,
+                workexecPort,
+                invoicingPort,
+                new com.positivity.order.internal.service.OrderStateMachine(
+                        orderStatusHistoryRepository, java.time.Clock.systemUTC()),
+                orderDomainEventPublisher);
+        when(paymentRecordRepository.findByOrderId(any())).thenReturn(List.of());
+    }
 
     // ── shared fixtures ───────────────────────────────────────────────────────
 
     private static final UUID ORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID WORKORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
-    private static final UUID PAYMENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
+    private static final UUID INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
+    private static final UUID INTENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000004");
 
     private SalesOrder draftOrder() {
         return SalesOrder.builder()
@@ -85,48 +108,44 @@ class OrderCancellationServiceImplTest {
         return order;
     }
 
-    private SalesOrder orderWithWorkorderAndPayment() {
-        SalesOrder order = quotedOrderWithWorkorder();
-        order.setPaymentId(PAYMENT_ID);
-        return order;
+    private OrderPaymentRecord settledRecord(BigDecimal amount) {
+        return OrderPaymentRecord.builder()
+                .paymentRecordId(UUID.randomUUID())
+                .orderId(ORDER_ID)
+                .recordType(OrderPaymentRecord.RecordType.SETTLED)
+                .paymentIntentId(INTENT_ID)
+                .methodType("CARD")
+                .amount(amount)
+                .occurredAt(Instant.now())
+                .createdAt(Instant.now())
+                .build();
     }
 
-    private CancelOrderCommand cancelCommand(UUID workOrderId, UUID paymentId) {
-        return new CancelOrderCommand("Customer request", workOrderId, paymentId, "idem-key-1");
+    private CancelOrderCommand cancelCommand(UUID workOrderId) {
+        return new CancelOrderCommand("Customer request", workOrderId, "idem-key-1");
     }
 
-    // ── Issue #19: happy path ─────────────────────────────────────────────────
+    // ── happy paths ───────────────────────────────────────────────────────────
 
-    /**
-     * BR2: No workorder or payment — saga skips external calls and terminates
-     * CANCELLED.
-     */
     @Test
-    @DisplayName("CC-001: DRAFT order, no workOrderId, no paymentId → result.status = CANCELLED")
-    void cancelOrder_happyPath_noWorkorder_noPayment() {
-        // Arrange
+    @DisplayName("CC-001: DRAFT order, no workorder, no settled payments → CANCELLED, no port calls")
+    void cancelOrder_happyPath_noWorkorder_noPayments() {
         SalesOrder order = draftOrder();
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        // Act
-        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null, null));
+        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null));
 
-        // Assert
         assertThat(result.status()).isEqualTo("CANCELLED");
         assertThat(result.orderId()).isEqualTo(ORDER_ID);
         verify(workexecPort, never()).checkWorkorderStatus(any());
-        verify(billingPort, never()).reversePayment(any(), any());
+        verify(invoicingPort, never()).reversePayment(any(), any(), any());
+        verify(orderDomainEventPublisher).publishOrderCancelled(order);
     }
 
-    /**
-     * BR2 + BR1: workOrderId present → Workexec pre-check + cancel command issued;
-     * saga ends CANCELLED.
-     */
     @Test
-    @DisplayName("CC-002: QUOTED order with workOrderId → Workexec checked and cancelled, result CANCELLED")
-    void cancelOrder_happyPath_withWorkorder_noPayment() {
-        // Arrange
+    @DisplayName("CC-002: QUOTED order with workorder → Workexec checked and cancelled, result CANCELLED")
+    void cancelOrder_happyPath_withWorkorder() {
         SalesOrder order = quotedOrderWithWorkorder();
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -134,75 +153,73 @@ class OrderCancellationServiceImplTest {
         when(workexecPort.cancelWorkorder(eq(WORKORDER_ID), any(CancelWorkorderCommand.class)))
                 .thenReturn(new WorkorderCancelResult(true, "Cancelled"));
 
-        // Act
-        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, null));
+        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID));
 
-        // Assert
         assertThat(result.status()).isEqualTo("CANCELLED");
-        assertThat(result.orderId()).isEqualTo(ORDER_ID);
         verify(workexecPort).checkWorkorderStatus(WORKORDER_ID);
         verify(workexecPort).cancelWorkorder(eq(WORKORDER_ID), any(CancelWorkorderCommand.class));
-        verify(billingPort, never()).reversePayment(any(), any());
+        verify(invoicingPort, never()).reversePayment(any(), any(), any());
     }
 
-    /**
-     * BR2 + BR1: full saga — both Workexec and Billing calls complete, order
-     * CANCELLED.
-     */
     @Test
-    @DisplayName("CC-003: Order with workOrderId + paymentId → full saga, CANCELLED; both ports called")
-    void cancelOrder_happyPath_withWorkorder_withPayment() {
-        // Arrange
-        SalesOrder order = orderWithWorkorderAndPayment();
+    @DisplayName("CC-003: settled payment on the ledger → refund issued for the net amount, CANCELLED")
+    void cancelOrder_withSettledPayment_reversesLedgerEntry() {
+        SalesOrder order = draftOrder();
+        order.setInvoiceId(INVOICE_ID);
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(workexecPort.checkWorkorderStatus(WORKORDER_ID)).thenReturn(new WorkorderStatusResult("OPEN", true, null));
-        when(workexecPort.cancelWorkorder(eq(WORKORDER_ID), any(CancelWorkorderCommand.class)))
-                .thenReturn(new WorkorderCancelResult(true, "Cancelled"));
-        when(billingPort.reversePayment(eq(PAYMENT_ID), any(ReversePaymentCommand.class)))
-                .thenReturn(new PaymentReversalResult(true, "VOID", "Payment voided"));
+        when(paymentRecordRepository.findByOrderId(ORDER_ID))
+                .thenReturn(List.of(settledRecord(new BigDecimal("80.00"))));
+        when(invoicingPort.reversePayment(eq(INVOICE_ID), eq(INTENT_ID), any(ReversePaymentCommand.class)))
+                .thenReturn(new PaymentReversalResult(true, "REFUND", "Reversed"));
 
-        // Act
-        CancellationResult result =
-                orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, PAYMENT_ID));
+        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null));
 
-        // Assert
         assertThat(result.status()).isEqualTo("CANCELLED");
-        verify(workexecPort).checkWorkorderStatus(WORKORDER_ID);
-        verify(workexecPort).cancelWorkorder(eq(WORKORDER_ID), any(CancelWorkorderCommand.class));
-        verify(billingPort).reversePayment(eq(PAYMENT_ID), any(ReversePaymentCommand.class));
+        org.mockito.ArgumentCaptor<ReversePaymentCommand> captor =
+                org.mockito.ArgumentCaptor.forClass(ReversePaymentCommand.class);
+        verify(invoicingPort).reversePayment(eq(INVOICE_ID), eq(INTENT_ID), captor.capture());
+        assertThat(captor.getValue().amount()).isEqualByComparingTo("80.00");
+        assertThat(captor.getValue().type()).isEqualTo("REFUND");
     }
 
-    // ── Issue #19: Workexec failure paths ────────────────────────────────────
+    @Test
+    @DisplayName("CC-003b: already-reversed ledger entries net to zero → no reversal call")
+    void cancelOrder_netZeroLedger_skipsReversal() {
+        SalesOrder order = draftOrder();
+        order.setInvoiceId(INVOICE_ID);
+        OrderPaymentRecord reversal = settledRecord(new BigDecimal("80.00"));
+        reversal.setRecordType(OrderPaymentRecord.RecordType.REVERSED);
+        when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+        when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentRecordRepository.findByOrderId(ORDER_ID))
+                .thenReturn(List.of(settledRecord(new BigDecimal("80.00")), reversal));
 
-    /**
-     * BR1: Workexec pre-check returns cancellable=false → stops saga with
-     * CANCEL_FAILED_WORKEXEC.
-     */
+        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null));
+
+        assertThat(result.status()).isEqualTo("CANCELLED");
+        verify(invoicingPort, never()).reversePayment(any(), any(), any());
+    }
+
+    // ── Workexec failure paths ────────────────────────────────────────────────
+
     @Test
     @DisplayName("CC-004: Workexec cancellable=false → IllegalStateException, order CANCEL_FAILED_WORKEXEC")
     void cancelOrder_workexec_notCancellable_throwsIllegalState() {
-        // Arrange
         SalesOrder order = quotedOrderWithWorkorder();
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(workexecPort.checkWorkorderStatus(WORKORDER_ID))
                 .thenReturn(new WorkorderStatusResult("IN_PROGRESS", false, "Work already started"));
 
-        // Act & Assert
-        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, null)))
+        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID)))
                 .isInstanceOf(IllegalStateException.class);
+        assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.CANCEL_FAILED_WORKEXEC);
     }
 
-    /**
-     * BR1: Workexec cancel command returns success=false → sets
-     * CANCEL_FAILED_WORKEXEC.
-     */
     @Test
-    @DisplayName(
-            "CC-005: Workexec cancelWorkorder returns success=false → IllegalStateException, CANCEL_FAILED_WORKEXEC")
+    @DisplayName("CC-005: Workexec cancelWorkorder success=false → IllegalStateException, CANCEL_FAILED_WORKEXEC")
     void cancelOrder_workexec_cancelFails_statusSetToFailWorkexec() {
-        // Arrange
         SalesOrder order = quotedOrderWithWorkorder();
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -210,154 +227,151 @@ class OrderCancellationServiceImplTest {
         when(workexecPort.cancelWorkorder(eq(WORKORDER_ID), any(CancelWorkorderCommand.class)))
                 .thenReturn(new WorkorderCancelResult(false, "Failed to cancel"));
 
-        // Act & Assert
-        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, null)))
+        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID)))
                 .isInstanceOf(IllegalStateException.class);
+        assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.CANCEL_FAILED_WORKEXEC);
     }
 
-    // ── Issue #19: Billing failure path ──────────────────────────────────────
+    // ── Billing failure path ──────────────────────────────────────────────────
 
-    /**
-     * BR2 + BR3: Workexec succeeds but Billing reversal fails → sets
-     * CANCEL_FAILED_BILLING.
-     */
     @Test
-    @DisplayName("CC-006: Workexec succeeds, BillingPort reversal fails → IllegalStateException, CANCEL_FAILED_BILLING")
+    @DisplayName("CC-006: reversal fails → IllegalStateException, CANCEL_FAILED_BILLING")
     void cancelOrder_billing_reversalFails_statusSetToFailBilling() {
-        // Arrange
-        SalesOrder order = orderWithWorkorderAndPayment();
+        SalesOrder order = draftOrder();
+        order.setInvoiceId(INVOICE_ID);
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(workexecPort.checkWorkorderStatus(WORKORDER_ID)).thenReturn(new WorkorderStatusResult("OPEN", true, null));
-        when(workexecPort.cancelWorkorder(eq(WORKORDER_ID), any(CancelWorkorderCommand.class)))
-                .thenReturn(new WorkorderCancelResult(true, "Cancelled"));
-        when(billingPort.reversePayment(eq(PAYMENT_ID), any(ReversePaymentCommand.class)))
+        when(paymentRecordRepository.findByOrderId(ORDER_ID))
+                .thenReturn(List.of(settledRecord(new BigDecimal("80.00"))));
+        when(invoicingPort.reversePayment(eq(INVOICE_ID), eq(INTENT_ID), any(ReversePaymentCommand.class)))
                 .thenReturn(new PaymentReversalResult(false, null, "Billing system unavailable"));
 
-        // Act & Assert
-        assertThatThrownBy(
-                        () -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID, PAYMENT_ID)))
+        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null)))
                 .isInstanceOf(IllegalStateException.class);
+        assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.CANCEL_FAILED_BILLING);
     }
 
-    // ── Issue #19: Idempotency ────────────────────────────────────────────────
-
-    /**
-     * BR4: Same idempotencyKey on already-CANCELLED order → returns existing
-     * result, no ports re-invoked.
-     */
     @Test
-    @DisplayName("CC-007: Already CANCELLED + matching idempotencyKey → existing result returned, no ports called")
+    @DisplayName("CC-006b: settled payments but no invoice reference → CANCEL_FAILED_BILLING")
+    void cancelOrder_settledPaymentsWithoutInvoice_failsBilling() {
+        SalesOrder order = draftOrder();
+        when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+        when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentRecordRepository.findByOrderId(ORDER_ID))
+                .thenReturn(List.of(settledRecord(new BigDecimal("80.00"))));
+
+        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.CANCEL_FAILED_BILLING);
+    }
+
+    // ── Idempotency ───────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("CC-007: Already CANCELLED + matching idempotencyKey → existing result, no ports called")
     void cancelOrder_idempotency_alreadyCancelled_returnsExisting() {
-        // Arrange
         SalesOrder order = draftOrder();
         order.setStatus(SalesOrderStatus.CANCELLED);
         order.setCancellationIdempotencyKey("idem-key-1");
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
-        // Act
-        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null, null));
+        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null));
 
-        // Assert — should return existing result without re-running saga
         assertThat(result.status()).isEqualTo("CANCELLED");
         assertThat(result.cancellationIdempotencyKey()).isEqualTo("idem-key-1");
         verify(workexecPort, never()).checkWorkorderStatus(any());
-        verify(billingPort, never()).reversePayment(any(), any());
+        verify(invoicingPort, never()).reversePayment(any(), any(), any());
     }
 
-    // ── Issue #19: Invalid state / not found ─────────────────────────────────
+    // ── Invalid state / not found ─────────────────────────────────────────────
 
-    /**
-     * State guard: COMPLETED orders are not eligible for cancellation.
-     */
     @Test
     @DisplayName("CC-008: COMPLETED order → IllegalStateException — order cannot be cancelled")
     void cancelOrder_invalidState_completed_throwsIllegalState() {
-        // Arrange
         SalesOrder order = draftOrder();
         order.setStatus(SalesOrderStatus.COMPLETED);
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
-        // Act & Assert
-        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null, null)))
+        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("cancel");
     }
 
-    /**
-     * Repository returns empty → not found exception surfaced to caller.
-     */
     @Test
     @DisplayName("CC-009: Order not found → SalesOrderNotFoundException")
     void cancelOrder_orderNotFound_throwsSalesOrderNotFoundException() {
-        // Arrange
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.empty());
 
-        // Act & Assert
-        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null, null)))
+        assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null)))
                 .isInstanceOf(SalesOrderNotFoundException.class);
     }
 
-    // ── Issue #19: Retry path ─────────────────────────────────────────────────
+    // ── Retry path ────────────────────────────────────────────────────────────
 
-    /**
-     * Retry: order in CANCEL_FAILED_BILLING with matching key → billing
-     * re-attempted, CANCELLED.
-     */
     @Test
-    @DisplayName("CC-010: retryCancellation on CANCEL_FAILED_BILLING → billing retried, result CANCELLED")
+    @DisplayName("CC-010: retryCancellation on CANCEL_FAILED_BILLING → ledger reversal retried, CANCELLED")
     void retryCancellation_happyPath_billingRetry() {
-        // Arrange
         SalesOrder order = draftOrder();
         order.setStatus(SalesOrderStatus.CANCEL_FAILED_BILLING);
         order.setCancellationIdempotencyKey("idem-key-1");
-        order.setPaymentId(PAYMENT_ID);
+        order.setInvoiceId(INVOICE_ID);
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(billingPort.reversePayment(eq(PAYMENT_ID), any(ReversePaymentCommand.class)))
-                .thenReturn(new PaymentReversalResult(true, "VOID", "Payment voided"));
+        when(paymentRecordRepository.findByOrderId(ORDER_ID))
+                .thenReturn(List.of(settledRecord(new BigDecimal("80.00"))));
+        when(invoicingPort.reversePayment(eq(INVOICE_ID), eq(INTENT_ID), any(ReversePaymentCommand.class)))
+                .thenReturn(new PaymentReversalResult(true, "REFUND", "Reversed"));
 
-        // Act
         CancellationResult result = orderCancellationService.retryCancellation(ORDER_ID, "idem-key-1");
 
-        // Assert
         assertThat(result.status()).isEqualTo("CANCELLED");
-        verify(billingPort).reversePayment(eq(PAYMENT_ID), any(ReversePaymentCommand.class));
+        verify(invoicingPort).reversePayment(eq(INVOICE_ID), eq(INTENT_ID), any(ReversePaymentCommand.class));
     }
 
-    /**
-     * Retry guard: order in CANCELLED state is not valid for retry.
-     */
+    @Test
+    @DisplayName("CC-010b: retry fails again → CANCEL_REQUIRES_MANUAL_REVIEW + alert fact")
+    void retryCancellation_failsAgain_parksForManualReview() {
+        SalesOrder order = draftOrder();
+        order.setStatus(SalesOrderStatus.CANCEL_FAILED_BILLING);
+        order.setInvoiceId(INVOICE_ID);
+        when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+        when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentRecordRepository.findByOrderId(ORDER_ID))
+                .thenReturn(List.of(settledRecord(new BigDecimal("80.00"))));
+        when(invoicingPort.reversePayment(eq(INVOICE_ID), eq(INTENT_ID), any(ReversePaymentCommand.class)))
+                .thenReturn(new PaymentReversalResult(false, null, "still down"));
+
+        assertThatThrownBy(() -> orderCancellationService.retryCancellation(ORDER_ID, "idem-key-2"))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.CANCEL_REQUIRES_MANUAL_REVIEW);
+        verify(orderDomainEventPublisher)
+                .publishCancelReviewRequired(eq(order), org.mockito.ArgumentMatchers.anyString());
+    }
+
     @Test
     @DisplayName("CC-011: retryCancellation on already-CANCELLED order → IllegalStateException")
     void retryCancellation_wrongState_throwsIllegalState() {
-        // Arrange
         SalesOrder order = draftOrder();
         order.setStatus(SalesOrderStatus.CANCELLED);
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
-        // Act & Assert
         assertThatThrownBy(() -> orderCancellationService.retryCancellation(ORDER_ID, "idem-key-1"))
                 .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
-    @DisplayName("CC-012: cancelOrder omitting optional IDs preserves persisted workOrderId/paymentId")
+    @DisplayName("CC-012: cancelOrder omitting workOrderId preserves the persisted workOrderId")
     void cancelOrder_omitOptionalIds_preservesPersistedIds() {
-        // Arrange
-        SalesOrder order = orderWithWorkorderAndPayment();
+        SalesOrder order = quotedOrderWithWorkorder();
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        // Act
-        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null, null));
+        CancellationResult result = orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null));
 
-        // Assert
         assertThat(result.status()).isEqualTo("CANCELLED");
         assertThat(order.getWorkOrderId()).isEqualTo(WORKORDER_ID);
-        assertThat(order.getPaymentId()).isEqualTo(PAYMENT_ID);
         verify(workexecPort, never()).checkWorkorderStatus(any());
         verify(workexecPort, never()).cancelWorkorder(any(), any());
-        verify(billingPort, never()).reversePayment(any(), any());
+        verify(invoicingPort, never()).reversePayment(any(), any(), any());
     }
 }

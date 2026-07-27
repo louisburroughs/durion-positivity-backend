@@ -7,17 +7,21 @@ import com.positivity.inventory.internal.dto.ShortageResolveRequest;
 import com.positivity.inventory.service.ShortageResolutionService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/inventory/shortage")
 @RequiredArgsConstructor
+@Validated
 @Tag(name = "Shortage Resolution", description = "Shortage resolution recommendation endpoints")
 public class ShortageController {
 
@@ -40,8 +45,10 @@ public class ShortageController {
     @PreAuthorize("hasAuthority('inventory:shortage:view')")
     @Operation(
             operationId = "listShortageOptions",
-            summary = "List shortage options",
-            description = "Returns available shortage resolution options for an allocation.",
+            summary = "List computed shortage options",
+            description = "Computes the resolution options (backorder, substitute, transfer-in, emergency purchase,"
+                    + " cancel) for a shortage, each with an expected-resolution date and a cost delta where"
+                    + " computable.",
             tags = {"Shortage Resolution"})
     @ApiResponse(
             responseCode = "200",
@@ -58,8 +65,15 @@ public class ShortageController {
             responseCode = "403",
             description = "User lacks required shortage view authority",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<List<ShortageOptionDto>> listShortageOptions(@RequestParam UUID allocationId) {
-        return ResponseEntity.ok(shortageResolutionService.listShortageOptions(allocationId));
+    public ResponseEntity<List<ShortageOptionDto>> listShortageOptions(
+            @Parameter(description = "Allocation experiencing the shortage") @RequestParam UUID allocationId,
+            @Parameter(description = "SKU / stock-item identifier that is short") @RequestParam @NotBlank String sku,
+            @Parameter(description = "Quantity that is short") @RequestParam @Positive int shortQuantity,
+            @Parameter(description = "Workorder line whose demand is short") @RequestParam(required = false)
+                    UUID workorderLineId,
+            @Parameter(description = "Site the demand is short at") @RequestParam(required = false) UUID locationId) {
+        return ResponseEntity.ok(shortageResolutionService.computeShortageOptions(
+                allocationId, workorderLineId, sku, shortQuantity, locationId));
     }
 
     @PostMapping("/resolve")

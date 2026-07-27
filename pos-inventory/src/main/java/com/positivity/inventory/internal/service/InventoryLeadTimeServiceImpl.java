@@ -8,6 +8,7 @@ import com.positivity.inventory.internal.repository.NormalizedAvailabilityReposi
 import com.positivity.inventory.service.InventoryLeadTimeService;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -41,7 +42,14 @@ public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
         if (productId == null) {
             throw new InvalidInventoryAvailabilityRequestException("productId is required");
         }
+        return findLeadTime(productId, locationId, storageLocationId)
+                .orElseThrow(() -> new ResourceNotFoundException("LeadTime", productId.toString()));
+    }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<LeadTimeView> findLeadTime(
+            @NonNull UUID productId, @Nullable UUID locationId, @Nullable UUID storageLocationId) {
         UUID resolvedLocationId = storageLocationId != null ? storageLocationId : locationId;
 
         LeadTimeCandidate distributorCandidate = toCandidate(
@@ -53,10 +61,10 @@ public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
 
         LeadTimeCandidate selected = distributorCandidate != null ? distributorCandidate : manufacturerCandidate;
         if (selected == null) {
-            throw new ResourceNotFoundException("LeadTime", productId.toString());
+            return Optional.empty();
         }
 
-        return LeadTimeView.builder()
+        return Optional.of(LeadTimeView.builder()
                 .productId(productId)
                 .locationId(resolvedLocationId)
                 .source(selected.source())
@@ -65,7 +73,7 @@ public class InventoryLeadTimeServiceImpl implements InventoryLeadTimeService {
                 .displayText(formatDisplayText(selected.minDays(), selected.maxDays()))
                 .confidence(selected.confidence())
                 .asOf(selected.asOf())
-                .build();
+                .build());
     }
 
     private LeadTimeCandidate toCandidate(

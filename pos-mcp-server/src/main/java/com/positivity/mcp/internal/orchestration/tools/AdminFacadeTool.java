@@ -1,8 +1,8 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
 import com.positivity.security.common.SecurityContextHelper;
-import dev.langchain4j.agent.tool.P;
-import dev.langchain4j.agent.tool.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -30,20 +30,20 @@ public class AdminFacadeTool {
         this.auditSearchUriTemplate = auditSearchUriTemplate;
     }
 
-    @Tool("Get overall platform system status and health summary")
+    @Tool(description = "Get overall platform system status and health summary")
     public String getSystemStatus() {
         return "pos-mcp-server status: UP";
     }
 
-    @Tool(
-            "List all users registered in the platform. Returns each user's ID, username, and assigned roles. "
-                    + "Use this to answer questions about the total number of users, look up users by name, or audit who has platform access.")
+        @Tool(
+            description = "List all users registered in the platform. Returns each user's ID, username, and assigned roles. "
+                + "Use this to answer questions about the total number of users, look up users by name, or audit who has platform access.")
     public String listUsers() {
         return usersRestClient.get().retrieve().body(String.class);
     }
 
-    @Tool("Get effective user permissions and access details")
-    public String getUserPermissions(@P("The user ID") @NonNull String userId) {
+    @Tool(description = "Get effective user permissions and access details")
+    public String getUserPermissions(@ToolParam(description = "The user ID") @NonNull String userId) {
         return usersRestClient
                 .get()
                 .uri(userPermissionsPathTemplate, Map.of("userId", userId))
@@ -51,15 +51,14 @@ public class AdminFacadeTool {
                 .body(String.class);
     }
 
-    @Tool(
-            "Get effective permissions for the currently authenticated user. Use this when the user asks what permissions they have or what access they currently hold.")
+    @Tool(description = "Get effective permissions for the currently authenticated user. Use this when the user asks what permissions they have or what access they currently hold.")
     public String getMyPermissions() {
         return getUserPermissions(SecurityContextHelper.getCurrentUserIdAsUuidOrThrowIllegalStateException()
                 .toString());
     }
 
-    @Tool("Search the administrative audit log with a query string")
-    public String getAuditLog(@P("Search query for audit log") @NonNull String query) {
+    @Tool(description = "Search the administrative audit log with a query string")
+    public String getAuditLog(@ToolParam(description = "Search query for audit log") @NonNull String query) {
         return auditRestClient
                 .get()
                 .uri(auditSearchUriTemplate, Map.of("query", query))

@@ -37,6 +37,62 @@ public class SalesOrderExceptionHandler {
                         correlationId));
     }
 
+    @ExceptionHandler(com.positivity.order.internal.exception.TaxUnavailableException.class)
+    public ResponseEntity<ApiError> handleTaxUnavailable(
+            com.positivity.order.internal.exception.TaxUnavailableException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "ORDER_TAX_UNAVAILABLE",
+                        ex.getMessage(),
+                        HttpStatus.SERVICE_UNAVAILABLE.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    @ExceptionHandler(com.positivity.order.internal.exception.OrderVoidBlockedException.class)
+    public ResponseEntity<ApiError> handleVoidBlocked(
+            com.positivity.order.internal.exception.OrderVoidBlockedException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "ORDER_VOID_BLOCKED",
+                        ex.getMessage(),
+                        HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    @ExceptionHandler(com.positivity.order.internal.exception.InvoicingUnavailableException.class)
+    public ResponseEntity<ApiError> handleInvoicingUnavailable(
+            com.positivity.order.internal.exception.InvoicingUnavailableException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "ORDER_INVOICING_UNAVAILABLE",
+                        ex.getMessage(),
+                        HttpStatus.SERVICE_UNAVAILABLE.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    @ExceptionHandler(com.positivity.order.internal.exception.InvalidCustomerException.class)
+    public ResponseEntity<ApiError> handleInvalidCustomer(
+            com.positivity.order.internal.exception.InvalidCustomerException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "ORDER_INVALID_CUSTOMER",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
     @ExceptionHandler(InvalidSkuException.class)
     public ResponseEntity<ApiError> handleInvalidSku(InvalidSkuException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);

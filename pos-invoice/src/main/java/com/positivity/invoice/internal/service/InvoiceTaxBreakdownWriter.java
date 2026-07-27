@@ -31,7 +31,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-class InvoiceTaxBreakdownWriter {
+public class InvoiceTaxBreakdownWriter {
 
     private static final int MONEY_SCALE = 4;
 
@@ -45,7 +45,7 @@ class InvoiceTaxBreakdownWriter {
      * @param response  the calculation response to materialize; {@code null} (nothing taxable)
      *                  clears the breakdown
      */
-    void replace(@NonNull UUID invoiceId, @Nullable TaxCalculationResponse response) {
+    public void replace(@NonNull UUID invoiceId, @Nullable TaxCalculationResponse response) {
         lineTaxRepository.deleteByInvoiceId(invoiceId);
         taxSummaryRepository.deleteByInvoiceId(invoiceId);
         if (response == null || response.getLineItemTaxes() == null) {

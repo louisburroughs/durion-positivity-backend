@@ -36,6 +36,7 @@ public class ReservationServiceImpl implements ReservationService {
     private final ReservationRepository reservationRepository;
     private final AllocationRepository allocationRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final StorageLocationValidationService storageLocationValidationService;
 
@@ -204,7 +205,7 @@ public class ReservationServiceImpl implements ReservationService {
                                 : allocation.getAllocationId().toString())
                 .timestamp(Instant.now(clock))
                 .build();
-        inventoryLedgerEntryRepository.save(entry);
+        ledgerPostingService.post(entry);
         inventoryFactPublisher.markEntry(entry);
     }
 

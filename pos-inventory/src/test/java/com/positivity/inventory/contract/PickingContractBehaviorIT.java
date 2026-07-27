@@ -1,6 +1,7 @@
 package com.positivity.inventory.contract;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -154,8 +155,10 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
         PickTaskResponse mockResponse =
                 new PickTaskResponse(taskId, pickListId, productId, locationId, 2, 2, PickTaskStatus.PICKED, 0);
 
-        // BLOCKED: confirmPickTask does not exist on PickListService
-        when(pickListService.confirmPickTask(eq(pickListId), eq(taskId), eq(productId), eq(locationId), eq(2)))
+        // odoo-parity E2 (#1042): the controller delegates to the lot-aware overload; no lot
+        // number keyed on this request → null.
+        when(pickListService.confirmPickTask(
+                        eq(pickListId), eq(taskId), eq(productId), eq(locationId), eq(2), isNull()))
                 .thenReturn(mockResponse);
 
         String requestBody = objectMapper.writeValueAsString(Map.of(
@@ -199,7 +202,8 @@ class PickingContractBehaviorIT extends BaseContractIntegrationTest {
         // BLOCKED: confirmPickTask and PickScanMismatchException do not exist
         // Issue #179: compile fix — constructor is (UUID expectedSkuId, UUID
         // scannedSkuId)
-        when(pickListService.confirmPickTask(eq(pickListId), eq(taskId), eq(wrongSkuId), eq(locationId), eq(1)))
+        when(pickListService.confirmPickTask(
+                        eq(pickListId), eq(taskId), eq(wrongSkuId), eq(locationId), eq(1), isNull()))
                 .thenThrow(new PickScanMismatchException(
                         UUID.fromString("00000000-0000-0000-0000-000000000001"), wrongSkuId));
 

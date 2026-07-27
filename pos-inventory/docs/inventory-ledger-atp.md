@@ -18,7 +18,23 @@ Please review the ADR for complete context and rationale.
 ATP = On-Hand - Allocations
 ```
 
-**Note**: Expected Receipts are out of scope for v1.
+**Note**: The ATP definition itself is unchanged — expected receipts do NOT enter ATP.
+Since odoo-parity A2 (issue #1028) expected receipts surface as separate additive **forecast
+fields** on the availability endpoints and the `InventoryAvailabilityUpdatedV1` fact
+(schema v2):
+
+```
+incomingQty        = open approved-PO line quantity + un-received ASN remainder
+outgoingQty        = unallocated reservation remainders + released-not-picked pick-task remainders
+projectedAvailable = On-Hand + incomingQty - outgoingQty   (Odoo virtual_available)
+```
+
+Forecast quantities are computed on read from open documents (never stored on
+`inventory_stock_summary`) and accept an optional `horizon` query parameter bounding supply by
+PO `expectedDeliveryDate` / ASN `expectedArrivalDate` and reservation demand by `dueDateTime`;
+documents without an expected date are included unbounded and excluded when a horizon is given.
+When a purchase order is closed or cancelled with remaining open quantity, the dropped supply
+is announced via the `ExpectedSupplyDroppedV1` fact.
 
 ### Unit of Measure (UOM)
 - All calculations and responses use the product's **base UOM**
@@ -52,6 +68,11 @@ ATP = On-Hand - Allocations
 - `ALLOCATION_CREATED` / `ALLOCATION_RELEASED`
 - `BACKORDER_CREATED` / `BACKORDER_RESOLVED`
 - `PICK_TASK_CREATED` / `PICK_TASK_COMPLETED` (unless posting GOODS_ISSUE)
+
+#### Negative-Stock Policy
+
+Whether a posting may take on-hand below zero is governed per event type by the
+negative-stock policy matrix — see [negative-stock-policy.md](negative-stock-policy.md) (odoo-parity K1, #1027).
 
 ## API Contract (Proposed)
 
@@ -237,11 +258,14 @@ public InventoryAvailability getAvailability(UUID productId, UUID locationId) {
 - Error rate > 1% (Warning)
 - Database connection pool exhaustion (Critical)
 
+### Consistency Sweeps
+- Allocation/reservation consistency (odoo-parity K3, #1032): see [allocation-consistency.md](allocation-consistency.md) — report-only; corrections are new ledger entries per DECISION-INVENTORY-005.
+
 ## Future Enhancements (Out of Scope for v1)
 
-1. **Expected Receipts**: ATP = On-Hand - Allocations + Expected Receipts
-   - Requires integration with purchasing system
-   - Needs promise-date tracking
+1. ~~**Expected Receipts**~~ — delivered as forecast quantities (odoo-parity A2, issue #1028);
+   surfaced as `incomingQty`/`outgoingQty`/`projectedAvailable`, ATP formula untouched (see
+   Quick Reference above)
 
 2. **UOM Conversion**: Support queries in different units
    - Requires Product/UOM service integration

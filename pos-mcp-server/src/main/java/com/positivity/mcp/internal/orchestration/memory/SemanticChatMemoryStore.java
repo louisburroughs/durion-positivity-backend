@@ -1,10 +1,5 @@
 package com.positivity.mcp.internal.orchestration.memory;
 
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.memory.ChatMemory;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -13,6 +8,11 @@ import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,10 +51,10 @@ public class SemanticChatMemoryStore implements ChatMemory {
     private final int maxMessages;
     private final @NonNull ChatModel chatModel;
     private final @NonNull EmbeddingModel embeddingModel;
-    private final @NonNull PgVectorEmbeddingStore embeddingStore;
+    private final @NonNull PgVectorStore embeddingStore;
     private final @Nullable SessionSummary sessionSummary;
     private final String sessionId;
-    private final List<ChatMessage> messages;
+    private final Map<String, List<Message>> messagesByConversation;
     private final Map<String, Object> sessionMetadata;
     private volatile boolean shouldGenerateSummaryOnClose;
 
@@ -62,7 +62,7 @@ public class SemanticChatMemoryStore implements ChatMemory {
             int maxMessages,
             @NonNull ChatModel chatModel,
             @NonNull EmbeddingModel embeddingModel,
-            @NonNull PgVectorEmbeddingStore embeddingStore,
+            @NonNull PgVectorStore embeddingStore,
             @Nullable SessionSummary sessionSummary) {
         this.maxMessages = Math.max(1, maxMessages);
         this.chatModel = chatModel;
@@ -70,49 +70,52 @@ public class SemanticChatMemoryStore implements ChatMemory {
         this.embeddingStore = embeddingStore;
         this.sessionSummary = sessionSummary;
         this.sessionId = UUID.randomUUID().toString();
-        this.messages = Collections.synchronizedList(new ArrayList<>());
+        this.messagesByConversation = Collections.synchronizedMap(new HashMap<>());
         this.sessionMetadata = new HashMap<>();
         this.shouldGenerateSummaryOnClose = true;
         LOGGER.debug("Created SemanticChatMemoryStore sessionId={} maxMessages={}", sessionId, maxMessages);
     }
 
     @Override
-    public String id() {
-        return sessionId;
-    }
+    public void add(@NonNull String conversationId, @NonNull List<Message> messages) {
+        synchronized (messagesByConversation) {
+            List<Message> conversationMessages =
+                    messagesByConversation.computeIfAbsent(conversationId, ignored -> new ArrayList<>());
+            conversationMessages.addAll(messages);
 
-    @Override
-    public void add(@NonNull ChatMessage message) {
-        synchronized (messages) {
-            messages.add(message);
-
-            // Maintain window size (Tier 3: backward compat with message window)
-            if (messages.size() > maxMessages) {
-                messages.remove(0);
+            while (conversationMessages.size() > maxMessages) {
+                conversationMessages.remove(0);
             }
 
-            String messageType = message.getClass().getSimpleName();
             LOGGER.trace(
-                    "Added to semantic memory sessionId={} type={} messageCount={} windowSize={}",
+                    "Added to semantic memory sessionId={} conversationId={} added={} messageCount={} windowSize={}",
                     sessionId,
-                    messageType,
+                    conversationId,
                     messages.size(),
+                    conversationMessages.size(),
                     maxMessages);
         }
     }
 
     @Override
-    public @NonNull List<ChatMessage> messages() {
-        synchronized (messages) {
-            return new ArrayList<>(messages);
+    public @NonNull List<Message> get(@NonNull String conversationId) {
+        synchronized (messagesByConversation) {
+            return new ArrayList<>(messagesByConversation.getOrDefault(conversationId, List.of()));
         }
     }
 
     @Override
-    public void clear() {
-        LOGGER.debug("Clearing SemanticChatMemoryStore sessionId={} messageCount={}", sessionId, messages.size());
-        messages.clear();
-        sessionMetadata.clear();
+    public void clear(@NonNull String conversationId) {
+        synchronized (messagesByConversation) {
+            int count = messagesByConversation.getOrDefault(conversationId, List.of()).size();
+            LOGGER.debug(
+                    "Clearing SemanticChatMemoryStore sessionId={} conversationId={} messageCount={}",
+                    sessionId,
+                    conversationId,
+                    count);
+            messagesByConversation.remove(conversationId);
+            sessionMetadata.clear();
+        }
     }
 
     /**
@@ -126,6 +129,7 @@ public class SemanticChatMemoryStore implements ChatMemory {
      */
     @NonNull
     public String generateSummary() {
+        List<Message> messages = get(sessionId);
         if (messages.isEmpty()) {
             return "";
         }
@@ -164,6 +168,7 @@ public class SemanticChatMemoryStore implements ChatMemory {
                 LOGGER.debug("SessionSummary not available; skipping archive for sessionId={}", sessionId);
                 return;
             }
+            List<Message> messages = get(sessionId);
             String summary = generateSummary();
             if (!summary.isEmpty()) {
                 sessionSummary.archiveSession(sessionId, summary, messages);
@@ -257,7 +262,8 @@ public class SemanticChatMemoryStore implements ChatMemory {
 
     @Override
     public String toString() {
-        return "SemanticChatMemoryStore{" + "sessionId='" + sessionId + '\'' + ", messages=" + messages.size()
+        int messageCount = messagesByConversation.values().stream().mapToInt(List::size).sum();
+        return "SemanticChatMemoryStore{" + "sessionId='" + sessionId + '\'' + ", messages=" + messageCount
                 + ", maxMessages=" + maxMessages + '}';
     }
 }

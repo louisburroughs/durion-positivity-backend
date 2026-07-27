@@ -61,10 +61,13 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final ReceivingSessionRepository receivingSessionRepository;
     private final InventoryVarianceRepository inventoryVarianceRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final SourceDocumentStubClient sourceDocumentStubClient;
     private final SiteDefaultsService siteDefaultsService;
     private final WorkorderValidationService workorderValidationService;
+    private final DocumentQuantityConverter documentQuantityConverter;
+    private final InventoryLotCaptureService lotCaptureService;
 
     @Value("${pos.inventory.receiving.source-document-service:}")
     private String configuredSourceDocumentService;
@@ -130,10 +133,38 @@ public class ReceivingServiceImpl implements ReceivingService {
                 continue;
             }
 
-            BigDecimal receivedQty = lineReq.getReceivedQuantity();
+            // odoo-parity B2 (#1034): an optional document UoM converts to base BEFORE the
+            // expected-vs-received comparison and the ledger posting; keyed values are kept
+            // on the line for audit.
+            DocumentQuantityConverter.DocumentConversion conversion = documentQuantityConverter
+                    .convertIfPresent(
+                            parseProductId(line.getProductId()),
+                            line.getProductId(),
+                            lineReq.getDocumentUom(),
+                            lineReq.getDocumentQuantity())
+                    .orElse(null);
+            BigDecimal receivedQty = conversion != null ? conversion.baseQuantity() : lineReq.getReceivedQuantity();
+            if (receivedQty == null) {
+                throw new IllegalArgumentException(
+                        "receivedQuantity is required when documentUom/documentQuantity are absent");
+            }
             BigDecimal expectedQty = line.getExpectedQuantity();
 
+            // odoo-parity E1 (#1038): LOT-tracked products require a lotNumber (422
+            // LOT_NUMBER_REQUIRED) and find-or-create the lot; untracked products pass
+            // through with a null lot, byte-identical to pre-E1 behavior. odoo-parity E3
+            // (#1047): an optional line expirationDate is stamped on first lot creation.
+            UUID lotId = lotCaptureService.resolveReceiptLot(
+                    line.getProductId(),
+                    lineReq.getLotNumber(),
+                    parseSupplierVendorId(session.getSupplierId()),
+                    lineReq.getExpirationDate());
+
             line.setReceivedQuantity(receivedQty);
+            line.setLotNumber(lineReq.getLotNumber());
+            line.setDocumentUom(conversion == null ? null : conversion.documentUom());
+            line.setDocumentQuantity(conversion == null ? null : conversion.documentQuantity());
+            line.setConversionFactor(conversion == null ? null : conversion.conversionFactor());
             int cmp = receivedQty.compareTo(expectedQty);
             if (cmp == 0) {
                 line.setStatus(ReceivingLineStatus.RECEIVED);
@@ -143,7 +174,14 @@ public class ReceivingServiceImpl implements ReceivingService {
                 line.setStatus(ReceivingLineStatus.RECEIVED_OVER);
             }
 
-            createGoodsReceiptLedgerEntry(sessionId, line.getLineId(), line.getProductId(), receivedQty, actorUserId);
+            createGoodsReceiptLedgerEntry(
+                    sessionId,
+                    line.getLineId(),
+                    line.getProductId(),
+                    receivedQty,
+                    lotId,
+                    lineReq.getSerialNumbers(),
+                    actorUserId);
 
             if (cmp != 0) {
                 InventoryVarianceType varianceType =
@@ -233,6 +271,21 @@ public class ReceivingServiceImpl implements ReceivingService {
         UUID crossDockLocationId = resolveCrossDockLocationId();
         int receiptQuantityAfter = calculateQuantityAfter(line.getProductId(), crossDockLocationId, quantityDelta);
 
+        // odoo-parity E2 (#1042): cross-dock is lot-gated like any other receipt of a
+        // LOT-tracked product (E1 deferred this because only the receipt half could have been
+        // stamped, stranding phantom per-lot on-hand). The lot number comes from the request,
+        // falling back to one already keyed on the receiving line, and the lot is
+        // found-or-created (inbound semantics — this receipt IS the lot's first sighting).
+        // BOTH paired entries carry the same lotId, so the per-lot row nets to zero and the
+        // funnel's status reconciler marks the lot CONSUMED — stock went straight to the
+        // workorder. Untracked products resolve to null, byte-identical to pre-E2.
+        String effectiveLotNumber =
+                request.getLotNumber() != null && !request.getLotNumber().isBlank()
+                        ? request.getLotNumber()
+                        : line.getLotNumber();
+        UUID lotId = lotCaptureService.resolveReceiptLot(
+                line.getProductId(), effectiveLotNumber, parseSupplierVendorId(session.getSupplierId()));
+
         InventoryLedgerEntry receiptEntry = InventoryLedgerEntry.builder()
                 .stockItemId(line.getProductId())
                 .locationId(crossDockLocationId)
@@ -240,12 +293,13 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
                 .changeInQuantity(quantityDelta)
                 .quantityAfter(receiptQuantityAfter)
+                .lotId(lotId)
                 .transactionUserId(actorUserId)
                 .sourceTransactionId(sessionId.toString())
                 .notes("Cross-dock GOODS_RECEIPT for workorder " + workorderId)
                 .build();
 
-        InventoryLedgerEntry savedReceiptEntry = inventoryLedgerEntryRepository.save(receiptEntry);
+        InventoryLedgerEntry savedReceiptEntry = ledgerPostingService.post(receiptEntry);
         inventoryFactPublisher.markEntry(savedReceiptEntry);
         int issueQuantityAfter = calculateQuantityAfter(line.getProductId(), crossDockLocationId, -quantityDelta);
 
@@ -256,17 +310,21 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .eventType(InventoryLedgerEventType.GOODS_ISSUE)
                 .changeInQuantity(-quantityDelta)
                 .quantityAfter(issueQuantityAfter)
+                .lotId(lotId)
                 .transactionUserId(actorUserId)
                 .sourceTransactionId(sessionId.toString())
                 .notes("Cross-dock GOODS_ISSUE to workorder " + workorderId)
                 .build();
 
-        InventoryLedgerEntry savedIssueEntry = inventoryLedgerEntryRepository.save(issueEntry);
+        InventoryLedgerEntry savedIssueEntry = ledgerPostingService.post(issueEntry);
         inventoryFactPublisher.markEntry(savedIssueEntry);
 
         line.setWorkorderId(workorderId);
         line.setWorkorderLineId(request.getWorkorderLineId());
         line.setReceivedQuantity(cumulativeReceivedQuantity);
+        if (lotId != null && effectiveLotNumber != null) {
+            line.setLotNumber(effectiveLotNumber.trim());
+        }
 
         int quantityCompare = cumulativeReceivedQuantity.compareTo(expectedQuantity);
         if (quantityCompare == 0) {
@@ -319,7 +377,13 @@ public class ReceivingServiceImpl implements ReceivingService {
     }
 
     private void createGoodsReceiptLedgerEntry(
-            UUID sessionId, UUID lineId, String productId, BigDecimal quantity, String actorUserId) {
+            UUID sessionId,
+            UUID lineId,
+            String productId,
+            BigDecimal quantity,
+            UUID lotId,
+            java.util.List<String> serialNumbers,
+            String actorUserId) {
         int quantityDelta = toWholeLedgerQuantity(quantity, "receivedQuantity");
         UUID stagingLocationId = resolveStagingLocationId();
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
@@ -329,13 +393,32 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
                 .changeInQuantity(quantityDelta)
                 .quantityAfter(calculateQuantityAfter(productId, stagingLocationId, quantityDelta))
+                .lotId(lotId)
+                // odoo-parity E4 (#1050): the funnel enumerates these serials for SERIAL-tracked
+                // products (422 SERIAL_COUNT_MISMATCH if the count != received qty); ignored otherwise.
+                .serialNumbers(serialNumbers == null ? java.util.List.of() : serialNumbers)
                 .transactionUserId(actorUserId)
                 .sourceTransactionId(sessionId + ":" + lineId)
                 .notes("Receiving session " + sessionId + " line " + lineId)
                 .build();
 
-        inventoryLedgerEntryRepository.save(entry);
+        ledgerPostingService.post(entry);
         inventoryFactPublisher.markEntry(entry);
+    }
+
+    /**
+     * Parses the session's free-text supplier reference as a vendor UUID for lot stamping
+     * (odoo-parity E1, #1038); null when the reference is absent or not a UUID.
+     */
+    private UUID parseSupplierVendorId(String supplierId) {
+        if (supplierId == null || supplierId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(supplierId.trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     private int toWholeLedgerQuantity(BigDecimal quantity, String fieldName) {
@@ -346,6 +429,22 @@ public class ReceivingServiceImpl implements ReceivingService {
             return quantity.intValueExact();
         } catch (ArithmeticException ex) {
             throw new IllegalArgumentException(fieldName + " must be a whole number within 32-bit integer range", ex);
+        }
+    }
+
+    /**
+     * Parses a receiving line's free-text productId as a catalog product UUID; {@code null} when
+     * it does not parse (a document UoM on such a line raises {@code UOM_CONVERSION_UNDEFINED} —
+     * odoo-parity B2, #1034).
+     */
+    private UUID parseProductId(String productId) {
+        if (productId == null || productId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(productId.trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
         }
     }
 
@@ -632,6 +731,10 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .status(line.getStatus() != null ? line.getStatus().name() : null)
                 .workorderId(line.getWorkorderId())
                 .workorderLineId(line.getWorkorderLineId())
+                .lotNumber(line.getLotNumber())
+                .documentUom(line.getDocumentUom())
+                .documentQuantity(line.getDocumentQuantity())
+                .conversionFactor(line.getConversionFactor())
                 .build();
     }
 }

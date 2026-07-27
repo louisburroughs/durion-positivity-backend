@@ -2,12 +2,16 @@ package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.dto.CreditMemoResponse;
+import com.positivity.accounting.internal.dto.VoidCreditMemoRequest;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.service.CreditMemoService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -96,6 +100,61 @@ public class CreditMemoController {
         CreditMemoResponse response = creditMemoService.createCreditMemo(request, currentUser);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * Void a POSTED Credit Memo (issue #997 symmetry).
+     *
+     * The memo keeps its posting-period contribution to the tax-liability report (no retroactive
+     * restatement of closed/frozen periods); the void posts the mirror journal entry
+     * (Dr AR / Cr Revenue + Cr Sales-Tax Payable) dated now, and the report restores the reversed
+     * tax in the void's period — GL drift stays zero on both sides of the transition. The
+     * invoice's outstanding balance is restored automatically.
+     *
+     * @param creditMemoId Credit Memo to void
+     * @param request      Void request (mandatory reason)
+     * @return Voided Credit Memo details
+     */
+    @PostMapping("/{creditMemoId}/void")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:credit-memo:void"})
+    @PreAuthorize("hasAuthority('accounting:credit-memo:void')")
+    @Operation(
+            summary = "Void a posted credit memo",
+            description = "Void a POSTED Credit Memo: posts the mirror GL entry (Dr AR / Cr Revenue + Cr Sales-Tax"
+                    + " Payable) dated at void time and restores the invoice's outstanding balance. The memo's"
+                    + " original posting-period figures are never restated; the tax-liability report restores the"
+                    + " reversed tax in the void's period. Only POSTED memos are voidable — APPLIED memos have been"
+                    + " consumed and VOIDED is terminal.",
+            tags = {"Credit Memos"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Credit memo voided",
+            content = @Content(schema = @Schema(implementation = CreditMemoResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing or invalid void reason",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Credit memo not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Credit memo is not in POSTED status",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @EmitEvent(id = "ACCOUNTING_CREDIT_MEMO_VOID", apiVersion = "1")
+    public ResponseEntity<CreditMemoResponse> voidCreditMemo(
+            @Parameter(description = "Credit Memo id", required = true) @PathVariable UUID creditMemoId,
+            @Valid @RequestBody VoidCreditMemoRequest request) {
+
+        String currentUser = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated"));
+
+        log.info("Voiding Credit Memo {} requested by user {}", creditMemoId, currentUser);
+
+        return ResponseEntity.ok(creditMemoService.voidCreditMemo(creditMemoId, request.getVoidReason(), currentUser));
     }
 
     /**

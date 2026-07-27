@@ -1,11 +1,11 @@
 package com.positivity.mcp.internal.config;
 
-import dev.langchain4j.model.embedding.EmbeddingModel;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.postgresql.util.PGobject;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -48,8 +48,7 @@ public class ToolEmbeddingInitializer implements ApplicationRunner {
         for (ToolDescriptionRow row : rows) {
             long rowStartNanos = System.nanoTime();
             try {
-                float[] vector =
-                        embeddingModel.embed(row.description()).content().vector();
+                float[] vector = embeddingModel.embed(row.description());
                 jdbcTemplate.update(
                         "UPDATE mcp_tool SET embedding = ?::vector WHERE id = ?", toVectorPGobject(vector), row.id());
                 populated++;

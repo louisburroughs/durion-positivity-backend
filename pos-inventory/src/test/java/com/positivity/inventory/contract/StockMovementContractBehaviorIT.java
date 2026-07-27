@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -60,6 +61,9 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
     @Autowired
+    private InventoryStockSummaryRepository inventoryStockSummaryRepository;
+
+    @Autowired
     private InventoryAdjustmentRequestRepository inventoryAdjustmentRequestRepository;
 
     @Autowired
@@ -69,6 +73,7 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
     void setUp() {
         inventoryAdjustmentRequestRepository.deleteAll();
         inventoryLedgerEntryRepository.deleteAll();
+        inventoryStockSummaryRepository.deleteAll();
     }
 
     // Issue CAP-215: AC-1 — RECEIVE movement records a GOODS_RECEIPT ledger entry
@@ -87,6 +92,14 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("AC-2: recordMovement_TRANSFER_createsTwoLedgerEntries")
     void recordMovement_TRANSFER_createsTwoLedgerEntries() throws Exception {
+        // K1 (#1027): TRANSFER dispatch is blocked below zero on-hand, so seed
+        // the source location before transferring from it.
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/stock-movements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productSku\":\"SKU-XFER-1\",\"fromLocationId\":\"" + LOC_SRC + "\","
+                                + "\"movementType\":\"RECEIVE\",\"quantity\":25,\"unitOfMeasure\":\"EACH\"}")))
+                .andExpect(status().isCreated());
+
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/stock-movements")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"productSku\":\"SKU-XFER-1\",\"fromLocationId\":\"" + LOC_SRC + "\","
@@ -94,8 +107,27 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
                                 + "\"quantity\":25,\"unitOfMeasure\":\"EACH\"}")))
                 .andExpect(status().isCreated());
 
+        // 1 seed GOODS_RECEIPT + TRANSFER_IN/TRANSFER_OUT pair
         List<InventoryLedgerEntry> entries = inventoryLedgerEntryRepository.findAll();
-        assertThat(entries).hasSize(2);
+        assertThat(entries).hasSize(3);
+    }
+
+    // Issue #1027 (odoo-parity K1): TRANSFER dispatch below zero on-hand is
+    // blocked by the negative-stock policy matrix in the posting funnel and the
+    // whole movement (both paired entries) rolls back.
+    @Test
+    @DisplayName("K1: recordMovement_TRANSFER_returns422_whenInsufficientStock")
+    void recordMovement_TRANSFER_returns422_whenInsufficientStock() throws Exception {
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/stock-movements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productSku\":\"SKU-XFER-NEG\",\"fromLocationId\":\"" + LOC_SRC + "\","
+                                + "\"toLocationId\":\"" + LOC_DST + "\",\"movementType\":\"TRANSFER\","
+                                + "\"quantity\":25,\"unitOfMeasure\":\"EACH\"}")))
+                .andExpect(status().is(422))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("INSUFFICIENT_STOCK"));
+
+        assertThat(inventoryLedgerEntryRepository.findAll()).isEmpty();
     }
 
     @Test
@@ -139,6 +171,14 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("AC-4: approveAdjustment_postsLedgerEntry")
     void approveAdjustment_postsLedgerEntry() throws Exception {
+        // K1 (#1027): ADJUSTMENT_OUT floors at zero, so seed on-hand at the
+        // adjustment location before approving a negative adjustment.
+        mockMvc.perform(withGatewayAuth(post("/v1/inventory/stock-movements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productSku\":\"SKU-ADJ2\",\"fromLocationId\":\"" + LOC_2 + "\","
+                                + "\"movementType\":\"RECEIVE\",\"quantity\":5,\"unitOfMeasure\":\"EACH\"}")))
+                .andExpect(status().isCreated());
+
         MvcResult createResult = mockMvc.perform(withGatewayAuth(post("/v1/inventory/adjustments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"productSku\":\"SKU-ADJ2\",\"locationId\":\"" + LOC_2 + "\","
@@ -154,6 +194,31 @@ class StockMovementContractBehaviorIT extends BaseContractIntegrationTest {
         mockMvc.perform(withGatewayAuth(
                         post("/v1/inventory/adjustments/{adjustmentRequestId}/approve", adjustmentRequestId)))
                 .andExpect(status().isOk());
+    }
+
+    // Issue #1027 (odoo-parity K1): ADJUSTMENT_OUT may zero stock but never
+    // drive it negative — approval of an over-sized negative adjustment is
+    // rejected with the deterministic floor-violation code.
+    @Test
+    @DisplayName("K1: approveAdjustment_drivingOnHandNegative_returns422FloorViolation")
+    void approveAdjustment_drivingOnHandNegative_returns422FloorViolation() throws Exception {
+        MvcResult createResult = mockMvc.perform(withGatewayAuth(post("/v1/inventory/adjustments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productSku\":\"SKU-ADJ-NEG\",\"locationId\":\"" + LOC_2 + "\","
+                                + "\"quantity\":-3,\"reasonCode\":\"DAMAGE\",\"unitOfMeasure\":\"EACH\"}")))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        JsonNode responseJson = objectMapper.readTree(createResult.getResponse().getContentAsString());
+        String adjustmentRequestId = responseJson.get("adjustmentRequestId").asString();
+
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/inventory/adjustments/{adjustmentRequestId}/approve", adjustmentRequestId)))
+                .andExpect(status().is(422))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("NEGATIVE_STOCK_FLOOR_VIOLATION"));
+
+        assertThat(inventoryLedgerEntryRepository.findAll()).isEmpty();
     }
 
     // Issue CAP-215: AC-5 — PICK with no prior stock present returns 422

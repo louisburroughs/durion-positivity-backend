@@ -34,7 +34,16 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.write("NLTI_REQUEST_SUBMIT", "Submit a NLTI natural language request")
                         .build(),
+                EventTypeRegistration.write(
+                                "NLTI_SESSION_WORKFLOW_STATE_SET", "Advance the workflow state of a NLTI session")
+                        .build(),
                 EventTypeRegistration.fastRead("NLTI_AUDIT_QUERY", "Query the NLTI audit event ledger")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "MCP_TOOL_PERMISSION_GRANT", "Grant a permission code to a discovered OpenAPI tool")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "MCP_TOOL_PERMISSION_REVOKE", "Revoke a permission code from a discovered OpenAPI tool")
                         .build());
     }
 }

@@ -2,7 +2,7 @@
 
 AI orchestration and MCP (Model Context Protocol) server for the Durion Positivity ETSMS platform. It discovers
 backend REST APIs from the gateway aggregate OpenAPI spec, registers them as MCP tools, routes natural-language
-requests through LangChain4j agents backed by Ollama, and maintains a pgvector RAG store for context-augmented
+requests through Spring AI assistants backed by Ollama-compatible chat/streaming models, and maintains a pgvector RAG store for context-augmented
 queries. Tool visibility is gated by the caller's **permission codes** (perm_bits), and tool priorities are tuned
 adaptively from invocation outcomes.
 
@@ -16,7 +16,7 @@ adaptively from invocation outcomes.
   from the gateway aggregate OpenAPI spec.
 - Gate tool visibility per request by the caller's permission codes intersected with workflow state (see
   [Tool Selection](#tool-selection)).
-- Orchestrate multi-step agent conversations via LangChain4j session agents (synchronous and streaming SSE).
+- Orchestrate multi-step agent conversations via Spring AI session assistants (synchronous and streaming SSE).
 - Embed and retrieve RAG documents using pgvector for context-augmented tool selection and answers.
 - Persist system prompts, tool metadata, invocation audit logs, and NLTI sessions/requests/intents.
 - Tune `mcp_tool.priority` adaptively from invocation success rate and latency (daily cron).
@@ -36,8 +36,8 @@ pos-mcp-server (Spring Boot 4.0.x, Java 25)
    │     ├─ Exa web-search tool (always included)
    │     ├─ Tier-2 RAG ContentRetriever (shared pgvector store)
    │     └─ per-session ChatMemory (MessageWindowChatMemory + semantic store)
-   ├─ LangChain4j runtime — OllamaChatModel / OllamaStreamingChatModel,
-   │     OllamaEmbeddingModel, AiServices tool-calling loop
+   ├─ Spring AI runtime — ChatModel / StreamingChatModel with
+   │     tool-calling callbacks + Ollama embedding model
    ├─ Tool discovery (internal/discovery/) — fetch gateway aggregate OpenAPI,
    │     map operations → mcp_tool rows, build HTTP proxies
    ├─ Audit + adaptive tuning — every selection/execution logged; daily cron
@@ -49,22 +49,22 @@ pos-mcp-server (Spring Boot 4.0.x, Java 25)
         └─ Exa (external web-search SaaS)
 ```
 
-The previous external orchestration platform was replaced by in-process LangChain4j: prompt construction
-(`AiServices`), tool-use planning (tool-calling protocol), memory (`MessageWindowChatMemory`), retrieval
-(`EmbeddingStoreContentRetriever` + pgvector), and model abstraction (`OllamaChatModel`) are all local.
+The previous external orchestration platform was replaced by in-process orchestration. Prompt construction,
+tool-use planning (tool-calling protocol), retrieval, and model abstraction now run locally in the Spring AI
+runtime.
 
 ## API Endpoints
 
-| Method & path                          | Permission              | Purpose                                |
-| -------------------------------------- | ----------------------- | -------------------------------------- |
-| `POST /v1/mcp/chat`                    | `mcp:chat:execute`      | Synchronous chat                       |
-| `POST /v1/mcp/chat/stream`             | `mcp:chat:stream`       | Streaming SSE chat                     |
-| `POST /v1/mcp/documents`               | `mcp:document:ingest`   | Ingest a document into the RAG store   |
-| `GET  /v1/mcp/documents/jobs/{jobId}`  | `mcp:document:ingest`   | Check ingestion job status             |
-| `POST /v1/nlt/requests`                | `nlti:request:submit`   | Submit an NLTI request                 |
-| `GET  /v1/nlt/audit`                   | `nlti:audit:read`       | Query the NLTI audit log               |
-| `GET/PUT/DELETE /v1/prompts/{id}`      | `mcp:system_prompt:*`   | System prompt CRUD                     |
-| `GET/POST/PUT/DELETE /v1/llm-apis`     | `mcp:llm_api:*`         | LLM API config CRUD                    |
+| Method & path                         | Permission            | Purpose                              |
+| ------------------------------------- | --------------------- | ------------------------------------ |
+| `POST /v1/mcp/chat`                   | `mcp:chat:execute`    | Synchronous chat                     |
+| `POST /v1/mcp/chat/stream`            | `mcp:chat:stream`     | Streaming SSE chat                   |
+| `POST /v1/mcp/documents`              | `mcp:document:ingest` | Ingest a document into the RAG store |
+| `GET  /v1/mcp/documents/jobs/{jobId}` | `mcp:document:ingest` | Check ingestion job status           |
+| `POST /v1/nlt/requests`               | `nlti:request:submit` | Submit an NLTI request               |
+| `GET  /v1/nlt/audit`                  | `nlti:audit:read`     | Query the NLTI audit log             |
+| `GET/PUT/DELETE /v1/prompts/{id}`     | `mcp:system_prompt:*` | System prompt CRUD                   |
+| `GET/POST/PUT/DELETE /v1/llm-apis`    | `mcp:llm_api:*`       | LLM API config CRUD                  |
 
 Permission constants are defined in `McpPermissions`. Errors use the standard `ApiError` envelope.
 
@@ -90,9 +90,11 @@ sentinel marks operations available to any authenticated caller.
 **Permission-code extraction:** `CurrentUserContextResolver` derives bare `domain:resource:action` codes from the
 `Authentication` authorities (mixed `ROLE_*`, `PERM_*`, and bare forms) and always includes `AUTHENTICATED`.
 
-> **Known limitation — workflow state:** managers currently always evaluate with `WORKFLOW_IDLE`. Deriving workflow
-> state from session context to activate non-IDLE tool sets (`CREATING_PO`, `PROCESSING_RETURN`, …) is not yet
-> implemented — tracked as a backlog item.
+> **Workflow state (#778):** both session managers resolve the caller's persisted `NltiSession.workflowState`
+> (their most-recently-updated session) and thread it into tool selection, so non-IDLE tool sets (`CREATING_PO`,
+> `RECEIVING_ASN`, `INVENTORY_RECON`, `PROCESSING_RETURN`) activate when a session is in that state. Callers with no
+> session fall back to message-heuristic derivation. Advance a session's state explicitly via
+> `POST /v1/nlt/sessions/{sessionId}/workflow-state` (ownership-checked; guarded by `nlti:request:submit`).
 
 ### Facade tools
 
@@ -105,9 +107,13 @@ are seeded by migration `V18`.
 
 `ToolBootstrapRunner` calls `ToolRegistrationService.registerDiscoveredTools()` on startup. `OpenApiDocumentFetcher`
 pulls the gateway aggregate spec (`pos-api-gateway`, configurable via `MCP_AGGREGATE_SPEC_URL`), `OpenApiToolMapper`
-maps operations to `mcp_tool` rows, and `OperationProxyFactory` builds the HTTP proxy used to execute a call. These
-expand the candidate pool beyond the 17 facades. (Wiring discovered operations as directly agent-callable tools via a
-LangChain4j `ToolProvider` is a backlog item — see [Backlog](#backlog--missing-features).)
+maps operations to `mcp_tool` rows, and `OperationProxyFactory` builds the HTTP proxy used to execute a call.
+`OpenApiToolProvider` then resolves permission-gated discovered operations into dynamic Spring AI `ToolCallback`s per
+request. These expand the candidate pool beyond the 17 facades.
+
+Discovery runs once at startup. Set `mcp.server.discovery-refresh.enabled=true` (interval
+`mcp.server.discovery-refresh.interval-ms`, default 5 min) to periodically re-discover and pick up new or changed
+backend operations without a restart — re-registration is idempotent (each tool is removed then re-added).
 
 ## Audit & Adaptive Tuning
 
@@ -136,22 +142,24 @@ Retrieval is role-aware (`RoleAwareMetadataFilter`, `ScopedContentRetrieverFacto
 
 ## Configuration
 
-| Property                                        | Env / Default                 | Description                                    |
-| ----------------------------------------------- | ----------------------------- | ---------------------------------------------- |
-| `langchain4j.ollama.chat-model.model-name`      | `OLLAMA_CHAT_MODEL` `qwen3.5:cloud` | Deliberate default executor model (single default; tier routing may override per request) |
-| `langchain4j.ollama.embedding-model.model-name` | `nomic-embed-text`            | Embedding model for RAG                        |
-| `mcp.agent.cache-ttl-minutes`                   | `30`                          | Agent cache TTL (role agents + sessions)       |
-| `mcp.agent.candidate-tool-limit`                | `MCP_AGENT_CANDIDATE_TOOL_LIMIT` `8` | Max candidate tools per chat request    |
-| `mcp.rag.chunking.enabled`                      | `MCP_RAG_CHUNKING_ENABLED` `true`    | Chunk documents before embedding        |
-| `mcp.rag.chunking.max-segment-size`             | `MCP_RAG_MAX_SEGMENT_SIZE`    | Max chunk size                                 |
-| `mcp.rag.chunking.max-overlap-size`             | `MCP_RAG_MAX_OVERLAP_SIZE`    | Chunk overlap                                  |
-| `mcp.rag.preload.docs`                          | `[]`                          | Static classpath documents to preload          |
-| `mcp.tuning.enabled`                            | `MCP_TUNING_ENABLED` `false`  | Adaptive tool priority tuning (disabled until regression harness exists — Gate 0) |
-| `mcp.tuning.cron`                               | `0 0 2 * * ?`                 | Tuning schedule (daily 02:00)                  |
-| `mcp.model.fallback.enabled`                    | `MCP_MODEL_FALLBACK_ENABLED`  | Primary → secondary model fallback             |
-| `mcp.discovery.aggregate-spec-url`              | `MCP_AGGREGATE_SPEC_URL`      | Gateway aggregate OpenAPI URL                  |
-| Exa web search                                  | `EXA_API_KEY`                 | External web-search API key                    |
-| DB connection                                   | `MCP_DB_HOST/PORT/NAME/USER/PASSWORD` | PostgreSQL + pgvector                  |
+| Property                                   | Env / Default                               | Description                                                                               |
+| ------------------------------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `spring.ai.ollama.chat.options.model`      | `OLLAMA_CHAT_MODEL` `gpt-oss:120b`          | Deliberate default executor model (single default; tier routing may override per request) |
+| `mcp.model.fallback.secondary-model-name`  | `OLLAMA_FALLBACK_MODEL` `gpt-oss:20b`       | Secondary model used when `mcp.model.fallback.enabled=true`                                |
+| `OLLAMA_CHAT_THINK`                         | _(unset)_                                   | `false`/`true` to force Ollama thinking off/on; unset leaves the model default. Set `false` for reasoning models that would otherwise return the answer in the `thinking` channel (blank `content`) |
+| `spring.ai.ollama.embedding.options.model` | `OLLAMA_EMBEDDING_MODEL` `nomic-embed-text` | Embedding model for RAG                                                                   |
+| `mcp.agent.cache-ttl-minutes`              | `30`                                        | Agent cache TTL (role agents + sessions)                                                  |
+| `mcp.agent.candidate-tool-limit`           | `MCP_AGENT_CANDIDATE_TOOL_LIMIT` `8`        | Max candidate tools per chat request                                                      |
+| `mcp.rag.chunking.enabled`                 | `MCP_RAG_CHUNKING_ENABLED` `true`           | Chunk documents before embedding                                                          |
+| `mcp.rag.chunking.max-segment-size`        | `MCP_RAG_MAX_SEGMENT_SIZE`                  | Max chunk size                                                                            |
+| `mcp.rag.chunking.max-overlap-size`        | `MCP_RAG_MAX_OVERLAP_SIZE`                  | Chunk overlap                                                                             |
+| `mcp.rag.preload.docs`                     | `[]`                                        | Static classpath documents to preload                                                     |
+| `mcp.tuning.enabled`                       | `MCP_TUNING_ENABLED` `false`                | Adaptive tool priority tuning (disabled until regression harness exists — Gate 0)         |
+| `mcp.tuning.cron`                          | `0 0 2 * * ?`                               | Tuning schedule (daily 02:00)                                                             |
+| `mcp.model.fallback.enabled`               | `MCP_MODEL_FALLBACK_ENABLED`                | Primary → secondary model fallback                                                        |
+| `mcp.discovery.aggregate-spec-url`         | `MCP_AGGREGATE_SPEC_URL`                    | Gateway aggregate OpenAPI URL                                                             |
+| Exa web search                             | `EXA_API_KEY`                               | External web-search API key                                                               |
+| DB connection                              | `MCP_DB_HOST/PORT/NAME/USER/PASSWORD`       | PostgreSQL + pgvector                                                                     |
 
 ### Static RAG preload (`alpha` profile)
 
@@ -171,8 +179,8 @@ that is needed to include a new static document.
 
 ## Startup Behaviour
 
-| Runner                             | Profile | Behaviour                                                                                        |
-| ---------------------------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| Runner                             | Profile | Behaviour                                                                                         |
+| ---------------------------------- | ------- | ------------------------------------------------------------------------------------------------- |
 | `ToolBootstrapRunner`              | all     | Registers MCP tools from the gateway aggregate OpenAPI spec.                                      |
 | `SystemPromptSeedRunner`           | `!test` | Upserts `default` and `ROLE_*` prompts from code (best-effort; per-entry failures skipped).       |
 | `SimpleChatRuleSeedRunner`         | `!test` | Seeds the simple-chat rule catalog used for direct (non-agent) routing.                           |
@@ -217,10 +225,6 @@ docker compose up
 
 Tracked separately as GitHub issues. Open items not yet implemented in code:
 
-- **Workflow-state derivation beyond `IDLE`** — persist workflow state on `NltiSession` and thread it through both
-  session managers so non-IDLE tool sets activate.
-- **OpenAPI tool execution bridge** — wire `source = 'openapi'` discovered operations as agent-callable tools via a
-  LangChain4j `ToolProvider` so the assistant can execute them with no facade equivalent.
 - **Legacy role-gating cleanup** — drop `mcp_role` / `mcp_tool_role`, `ToolRegistryRoleMapper`, and the role-gated
   repository queries now superseded by permission gating.
 - **`AUTHENTICATED` sentinel everywhere** — promote `requiredPermissionsOperationCustomizer` to `pos-security-common`

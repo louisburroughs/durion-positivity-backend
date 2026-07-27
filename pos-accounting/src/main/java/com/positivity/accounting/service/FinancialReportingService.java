@@ -219,4 +219,51 @@ public interface FinancialReportingService {
      */
     @NonNull
     AgedPayablesReport generateAgedPayables(@NonNull LocalDate asOfDate);
+
+    /**
+     * Generate the Sales-Tax Liability report for a date range (Story T8, Issue
+     * #966).
+     *
+     * <p>
+     * Reconciliation-grade report (R-T4 decision A): AvaTax is the filing system of
+     * record; this report confirms platform-collected tax equals GL-posted tax. It
+     * reads the {@code ext_invoice_tax} replica and nets POSTED credit-memo tax
+     * reversals, both on an accrual basis.
+     *
+     * <p>
+     * <b>Bucketing.</b> Invoice tax is included when the invoice's
+     * {@code finalizedAt} (accrual posting date) falls in the inclusive range;
+     * credit-memo reversals are included when the credit's {@code postedTimestamp}
+     * falls in the range. Rows are grouped by
+     * {@code (jurisdictionType, jurisdictionCode)} at all available geographic
+     * levels (state / county / city / special), ordered state → county → city →
+     * special then by code.
+     *
+     * <p>
+     * <b>Exempt.</b> Exempt / zero-rate lines contribute to a per-jurisdiction
+     * exempt base (Σ taxable base of exempt lines) with their distinct exemption
+     * reason codes; they add nothing to gross tax.
+     *
+     * <p>
+     * <b>Credits.</b> {@code ext_invoice_tax} is invoice-side only, so each POSTED
+     * credit memo's scalar {@code taxAmountReversed} is allocated across its original
+     * invoice's jurisdictions pro-rata to that invoice's per-jurisdiction collected
+     * tax, with a deterministic exact-sum residual rule (largest-share gets the
+     * remainder, HALF_UP at currency scale). Credits net within the
+     * jurisdiction+period bucket; gross collected stays visible. True per-jurisdiction
+     * credit attribution is a Phase-2 concern.
+     *
+     * <p>
+     * <b>GL drift.</b> Total net tax is reconciled against the credit-normal period
+     * activity of the Sales-Tax Payable account (code {@code 2200}); on a clean
+     * ledger the drift is zero.
+     *
+     * @param startDate period start date (inclusive)
+     * @param endDate   period end date (inclusive)
+     * @return sales-tax liability report with per-jurisdiction rows, totals, and GL
+     *         drift
+     * @throws IllegalArgumentException if {@code endDate} is before {@code startDate}
+     */
+    @NonNull
+    TaxLiabilityReport generateTaxLiability(@NonNull LocalDate startDate, @NonNull LocalDate endDate);
 }
