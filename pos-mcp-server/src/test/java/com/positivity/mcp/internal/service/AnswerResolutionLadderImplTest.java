@@ -47,7 +47,7 @@ class AnswerResolutionLadderImplTest {
     @DisplayName("a resolved screen yields a DEEP_LINK carrying its title and url")
     void deepLinkWhenScreenResolves() {
         when(requestScopedUserContext.current()).thenReturn(Optional.of(userWith(Set.of("workorder:workorder:view"))));
-        when(screenLinkResolver.resolve(any(), nullable(String.class), any(), any()))
+        when(screenLinkResolver.resolve(any(), nullable(String.class), any(), any(), any()))
                 .thenReturn(Optional.of(new ScreenLink("workorders.list", "Work Orders", "/workorders", 0.8)));
 
         LadderResult result = ladder().resolveFallback("how many workorders are open");
@@ -61,7 +61,7 @@ class AnswerResolutionLadderImplTest {
     @DisplayName("no resolvable screen yields an honest HANDOFF")
     void handoffWhenNoScreen() {
         when(requestScopedUserContext.current()).thenReturn(Optional.empty());
-        when(screenLinkResolver.resolve(any(), nullable(String.class), any(), any()))
+        when(screenLinkResolver.resolve(any(), nullable(String.class), any(), any(), any()))
                 .thenReturn(Optional.empty());
 
         LadderResult result = ladder().resolveFallback("something unanswerable");
@@ -75,7 +75,7 @@ class AnswerResolutionLadderImplTest {
     @DisplayName("a screen-resolver failure degrades to HANDOFF instead of propagating")
     void resolverFailureDegradesToHandoff() {
         when(requestScopedUserContext.current()).thenReturn(Optional.empty());
-        when(screenLinkResolver.resolve(any(), nullable(String.class), any(), any()))
+        when(screenLinkResolver.resolve(any(), nullable(String.class), any(), any(), any()))
                 .thenThrow(new RuntimeException("embedding backend down"));
 
         LadderResult result = ladder().resolveFallback("how many workorders are open");
@@ -89,7 +89,7 @@ class AnswerResolutionLadderImplTest {
     void passesCallerPermissions() {
         Set<String> perms = Set.of("workorder:workorder:view", "invoice:invoice:view");
         when(requestScopedUserContext.current()).thenReturn(Optional.of(userWith(perms)));
-        when(screenLinkResolver.resolve(any(), nullable(String.class), eq(perms), any()))
+        when(screenLinkResolver.resolve(any(), nullable(String.class), eq(perms), any(), any()))
                 .thenReturn(Optional.empty());
 
         LadderResult result = ladder().resolveFallback("q");
