@@ -21,8 +21,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * {@code content_tsv} generated column (migration V28), returning Spring AI {@link Document}s that
  * carry the DB {@code id} so hybrid fusion can dedup dense + lexical hits by id.
  *
- * <p>Package-private; built by {@link ScopedContentRetrieverFactory}. Alpha/prod only — the H2 test
- * schema has no FTS, so this never runs in tests.
+ * <p>Package-private; built by {@link ScopedContentRetrieverFactory}, which is {@code @Profile("alpha")},
+ * so this is alpha-only today (the H2 test schema has no FTS, and it never runs in tests).
  */
 final class LexicalDocumentRetriever implements QueryDocumentRetriever {
 
@@ -37,7 +37,7 @@ final class LexicalDocumentRetriever implements QueryDocumentRetriever {
             FROM mcp_document_embedding
             WHERE content_tsv @@ websearch_to_tsquery('english', ?)
               AND metadata ->> 'rag_scope' = ?
-            ORDER BY ts_rank_cd(content_tsv, websearch_to_tsquery('english', ?)) DESC
+            ORDER BY ts_rank_cd(content_tsv, websearch_to_tsquery('english', ?)) DESC, id
             LIMIT ?
             """;
 

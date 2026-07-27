@@ -48,7 +48,7 @@ K = 5
 RAG_MIN_SCORE = float(os.environ.get("EVAL_RAG_MIN_SCORE", "0.55"))
 # #784: Reciprocal Rank Fusion constant for the dense+lexical hybrid diagnostic. Matches the
 # application default (HybridRetrievalProperties.rrfK / mcp.rag.hybrid.rrf-k).
-RRF_K = int(os.environ.get("EVAL_RRF_K", "60"))
+RRF_K = max(1, int(os.environ.get("EVAL_RRF_K", "60")))  # clamp: rank constant must be >= 1
 
 
 def env_file(key):
@@ -122,7 +122,7 @@ def rrf_fuse(ranked_lists, k=RRF_K, limit=None):
                 first_seen.append(doc)
             scores[doc] = scores.get(doc, 0.0) + 1.0 / (k + rank)
     fused = sorted(first_seen, key=lambda d: scores[d], reverse=True)
-    return fused[:limit] if limit else fused
+    return fused[:limit] if limit is not None else fused
 
 
 def main():
