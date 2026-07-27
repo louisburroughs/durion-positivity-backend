@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "_comment": "Gap-harness synthetic breadth question set (#1125 §7). SME-authored ground truth: expected_facts are verbatim from the corpus _Verified: ...  citations so the grounded judge (§4) is anchored to module source of truth, never its own priors. Tags: 'exact-code' feeds the hybrid-lexical flip-threshold (§8); 'gated' exercises permission gating (#4); 'known-gap' has an expected_doc_id that is intentionally NOT in the corpus, to demonstrate corpus-gap discovery + the phase-5 round-trip. Keep expected_facts source-verified; do not add facts not backed by module source.",
+  "questions": [
+    {
+      "id": "gap-vin-format",
+      "query": "what is the exact format of a VIN and which characters are not allowed",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "master",
+      "expected_doc_ids": ["glossary.identifiers"],
+      "expected_facts": [
+        "A VIN is exactly 17 characters matching ^[A-HJ-NPR-Z0-9]{17}$: uppercase letters and digits with I, O, Q excluded.",
+        "The VIN system of record is pos-vehicle-inventory; it is stored raw (vin) and normalized (vin_normalized, globally unique)."
+      ],
+      "topic": "VIN identifier format",
+      "tags": ["exact-code", "identifier"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-sku-immutable",
+      "query": "can a SKU be changed after a product is created and is there a required format",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "master",
+      "expected_doc_ids": ["glossary.identifiers"],
+      "expected_facts": [
+        "In pos-catalog the SKU is a client-supplied string, unique, required at create, and immutable thereafter.",
+        "There is no system-enforced length or regex pattern and no auto-generation for SKU; example values like SKU-12345 are illustrative only."
+      ],
+      "topic": "SKU rules",
+      "tags": ["exact-code", "identifier"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-po-number-owner",
+      "query": "which service owns purchase order numbers and what do they look like",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "master",
+      "expected_doc_ids": ["glossary.identifiers"],
+      "expected_facts": [
+        "Purchase orders are owned by pos-inventory (not pos-order).",
+        "A PO number is an 8-character, zero-padded, uppercase base-36 code from a Postgres sequence (e.g. 0000000A); there is no PO-/year prefix."
+      ],
+      "topic": "PO number format and ownership",
+      "tags": ["exact-code", "identifier"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-invoice-number-format",
+      "query": "what does an invoice number look like and what permission is needed to read an invoice",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "master",
+      "expected_doc_ids": ["glossary.identifiers"],
+      "expected_facts": [
+        "An invoice number is INV-<epochMillis>-<first 8 chars of the invoice UUID>, assigned once at draft creation.",
+        "Reading an invoice is gated by invoice:manage; there is no invoice:read permission."
+      ],
+      "topic": "invoice number format and gating",
+      "tags": ["exact-code", "identifier"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-workorder-number-format",
+      "query": "what is the format of a workorder number and how does it relate to the estimate number",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "master",
+      "expected_doc_ids": ["glossary.identifiers"],
+      "expected_facts": [
+        "A workorder number is WO-YYYY-NNNN with the sequence starting at 1000 (e.g. WO-2026-1001).",
+        "On promotion from an estimate it reuses the estimate's number with the prefix swapped (EST-YYYY-NNNN to WO-YYYY-NNNN) when free; estimate numbers are EST-YYYY-NNNN, unique per location."
+      ],
+      "topic": "workorder number format",
+      "tags": ["exact-code", "identifier"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-gl-account-code",
+      "query": "what is the format of a GL chart-of-accounts code",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "master",
+      "expected_doc_ids": ["glossary.identifiers"],
+      "expected_facts": [
+        "A GL / chart-of-accounts code (pos-accounting) matches ^\\d{4}(-\\d{3})?$: four digits, optionally a dash plus three digits (e.g. 1000, 4000-100).",
+        "The customer account number (pos-customer) is the party customerNumber, not a GL code."
+      ],
+      "topic": "account code format",
+      "tags": ["exact-code", "identifier"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-order-view",
+      "query": "how do I look up the status of an order",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
+      "rag_scope": "order",
+      "expected_doc_ids": ["order.guide"],
+      "expected_facts": [],
+      "topic": "order lookup",
+      "tags": ["scope-coverage", "positive"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-pricing-rules",
+      "query": "how are pricing rules and price books structured",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["pricing:price_book:view", "pricing:rule:view"] },
+      "rag_scope": "pricing",
+      "expected_doc_ids": ["pricing.guide"],
+      "expected_facts": [],
+      "topic": "pricing rules",
+      "tags": ["scope-coverage", "positive"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-tax-mode",
+      "query": "how is tax mode configured",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["tax:mode:view"] },
+      "rag_scope": "tax",
+      "expected_doc_ids": ["tax.guide"],
+      "expected_facts": [],
+      "topic": "tax configuration",
+      "tags": ["scope-coverage", "positive"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-admin-governance-gated",
+      "query": "who can approve a permission change and what are the admin approval gates",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "admin",
+      "expected_doc_ids": ["admin.governance"],
+      "expected_facts": [],
+      "topic": "admin governance approvals",
+      "tags": ["gated", "negative"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-events-audit-gated",
+      "query": "how do I read the NLTI audit trail for a request",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "events",
+      "expected_doc_ids": ["events.observability"],
+      "expected_facts": [],
+      "topic": "NLTI audit trail",
+      "tags": ["gated", "negative"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-returns-refunds-KNOWNGAP",
+      "query": "what is the policy for processing a customer return and issuing a refund on a paid invoice",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
+      "rag_scope": "order",
+      "expected_doc_ids": ["order.returns-refunds"],
+      "expected_facts": [],
+      "topic": "returns and refunds policy",
+      "tags": ["known-gap", "corpus-gap"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-core-charge-KNOWNGAP",
+      "query": "how are core charges handled when a customer returns a rebuildable part",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
+      "rag_scope": "order",
+      "expected_doc_ids": ["order.returns-refunds"],
+      "expected_facts": [],
+      "topic": "returns and refunds policy",
+      "tags": ["known-gap", "corpus-gap"],
+      "source": "synthetic"
+    }
+  ]
+}

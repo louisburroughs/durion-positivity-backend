@@ -31,6 +31,7 @@ Utility scripts for development, operations, testing, and deployment.
 | [`story_export.sh`](#story_exportsh) | CI / Stories | Export `story-implementation` GitHub issues to `.story-work/inbox/` |
 | [`test-gateway-refactoring.sh`](#test-gateway-refactoringsh) | Testing | Integration checks for the gateway API versioning refactor |
 | [`run_test.sh`](#run_testsh) | Testing | Run a focused set of `pos-accounting` tests and grep failures |
+| [`rag_gap_harness.py`](#rag_gap_harnesspy) | Evaluation | RAG corpus gap-discovery harness — ask/grade/classify + hybrid flip-threshold (#1125) |
 | [`fix_uuids*.py`](#fix_uuidspy-family) | Migration | One-time UUID normalization helpers for test files |
 
 ---
@@ -491,6 +492,31 @@ Convenience script to run the three primary `pos-accounting` integration/unit te
 ```
 
 Output is written to `./mvn_test_output.log` and the failure block is printed to stdout.
+
+---
+
+## Evaluation
+
+### `rag_gap_harness.py`
+
+RAG corpus gap-discovery harness (#1125). Asks realistic questions through the MCP chat API,
+reproduces the retrieval that fed the prompt (reusing `eval_live.py`'s DB path), grades answers with
+a source-grounded judge, classifies every failure into a four-way taxonomy (corpus gap / retrieval
+miss / generation / permission gating), and emits a human-actionable gap report — plus the
+dense-vs-hybrid recovery evidence for #1124's `mcp.rag.hybrid.lexical-enabled` flip-threshold.
+
+**Usage:**
+```bash
+pip install --user pg8000
+POS_MCP_TOKEN_ROLE_USER=... scripts/run-gap-harness.sh --judge ollama --recall-at-k 0.85
+python3 scripts/rag_gap_harness.py replay --results pos-mcp-server/target/gap-harness/results.json
+python3 scripts/rag_gap_harness.py calibrate --judge ollama
+```
+
+Pure decision logic lives in the `scripts/gap_harness/` package and is unit-tested
+(`scripts/tests/test_gap_harness.py`); `replay`, `emit-fixture`, and `calibrate` on a set carrying
+`predicted_verdict` run offline. Full docs: [`scripts/gap_harness/README.md`](gap_harness/README.md). Design:
+`pos-mcp-server/docs/rag-corpus-gap-harness-design.md`.
 
 ---
 

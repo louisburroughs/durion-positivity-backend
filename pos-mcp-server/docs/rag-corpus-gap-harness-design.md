@@ -1,8 +1,15 @@
 # RAG Corpus Gap-Discovery Harness (design)
 
-> **Status:** DESIGN. Sub-effort of #1124 (grow the RAG corpus systematically; define the
-> threshold to enable hybrid lexical retrieval). Depends on the retrieval-quality tooling from
-> #783 (`scripts/eval_live.py`) and the hybrid dense+lexical retrieval from #1123.
+> **Status:** IMPLEMENTED (phases 1–4; #1125). Sub-effort of #1124 (grow the RAG corpus
+> systematically; define the threshold to enable hybrid lexical retrieval). Depends on the
+> retrieval-quality tooling from #783 (`scripts/eval_live.py`) and the hybrid dense+lexical
+> retrieval from #1123.
+>
+> **Harness:** `scripts/rag_gap_harness.py` (CLI) + `scripts/gap_harness/` (package) +
+> `scripts/run-gap-harness.sh` (runner). Pure decision logic is unit-tested in
+> `scripts/tests/test_gap_harness.py`. See `scripts/gap_harness/README.md` for how each design
+> section maps to a module. Phase 5 (the authored-doc → new-fixture round-trip) is wired via
+> `rag_gap_harness.py emit-fixture` and awaits a human-authored, source-verified gap doc.
 
 ## 1. Problem
 
