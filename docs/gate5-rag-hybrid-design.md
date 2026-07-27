@@ -150,10 +150,14 @@ The #783 gate (`scripts/eval_live.py`, now scheduled via `eval-cron.sh`) already
    metrics (recall@k was ~0.96 at `RAG_MIN_SCORE=0.55` per #783/#1119).
 2. **Hybrid:** run with `lexical-enabled=true` → require **no regression** on the existing
    metrics and (target) improvement on keyword/identifier-heavy queries.
-3. **Lexical-sensitive fixtures:** add eval queries that dense currently misses — exact
-   permission codes (`crm:party:view`), rare identifiers, verbatim phrases — to
-   `scripts/fixtures` so the harness demonstrates the lexical path's value and guards it going
-   forward.
+3. **Lexical-sensitive fixtures:** exact-code / rare-identifier queries that dense misses live in
+   a **separate suite** `pos-mcp-server/src/test/resources/eval/rag-lexical/` (grounded in
+   `rag/glossary-identifiers.md` codes — `WO-YYYY-NNNN`, `uk_product_sku`, `vin_normalized`,
+   `GR-`, `INV-` — and a `security:*` permission-code query). They are kept out of the
+   `rag-retrieval` suite so they do **not** count toward the gated dense recall@k (which would
+   otherwise regress the #783 floor). `eval_live.py` needs a hybrid-scoring pass
+   (dense ANN ∪ lexical FTS, fused by RRF) to score this suite dense-vs-hybrid — that pass is the
+   remaining harness task.
 4. Tune `rrf-k` / weights only if step 2 shows a regression; re-run to confirm.
 
 Gate stays green ⇒ safe to leave `lexical-enabled=true` on alpha and close #784.
