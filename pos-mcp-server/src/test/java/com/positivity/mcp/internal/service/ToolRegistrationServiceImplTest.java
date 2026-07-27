@@ -13,6 +13,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.positivity.mcp.internal.config.McpServerProperties;
 import com.positivity.mcp.internal.discovery.OpenApiDocumentFetcher;
 import com.positivity.mcp.internal.discovery.OpenApiToolMapper;
+import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.modelcontextprotocol.server.McpAsyncServer;
@@ -22,6 +23,8 @@ import io.swagger.v3.oas.models.OpenAPI;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -199,9 +202,74 @@ class ToolRegistrationServiceImplTest {
         verify(mcpAsyncServer, never()).notifyToolsListChanged();
     }
 
+    @Test
+    @DisplayName("registerDiscoveredTools prunes stale openapi rows absent from the current spec after persisting "
+            + "(#1121)")
+    void registerDiscoveredTools_prunesOrphans_afterPersistingAggregate() {
+        McpServerFeatures.AsyncToolSpecification spec = toolSpec("accounting_listinvoices");
+        OpenApiDocumentFetcher.DiscoveredOpenApi discovered =
+                new OpenApiDocumentFetcher.DiscoveredOpenApi("aggregate", GATEWAY_BASE_URI, new OpenAPI());
+        DiscoveredOperation op = new DiscoveredOperation(
+                "accounting_listinvoices",
+                "List invoices",
+                "GET",
+                "/accounting/v1/invoices",
+                "http://api-gateway:8080",
+                null,
+                List.of());
+
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.just(discovered));
+        when(openApiToolMapper.toAggregateToolSpecifications(GATEWAY_BASE_URI, discovered.openApi()))
+                .thenReturn(List.of(spec));
+        when(openApiToolMapper.toDiscoveredOperations("http://api-gateway:8080", discovered.openApi()))
+                .thenReturn(List.of(op));
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.addTool(spec)).thenReturn(Mono.empty());
+        when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
+
+        ToolMetadataRepository repo = mock(ToolMetadataRepository.class);
+        when(repo.upsertDiscoveredOperation(any(), any()))
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        when(repo.pruneDiscoveredOperationsExcept(any())).thenReturn(3);
+
+        serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+        // Reconciliation runs with exactly the names discovered this run, and the counter reflects the deletes.
+        verify(repo).pruneDiscoveredOperationsExcept(Set.of("accounting_listinvoices"));
+        assertThat(meterRegistry.get("tools.pruned").counter().count()).isEqualTo(3.0);
+    }
+
+    @Test
+    @DisplayName("registerDiscoveredTools does not prune when the aggregate persists no ops (#1121 safety guard)")
+    void registerDiscoveredTools_doesNotPrune_whenNothingPersisted() {
+        McpServerFeatures.AsyncToolSpecification spec = toolSpec("accounting_listinvoices");
+        OpenApiDocumentFetcher.DiscoveredOpenApi discovered =
+                new OpenApiDocumentFetcher.DiscoveredOpenApi("aggregate", GATEWAY_BASE_URI, new OpenAPI());
+
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.just(discovered));
+        when(openApiToolMapper.toAggregateToolSpecifications(GATEWAY_BASE_URI, discovered.openApi()))
+                .thenReturn(List.of(spec));
+        // No discovered operations persisted this run → the guard must skip pruning so a bad/empty run
+        // can never wipe the catalog.
+        when(openApiToolMapper.toDiscoveredOperations("http://api-gateway:8080", discovered.openApi()))
+                .thenReturn(List.of());
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.addTool(spec)).thenReturn(Mono.empty());
+        when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
+
+        ToolMetadataRepository repo = mock(ToolMetadataRepository.class);
+        serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+        verify(repo, never()).pruneDiscoveredOperationsExcept(any());
+    }
+
     // --- helpers ---
 
     private ToolRegistrationServiceImpl serviceUnderTest() {
+        return serviceUnderTest(mock(ToolMetadataRepository.class));
+    }
+
+    private ToolRegistrationServiceImpl serviceUnderTest(ToolMetadataRepository toolMetadataRepository) {
         McpServerProperties properties = new McpServerProperties(
                 "http://localhost:8086",
                 "/mcp/message",
@@ -217,7 +285,7 @@ class ToolRegistrationServiceImplTest {
                 openApiDocumentFetcher,
                 openApiToolMapper,
                 mcpAsyncServer,
-                mock(ToolMetadataRepository.class),
+                toolMetadataRepository,
                 "http://api-gateway:8080",
                 meterRegistry);
     }

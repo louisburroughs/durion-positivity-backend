@@ -90,6 +90,11 @@ public class SessionAgentManagerTestConfiguration {
             }
 
             @Override
+            public int pruneDiscoveredOperationsExcept(java.util.Collection<String> keptNames) {
+                return 0;
+            }
+
+            @Override
             public void linkToolToWorkflow(java.util.UUID toolId, String workflowState) {
                 // no-op stub
             }

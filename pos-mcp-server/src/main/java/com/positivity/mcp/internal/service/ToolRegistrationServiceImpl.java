@@ -12,6 +12,7 @@ import io.modelcontextprotocol.server.McpAsyncServer;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.swagger.v3.oas.models.OpenAPI;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
@@ -40,6 +41,8 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
     // tools_discovered_total / tools_registered_total.
     private final Counter toolsDiscoveredTotal;
     private final Counter toolsRegisteredTotal;
+    // #1121: orphan openapi rows pruned to reconcile the persisted set with the current spec.
+    private final Counter toolsPrunedTotal;
 
     public ToolRegistrationServiceImpl(
             @NonNull McpServerProperties properties,
@@ -63,6 +66,9 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                 .register(meterRegistry);
         this.toolsRegisteredTotal = Counter.builder("tools.registered")
                 .description("MCP tools successfully registered from discovery")
+                .register(meterRegistry);
+        this.toolsPrunedTotal = Counter.builder("tools.pruned")
+                .description("Stale openapi-discovered mcp_tool rows pruned to match the current spec (#1121)")
                 .register(meterRegistry);
     }
 
@@ -178,6 +184,13 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
         return Mono.fromRunnable(() -> {
                     List<DiscoveredOperation> operations =
                             openApiToolMapper.toDiscoveredOperations(gatewayBaseUrl, openApi);
+                    // Names of every op discovered this run — the desired persisted set for the #1121 prune
+                    // below. name is @NonNull by contract; the filter is a defensive guard so a stray null
+                    // can never enter the keep-set and turn the prune's NOT IN (...) into a silent no-op.
+                    Set<String> discoveredNames = operations.stream()
+                            .map(DiscoveredOperation::name)
+                            .filter(java.util.Objects::nonNull)
+                            .collect(Collectors.toSet());
                     int persisted = 0;
                     for (DiscoveredOperation operation : operations) {
                         String path = operation.httpPath();
@@ -207,6 +220,17 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                                     + "x-required-permissions (fail-closed when absent)",
                             persisted,
                             DISCOVERED_WORKFLOW_STATE);
+                    // #1121: reconcile — delete any source='openapi' row absent from this run (orphans left
+                    // by a spec change or discovery-mode switch, since persistence is otherwise upsert-only).
+                    // Guarded on persisted > 0 so a run that wrote nothing (bad/empty spec, DB trouble) can
+                    // never wipe the catalog; pruneDiscoveredOperationsExcept also no-ops on an empty set.
+                    if (persisted > 0 && !discoveredNames.isEmpty()) {
+                        int pruned = toolMetadataRepository.pruneDiscoveredOperationsExcept(discoveredNames);
+                        if (pruned > 0) {
+                            toolsPrunedTotal.increment(pruned);
+                            log.info("Pruned {} stale openapi mcp_tool row(s) not in the current spec (#1121)", pruned);
+                        }
+                    }
                 })
                 .subscribeOn(Schedulers.boundedElastic())
                 .then();

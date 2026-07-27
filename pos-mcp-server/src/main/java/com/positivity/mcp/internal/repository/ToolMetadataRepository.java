@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.repository;
 
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.domain.ToolMetadata;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -32,6 +33,19 @@ public interface ToolMetadataRepository {
      */
     @NonNull
     UUID upsertDiscoveredOperation(@NonNull DiscoveredOperation operation, @NonNull String domain);
+
+    /**
+     * #1121: reconciles the discovered-tool set to the current run. Deletes every
+     * {@code source='openapi'} {@code mcp_tool} row whose name is NOT in {@code keptNames} (and its FK
+     * children), removing orphans left behind by a spec change or discovery-mode switch — discovery is
+     * otherwise upsert-only and never prunes. Scoped strictly to {@code source='openapi'} so
+     * hand-seeded/admin tools are never touched. Returns the number of orphan rows deleted.
+     *
+     * <p><strong>Safety:</strong> an empty {@code keptNames} is a no-op (returns 0) — the caller must
+     * only prune after a successful, non-empty discovery run so a transient empty/failed fetch can
+     * never wipe the catalog.
+     */
+    int pruneDiscoveredOperationsExcept(@NonNull Collection<String> keptNames);
 
     /** Gate 3 (G3.1): maps a tool to a workflow state (by name) so it is selectable there. Idempotent. */
     void linkToolToWorkflow(@NonNull UUID toolId, @NonNull String workflowState);
