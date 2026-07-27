@@ -11,15 +11,16 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -57,9 +58,11 @@ public class SiteMapClient implements SiteMapService {
 
     private volatile @Nullable Cached cached;
 
+    // Inject the shared Clock bean rather than Clock.systemUTC() so the accelerated-clock profile can
+    // replace application time (enforced by the pos-archunit time rule).
     @Autowired
-    public SiteMapClient(@NonNull SiteMapProperties properties) {
-        this(buildRestClient(properties), properties, Clock.systemUTC());
+    public SiteMapClient(@NonNull SiteMapProperties properties, @NonNull Clock clock) {
+        this(buildRestClient(properties), properties, clock);
     }
 
     // Visible for testing: inject a pre-built RestClient (e.g. bound to MockRestServiceServer) and a
@@ -160,7 +163,8 @@ public class SiteMapClient implements SiteMapService {
             throw new SiteMapUnavailableException("Unexpected site-map status " + response.getStatusCode());
         }
         MediaType contentType = response.getHeaders().getContentType();
-        if (contentType == null || !contentType.getSubtype().toLowerCase().contains("json")) {
+        if (contentType == null
+                || !contentType.getSubtype().toLowerCase(Locale.ROOT).contains("json")) {
             throw new SiteMapUnavailableException(
                     "Unexpected site-map " + HttpHeaders.CONTENT_TYPE + ": " + contentType);
         }
