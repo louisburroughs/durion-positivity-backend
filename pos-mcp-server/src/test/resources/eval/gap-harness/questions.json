@@ -107,6 +107,9 @@
       "rag_scope": "pricing",
       "expected_doc_ids": ["pricing.guide"],
       "expected_facts": [
+        "There is no PriceBook entity, table, or class anywhere in pos-price; price_book is only a permission-code label (pricing:price_book:{create,edit,delete,view}) with no backing entity, repository, or endpoint.",
+        "The real verified price-source entities are ProductBasePrice (product_base_price: productId, msrp, currency, effectiveFrom, effectiveTo), LocationPriceOverride (location_price_override: productId, locationId, overridePrice, currency, effectiveFrom, effectiveTo), and CustomerTierPricingRule (customer_tier_pricing_rule: productId, customerTierId, discountRate, effectiveFrom, effectiveTo).",
+        "Rule scoping is limited to product+location (LocationPriceOverride) or product+customer tier (CustomerTierPricingRule) only; there is no customer/account-level rule, service-type field, quantity-break field, or contract-pricing entity.",
         "Price precedence is a fixed sequential pipeline (PriceQuoteServiceImpl.calculatePrice): BASE_PRICE (MSRP, required) then LOCATION_OVERRIDE (absolute replacement) then CUSTOMER_TIER_DISCOUNT (multiplicative), with final rounding HALF_EVEN at scale 2.",
         "effectiveFrom is inclusive and effectiveTo exclusive (NULL = open-ended/active); within one rule type the most-recently-effective active record wins. Read-level pricing permissions are pricing:price_book:view and pricing:rule:view."
       ],
@@ -120,7 +123,13 @@
       "actor": { "role": "ROLE_USER", "permission_codes": ["tax:mode:view"] },
       "rag_scope": "tax",
       "expected_doc_ids": ["tax.guide"],
-      "expected_facts": [],
+      "expected_facts": [
+        "Tax mode is controlled by the boolean Spring config property pos.tax.test-mode.enabled (TaxProperties.TestMode.enabled), overridable via the TAX_TEST_MODE environment variable; it defaults to true (test mode on) until a real external provider is wired.",
+        "A separate property, pos.tax.provider (TaxProperties.provider, env var TAX_PROVIDER), selects the concrete external adapter used only when test mode is disabled: TEST_MODE (default/unset, legacy external stub), AVALARA (real Avalara AvaTax REST v2 adapter), or EXTERNAL (legacy generic HTTP stub). test-mode.enabled always wins over provider.",
+        "Tax mode is global/service-level, not per-request, per-location, or per-tenant: TaxCalculationServiceImpl.isTestMode() returns properties.getTestMode().isEnabled() directly from the injected TaxProperties bean, with no location, tenant, or request-scoped override.",
+        "Tax mode can be read (not changed) at runtime via GET /v1/tax/mode on TaxController, gated by tax:mode:view. The response is {\"mode\": \"test\" | \"production\", \"testMode\": <boolean>} (TaxController.ModeResponse); it does not expose the pos.tax.provider selection.",
+        "There is no API or UI to change tax mode — pos.tax.test-mode.enabled and pos.tax.provider are deploy-time/ops-only properties (environment variables TAX_TEST_MODE / TAX_PROVIDER, set at deployment). No pos-tax endpoint accepts a mode-change request; tax:mode:view only gates the read-only GET /v1/tax/mode endpoint."
+      ],
       "topic": "tax configuration",
       "tags": ["scope-coverage", "positive"],
       "source": "synthetic"
@@ -170,6 +179,34 @@
       "expected_facts": [],
       "topic": "core charge handling",
       "tags": ["known-gap", "corpus-gap"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-warranty-claim-code-format",
+      "query": "what is the format of a warranty claim code and how is it allocated",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["warranty:claim:view"] },
+      "rag_scope": "warranty",
+      "expected_doc_ids": ["warranty.guide"],
+      "expected_facts": [
+        "Claim code format is WC-{yyyy}-{seq}, zero-padded to 6 digits, resetting each calendar year, allocated atomically via a locked per-year sequence row.",
+        "Verified: pos-warranty ClaimCodeServiceImpl.nextClaimCode (String.format(\"WC-%d-%06d\", year, allocated)), ClaimCodeSequence."
+      ],
+      "topic": "warranty claim code format",
+      "tags": ["exact-code", "identifier"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-warranty-settle-customer-first",
+      "query": "can a warranty claim be settled while the vendor reimbursement or part return is still open",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["warranty:claim:view"] },
+      "rag_scope": "warranty",
+      "expected_doc_ids": ["warranty.guide"],
+      "expected_facts": [
+        "Settle-customer-first invariant: vendor reimbursement and part-return child lifecycles never block APPROVED\u2192SETTLED; they block only SETTLED\u2192CLOSED, requiring every reimbursement terminal (CREDIT_RECEIVED, WRITTEN_OFF, NOT_APPLICABLE, DENIED) and every part return terminal (RECEIVED_BY_VENDOR, SCRAPPED, CLOSED).",
+        "Claim status machine is DRAFT, SUBMITTED, IN_REVIEW, INFO_NEEDED, APPROVED, DENIED, SETTLED, CLOSED, CANCELLED; a claim is editable only in DRAFT/INFO_NEEDED."
+      ],
+      "topic": "warranty settle-customer-first invariant",
+      "tags": ["scope-coverage", "positive"],
       "source": "synthetic"
     }
   ]

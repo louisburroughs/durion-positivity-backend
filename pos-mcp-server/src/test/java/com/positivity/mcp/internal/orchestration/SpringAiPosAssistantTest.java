@@ -92,6 +92,49 @@ class SpringAiPosAssistantTest {
     }
 
     @Test
+    void chat_ragContextInstructsGroundingAndForbidsContradictingInventedFacts() {
+        // #1124/#1125: gap-harness alpha showed the model contradicting or ignoring a correctly
+        // retrieved glossary.identifiers snippet (invented PO/GL formats, or a flat refusal despite
+        // the answer being present). The injected RAG block must explicitly instruct the model to
+        // ground its answer in the numbered snippets and refuse to state a fact that isn't supported
+        // by them, rather than silently falling back to trained knowledge.
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        OpenApiToolProvider openApiToolProvider = mock(OpenApiToolProvider.class);
+        when(chatModel.getDefaultOptions())
+                .thenReturn(OllamaChatOptions.builder().model("qwen3.5:cloud").build());
+        when(openApiToolProvider.resolveToolCallbacks(any())).thenReturn(List.of());
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("resolved answer"));
+        when(ragRetriever.retrieve("PO number format"))
+                .thenReturn(List.of(new Document("PO numbers are owned by pos-inventory")));
+        when(chatMemory.get("user-1::ROLE_TECH")).thenReturn(List.of());
+
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel,
+                () -> "base prompt",
+                List.of(new PingTool()),
+                ragRetriever,
+                ignored -> chatMemory,
+                openApiToolProvider,
+                null);
+
+        assistant.chat("user-1::ROLE_TECH", "PO number format", "ctx:role=TECH");
+
+        ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(promptCaptor.capture());
+        List<Message> promptMessages = promptCaptor.getValue().getInstructions();
+        String systemMessageText =
+                promptMessages.get(promptMessages.size() - 2).getText();
+        assertThat(systemMessageText)
+                .contains("Relevant retrieved context:")
+                .contains("Ground your answer in the numbered snippets")
+                .containsIgnoringCase("do not state")
+                .containsIgnoringCase("say what you don't know instead of inventing")
+                .contains("PO numbers are owned by pos-inventory");
+    }
+
+    @Test
     void chat_handsOffToLadderWhenContentBlank() {
         ChatModel chatModel = mock(ChatModel.class);
         QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);

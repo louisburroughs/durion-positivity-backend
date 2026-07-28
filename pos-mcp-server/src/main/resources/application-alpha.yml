@@ -97,6 +97,10 @@ mcp:
           source-path: "classpath:rag/pricing-guide.md"
           rag-scope: "pricing"
           required-permissions: ["pricing:price_book:view", "pricing:rule:view"]
+        - id: "warranty.guide"
+          source-path: "classpath:rag/warranty-guide.md"
+          rag-scope: "warranty"
+          required-permissions: ["warranty:claim:view"]
         - id: "tax.guide"
           source-path: "classpath:rag/tax-guide.md"
           rag-scope: "tax"
