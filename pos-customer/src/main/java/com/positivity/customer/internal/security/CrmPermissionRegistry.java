@@ -84,6 +84,14 @@ public class CrmPermissionRegistry {
     // Interaction History (Story #1141)
     public static final String INTERACTION_VIEW = "crm:interaction:view";
 
+    // Follow-up Tasks (Story #1153)
+    public static final String FOLLOWUP_VIEW = "crm:followup:view";
+    public static final String FOLLOWUP_MANAGE = "crm:followup:manage";
+
+    // Inquiries (Story #1154)
+    public static final String INQUIRY_VIEW = "crm:inquiry:view";
+    public static final String INQUIRY_MANAGE = "crm:inquiry:manage";
+
     // Integration Monitoring (Read-Only)
     public static final String PROCESSING_LOG_VIEW = "crm:processing_log:view";
     public static final String SUSPENSE_VIEW = "crm:suspense:view";
@@ -219,6 +227,22 @@ public class CrmPermissionRegistry {
                         "View a party's interaction and touch history (campaign sends, calls, notes)",
                         "MEDIUM",
                         "Issue #1141"),
+
+                // Follow-up Tasks (2 permissions, Story #1153)
+                permission(FOLLOWUP_VIEW, "View follow-up tasks and the CSR work queue", "LOW", "Issue #1153"),
+                permission(
+                        FOLLOWUP_MANAGE,
+                        "Raise, assign, complete, or dismiss follow-up tasks",
+                        "MEDIUM",
+                        "Issue #1153"),
+
+                // Inquiries (2 permissions, Story #1154)
+                permission(INQUIRY_VIEW, "View inbound service and fleet-quote inquiries", "LOW", "Issue #1154"),
+                permission(
+                        INQUIRY_MANAGE,
+                        "Capture, assign, triage, and convert inbound inquiries into parties",
+                        "MEDIUM",
+                        "Issue #1154"),
 
                 // Integration Monitoring (3 permissions, read-only)
                 permission(

@@ -235,6 +235,53 @@ public final class EventTypes {
                         .apiVersion("1")
                         .build(),
 
+                // CrmFollowUpController - 7 events (Story #1153)
+                EventTypeRegistration.fastRead("CRM_FOLLOWUP_QUEUE", "Retrieve the CSR follow-up work queue")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("CRM_FOLLOWUP_GET", "Retrieve a follow-up task")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("CRM_FOLLOWUP_LIST", "List follow-up tasks for a party")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_FOLLOWUP_CREATE", "Raise a follow-up task")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_FOLLOWUP_ASSIGN", "Assign a follow-up task")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_FOLLOWUP_COMPLETE", "Complete a follow-up task with an outcome")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_FOLLOWUP_DISMISS", "Dismiss a follow-up task")
+                        .apiVersion("1")
+                        .build(),
+
+                // CrmInquiryController / PublicInquiryController - 7 events (Story #1154)
+                EventTypeRegistration.fastRead("CRM_INQUIRY_LIST", "List inbound inquiries")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("CRM_INQUIRY_GET", "Retrieve an inquiry")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_INQUIRY_CAPTURE", "Capture an inquiry taken by staff")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_INQUIRY_ASSIGN", "Assign an inquiry")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_INQUIRY_STATUS_UPDATE", "Update an inquiry's status")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_INQUIRY_CONVERT", "Convert an inquiry into a party")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write(
+                                "CRM_PUBLIC_INQUIRY_SUBMIT", "Capture an inquiry from the public unauthenticated form")
+                        .apiVersion("1")
+                        .build(),
+
                 // WorkorderEventHandler - 3 inbound event processing entries (Story #92)
                 EventTypeRegistration.write(
                                 "CUSTOMER_EVENT_VEHICLE_UPDATED_PROCESSED",

@@ -566,13 +566,18 @@ public enum PermissionCode {
     MARKETING__CAMPAIGN__VIEW(434, "marketing:campaign:view"),
     MARKETING__STATS__VIEW(435, "marketing:stats:view"),
     MARKETING__TEMPLATE__MANAGE(436, "marketing:template:manage"),
-    MARKETING__TEMPLATE__VIEW(437, "marketing:template:view");
+    MARKETING__TEMPLATE__VIEW(437, "marketing:template:view"),
+    // ── Crm (new) ──────────────────────────────────────────────────────────────
+    CRM__FOLLOWUP__MANAGE(438, "crm:followup:manage"),
+    CRM__FOLLOWUP__VIEW(439, "crm:followup:view"),
+    CRM__INQUIRY__MANAGE(440, "crm:inquiry:manage"),
+    CRM__INQUIRY__VIEW(441, "crm:inquiry:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 38;
+    public static final int CATALOG_VERSION = 39;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

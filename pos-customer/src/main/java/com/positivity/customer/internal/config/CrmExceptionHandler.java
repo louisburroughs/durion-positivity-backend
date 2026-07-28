@@ -2,6 +2,7 @@ package com.positivity.customer.internal.config;
 
 import com.positivity.customer.internal.exception.CrmDuplicateResourceException;
 import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
+import com.positivity.customer.internal.exception.CrmTooManyRequestsException;
 import com.positivity.customer.internal.exception.CrmUnprocessableEntityException;
 import com.positivity.customer.internal.exception.DuplicateRedemptionException;
 import com.positivity.shared.error.ApiError;
@@ -127,6 +128,28 @@ public class CrmExceptionHandler {
                         "UNPROCESSABLE_ENTITY",
                         ex.getMessage(),
                         HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * Rate limit exceeded on the public inquiry form. The message is deliberately generic — a
+     * response that revealed the exact limit or remaining quota would just tell an abuser how
+     * to pace themselves.
+     */
+    @ExceptionHandler(CrmTooManyRequestsException.class)
+    public ResponseEntity<ApiError> handleTooManyRequests(
+            CrmTooManyRequestsException ex, HttpServletRequest request, HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.warn("Rate limit exceeded on {}", path);
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(ApiError.of(
+                        "TOO_MANY_REQUESTS",
+                        ex.getMessage(),
+                        HttpStatus.TOO_MANY_REQUESTS.value(),
                         Instant.now(clock).toString(),
                         correlationId));
     }

@@ -383,6 +383,26 @@ paths:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1commercial-accounts~1{partyId}~1relationships~1{relationshipId}
   /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}/primary-billing:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1commercial-accounts~1{partyId}~1relationships~1{relationshipId}~1primary-billing
+  /v1/crm/follow-ups:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1follow-ups
+  /v1/crm/follow-ups/{taskId}:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1follow-ups~1{taskId}
+  /v1/crm/follow-ups/{taskId}/assignee:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1follow-ups~1{taskId}~1assignee
+  /v1/crm/follow-ups/{taskId}/complete:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1follow-ups~1{taskId}~1complete
+  /v1/crm/follow-ups/{taskId}/dismiss:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1follow-ups~1{taskId}~1dismiss
+  /v1/crm/inquiries:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1inquiries
+  /v1/crm/inquiries/{inquiryId}:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1inquiries~1{inquiryId}
+  /v1/crm/inquiries/{inquiryId}/assignee:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1inquiries~1{inquiryId}~1assignee
+  /v1/crm/inquiries/{inquiryId}/convert:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1inquiries~1{inquiryId}~1convert
+  /v1/crm/inquiries/{inquiryId}/status:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1inquiries~1{inquiryId}~1status
   /v1/crm/parties/{partyId}/communicationPreferences:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1communicationPreferences
   /v1/crm/parties/{partyId}/consent-history:
@@ -391,6 +411,8 @@ paths:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1contacts
   /v1/crm/parties/{partyId}/contacts/{contactId}/roles:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1contacts~1{contactId}~1roles
+  /v1/crm/parties/{partyId}/follow-ups:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1follow-ups
   /v1/crm/parties/{partyId}/interactions:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1interactions
   /v1/crm/parties/{partyId}/marketing-consent:
@@ -407,6 +429,8 @@ paths:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1persons
   /v1/crm/persons/{personId}:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1persons~1{personId}
+  /v1/crm/public/inquiries:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1public~1inquiries
   /v1/crm/segments:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1segments
   /v1/crm/segments/{segmentId}:

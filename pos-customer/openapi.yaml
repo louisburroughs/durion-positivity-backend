@@ -12,6 +12,8 @@ servers:
 tags:
 - name: CRM Interactions
   description: Party interaction and touch history
+- name: CRM Public Inquiry
+  description: Unauthenticated inbound inquiry capture
 - name: CRM Person-Link Reconciliation
   description: Verify person_party links resolve in pos-people
 - name: CRM Tags
@@ -34,12 +36,16 @@ tags:
   description: Operations related to customers
 - name: CRM Communication Preferences
   description: Communication preferences and consent flag management
+- name: CRM Inquiries
+  description: Inbound service and fleet-quote inquiries
 - name: CRM Vehicles
   description: Vehicle management operations for customers
 - name: CRM Snapshots
   description: Consolidated CRM data snapshots
 - name: CRM Party Relationships
   description: Commercial account relationship management APIs
+- name: CRM Follow-ups
+  description: Customer follow-up tasks and the CSR work queue
 - name: CRM Marketing Consent
   description: Per-channel marketing consent, account gate, and consent audit
 - name: Customer Requirements
@@ -475,6 +481,125 @@ paths:
         - crm:contact_role:assign
       x-required-permissions:
       - crm:contact_role:assign
+  /v1/crm/inquiries/{inquiryId}/status:
+    put:
+      tags:
+      - CRM Inquiries
+      summary: Update inquiry status
+      description: Move an inquiry to CONTACTED or CLOSED. CONVERTED is reached by converting it.
+      operationId: updateStatus
+      parameters:
+      - name: inquiryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - NEW
+          - CONTACTED
+          - CONVERTED
+          - CLOSED
+      - name: resolutionNote
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InquiryResponse'
+        '404':
+          description: Inquiry not found
+        '422':
+          description: Illegal transition, or CONVERTED was requested directly
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:inquiry:manage
+      x-required-permissions:
+      - crm:inquiry:manage
+  /v1/crm/inquiries/{inquiryId}/assignee:
+    put:
+      tags:
+      - CRM Inquiries
+      summary: Assign inquiry
+      description: Assign or unassign an inquiry
+      operationId: assign
+      parameters:
+      - name: inquiryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: assignedTo
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Inquiry assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InquiryResponse'
+        '404':
+          description: Inquiry not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:inquiry:manage
+      x-required-permissions:
+      - crm:inquiry:manage
+  /v1/crm/follow-ups/{taskId}/assignee:
+    put:
+      tags:
+      - CRM Follow-ups
+      summary: Assign follow-up
+      description: Assign or unassign a follow-up task
+      operationId: assign_1
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: assignedTo
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Task assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowUpTaskResponse'
+        '404':
+          description: Task not found
+        '422':
+          description: Task is already closed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:followup:manage
+      x-required-permissions:
+      - crm:followup:manage
   /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}/primary-billing:
     put:
       tags:
@@ -995,6 +1120,30 @@ paths:
         - crm:segment:manage
       x-required-permissions:
       - crm:segment:manage
+  /v1/crm/public/inquiries:
+    post:
+      tags:
+      - CRM Public Inquiry
+      summary: Submit an inquiry
+      description: Public, unauthenticated capture of a service or fleet-quote request. Rate-limited per submitter; returns only a reference id.
+      operationId: submit
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitInquiryRequest'
+        required: true
+      responses:
+        '202':
+          description: Inquiry accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InquiryAcceptedResponse'
+        '400':
+          description: Validation failed
+        '429':
+          description: Too many submissions
   /v1/crm/persons:
     get:
       tags:
@@ -1266,6 +1415,92 @@ paths:
         - crm:interaction:view
       x-required-permissions:
       - crm:interaction:view
+  /v1/crm/parties/{partyId}/follow-ups:
+    get:
+      tags:
+      - CRM Follow-ups
+      summary: List party follow-ups
+      description: Follow-up tasks raised against a party
+      operationId: listForParty
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - DONE
+          - DISMISSED
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        '200':
+          description: Tasks returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:followup:view
+      x-required-permissions:
+      - crm:followup:view
+    post:
+      tags:
+      - CRM Follow-ups
+      summary: Raise follow-up task
+      description: Raise a follow-up task against a party
+      operationId: create_1
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFollowUpTaskRequest'
+        required: true
+      responses:
+        '201':
+          description: Task raised
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowUpTaskResponse'
+        '404':
+          description: Party not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:followup:manage
+      x-required-permissions:
+      - crm:followup:manage
   /v1/crm/parties/{partyId}/communicationPreferences:
     get:
       tags:
@@ -1335,6 +1570,194 @@ paths:
         - crm:contact_preference:edit
       x-required-permissions:
       - crm:contact_preference:edit
+  /v1/crm/inquiries:
+    get:
+      tags:
+      - CRM Inquiries
+      summary: List inquiries
+      description: Inbound inquiries, newest first
+      operationId: list_3
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - NEW
+          - CONTACTED
+          - CONVERTED
+          - CLOSED
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        '200':
+          description: Inquiries returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:inquiry:view
+      x-required-permissions:
+      - crm:inquiry:view
+    post:
+      tags:
+      - CRM Inquiries
+      summary: Capture inquiry
+      description: Record an inquiry taken by phone, walk-in, or referral
+      operationId: capture
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitInquiryRequest'
+        required: true
+      responses:
+        '201':
+          description: Inquiry captured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InquiryResponse'
+        '400':
+          description: Validation failed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:inquiry:manage
+      x-required-permissions:
+      - crm:inquiry:manage
+  /v1/crm/inquiries/{inquiryId}/convert:
+    post:
+      tags:
+      - CRM Inquiries
+      summary: Convert inquiry
+      description: Turn the inquiry into a PROSPECT party, or link it to an existing party when the enquirer is already known
+      operationId: convert
+      parameters:
+      - name: inquiryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: existingPartyId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Inquiry converted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InquiryResponse'
+        '404':
+          description: Inquiry or party not found
+        '422':
+          description: Illegal transition, or an individual inquiry with no party to link
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:inquiry:manage
+      x-required-permissions:
+      - crm:inquiry:manage
+  /v1/crm/follow-ups/{taskId}/dismiss:
+    post:
+      tags:
+      - CRM Follow-ups
+      summary: Dismiss follow-up
+      description: Close a follow-up as deliberately not pursued, recording why
+      operationId: dismiss
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseFollowUpTaskRequest'
+        required: true
+      responses:
+        '200':
+          description: Task dismissed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowUpTaskResponse'
+        '404':
+          description: Task not found
+        '422':
+          description: Task is already closed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:followup:manage
+      x-required-permissions:
+      - crm:followup:manage
+  /v1/crm/follow-ups/{taskId}/complete:
+    post:
+      tags:
+      - CRM Follow-ups
+      summary: Complete follow-up
+      description: Close a follow-up as worked, recording the outcome and any resulting booking
+      operationId: complete
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseFollowUpTaskRequest'
+        required: true
+      responses:
+        '200':
+          description: Task completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowUpTaskResponse'
+        '404':
+          description: Task not found
+        '422':
+          description: Task is already closed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:followup:manage
+      x-required-permissions:
+      - crm:followup:manage
   /v1/crm/commercial-accounts/{partyId}/relationships:
     post:
       tags:
@@ -2147,6 +2570,127 @@ paths:
         - crm:consent:view
       x-required-permissions:
       - crm:consent:view
+  /v1/crm/inquiries/{inquiryId}:
+    get:
+      tags:
+      - CRM Inquiries
+      summary: Get inquiry
+      description: Retrieve a single inquiry
+      operationId: get_1
+      parameters:
+      - name: inquiryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Inquiry returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InquiryResponse'
+        '404':
+          description: Inquiry not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:inquiry:view
+      x-required-permissions:
+      - crm:inquiry:view
+  /v1/crm/follow-ups:
+    get:
+      tags:
+      - CRM Follow-ups
+      summary: Follow-up queue
+      description: The CSR work queue, ordered by due date. All filters are optional.
+      operationId: queue
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - DONE
+          - DISMISSED
+      - name: assignedTo
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - DECLINED_SERVICE_FOLLOWUP
+          - SERVICE_DUE_REMINDER
+          - FLEET_CHECKIN
+          - CAMPAIGN_RESPONSE
+          - GENERAL
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        '200':
+          description: Queue returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:followup:view
+      x-required-permissions:
+      - crm:followup:view
+  /v1/crm/follow-ups/{taskId}:
+    get:
+      tags:
+      - CRM Follow-ups
+      summary: Get follow-up task
+      description: Retrieve a single follow-up task
+      operationId: get_2
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Task returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowUpTaskResponse'
+        '404':
+          description: Task not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:followup:view
+      x-required-permissions:
+      - crm:followup:view
   /v1/crm/commercial-accounts/{partyId}/contacts:
     get:
       tags:
@@ -2993,6 +3537,159 @@ components:
       - contactId
       - partyId
       - status
+    InquiryResponse:
+      type: object
+      description: A captured inbound inquiry
+      properties:
+        inquiryId:
+          type: string
+          format: uuid
+          description: Inquiry identifier
+        channel:
+          type: string
+          description: How it arrived
+          enum:
+          - WEB_FORM
+          - PHONE
+          - WALK_IN
+          - EMAIL
+          - REFERRAL
+          - CAMPAIGN
+        audienceType:
+          type: string
+          description: Fleet or individual
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+        contactName:
+          type: string
+          description: Who is asking
+        organizationName:
+          type: string
+          description: Organization name
+        email:
+          type: string
+          description: Contact email
+        phone:
+          type: string
+          description: Contact phone
+        vehicleOfInterest:
+          type: string
+          description: Vehicle of interest
+        serviceOfInterest:
+          type: string
+          description: Service of interest
+        message:
+          type: string
+          description: Free-text message
+        campaignCode:
+          type: string
+          description: Attributed campaign
+        status:
+          type: string
+          description: Inquiry state
+          enum:
+          - NEW
+          - CONTACTED
+          - CONVERTED
+          - CLOSED
+        partyId:
+          type: string
+          format: uuid
+          description: Party it converted into
+        assignedTo:
+          type: string
+          description: Owning CSR
+        resolutionNote:
+          type: string
+          description: How it was resolved
+        createdAt:
+          type: string
+          format: date-time
+          description: Capture timestamp
+      required:
+      - audienceType
+      - channel
+      - contactName
+      - createdAt
+      - inquiryId
+      - status
+    FollowUpTaskResponse:
+      type: object
+      description: A customer follow-up task
+      properties:
+        taskId:
+          type: string
+          format: uuid
+          description: Task identifier
+        partyId:
+          type: string
+          format: uuid
+          description: Party the follow-up concerns
+        vehicleId:
+          type: string
+          format: uuid
+          description: Vehicle the follow-up concerns
+        type:
+          type: string
+          description: Why the follow-up exists
+          enum:
+          - DECLINED_SERVICE_FOLLOWUP
+          - SERVICE_DUE_REMINDER
+          - FLEET_CHECKIN
+          - CAMPAIGN_RESPONSE
+          - GENERAL
+          example: DECLINED_SERVICE_FOLLOWUP
+        dueDate:
+          type: string
+          format: date
+          description: When it should be worked by
+        assignedTo:
+          type: string
+          description: Owning CSR; null means unassigned
+        status:
+          type: string
+          description: Task state
+          enum:
+          - OPEN
+          - DONE
+          - DISMISSED
+        sourceWorkorderId:
+          type: string
+          description: Workorder it originated from
+        reason:
+          type: string
+          description: Context for whoever works it
+        outcome:
+          type: string
+          description: What happened when it was worked
+        notes:
+          type: string
+          description: Free-text notes
+        bookedWorkorderId:
+          type: string
+          format: uuid
+          description: Workorder booked from the hand-off
+        bookedAppointmentId:
+          type: string
+          format: uuid
+          description: Appointment booked from the hand-off
+        closedAt:
+          type: string
+          format: date-time
+          description: When the task was closed
+        closedBy:
+          type: string
+          description: Who closed it
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - partyId
+      - status
+      - taskId
+      - type
     UpsertBillingRulesRequest:
       type: object
       description: Request to upsert billing rules for a commercial party
@@ -3541,6 +4238,94 @@ components:
           minItems: 0
       required:
       - partyIds
+    SubmitInquiryRequest:
+      type: object
+      description: Request to capture an inbound service or fleet-quote inquiry
+      properties:
+        channel:
+          type: string
+          description: How the inquiry arrived
+          enum:
+          - WEB_FORM
+          - PHONE
+          - WALK_IN
+          - EMAIL
+          - REFERRAL
+          - CAMPAIGN
+          example: WEB_FORM
+        audienceType:
+          type: string
+          description: Whether this is a fleet or individual inquiry
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+          example: INDIVIDUAL
+        contactName:
+          type: string
+          description: Who is asking
+          example: Jane Doe
+          maxLength: 200
+          minLength: 0
+        organizationName:
+          type: string
+          description: Organization name, for a fleet inquiry
+          maxLength: 200
+          minLength: 0
+        email:
+          type: string
+          format: email
+          description: Contact email
+          example: jane@example.com
+          maxLength: 320
+          minLength: 0
+        phone:
+          type: string
+          description: Contact phone
+          example: +1-555-0100
+          maxLength: 40
+          minLength: 0
+        vehicleOfInterest:
+          type: string
+          description: Vehicle the inquiry concerns
+          example: 2019 Ford Transit 250
+          maxLength: 300
+          minLength: 0
+        serviceOfInterest:
+          type: string
+          description: Service the inquiry concerns
+          example: Fleet tire rotation
+          maxLength: 300
+          minLength: 0
+        message:
+          type: string
+          description: Free-text message
+          maxLength: 2000
+          minLength: 0
+        campaignCode:
+          type: string
+          description: Campaign that drove the inquiry
+          example: SPRING-FLEET-2026
+          maxLength: 100
+          minLength: 0
+      required:
+      - audienceType
+      - channel
+      - contactName
+    InquiryAcceptedResponse:
+      type: object
+      description: Acknowledgement of a publicly submitted inquiry
+      properties:
+        inquiryId:
+          type: string
+          format: uuid
+          description: Reference for the submitted inquiry
+        status:
+          type: string
+          description: Always NEW
+          example: NEW
+      required:
+      - inquiryId
+      - status
     CreatePersonRequest:
       type: object
       description: Request to create an individual person record
@@ -3855,6 +4640,52 @@ components:
       - occurredAt
       - partyId
       - type
+    CreateFollowUpTaskRequest:
+      type: object
+      description: Request to raise a follow-up task against a party
+      properties:
+        type:
+          type: string
+          description: Why the follow-up is needed
+          enum:
+          - DECLINED_SERVICE_FOLLOWUP
+          - SERVICE_DUE_REMINDER
+          - FLEET_CHECKIN
+          - CAMPAIGN_RESPONSE
+          - GENERAL
+          example: DECLINED_SERVICE_FOLLOWUP
+        vehicleId:
+          type: string
+          format: uuid
+          description: Vehicle the follow-up concerns, when vehicle-specific
+        dueDate:
+          type: string
+          format: date
+          description: When the follow-up should be worked by
+          example: 2026-08-15
+        assignedTo:
+          type: string
+          description: CSR to own the task; unassigned tasks sit in the shared queue
+          maxLength: 255
+          minLength: 0
+        reason:
+          type: string
+          description: Context for whoever works it
+          example: Declined rear brake pads at 62k service
+          maxLength: 500
+          minLength: 0
+        sourceWorkorderId:
+          type: string
+          description: Workorder the follow-up originated from
+          maxLength: 64
+          minLength: 0
+        notes:
+          type: string
+          description: Free-text notes
+          maxLength: 2000
+          minLength: 0
+      required:
+      - type
     UpsertCommunicationPreferencesRequest:
       type: object
       description: Communication preferences to set
@@ -3937,6 +4768,26 @@ components:
       - operationType
       - partyId
       - status
+    CloseFollowUpTaskRequest:
+      type: object
+      description: Request to complete or dismiss a follow-up task
+      properties:
+        outcome:
+          type: string
+          description: What happened when the follow-up was worked
+          example: Customer booked for 12 Aug
+          maxLength: 500
+          minLength: 0
+        bookedWorkorderId:
+          type: string
+          format: uuid
+          description: Workorder created from the hand-off, when booking followed
+        bookedAppointmentId:
+          type: string
+          format: uuid
+          description: Appointment created from the hand-off, when booking followed
+      required:
+      - outcome
     CreatePartyRelationshipRequest:
       type: object
       description: Request to create a relationship between a commercial account and an individual
