@@ -64,7 +64,9 @@ _Verified: `pos-accounting` `GLAccountCreateRequest` (`@Pattern "^\\d{4}(-\\d{3}
 
 ## Claim code
 
-A claim code is the human-facing identifier of a warranty claim, owned by `pos-warranty` (distinct from the claim's UUIDv7 `id`, which remains the primary key). Format: `WC-{yyyy}-{seq}` where the sequence is zero-padded to 6 digits and resets each calendar year (e.g. `WC-2026-000123`). The `claimCode` is unique and is the business/search key — claim lookups and cross-service references (e.g. invoice adjustments/refunds carry it as `externalReference`) use the claim code, while APIs address the claim by UUID. Use lexical retrieval for exact-code recall.
+A claim code is the human-facing identifier of a warranty claim, owned by `pos-warranty` (distinct from the claim's UUIDv7 `id`, which remains the primary key). Format: `WC-{yyyy}-{seq}` where the sequence is zero-padded to 6 digits and resets each calendar year (e.g. `WC-2026-000123`). The `claimCode` is unique and is the business/search key for claim lookups, while APIs address the claim by UUID. Note: invoice adjustments/refunds carry the **settlement id** (not the claim code) as `externalReference` for pos-invoice idempotency/reconciliation — the claim code only appears in the adjustment's human-readable reason text. Use lexical retrieval for exact-code recall.
+
+_Verified: `pos-warranty` `SettlementReconciliationServiceImpl` (`String externalReference = settlement.getId().toString()`), `SettlementController` ("against pos-invoice by its externalReference (the settlement id)")._
 
 _Verified: `pos-warranty` `ClaimCodeServiceImpl` (`String.format("WC-%d-%06d", year, seq)`), `ClaimCodeSequence` (per-year counter), `WarrantyClaim.claimCode` (unique) + `WarrantyClaimRepository` claim-code lookup._
 
