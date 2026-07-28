@@ -45,6 +45,7 @@ MANIFEST = [
     ("order.guide", "order-guide.md", "order", ["order:order:view"]),
     ("order.returns-refunds", "returns-refunds-rag.md", "order", ["order:order:view"]),
     ("pricing.guide", "pricing-guide.md", "pricing", ["pricing:price_book:view", "pricing:rule:view"]),
+    ("warranty.guide", "warranty-guide.md", "warranty", ["warranty:claim:view"]),
     ("tax.guide", "tax-guide.md", "tax", ["tax:mode:view"]),
     ("crm.customer-vehicle", "customer-vehicle-guide.md", "customer",
      ["crm:party:view", "crm:party:search", "crm:vehicle:view", "crm:vehicle:search", "crm:contact:view"]),

@@ -39,6 +39,7 @@ MANIFEST: list[tuple[str, str, str, list[str]]] = [
     ("order.guide", "order-guide.md", "order", ["order:order:view"]),
     ("order.returns-refunds", "returns-refunds-rag.md", "order", ["order:order:view"]),
     ("pricing.guide", "pricing-guide.md", "pricing", ["pricing:price_book:view", "pricing:rule:view"]),
+    ("warranty.guide", "warranty-guide.md", "warranty", ["warranty:claim:view"]),
     ("tax.guide", "tax-guide.md", "tax", ["tax:mode:view"]),
     (
         "crm.customer-vehicle",

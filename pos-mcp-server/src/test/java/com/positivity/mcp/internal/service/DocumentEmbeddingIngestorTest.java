@@ -94,4 +94,98 @@ class DocumentEmbeddingIngestorTest {
         assertTrue(exception.getCause().getMessage().contains("Document exceeds configured chunk limit"));
         verify(embeddingModel, never()).embed(anyList());
     }
+
+    /**
+     * #1124/#1125: a markdown document with several {@code ##} sub-sections must split into one
+     * chunk per sub-section (each independently embeddable/retrievable) rather than fixed
+     * character-window slices that can straddle two unrelated sections and dilute or truncate the
+     * fact a query is looking for. Regression coverage for the gap-harness alpha finding where
+     * glossary.identifiers was retrieved as the correct document but the specific PO/GL/invoice fact
+     * was not reliably present in the returned chunk.
+     */
+    @Test
+    void chunking_splitsMarkdownDocumentPerHeadingSection() {
+        PgVectorStore embeddingStore = mock(PgVectorStore.class);
+        EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
+        when(embeddingModel.embed(anyList()))
+                .thenAnswer(invocation -> ((List<String>) invocation.getArgument(0)).stream()
+                        .map(ignored -> new float[] {1.0f})
+                        .toList());
+        // Large segment size so no section needs further sliding-window splitting; only the
+        // heading-based split should apply.
+        DocumentEmbeddingIngestor ingestor = new DocumentEmbeddingIngestor(embeddingStore, embeddingModel, true, 2000, 200);
+
+        String content =
+                """
+                # Glossary
+
+                ## Purpose
+
+                This document defines identifiers.
+
+                ## PO number
+
+                POs are owned by pos-inventory. Format: 8-character zero-padded base-36 code.
+
+                ## GL account code
+
+                Format: ^\\d{4}(-\\d{3})?$
+                """;
+
+        int chunkCount = ingestor.ingestDocument(content, Map.of("rag_scope", "master"));
+
+        // Preamble ("# Glossary" title, before the first "## " heading) plus one chunk per
+        // "## " section (Purpose, PO number, GL account code) = 4 chunks.
+        assertEquals(4, chunkCount);
+
+        ArgumentCaptor<List<Document>> segmentCaptor = listCaptor();
+        verify(embeddingStore).add(segmentCaptor.capture());
+        List<Document> segments = segmentCaptor.getValue();
+        assertTrue(segments.stream()
+                .anyMatch(segment -> segment.getText().contains("## PO number")
+                        && segment.getText().contains("pos-inventory")
+                        && !segment.getText().contains("GL account code")));
+        assertTrue(segments.stream()
+                .anyMatch(segment -> segment.getText().contains("## GL account code")
+                        && segment.getText().contains("\\d{4}")
+                        && !segment.getText().contains("PO number")));
+    }
+
+    /**
+     * A section that exceeds {@code maxSegmentSize} still falls back to the sliding-window split
+     * within that section, so oversized sub-sections don't silently bypass the chunk-size contract.
+     */
+    @Test
+    void chunking_fallsBackToSlidingWindowForOversizedSection() {
+        PgVectorStore embeddingStore = mock(PgVectorStore.class);
+        EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
+        when(embeddingModel.embed(anyList()))
+                .thenAnswer(invocation -> ((List<String>) invocation.getArgument(0)).stream()
+                        .map(ignored -> new float[] {1.0f})
+                        .toList());
+        DocumentEmbeddingIngestor ingestor = new DocumentEmbeddingIngestor(embeddingStore, embeddingModel, true, 20, 0);
+
+        String content = "## Big section\n" + "x".repeat(100);
+
+        int chunkCount = ingestor.ingestDocument(content, Map.of("rag_scope", "master"));
+
+        assertTrue(chunkCount > 1);
+    }
+
+    /** Plain prose with no {@code ##} headings is unaffected and still uses the sliding window. */
+    @Test
+    void chunking_plainProseWithNoHeadingsUsesSlidingWindow() {
+        PgVectorStore embeddingStore = mock(PgVectorStore.class);
+        EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
+        when(embeddingModel.embed(anyList()))
+                .thenAnswer(invocation -> ((List<String>) invocation.getArgument(0)).stream()
+                        .map(ignored -> new float[] {1.0f})
+                        .toList());
+        DocumentEmbeddingIngestor ingestor =
+                new DocumentEmbeddingIngestor(embeddingStore, embeddingModel, true, 10, 9, 100);
+
+        int chunks = ingestor.ingestDocument("abcdefghijklmnopqrstuvwxyz", Map.of("rag_scope", "inventory"));
+
+        assertEquals(5, chunks);
+    }
 }
