@@ -833,6 +833,13 @@ services:
       MCP_RAG_CHUNKING_ENABLED: ${MCP_RAG_CHUNKING_ENABLED:-true}
       MCP_RAG_MAX_SEGMENT_SIZE: ${MCP_RAG_MAX_SEGMENT_SIZE:-2000}
       MCP_RAG_MAX_OVERLAP_SIZE: ${MCP_RAG_MAX_OVERLAP_SIZE:-200}
+      # Origin of the frontend SSR server that serves /sitemap.json (NOT the API gateway).
+      # Must be passed through explicitly; compose only reads .env for ${..} substitution,
+      # it does not inject host env into the container.
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://pos-frontend:4000}
+      SITEMAP_CACHE_TTL: ${SITEMAP_CACHE_TTL:-600s}
+      SITEMAP_FETCH_TIMEOUT: ${SITEMAP_FETCH_TIMEOUT:-5s}
+      SITEMAP_EXPECTED_VERSION: ${SITEMAP_EXPECTED_VERSION:-1}
       EXA_API_KEY: ${EXA_API_KEY:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
