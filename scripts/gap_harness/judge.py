@@ -23,6 +23,7 @@ from .model import (
     VERDICT_CORRECT,
     VERDICT_MISLEADING,
     VERDICT_REFUSED,
+    VERDICT_UNSUPPORTED,
     VERDICTS,
     Grade,
 )
@@ -30,6 +31,7 @@ from .refusal import is_refusal, refusal_match
 
 LLM = Callable[[str], str]
 
+# Grounded grader: there IS a source of truth, so grade contradiction against it.
 _JUDGE_SYSTEM = """\
 You are a strict grader for a retrieval-augmented assistant. Grade the ANSWER against the GROUND
 TRUTH facts ONLY. Do not use outside knowledge or your own priors — if a claim is not settled by the
@@ -49,13 +51,49 @@ Definitions:
   important class to catch — a fluent wrong answer is worse than a refusal.
 """
 
+# Ungrounded grader (#1131): there is NO ground truth to contradict — a corpus gap means no doc, so
+# no expected fact can exist, and the grounded grader would fall through to "correct" on a fully
+# fabricated answer. Here the question inverts: is the answer *supported*, or is it asserting
+# specifics with no basis? That confident-invention case is the exact signal the harness exists to
+# find, so it must NOT pass as correct.
+_JUDGE_SYSTEM_UNSUPPORTED = """\
+You are a strict grader for a retrieval-augmented assistant. There is NO authoritative ground truth
+for this question — so you cannot confirm the answer is right, and you must not assume it is. Judge
+whether the answer is GROUNDED or is confidently inventing specifics with no basis.
+
+Return exactly one JSON object, no prose, with keys:
+  "verdict": one of "correct", "refused", "unsupported"
+  "rationale": one sentence explaining the verdict
+  "cited_ground_truth": "" (no ground truth is available for this question)
+
+Definitions:
+- "refused": the answer declines, says it lacks information/permission, or does not attempt an answer.
+- "unsupported": the answer is confident and specific — named entities, workflows, identifier
+  formats, owners, numbered steps — with nothing to support those specifics. Treat fluent, detailed,
+  unsourced factual claims as unsupported. This is the signal to catch: a model inventing a workflow
+  for a topic the corpus does not cover is a corpus gap, not a good answer.
+- "correct": ONLY when the answer is general and appropriately qualified, or explicitly grounded in
+  sources it cites — not when it fabricates concrete specifics.
+"""
+
 
 def build_judge_prompt(question: str, answer: str, ground_truth: Iterable[str]) -> str:
-    facts = "\n".join(f"- {f}" for f in ground_truth if f) or "- (no explicit ground-truth fact provided)"
+    """Select the grader by whether ground truth exists. With facts, grade contradiction (the
+    original behaviour). Without facts (a corpus gap), grade groundedness, so a confident fabrication
+    is caught as ``unsupported`` instead of slipping through as ``correct`` (#1131)."""
+    facts = [f for f in ground_truth if f]
+    if not facts:
+        return (
+            f"{_JUDGE_SYSTEM_UNSUPPORTED}\n"
+            f"QUESTION:\n{question}\n\n"
+            f"ANSWER:\n{answer}\n\n"
+            f"JSON:"
+        )
+    fact_lines = "\n".join(f"- {f}" for f in facts)
     return (
         f"{_JUDGE_SYSTEM}\n"
         f"QUESTION:\n{question}\n\n"
-        f"GROUND TRUTH (authoritative — grade against these only):\n{facts}\n\n"
+        f"GROUND TRUTH (authoritative — grade against these only):\n{fact_lines}\n\n"
         f"ANSWER:\n{answer}\n\n"
         f"JSON:"
     )
@@ -89,16 +127,26 @@ def _extract_json(raw: str) -> Optional[dict]:
         return None
 
 
+# judge_error prefixes distinguish the two failure kinds the report must not conflate (#1130): a
+# `parse:` error is a judge-quality signal (the model replied, but unusably), a `transport:` error is
+# retryable infrastructure noise (timeout / connection / HTTP 5xx), and `ungraded:` means no judge
+# ran at all. The aggregate keys off these prefixes so neither is counted as a real `misleading`.
+ERR_PARSE = "parse:"
+ERR_TRANSPORT = "transport:"
+ERR_UNGRADED = "ungraded:"
+
+
 def parse_verdict(raw: str) -> Grade:
     """Parse a judge reply into a Grade, defensively. An unparseable reply is surfaced as a
-    ``judge_error`` (verdict falls back to ``misleading`` — the conservative choice, since silently
-    treating a broken judge call as ``correct`` would hide real failures)."""
+    ``parse:`` ``judge_error`` (verdict falls back to ``misleading`` — the conservative choice, since
+    silently treating a broken judge call as ``correct`` would hide real failures — but the error tag
+    keeps it out of the graded ``misleading`` count)."""
     obj = _extract_json(raw)
     if obj is None:
         return Grade(
             verdict=VERDICT_MISLEADING,
             rationale="unparseable judge response",
-            judge_error=f"could not parse JSON from judge output: {raw[:200]!r}",
+            judge_error=f"{ERR_PARSE} could not parse JSON from judge output: {raw[:200]!r}",
         )
     verdict = str(obj.get("verdict", "")).strip().lower()
     if verdict not in VERDICTS:
@@ -106,7 +154,7 @@ def parse_verdict(raw: str) -> Grade:
             verdict=VERDICT_MISLEADING,
             rationale=f"judge returned unknown verdict {verdict!r}",
             cited_ground_truth=str(obj.get("cited_ground_truth", "")),
-            judge_error=f"unknown verdict: {verdict!r}",
+            judge_error=f"{ERR_PARSE} unknown verdict: {verdict!r}",
         )
     return Grade(
         verdict=verdict,
@@ -122,11 +170,17 @@ def grade(
     llm: Optional[LLM] = None,
     *,
     prefilter_refusals: bool = True,
+    transport_retries: int = 1,
 ) -> Grade:
     """Grade one answer. Deterministic refusal pre-filter first (no judge call spent); otherwise
     invoke the grounded judge. If no ``llm`` is supplied, only the refusal pre-filter runs and a
     non-refusal is returned ungraded (verdict ``correct`` is *not* assumed — an ungraded flag is set
-    via ``judge_error`` so the caller never mistakes 'not judged' for 'judged correct')."""
+    via ``judge_error`` so the caller never mistakes 'not judged' for 'judged correct').
+
+    A transport failure (timeout / connection / HTTP 5xx) is retried up to ``transport_retries``
+    times before giving up, since these are the flaky-host failures #1129 documents; a persistent
+    failure is surfaced as a ``transport:`` ``judge_error`` (not swallowed into a ``misleading``
+    verdict — the report keys off the tag to keep it out of the graded counts, #1130)."""
     if prefilter_refusals and is_refusal(answer):
         return Grade(
             verdict=VERDICT_REFUSED,
@@ -137,17 +191,20 @@ def grade(
         return Grade(
             verdict=VERDICT_CORRECT,
             rationale="no judge configured; answer not graded",
-            judge_error="ungraded: no llm supplied",
+            judge_error=f"{ERR_UNGRADED} no llm supplied",
         )
-    try:
-        raw = llm(build_judge_prompt(question, answer, list(ground_truth)))
-    except Exception as e:  # transport / model error — surface, do not swallow into a verdict
-        return Grade(
-            verdict=VERDICT_MISLEADING,
-            rationale="judge call failed",
-            judge_error=f"{type(e).__name__}: {e}",
-        )
-    return parse_verdict(raw)
+    prompt = build_judge_prompt(question, answer, list(ground_truth))
+    last_exc: Optional[Exception] = None
+    for _attempt in range(max(1, transport_retries + 1)):
+        try:
+            return parse_verdict(llm(prompt))
+        except Exception as e:  # transport / model error — surface, do not swallow into a verdict
+            last_exc = e
+    return Grade(
+        verdict=VERDICT_MISLEADING,
+        rationale="judge call failed",
+        judge_error=f"{ERR_TRANSPORT} {type(last_exc).__name__}: {last_exc}",
+    )
 
 
 # --- calibration / judge-accuracy (§4) ---------------------------------------------------------

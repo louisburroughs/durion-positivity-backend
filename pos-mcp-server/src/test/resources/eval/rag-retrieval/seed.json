@@ -39,6 +39,24 @@
       "rag_scope": "master",
       "tags": ["visibility-negative"],
       "notes": "Admin-only docs must not surface to a technician (permission-aware filter)."
+    },
+    {
+      "fixture_id": "returns-refund-policy-pos-1",
+      "query": "what is the policy for returning items and refunding a completed order",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["order:order:view"] },
+      "expected": { "doc_ids": ["order.returns-refunds"], "k": 5 },
+      "rag_scope": "order",
+      "tags": ["positive", "gap-harness-roundtrip"],
+      "notes": "Round-tripped from a gap-harness corpus-gap finding (#1124/#1131): order.returns-refunds authored + source-verified against pos-order ReturnOrderServiceImpl."
+    },
+    {
+      "fixture_id": "returns-refund-method-pos-2",
+      "query": "how is a refund issued to the original tender when a return is processed",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["order:order:view"] },
+      "expected": { "doc_ids": ["order.returns-refunds"], "k": 5 },
+      "rag_scope": "order",
+      "tags": ["positive"],
+      "notes": "ORIGINAL_TENDER refund path; should recall the authored returns-refunds doc."
     }
   ]
 }

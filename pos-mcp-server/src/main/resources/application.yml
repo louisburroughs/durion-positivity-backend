@@ -85,6 +85,10 @@ mcp:
           source-path: "classpath:rag/order-guide.md"
           rag-scope: "order"
           required-permissions: ["order:order:view"]
+        - id: "order.returns-refunds"
+          source-path: "classpath:rag/returns-refunds-rag.md"
+          rag-scope: "order"
+          required-permissions: ["order:order:view"]
         - id: "pricing.guide"
           source-path: "classpath:rag/pricing-guide.md"
           rag-scope: "pricing"

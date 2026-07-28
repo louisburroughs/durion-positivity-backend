@@ -13,11 +13,27 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import time
 import urllib.error
 import urllib.request
 from typing import Callable, Optional
 
 from .model import Actor
+
+# Warn once a judge call spends this fraction of its timeout — a run riding the ceiling (#1129) is
+# one busy host or slightly longer prompt away from failing, and that should be visible before the
+# failures start, not only in the post-hoc tally.
+JUDGE_TIMEOUT_WARN_RATIO = 0.75
+
+
+def _warn_if_slow(model: str, elapsed: float, timeout: float) -> None:
+    if timeout > 0 and elapsed >= JUDGE_TIMEOUT_WARN_RATIO * timeout:
+        print(
+            f"WARNING: judge call ({model}) took {elapsed:.0f}s of a {timeout:.0f}s timeout "
+            f"({elapsed / timeout:.0%}); raise --judge-timeout or use a smaller judge model.",
+            file=sys.stderr,
+        )
 
 # A token provider maps an actor to the bearer token to send. Returns None if no token is known.
 TokenProvider = Callable[[Actor], Optional[str]]
@@ -83,8 +99,10 @@ def ollama_judge(base_url: str, model: str, timeout: int = 120) -> Callable[[str
             headers={"Content-Type": "application/json"},
             method="POST",
         )
+        started = time.monotonic()
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = json.loads(resp.read())
+        _warn_if_slow(model, time.monotonic() - started, timeout)
         return body.get("message", {}).get("content", "")
 
     return _llm
@@ -108,8 +126,10 @@ def openai_compatible_judge(
             headers=headers,
             method="POST",
         )
+        started = time.monotonic()
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = json.loads(resp.read())
+        _warn_if_slow(model, time.monotonic() - started, timeout)
         return body["choices"][0]["message"]["content"]
 
     return _llm

@@ -74,6 +74,20 @@
       "expected_facts": ["An invoice number is INV-<epochMillis>-<first 8 chars of the invoice UUID>, assigned once at draft creation."],
       "answer": "I don't have that information available.",
       "human_verdict": "refused"
+    },
+    {
+      "id": "cal-core-charge-unsupported",
+      "query": "how are core charges handled when a customer returns a rebuildable part",
+      "expected_facts": [],
+      "answer": "The platform creates a Return Request linked to the original invoice, runs the rebuild-core rule set to confirm the part is rebuildable, and a Service Rep credits the core charge back through the core-charge ledger in a five-step workflow.",
+      "human_verdict": "unsupported"
+    },
+    {
+      "id": "cal-returns-unsupported",
+      "query": "what is the policy for processing a customer return and issuing a refund on a paid invoice",
+      "expected_facts": [],
+      "answer": "Returns are processed through the Refund Authorization Center, which requires a manager PIN, automatically reverses the original journal entry, and issues store credit within 24 hours under the standard returns SLA.",
+      "human_verdict": "unsupported"
     }
   ]
 }

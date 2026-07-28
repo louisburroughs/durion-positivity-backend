@@ -19,8 +19,9 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from gap_harness import corpus as corpus_mod  # noqa: E402
-from gap_harness import fusion, harness, judge, questions as q_mod, refusal, report  # noqa: E402
+from gap_harness import api, fusion, harness, judge, questions as q_mod, refusal, report  # noqa: E402
 from gap_harness import taxonomy  # noqa: E402
+import rag_gap_harness as harness_cli  # noqa: E402
 from gap_harness.model import (  # noqa: E402
     CAUSE_CORPUS_GAP,
     CAUSE_GENERATION,
@@ -30,9 +31,14 @@ from gap_harness.model import (  # noqa: E402
     VERDICT_CORRECT,
     VERDICT_MISLEADING,
     VERDICT_REFUSED,
+    VERDICT_UNSUPPORTED,
+    VERDICTS,
     Actor,
     Capture,
+    Classification,
+    Grade,
     Question,
+    Result,
     RetrievedDoc,
 )
 
@@ -87,9 +93,9 @@ class CorpusTest(unittest.TestCase):
         self.assertIn("glossary.identifiers", covering)
 
     def test_coverage_lookup_empty_for_uncovered_topic(self):
-        covering = self.idx.covering_docs("core charge refund policy for rebuildable parts warranty return")
-        self.assertNotIn("order.returns-refunds", covering)  # doc does not exist
-        self.assertFalse(self.idx.exists("order.returns-refunds"))
+        covering = self.idx.covering_docs("layaway installment plan scheduling and deposit forfeiture")
+        self.assertEqual(covering, [])  # no doc covers layaway
+        self.assertFalse(self.idx.exists("order.core-charges"))  # core charges are not modeled
 
 
 class RefusalTest(unittest.TestCase):
@@ -203,8 +209,8 @@ class TaxonomyTest(unittest.TestCase):
         self.assertEqual(c.cause, CAUSE_NONE)
 
     def test_corpus_gap_when_expected_doc_absent(self):
-        q = Question("q", "returns policy", Actor("ROLE_USER", ("order:order:view",)),
-                     rag_scope="order", expected_doc_ids=("order.returns-refunds",))
+        q = Question("q", "core charge policy", Actor("ROLE_USER", ("order:order:view",)),
+                     rag_scope="order", expected_doc_ids=("order.core-charges",))
         c = taxonomy.classify(q, self._cap("q", [], ["order:order:view"]), VERDICT_REFUSED, self.idx)
         self.assertEqual(c.cause, CAUSE_CORPUS_GAP)
 
@@ -357,6 +363,9 @@ class DataValidationTest(unittest.TestCase):
         self.assertIn("misleading", verdicts)
         self.assertIn("refused", verdicts)
         self.assertIn("correct", verdicts)
+        self.assertIn("unsupported", verdicts)  # #1131: ungrounded-fabrication class must be calibrated
+        # every calibration verdict is a known verdict
+        self.assertTrue(set(verdicts).issubset(set(VERDICTS)))
 
 
 class PipelineTest(unittest.TestCase):
@@ -371,9 +380,9 @@ class PipelineTest(unittest.TestCase):
             # correct: right doc retrieved, judge says correct
             Question("q-ok", "vin format", Actor("ROLE_USER"), rag_scope="master",
                      expected_doc_ids=("glossary.identifiers",), expected_facts=("17 chars",)),
-            # corpus gap: expected doc missing
-            Question("q-gap", "returns policy", Actor("ROLE_USER", ("order:order:view",)),
-                     rag_scope="order", expected_doc_ids=("order.returns-refunds",), topic="returns"),
+            # corpus gap: expected doc missing (core charges are not modeled anywhere)
+            Question("q-gap", "core charge policy", Actor("ROLE_USER", ("order:order:view",)),
+                     rag_scope="order", expected_doc_ids=("order.core-charges",), topic="core charges"),
             # retrieval miss: visible doc exists but wrong doc retrieved
             Question("q-miss", "order status", Actor("ROLE_USER", ("order:order:view",)),
                      rag_scope="order", expected_doc_ids=("order.guide",)),
@@ -416,12 +425,158 @@ class PipelineTest(unittest.TestCase):
         # reports render without error
         gap = report.build_gap_report(results)
         self.assertEqual(gap["gap_count"], 1)
-        self.assertIn("returns", gap["entries"][0]["topic"])
+        self.assertIn("core", gap["entries"][0]["topic"])
         md = report.render_gap_report_md(gap)
         self.assertIn("DO NOT INGEST", md)
         self.assertIn("Draft outline", md)
         summary = report.summarize(results)
         self.assertEqual(summary["taxonomy"][CAUSE_CORPUS_GAP], 1)
+
+
+class UnsupportedVerdictTest(unittest.TestCase):
+    """#1131: a corpus gap means no ground truth, so the grounded grader has nothing to contradict
+    and would pass a fabrication as `correct`. The judge must switch to a groundedness prompt and the
+    new `unsupported` verdict when no facts exist, and that failure must route to a corpus_gap."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.idx = corpus_mod.load_corpus()
+
+    def test_prompt_selects_grounded_grader_when_facts_present(self):
+        p = judge.build_judge_prompt("q", "a", ["fact one"])
+        self.assertIn("GROUND TRUTH", p)
+        self.assertIn("fact one", p)
+        self.assertNotIn("There is NO authoritative ground truth", p)
+
+    def test_prompt_selects_groundedness_grader_when_no_facts(self):
+        p = judge.build_judge_prompt("q", "a", [])
+        self.assertIn("There is NO authoritative ground truth", p)
+        self.assertIn("unsupported", p)
+        self.assertNotIn("GROUND TRUTH (authoritative", p)
+
+    def test_empty_string_facts_are_treated_as_no_facts(self):
+        # ground_truth_for yields [] for a factless doc; a list of empty strings must not fool it.
+        self.assertIn("There is NO authoritative ground truth", judge.build_judge_prompt("q", "a", ["", ""]))
+
+    def test_fabrication_graded_unsupported(self):
+        g = judge.grade("q", "A five-step Return Request workflow handles it.", [],
+                        lambda _: '{"verdict":"unsupported","rationale":"invented specifics"}')
+        self.assertEqual(g.verdict, VERDICT_UNSUPPORTED)
+        self.assertIsNone(g.judge_error)
+
+    def test_unsupported_routes_to_corpus_gap(self):
+        q = Question("q-gap", "how are core charges handled on a rebuildable return",
+                     Actor("ROLE_USER", ("order:order:view",)), rag_scope="order",
+                     expected_doc_ids=("order.no-such-doc",), topic="core charges")
+        cap = Capture(question_id="q-gap", answer="fabricated", permission_codes=["order:order:view"])
+        c = taxonomy.classify(q, cap, VERDICT_UNSUPPORTED, self.idx)
+        self.assertEqual(c.cause, CAUSE_CORPUS_GAP)
+
+    def test_unsupported_counts_in_summary_and_calibration(self):
+        q = Question("u", "u", Actor("ROLE_USER"))
+        r = Result(question=q, capture=Capture(question_id="u", answer="a"),
+                   grade=Grade(verdict=VERDICT_UNSUPPORTED),
+                   classification=Classification(cause=CAUSE_CORPUS_GAP))
+        s = report.summarize([r])
+        self.assertEqual(s["verdicts"][VERDICT_UNSUPPORTED], 1)
+        acc = judge.calibrate([(VERDICT_UNSUPPORTED, VERDICT_UNSUPPORTED)])
+        self.assertIn(VERDICT_UNSUPPORTED, acc.per_class)
+        self.assertAlmostEqual(acc.per_class[VERDICT_UNSUPPORTED].recall, 1.0)
+
+
+class JudgeReliabilityTest(unittest.TestCase):
+    """#1129 (configurable timeout + slow-call warning) and #1130 (transport failures must not be
+    counted as `misleading`; ungraded is derived from judge_error, not reported as 0)."""
+
+    def _result(self, qid, grade, *, expected_facts=("f",)):
+        q = Question(qid, qid, Actor("ROLE_USER"), expected_facts=expected_facts)
+        cap = Capture(question_id=qid, answer="a")
+        cls = Classification(cause=CAUSE_NONE)
+        return Result(question=q, capture=cap, grade=grade, classification=cls)
+
+    def test_transport_failure_is_tagged_and_retried(self):
+        calls = {"n": 0}
+
+        def boom(_):
+            calls["n"] += 1
+            raise TimeoutError("read timed out")
+
+        g = judge.grade("q", "a real answer", ["fact"], boom, transport_retries=2)
+        self.assertEqual(calls["n"], 3)  # initial + 2 retries
+        self.assertTrue(g.judge_error.startswith(judge.ERR_TRANSPORT))
+
+    def test_transport_retry_then_success(self):
+        calls = {"n": 0}
+
+        def flaky(_):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise ConnectionError("reset")
+            return '{"verdict":"correct","rationale":"ok"}'
+
+        g = judge.grade("q", "a real answer", ["fact"], flaky, transport_retries=2)
+        self.assertEqual(g.verdict, VERDICT_CORRECT)
+        self.assertIsNone(g.judge_error)
+
+    def test_parse_failure_is_tagged_parse(self):
+        self.assertTrue(judge.parse_verdict("not json").judge_error.startswith(judge.ERR_PARSE))
+        self.assertTrue(judge.parse_verdict('{"verdict":"great"}').judge_error.startswith(judge.ERR_PARSE))
+
+    def test_summary_excludes_ungraded_from_verdicts(self):
+        results = [
+            self._result("real-mis", Grade(verdict=VERDICT_MISLEADING, cited_ground_truth="x")),
+            self._result("transport", Grade(verdict=VERDICT_MISLEADING, judge_error="transport: TimeoutError")),
+            self._result("parse", Grade(verdict=VERDICT_MISLEADING, judge_error="parse: bad json")),
+            self._result("ok", Grade(verdict=VERDICT_CORRECT)),
+        ]
+        s = report.summarize(results)
+        # only the genuinely-judged misleading is counted; the two errored ones are not
+        self.assertEqual(s["verdicts"][VERDICT_MISLEADING], 1)
+        self.assertEqual(s["verdicts"]["ungraded"], 2)
+        self.assertEqual(s["ungraded"], 2)
+        self.assertEqual(s["ungraded_breakdown"]["transport"], 1)
+        self.assertEqual(s["ungraded_breakdown"]["parse"], 1)
+        # graded verdicts + ungraded sum to the question count
+        self.assertEqual(sum(s["verdicts"].values()), s["questions"])
+        # half ungraded -> loud warning
+        self.assertIn("warning", s)
+        self.assertIn("UNGRADED", s["warning"])
+
+    def test_summary_no_warning_when_fully_graded(self):
+        results = [self._result("ok", Grade(verdict=VERDICT_CORRECT))]
+        s = report.summarize(results)
+        self.assertEqual(s["ungraded"], 0)
+        self.assertNotIn("warning", s)
+
+    def test_slow_judge_call_warns(self):
+        import io
+        from contextlib import redirect_stderr
+
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            api._warn_if_slow("judge-model", elapsed=95.0, timeout=120.0)
+            api._warn_if_slow("judge-model", elapsed=5.0, timeout=120.0)
+        out = buf.getvalue()
+        self.assertIn("WARNING", out)
+        self.assertEqual(out.count("WARNING"), 1)  # only the 95/120 call warns
+
+    def test_build_judge_threads_timeout(self):
+        import argparse
+
+        captured = {}
+
+        def fake_ollama(base, model, timeout=120):
+            captured["timeout"] = timeout
+            return lambda p: ""
+
+        orig = api.ollama_judge
+        api.ollama_judge = fake_ollama
+        try:
+            args = argparse.Namespace(judge="ollama", judge_base=None, judge_model="m", judge_timeout=300)
+            harness_cli.build_judge(args)
+        finally:
+            api.ollama_judge = orig
+        self.assertEqual(captured["timeout"], 300)
 
 
 if __name__ == "__main__":

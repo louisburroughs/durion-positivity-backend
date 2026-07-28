@@ -18,17 +18,32 @@ from collections import defaultdict
 from typing import Iterable, Optional
 
 from .fusion import FlipDecision
-from .judge import JudgeAccuracy
+from .judge import ERR_PARSE, ERR_TRANSPORT, ERR_UNGRADED, JudgeAccuracy
 from .model import (
     CAUSE_CORPUS_GAP,
     CAUSE_GENERATION,
     CAUSE_PERMISSION_GATING,
     CAUSE_RETRIEVAL_MISS,
-    VERDICT_CORRECT,
-    VERDICT_MISLEADING,
-    VERDICT_REFUSED,
+    VERDICTS,
     Result,
 )
+
+# Above this ungraded fraction a run's headline numbers are not trustworthy and the summary + gap
+# report say so at the top (#1130) — half the judge calls failing must not read as a clean run.
+UNGRADED_WARN_FRACTION = 0.2
+
+
+def _ungraded_kind(judge_error: str) -> str:
+    """Bucket a ``judge_error`` by its tag prefix (see judge.py): transport failures are retryable
+    infra noise, parse failures are a judge-quality signal, no_llm means no judge ran. The two error
+    kinds mean different things for calibration, so they are reported apart (#1130)."""
+    if judge_error.startswith(ERR_TRANSPORT):
+        return "transport"
+    if judge_error.startswith(ERR_PARSE):
+        return "parse"
+    if judge_error.startswith(ERR_UNGRADED):
+        return "no_llm"
+    return "other"
 
 GUARDRAIL_BANNER = (
     "PROPOSED GAPS — DO NOT INGEST AS-IS. A human authors each doc and source-verifies it "
@@ -106,32 +121,55 @@ def _draft_outline(topic: str, scope: str, expected_docs: list[str], queries: li
 
 
 def summarize(results: list[Result]) -> dict:
-    """Top-line counts: verdict distribution + taxonomy distribution."""
-    verdicts = {VERDICT_CORRECT: 0, VERDICT_REFUSED: 0, VERDICT_MISLEADING: 0}
+    """Top-line counts: verdict distribution + taxonomy distribution.
+
+    A record carrying a ``judge_error`` was *not graded* — a transport/parse failure must not be
+    counted as a real ``misleading`` verdict (#1130). Such records are pulled out of the verdict
+    histogram into a distinct ``ungraded`` bucket, so the graded verdict counts + ``ungraded`` always
+    sum to the number of questions, and a half-broken judge can no longer masquerade as a run that
+    found many misleading answers."""
+    verdicts = {v: 0 for v in VERDICTS}
+    verdicts["ungraded"] = 0
     causes = {
         CAUSE_CORPUS_GAP: 0,
         CAUSE_RETRIEVAL_MISS: 0,
         CAUSE_GENERATION: 0,
         CAUSE_PERMISSION_GATING: 0,
     }
-    ungraded = 0
+    ungraded_breakdown = {"transport": 0, "parse": 0, "no_llm": 0, "other": 0}
+    factless_graded = 0
     for r in results:
-        verdicts[r.grade.verdict] = verdicts.get(r.grade.verdict, 0) + 1
+        if r.grade.judge_error:
+            verdicts["ungraded"] += 1
+            ungraded_breakdown[_ungraded_kind(r.grade.judge_error)] += 1
+        else:
+            verdicts[r.grade.verdict] = verdicts.get(r.grade.verdict, 0) + 1
+            if not (r.question.expected_facts or r.question.expected_doc_ids):
+                factless_graded += 1
         if r.classification.cause in causes:
             causes[r.classification.cause] += 1
-        if r.grade.judge_error and r.grade.judge_error.startswith("ungraded"):
-            ungraded += 1
     n = len(results)
-    return {
+    ungraded = verdicts["ungraded"]
+    summary = {
         "questions": n,
         "verdicts": verdicts,
         "taxonomy": causes,
         "ungraded": ungraded,
+        "ungraded_breakdown": ungraded_breakdown,
+        "ungraded_fraction": round(ungraded / n, 4) if n else 0.0,
+        "factless_graded": factless_graded,
         "honesty_note": (
             "misleading detection is partial (§4): a 0 in `misleading` does not mean all answers are "
             "correct — trust the count proportionally to the judge-accuracy report."
         ),
     }
+    if n and ungraded / n >= UNGRADED_WARN_FRACTION:
+        summary["warning"] = (
+            f"{ungraded}/{n} questions ({ungraded / n:.0%}) were UNGRADED (judge transport/parse "
+            f"failures: {ungraded_breakdown}); the verdict and taxonomy counts below rest on the "
+            "graded remainder only. Raise --judge-timeout (#1129) or use a smaller judge, then re-run."
+        )
+    return summary
 
 
 def render_gap_report_md(report: dict) -> str:
