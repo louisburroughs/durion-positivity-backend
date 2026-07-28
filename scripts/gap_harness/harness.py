@@ -12,9 +12,10 @@ from typing import Callable, Optional
 
 from .corpus import CorpusIndex
 from .fusion import RecoveryRecord, recovery_record
-from .judge import LLM, grade as judge_grade
+from .judge import ERR_TRANSPORT, LLM, grade as judge_grade
 from .model import (
     CAUSE_RETRIEVAL_MISS,
+    VERDICT_MISLEADING,
     Capture,
     Grade,
     Question,
@@ -45,6 +46,19 @@ def ground_truth_for(question: Question, corpus: CorpusIndex) -> list[str]:
             seen.add(f)
             out.append(f)
     return out
+
+
+def _ask_error(error: Optional[str]) -> Optional[str]:
+    """The ``ask:`` segment of a capture error, if the *answer* call itself failed. Distinct from a
+    retrieval failure (which leaves the answer intact): a failed ask means no answer was obtained, so
+    there is nothing to grade. ``capture_one`` joins segments with ``"; "`` (e.g.
+    ``"retrieve: …; ask: …"``), so split on that and match the ask segment."""
+    if not error:
+        return None
+    for segment in error.split("; "):
+        if segment.startswith("ask:"):
+            return segment
+    return None
 
 
 def capture_one(question: Question, ask: AskFn, retrieve: RetrieveFn) -> Capture:
@@ -86,8 +100,22 @@ def run(
     recoveries: list[RecoveryRecord] = []
     for q in questions:
         capture = capture_one(q, ask, retrieve)
-        gt = ground_truth_for(q, corpus)
-        grade = judge_grade(q.query, capture.answer, gt, judge_llm)
+        ask_err = _ask_error(capture.error)
+        if ask_err:
+            # The answer call itself failed (timeout / connection / non-2xx), so there is no answer
+            # to grade. Do NOT fall through to judge_grade: an empty answer trips the deterministic
+            # refusal pre-filter (refusal.py) and would be miscounted as a content `refused` with
+            # transport=0 — masking a transport/HTTP failure (e.g. a 404 from a wrong base-url) as a
+            # real refusal. Surface it as an ungraded `transport:` failure so the report keeps it out
+            # of the graded verdict + taxonomy counts, exactly as a judge transport failure is (#1130).
+            grade = Grade(
+                verdict=VERDICT_MISLEADING,  # placeholder; judge_error pulls it into the ungraded bucket
+                rationale="answer call failed; not graded",
+                judge_error=f"{ERR_TRANSPORT} {ask_err}",
+            )
+        else:
+            gt = ground_truth_for(q, corpus)
+            grade = judge_grade(q.query, capture.answer, gt, judge_llm)
         classification = classify(q, capture, grade.verdict, corpus)
         results.append(Result(question=q, capture=capture, grade=grade, classification=classification))
 

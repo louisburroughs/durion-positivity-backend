@@ -11,6 +11,7 @@ import importlib.util
 import json
 import sys
 import unittest
+import urllib.error
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -240,6 +241,53 @@ class TaxonomyTest(unittest.TestCase):
         c = taxonomy.classify(q, cap, VERDICT_REFUSED, self.idx)
         self.assertEqual(c.cause, CAUSE_RETRIEVAL_MISS)
         self.assertIn("order.guide", c.covering_doc_ids)
+
+
+class HarnessRunTest(unittest.TestCase):
+    """A failed `ask` (transport/HTTP error, e.g. a 404 from a wrong base-url) must surface as an
+    ungraded transport failure — never be scored as a content `refused` off the empty answer, which
+    previously let a broken endpoint masquerade as a run full of refusals with transport=0."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.idx = corpus_mod.load_corpus()
+
+    def _retrieve(self, _q):
+        return [], []
+
+    def test_ask_failure_is_ungraded_transport_not_refused(self):
+        def ask(_q):
+            raise urllib.error.HTTPError("http://x/v1/mcp/chat", 404, "Not Found", {}, None)
+
+        q = Question("q", "what is a sku", Actor("ROLE_USER"))
+        # A judge is supplied; it must NOT be consulted for a failed ask (there is no answer to grade).
+        judge_calls = []
+        judge_llm = lambda p: judge_calls.append(p) or '{"verdict":"correct"}'
+        results, recoveries = harness.run([q], ask, self._retrieve, self.idx, judge_llm)
+
+        self.assertEqual(len(results), 1)
+        grade = results[0].grade
+        self.assertIsNotNone(grade.judge_error)
+        self.assertTrue(grade.judge_error.startswith(judge.ERR_TRANSPORT))
+        self.assertIn("404", grade.judge_error)
+        self.assertFalse(grade.deterministic)  # not a deterministic refusal
+        self.assertEqual(judge_calls, [])  # judge never called on a non-answer
+        self.assertEqual(recoveries, [])  # ungraded rows never feed the flip-threshold set
+
+        summary = report.summarize(results)
+        self.assertEqual(summary["verdicts"]["refused"], 0)  # the bug this guards against
+        self.assertEqual(summary["verdicts"]["ungraded"], 1)
+        self.assertEqual(summary["ungraded_breakdown"]["transport"], 1)
+        self.assertEqual(sum(summary["taxonomy"].values()), 0)  # taxonomy skips ungraded rows
+
+    def test_successful_ask_still_graded(self):
+        # Guard the else-branch: a clean ask is graded normally (retrieval failure alone must not
+        # divert a good answer into the ungraded bucket).
+        q = Question("q", "vin format", Actor("ROLE_USER"), expected_facts=("A VIN is 17 characters",))
+        judge_llm = lambda _p: '{"verdict":"correct"}'
+        results, _ = harness.run([q], lambda _q: "A VIN is 17 characters", self._retrieve, self.idx, judge_llm)
+        self.assertIsNone(results[0].grade.judge_error)
+        self.assertEqual(results[0].grade.verdict, VERDICT_CORRECT)
 
 
 class FusionTest(unittest.TestCase):
