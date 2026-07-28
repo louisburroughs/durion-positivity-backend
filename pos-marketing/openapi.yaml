@@ -1,0 +1,1105 @@
+openapi: 3.1.0
+info:
+  title: Marketing API
+  description: API for marketing campaigns, message templates, audience binding, send orchestration, and campaign analytics in the POS system
+  contact:
+    name: Durion Support Services
+    email: platform@durionpos.org
+  version: '1.0'
+servers:
+- url: http://localhost:8098
+  description: Generated server url
+tags:
+- name: Marketing Analytics
+  description: Campaign reach, delivery, and attribution analytics
+- name: Marketing Templates
+  description: Channel-specific message templates with token substitution
+- name: Marketing Campaigns
+  description: Campaign definition, lifecycle, audience preview, and dispatch
+paths:
+  /v1/marketing/templates/{templateId}:
+    get:
+      tags:
+      - Marketing Templates
+      summary: Get template
+      description: Retrieve a template and its available tokens
+      operationId: get
+      parameters:
+      - name: templateId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Template returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageTemplateResponse'
+        '404':
+          description: Template not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:template:view
+      x-required-permissions:
+      - marketing:template:view
+    put:
+      tags:
+      - Marketing Templates
+      summary: Update template
+      description: Update a template's name, subject, or body
+      operationId: update
+      parameters:
+      - name: templateId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertMessageTemplateRequest'
+        required: true
+      responses:
+        '200':
+          description: Template updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageTemplateResponse'
+        '404':
+          description: Template not found
+        '409':
+          description: Template name already exists
+        '422':
+          description: Invalid token, or an immutable field was changed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:template:manage
+      x-required-permissions:
+      - marketing:template:manage
+    delete:
+      tags:
+      - Marketing Templates
+      summary: Delete template
+      description: Delete a template that no campaign is using
+      operationId: delete
+      parameters:
+      - name: templateId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Template deleted
+        '404':
+          description: Template not found
+        '422':
+          description: Template is attached to a campaign
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:template:manage
+      x-required-permissions:
+      - marketing:template:manage
+  /v1/marketing/campaigns/{campaignId}:
+    get:
+      tags:
+      - Marketing Campaigns
+      summary: Get campaign
+      description: Retrieve a campaign by id
+      operationId: get_1
+      parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Campaign returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '404':
+          description: Campaign not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:campaign:view
+      x-required-permissions:
+      - marketing:campaign:view
+    put:
+      tags:
+      - Marketing Campaigns
+      summary: Update campaign
+      description: Update a DRAFT campaign. Editing is refused once dispatch has begun.
+      operationId: update_1
+      parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertCampaignRequest'
+        required: true
+      responses:
+        '200':
+          description: Campaign updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '404':
+          description: Campaign not found
+        '409':
+          description: Campaign code already exists
+        '422':
+          description: Campaign is no longer editable, or an immutable field was changed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:campaign:edit
+      x-required-permissions:
+      - marketing:campaign:edit
+  /v1/marketing/templates:
+    get:
+      tags:
+      - Marketing Templates
+      summary: List templates
+      description: List templates, optionally filtered by channel and audience
+      operationId: list
+      parameters:
+      - name: channel
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - EMAIL
+          - SMS
+      - name: audienceType
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+      responses:
+        '200':
+          description: Templates returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MessageTemplateResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:template:view
+      x-required-permissions:
+      - marketing:template:view
+    post:
+      tags:
+      - Marketing Templates
+      summary: Create template
+      description: Create a template. Unknown tokens and tokens outside the audience's vocabulary are rejected.
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertMessageTemplateRequest'
+        required: true
+      responses:
+        '201':
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageTemplateResponse'
+        '409':
+          description: Template name already exists
+        '422':
+          description: Invalid token, missing subject, or SMS body over the segment limit
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:template:manage
+      x-required-permissions:
+      - marketing:template:manage
+  /v1/marketing/campaigns:
+    get:
+      tags:
+      - Marketing Campaigns
+      summary: List campaigns
+      description: List campaigns, optionally filtered by status or program
+      operationId: list_1
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - SCHEDULED
+          - SENDING
+          - SENT
+          - PAUSED
+          - CANCELLED
+          - CLOSED
+      - name: campaignProgramId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Campaigns returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CampaignResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:campaign:view
+      x-required-permissions:
+      - marketing:campaign:view
+    post:
+      tags:
+      - Marketing Campaigns
+      summary: Create campaign
+      description: Create a campaign in DRAFT status
+      operationId: create_1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertCampaignRequest'
+        required: true
+      responses:
+        '201':
+          description: Campaign created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '409':
+          description: Campaign code already exists
+        '422':
+          description: Campaign definition is inconsistent
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:campaign:create
+      x-required-permissions:
+      - marketing:campaign:create
+  /v1/marketing/campaigns/{campaignId}/send:
+    post:
+      tags:
+      - Marketing Campaigns
+      summary: Dispatch campaign
+      description: 'Queue the campaign''s audience for delivery. Asynchronous and idempotent: re-invoking never double-sends.'
+      operationId: send
+      parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '202':
+          description: Dispatch accepted
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          description: Campaign not found
+        '422':
+          description: Campaign is not in a dispatchable state
+        '503':
+          description: pos-customer unavailable
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:campaign:send
+      x-required-permissions:
+      - marketing:campaign:send
+  /v1/marketing/campaigns/{campaignId}/schedule:
+    post:
+      tags:
+      - Marketing Campaigns
+      summary: Schedule campaign
+      description: Validate the segment, templates, and offer, then move the campaign to SCHEDULED
+      operationId: schedule
+      parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Campaign scheduled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '404':
+          description: Campaign not found
+        '422':
+          description: Campaign is not ready to schedule
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:campaign:schedule
+      x-required-permissions:
+      - marketing:campaign:schedule
+  /v1/marketing/campaigns/{campaignId}/resume:
+    post:
+      tags:
+      - Marketing Campaigns
+      summary: Resume campaign
+      description: Return a paused campaign to the dispatch queue
+      operationId: resume
+      parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Campaign resumed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '422':
+          description: Illegal lifecycle transition
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:campaign:manage
+      x-required-permissions:
+      - marketing:campaign:manage
+  /v1/marketing/campaigns/{campaignId}/pause:
+    post:
+      tags:
+      - Marketing Campaigns
+      summary: Pause campaign
+      description: Halt dispatch; queued recipients stop being drained
+      operationId: pause
+      parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Campaign paused
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '422':
+          description: Illegal lifecycle transition
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:campaign:manage
+      x-required-permissions:
+      - marketing:campaign:manage
+  /v1/marketing/campaigns/{campaignId}/cancel:
+    post:
+      tags:
+      - Marketing Campaigns
+      summary: Cancel campaign
+      description: Cancel a campaign; the state is terminal
+      operationId: cancel
+      parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Campaign cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '422':
+          description: Illegal lifecycle transition
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:campaign:manage
+      x-required-permissions:
+      - marketing:campaign:manage
+  /v1/marketing/campaigns/{campaignId}/audience-preview:
+    post:
+      tags:
+      - Marketing Campaigns
+      summary: Preview audience
+      description: Per-channel reach after consent, account gate, and suppression, plus any issues that would block scheduling
+      operationId: previewAudience
+      parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Preview returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudiencePreviewResponse'
+        '422':
+          description: Campaign has no segment bound
+        '503':
+          description: pos-customer unavailable
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:campaign:view
+      x-required-permissions:
+      - marketing:campaign:view
+  /v1/marketing/programs/{campaignProgramId}/stats:
+    get:
+      tags:
+      - Marketing Analytics
+      summary: Program stats
+      description: Compare the commercial and individual arms of one campaign program side by side
+      operationId: programStats
+      parameters:
+      - name: campaignProgramId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Program stats returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramStatsResponse'
+        '404':
+          description: Campaign program not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:stats:view
+      x-required-permissions:
+      - marketing:stats:view
+  /v1/marketing/campaigns/{campaignId}/stats:
+    get:
+      tags:
+      - Marketing Analytics
+      summary: Campaign stats
+      description: Per-channel reach funnel plus redemptions and discount value credited to the campaign
+      operationId: campaignStats
+      parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Stats returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignStatsResponse'
+        '404':
+          description: Campaign not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:stats:view
+      x-required-permissions:
+      - marketing:stats:view
+  /v1/marketing/campaigns/{campaignId}/sends:
+    get:
+      tags:
+      - Marketing Campaigns
+      summary: List sends
+      description: Per-recipient send records for a campaign
+      operationId: listSends
+      parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        '200':
+          description: Send records returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:campaign:view
+      x-required-permissions:
+      - marketing:campaign:view
+components:
+  schemas:
+    UpsertMessageTemplateRequest:
+      type: object
+      description: Request to create or update a message template
+      properties:
+        name:
+          type: string
+          description: Unique template name
+          example: Spring fleet — email
+          maxLength: 150
+          minLength: 0
+        channel:
+          type: string
+          description: Delivery channel
+          enum:
+          - EMAIL
+          - SMS
+        audienceType:
+          type: string
+          description: Audience whose token vocabulary applies
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+        subject:
+          type: string
+          description: Subject line; required for EMAIL, rejected for SMS
+          maxLength: 255
+          minLength: 0
+        body:
+          type: string
+          description: Message body with {{token}} placeholders from the audience's token catalog
+          example: Hi {{contactFirstName}}, your {{vehicleMake}} is due for service. Use {{offerCode}}.
+          maxLength: 20000
+          minLength: 0
+      required:
+      - audienceType
+      - body
+      - channel
+      - name
+    MessageTemplateResponse:
+      type: object
+      description: A channel-specific message template
+      properties:
+        templateId:
+          type: string
+          format: uuid
+          description: Template identifier
+        name:
+          type: string
+          description: Template name
+        channel:
+          type: string
+          description: Delivery channel
+          enum:
+          - EMAIL
+          - SMS
+        audienceType:
+          type: string
+          description: Audience whose token vocabulary applies
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+        subject:
+          type: string
+          description: Subject line; null for SMS
+        body:
+          type: string
+          description: Message body with token placeholders
+        availableTokens:
+          type: array
+          description: Tokens available to this template's audience
+          items:
+            type: string
+          uniqueItems: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+      - audienceType
+      - availableTokens
+      - body
+      - channel
+      - name
+      - templateId
+    UpsertCampaignRequest:
+      type: object
+      description: Request to create or update a marketing campaign
+      properties:
+        code:
+          type: string
+          description: Stable campaign code; stamped onto redemptions for attribution
+          example: SPRING-FLEET-2026
+          maxLength: 100
+          minLength: 0
+        name:
+          type: string
+          description: Campaign name
+          example: Spring fleet alignment push
+          maxLength: 200
+          minLength: 0
+        description:
+          type: string
+          description: What the campaign is for
+          maxLength: 1000
+          minLength: 0
+        audienceType:
+          type: string
+          description: Targeted party kind; immutable after creation
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+        campaignProgramId:
+          type: string
+          format: uuid
+          description: Groups the commercial and individual arms of one initiative for comparison
+        channels:
+          type: array
+          description: Delivery channels
+          items:
+            type: string
+            enum:
+            - EMAIL
+            - SMS
+          minItems: 1
+          uniqueItems: true
+        segmentId:
+          type: string
+          format: uuid
+          description: pos-customer segment to target
+        promotionOfferId:
+          type: string
+          format: uuid
+          description: pos-price offer promoted by the campaign
+        catalogFocusRef:
+          type: string
+          description: pos-catalog reference the message points at
+          maxLength: 200
+          minLength: 0
+        windowStart:
+          type: string
+          format: date-time
+          description: Start of the campaign's active window
+        windowEnd:
+          type: string
+          format: date-time
+          description: End of the campaign's active window
+        scheduleType:
+          type: string
+          description: IMMEDIATE or SCHEDULED; defaults to IMMEDIATE
+          enum:
+          - IMMEDIATE
+          - SCHEDULED
+        scheduledAt:
+          type: string
+          format: date-time
+          description: When to dispatch; required for SCHEDULED
+        emailTemplateId:
+          type: string
+          format: uuid
+          description: Email template to render
+        smsTemplateId:
+          type: string
+          format: uuid
+          description: SMS template to render
+      required:
+      - audienceType
+      - channels
+      - code
+      - name
+    CampaignResponse:
+      type: object
+      description: A marketing campaign
+      properties:
+        campaignId:
+          type: string
+          format: uuid
+          description: Campaign identifier
+        code:
+          type: string
+          description: Stable campaign code
+          example: SPRING-FLEET-2026
+        name:
+          type: string
+          description: Campaign name
+        description:
+          type: string
+          description: What the campaign is for
+        audienceType:
+          type: string
+          description: Targeted party kind
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+        campaignProgramId:
+          type: string
+          format: uuid
+          description: Program grouping the commercial and individual arms
+        status:
+          type: string
+          description: Lifecycle status
+          enum:
+          - DRAFT
+          - SCHEDULED
+          - SENDING
+          - SENT
+          - PAUSED
+          - CANCELLED
+          - CLOSED
+        channels:
+          type: array
+          description: Delivery channels
+          items:
+            type: string
+          uniqueItems: true
+        segmentId:
+          type: string
+          format: uuid
+          description: Bound pos-customer segment
+        promotionOfferId:
+          type: string
+          format: uuid
+          description: Promoted pos-price offer
+        catalogFocusRef:
+          type: string
+          description: pos-catalog focus reference
+        windowStart:
+          type: string
+          format: date-time
+          description: Start of the active window
+        windowEnd:
+          type: string
+          format: date-time
+          description: End of the active window
+        scheduleType:
+          type: string
+          description: Dispatch timing
+          enum:
+          - IMMEDIATE
+          - SCHEDULED
+        scheduledAt:
+          type: string
+          format: date-time
+          description: When dispatch begins
+        emailTemplateId:
+          type: string
+          format: uuid
+          description: Email template
+        smsTemplateId:
+          type: string
+          format: uuid
+          description: SMS template
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+      - audienceType
+      - campaignId
+      - channels
+      - code
+      - name
+      - scheduleType
+      - status
+    AudiencePreviewResponse:
+      type: object
+      description: Per-channel audience preview after consent and suppression filtering
+      properties:
+        campaignId:
+          type: string
+          format: uuid
+          description: Campaign previewed
+        segmentId:
+          type: string
+          format: uuid
+          description: Bound segment
+        audienceType:
+          type: string
+          description: Targeted party kind
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+        segmentMatched:
+          type: integer
+          format: int64
+          description: Parties matching the segment before any filtering
+        truncated:
+          type: boolean
+          description: Whether the segment resolution hit its candidate ceiling and is partial
+        channels:
+          type: array
+          description: Per-channel reach after consent, account gate, and suppression
+          items:
+            $ref: '#/components/schemas/ChannelPreview'
+        warnings:
+          type: array
+          description: Validation warnings that would block scheduling, e.g. an expired offer
+          items:
+            type: string
+      required:
+      - audienceType
+      - campaignId
+      - channels
+      - segmentMatched
+      - truncated
+      - warnings
+    ChannelPreview:
+      type: object
+      description: Reach on one channel
+      properties:
+        channel:
+          type: string
+          description: Channel
+          enum:
+          - EMAIL
+          - SMS
+        targeted:
+          type: integer
+          format: int64
+          description: Parties targeted on this channel
+          example: 412
+        eligible:
+          type: integer
+          format: int64
+          description: Of those, how many may actually be sent to
+          example: 287
+        templateAttached:
+          type: boolean
+          description: Whether a template is attached for this channel
+      required:
+      - channel
+      - eligible
+      - targeted
+      - templateAttached
+    CampaignStatsResponse:
+      type: object
+      description: Campaign reach funnel and attribution
+      properties:
+        campaignId:
+          type: string
+          format: uuid
+          description: Campaign
+        code:
+          type: string
+          description: Campaign code
+        audienceType:
+          type: string
+          description: Targeted party kind
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+        campaignProgramId:
+          type: string
+          format: uuid
+          description: Program grouping this campaign's arm
+        channels:
+          type: array
+          description: Per-channel funnel
+          items:
+            $ref: '#/components/schemas/ChannelFunnel'
+        redeemed:
+          type: integer
+          format: int64
+          description: Redemptions credited to this campaign
+          example: 37
+        attributedDiscount:
+          type: number
+          description: Total discount value across attributed redemptions
+      required:
+      - attributedDiscount
+      - audienceType
+      - campaignId
+      - channels
+      - code
+      - redeemed
+    ChannelFunnel:
+      type: object
+      description: Reach funnel for one channel
+      properties:
+        channel:
+          type: string
+          description: Channel
+          enum:
+          - EMAIL
+          - SMS
+        targeted:
+          type: integer
+          format: int64
+          description: Recipients queued
+          example: 412
+        suppressed:
+          type: integer
+          format: int64
+          description: Recipients blocked at dispatch by consent, account gate, or suppression
+          example: 125
+        sent:
+          type: integer
+          format: int64
+          description: Messages dispatched to the provider
+          example: 287
+        delivered:
+          type: integer
+          format: int64
+          description: Messages the provider confirmed delivered
+        bounced:
+          type: integer
+          format: int64
+          description: Hard bounces
+        complained:
+          type: integer
+          format: int64
+          description: Spam complaints
+        failed:
+          type: integer
+          format: int64
+          description: Permanent send failures
+      required:
+      - bounced
+      - channel
+      - complained
+      - delivered
+      - failed
+      - sent
+      - suppressed
+      - targeted
+    ProgramStatsResponse:
+      type: object
+      description: Campaign program rollup comparing commercial and individual arms
+      properties:
+        campaignProgramId:
+          type: string
+          format: uuid
+          description: Program identifier
+        arms:
+          type: array
+          description: One entry per campaign in the program
+          items:
+            $ref: '#/components/schemas/CampaignStatsResponse'
+      required:
+      - arms
+      - campaignProgramId
+    PagedResponse:
+      type: object
+      description: A page of results
+      properties:
+        items:
+          type: array
+          description: Items on this page
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+          example: 0
+        size:
+          type: integer
+          format: int32
+          description: Requested page size
+          example: 50
+        totalElements:
+          type: integer
+          format: int64
+          description: Total matching items across all pages
+          example: 412
+        totalPages:
+          type: integer
+          format: int32
+          description: Total number of pages
+          example: 9
+      required:
+      - items
+      - page
+      - size
+      - totalElements
+      - totalPages
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

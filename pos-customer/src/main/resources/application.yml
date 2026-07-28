@@ -79,6 +79,9 @@ pos:
       workorder-manifest-topic: ${POS_CUSTOMER_WORKORDER_MANIFEST_TOPIC:workorder.manifest.v1}
       workorder-commands-topic: ${POS_CUSTOMER_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
       manifest-consumer-group: ${POS_CUSTOMER_MANIFEST_CONSUMER_GROUP:pos-customer-workorder-manifests}
+      # Campaign-send facts logged onto the party interaction timeline (Story #1151)
+      marketing-events-topic: ${POS_CUSTOMER_MARKETING_EVENTS_TOPIC:marketing.events.v1}
+      marketing-events-consumer-group: ${POS_CUSTOMER_MARKETING_EVENTS_CONSUMER_GROUP:pos-customer-marketing-events}
       # Vehicle replica feed + reconciliation (ADR-0044 §6, #843)
       vehicle-events-topic: ${POS_CUSTOMER_VEHICLE_EVENTS_TOPIC:vehicle.events.v1}
       vehicle-events-consumer-group: ${POS_CUSTOMER_VEHICLE_EVENTS_CONSUMER_GROUP:pos-customer-vehicle-events}

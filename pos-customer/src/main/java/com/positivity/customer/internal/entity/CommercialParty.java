@@ -20,6 +20,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.validation.constraints.NotBlank;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -93,6 +94,21 @@ public class CommercialParty extends AbstractParty {
     @Nullable
     @Schema(description = "Embedded billing rules for this commercial party")
     private BillingRulesEmbeddable billingRules;
+
+    /**
+     * Account-level hard gate on marketing (Story #1138, decision O-2). When set, no
+     * marketing may reach this account on any channel regardless of what any individual
+     * contact has consented to — a fleet manager can silence the whole account with one
+     * instruction, which is the behaviour commercial customers expect.
+     */
+    @Column(name = "account_marketing_opt_out", nullable = false)
+    @Schema(description = "Account-level hard gate suppressing all marketing to this account", example = "false")
+    private boolean accountMarketingOptOut = false;
+
+    @Column(name = "account_marketing_opt_out_at")
+    @Nullable
+    @Schema(description = "When the account-level marketing gate was last set")
+    private Instant accountMarketingOptOutAt;
 
     @PreUpdate
     @PrePersist

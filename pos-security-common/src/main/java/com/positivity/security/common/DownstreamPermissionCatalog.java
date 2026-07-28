@@ -23,7 +23,7 @@ public final class DownstreamPermissionCatalog {
      * {@code PermissionCode.CATALOG_VERSION}.
      * Updated automatically by {@code scripts/generate-permissions.py --sync}.
      */
-    public static final int CATALOG_VERSION = 37;
+    public static final int CATALOG_VERSION = 38;
 
     /**
      * Index-to-authority mapping. Entry at position N is the {@code PERM_*}-prefixed
@@ -504,7 +504,29 @@ public final class DownstreamPermissionCatalog {
         "PERM_inventory:valuation:view",                     // 416
 
         // ── New batch (bits 417–417) ──────────────────────────────────────────
-        "PERM_inventory:valuation:adjust"                   // 417
+        "PERM_inventory:valuation:adjust",                   // 417
+
+        // ── New batch (bits 418–437) ──────────────────────────────────────────
+        "PERM_crm:consent:manage",                           // 418
+        "PERM_crm:consent:view",                             // 419
+        "PERM_crm:interaction:view",                         // 420
+        "PERM_crm:segment:manage",                           // 421
+        "PERM_crm:segment:resolve",                          // 422
+        "PERM_crm:segment:view",                             // 423
+        "PERM_crm:suppression:manage",                       // 424
+        "PERM_crm:suppression:view",                         // 425
+        "PERM_crm:tag:assign",                               // 426
+        "PERM_crm:tag:manage",                               // 427
+        "PERM_crm:tag:view",                                 // 428
+        "PERM_marketing:campaign:create",                    // 429
+        "PERM_marketing:campaign:edit",                      // 430
+        "PERM_marketing:campaign:manage",                    // 431
+        "PERM_marketing:campaign:schedule",                  // 432
+        "PERM_marketing:campaign:send",                      // 433
+        "PERM_marketing:campaign:view",                      // 434
+        "PERM_marketing:stats:view",                         // 435
+        "PERM_marketing:template:manage",                    // 436
+        "PERM_marketing:template:view"                      // 437
     };
 
     public static String authorityForBit(int bitIndex) {

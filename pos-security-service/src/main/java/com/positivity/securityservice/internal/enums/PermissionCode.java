@@ -543,13 +543,36 @@ public enum PermissionCode {
     // ── Inventory (new) ────────────────────────────────────────────────────────
     INVENTORY__VALUATION__VIEW(416, "inventory:valuation:view"),
     // ── Inventory (new) ────────────────────────────────────────────────────────
-    INVENTORY__VALUATION__ADJUST(417, "inventory:valuation:adjust");
+    INVENTORY__VALUATION__ADJUST(417, "inventory:valuation:adjust"),
+    // ── Crm (new) ──────────────────────────────────────────────────────────────
+    CRM__CONSENT__MANAGE(418, "crm:consent:manage"),
+    CRM__CONSENT__VIEW(419, "crm:consent:view"),
+    CRM__INTERACTION__VIEW(420, "crm:interaction:view"),
+    CRM__SEGMENT__MANAGE(421, "crm:segment:manage"),
+    CRM__SEGMENT__RESOLVE(422, "crm:segment:resolve"),
+    CRM__SEGMENT__VIEW(423, "crm:segment:view"),
+    CRM__SUPPRESSION__MANAGE(424, "crm:suppression:manage"),
+    CRM__SUPPRESSION__VIEW(425, "crm:suppression:view"),
+    CRM__TAG__ASSIGN(426, "crm:tag:assign"),
+    CRM__TAG__MANAGE(427, "crm:tag:manage"),
+    CRM__TAG__VIEW(428, "crm:tag:view"),
+
+    // ── Marketing (new) ────────────────────────────────────────────────────────
+    MARKETING__CAMPAIGN__CREATE(429, "marketing:campaign:create"),
+    MARKETING__CAMPAIGN__EDIT(430, "marketing:campaign:edit"),
+    MARKETING__CAMPAIGN__MANAGE(431, "marketing:campaign:manage"),
+    MARKETING__CAMPAIGN__SCHEDULE(432, "marketing:campaign:schedule"),
+    MARKETING__CAMPAIGN__SEND(433, "marketing:campaign:send"),
+    MARKETING__CAMPAIGN__VIEW(434, "marketing:campaign:view"),
+    MARKETING__STATS__VIEW(435, "marketing:stats:view"),
+    MARKETING__TEMPLATE__MANAGE(436, "marketing:template:manage"),
+    MARKETING__TEMPLATE__VIEW(437, "marketing:template:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 37;
+    public static final int CATALOG_VERSION = 38;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

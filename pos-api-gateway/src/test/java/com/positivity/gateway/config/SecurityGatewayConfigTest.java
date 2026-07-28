@@ -1142,9 +1142,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 37")
+    @DisplayName("CATALOG_VERSION is 38")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(37);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(38);
     }
 
     @Test
@@ -1248,8 +1248,16 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(415)).isEqualTo("PERM_inventory:lot:manage");
         assertThat(GatewayPermissionCatalog.authorityForBit(416)).isEqualTo("PERM_inventory:valuation:view");
         assertThat(GatewayPermissionCatalog.authorityForBit(417)).isEqualTo("PERM_inventory:valuation:adjust");
+        // catalog v38 (#1136-#1152): CRM segmentation/consent/suppression authorities (418-428)
+        assertThat(GatewayPermissionCatalog.authorityForBit(418)).isEqualTo("PERM_crm:consent:manage");
+        assertThat(GatewayPermissionCatalog.authorityForBit(422)).isEqualTo("PERM_crm:segment:resolve");
+        assertThat(GatewayPermissionCatalog.authorityForBit(428)).isEqualTo("PERM_crm:tag:view");
+        // catalog v38: pos-marketing authorities appended (429-437)
+        assertThat(GatewayPermissionCatalog.authorityForBit(429)).isEqualTo("PERM_marketing:campaign:create");
+        assertThat(GatewayPermissionCatalog.authorityForBit(433)).isEqualTo("PERM_marketing:campaign:send");
+        assertThat(GatewayPermissionCatalog.authorityForBit(437)).isEqualTo("PERM_marketing:template:view");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(418)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(438)).isNull();
     }
 
     @Test

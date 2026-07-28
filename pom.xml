@@ -274,6 +274,7 @@
 		<module>pos-tax</module>
 		<module>pos-documents</module>
 		<module>pos-warranty</module>
+		<module>pos-marketing</module>
 		<module>pos-document-helper</module>
 		<module>pos-bulk-ingest-lib</module>
 		<module>pos-bulk-loader</module>

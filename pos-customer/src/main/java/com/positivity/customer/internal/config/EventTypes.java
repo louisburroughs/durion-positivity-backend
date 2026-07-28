@@ -133,6 +133,108 @@ public final class EventTypes {
                         .apiVersion("1")
                         .build(),
 
+                // CrmTagController - 7 events (Story #1136)
+                EventTypeRegistration.fastRead("CRM_TAG_LIST", "List the CRM tag catalog")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("CRM_TAG_GET", "Retrieve a single CRM tag")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_TAG_CREATE", "Create a CRM tag")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_TAG_UPDATE", "Update a CRM tag")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_TAG_DELETE", "Delete a CRM tag and its assignments")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("CRM_PARTY_TAG_LIST", "List tags attached to a party")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_PARTY_TAG_ASSIGN", "Attach a tag to a party")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_PARTY_TAG_REMOVE", "Detach a tag from a party")
+                        .apiVersion("1")
+                        .build(),
+
+                // CrmConsentController - 5 events (Stories #1138/#1139)
+                EventTypeRegistration.fastRead(
+                                "CRM_MARKETING_CONSENT_GET", "Retrieve per-channel marketing consent for a party")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write(
+                                "CRM_MARKETING_CONSENT_UPDATE", "Update per-channel marketing consent for a party")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write(
+                                "CRM_MARKETING_ACCOUNT_GATE_SET",
+                                "Set or clear the commercial-account marketing master gate")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "CRM_CONSENT_HISTORY_GET", "Retrieve the marketing-consent audit trail for a party")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "CRM_MARKETING_ELIGIBILITY_GET",
+                                "Resolve marketing send eligibility for a party and channel")
+                        .apiVersion("1")
+                        .build(),
+
+                // CrmSuppressionController - 4 events (Story #1140)
+                EventTypeRegistration.fastRead("CRM_SUPPRESSION_LIST", "List marketing suppression entries")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("CRM_SUPPRESSION_CHECK", "Check whether an address is suppressed")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_SUPPRESSION_ADD", "Hard-block an address from marketing")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_SUPPRESSION_REMOVE", "Lift a marketing suppression entry")
+                        .apiVersion("1")
+                        .build(),
+
+                // CrmInteractionController - 2 events (Story #1141)
+                EventTypeRegistration.fastRead("CRM_INTERACTION_LIST", "List a party's interaction history")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_INTERACTION_RECORD", "Record a CSR-initiated party interaction")
+                        .apiVersion("1")
+                        .build(),
+
+                // CrmSegmentController - 8 events (Story #1137)
+                EventTypeRegistration.fastRead("CRM_SEGMENT_LIST", "List saved audience segments")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("CRM_SEGMENT_GET", "Retrieve a segment definition")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_SEGMENT_CREATE", "Create an audience segment")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_SEGMENT_UPDATE", "Update an audience segment")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_SEGMENT_DELETE", "Delete an audience segment")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_SEGMENT_MEMBERS_ADD", "Pin parties into a static segment")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_SEGMENT_MEMBER_REMOVE", "Unpin a party from a static segment")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.search("CRM_SEGMENT_RESOLVE", "Resolve a segment to counts and a masked sample")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.search(
+                                "CRM_SEGMENT_RESOLVE_PARTY_IDS", "Resolve a segment to its matching party ids")
+                        .apiVersion("1")
+                        .build(),
+
                 // WorkorderEventHandler - 3 inbound event processing entries (Story #92)
                 EventTypeRegistration.write(
                                 "CUSTOMER_EVENT_VEHICLE_UPDATED_PROCESSED",

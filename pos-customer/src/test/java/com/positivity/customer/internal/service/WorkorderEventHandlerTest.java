@@ -80,6 +80,9 @@ class WorkorderEventHandlerTest {
     @Mock
     private PersonParty personParty;
 
+    @Mock
+    private CustomerInteractionServiceImpl customerInteractionService;
+
     private WorkorderEventHandler handler;
 
     @BeforeEach
@@ -91,6 +94,7 @@ class WorkorderEventHandlerTest {
                 communicationPreferenceRepository,
                 personPartyRepository,
                 partyNoteRepository,
+                customerInteractionService,
                 new ObjectMapper());
     }
 

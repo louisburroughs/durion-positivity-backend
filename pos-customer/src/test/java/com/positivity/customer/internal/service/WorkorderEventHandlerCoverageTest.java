@@ -59,6 +59,9 @@ class WorkorderEventHandlerCoverageTest {
     @Mock
     private PersonParty personParty;
 
+    @Mock
+    private CustomerInteractionServiceImpl customerInteractionService;
+
     private WorkorderEventHandler handler;
 
     @BeforeEach
@@ -69,6 +72,7 @@ class WorkorderEventHandlerCoverageTest {
                 communicationPreferenceRepository,
                 personPartyRepository,
                 partyNoteRepository,
+                customerInteractionService,
                 new ObjectMapper());
     }
 

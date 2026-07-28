@@ -8,8 +8,13 @@ import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.customer.CustomerPartyDeletedV1;
+import com.positivity.domainevents.customer.CustomerPartyTagChangedV1;
 import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
 import com.positivity.domainevents.customer.CustomerPersonIdentityUpdatedV1;
+import com.positivity.domainevents.customer.CustomerRedemptionRecordedV1;
+import com.positivity.domainevents.customer.CustomerSuppressionChangedV1;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -134,6 +139,71 @@ public class CustomerFactPublisher {
             return;
         }
         personPartyRepository.findByPersonId(personId).ifPresent(person -> publishPartyUpdated(writer, person));
+    }
+
+    /**
+     * Emit {@code customer.party.tag-changed} for a tag attach or removal (Story #1136), so
+     * marketing audience replicas track CRM classification without reading the CRM tables.
+     */
+    public void partyTagChanged(
+            @NonNull UUID partyId,
+            @NonNull UUID tagId,
+            @NonNull String tagName,
+            boolean assigned,
+            @Nullable String source) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        CustomerPartyTagChangedV1 payload = new CustomerPartyTagChangedV1(partyId, tagId, tagName, assigned, source);
+        publish(writer, CustomerPartyTagChangedV1.EVENT_TYPE, partyId, payload);
+    }
+
+    /**
+     * Emit {@code customer.suppression.changed} so pos-marketing can keep a local suppression
+     * replica and check it per recipient without a synchronous CRM call (Story #1140).
+     *
+     * <p>Suppression has no UUID aggregate of its own — the subject is an address. The
+     * aggregate id is therefore derived deterministically from {@code channel:addressHash},
+     * which keeps per-address ordering intact and lets the topic compact.
+     */
+    public void suppressionChanged(
+            @NonNull String channel,
+            @NonNull String addressHash,
+            @Nullable UUID partyId,
+            boolean suppressed,
+            @Nullable String reason) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        UUID aggregateId = UUID.nameUUIDFromBytes((channel + ":" + addressHash).getBytes(StandardCharsets.UTF_8));
+        CustomerSuppressionChangedV1 payload =
+                new CustomerSuppressionChangedV1(channel, addressHash, partyId, suppressed, reason);
+        publish(writer, CustomerSuppressionChangedV1.EVENT_TYPE, aggregateId, payload);
+    }
+
+    /**
+     * Emit {@code customer.redemption.recorded} so pos-marketing can attribute conversions
+     * back to a campaign (Story #1142). Emitted for every redemption, including those with no
+     * {@code campaignCode} — marketing needs the non-attributed baseline for a campaign's lift
+     * to mean anything.
+     */
+    public void redemptionRecorded(
+            @NonNull UUID redemptionId,
+            @NonNull UUID promotionId,
+            @NonNull UUID customerId,
+            @NonNull UUID workorderId,
+            @NonNull String promotionCode,
+            @Nullable String campaignCode,
+            @Nullable BigDecimal discountAmount) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        CustomerRedemptionRecordedV1 payload = new CustomerRedemptionRecordedV1(
+                redemptionId, promotionId, customerId, workorderId, promotionCode, campaignCode, discountAmount);
+        publish(writer, CustomerRedemptionRecordedV1.EVENT_TYPE, customerId, payload);
     }
 
     private void publishPartyUpdated(@NonNull OutboxEventWriter writer, @NonNull AbstractParty party) {
