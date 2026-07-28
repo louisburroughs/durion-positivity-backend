@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "_comment": "#1124 lexical-sensitive fixtures for the authored order.returns-refunds doc. Exact status/method/event tokens (REFUND_FAILED, ORIGINAL_TENDER, order.order.returned) that dense embeddings blur but Postgres FTS recalls. Kept in the 'rag-lexical' suite so they do NOT count toward the #783 dense recall@k gate; they feed the dense-vs-hybrid recovery measurement (#1124 flip-threshold). Tokens are verbatim from rag/returns-refunds-rag.md, itself source-verified against pos-order.",
+  "fixtures": [
+    {
+      "fixture_id": "rag-lexical-returns-refund-failed",
+      "query": "REFUND_FAILED retryable return status before stock movement",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["order:order:view"] },
+      "expected": { "doc_ids": ["order.returns-refunds"], "k": 5 },
+      "rag_scope": "order",
+      "tags": ["positive", "lexical", "exact-code"],
+      "notes": "Exact status token REFUND_FAILED; dense under-retrieves bare enum names, FTS should recall order.returns-refunds."
+    },
+    {
+      "fixture_id": "rag-lexical-returns-original-tender",
+      "query": "ORIGINAL_TENDER refund method reverse settled payment intent",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["order:order:view"] },
+      "expected": { "doc_ids": ["order.returns-refunds"], "k": 5 },
+      "rag_scope": "order",
+      "tags": ["positive", "lexical", "exact-code"],
+      "notes": "Refund-method enum ORIGINAL_TENDER, a rare exact token verbatim in the doc."
+    },
+    {
+      "fixture_id": "rag-lexical-returns-event-name",
+      "query": "order.order.returned event restock RESTOCK SCRAP",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["order:order:view"] },
+      "expected": { "doc_ids": ["order.returns-refunds"], "k": 5 },
+      "rag_scope": "order",
+      "tags": ["positive", "lexical", "exact-code"],
+      "notes": "Dotted event name order.order.returned + restock conditions; symbol-heavy tokens embeddings blur."
+    }
+  ]
+}

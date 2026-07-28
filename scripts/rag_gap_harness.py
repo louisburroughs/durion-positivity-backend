@@ -54,15 +54,16 @@ GAP_QUESTIONS = EVAL / "gap-harness"
 
 # --- shared wiring -----------------------------------------------------------------------------
 def build_judge(args):
+    timeout = getattr(args, "judge_timeout", 120)
     if args.judge == "none":
         return None
     if args.judge == "ollama":
         base = args.judge_base or os.environ.get("OLLAMA_CHAT_BASE_URL", "http://localhost:11434")
-        return api.ollama_judge(base, args.judge_model or "llama3.1")
+        return api.ollama_judge(base, args.judge_model or "llama3.1", timeout=timeout)
     if args.judge == "openai":
         base = args.judge_base or os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
         key = os.environ.get("OPENAI_API_KEY")
-        return api.openai_compatible_judge(base, args.judge_model or "gpt-4o-mini", key)
+        return api.openai_compatible_judge(base, args.judge_model or "gpt-4o-mini", key, timeout=timeout)
     raise SystemExit(f"unknown judge backend: {args.judge}")
 
 
@@ -155,7 +156,8 @@ def cmd_replay(args):
             grade = harness.grade_only(q, cap.answer, idx, judge_llm)
         classification = classify(q, cap, grade.verdict, idx)
         results.append(Result(question=q, capture=cap, grade=grade, classification=classification))
-        if classification.cause == CAUSE_RETRIEVAL_MISS:
+        # Skip ungraded records: a placeholder verdict must not feed the flip-threshold recovery set.
+        if classification.cause == CAUSE_RETRIEVAL_MISS and not grade.judge_error:
             expected_visible = [d for d in classification.covering_doc_ids if d not in classification.gated_doc_ids]
             recoveries.append(
                 fusion.recovery_record(
@@ -235,6 +237,12 @@ def main(argv=None):
         sp.add_argument("--judge", choices=["none", "ollama", "openai"], default="none")
         sp.add_argument("--judge-base", default=None)
         sp.add_argument("--judge-model", default=None)
+        sp.add_argument(
+            "--judge-timeout",
+            type=int,
+            default=120,
+            help="per-call judge HTTP timeout in seconds (default 120; raise on CPU-hosted judges, #1129)",
+        )
 
     r = sub.add_parser("run", help="live run against the stack")
     r.add_argument("--base-url", required=True, help="MCP chat API base, e.g. http://localhost:8080")

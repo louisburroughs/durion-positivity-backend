@@ -14,8 +14,9 @@ from typing import Any, Optional
 # --- verdict / cause vocabularies (kept as plain strings for JSON round-tripping) -------------
 VERDICT_CORRECT = "correct"
 VERDICT_REFUSED = "refused"
-VERDICT_MISLEADING = "misleading"
-VERDICTS = (VERDICT_CORRECT, VERDICT_REFUSED, VERDICT_MISLEADING)
+VERDICT_MISLEADING = "misleading"  # contradicts a supplied ground-truth fact
+VERDICT_UNSUPPORTED = "unsupported"  # confident, specific claims with no grounding to check against (#1131)
+VERDICTS = (VERDICT_CORRECT, VERDICT_REFUSED, VERDICT_MISLEADING, VERDICT_UNSUPPORTED)
 
 CAUSE_CORPUS_GAP = "corpus_gap"  # taxonomy #1 -> write a new doc (the #1124 goal)
 CAUSE_RETRIEVAL_MISS = "retrieval_miss"  # taxonomy #2 -> retrieval problem, feeds the flip-threshold

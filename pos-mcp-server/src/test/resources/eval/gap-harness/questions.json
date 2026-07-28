@@ -92,7 +92,10 @@
       "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
       "rag_scope": "order",
       "expected_doc_ids": ["order.guide"],
-      "expected_facts": [],
+      "expected_facts": [
+        "Sales-order statuses (pos-order SalesOrderStatus) include DRAFT, QUOTED, COMPLETED, VOIDED, CANCEL_REQUESTED, and CANCELLED; read access is gated by order:order:view.",
+        "Purchase orders are NOT in pos-order — they are owned by pos-inventory (inventory:purchase_order:{create,view,approve,receive}) with PurchaseOrderStatus DRAFT, APPROVED, PARTIALLY_RECEIVED, FULLY_RECEIVED, CLOSED, CANCELLED."
+      ],
       "topic": "order lookup",
       "tags": ["scope-coverage", "positive"],
       "source": "synthetic"
@@ -103,7 +106,10 @@
       "actor": { "role": "ROLE_USER", "permission_codes": ["pricing:price_book:view", "pricing:rule:view"] },
       "rag_scope": "pricing",
       "expected_doc_ids": ["pricing.guide"],
-      "expected_facts": [],
+      "expected_facts": [
+        "Price precedence is a fixed sequential pipeline (PriceQuoteServiceImpl.calculatePrice): BASE_PRICE (MSRP, required) then LOCATION_OVERRIDE (absolute replacement) then CUSTOMER_TIER_DISCOUNT (multiplicative), with final rounding HALF_EVEN at scale 2.",
+        "effectiveFrom is inclusive and effectiveTo exclusive (NULL = open-ended/active); within one rule type the most-recently-effective active record wins. Read-level pricing permissions are pricing:price_book:view and pricing:rule:view."
+      ],
       "topic": "pricing rules",
       "tags": ["scope-coverage", "positive"],
       "source": "synthetic"
@@ -142,14 +148,17 @@
       "source": "synthetic"
     },
     {
-      "id": "gap-returns-refunds-KNOWNGAP",
+      "id": "gap-returns-refunds",
       "query": "what is the policy for processing a customer return and issuing a refund on a paid invoice",
       "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
       "rag_scope": "order",
       "expected_doc_ids": ["order.returns-refunds"],
-      "expected_facts": [],
+      "expected_facts": [
+        "Returns are line-by-line against one COMPLETED sales order, per-line capped at the un-refunded remainder; creation parks in PENDING_APPROVAL when the total refund exceeds the approval threshold (default $250.00), otherwise RETURN_REQUESTED.",
+        "Refund methods are ORIGINAL_TENDER, STORE_CREDIT, and ON_ACCOUNT_CREDIT; ORIGINAL_TENDER reverses the original settled tender and a failure parks the return at REFUND_FAILED before any stock movement."
+      ],
       "topic": "returns and refunds policy",
-      "tags": ["known-gap", "corpus-gap"],
+      "tags": ["scope-coverage", "positive", "gap-harness-roundtrip"],
       "source": "synthetic"
     },
     {
@@ -157,9 +166,9 @@
       "query": "how are core charges handled when a customer returns a rebuildable part",
       "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
       "rag_scope": "order",
-      "expected_doc_ids": ["order.returns-refunds"],
+      "expected_doc_ids": ["order.core-charges"],
       "expected_facts": [],
-      "topic": "returns and refunds policy",
+      "topic": "core charge handling",
       "tags": ["known-gap", "corpus-gap"],
       "source": "synthetic"
     }

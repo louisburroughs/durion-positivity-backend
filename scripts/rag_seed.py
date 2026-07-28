@@ -43,6 +43,7 @@ MANIFEST = [
     ("workflow.cross-domain-playbooks", "cross-domain-playbooks.md", "master", ["AUTHENTICATED"]),
     ("glossary.identifiers", "glossary-identifiers.md", "master", ["AUTHENTICATED"]),
     ("order.guide", "order-guide.md", "order", ["order:order:view"]),
+    ("order.returns-refunds", "returns-refunds-rag.md", "order", ["order:order:view"]),
     ("pricing.guide", "pricing-guide.md", "pricing", ["pricing:price_book:view", "pricing:rule:view"]),
     ("tax.guide", "tax-guide.md", "tax", ["tax:mode:view"]),
     ("crm.customer-vehicle", "customer-vehicle-guide.md", "customer",
