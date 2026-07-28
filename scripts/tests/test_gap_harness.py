@@ -290,6 +290,73 @@ class HarnessRunTest(unittest.TestCase):
         self.assertEqual(results[0].grade.verdict, VERDICT_CORRECT)
 
 
+class WarningRemedyTest(unittest.TestCase):
+    """The ungraded warning must name the right fix: chat-endpoint (ask) transport failures need the
+    base-url/token fixed, judge transport failures need the judge timeout/model changed. They share
+    the `transport` bucket, so the message keys off the `ask:` tag harness.run stamps on a failed ask."""
+
+    def _res(self, judge_error):
+        q = Question("q", "x", Actor("ROLE_USER"))
+        cap = Capture(question_id="q", answer="", dense_docs=[], permission_codes=[])
+        grade = Grade(verdict=VERDICT_MISLEADING, judge_error=judge_error)
+        return Result(question=q, capture=cap, grade=grade, classification=Classification(cause=CAUSE_NONE))
+
+    def test_chat_endpoint_transport_blames_endpoint_not_judge(self):
+        results = [self._res("transport: ask: HTTPError: HTTP Error 404: Not Found") for _ in range(3)]
+        w = report.summarize(results)["warning"]
+        self.assertIn("CHAT-ENDPOINT", w)
+        self.assertIn("--base-url", w)
+        self.assertNotIn("--judge-timeout", w)  # do NOT send them at the judge
+
+    def test_judge_transport_blames_judge(self):
+        results = [self._res("transport: RuntimeError: timeout") for _ in range(3)]
+        w = report.summarize(results)["warning"]
+        self.assertIn("JUDGE", w)
+        self.assertIn("--judge-timeout", w)
+        self.assertNotIn("CHAT-ENDPOINT", w)
+
+    def test_mixed_transport_names_both(self):
+        results = [
+            self._res("transport: ask: HTTPError: HTTP Error 401: Unauthorized"),
+            self._res("transport: RuntimeError: timeout"),
+            self._res("transport: ask: HTTPError: HTTP Error 404: Not Found"),
+        ]
+        w = report.summarize(results)["warning"]
+        self.assertIn("CHAT-ENDPOINT", w)
+        self.assertIn("JUDGE", w)
+
+
+class PreflightTest(unittest.TestCase):
+    """The run preflight fails fast with an actionable message on a 404/401 rather than letting all N
+    questions fail one at a time and surface only as a 100%-ungraded run at the end."""
+
+    class _Chat:
+        def __init__(self, exc):
+            self._exc = exc
+
+        def ask(self, _actor, _msg):
+            if self._exc:
+                raise self._exc
+            return "ok"
+
+    def test_404_aborts_with_base_url_hint(self):
+        exc = urllib.error.HTTPError("http://x/v1/mcp/chat", 404, "Not Found", {}, None)
+        with self.assertRaises(SystemExit) as cm:
+            harness_cli.preflight_chat(self._Chat(exc), Actor("ROLE_USER"), "http://localhost:8080")
+        msg = str(cm.exception)
+        self.assertIn("404", msg)
+        self.assertIn("/mcp-server", msg)
+
+    def test_401_aborts_with_token_hint(self):
+        exc = urllib.error.HTTPError("http://x/v1/mcp/chat", 401, "Unauthorized", {}, None)
+        with self.assertRaises(SystemExit) as cm:
+            harness_cli.preflight_chat(self._Chat(exc), Actor("ROLE_USER"), "http://localhost:8080/mcp-server")
+        self.assertIn("token", str(cm.exception).lower())
+
+    def test_success_is_silent(self):
+        harness_cli.preflight_chat(self._Chat(None), Actor("ROLE_USER"), "http://x/mcp-server")  # no raise
+
+
 class FusionTest(unittest.TestCase):
     def test_rrf_fuse_orders_by_reciprocal_rank(self):
         fused = fusion.rrf_fuse([["a", "b", "c"], ["c", "d"]], k=60)

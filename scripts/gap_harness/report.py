@@ -45,6 +45,14 @@ def _ungraded_kind(judge_error: str) -> str:
         return "no_llm"
     return "other"
 
+
+def _is_ask_transport(judge_error: str) -> bool:
+    """True if a ``transport:`` failure originated in the *chat* (answer) call rather than the judge.
+    ``harness.run`` tags a failed ask as ``"transport: ask: …"`` (see harness._ask_error), so a
+    transport error whose payload starts with ``ask:`` is a chat-endpoint problem (base-url / token),
+    not a judge problem (timeout / judge model)."""
+    return judge_error.startswith(f"{ERR_TRANSPORT} ask:")
+
 GUARDRAIL_BANNER = (
     "PROPOSED GAPS — DO NOT INGEST AS-IS. A human authors each doc and source-verifies it "
     "(the `_Verified: …_` convention). A model authoring docs to answer its own questions injects "
@@ -137,6 +145,11 @@ def summarize(results: list[Result]) -> dict:
         CAUSE_PERMISSION_GATING: 0,
     }
     ungraded_breakdown = {"transport": 0, "parse": 0, "no_llm": 0, "other": 0}
+    # A transport failure can come from the *chat* call (the answer never arrived — wrong base-url,
+    # expired token) or from the *judge* call. They share the `transport` bucket but need opposite
+    # fixes, so split them for the warning's remedy (#1157-followup).
+    ask_transport = 0
+    judge_transport = 0
     factless_graded = 0
     for r in results:
         if r.grade.judge_error:
@@ -144,7 +157,13 @@ def summarize(results: list[Result]) -> dict:
             # judge would otherwise inflate the breakdown off placeholder verdicts). Keep it out of
             # both the verdict histogram AND the taxonomy, per the warning below.
             verdicts["ungraded"] += 1
-            ungraded_breakdown[_ungraded_kind(r.grade.judge_error)] += 1
+            kind = _ungraded_kind(r.grade.judge_error)
+            ungraded_breakdown[kind] += 1
+            if kind == "transport":
+                if _is_ask_transport(r.grade.judge_error):
+                    ask_transport += 1
+                else:
+                    judge_transport += 1
             continue
         verdicts[r.grade.verdict] = verdicts.get(r.grade.verdict, 0) + 1
         if not (r.question.expected_facts or r.question.expected_doc_ids):
@@ -167,10 +186,33 @@ def summarize(results: list[Result]) -> dict:
         ),
     }
     if n and ungraded / n >= UNGRADED_WARN_FRACTION:
+        # Tailor the remedy to what actually failed: a chat-endpoint failure needs the base-url/token
+        # fixed, a judge failure needs the judge timeout/model changed. Conflating them (the old text
+        # always blamed the judge) sends people chasing --judge-timeout when the real fault is a 404
+        # from a wrong base-url or a 401 from an expired token.
+        hints = []
+        if ask_transport:
+            hints.append(
+                f"{ask_transport} were CHAT-ENDPOINT failures (the answer call itself failed — e.g. a "
+                "404 from a --base-url missing the gateway service route like `/mcp-server`, or a 401 "
+                "from an expired/invalid token) — fix the endpoint/token, not the judge"
+            )
+        if judge_transport:
+            hints.append(
+                f"{judge_transport} were JUDGE transport failures — raise --judge-timeout (#1129) or "
+                "use a smaller judge model"
+            )
+        if ungraded_breakdown["parse"]:
+            hints.append(
+                f"{ungraded_breakdown['parse']} were judge PARSE failures (a judge-quality signal)"
+            )
+        if ungraded_breakdown["no_llm"]:
+            hints.append(f"{ungraded_breakdown['no_llm']} ran with no judge configured (--judge none)")
+        remedy = "; ".join(hints) if hints else "raise --judge-timeout (#1129) or use a smaller judge"
         summary["warning"] = (
-            f"{ungraded}/{n} questions ({ungraded / n:.0%}) were UNGRADED (judge transport/parse "
-            f"failures: {ungraded_breakdown}); the verdict and taxonomy counts below rest on the "
-            "graded remainder only. Raise --judge-timeout (#1129) or use a smaller judge, then re-run."
+            f"{ungraded}/{n} questions ({ungraded / n:.0%}) were UNGRADED "
+            f"(breakdown: {ungraded_breakdown}); the verdict and taxonomy counts below rest on the "
+            f"graded remainder only. {remedy}. Then re-run."
         )
     return summary
 
