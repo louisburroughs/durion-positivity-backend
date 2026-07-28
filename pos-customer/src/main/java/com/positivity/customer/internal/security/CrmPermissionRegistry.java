@@ -84,6 +84,12 @@ public class CrmPermissionRegistry {
     // Interaction History (Story #1141)
     public static final String INTERACTION_VIEW = "crm:interaction:view";
 
+    /**
+     * Separate from {@link #INTERACTION_VIEW}: the timeline is evidence of what was said to a
+     * customer, so reading it must not carry the right to write into it.
+     */
+    public static final String INTERACTION_MANAGE = "crm:interaction:manage";
+
     // Follow-up Tasks (Story #1153)
     public static final String FOLLOWUP_VIEW = "crm:followup:view";
     public static final String FOLLOWUP_MANAGE = "crm:followup:manage";
@@ -221,10 +227,15 @@ public class CrmPermissionRegistry {
                         "HIGH",
                         "Issue #1140"),
 
-                // Interaction History (1 permission, Story #1141)
+                // Interaction History (2 permissions, Story #1141)
                 permission(
                         INTERACTION_VIEW,
                         "View a party's interaction and touch history (campaign sends, calls, notes)",
+                        "MEDIUM",
+                        "Issue #1141"),
+                permission(
+                        INTERACTION_MANAGE,
+                        "Record a CSR-initiated interaction on a party's timeline",
                         "MEDIUM",
                         "Issue #1141"),
 

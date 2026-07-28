@@ -1142,9 +1142,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 39")
+    @DisplayName("CATALOG_VERSION is 40")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(39);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(40);
     }
 
     @Test
@@ -1259,8 +1259,11 @@ class SecurityGatewayConfigTest {
         // catalog v39 (#1153/#1154): follow-up and inquiry authorities appended (438-441)
         assertThat(GatewayPermissionCatalog.authorityForBit(438)).isEqualTo("PERM_crm:followup:manage");
         assertThat(GatewayPermissionCatalog.authorityForBit(441)).isEqualTo("PERM_crm:inquiry:view");
+        // catalog v40 (#1141): writing to a party's interaction timeline is its own authority,
+        // separate from reading it
+        assertThat(GatewayPermissionCatalog.authorityForBit(442)).isEqualTo("PERM_crm:interaction:manage");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(442)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(443)).isNull();
     }
 
     @Test

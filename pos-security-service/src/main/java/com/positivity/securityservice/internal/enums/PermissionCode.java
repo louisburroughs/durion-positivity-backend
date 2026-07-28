@@ -571,13 +571,15 @@ public enum PermissionCode {
     CRM__FOLLOWUP__MANAGE(438, "crm:followup:manage"),
     CRM__FOLLOWUP__VIEW(439, "crm:followup:view"),
     CRM__INQUIRY__MANAGE(440, "crm:inquiry:manage"),
-    CRM__INQUIRY__VIEW(441, "crm:inquiry:view");
+    CRM__INQUIRY__VIEW(441, "crm:inquiry:view"),
+    // ── Crm (new) ──────────────────────────────────────────────────────────────
+    CRM__INTERACTION__MANAGE(442, "crm:interaction:manage");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 39;
+    public static final int CATALOG_VERSION = 40;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

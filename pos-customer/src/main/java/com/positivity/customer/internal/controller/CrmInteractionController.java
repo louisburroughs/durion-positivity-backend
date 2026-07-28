@@ -80,8 +80,8 @@ public class CrmInteractionController {
     @PostMapping
     @SecurityRequirement(
             name = "bearerAuth",
-            scopes = {CrmPermissionRegistry.INTERACTION_VIEW})
-    @PreAuthorize("hasAuthority('crm:interaction:view')")
+            scopes = {CrmPermissionRegistry.INTERACTION_MANAGE})
+    @PreAuthorize("hasAuthority('crm:interaction:manage')")
     @EmitEvent(id = "CRM_INTERACTION_RECORD", apiVersion = "1")
     public ResponseEntity<CustomerInteractionResponse> record(
             @PathVariable UUID partyId, @Valid @RequestBody RecordInteractionRequest request) {

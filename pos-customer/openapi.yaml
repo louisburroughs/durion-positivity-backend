@@ -1412,9 +1412,9 @@ paths:
           description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
-        - crm:interaction:view
+        - crm:interaction:manage
       x-required-permissions:
-      - crm:interaction:view
+      - crm:interaction:manage
   /v1/crm/parties/{partyId}/follow-ups:
     get:
       tags:
