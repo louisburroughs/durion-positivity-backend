@@ -140,12 +140,15 @@ def summarize(results: list[Result]) -> dict:
     factless_graded = 0
     for r in results:
         if r.grade.judge_error:
+            # Ungraded: the verdict is a placeholder, so its taxonomy cause is meaningless (a flaky
+            # judge would otherwise inflate the breakdown off placeholder verdicts). Keep it out of
+            # both the verdict histogram AND the taxonomy, per the warning below.
             verdicts["ungraded"] += 1
             ungraded_breakdown[_ungraded_kind(r.grade.judge_error)] += 1
-        else:
-            verdicts[r.grade.verdict] = verdicts.get(r.grade.verdict, 0) + 1
-            if not (r.question.expected_facts or r.question.expected_doc_ids):
-                factless_graded += 1
+            continue
+        verdicts[r.grade.verdict] = verdicts.get(r.grade.verdict, 0) + 1
+        if not (r.question.expected_facts or r.question.expected_doc_ids):
+            factless_graded += 1
         if r.classification.cause in causes:
             causes[r.classification.cause] += 1
     n = len(results)

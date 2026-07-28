@@ -91,7 +91,9 @@ def run(
         classification = classify(q, capture, grade.verdict, corpus)
         results.append(Result(question=q, capture=capture, grade=grade, classification=classification))
 
-        if classification.cause == CAUSE_RETRIEVAL_MISS:
+        # An ungraded record's verdict is a placeholder, so its retrieval_miss classification is not
+        # real evidence — keep it out of the dense-vs-hybrid recovery set that feeds the #1124 flip.
+        if classification.cause == CAUSE_RETRIEVAL_MISS and not grade.judge_error:
             expected_visible = [
                 d for d in classification.covering_doc_ids if d not in classification.gated_doc_ids
             ]

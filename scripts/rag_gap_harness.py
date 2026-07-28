@@ -156,7 +156,8 @@ def cmd_replay(args):
             grade = harness.grade_only(q, cap.answer, idx, judge_llm)
         classification = classify(q, cap, grade.verdict, idx)
         results.append(Result(question=q, capture=cap, grade=grade, classification=classification))
-        if classification.cause == CAUSE_RETRIEVAL_MISS:
+        # Skip ungraded records: a placeholder verdict must not feed the flip-threshold recovery set.
+        if classification.cause == CAUSE_RETRIEVAL_MISS and not grade.judge_error:
             expected_visible = [d for d in classification.covering_doc_ids if d not in classification.gated_doc_ids]
             recoveries.append(
                 fusion.recovery_record(

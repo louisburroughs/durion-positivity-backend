@@ -110,4 +110,3 @@ _Verified: `pos-order` `ReturnOrderServiceImpl.runSaga`, `ReturnCondition`._
 _Verified: `pos-order` `OrderPermissions`, `ReturnOrderController`, `permissions.yaml`._
 - **Core charges are NOT modeled in pos-order** — no core-charge entity, permission, or calculation exists.
 _Verified: `pos-order` source (no core-charge implementation)._
-</content>

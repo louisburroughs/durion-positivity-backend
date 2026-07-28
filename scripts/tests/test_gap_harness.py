@@ -542,6 +542,16 @@ class JudgeReliabilityTest(unittest.TestCase):
         self.assertIn("warning", s)
         self.assertIn("UNGRADED", s["warning"])
 
+    def test_ungraded_excluded_from_taxonomy(self):
+        # An ungraded (judge_error) record's taxonomy cause is a placeholder and must not be counted,
+        # matching the summary warning that counts rest on the graded remainder only.
+        graded = self._result("g", Grade(verdict=VERDICT_MISLEADING))
+        graded.classification = Classification(cause=CAUSE_CORPUS_GAP)
+        ungraded = self._result("u", Grade(verdict=VERDICT_MISLEADING, judge_error="transport: TimeoutError"))
+        ungraded.classification = Classification(cause=CAUSE_CORPUS_GAP)
+        s = report.summarize([graded, ungraded])
+        self.assertEqual(s["taxonomy"][CAUSE_CORPUS_GAP], 1)  # only the graded one
+
     def test_summary_no_warning_when_fully_graded(self):
         results = [self._result("ok", Grade(verdict=VERDICT_CORRECT))]
         s = report.summarize(results)
