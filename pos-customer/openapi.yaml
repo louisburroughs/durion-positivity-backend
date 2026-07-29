@@ -10,30 +10,46 @@ servers:
 - url: http://api-gateway.local/v1/customer
   description: API Gateway
 tags:
-- name: Customer API
-  description: Operations related to customers
-- name: CRM Communication Preferences
-  description: Communication preferences and consent flag management
+- name: CRM Interactions
+  description: Party interaction and touch history
+- name: CRM Public Inquiry
+  description: Unauthenticated inbound inquiry capture
 - name: CRM Person-Link Reconciliation
   description: Verify person_party links resolve in pos-people
-- name: CRM Vehicles
-  description: Vehicle management operations for customers
-- name: CRM Snapshots
-  description: Consolidated CRM data snapshots
+- name: CRM Tags
+  description: Manage the CRM tag catalog and attach tags to parties
 - name: Customer Bulk Ingest API
   description: Bulk import customer records
-- name: CRM Party Relationships
-  description: Commercial account relationship management APIs
+- name: CRM Suppression
+  description: Hard address-level marketing suppression list
+- name: CRM Segments
+  description: Saved audience segments with static lists or validated predicates
 - name: CRM Contacts
   description: Contact point and role management for parties
 - name: CRM Accounts
   description: Account tier management, party creation, search, merge, contacts, preferences, and vehicle operations
-- name: Customer Requirements
-  description: Eligibility checks for customer-facing workflows
 - name: Promotion Redemptions
   description: Operations for recording and querying promotion redemptions
 - name: CRM Persons
   description: Individual person management APIs
+- name: Customer API
+  description: Operations related to customers
+- name: CRM Communication Preferences
+  description: Communication preferences and consent flag management
+- name: CRM Inquiries
+  description: Inbound service and fleet-quote inquiries
+- name: CRM Vehicles
+  description: Vehicle management operations for customers
+- name: CRM Snapshots
+  description: Consolidated CRM data snapshots
+- name: CRM Party Relationships
+  description: Commercial account relationship management APIs
+- name: CRM Follow-ups
+  description: Customer follow-up tasks and the CSR work queue
+- name: CRM Marketing Consent
+  description: Per-channel marketing consent, account gate, and consent audit
+- name: Customer Requirements
+  description: Eligibility checks for customer-facing workflows
 paths:
   /v1/crm/{id}:
     get:
@@ -133,6 +149,292 @@ paths:
         - crm:party:deactivate
       x-required-permissions:
       - crm:party:deactivate
+  /v1/crm/tags/{tagId}:
+    get:
+      tags:
+      - CRM Tags
+      summary: Get tag
+      description: Retrieve a single tag by id
+      operationId: getTag
+      parameters:
+      - name: tagId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Tag returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyTagResponse'
+        '404':
+          description: Tag not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:tag:view
+      x-required-permissions:
+      - crm:tag:view
+    put:
+      tags:
+      - CRM Tags
+      summary: Update tag
+      description: Rename, recolour, recategorize, or retire a tag
+      operationId: updateTag
+      parameters:
+      - name: tagId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertPartyTagRequest'
+        required: true
+      responses:
+        '200':
+          description: Tag updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyTagResponse'
+        '404':
+          description: Tag not found
+        '409':
+          description: Tag name already exists
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:tag:manage
+      x-required-permissions:
+      - crm:tag:manage
+    delete:
+      tags:
+      - CRM Tags
+      summary: Delete tag
+      description: Remove a tag from the catalog along with every assignment of it
+      operationId: deleteTag
+      parameters:
+      - name: tagId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Tag deleted
+        '404':
+          description: Tag not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:tag:manage
+      x-required-permissions:
+      - crm:tag:manage
+  /v1/crm/segments/{segmentId}:
+    get:
+      tags:
+      - CRM Segments
+      summary: Get segment
+      description: Retrieve a segment definition by id
+      operationId: get
+      parameters:
+      - name: segmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Segment returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SegmentResponse'
+        '404':
+          description: Segment not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:segment:view
+      x-required-permissions:
+      - crm:segment:view
+    put:
+      tags:
+      - CRM Segments
+      summary: Update segment
+      description: Update a segment's name, description, predicate, or active flag. Type and audience type are immutable.
+      operationId: update
+      parameters:
+      - name: segmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertSegmentRequest'
+        required: true
+      responses:
+        '200':
+          description: Segment updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SegmentResponse'
+        '404':
+          description: Segment not found
+        '409':
+          description: Segment name already exists
+        '422':
+          description: Predicate invalid, or an immutable field was changed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:segment:manage
+      x-required-permissions:
+      - crm:segment:manage
+    delete:
+      tags:
+      - CRM Segments
+      summary: Delete segment
+      description: Delete a segment and its pinned membership
+      operationId: delete
+      parameters:
+      - name: segmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Segment deleted
+        '404':
+          description: Segment not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:segment:manage
+      x-required-permissions:
+      - crm:segment:manage
+  /v1/crm/parties/{partyId}/marketing-consent:
+    get:
+      tags:
+      - CRM Marketing Consent
+      summary: Get marketing consent
+      description: Per-channel marketing consent plus the effective send eligibility for each channel
+      operationId: getConsent
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Consent returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketingConsentSummaryResponse'
+        '404':
+          description: Party not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:consent:view
+      x-required-permissions:
+      - crm:consent:view
+    put:
+      tags:
+      - CRM Marketing Consent
+      summary: Update marketing consent
+      description: Update per-channel marketing consent. Only channels present in the request change; each change writes one immutable consent-audit entry.
+      operationId: updateConsent
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMarketingConsentRequest'
+        required: true
+      responses:
+        '200':
+          description: Consent updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketingConsentSummaryResponse'
+        '404':
+          description: Party not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:consent:manage
+      x-required-permissions:
+      - crm:consent:manage
+  /v1/crm/parties/{partyId}/marketing-consent/account-gate:
+    put:
+      tags:
+      - CRM Marketing Consent
+      summary: Set account marketing gate
+      description: Set or clear the commercial-account hard gate. When set, no marketing reaches the account on any channel regardless of individual contact consent.
+      operationId: setAccountGate
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: optOut
+        in: query
+        required: true
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: Gate updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketingConsentSummaryResponse'
+        '404':
+          description: Commercial party not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:consent:manage
+      x-required-permissions:
+      - crm:consent:manage
   /v1/crm/parties/{partyId}/contacts/{contactId}/roles:
     put:
       tags:
@@ -179,6 +481,125 @@ paths:
         - crm:contact_role:assign
       x-required-permissions:
       - crm:contact_role:assign
+  /v1/crm/inquiries/{inquiryId}/status:
+    put:
+      tags:
+      - CRM Inquiries
+      summary: Update inquiry status
+      description: Move an inquiry to CONTACTED or CLOSED. CONVERTED is reached by converting it.
+      operationId: updateStatus
+      parameters:
+      - name: inquiryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - NEW
+          - CONTACTED
+          - CONVERTED
+          - CLOSED
+      - name: resolutionNote
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InquiryResponse'
+        '404':
+          description: Inquiry not found
+        '422':
+          description: Illegal transition, or CONVERTED was requested directly
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:inquiry:manage
+      x-required-permissions:
+      - crm:inquiry:manage
+  /v1/crm/inquiries/{inquiryId}/assignee:
+    put:
+      tags:
+      - CRM Inquiries
+      summary: Assign inquiry
+      description: Assign or unassign an inquiry
+      operationId: assign
+      parameters:
+      - name: inquiryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: assignedTo
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Inquiry assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InquiryResponse'
+        '404':
+          description: Inquiry not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:inquiry:manage
+      x-required-permissions:
+      - crm:inquiry:manage
+  /v1/crm/follow-ups/{taskId}/assignee:
+    put:
+      tags:
+      - CRM Follow-ups
+      summary: Assign follow-up
+      description: Assign or unassign a follow-up task
+      operationId: assign_1
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: assignedTo
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Task assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowUpTaskResponse'
+        '404':
+          description: Task not found
+        '422':
+          description: Task is already closed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:followup:manage
+      x-required-permissions:
+      - crm:followup:manage
   /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}/primary-billing:
     put:
       tags:
@@ -389,6 +810,307 @@ paths:
         - crm:party:create
       x-required-permissions:
       - crm:party:create
+  /v1/crm/tags:
+    get:
+      tags:
+      - CRM Tags
+      summary: List tags
+      description: List the CRM tag catalog with assignment counts
+      operationId: listTags
+      parameters:
+      - name: includeInactive
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+      responses:
+        '200':
+          description: Tags returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartyTagResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:tag:view
+      x-required-permissions:
+      - crm:tag:view
+    post:
+      tags:
+      - CRM Tags
+      summary: Create tag
+      description: Add a new tag to the CRM tag catalog
+      operationId: createTag
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertPartyTagRequest'
+        required: true
+      responses:
+        '201':
+          description: Tag created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyTagResponse'
+        '409':
+          description: Tag name already exists
+        '400':
+          description: Validation failed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:tag:manage
+      x-required-permissions:
+      - crm:tag:manage
+  /v1/crm/suppression:
+    get:
+      tags:
+      - CRM Suppression
+      summary: List suppression entries
+      description: List suppressed addresses, newest first
+      operationId: list
+      parameters:
+      - name: channel
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - EMAIL
+          - SMS
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        '200':
+          description: Entries returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:suppression:view
+      x-required-permissions:
+      - crm:suppression:view
+    post:
+      tags:
+      - CRM Suppression
+      summary: Suppress an address
+      description: 'Hard-block an address from marketing. Idempotent: re-adding returns the existing entry.'
+      operationId: add
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddSuppressionRequest'
+        required: true
+      responses:
+        '201':
+          description: Address suppressed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuppressionEntryResponse'
+        '400':
+          description: Validation failed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:suppression:manage
+      x-required-permissions:
+      - crm:suppression:manage
+  /v1/crm/segments:
+    get:
+      tags:
+      - CRM Segments
+      summary: List segments
+      description: List saved segments, optionally filtered by audience type
+      operationId: list_1
+      parameters:
+      - name: audienceType
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+      responses:
+        '200':
+          description: Segments returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SegmentResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:segment:view
+      x-required-permissions:
+      - crm:segment:view
+    post:
+      tags:
+      - CRM Segments
+      summary: Create segment
+      description: Create a static or dynamic segment. Dynamic predicates are validated against the attribute catalog.
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertSegmentRequest'
+        required: true
+      responses:
+        '201':
+          description: Segment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SegmentResponse'
+        '409':
+          description: Segment name already exists
+        '422':
+          description: Predicate is not valid for this catalog
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:segment:manage
+      x-required-permissions:
+      - crm:segment:manage
+  /v1/crm/segments/{segmentId}/resolve:
+    post:
+      tags:
+      - CRM Segments
+      summary: Resolve segment
+      description: Resolve a segment to a match count, an optional per-channel eligible count, and a masked sample
+      operationId: resolve
+      parameters:
+      - name: segmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: channel
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - EMAIL
+          - SMS
+      - name: sampleSize
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 10
+      responses:
+        '200':
+          description: Resolution returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SegmentResolutionResponse'
+        '404':
+          description: Segment not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:segment:resolve
+      x-required-permissions:
+      - crm:segment:resolve
+  /v1/crm/segments/{segmentId}/members:
+    post:
+      tags:
+      - CRM Segments
+      summary: Pin members
+      description: Add parties to a static segment; already-present parties are ignored
+      operationId: addMembers
+      parameters:
+      - name: segmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SegmentMembersRequest'
+        required: true
+      responses:
+        '200':
+          description: Members added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SegmentResponse'
+        '404':
+          description: Segment not found
+        '422':
+          description: Segment is dynamic
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:segment:manage
+      x-required-permissions:
+      - crm:segment:manage
+  /v1/crm/public/inquiries:
+    post:
+      tags:
+      - CRM Public Inquiry
+      summary: Submit an inquiry
+      description: Public, unauthenticated capture of a service or fleet-quote request. Rate-limited per submitter; returns only a reference id.
+      operationId: submit
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitInquiryRequest'
+        required: true
+      responses:
+        '202':
+          description: Inquiry accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InquiryAcceptedResponse'
+        '400':
+          description: Validation failed
+        '429':
+          description: Too many submissions
   /v1/crm/persons:
     get:
       tags:
@@ -503,6 +1225,249 @@ paths:
         - crm:person:create
       x-required-permissions:
       - crm:person:create
+  /v1/crm/parties/{partyId}/tags:
+    get:
+      tags:
+      - CRM Tags
+      summary: List party tags
+      description: List the tags currently attached to a party
+      operationId: listPartyTags
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Party tags returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartyTagAssignmentResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:tag:view
+      x-required-permissions:
+      - crm:tag:view
+    post:
+      tags:
+      - CRM Tags
+      summary: Assign tag to party
+      description: 'Attach a tag to a party. Idempotent: re-assigning returns the existing assignment.'
+      operationId: assignTag
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignPartyTagRequest'
+        required: true
+      responses:
+        '200':
+          description: Tag assigned (or already present)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyTagAssignmentResponse'
+        '400':
+          description: Tag is inactive
+        '404':
+          description: Tag not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:tag:assign
+      x-required-permissions:
+      - crm:tag:assign
+  /v1/crm/parties/{partyId}/interactions:
+    get:
+      tags:
+      - CRM Interactions
+      summary: List party interactions
+      description: Interaction history for a party, newest first, optionally filtered by type
+      operationId: list_2
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - CAMPAIGN_SEND
+          - EMAIL
+          - SMS
+          - CALL
+          - FOLLOW_UP
+          - NOTE
+          - WORKORDER_NOTE
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        '200':
+          description: Interactions returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:interaction:view
+      x-required-permissions:
+      - crm:interaction:view
+    post:
+      tags:
+      - CRM Interactions
+      summary: Record an interaction
+      description: Record a CSR-initiated touch (call, email, note) on a party's timeline
+      operationId: record
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordInteractionRequest'
+        required: true
+      responses:
+        '201':
+          description: Interaction recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerInteractionResponse'
+        '400':
+          description: Validation failed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:interaction:manage
+      x-required-permissions:
+      - crm:interaction:manage
+  /v1/crm/parties/{partyId}/follow-ups:
+    get:
+      tags:
+      - CRM Follow-ups
+      summary: List party follow-ups
+      description: Follow-up tasks raised against a party
+      operationId: listForParty
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - DONE
+          - DISMISSED
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        '200':
+          description: Tasks returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:followup:view
+      x-required-permissions:
+      - crm:followup:view
+    post:
+      tags:
+      - CRM Follow-ups
+      summary: Raise follow-up task
+      description: Raise a follow-up task against a party
+      operationId: create_1
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFollowUpTaskRequest'
+        required: true
+      responses:
+        '201':
+          description: Task raised
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowUpTaskResponse'
+        '404':
+          description: Party not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:followup:manage
+      x-required-permissions:
+      - crm:followup:manage
   /v1/crm/parties/{partyId}/communicationPreferences:
     get:
       tags:
@@ -572,6 +1537,194 @@ paths:
         - crm:contact_preference:edit
       x-required-permissions:
       - crm:contact_preference:edit
+  /v1/crm/inquiries:
+    get:
+      tags:
+      - CRM Inquiries
+      summary: List inquiries
+      description: Inbound inquiries, newest first
+      operationId: list_3
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - NEW
+          - CONTACTED
+          - CONVERTED
+          - CLOSED
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        '200':
+          description: Inquiries returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:inquiry:view
+      x-required-permissions:
+      - crm:inquiry:view
+    post:
+      tags:
+      - CRM Inquiries
+      summary: Capture inquiry
+      description: Record an inquiry taken by phone, walk-in, or referral
+      operationId: capture
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitInquiryRequest'
+        required: true
+      responses:
+        '201':
+          description: Inquiry captured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InquiryResponse'
+        '400':
+          description: Validation failed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:inquiry:manage
+      x-required-permissions:
+      - crm:inquiry:manage
+  /v1/crm/inquiries/{inquiryId}/convert:
+    post:
+      tags:
+      - CRM Inquiries
+      summary: Convert inquiry
+      description: Turn the inquiry into a PROSPECT party, or link it to an existing party when the enquirer is already known
+      operationId: convert
+      parameters:
+      - name: inquiryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: existingPartyId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Inquiry converted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InquiryResponse'
+        '404':
+          description: Inquiry or party not found
+        '422':
+          description: Illegal transition, or an individual inquiry with no party to link
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:inquiry:manage
+      x-required-permissions:
+      - crm:inquiry:manage
+  /v1/crm/follow-ups/{taskId}/dismiss:
+    post:
+      tags:
+      - CRM Follow-ups
+      summary: Dismiss follow-up
+      description: Close a follow-up as deliberately not pursued, recording why
+      operationId: dismiss
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseFollowUpTaskRequest'
+        required: true
+      responses:
+        '200':
+          description: Task dismissed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowUpTaskResponse'
+        '404':
+          description: Task not found
+        '422':
+          description: Task is already closed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:followup:manage
+      x-required-permissions:
+      - crm:followup:manage
+  /v1/crm/follow-ups/{taskId}/complete:
+    post:
+      tags:
+      - CRM Follow-ups
+      summary: Complete follow-up
+      description: Close a follow-up as worked, recording the outcome and any resulting booking
+      operationId: complete
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseFollowUpTaskRequest'
+        required: true
+      responses:
+        '200':
+          description: Task completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowUpTaskResponse'
+        '404':
+          description: Task not found
+        '422':
+          description: Task is already closed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:followup:manage
+      x-required-permissions:
+      - crm:followup:manage
   /v1/crm/commercial-accounts/{partyId}/relationships:
     post:
       tags:
@@ -1094,6 +2247,41 @@ paths:
         - crm:vehicle:view
       x-required-permissions:
       - crm:vehicle:view
+  /v1/crm/suppression/check:
+    get:
+      tags:
+      - CRM Suppression
+      summary: Check address suppression
+      description: Whether a raw address is currently blocked on a channel. Used by send pipelines.
+      operationId: check
+      parameters:
+      - name: channel
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - EMAIL
+          - SMS
+      - name: address
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Result returned
+          content:
+            application/json:
+              schema:
+                type: boolean
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:suppression:view
+      x-required-permissions:
+      - crm:suppression:view
   /v1/crm/snapshot/vehicle/{vehicleId}:
     get:
       tags:
@@ -1240,6 +2428,42 @@ paths:
         - crm:person:read
       x-required-permissions:
       - crm:person:read
+  /v1/crm/parties/{partyId}/marketing-eligibility:
+    get:
+      tags:
+      - CRM Marketing Consent
+      summary: Resolve send eligibility
+      description: Fold the account gate, governing contact consent, and suppression into a single allow/deny decision for one channel
+      operationId: resolveEligibility
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: channel
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - EMAIL
+          - SMS
+      responses:
+        '200':
+          description: Decision returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketingConsentDecision'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:consent:view
+      x-required-permissions:
+      - crm:consent:view
   /v1/crm/parties/{partyId}/contacts:
     get:
       tags:
@@ -1271,6 +2495,169 @@ paths:
         - crm:contact:view
       x-required-permissions:
       - crm:contact:view
+  /v1/crm/parties/{partyId}/consent-history:
+    get:
+      tags:
+      - CRM Marketing Consent
+      summary: Get consent history
+      description: Append-only marketing-consent audit trail for a party, newest first
+      operationId: getConsentHistory
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        '200':
+          description: History returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:consent:view
+      x-required-permissions:
+      - crm:consent:view
+  /v1/crm/inquiries/{inquiryId}:
+    get:
+      tags:
+      - CRM Inquiries
+      summary: Get inquiry
+      description: Retrieve a single inquiry
+      operationId: get_1
+      parameters:
+      - name: inquiryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Inquiry returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InquiryResponse'
+        '404':
+          description: Inquiry not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:inquiry:view
+      x-required-permissions:
+      - crm:inquiry:view
+  /v1/crm/follow-ups:
+    get:
+      tags:
+      - CRM Follow-ups
+      summary: Follow-up queue
+      description: The CSR work queue, ordered by due date. All filters are optional.
+      operationId: queue
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - DONE
+          - DISMISSED
+      - name: assignedTo
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - DECLINED_SERVICE_FOLLOWUP
+          - SERVICE_DUE_REMINDER
+          - FLEET_CHECKIN
+          - CAMPAIGN_RESPONSE
+          - GENERAL
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        '200':
+          description: Queue returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:followup:view
+      x-required-permissions:
+      - crm:followup:view
+  /v1/crm/follow-ups/{taskId}:
+    get:
+      tags:
+      - CRM Follow-ups
+      summary: Get follow-up task
+      description: Retrieve a single follow-up task
+      operationId: get_2
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Task returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowUpTaskResponse'
+        '404':
+          description: Task not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:followup:view
+      x-required-permissions:
+      - crm:followup:view
   /v1/crm/commercial-accounts/{partyId}/contacts:
     get:
       tags:
@@ -1485,6 +2872,92 @@ paths:
         - crm:party:search
       x-required-permissions:
       - crm:party:search
+  /v1/crm/suppression/{suppressionId}:
+    delete:
+      tags:
+      - CRM Suppression
+      summary: Lift a suppression
+      description: Remove a suppression entry
+      operationId: remove
+      parameters:
+      - name: suppressionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Suppression lifted
+        '404':
+          description: Suppression entry not found
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:suppression:manage
+      x-required-permissions:
+      - crm:suppression:manage
+  /v1/crm/segments/{segmentId}/members/{partyId}:
+    delete:
+      tags:
+      - CRM Segments
+      summary: Unpin member
+      description: Remove a party from a static segment
+      operationId: removeMember
+      parameters:
+      - name: segmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Member removed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:segment:manage
+      x-required-permissions:
+      - crm:segment:manage
+  /v1/crm/parties/{partyId}/tags/{tagId}:
+    delete:
+      tags:
+      - CRM Tags
+      summary: Remove tag from party
+      description: 'Detach a tag from a party. Idempotent: removing an absent tag succeeds.'
+      operationId: removeTag
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: tagId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Tag removed
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:tag:assign
+      x-required-permissions:
+      - crm:tag:assign
   /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}:
     delete:
       tags:
@@ -1577,6 +3050,399 @@ components:
       required:
       - firstName
       - lastName
+    UpsertPartyTagRequest:
+      type: object
+      description: Request to create or update a CRM party tag
+      properties:
+        name:
+          type: string
+          description: Unique tag name
+          example: Fleet Prospect
+          maxLength: 100
+          minLength: 0
+        category:
+          type: string
+          description: Optional display grouping
+          example: Lifecycle
+          maxLength: 100
+          minLength: 0
+        color:
+          type: string
+          description: Presentation colour hint
+          example: '#1f7a4d'
+          pattern: ^#[0-9a-fA-F]{6}$
+        active:
+          type: boolean
+          description: Whether the tag can be assigned; defaults to true on create
+          example: true
+      required:
+      - name
+    PartyTagResponse:
+      type: object
+      description: A CRM classification tag that can be attached to parties
+      properties:
+        tagId:
+          type: string
+          format: uuid
+          description: Tag identifier
+          example: 01960003-0000-7000-8000-000000000010
+        name:
+          type: string
+          description: Unique tag name
+          example: Fleet Prospect
+        category:
+          type: string
+          description: Optional display grouping
+          example: Lifecycle
+        color:
+          type: string
+          description: Presentation colour hint
+          example: '#1f7a4d'
+        active:
+          type: boolean
+          description: Whether the tag can still be assigned
+          example: true
+        assignmentCount:
+          type: integer
+          format: int64
+          description: Number of parties currently carrying the tag
+          example: 42
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - active
+      - assignmentCount
+      - name
+      - tagId
+    And:
+      allOf:
+      - $ref: '#/components/schemas/SegmentPredicate'
+      - type: object
+        properties:
+          nodes:
+            type: array
+            description: Child predicates
+            items:
+              oneOf:
+              - $ref: '#/components/schemas/And'
+              - $ref: '#/components/schemas/Comparison'
+              - $ref: '#/components/schemas/Not'
+              - $ref: '#/components/schemas/Or'
+      description: All child predicates must match
+    Comparison:
+      allOf:
+      - $ref: '#/components/schemas/SegmentPredicate'
+      - type: object
+        properties:
+          attribute:
+            type: string
+            description: Attribute wire name
+            example: party.accountTier
+          operator:
+            type: string
+            description: Comparison operator
+            enum:
+            - EQUALS
+            - NOT_EQUALS
+            - IN
+            - NOT_IN
+            - GREATER_THAN
+            - GREATER_THAN_OR_EQUAL
+            - LESS_THAN
+            - LESS_THAN_OR_EQUAL
+            - IS_TRUE
+            - IS_FALSE
+            - IS_NULL
+            - IS_NOT_NULL
+            - CONTAINS_ANY
+            - CONTAINS_ALL
+            example: IN
+          values:
+            type: array
+            description: Operand values; empty for unary operators
+            items:
+              type: string
+      description: A single attribute test
+    Not:
+      allOf:
+      - $ref: '#/components/schemas/SegmentPredicate'
+      - type: object
+        properties:
+          node:
+            description: Predicate to invert
+            oneOf:
+            - $ref: '#/components/schemas/And'
+            - $ref: '#/components/schemas/Comparison'
+            - $ref: '#/components/schemas/Not'
+            - $ref: '#/components/schemas/Or'
+      description: Inverts the child predicate
+    Or:
+      allOf:
+      - $ref: '#/components/schemas/SegmentPredicate'
+      - type: object
+        properties:
+          nodes:
+            description: Child predicates
+      description: At least one child predicate must match
+    SegmentPredicate:
+      description: Boolean predicate tree over the whitelisted segment attribute catalog
+      discriminator:
+        propertyName: nodeType
+      properties:
+        nodeType:
+          type: string
+      required:
+      - nodeType
+    UpsertSegmentRequest:
+      type: object
+      description: Request to create or update an audience segment
+      properties:
+        name:
+          type: string
+          description: Unique segment name
+          example: Fleet accounts on credit hold
+          maxLength: 150
+          minLength: 0
+        description:
+          type: string
+          description: What the segment is for
+          maxLength: 1000
+          minLength: 0
+        audienceType:
+          type: string
+          description: Which kind of party the segment targets
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+          example: COMMERCIAL
+        type:
+          type: string
+          description: STATIC for an explicit list, DYNAMIC for a stored predicate
+          enum:
+          - STATIC
+          - DYNAMIC
+        predicate:
+          description: Predicate tree; required for DYNAMIC segments and rejected for STATIC ones
+          oneOf:
+          - $ref: '#/components/schemas/And'
+          - $ref: '#/components/schemas/Comparison'
+          - $ref: '#/components/schemas/Not'
+          - $ref: '#/components/schemas/Or'
+        active:
+          type: boolean
+          description: Whether the segment can be bound to a campaign; defaults to true
+      required:
+      - audienceType
+      - name
+      - type
+    SegmentResponse:
+      type: object
+      description: A saved audience segment
+      properties:
+        segmentId:
+          type: string
+          format: uuid
+          description: Segment identifier
+        name:
+          type: string
+          description: Segment name
+        description:
+          type: string
+          description: What the segment is for
+        audienceType:
+          type: string
+          description: Targeted party kind
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+          example: COMMERCIAL
+        type:
+          type: string
+          description: How membership is determined
+          enum:
+          - STATIC
+          - DYNAMIC
+          example: DYNAMIC
+        predicate:
+          description: Predicate tree for DYNAMIC segments
+          oneOf:
+          - $ref: '#/components/schemas/And'
+          - $ref: '#/components/schemas/Comparison'
+          - $ref: '#/components/schemas/Not'
+          - $ref: '#/components/schemas/Or'
+        active:
+          type: boolean
+          description: Whether the segment can be bound to a campaign
+        memberCount:
+          type: integer
+          format: int64
+          description: Pinned member count for STATIC segments; null for DYNAMIC
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+      - active
+      - audienceType
+      - name
+      - segmentId
+      - type
+    UpdateMarketingConsentRequest:
+      type: object
+      description: Request to update per-channel marketing consent for a party
+      properties:
+        marketingEmailConsent:
+          type: string
+          description: New marketing consent for email
+          enum:
+          - OPT_IN
+          - OPT_OUT
+          - UNSET
+          example: OPT_IN
+        marketingSmsConsent:
+          type: string
+          description: New marketing consent for SMS
+          enum:
+          - OPT_IN
+          - OPT_OUT
+          - UNSET
+          example: OPT_OUT
+        optOutReason:
+          type: string
+          description: Reason recorded when a channel moves to OPT_OUT
+          enum:
+          - NOT_INTERESTED
+          - TOO_FREQUENT
+          - NEVER_SIGNED_UP
+          - CONTENT_NOT_RELEVANT
+          - LEGAL_DNC
+          - OTHER
+          example: TOO_FREQUENT
+        source:
+          type: string
+          description: Where the change originated; defaults to CSR
+          enum:
+          - CSR
+          - SELF_SERVICE
+          - UNSUBSCRIBE_LINK
+          - IMPORT
+          - API
+          - SYSTEM
+        quietHoursStart:
+          type: string
+          description: Start of the local-time window during which marketing sends are held
+          example: 1260
+        quietHoursEnd:
+          type: string
+          description: End of the local-time window during which marketing sends are held
+          example: 08:00
+        maxMarketingSendsPerMonth:
+          type: integer
+          format: int32
+          description: Cadence cap on marketing sends per calendar month
+          example: 4
+          maximum: 365
+          minimum: 1
+    MarketingConsentDecision:
+      type: object
+      description: Marketing send eligibility decision for a party and channel
+      properties:
+        partyId:
+          type: string
+          format: uuid
+          description: Party the decision is about
+        channel:
+          type: string
+          description: Channel evaluated
+          enum:
+          - EMAIL
+          - SMS
+          example: EMAIL
+        allowed:
+          type: boolean
+          description: Whether a marketing send is permitted
+          example: false
+        reason:
+          type: string
+          description: Machine-readable decision reason
+          enum:
+          - OPT_IN
+          - ACCOUNT_OPT_OUT
+          - CONSENT_OPT_OUT
+          - CONSENT_UNSET
+          - NO_PRIMARY_CONTACT
+          - SUPPRESSED
+          - PARTY_NOT_FOUND
+          example: ACCOUNT_OPT_OUT
+        governingPartyId:
+          type: string
+          format: uuid
+          description: Party whose personal consent governed the decision — the primary business contact for a commercial account, the party itself for an individual
+      required:
+      - allowed
+      - channel
+      - partyId
+      - reason
+    MarketingConsentSummaryResponse:
+      type: object
+      description: Per-channel marketing consent and suppression state for a party
+      properties:
+        partyId:
+          type: string
+          format: uuid
+          description: Party identifier
+        marketingEmailConsent:
+          type: string
+          description: Marketing consent for email
+          enum:
+          - OPT_IN
+          - OPT_OUT
+          - UNSET
+          example: OPT_IN
+        marketingSmsConsent:
+          type: string
+          description: Marketing consent for SMS
+          enum:
+          - OPT_IN
+          - OPT_OUT
+          - UNSET
+          example: UNSET
+        optOutReason:
+          type: string
+          description: Reason marketing consent was last withdrawn
+        optOutAt:
+          type: string
+          format: date-time
+          description: When marketing consent was last withdrawn
+        accountMarketingOptOut:
+          type: boolean
+          description: Account-level hard gate; only meaningful for commercial parties, null for individuals
+        quietHoursStart:
+          type: string
+          description: Start of the quiet-hours window
+        quietHoursEnd:
+          type: string
+          description: End of the quiet-hours window
+        maxMarketingSendsPerMonth:
+          type: integer
+          format: int32
+          description: Cadence cap on marketing sends per month
+        emailEligibility:
+          $ref: '#/components/schemas/MarketingConsentDecision'
+        smsEligibility:
+          $ref: '#/components/schemas/MarketingConsentDecision'
+      required:
+      - emailEligibility
+      - marketingEmailConsent
+      - marketingSmsConsent
+      - partyId
+      - smsEligibility
     RoleAssignment:
       type: object
       description: Single role assignment detail
@@ -1638,6 +3504,159 @@ components:
       - contactId
       - partyId
       - status
+    InquiryResponse:
+      type: object
+      description: A captured inbound inquiry
+      properties:
+        inquiryId:
+          type: string
+          format: uuid
+          description: Inquiry identifier
+        channel:
+          type: string
+          description: How it arrived
+          enum:
+          - WEB_FORM
+          - PHONE
+          - WALK_IN
+          - EMAIL
+          - REFERRAL
+          - CAMPAIGN
+        audienceType:
+          type: string
+          description: Fleet or individual
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+        contactName:
+          type: string
+          description: Who is asking
+        organizationName:
+          type: string
+          description: Organization name
+        email:
+          type: string
+          description: Contact email
+        phone:
+          type: string
+          description: Contact phone
+        vehicleOfInterest:
+          type: string
+          description: Vehicle of interest
+        serviceOfInterest:
+          type: string
+          description: Service of interest
+        message:
+          type: string
+          description: Free-text message
+        campaignCode:
+          type: string
+          description: Attributed campaign
+        status:
+          type: string
+          description: Inquiry state
+          enum:
+          - NEW
+          - CONTACTED
+          - CONVERTED
+          - CLOSED
+        partyId:
+          type: string
+          format: uuid
+          description: Party it converted into
+        assignedTo:
+          type: string
+          description: Owning CSR
+        resolutionNote:
+          type: string
+          description: How it was resolved
+        createdAt:
+          type: string
+          format: date-time
+          description: Capture timestamp
+      required:
+      - audienceType
+      - channel
+      - contactName
+      - createdAt
+      - inquiryId
+      - status
+    FollowUpTaskResponse:
+      type: object
+      description: A customer follow-up task
+      properties:
+        taskId:
+          type: string
+          format: uuid
+          description: Task identifier
+        partyId:
+          type: string
+          format: uuid
+          description: Party the follow-up concerns
+        vehicleId:
+          type: string
+          format: uuid
+          description: Vehicle the follow-up concerns
+        type:
+          type: string
+          description: Why the follow-up exists
+          enum:
+          - DECLINED_SERVICE_FOLLOWUP
+          - SERVICE_DUE_REMINDER
+          - FLEET_CHECKIN
+          - CAMPAIGN_RESPONSE
+          - GENERAL
+          example: DECLINED_SERVICE_FOLLOWUP
+        dueDate:
+          type: string
+          format: date
+          description: When it should be worked by
+        assignedTo:
+          type: string
+          description: Owning CSR; null means unassigned
+        status:
+          type: string
+          description: Task state
+          enum:
+          - OPEN
+          - DONE
+          - DISMISSED
+        sourceWorkorderId:
+          type: string
+          description: Workorder it originated from
+        reason:
+          type: string
+          description: Context for whoever works it
+        outcome:
+          type: string
+          description: What happened when it was worked
+        notes:
+          type: string
+          description: Free-text notes
+        bookedWorkorderId:
+          type: string
+          format: uuid
+          description: Workorder booked from the hand-off
+        bookedAppointmentId:
+          type: string
+          format: uuid
+          description: Appointment booked from the hand-off
+        closedAt:
+          type: string
+          format: date-time
+          description: When the task was closed
+        closedBy:
+          type: string
+          description: Who closed it
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+      required:
+      - partyId
+      - status
+      - taskId
+      - type
     UpsertBillingRulesRequest:
       type: object
       description: Request to upsert billing rules for a commercial party
@@ -1793,6 +3812,12 @@ components:
           example: SUMMER25
           maxLength: 100
           minLength: 0
+        campaignCode:
+          type: string
+          description: Campaign code that drove the redemption, when the offer was reached through a campaign
+          example: SPRING-FLEET-2026
+          maxLength: 100
+          minLength: 0
         recordedOverLimit:
           type: boolean
           description: Whether the redemption is being recorded over the configured usage limit
@@ -1850,6 +3875,10 @@ components:
           type: string
           description: Promotion code that was redeemed
           example: SUMMER25
+        campaignCode:
+          type: string
+          description: Campaign code the redemption is attributed to, if any
+          example: SPRING-FLEET-2026
         recordedBy:
           type: string
           description: Identifier of the actor who recorded the redemption
@@ -2014,6 +4043,256 @@ components:
       required:
       - rowIndex
       - success
+    AddSuppressionRequest:
+      type: object
+      description: Request to hard-block an address from marketing
+      properties:
+        channel:
+          type: string
+          description: Channel the address belongs to
+          enum:
+          - EMAIL
+          - SMS
+          example: EMAIL
+        address:
+          type: string
+          description: Raw address to suppress; stored only as a normalized hash plus a masked hint
+          example: jane@example.com
+          maxLength: 320
+          minLength: 0
+        partyId:
+          type: string
+          format: uuid
+          description: Party the address belonged to, when known
+        reason:
+          type: string
+          description: Why the address is blocked
+          enum:
+          - HARD_BOUNCE
+          - SPAM_COMPLAINT
+          - LEGAL_DNC
+          - MANUAL
+          - UNSUBSCRIBE_LINK
+          example: HARD_BOUNCE
+        source:
+          type: string
+          description: Where the block originated; defaults to CSR
+          enum:
+          - CSR
+          - SELF_SERVICE
+          - UNSUBSCRIBE_LINK
+          - IMPORT
+          - API
+          - SYSTEM
+      required:
+      - address
+      - channel
+      - reason
+    SuppressionEntryResponse:
+      type: object
+      description: A hard address-level marketing block
+      properties:
+        suppressionId:
+          type: string
+          format: uuid
+          description: Suppression identifier
+        channel:
+          type: string
+          description: Channel the block applies to
+          enum:
+          - EMAIL
+          - SMS
+          example: EMAIL
+        addressHint:
+          type: string
+          description: Masked address; the raw value is never stored or returned
+          example: j***@example.com
+        partyId:
+          type: string
+          format: uuid
+          description: Party the address belonged to when blocked
+        reason:
+          type: string
+          description: Why the address is blocked
+          example: HARD_BOUNCE
+        source:
+          type: string
+          description: Where the block originated
+          example: SYSTEM
+        createdBy:
+          type: string
+          description: Actor that created the block
+        createdAt:
+          type: string
+          format: date-time
+          description: When the block was created
+      required:
+      - channel
+      - createdAt
+      - reason
+      - source
+      - suppressionId
+    SegmentResolutionResponse:
+      type: object
+      description: Result of resolving a segment to its matching parties
+      properties:
+        segmentId:
+          type: string
+          format: uuid
+          description: Segment resolved
+        audienceType:
+          type: string
+          description: Targeted party kind
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+        totalMatched:
+          type: integer
+          format: int64
+          description: Parties matching the definition
+          example: 412
+        eligibleCount:
+          type: integer
+          format: int64
+          description: Of those, how many may actually be sent to on the requested channel after consent, account gate, and suppression; null when no channel was requested
+          example: 287
+        channel:
+          type: string
+          description: Channel the eligibility count was computed for
+          enum:
+          - EMAIL
+          - SMS
+        truncated:
+          type: boolean
+          description: Whether the candidate scan hit its ceiling and the result is partial
+          example: false
+        sample:
+          type: array
+          description: A masked sample of matching parties
+          items:
+            $ref: '#/components/schemas/SegmentSampleEntry'
+      required:
+      - audienceType
+      - sample
+      - segmentId
+      - totalMatched
+      - truncated
+    SegmentSampleEntry:
+      type: object
+      description: One masked entry in a segment resolution sample
+      properties:
+        partyId:
+          type: string
+          format: uuid
+          description: Party identifier
+        maskedLabel:
+          type: string
+          description: Masked display label
+          example: Acme T***
+      required:
+      - partyId
+    SegmentMembersRequest:
+      type: object
+      description: Request to pin parties into a static segment
+      properties:
+        partyIds:
+          type: array
+          description: Parties to add; already-present parties are ignored
+          items:
+            type: string
+            format: uuid
+          maxItems: 5000
+          minItems: 0
+      required:
+      - partyIds
+    SubmitInquiryRequest:
+      type: object
+      description: Request to capture an inbound service or fleet-quote inquiry
+      properties:
+        channel:
+          type: string
+          description: How the inquiry arrived
+          enum:
+          - WEB_FORM
+          - PHONE
+          - WALK_IN
+          - EMAIL
+          - REFERRAL
+          - CAMPAIGN
+          example: WEB_FORM
+        audienceType:
+          type: string
+          description: Whether this is a fleet or individual inquiry
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+          example: INDIVIDUAL
+        contactName:
+          type: string
+          description: Who is asking
+          example: Jane Doe
+          maxLength: 200
+          minLength: 0
+        organizationName:
+          type: string
+          description: Organization name, for a fleet inquiry
+          maxLength: 200
+          minLength: 0
+        email:
+          type: string
+          format: email
+          description: Contact email
+          example: jane@example.com
+          maxLength: 320
+          minLength: 0
+        phone:
+          type: string
+          description: Contact phone
+          example: +1-555-0100
+          maxLength: 40
+          minLength: 0
+        vehicleOfInterest:
+          type: string
+          description: Vehicle the inquiry concerns
+          example: 2019 Ford Transit 250
+          maxLength: 300
+          minLength: 0
+        serviceOfInterest:
+          type: string
+          description: Service the inquiry concerns
+          example: Fleet tire rotation
+          maxLength: 300
+          minLength: 0
+        message:
+          type: string
+          description: Free-text message
+          maxLength: 2000
+          minLength: 0
+        campaignCode:
+          type: string
+          description: Campaign that drove the inquiry
+          example: SPRING-FLEET-2026
+          maxLength: 100
+          minLength: 0
+      required:
+      - audienceType
+      - channel
+      - contactName
+    InquiryAcceptedResponse:
+      type: object
+      description: Acknowledgement of a publicly submitted inquiry
+      properties:
+        inquiryId:
+          type: string
+          format: uuid
+          description: Reference for the submitted inquiry
+        status:
+          type: string
+          description: Always NEW
+          example: NEW
+      required:
+      - inquiryId
+      - status
     CreatePersonRequest:
       type: object
       description: Request to create an individual person record
@@ -2135,6 +4414,245 @@ components:
       - lastName
       - personId
       - preferredContactMethod
+    AssignPartyTagRequest:
+      type: object
+      description: Request to attach a tag to a party
+      properties:
+        tagId:
+          type: string
+          format: uuid
+          description: Tag to attach
+        source:
+          type: string
+          description: How the assignment was made; defaults to MANUAL
+          enum:
+          - MANUAL
+          - CAMPAIGN
+          - IMPORT
+          - RULE
+      required:
+      - tagId
+    PartyTagAssignmentResponse:
+      type: object
+      description: A tag attached to a party
+      properties:
+        assignmentId:
+          type: string
+          format: uuid
+          description: Assignment identifier
+        partyId:
+          type: string
+          format: uuid
+          description: Party the tag is attached to
+        tagId:
+          type: string
+          format: uuid
+          description: Tag identifier
+        name:
+          type: string
+          description: Tag name at read time
+          example: Fleet Prospect
+        category:
+          type: string
+          description: Optional display grouping
+        source:
+          type: string
+          description: How the assignment was made
+          enum:
+          - MANUAL
+          - CAMPAIGN
+          - IMPORT
+          - RULE
+          example: MANUAL
+        assignedBy:
+          type: string
+          description: Actor that made the assignment
+        assignedAt:
+          type: string
+          format: date-time
+          description: When the tag was attached
+      required:
+      - assignedAt
+      - assignmentId
+      - name
+      - partyId
+      - source
+      - tagId
+    RecordInteractionRequest:
+      type: object
+      description: Request to record a CSR-initiated interaction on a party's timeline
+      properties:
+        type:
+          type: string
+          description: Kind of touch
+          enum:
+          - CAMPAIGN_SEND
+          - EMAIL
+          - SMS
+          - CALL
+          - FOLLOW_UP
+          - NOTE
+          - WORKORDER_NOTE
+          example: CALL
+        contactId:
+          type: string
+          format: uuid
+          description: Contact reached, when the touch targeted one
+        channel:
+          type: string
+          description: Channel used
+          enum:
+          - EMAIL
+          - SMS
+          example: EMAIL
+        direction:
+          type: string
+          description: Who initiated the touch; defaults to OUTBOUND
+          enum:
+          - OUTBOUND
+          - INBOUND
+        subject:
+          type: string
+          description: Short subject line
+          maxLength: 255
+          minLength: 0
+        summary:
+          type: string
+          description: Human summary of the touch
+          maxLength: 1000
+          minLength: 0
+        body:
+          type: string
+          description: Body text
+          maxLength: 4000
+          minLength: 0
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the touch occurred; defaults to now
+      required:
+      - type
+    CustomerInteractionResponse:
+      type: object
+      description: One recorded touch on a party's interaction timeline
+      properties:
+        interactionId:
+          type: string
+          format: uuid
+          description: Interaction identifier
+        partyId:
+          type: string
+          format: uuid
+          description: Party the touch belongs to
+        contactId:
+          type: string
+          format: uuid
+          description: Contact reached, when the touch targeted one
+        type:
+          type: string
+          description: Kind of touch
+          enum:
+          - CAMPAIGN_SEND
+          - EMAIL
+          - SMS
+          - CALL
+          - FOLLOW_UP
+          - NOTE
+          - WORKORDER_NOTE
+          example: CAMPAIGN_SEND
+        channel:
+          type: string
+          description: Channel used
+          enum:
+          - EMAIL
+          - SMS
+          example: EMAIL
+        direction:
+          type: string
+          description: Who initiated the touch
+          enum:
+          - OUTBOUND
+          - INBOUND
+          example: OUTBOUND
+        campaignId:
+          type: string
+          format: uuid
+          description: Campaign the touch belongs to
+        campaignCode:
+          type: string
+          description: Campaign code
+          example: SPRING-FLEET-2026
+        subject:
+          type: string
+          description: Short subject line
+        summary:
+          type: string
+          description: Human summary of the touch
+        body:
+          type: string
+          description: Body text, redacted before it leaves the service
+        actor:
+          type: string
+          description: Actor that recorded the touch
+        sourceWorkorderId:
+          type: string
+          description: Workorder the touch originated from
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the touch occurred
+      required:
+      - direction
+      - interactionId
+      - occurredAt
+      - partyId
+      - type
+    CreateFollowUpTaskRequest:
+      type: object
+      description: Request to raise a follow-up task against a party
+      properties:
+        type:
+          type: string
+          description: Why the follow-up is needed
+          enum:
+          - DECLINED_SERVICE_FOLLOWUP
+          - SERVICE_DUE_REMINDER
+          - FLEET_CHECKIN
+          - CAMPAIGN_RESPONSE
+          - GENERAL
+          example: DECLINED_SERVICE_FOLLOWUP
+        vehicleId:
+          type: string
+          format: uuid
+          description: Vehicle the follow-up concerns, when vehicle-specific
+        dueDate:
+          type: string
+          format: date
+          description: When the follow-up should be worked by
+          example: 2026-08-15
+        assignedTo:
+          type: string
+          description: CSR to own the task; unassigned tasks sit in the shared queue
+          maxLength: 255
+          minLength: 0
+        reason:
+          type: string
+          description: Context for whoever works it
+          example: Declined rear brake pads at 62k service
+          maxLength: 500
+          minLength: 0
+        sourceWorkorderId:
+          type: string
+          description: Workorder the follow-up originated from
+          maxLength: 64
+          minLength: 0
+        notes:
+          type: string
+          description: Free-text notes
+          maxLength: 2000
+          minLength: 0
+      required:
+      - type
     UpsertCommunicationPreferencesRequest:
       type: object
       description: Communication preferences to set
@@ -2217,6 +4735,26 @@ components:
       - operationType
       - partyId
       - status
+    CloseFollowUpTaskRequest:
+      type: object
+      description: Request to complete or dismiss a follow-up task
+      properties:
+        outcome:
+          type: string
+          description: What happened when the follow-up was worked
+          example: Customer booked for 12 Aug
+          maxLength: 500
+          minLength: 0
+        bookedWorkorderId:
+          type: string
+          format: uuid
+          description: Workorder created from the hand-off, when booking followed
+        bookedAppointmentId:
+          type: string
+          format: uuid
+          description: Appointment created from the hand-off, when booking followed
+      required:
+      - outcome
     CreatePartyRelationshipRequest:
       type: object
       description: Request to create a relationship between a commercial account and an individual
@@ -2915,10 +5453,10 @@ components:
         number:
           type: integer
           format: int32
-        sort:
-          $ref: '#/components/schemas/SortObject'
         pageable:
           $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
         first:
           type: boolean
         last:
@@ -2934,8 +5472,6 @@ components:
         offset:
           type: integer
           format: int64
-        sort:
-          $ref: '#/components/schemas/SortObject'
         paged:
           type: boolean
         pageNumber:
@@ -2944,6 +5480,8 @@ components:
         pageSize:
           type: integer
           format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
     SortObject:
@@ -3091,6 +5629,39 @@ components:
       - version
       - vin
       - vinNormalized
+    PagedResponse:
+      type: object
+      description: A page of results
+      properties:
+        items:
+          type: array
+          description: Items on this page
+        page:
+          type: integer
+          format: int32
+          description: Zero-based page index
+          example: 0
+        size:
+          type: integer
+          format: int32
+          description: Requested page size
+          example: 50
+        totalElements:
+          type: integer
+          format: int64
+          description: Total matching items across all pages
+          example: 137
+        totalPages:
+          type: integer
+          format: int32
+          description: Total number of pages
+          example: 3
+      required:
+      - items
+      - page
+      - size
+      - totalElements
+      - totalPages
     AccountSummary:
       type: object
       description: Account summary surfaced in a CRM snapshot
@@ -3230,6 +5801,13 @@ components:
           $ref: '#/components/schemas/BillingPreferences'
         billingRules:
           $ref: '#/components/schemas/BillingRuleRef'
+        marketingConsent:
+          $ref: '#/components/schemas/MarketingConsentSummaryResponse'
+        recentInteractions:
+          type: array
+          description: Most recent touches on the party's interaction timeline
+          items:
+            $ref: '#/components/schemas/CustomerInteractionResponse'
       required:
       - account
       - contacts

@@ -1,5 +1,7 @@
 package com.positivity.customer.internal.entity;
 
+import com.positivity.customer.internal.enums.MarketingConsent;
+import com.positivity.customer.internal.enums.OptOutReason;
 import com.positivity.shared.id.UUIDv7Id;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CollectionTable;
@@ -7,6 +9,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
@@ -16,6 +20,7 @@ import jakarta.persistence.MapKeyColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -100,6 +105,46 @@ public class CommunicationPreference {
             example = "OPT_OUT",
             allowableValues = {"OPT_IN", "OPT_OUT"})
     private String marketingPreference;
+
+    /**
+     * Per-channel marketing consent, distinct from the operational
+     * {@code emailPreference}/{@code smsPreference} above (Story #1138). A party can
+     * want service reminders by SMS while refusing marketing on the same channel, so
+     * the two must never be conflated at send time.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "marketing_email_consent", columnDefinition = "VARCHAR(20)", nullable = false)
+    @Builder.Default
+    @Schema(description = "Marketing consent for email", example = "OPT_IN")
+    private MarketingConsent marketingEmailConsent = MarketingConsent.UNSET;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "marketing_sms_consent", columnDefinition = "VARCHAR(20)", nullable = false)
+    @Builder.Default
+    @Schema(description = "Marketing consent for SMS", example = "OPT_OUT")
+    private MarketingConsent marketingSmsConsent = MarketingConsent.UNSET;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "opt_out_reason", columnDefinition = "VARCHAR(30)")
+    @Schema(description = "Why marketing consent was last withdrawn", example = "TOO_FREQUENT")
+    private OptOutReason optOutReason;
+
+    @Column(name = "opt_out_at")
+    @Schema(description = "When marketing consent was last withdrawn")
+    private Instant optOutAt;
+
+    /** Local-time window during which marketing sends must be held. Both null means no restriction. */
+    @Column(name = "quiet_hours_start")
+    @Schema(description = "Start of the local-time window during which marketing sends are held", example = "21:00")
+    private LocalTime quietHoursStart;
+
+    @Column(name = "quiet_hours_end")
+    @Schema(description = "End of the local-time window during which marketing sends are held", example = "08:00")
+    private LocalTime quietHoursEnd;
+
+    @Column(name = "max_marketing_sends_per_month")
+    @Schema(description = "Cadence cap on marketing sends per calendar month; null means uncapped", example = "4")
+    private Integer maxMarketingSendsPerMonth;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "consent_flag", joinColumns = @JoinColumn(name = "preference_id"))

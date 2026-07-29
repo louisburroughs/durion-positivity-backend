@@ -1,6 +1,8 @@
 package com.positivity.customer.internal.repository;
 
 import com.positivity.customer.internal.entity.CommunicationPreference;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -28,6 +30,16 @@ public interface CommunicationPreferenceRepository extends JpaRepository<Communi
      */
     @NonNull
     Optional<CommunicationPreference> findByPartyId(@NonNull UUID partyId);
+
+    /**
+     * Batch-load preferences for a candidate set — segment resolution evaluates consent for
+     * every candidate party, so a per-party lookup would be one query per row (Story #1137).
+     *
+     * @param partyIds the party UUIDs
+     * @return preferences for the parties that have them
+     */
+    @NonNull
+    List<CommunicationPreference> findByPartyIdIn(@NonNull Collection<UUID> partyIds);
 
     /**
      * Check if communication preferences exist for a party.

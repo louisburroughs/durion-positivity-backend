@@ -383,22 +383,80 @@ paths:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1commercial-accounts~1{partyId}~1relationships~1{relationshipId}
   /v1/crm/commercial-accounts/{partyId}/relationships/{relationshipId}/primary-billing:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1commercial-accounts~1{partyId}~1relationships~1{relationshipId}~1primary-billing
+  /v1/crm/follow-ups:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1follow-ups
+  /v1/crm/follow-ups/{taskId}:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1follow-ups~1{taskId}
+  /v1/crm/follow-ups/{taskId}/assignee:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1follow-ups~1{taskId}~1assignee
+  /v1/crm/follow-ups/{taskId}/complete:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1follow-ups~1{taskId}~1complete
+  /v1/crm/follow-ups/{taskId}/dismiss:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1follow-ups~1{taskId}~1dismiss
+  /v1/crm/inquiries:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1inquiries
+  /v1/crm/inquiries/{inquiryId}:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1inquiries~1{inquiryId}
+  /v1/crm/inquiries/{inquiryId}/assignee:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1inquiries~1{inquiryId}~1assignee
+  /v1/crm/inquiries/{inquiryId}/convert:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1inquiries~1{inquiryId}~1convert
+  /v1/crm/inquiries/{inquiryId}/status:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1inquiries~1{inquiryId}~1status
   /v1/crm/parties/{partyId}/communicationPreferences:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1communicationPreferences
+  /v1/crm/parties/{partyId}/consent-history:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1consent-history
   /v1/crm/parties/{partyId}/contacts:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1contacts
   /v1/crm/parties/{partyId}/contacts/{contactId}/roles:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1contacts~1{contactId}~1roles
+  /v1/crm/parties/{partyId}/follow-ups:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1follow-ups
+  /v1/crm/parties/{partyId}/interactions:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1interactions
+  /v1/crm/parties/{partyId}/marketing-consent:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1marketing-consent
+  /v1/crm/parties/{partyId}/marketing-consent/account-gate:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1marketing-consent~1account-gate
+  /v1/crm/parties/{partyId}/marketing-eligibility:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1marketing-eligibility
+  /v1/crm/parties/{partyId}/tags:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1tags
+  /v1/crm/parties/{partyId}/tags/{tagId}:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1parties~1{partyId}~1tags~1{tagId}
   /v1/crm/persons:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1persons
   /v1/crm/persons/{personId}:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1persons~1{personId}
+  /v1/crm/public/inquiries:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1public~1inquiries
+  /v1/crm/segments:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1segments
+  /v1/crm/segments/{segmentId}:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1segments~1{segmentId}
+  /v1/crm/segments/{segmentId}/members:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1segments~1{segmentId}~1members
+  /v1/crm/segments/{segmentId}/members/{partyId}:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1segments~1{segmentId}~1members~1{partyId}
+  /v1/crm/segments/{segmentId}/resolve:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1segments~1{segmentId}~1resolve
   /v1/crm/snapshot/party/{partyId}:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1snapshot~1party~1{partyId}
   /v1/crm/snapshot/party/{partyId}/billing-rules:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1snapshot~1party~1{partyId}~1billing-rules
   /v1/crm/snapshot/vehicle/{vehicleId}:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1snapshot~1vehicle~1{vehicleId}
+  /v1/crm/suppression:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1suppression
+  /v1/crm/suppression/check:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1suppression~1check
+  /v1/crm/suppression/{suppressionId}:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1suppression~1{suppressionId}
+  /v1/crm/tags:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1tags
+  /v1/crm/tags/{tagId}:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1tags~1{tagId}
   /v1/crm/{customerId}/vehicles:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1{customerId}~1vehicles
   /v1/crm/{customerId}/vehicles/{vehicleId}:
@@ -769,6 +827,32 @@ paths:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1travel-buffer-policies
   /v1/travel-buffer-policies/{id}:
     $ref: ../../pos-location/openapi.yaml#/paths/~1v1~1travel-buffer-policies~1{id}
+  /v1/marketing/campaigns:
+    $ref: ../../pos-marketing/openapi.yaml#/paths/~1v1~1marketing~1campaigns
+  /v1/marketing/campaigns/{campaignId}:
+    $ref: ../../pos-marketing/openapi.yaml#/paths/~1v1~1marketing~1campaigns~1{campaignId}
+  /v1/marketing/campaigns/{campaignId}/audience-preview:
+    $ref: ../../pos-marketing/openapi.yaml#/paths/~1v1~1marketing~1campaigns~1{campaignId}~1audience-preview
+  /v1/marketing/campaigns/{campaignId}/cancel:
+    $ref: ../../pos-marketing/openapi.yaml#/paths/~1v1~1marketing~1campaigns~1{campaignId}~1cancel
+  /v1/marketing/campaigns/{campaignId}/pause:
+    $ref: ../../pos-marketing/openapi.yaml#/paths/~1v1~1marketing~1campaigns~1{campaignId}~1pause
+  /v1/marketing/campaigns/{campaignId}/resume:
+    $ref: ../../pos-marketing/openapi.yaml#/paths/~1v1~1marketing~1campaigns~1{campaignId}~1resume
+  /v1/marketing/campaigns/{campaignId}/schedule:
+    $ref: ../../pos-marketing/openapi.yaml#/paths/~1v1~1marketing~1campaigns~1{campaignId}~1schedule
+  /v1/marketing/campaigns/{campaignId}/send:
+    $ref: ../../pos-marketing/openapi.yaml#/paths/~1v1~1marketing~1campaigns~1{campaignId}~1send
+  /v1/marketing/campaigns/{campaignId}/sends:
+    $ref: ../../pos-marketing/openapi.yaml#/paths/~1v1~1marketing~1campaigns~1{campaignId}~1sends
+  /v1/marketing/campaigns/{campaignId}/stats:
+    $ref: ../../pos-marketing/openapi.yaml#/paths/~1v1~1marketing~1campaigns~1{campaignId}~1stats
+  /v1/marketing/programs/{campaignProgramId}/stats:
+    $ref: ../../pos-marketing/openapi.yaml#/paths/~1v1~1marketing~1programs~1{campaignProgramId}~1stats
+  /v1/marketing/templates:
+    $ref: ../../pos-marketing/openapi.yaml#/paths/~1v1~1marketing~1templates
+  /v1/marketing/templates/{templateId}:
+    $ref: ../../pos-marketing/openapi.yaml#/paths/~1v1~1marketing~1templates~1{templateId}
   /v1/llm-apis:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1llm-apis
   /v1/llm-apis/{id}:
@@ -1466,6 +1550,8 @@ tags:
   description: Operations served by pos-invoice
 - name: pos-location
   description: Operations served by pos-location
+- name: pos-marketing
+  description: Operations served by pos-marketing
 - name: pos-mcp-server
   description: Operations served by pos-mcp-server
 - name: pos-order
@@ -1503,6 +1589,7 @@ x-aggregated-modules:
 - pos-inventory
 - pos-invoice
 - pos-location
+- pos-marketing
 - pos-mcp-server
 - pos-order
 - pos-people-contact

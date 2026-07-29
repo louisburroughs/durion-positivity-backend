@@ -2,6 +2,7 @@ package com.positivity.customer.internal.entity;
 
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.AccountTier;
+import com.positivity.customer.internal.enums.LifecycleStage;
 import com.positivity.shared.id.UUIDv7Id;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CollectionTable;
@@ -9,6 +10,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Inheritance;
@@ -64,6 +67,19 @@ public abstract class AbstractParty implements Party {
     @Column(nullable = false)
     @Schema(description = "Account tier level", example = "STANDARD")
     private AccountTier tier = AccountTier.STANDARD;
+
+    /**
+     * How far this party has progressed toward being a real customer (Story #1154).
+     *
+     * <p>Distinct from {@link #status}, which says whether the record is usable. A PROSPECT is
+     * an active, valid record that has simply never bought anything; counting it as a customer
+     * inflates every retention and churn figure. Parties created through the normal
+     * create-account path are ACTIVE — only inquiry conversion starts one as a PROSPECT.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "lifecycle_stage", columnDefinition = "VARCHAR(20)", nullable = false)
+    @Schema(description = "Customer lifecycle stage", example = "ACTIVE")
+    private LifecycleStage lifecycleStage = LifecycleStage.ACTIVE;
 
     @Schema(description = "When the tier was last assigned or updated")
     private Instant tierAssignedAt;

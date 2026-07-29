@@ -66,6 +66,14 @@ public class RecordRedemptionRequest {
     private String promotionCode;
 
     @Schema(
+            description = "Campaign code that drove the redemption, when the offer was reached through a campaign",
+            example = "SPRING-FLEET-2026",
+            requiredMode = NOT_REQUIRED)
+    @Nullable
+    @Size(max = 100)
+    private String campaignCode;
+
+    @Schema(
             description = "Whether the redemption is being recorded over the configured usage limit",
             example = "false",
             requiredMode = NOT_REQUIRED)

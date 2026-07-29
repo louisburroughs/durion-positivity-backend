@@ -133,6 +133,151 @@ public final class EventTypes {
                         .apiVersion("1")
                         .build(),
 
+                // CrmTagController - 7 events (Story #1136)
+                EventTypeRegistration.fastRead("CRM_TAG_LIST", "List the CRM tag catalog")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("CRM_TAG_GET", "Retrieve a single CRM tag")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_TAG_CREATE", "Create a CRM tag")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_TAG_UPDATE", "Update a CRM tag")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_TAG_DELETE", "Delete a CRM tag and its assignments")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("CRM_PARTY_TAG_LIST", "List tags attached to a party")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_PARTY_TAG_ASSIGN", "Attach a tag to a party")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_PARTY_TAG_REMOVE", "Detach a tag from a party")
+                        .apiVersion("1")
+                        .build(),
+
+                // CrmConsentController - 5 events (Stories #1138/#1139)
+                EventTypeRegistration.fastRead(
+                                "CRM_MARKETING_CONSENT_GET", "Retrieve per-channel marketing consent for a party")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write(
+                                "CRM_MARKETING_CONSENT_UPDATE", "Update per-channel marketing consent for a party")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write(
+                                "CRM_MARKETING_ACCOUNT_GATE_SET",
+                                "Set or clear the commercial-account marketing master gate")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "CRM_CONSENT_HISTORY_GET", "Retrieve the marketing-consent audit trail for a party")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "CRM_MARKETING_ELIGIBILITY_GET",
+                                "Resolve marketing send eligibility for a party and channel")
+                        .apiVersion("1")
+                        .build(),
+
+                // CrmSuppressionController - 4 events (Story #1140)
+                EventTypeRegistration.fastRead("CRM_SUPPRESSION_LIST", "List marketing suppression entries")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("CRM_SUPPRESSION_CHECK", "Check whether an address is suppressed")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_SUPPRESSION_ADD", "Hard-block an address from marketing")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_SUPPRESSION_REMOVE", "Lift a marketing suppression entry")
+                        .apiVersion("1")
+                        .build(),
+
+                // CrmInteractionController - 2 events (Story #1141)
+                EventTypeRegistration.fastRead("CRM_INTERACTION_LIST", "List a party's interaction history")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_INTERACTION_RECORD", "Record a CSR-initiated party interaction")
+                        .apiVersion("1")
+                        .build(),
+
+                // CrmSegmentController - 8 events (Story #1137)
+                EventTypeRegistration.fastRead("CRM_SEGMENT_LIST", "List saved audience segments")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("CRM_SEGMENT_GET", "Retrieve a segment definition")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_SEGMENT_CREATE", "Create an audience segment")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_SEGMENT_UPDATE", "Update an audience segment")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_SEGMENT_DELETE", "Delete an audience segment")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_SEGMENT_MEMBERS_ADD", "Pin parties into a static segment")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_SEGMENT_MEMBER_REMOVE", "Unpin a party from a static segment")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.search("CRM_SEGMENT_RESOLVE", "Resolve a segment to counts and a masked sample")
+                        .apiVersion("1")
+                        .build(),
+
+                // CrmFollowUpController - 7 events (Story #1153)
+                EventTypeRegistration.fastRead("CRM_FOLLOWUP_QUEUE", "Retrieve the CSR follow-up work queue")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("CRM_FOLLOWUP_GET", "Retrieve a follow-up task")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("CRM_FOLLOWUP_LIST", "List follow-up tasks for a party")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_FOLLOWUP_CREATE", "Raise a follow-up task")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_FOLLOWUP_ASSIGN", "Assign a follow-up task")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_FOLLOWUP_COMPLETE", "Complete a follow-up task with an outcome")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_FOLLOWUP_DISMISS", "Dismiss a follow-up task")
+                        .apiVersion("1")
+                        .build(),
+
+                // CrmInquiryController / PublicInquiryController - 7 events (Story #1154)
+                EventTypeRegistration.fastRead("CRM_INQUIRY_LIST", "List inbound inquiries")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("CRM_INQUIRY_GET", "Retrieve an inquiry")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_INQUIRY_CAPTURE", "Capture an inquiry taken by staff")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_INQUIRY_ASSIGN", "Assign an inquiry")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_INQUIRY_STATUS_UPDATE", "Update an inquiry's status")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write("CRM_INQUIRY_CONVERT", "Convert an inquiry into a party")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write(
+                                "CRM_PUBLIC_INQUIRY_SUBMIT", "Capture an inquiry from the public unauthenticated form")
+                        .apiVersion("1")
+                        .build(),
+
                 // WorkorderEventHandler - 3 inbound event processing entries (Story #92)
                 EventTypeRegistration.write(
                                 "CUSTOMER_EVENT_VEHICLE_UPDATED_PROCESSED",

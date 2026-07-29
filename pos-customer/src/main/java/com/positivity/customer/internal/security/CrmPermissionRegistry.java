@@ -63,6 +63,41 @@ public class CrmPermissionRegistry {
     public static final String VEHICLE_PREFERENCE_VIEW = "crm:vehicle_preference:view";
     public static final String VEHICLE_PREFERENCE_EDIT = "crm:vehicle_preference:edit";
 
+    // Party Tags (Story #1136)
+    public static final String TAG_VIEW = "crm:tag:view";
+    public static final String TAG_MANAGE = "crm:tag:manage";
+    public static final String TAG_ASSIGN = "crm:tag:assign";
+
+    // Segments (Story #1137)
+    public static final String SEGMENT_VIEW = "crm:segment:view";
+    public static final String SEGMENT_MANAGE = "crm:segment:manage";
+    public static final String SEGMENT_RESOLVE = "crm:segment:resolve";
+
+    // Marketing Consent (Story #1138, #1139)
+    public static final String CONSENT_VIEW = "crm:consent:view";
+    public static final String CONSENT_MANAGE = "crm:consent:manage";
+
+    // Suppression (Story #1140)
+    public static final String SUPPRESSION_VIEW = "crm:suppression:view";
+    public static final String SUPPRESSION_MANAGE = "crm:suppression:manage";
+
+    // Interaction History (Story #1141)
+    public static final String INTERACTION_VIEW = "crm:interaction:view";
+
+    /**
+     * Separate from {@link #INTERACTION_VIEW}: the timeline is evidence of what was said to a
+     * customer, so reading it must not carry the right to write into it.
+     */
+    public static final String INTERACTION_MANAGE = "crm:interaction:manage";
+
+    // Follow-up Tasks (Story #1153)
+    public static final String FOLLOWUP_VIEW = "crm:followup:view";
+    public static final String FOLLOWUP_MANAGE = "crm:followup:manage";
+
+    // Inquiries (Story #1154)
+    public static final String INQUIRY_VIEW = "crm:inquiry:view";
+    public static final String INQUIRY_MANAGE = "crm:inquiry:manage";
+
     // Integration Monitoring (Read-Only)
     public static final String PROCESSING_LOG_VIEW = "crm:processing_log:view";
     public static final String SUSPENSE_VIEW = "crm:suspense:view";
@@ -153,6 +188,72 @@ public class CrmPermissionRegistry {
                         VEHICLE_PREFERENCE_EDIT,
                         "Update vehicle care preferences with audit history and optimistic locking",
                         "MEDIUM"),
+
+                // Party Tags (3 permissions, Story #1136)
+                permission(TAG_VIEW, "View the CRM tag catalog and tags attached to parties", "LOW", "Issue #1136"),
+                permission(TAG_MANAGE, "Create, edit, retire, or delete CRM tags", "MEDIUM", "Issue #1136"),
+                permission(TAG_ASSIGN, "Attach or detach tags on a party", "MEDIUM", "Issue #1136"),
+
+                // Segments (3 permissions, Story #1137)
+                permission(SEGMENT_VIEW, "View saved audience segments and their definitions", "LOW", "Issue #1137"),
+                permission(
+                        SEGMENT_MANAGE,
+                        "Create, edit, or delete audience segments and their membership",
+                        "MEDIUM",
+                        "Issue #1137"),
+                permission(
+                        SEGMENT_RESOLVE,
+                        "Resolve a segment to its matching parties (returns counts and a masked sample)",
+                        "HIGH",
+                        "Issue #1137"),
+
+                // Marketing Consent (2 permissions, Stories #1138/#1139)
+                permission(
+                        CONSENT_VIEW,
+                        "View per-channel marketing consent and the consent-change audit trail",
+                        "MEDIUM",
+                        "Issue #1138"),
+                permission(
+                        CONSENT_MANAGE,
+                        "Set per-channel marketing consent, opt-out reasons, and the account master gate",
+                        "HIGH",
+                        "Issue #1138"),
+
+                // Suppression (2 permissions, Story #1140)
+                permission(SUPPRESSION_VIEW, "View the marketing suppression list", "MEDIUM", "Issue #1140"),
+                permission(
+                        SUPPRESSION_MANAGE,
+                        "Add or remove hard address-level suppression entries",
+                        "HIGH",
+                        "Issue #1140"),
+
+                // Interaction History (2 permissions, Story #1141)
+                permission(
+                        INTERACTION_VIEW,
+                        "View a party's interaction and touch history (campaign sends, calls, notes)",
+                        "MEDIUM",
+                        "Issue #1141"),
+                permission(
+                        INTERACTION_MANAGE,
+                        "Record a CSR-initiated interaction on a party's timeline",
+                        "MEDIUM",
+                        "Issue #1141"),
+
+                // Follow-up Tasks (2 permissions, Story #1153)
+                permission(FOLLOWUP_VIEW, "View follow-up tasks and the CSR work queue", "LOW", "Issue #1153"),
+                permission(
+                        FOLLOWUP_MANAGE,
+                        "Raise, assign, complete, or dismiss follow-up tasks",
+                        "MEDIUM",
+                        "Issue #1153"),
+
+                // Inquiries (2 permissions, Story #1154)
+                permission(INQUIRY_VIEW, "View inbound service and fleet-quote inquiries", "LOW", "Issue #1154"),
+                permission(
+                        INQUIRY_MANAGE,
+                        "Capture, assign, triage, and convert inbound inquiries into parties",
+                        "MEDIUM",
+                        "Issue #1154"),
 
                 // Integration Monitoring (3 permissions, read-only)
                 permission(

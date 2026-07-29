@@ -1,5 +1,9 @@
 package com.positivity.customer.internal.config;
 
+import com.positivity.customer.internal.exception.CrmDuplicateResourceException;
+import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
+import com.positivity.customer.internal.exception.CrmTooManyRequestsException;
+import com.positivity.customer.internal.exception.CrmUnprocessableEntityException;
 import com.positivity.customer.internal.exception.DuplicateRedemptionException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -68,6 +72,84 @@ public class CrmExceptionHandler {
                         "DUPLICATE_REDEMPTION",
                         ex.getMessage(),
                         HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    @ExceptionHandler(CrmResourceNotFoundException.class)
+    public ResponseEntity<ApiError> handleNotFound(
+            CrmResourceNotFoundException ex, HttpServletRequest request, HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.warn("Resource not found on {}: {}", path, ex.getMessage());
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiError.of(
+                        "RESOURCE_NOT_FOUND",
+                        ex.getMessage(),
+                        HttpStatus.NOT_FOUND.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    @ExceptionHandler(CrmDuplicateResourceException.class)
+    public ResponseEntity<ApiError> handleDuplicateResource(
+            CrmDuplicateResourceException ex, HttpServletRequest request, HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.warn("Duplicate resource on {}: {}", path, ex.getMessage());
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiError.of(
+                        "DUPLICATE_RESOURCE",
+                        ex.getMessage(),
+                        HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * A structurally valid request whose content the domain refuses — currently the
+     * segment predicate validator (Story #1137). ADR-0017 maps this to {@code 422}
+     * so callers can distinguish it from a malformed body ({@code 400}).
+     */
+    @ExceptionHandler(CrmUnprocessableEntityException.class)
+    public ResponseEntity<ApiError> handleUnprocessable(
+            CrmUnprocessableEntityException ex, HttpServletRequest request, HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.warn("Unprocessable entity on {}: {}", path, ex.getMessage());
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ApiError.of(
+                        "UNPROCESSABLE_ENTITY",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * Rate limit exceeded on the public inquiry form. The message is deliberately generic — a
+     * response that revealed the exact limit or remaining quota would just tell an abuser how
+     * to pace themselves.
+     */
+    @ExceptionHandler(CrmTooManyRequestsException.class)
+    public ResponseEntity<ApiError> handleTooManyRequests(
+            CrmTooManyRequestsException ex, HttpServletRequest request, HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.warn("Rate limit exceeded on {}", path);
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(ApiError.of(
+                        "TOO_MANY_REQUESTS",
+                        ex.getMessage(),
+                        HttpStatus.TOO_MANY_REQUESTS.value(),
                         Instant.now(clock).toString(),
                         correlationId));
     }
