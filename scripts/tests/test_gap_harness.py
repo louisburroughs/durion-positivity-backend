@@ -210,8 +210,12 @@ class TaxonomyTest(unittest.TestCase):
         self.assertEqual(c.cause, CAUSE_NONE)
 
     def test_corpus_gap_when_expected_doc_absent(self):
-        q = Question("q", "core charge policy", Actor("ROLE_USER", ("order:order:view",)),
-                     rag_scope="order", expected_doc_ids=("order.core-charges",))
+        # A genuinely-uncovered topic (no corpus doc addresses layaway) with an unauthored expected
+        # doc is a true corpus gap. NB: core charges are NOT such a topic — order.returns-refunds
+        # documents them as "not modeled", so that case is a covered topic (see the phantom-doc tests).
+        q = Question("q", "layaway installment plan scheduling and deposit forfeiture",
+                     Actor("ROLE_USER", ("order:order:view",)), rag_scope="order",
+                     expected_doc_ids=("order.layaway",))
         c = taxonomy.classify(q, self._cap("q", [], ["order:order:view"]), VERDICT_REFUSED, self.idx)
         self.assertEqual(c.cause, CAUSE_CORPUS_GAP)
 
@@ -241,6 +245,38 @@ class TaxonomyTest(unittest.TestCase):
         c = taxonomy.classify(q, cap, VERDICT_REFUSED, self.idx)
         self.assertEqual(c.cause, CAUSE_RETRIEVAL_MISS)
         self.assertIn("order.guide", c.covering_doc_ids)
+
+    def test_phantom_expected_doc_but_retrieved_doc_covers_topic_is_generation(self):
+        # The core-charge case: fixture names an unauthored doc, but order.returns-refunds (which
+        # documents core charges as "not modeled") WAS retrieved and the answer is still wrong. That
+        # is a generation failure, not a corpus gap — must not send a human to author a doc that exists.
+        q = Question("q", "how are core charges handled when a customer returns a rebuildable part",
+                     Actor("ROLE_USER", ("order:order:view",)), rag_scope="order",
+                     expected_doc_ids=("order.core-charges",))  # phantom, unauthored
+        cap = self._cap("q", ["order.returns-refunds"], ["order:order:view"])  # covering doc retrieved
+        c = taxonomy.classify(q, cap, VERDICT_UNSUPPORTED, self.idx)
+        self.assertEqual(c.cause, CAUSE_GENERATION)
+        self.assertIn("order.returns-refunds", c.covering_doc_ids)
+
+    def test_phantom_expected_doc_but_covering_doc_not_retrieved_is_retrieval_miss(self):
+        # Copilot #1160 review: a phantom expected doc must not shortcut to corpus_gap when a covering
+        # doc EXISTS but wasn't retrieved — that is a retrieval miss, not missing content. Here
+        # order.returns-refunds covers the topic and is visible to the actor, but nothing was retrieved.
+        q = Question("q", "how are core charges handled when a customer returns a rebuildable part",
+                     Actor("ROLE_USER", ("order:order:view",)), rag_scope="order",
+                     expected_doc_ids=("order.core-charges",))  # phantom, unauthored
+        cap = self._cap("q", [], ["order:order:view"])  # covering doc exists + visible, but not retrieved
+        c = taxonomy.classify(q, cap, VERDICT_REFUSED, self.idx)
+        self.assertEqual(c.cause, CAUSE_RETRIEVAL_MISS)
+        self.assertIn("order.returns-refunds", c.covering_doc_ids)
+
+    def test_phantom_expected_doc_with_no_covering_doc_at_all_stays_corpus_gap(self):
+        # Guard the guard: a phantom expected doc whose topic NO corpus doc covers is still a genuine
+        # corpus gap (the loyalty known-gap probe) — the fallback content lookup finds nothing.
+        q = Question("q", "how do loyalty reward points accrue and redeem at checkout",
+                     Actor("ROLE_USER"), rag_scope="order", expected_doc_ids=("order.loyalty-points",))
+        c = taxonomy.classify(q, self._cap("q", [], []), VERDICT_REFUSED, self.idx)
+        self.assertEqual(c.cause, CAUSE_CORPUS_GAP)
 
 
 class HarnessRunTest(unittest.TestCase):
@@ -495,9 +531,10 @@ class PipelineTest(unittest.TestCase):
             # correct: right doc retrieved, judge says correct
             Question("q-ok", "vin format", Actor("ROLE_USER"), rag_scope="master",
                      expected_doc_ids=("glossary.identifiers",), expected_facts=("17 chars",)),
-            # corpus gap: expected doc missing (core charges are not modeled anywhere)
-            Question("q-gap", "core charge policy", Actor("ROLE_USER", ("order:order:view",)),
-                     rag_scope="order", expected_doc_ids=("order.core-charges",), topic="core charges"),
+            # corpus gap: expected doc missing AND no corpus doc covers the topic (layaway)
+            Question("q-gap", "layaway installment plan scheduling and deposit forfeiture",
+                     Actor("ROLE_USER", ("order:order:view",)),
+                     rag_scope="order", expected_doc_ids=("order.layaway",), topic="layaway"),
             # retrieval miss: visible doc exists but wrong doc retrieved
             Question("q-miss", "order status", Actor("ROLE_USER", ("order:order:view",)),
                      rag_scope="order", expected_doc_ids=("order.guide",)),
@@ -540,7 +577,7 @@ class PipelineTest(unittest.TestCase):
         # reports render without error
         gap = report.build_gap_report(results)
         self.assertEqual(gap["gap_count"], 1)
-        self.assertIn("core", gap["entries"][0]["topic"])
+        self.assertIn("layaway", gap["entries"][0]["topic"])
         md = report.render_gap_report_md(gap)
         self.assertIn("DO NOT INGEST", md)
         self.assertIn("Draft outline", md)
@@ -580,9 +617,12 @@ class UnsupportedVerdictTest(unittest.TestCase):
         self.assertIsNone(g.judge_error)
 
     def test_unsupported_routes_to_corpus_gap(self):
-        q = Question("q-gap", "how are core charges handled on a rebuildable return",
+        # An unsupported (fabricated) answer on a genuinely-uncovered topic routes to corpus_gap. Use
+        # layaway, not core charges: core charges are covered by order.returns-refunds ("not modeled"),
+        # so that topic no longer routes to corpus_gap (see TaxonomyTest phantom-doc cases).
+        q = Question("q-gap", "layaway installment plan scheduling and deposit forfeiture",
                      Actor("ROLE_USER", ("order:order:view",)), rag_scope="order",
-                     expected_doc_ids=("order.no-such-doc",), topic="core charges")
+                     expected_doc_ids=("order.no-such-doc",), topic="layaway")
         cap = Capture(question_id="q-gap", answer="fabricated", permission_codes=["order:order:view"])
         c = taxonomy.classify(q, cap, VERDICT_UNSUPPORTED, self.idx)
         self.assertEqual(c.cause, CAUSE_CORPUS_GAP)

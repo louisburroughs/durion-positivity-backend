@@ -62,8 +62,19 @@ def classify(
     retrieved = [d.doc_id for d in capture.dense_docs]
     actor_perms = set(capture.permission_codes)
 
-    # #1 corpus gap — nothing in the corpus covers this topic (declared doc unauthored, or the
-    # content lookup found no doc). This is the #1124 signal: a doc needs to be written.
+    # The declared expected doc(s) don't exist (unauthored / renamed / phantom expected_doc_id).
+    # Before calling this a corpus gap, cross-check the content lookup: if a doc that actually covers
+    # this topic exists in the corpus, the corpus is NOT missing content, so fall through to the
+    # normal generation / permission-gating / retrieval-miss logic using those covering docs as the
+    # candidate set. Only a topic with no covering doc at all is a true corpus gap (#1124). Without
+    # this, a fixture that names an unauthored expected doc (e.g. `order.core-charges`) mis-files
+    # whatever went wrong as "write a new doc" even when a covering doc (e.g. `order.returns-refunds`,
+    # which documents the topic as "not modeled") exists — whether it was retrieved (generation),
+    # gated (permission_gating), or simply missed (retrieval_miss).
+    if not existing:
+        existing = [d for d in corpus.covering_docs(question.query, threshold=COVERAGE_THRESHOLD) if corpus.exists(d)]
+
+    # #1 corpus gap — nothing in the corpus covers this topic. This is the #1124 signal: write a doc.
     if not existing:
         return Classification(
             cause=CAUSE_CORPUS_GAP,
