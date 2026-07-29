@@ -98,7 +98,7 @@ topics: `inventory.putaway` (`PutawayPermissions`), `accounting.tax-liability-sn
 (`TaxLiabilitySnapshot` + `accounting:tax-snapshot:freeze`), `pricing.price-quote-snapshot`
 (`PriceQuoteController` / `PricingSnapshotController`), `workorder.estimate-items`.
 
-## Do NOT document — verified non-topics
+## Do NOT document: verified non-topics
 
 These were traced to stubs or absent source. They stay **gaps** (gap-harness known-gaps / negative
 fixtures), never docs — writing them would inject the exact plausible-but-wrong ground truth #1125 warns
