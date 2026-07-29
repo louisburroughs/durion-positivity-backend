@@ -112,6 +112,9 @@ class WorkorderCompletionTest {
     @Mock
     private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
 
+    @Mock
+    private com.positivity.workorder.internal.service.ServiceCompletionFactPublisher serviceCompletionFactPublisher;
+
     @InjectMocks
     private WorkorderStateMachine stateMachine;
 

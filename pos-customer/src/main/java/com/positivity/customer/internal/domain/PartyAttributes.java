@@ -15,6 +15,11 @@ import org.jspecify.annotations.Nullable;
  * @param vehicleMakes distinct makes across the party's active vehicles — a predicate on
  *     {@code vehicle.make} matches if <em>any</em> vehicle matches, which is what a marketer
  *     targeting "customers with a Ford" means
+ * @param monthsSinceLastService whole months since the most recent completed service, or null
+ *     when the party has no service history (FI-3, #1133)
+ * @param hasServiceHistory whether the party has any completed-service history
+ * @param daysSinceDeclinedService whole days since the most recent declined recommendation, or
+ *     null when the party has never declined one (FI-3, #1133)
  */
 public record PartyAttributes(
         UUID partyId,
@@ -34,4 +39,7 @@ public record PartyAttributes(
         Set<Integer> vehicleYears,
         boolean hasActiveVehicle,
         long vehicleCount,
-        @Nullable String displayLabel) {}
+        @Nullable String displayLabel,
+        @Nullable Integer monthsSinceLastService,
+        boolean hasServiceHistory,
+        @Nullable Integer daysSinceDeclinedService) {}
