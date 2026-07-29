@@ -416,6 +416,17 @@ if [[ "$GENERATE_PERMISSIONS" == true ]]; then
       python3 "$SCRIPT_DIR/generate-permissions.py" "$ROOT_DIR" || {
         echo "WARN: permissions.yaml regeneration reported errors; continuing." >&2
       }
+      # The per-module manifests above are only half the job: the aggregate report comes from
+      # a separate script, and calling generate-permissions.py directly skipped it. That left
+      # docs/permissions-report.yaml stale on every run — it still described 20 modules and
+      # 387 permissions after a 21st module and 25 more permissions had landed. Both scripts
+      # discover modules dynamically, so a new pos-* module is picked up as soon as it has a
+      # permissions.yaml; the report just has to actually be regenerated.
+      python3 "$SCRIPT_DIR/export-permission-registrations-yaml.py" \
+        --root "$ROOT_DIR" \
+        --output "docs/permissions-report.yaml" || {
+        echo "WARN: permissions report regeneration reported errors; continuing." >&2
+      }
     else
       echo "WARN: python3 not found; skipping permissions.yaml regeneration." >&2
     fi
