@@ -182,13 +182,24 @@
       "source": "synthetic"
     },
     {
-      "id": "gap-loyalty-points-KNOWNGAP",
+      "id": "order-loyalty-points-not-modeled",
       "query": "how do loyalty reward points accrue and redeem at checkout",
       "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
       "rag_scope": "order",
-      "expected_doc_ids": ["order.loyalty-points"],
+      "expected_doc_ids": ["order.lifecycle"],
+      "expected_facts": ["Loyalty reward points are NOT modeled in the platform — no accrual, balance, or redemption entity, permission, or calculation exists; the only loyalty-related token is the manual price-override reason code CUSTOMER_LOYALTY."],
+      "topic": "loyalty reward points (not modeled)",
+      "tags": ["not-modeled", "hallucination-guard"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-gift-cards-KNOWNGAP",
+      "query": "how do I sell a gift card at the register and redeem its balance on a later order",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
+      "rag_scope": "order",
+      "expected_doc_ids": ["order.gift-cards"],
       "expected_facts": [],
-      "topic": "loyalty reward points",
+      "topic": "gift card sale and redemption",
       "tags": ["known-gap", "corpus-gap"],
       "source": "synthetic"
     },

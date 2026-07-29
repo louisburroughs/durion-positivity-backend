@@ -80,6 +80,12 @@ The state machine allows these transitions:
 
 - Return/refund lifecycle details belong to order.returns-refunds.
 - Workorder execution lifecycle belongs to pos-workorder.
+- Loyalty reward points are NOT modeled in the platform — no accrual, balance, or redemption
+  entity, permission, or calculation exists in pos-order or any other module. The only
+  loyalty-related token is the manual price-override reason code CUSTOMER_LOYALTY. The assistant
+  must not invent a points program; if asked, it should say the platform does not support loyalty
+  points and may mention the CUSTOMER_LOYALTY price-override reason as the closest supported
+  concept.
 
 ## Verified Facts
 
@@ -87,3 +93,4 @@ The state machine allows these transitions:
 - _Verified: pos-order SalesOrderStatus enum values and OrderStateMachine.ALLOWED transition map in OrderStateMachine._
 - _Verified: pos-order SalesOrderServiceImpl.checkout performs idempotency checks and transitions to PENDING_PAYMENT through OrderStateMachine.transition._
 - _Verified: pos-order PaymentEventsListener recomputeSettlement transitions PENDING_PAYMENT to COMPLETED on settled-in-full payment events._
+- _Verified: pos-order source (no loyalty-points implementation; PriceOverrideReasonCode.CUSTOMER_LOYALTY is the only loyalty-related token in the codebase)._

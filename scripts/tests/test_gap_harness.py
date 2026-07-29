@@ -220,7 +220,9 @@ class TaxonomyTest(unittest.TestCase):
         self.assertEqual(c.cause, CAUSE_CORPUS_GAP)
 
     def test_corpus_gap_when_no_doc_covers_unknown_topic(self):
-        q = Question("q", "how do loyalty reward points accrue and redeem at checkout", Actor("ROLE_USER"))
+        # NB: loyalty points are no longer such a topic — order.lifecycle documents them as
+        # "not modeled" (same evolution as core charges). Gift cards are the current planted gap.
+        q = Question("q", "how do I sell a gift card at the register and redeem its balance", Actor("ROLE_USER"))
         c = taxonomy.classify(q, self._cap("q", [], []), VERDICT_MISLEADING, self.idx)
         self.assertEqual(c.cause, CAUSE_CORPUS_GAP)
 
@@ -272,9 +274,10 @@ class TaxonomyTest(unittest.TestCase):
 
     def test_phantom_expected_doc_with_no_covering_doc_at_all_stays_corpus_gap(self):
         # Guard the guard: a phantom expected doc whose topic NO corpus doc covers is still a genuine
-        # corpus gap (the loyalty known-gap probe) — the fallback content lookup finds nothing.
-        q = Question("q", "how do loyalty reward points accrue and redeem at checkout",
-                     Actor("ROLE_USER"), rag_scope="order", expected_doc_ids=("order.loyalty-points",))
+        # corpus gap (the gift-card known-gap probe; loyalty is now covered by order.lifecycle as
+        # "not modeled") — the fallback content lookup finds nothing.
+        q = Question("q", "how do I sell a gift card at the register and redeem its balance",
+                     Actor("ROLE_USER"), rag_scope="order", expected_doc_ids=("order.gift-cards",))
         c = taxonomy.classify(q, self._cap("q", [], []), VERDICT_REFUSED, self.idx)
         self.assertEqual(c.cause, CAUSE_CORPUS_GAP)
 

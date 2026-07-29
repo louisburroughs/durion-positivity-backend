@@ -114,6 +114,12 @@ against:
   replica). Lives in `pos-vehicle-inventory` (per ADR-0044), which is present in this repo as its own module.
   If/when authoring fitment docs for the corpus, source them from `pos-vehicle-inventory` — not from pos-customer.
 - **Core charges** — unchanged intentional gap (`gap-core-charge-KNOWNGAP`); no module source.
+- **Loyalty reward points** — no accrual, balance, or redemption implementation anywhere; the only
+  loyalty-related token is `PriceOverrideReasonCode.CUSTOMER_LOYALTY` (a manual price-override reason,
+  not a points program). Documented as an explicit not-modeled statement in `order.lifecycle`
+  ("Not Modeled in This Doc"), with the `order-loyalty-points-not-modeled` hallucination-guard question;
+  the planted corpus-gap-discovery question moved to `gap-gift-cards-KNOWNGAP` (gift cards: verified
+  absent from all modules and the corpus).
 
 ## Fixtures — grow in lockstep with each wave
 
