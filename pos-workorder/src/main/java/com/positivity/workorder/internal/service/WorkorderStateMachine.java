@@ -40,6 +40,7 @@ public class WorkorderStateMachine {
 
     private final WorkorderRepository workorderRepository;
     private final WorkorderFactPublisher workorderFactPublisher;
+    private final ServiceCompletionFactPublisher serviceCompletionFactPublisher;
     private final WorkorderStateTransitionRepository transitionRepository;
     private final WorkorderSnapshotRepository snapshotRepository;
     private final WorkorderServiceRepository workorderServiceRepository;
@@ -339,6 +340,9 @@ public class WorkorderStateMachine {
         workorder.setReopenReason(null);
         workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(workorderId);
+        // FI-3 (#1133): emit the CRM service-history facts (service-completion + declined-service)
+        // from the final committed state.
+        serviceCompletionFactPublisher.markCompleted(workorderId);
 
         // Transition to COMPLETED state
         transitionWorkorder(workorderId, WorkorderStatus.COMPLETED, actorId, "Work Order Completed");

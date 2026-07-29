@@ -84,6 +84,10 @@ pos:
         max-submissions-per-hour: ${POS_CUSTOMER_PUBLIC_INQUIRY_MAX_PER_HOUR:5}
     kafka:
       workorder-events-topic: workorder-events
+      # Service-history fact feed (FI-3, #1133): service-completion + declined-service facts
+      # projected into the CRM service-history read model and declined-service follow-ups.
+      workorder-facts-topic: ${POS_CUSTOMER_WORKORDER_FACTS_TOPIC:workorder.events.v1}
+      workorder-facts-consumer-group: ${POS_CUSTOMER_WORKORDER_FACTS_CONSUMER_GROUP:pos-customer-workorder-facts}
       # Reconciliation manifests + drift-repair commands (ADR-0044)
       workorder-manifest-topic: ${POS_CUSTOMER_WORKORDER_MANIFEST_TOPIC:workorder.manifest.v1}
       workorder-commands-topic: ${POS_CUSTOMER_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}

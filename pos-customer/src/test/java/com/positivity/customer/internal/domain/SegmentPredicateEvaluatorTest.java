@@ -36,7 +36,70 @@ class SegmentPredicateEvaluatorTest {
                 Set.of(2019),
                 true,
                 vehicleCount,
-                "Acme Towing");
+                "Acme Towing",
+                null,
+                false,
+                null);
+    }
+
+    private static PartyAttributes serviceParty(
+            Integer monthsSinceLastService, boolean hasServiceHistory, Integer daysSinceDeclinedService) {
+        return new PartyAttributes(
+                PARTY,
+                "COMMERCIAL",
+                "GOLD",
+                "ACTIVE",
+                false,
+                Map.of(),
+                Set.of(),
+                Boolean.FALSE,
+                Boolean.FALSE,
+                "NET30",
+                "OPT_IN",
+                "UNSET",
+                Set.of(),
+                Set.of(),
+                Set.of(),
+                true,
+                1,
+                "Acme Towing",
+                monthsSinceLastService,
+                hasServiceHistory,
+                daysSinceDeclinedService);
+    }
+
+    @Test
+    @DisplayName("months-since-last-service matches a numeric predicate; unknown never matches")
+    void matchesServiceAgePredicate() {
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("service.monthsSinceLast", SegmentOperator.GREATER_THAN, "6"),
+                        serviceParty(8, true, null)))
+                .isTrue();
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("service.monthsSinceLast", SegmentOperator.GREATER_THAN, "6"),
+                        serviceParty(3, true, null)))
+                .isFalse();
+        // No service history: unknown, not zero — a "> 6 months" win-back predicate must not match.
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("service.monthsSinceLast", SegmentOperator.GREATER_THAN, "6"),
+                        serviceParty(null, false, null)))
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("has-service-history and declined-recency predicates evaluate")
+    void matchesServiceHistoryAndDeclinePredicates() {
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("service.hasHistory", SegmentOperator.IS_TRUE), serviceParty(2, true, null)))
+                .isTrue();
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("service.daysSinceDeclined", SegmentOperator.LESS_THAN_OR_EQUAL, "30"),
+                        serviceParty(2, true, 10)))
+                .isTrue();
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("service.daysSinceDeclined", SegmentOperator.LESS_THAN_OR_EQUAL, "30"),
+                        serviceParty(2, true, null)))
+                .isFalse();
     }
 
     private static SegmentPredicate.Comparison comparison(

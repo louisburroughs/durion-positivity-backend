@@ -15,9 +15,16 @@ import com.positivity.customer.internal.enums.SegmentType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
+import com.positivity.customer.internal.repository.FollowUpTaskRepository;
 import com.positivity.customer.internal.repository.PartyTagAssignmentRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.SegmentMemberRepository;
+import com.positivity.customer.internal.repository.ServiceHistoryRepository;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -30,6 +37,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,6 +71,9 @@ public class SegmentResolutionService {
     private final ExtVehicleRepository extVehicleRepository;
     private final PartyTagAssignmentRepository tagAssignmentRepository;
     private final SegmentMemberRepository segmentMemberRepository;
+    private final ServiceHistoryRepository serviceHistoryRepository;
+    private final FollowUpTaskRepository followUpTaskRepository;
+    private final Clock clock;
 
     /** Matched party ids plus whether the candidate scan hit the ceiling. */
     public record Resolution(List<UUID> partyIds, boolean truncated) {}
@@ -141,6 +152,8 @@ public class SegmentResolutionService {
         Map<UUID, CommunicationPreference> preferences = preferencesByParty(ids);
         Map<UUID, Set<UUID>> tags = tagsByParty(ids);
         Map<UUID, List<ExtVehicle>> vehicles = vehiclesByAccount(ids);
+        Map<UUID, Instant> lastService = lastServiceByParty(ids);
+        Map<UUID, Instant> lastDeclined = lastDeclinedByParty(ids);
 
         return accounts.stream()
                 .map(account -> {
@@ -177,7 +190,10 @@ public class SegmentResolutionService {
                                     .collect(Collectors.toSet()),
                             owned.stream().anyMatch(ExtVehicle::isActive),
                             owned.size(),
-                            account.getDisplayName() != null ? account.getDisplayName() : account.getLegalName());
+                            account.getDisplayName() != null ? account.getDisplayName() : account.getLegalName(),
+                            monthsSince(lastService.get(account.getPartyId())),
+                            lastService.containsKey(account.getPartyId()),
+                            daysSince(lastDeclined.get(account.getPartyId())));
                 })
                 .toList();
     }
@@ -189,6 +205,8 @@ public class SegmentResolutionService {
         Map<UUID, CommunicationPreference> preferences = preferencesByParty(ids);
         Map<UUID, Set<UUID>> tags = tagsByParty(ids);
         Map<UUID, List<ExtVehicle>> vehicles = vehiclesByAccount(ids);
+        Map<UUID, Instant> lastService = lastServiceByParty(ids);
+        Map<UUID, Instant> lastDeclined = lastDeclinedByParty(ids);
 
         return people.stream()
                 .map(person -> {
@@ -217,7 +235,10 @@ public class SegmentResolutionService {
                             owned.size(),
                             // Person names live in pos-people-contact (ADR-0015); the customer
                             // number is the only local label, and it is already non-identifying.
-                            person.getCustomerNumber());
+                            person.getCustomerNumber(),
+                            monthsSince(lastService.get(person.getPartyId())),
+                            lastService.containsKey(person.getPartyId()),
+                            daysSince(lastDeclined.get(person.getPartyId())));
                 })
                 .toList();
     }
@@ -262,6 +283,50 @@ public class SegmentResolutionService {
         }
         return extVehicleRepository.findByAccountIdIn(partyIds).stream()
                 .collect(Collectors.groupingBy(ExtVehicle::getAccountId));
+    }
+
+    private Map<UUID, Instant> lastServiceByParty(List<UUID> partyIds) {
+        if (partyIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Instant> byParty = new HashMap<>();
+        for (var row : serviceHistoryRepository.findLastServiceByParty(partyIds)) {
+            if (row.getLastCompletedAt() != null) {
+                byParty.put(row.getPartyId(), row.getLastCompletedAt());
+            }
+        }
+        return byParty;
+    }
+
+    private Map<UUID, Instant> lastDeclinedByParty(List<UUID> partyIds) {
+        if (partyIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Instant> byParty = new HashMap<>();
+        for (var row : followUpTaskRepository.findLastDeclinedByParty(partyIds)) {
+            if (row.getLastDeclinedAt() != null) {
+                byParty.put(row.getPartyId(), row.getLastDeclinedAt());
+            }
+        }
+        return byParty;
+    }
+
+    /** Whole months elapsed since {@code since} (UTC calendar), or null when absent; floored at 0. */
+    private @Nullable Integer monthsSince(@Nullable Instant since) {
+        if (since == null) {
+            return null;
+        }
+        long months = ChronoUnit.MONTHS.between(LocalDate.ofInstant(since, ZoneOffset.UTC), LocalDate.now(clock));
+        return (int) Math.max(0, months);
+    }
+
+    /** Whole days elapsed since {@code since} (UTC calendar), or null when absent; floored at 0. */
+    private @Nullable Integer daysSince(@Nullable Instant since) {
+        if (since == null) {
+            return null;
+        }
+        long days = ChronoUnit.DAYS.between(LocalDate.ofInstant(since, ZoneOffset.UTC), LocalDate.now(clock));
+        return (int) Math.max(0, days);
     }
 
     private static String consent(CommunicationPreference preference, boolean email) {

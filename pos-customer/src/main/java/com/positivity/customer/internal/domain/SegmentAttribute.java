@@ -15,9 +15,9 @@ import java.util.Set;
  * operators it accepts; anything outside the enum is rejected at save time. That keeps the
  * resolver's query surface fixed and auditable no matter what a stored predicate contains.
  *
- * <p>Service-history and geography attributes are absent by design: they need the workorder
- * fact feed (FI-3) and structured addresses (FI-4), which are not yet available. They join
- * this catalog in story A-follow.
+ * <p>Service-history attributes (FI-3, #1133) are fed by the workorder fact feed via the CRM
+ * service-history read model. Geography attributes remain absent by design: they need structured
+ * addresses (FI-4), which are not yet available.
  */
 public enum SegmentAttribute {
 
@@ -44,7 +44,15 @@ public enum SegmentAttribute {
     VEHICLE_MODEL("vehicle.model", OperandKind.TEXT, equality()),
     VEHICLE_YEAR("vehicle.year", OperandKind.NUMBER, numeric()),
     HAS_ACTIVE_VEHICLE("vehicle.hasActive", OperandKind.BOOLEAN, booleanOps()),
-    VEHICLE_COUNT("vehicle.count", OperandKind.NUMBER, numeric());
+    VEHICLE_COUNT("vehicle.count", OperandKind.NUMBER, numeric()),
+
+    // --- Service history, from the workorder fact feed (FI-3, #1133) ---
+    /** Whole months since the party's most recent completed service; unset when no history. */
+    MONTHS_SINCE_LAST_SERVICE("service.monthsSinceLast", OperandKind.NUMBER, numeric()),
+    /** Whether the party has any completed-service history at all. */
+    HAS_SERVICE_HISTORY("service.hasHistory", OperandKind.BOOLEAN, booleanOps()),
+    /** Whole days since the party's most recent declined recommendation; unset when none. */
+    DAYS_SINCE_DECLINED_SERVICE("service.daysSinceDeclined", OperandKind.NUMBER, numeric());
 
     /** What shape of operand the attribute compares against. */
     public enum OperandKind {

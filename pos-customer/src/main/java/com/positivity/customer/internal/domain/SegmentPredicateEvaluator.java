@@ -59,6 +59,9 @@ public final class SegmentPredicateEvaluator {
             case VEHICLE_YEAR -> yearMatch(party.vehicleYears(), operator, values);
             case HAS_ACTIVE_VEHICLE -> booleanMatch(party.hasActiveVehicle(), operator);
             case VEHICLE_COUNT -> numberMatch(party.vehicleCount(), operator, values);
+            case MONTHS_SINCE_LAST_SERVICE -> nullableNumberMatch(party.monthsSinceLastService(), operator, values);
+            case HAS_SERVICE_HISTORY -> booleanMatch(party.hasServiceHistory(), operator);
+            case DAYS_SINCE_DECLINED_SERVICE -> nullableNumberMatch(party.daysSinceDeclinedService(), operator, values);
         };
     }
 
@@ -95,6 +98,20 @@ public final class SegmentPredicateEvaluator {
 
     private static boolean numberMatch(long actual, SegmentOperator operator, List<String> values) {
         return compare(actual, operator, Long.parseLong(values.get(0).trim()));
+    }
+
+    /**
+     * A null value is unknown, not zero: a party with no service history has not "had its last
+     * service 0 months ago", so a "months since last service &gt; 6" predicate must not match it.
+     * Missing data evaluates to non-match, consistent with the rest of the catalog.
+     */
+    private static boolean nullableNumberMatch(
+            @Nullable Integer actual, SegmentOperator operator, List<String> values) {
+        if (actual == null) {
+            return false;
+        }
+        return compare(
+                actual.longValue(), operator, Long.parseLong(values.get(0).trim()));
     }
 
     private static boolean compare(long actual, SegmentOperator operator, long operand) {
