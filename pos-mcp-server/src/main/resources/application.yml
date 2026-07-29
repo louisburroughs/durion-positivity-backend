@@ -45,6 +45,11 @@ mcp:
     table-name: mcp_document_embedding
     dimension: 768
     index-type: ivfflat
+    hybrid:
+      # Exact identifiers (VINs, SKUs, permission/event codes) routinely score below the dense
+      # tier-1 floor. Keep the literal FTS source in the live candidate set; operators can disable
+      # it immediately if the retrieval-quality gate detects a regression.
+      lexical-enabled: ${MCP_RAG_LEXICAL_ENABLED:true}
     preload:
       docs:
         - id: "accounting.de-bookkeeping"

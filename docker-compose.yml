@@ -833,6 +833,7 @@ services:
       MCP_RAG_CHUNKING_ENABLED: ${MCP_RAG_CHUNKING_ENABLED:-true}
       MCP_RAG_MAX_SEGMENT_SIZE: ${MCP_RAG_MAX_SEGMENT_SIZE:-2000}
       MCP_RAG_MAX_OVERLAP_SIZE: ${MCP_RAG_MAX_OVERLAP_SIZE:-200}
+      MCP_RAG_LEXICAL_ENABLED: ${MCP_RAG_LEXICAL_ENABLED:-true}
       # Origin of the frontend SSR server that serves /sitemap.json (NOT the API gateway).
       # Must be listed here to be passed into the container; values come from the
       # docker compose process environment and/or the .env file during ${...} substitution.

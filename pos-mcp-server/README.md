@@ -134,11 +134,34 @@ Both session managers use a Tier-2 retrieval chain:
 
 1. Baseline semantic retriever (`maxResults=10`, `minScore=0.6`).
 2. Query-expanded retriever (`maxResults=20`, `minScore=0.55`) using deterministic paraphrases.
-3. Hybrid merge + de-duplication across both retrievers.
+3. PostgreSQL full-text retrieval for literal identifiers (enabled by default), followed by reciprocal-rank fusion and de-duplication across all retrievers.
 4. Final lexical-aware re-ranking to the top-5 contexts before prompt injection.
 
 Retrieval is role-aware (`RoleAwareMetadataFilter`, `ScopedContentRetrieverFactory`) and chat memory is persisted via
 `SemanticChatMemoryStore` with session summarization (`SessionSummary`).
+
+### Troubleshooting identifier misses
+
+Treat a missing VIN, SKU, event name, or permission code as a candidate-pipeline problem before
+changing the answer prompt:
+
+1. Run the same query against dense retrieval at both score floors and against PostgreSQL FTS;
+   record document IDs at every stage (source retrieval, RRF, de-duplication, and final top-5).
+2. Confirm the expected chunk has the selected tool's RAG scope and that its
+   `required-permissions` are satisfied. A correct lexical match must never bypass scope or
+   permission filtering.
+3. Inspect the stored `search_vector` and query produced by `websearch_to_tsquery`. Punctuation in
+   VINs, SKUs, and colon/dot-delimited codes can change lexemes; use a normalized exact-token
+   fallback when PostgreSQL tokenization removes the distinguishing characters.
+4. Compare the covering chunk's rank before and after `RerankedContentRetriever`. If it enters the
+   candidate pool but misses the top-5, tune or diversify the final selection rather than lowering
+   the dense threshold.
+5. Check ingestion and chunking: verify the current source revision was embedded, the literal token
+   was not split across chunks, and dense/lexical copies share a stable document ID for de-duplication.
+
+Keep exact-identifier fixtures in `src/test/resources/eval/rag-lexical` and compare dense-only with
+hybrid recall, hit@5, MRR, forbidden-document violations, and latency before changing fusion weights
+or similarity floors.
 
 ## Configuration
 
@@ -153,6 +176,7 @@ Retrieval is role-aware (`RoleAwareMetadataFilter`, `ScopedContentRetrieverFacto
 | `mcp.rag.chunking.enabled`                 | `MCP_RAG_CHUNKING_ENABLED` `true`           | Chunk documents before embedding                                                          |
 | `mcp.rag.chunking.max-segment-size`        | `MCP_RAG_MAX_SEGMENT_SIZE`                  | Max chunk size                                                                            |
 | `mcp.rag.chunking.max-overlap-size`        | `MCP_RAG_MAX_OVERLAP_SIZE`                  | Chunk overlap                                                                             |
+| `mcp.rag.hybrid.lexical-enabled`           | `MCP_RAG_LEXICAL_ENABLED` `true`            | Include scoped PostgreSQL full-text hits in RRF fusion; set `false` for immediate rollback |
 | `mcp.rag.preload.docs`                     | `[]`                                        | Static classpath documents to preload                                                     |
 | `mcp.tuning.enabled`                       | `MCP_TUNING_ENABLED` `false`                | Adaptive tool priority tuning (disabled until regression harness exists — Gate 0)         |
 | `mcp.tuning.cron`                          | `0 0 2 * * ?`                               | Tuning schedule (daily 02:00)                                                             |
