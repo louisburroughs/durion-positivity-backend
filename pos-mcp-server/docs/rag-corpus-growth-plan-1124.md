@@ -1,0 +1,160 @@
+# RAG corpus-growth authoring plan (#1124)
+
+Concrete, source-verified authoring backlog for growing the RAG corpus from **19** docs to the
+**~40–50** target set in `rag-corpus-growth-and-flip-threshold-1124.md`. That companion doc records the
+*why* (create lexical headroom) and the flip criterion; this doc is the *what and how* — the specific
+docs to write, the real module source each must cite, the matching eval fixtures, and the sequencing
+that lets `eval_live.py` + the gap-harness measure the flip delta on every increment.
+
+Every candidate below was traced to concrete `pos-*` source (controllers, service impls, entities,
+enums, permission codes, `@EmitEvent` ids). Anchors are named so the human author's `_Verified: …_`
+citations point at code that exists — never a plausible-but-absent API.
+
+## How this plan serves the flip-threshold (#1124), not just coverage
+
+The point of growing the corpus is **not** raw doc count — it is to reach the size/noise where dense
+retrieval starts missing exact-token queries so hybrid (dense+lexical RRF) has measurable headroom
+(`fusion.py::flip_decision`). So the backlog is deliberately weighted toward **token-dense** content:
+enum constants, permission codes (`domain:resource:action`), `@EmitEvent` ids, status names, and
+identifier formats. Each domain also gets a compact **code-catalog doc** (`{scope}.codes`) whose whole
+job is to pack the domain's rare exact tokens into one retrievable place — the single highest-leverage
+lever for lexical headroom, and the easiest to source-verify (it is a list of real constants).
+
+## Authoring rules (guardrail — non-negotiable, from #1125)
+
+1. **Source-verified only.** Every `_Verified:` line cites a class / field / method / enum constant that
+   exists in the owning module. No invented workflows, fields, or values.
+2. **Unimplemented topics stay gaps.** If the source is a stub or absent, the topic does not get a doc —
+   it becomes a documented non-existence (a gap-harness known-gap / negative fixture). See
+   [Do NOT document](#do-not-document-verified-non-topics) below.
+3. **Frontmatter** on every doc: `RAG id`, `RAG scope`, `Required permissions` — matching the
+   `returns-refunds-rag.md` model. `required_permissions` must be the *read* permission a caller needs to
+   see the doc, mirroring the endpoint's `@PreAuthorize`.
+4. **Manifest lockstep.** Each new doc is added to all three manifests in the same change, or the corpus
+   unit test fails: `application.yml` + `application-alpha.yml` (`mcp.rag.preload.docs`),
+   `scripts/rag_seed.py` `MANIFEST`, `scripts/gap_harness/corpus.py` `MANIFEST`.
+5. **Human authors, harness proposes.** A model may draft a skeleton from these anchors; a human
+   source-verifies and signs the `_Verified:` lines before ingest.
+
+## Backlog — 21 new docs (19 → 40)
+
+Priority: **P1** closes a known/high-traffic gap or adds the most exact-token headroom; **P2** deepens
+coverage; **P3** is optional stretch toward the top of the 40–50 band. Split any P1 doc that grows past
+~400 lines rather than thinning its `_Verified:` density.
+
+### Wave 1 — order (pos-order) · +3
+
+| doc_id | scope / perms | Source anchors (`_Verified:` targets) | Exact-token payload |
+|---|---|---|---|
+| `order.lifecycle` (P1) | order / `order:order:view` | `SalesOrderController` `/v1/orders` (cart→checkout endpoints); `OrderStateMachine.ALLOWED` transition map + `transition/requireEditable`; `SalesOrderServiceImpl.checkout` (`requireOnAccountEligibility`, `repriceLines`, invoice port); `PaymentEventsListener` PENDING_PAYMENT→COMPLETED on `payment.payment.settled` | `SalesOrderStatus` (DRAFT, QUOTED, PENDING_PAYMENT, COMPLETED, VOIDED, CANCEL_REQUESTED, WORKORDER_CANCELLED, PAYMENT_REVERSED, CANCELLED, CANCEL_FAILED_WORKEXEC, CANCEL_FAILED_BILLING, CANCEL_REQUIRES_MANUAL_REVIEW); events `ORDER_CART_CREATE`, `ORDER_CHECKOUT`, `ORDER_VOID`; perms `order:order:{create,quote,checkout,void,discount,charge_on_account}`, `order:line:{create,edit,delete}` |
+| `order.price-override` (P1) | order / `order:price_override:view` | `PriceOverrideController` `/v1/orders/price-overrides`; `PriceOverrideServiceImpl` threshold gate (`APPROVAL_THRESHOLD_PERCENTAGE=10.0`, `APPROVAL_THRESHOLD_AMOUNT=50.0`, `requiresApproval`), DRAFT-only guard, `approveOverride`/`rejectOverride` (PENDING_APPROVAL only) | `OverrideStatus` (PENDING_APPROVAL, APPROVED, REJECTED — **document APPLIED/CANCELLED as declared-but-unused**); `PriceOverrideReasonCode` (8); perms `order:price_override:{apply,approve,reject,view}`; events `ORDER_PRICE_OVERRIDE_{APPLY,APPROVE,REJECT}`. **State fact:** approval is a flat numeric threshold — *no tiered/role-based authority*; `reviewerRole` is audit-only |
+| `order.codes` (P2) | order / `order:order:view` | Catalog doc: every enum + permission + event id above plus `OrderPermissions` / `PriceOverridePermissions` constants | Pure exact-token density for lexical recovery |
+
+### Wave 2 — pricing (pos-price) · +3
+
+| doc_id | scope / perms | Source anchors | Exact-token payload |
+|---|---|---|---|
+| `pricing.promotions` (P1) | pricing / `pricing:promotion:view` | `PromotionOfferController` `/v1/promotions/offers`, `PromotionEligibilityRuleController` `.../rules`; `PromotionOfferServiceImpl.applyPromotion` (ACTIVE + date + usage-limit + one-promo-per-estimate); `EligibilityEvaluationServiceImpl.evaluateEligibility` (AND/OR) | `PromotionStatus` (DRAFT, ACTIVE, INACTIVE, EXPIRED); `DiscountType` (PERCENT_LABOR, PERCENT_PARTS, FIXED_INVOICE); `ConditionType` (ACCOUNT_ID_LIST, VEHICLE_TAG, ACCOUNT_FLEET_SIZE); `RuleOperator` (IN, NOT_IN, EQUALS, GREATER_THAN_OR_EQUAL_TO); `RuleCombination` (AND, OR); `EligibilityReasonCode` (9); perms `pricing:promotion:{manage,view,apply}`; events `PROMOTION_OFFER_*`, `PROMOTION_RULE_*` |
+| `pricing.restrictions` (P1) | pricing / `pricing:restriction:view` *(note: reads enforce only `isAuthenticated()`)* | `RestrictionRuleController` `/v1/price/restrictions/rules`, `PriceRestrictionsController` `/v1/price/restrictions:evaluate|:override`; `RestrictionEvaluationServiceImpl.resolveDecision` (no rules→ALLOW; non-overrideable→BLOCK; else ALLOW_WITH_OVERRIDE; commit-path failure→503); `RestrictionOverrideServiceImpl` (24h expiry) | `RestrictionDecision` (ALLOW, BLOCK, ALLOW_WITH_OVERRIDE, RESTRICTION_UNKNOWN); `EvaluationContext` (BROWSE, QUOTE, CHECKOUT, INVOICE_FINALIZE, COMMIT_SALE); `LocationTag` (6); `ServiceTag` (5); `OverrideStatus` (ISSUED, APPROVED, DENIED — only ISSUED set); perms `pricing:restriction:{manage,override}`. **Flag:** `pricing:restrictions:{edit,view}` (plural) declared-but-unused |
+| `pricing.codes` (P2) | pricing / `pricing:promotion:view` | Catalog of the above enums + `permissions.yaml` codes (no Java constants class in pos-price — cite YAML + inline `@PreAuthorize`) | Exact-token density |
+
+### Wave 3 — inventory (pos-inventory) · +4
+
+| doc_id | scope / perms | Source anchors | Exact-token payload |
+|---|---|---|---|
+| `inventory.purchase-orders` (P1) | inventory / `inventory:purchase_order:view` | `PurchaseOrderController` `/v1/inventory/purchase-orders`; `PurchaseOrderServiceImpl` (DRAFT→APPROVED guard, receive→PARTIALLY/FULLY_RECEIVED, cancel blocks FULLY_RECEIVED/CLOSED) | `PurchaseOrderStatus` (DRAFT, APPROVED, PARTIALLY_RECEIVED, FULLY_RECEIVED, CLOSED, CANCELLED — **CLOSED unreached in service**); perms `inventory:purchase_order:{create,view,approve,receive}`; events `INVENTORY_PURCHASE_ORDER_*` |
+| `inventory.receiving` (P1) | inventory / `inventory:receiving:view` | `ReceivingController` `/v1/inventory/receiving/sessions`; `ReceivingServiceImpl.receiveItemsIntoStaging` (expected-vs-received → variance), `crossDockLineToWorkorder` (dual ledger) | `ReceivingSessionStatus` (OPEN, IN_PROGRESS, COMPLETED, CANCELLED); `ReceivingLineStatus` (EXPECTED, RECEIVED, RECEIVED_SHORT, RECEIVED_OVER, CANCELLED); `InventoryVarianceType` (SHORTAGE, OVERAGE); perms `inventory:receiving:{create,view,complete}`, `inventory:issue:parts` |
+| `inventory.transfers-adjustments` (P2) | inventory / `inventory:transfer:view` | `TransferOrderController` `/v1/inventory/transfer-orders` (dispatch/receive/short-close); `TransferOrderServiceImpl` (TRANSFER_OUT/IN ledger, short-close dispositions); `StockMovementController` adjustments | `TransferOrderStatus` (7); `TransferShortCloseDisposition` (LOST_IN_TRANSIT, RETURNED_TO_SOURCE); `AdjustmentRequestStatus` (PENDING, APPROVED, REJECTED) **vs** `AdjustmentStatus` (cycle-count — do not conflate); `MovementType`; `InventoryPermissionRegistry` constants |
+| `inventory.codes` (P3) | inventory / `inventory:purchase_order:view` | Catalog. **Flag the split source of truth:** transfer/adjustment/stock-movement codes live in Java `InventoryPermissionRegistry`; PO + receiving codes live only in `permissions.yaml` | Exact-token density |
+
+### Wave 4 — accounting (pos-accounting) · +4
+
+| doc_id | scope / perms | Source anchors | Exact-token payload |
+|---|---|---|---|
+| `accounting.journal-entries` (P1) | accounting / `accounting:je:view` | `JournalEntryController` `/v1/accounting/journal-entries` (post/reverse); `JournalEntryServiceImpl.postJournalEntry`/`reverseJournalEntry` (balance ±0.0001, `assignEntryNumber` `JE-{YYYYMM}-{seq}`, POSTED/REVERSED immutable) | `JournalEntryStatus` (DRAFT, PENDING, POSTED, REVERSED); `JournalEntryType` (EVENT_DRIVEN, MANUAL); `ManualJEReasonCode` (5); period-lock error codes (`PERIOD_HARD_LOCKED`, `PERIOD_CLOSED`, `UNBALANCED_ENTRY`, `ENTRY_ALREADY_POSTED`, `JE_ALREADY_REVERSED`, `JE_NOT_POSTED`); perms `accounting:je:{create,post,reverse,view}`, `accounting:period:override`; events `ACCOUNTING_JOURNAL_ENTRY_*` |
+| `accounting.financial-statements` (P1) | accounting / `reporting:view:financial-statements` | `FinancialReportingController` `/v1/accounting/reports/financial` (income-statement, balance-sheet, trial-balance, GL, aged-AR/AP, tax-liability, drilldowns); figures derived at query time from POSTED entries + `GLAccount` | `AccountType` (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE); `AccountSubtype` (12); `GLAccountStatus` (ACTIVE, INACTIVE, NOT_YET_ACTIVE — derived); events `REPORT_*_GENERATE`. **Differentiate from existing `reporting.metrics`** (that doc is cross-domain dashboard metrics; this is accounting statements) |
+| `accounting.report-export` (P2) | accounting / `accounting:report:export` | `ReportExportController` `/v1/accounting/reports/export` (async request→status→download); `ReportExportServiceImpl` CSV renderers | `ExportFormat` (PDF, CSV, XLSX, JSON); `ExportStatus` (PENDING, IN_PROGRESS, COMPLETED, FAILED); events `ACCOUNTING_REPORT_EXPORT_*` |
+| `accounting.codes` (P3) | accounting / `accounting:je:view` | Catalog of the above (codes are `permissions.yaml` strings; no Java constants class) | Exact-token density |
+
+### Wave 5 — customer (pos-customer) · +2
+
+| doc_id | scope / perms | Source anchors | Exact-token payload |
+|---|---|---|---|
+| `crm.party-account-model` (P1) | customer / `crm:party:view` | `CrmAccountsController` `/v1/crm/accounts`, `CrmContactsController` `/v1/crm/parties`, `CrmPartyRelationshipController` `/v1/crm/commercial-accounts/{partyId}`; `PartyRelationshipServiceImpl` (effective-dated relationships, one-primary-billing demotion, overlap 409), `PartyServiceImpl.mergeParties` (alias redirection) | `PartyType` (PERSON, COMMERCIAL, UNKNOWN); `PartyRelationshipRole` (APPROVER, BILLING, PRIMARY_CONTACT, DRIVER, TECHNICAL); `ContactRole` (BILLING, PAYMENT_AUTHORIZER, OPERATIONS, PRIMARY_BUSINESS_CONTACT, TECHNICAL — **distinct enum, flag the overlap**); `AccountStatus` (ACTIVE, INACTIVE, ON_HOLD, MERGED — **PENDING/SUSPENDED absent, flag doc/param mismatch**); `AccountTier` (6); `CrmPermissionRegistry` codes. **Facts:** addresses are unstructured `String`; contact points live in pos-people (ADR-0015); `crm:relationship:*` codes are hardcoded literals, not in the registry |
+| `crm.codes` (P3) | customer / `crm:party:view` | Catalog of the above | Exact-token density |
+
+### Wave 6 — workorder (pos-workorder) · +4  *(no workorder doc exists yet — highest coverage gain)*
+
+| doc_id | scope / perms | Source anchors | Exact-token payload |
+|---|---|---|---|
+| `workorder.estimate-promotion` (P1) | workorder / `workorder:estimate:view` | `EstimateController` `/v1/workorders/estimates/{id}/promote`; `PromotionValidationServiceImpl` 5-gate precondition chain; `WorkorderServiceImpl.createWorkorder` (EST-→WO- number swap, lands DRAFT) | `PromotionErrorCode` (ESTIMATE_NOT_FOUND, ALREADY_PROMOTED, APPROVAL_INVALID, APPROVAL_EXPIRED, NO_APPROVED_ITEMS); `EstimateStatus` (11); `ApprovalStatus` (PENDING_APPROVAL, APPROVED, DECLINED); perms `workorder:estimate:{create,submit,approve,decline,reopen,promote,edit,calculate}`; event `WORKORDER_ESTIMATE_PROMOTE` |
+| `workorder.status-lifecycle` (P2) | workorder / `workorder:workorder:view` | `WorkorderStatus.ALLOWED_TRANSITIONS` / `canTransitionTo`; start-eligible `{APPROVED, ASSIGNED}`; terminal `{COMPLETED, CANCELLED}` | `WorkorderStatus` (DRAFT, APPROVED, ASSIGNED, WORK_IN_PROGRESS, AWAITING_PARTS, AWAITING_APPROVAL, READY_FOR_PICKUP, COMPLETED, CANCELLED) |
+| `workorder.approval-config` (P1) | workorder / `workorder:approval_config:view` | `ApprovalConfigurationController` `/v1/workexec/approvalConfigurations`; `ApprovalConfigurationServiceImpl.getApplicableConfiguration` (customer→location→global specificity); `ApprovalConfiguration.calculatePriority` (customer=2, location=1, global=0) | `ApprovalMethod` (CLICK_CONFIRM, SIGNATURE, ELECTRONIC_SIGNATURE, VERBAL_CONFIRMATION); perms `workorder:approval_config:{create,view,edit,delete}`; events `WORKORDER_APPROVAL_CONFIG_*`. **Correct the parent issue's wording:** "approval threshold" here is **specificity priority on `{locationId, customerId}`, not a dollar amount** — no monetary field exists. PO-required gating is delegated to external `pos-billing-rules` |
+| `workorder.codes` (P3) | workorder / `workorder:estimate:view` | Catalog of the above | Exact-token density |
+
+**Running total: 19 + 21 = 40 docs.** To push toward 50 if the flip delta needs more exact-token
+density, split the P3 `{scope}.codes` catalogs per sub-resource, or add the identified P2/P3 stretch
+topics: `inventory.putaway` (`PutawayPermissions`), `accounting.tax-liability-snapshot`
+(`TaxLiabilitySnapshot` + `accounting:tax-snapshot:freeze`), `pricing.price-quote-snapshot`
+(`PriceQuoteController` / `PricingSnapshotController`), `workorder.estimate-items`.
+
+## Do NOT document — verified non-topics
+
+These were traced to stubs or absent source. They stay **gaps** (gap-harness known-gaps / negative
+fixtures), never docs — writing them would inject the exact plausible-but-wrong ground truth #1125 warns
+against:
+
+- **Pricing normalization** — `PriceNormalizationController.normalize` returns HTTP 501; no service,
+  entity, or DTO exists. (`pricing:normalization:*` perms are declared-but-unused.)
+- **Workorder monetary approval tiers** — no dollar/amount field anywhere in pos-workorder; approval is
+  method + specificity only.
+- **Order price-override role tiers** — flat $50/10% threshold; any `order:price_override:approve` holder
+  can approve any amount.
+- **Vehicle fitment / compatibility** — not modeled in pos-customer (only a read-only `ExtVehicle`
+  replica). Lives in `pos-vehicle-inventory` (per ADR-0044), which is **not attached to this repo scope**.
+  Attach that module before planning a fitment doc; do not source it from pos-customer.
+- **Core charges** — unchanged intentional gap (`gap-core-charge-KNOWNGAP`); no module source.
+
+## Fixtures — grow in lockstep with each wave
+
+For every new doc, add in the same change (dense grows proportionally, per #1124 AC):
+
+1. **`rag-lexical/{doc}.json`** — a **bare-code / rare-identifier** query with no semantic hook (e.g.
+   `"RECEIVED_SHORT"`, `"ALLOW_WITH_OVERRIDE"`, `"JE_ALREADY_REVERSED"`, `"order:price_override:approve"`)
+   expecting that doc. These are the queries that give lexical headroom over dense.
+2. **`rag-retrieval/*.json`** — a natural-language dense query for the same doc (recall@k coverage).
+3. **Negative / gated** — where `required_permissions` apply, a fixture asserting an under-permissioned
+   actor does **not** retrieve the doc (`permission_gating`, not a corpus gap).
+4. **Gap-harness `questions.json`** — for the non-topics above, a `known-gap` question whose correct
+   grade is "not modeled" (guards the #1161 grounding fix end-to-end).
+
+## Sequencing & measurement (one loop per wave)
+
+Run the live loop after **each wave**, not once at the end, so the flip delta is tracked as the corpus
+grows and any recall regression is caught early (runbook in `rag-corpus-growth-and-flip-threshold-1124.md`):
+
+1. Add docs + fixtures + all three manifest entries; `./mvnw -pl pos-mcp-server test` (corpus lockstep +
+   eval unit tests green).
+2. Re-embed on alpha: `ENV_FILE=/opt/durion/alpha/.env python3 scripts/rag_seed.py`.
+3. `scripts/eval_live.py` → record corpus size, `rag_retrieval.recall_at_k`, and
+   `rag_lexical_hybrid_784.{hybrid,dense}_recall_at_k`.
+4. `scripts/run-gap-harness.sh --recall-at-k <step-3 value>` → read `flip-threshold.md`
+   (`recovery_rate`, `recommend_flip`).
+5. Plot hybrid−dense delta vs corpus size. **Stop-and-flip** when `flip_decision` recommends it; otherwise
+   continue to the next wave.
+
+## Acceptance mapping (#1124)
+
+| #1124 AC | This plan |
+|---|---|
+| Corpus-growth plan (target scopes + doc counts) documented | This doc — 21 docs across 6 scopes, 19 → 40, with source anchors |
+| Initial expansion ingested on alpha | Wave 1 first; `order.returns-refunds` already landed as the pilot |
+| Expanded lexical + dense eval fixtures committed | Fixtures section — one lexical + one dense (+ gated) per doc |
+| Documented, reproducible flip threshold backed by `eval_live.py` deltas | `fusion.py::flip_decision` (done, #1125) + the per-wave measurement loop |
+| Decision recorded: flip or keep dormant, with numbers | Output of the stop-and-flip loop; re-baseline #783 floors on the final corpus |
+
+## References
+
+- Companion (why + flip criterion + runbook): `rag-corpus-growth-and-flip-threshold-1124.md`
+- Gap-discovery harness (proposes gaps, measures recovery): `rag-corpus-gap-harness-design.md`, `scripts/gap_harness/`
+- Retrieval-quality gate + floors: #783 (`scripts/eval_live.py`)
