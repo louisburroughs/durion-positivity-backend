@@ -28,7 +28,15 @@ RAG_DIR = ROOT / "pos-mcp-server/src/main/resources/rag"
 # (doc_id, source_file, rag_scope, required_permissions). Keep in sync with rag_seed.py MANIFEST.
 MANIFEST: list[tuple[str, str, str, list[str]]] = [
     ("accounting.de-bookkeeping", "de-bookkeeping-rag.md", "accounting", []),
+    ("accounting.journal-entries", "accounting-journal-entries-rag.md", "accounting", ["accounting:je:view"]),
+    ("accounting.financial-statements", "accounting-financial-statements-rag.md", "accounting", ["reporting:view:financial-statements"]),
+    ("accounting.report-export", "accounting-report-export-rag.md", "accounting", ["accounting:report:export"]),
+    ("accounting.codes", "accounting-codes-rag.md", "accounting", ["accounting:je:view"]),
     ("inventory.inv-cntrl", "inv-cntrl-rag.md", "inventory", []),
+    ("inventory.purchase-orders", "inventory-purchase-orders-rag.md", "inventory", ["inventory:purchase_order:view"]),
+    ("inventory.receiving", "inventory-receiving-rag.md", "inventory", ["inventory:receiving:view"]),
+    ("inventory.transfers-adjustments", "inventory-transfers-adjustments-rag.md", "inventory", ["inventory:transfer:view"]),
+    ("inventory.codes", "inventory-codes-rag.md", "inventory", ["inventory:purchase_order:view"]),
     ("people.human-resources", "hr-functions-guide.md", "hr", []),
     ("shop.management", "shop-management-rag.md", "shopmanager", []),
     ("shop.management.guidelines", "shop-management-guidelines.md", "shopmanager", []),
@@ -37,8 +45,14 @@ MANIFEST: list[tuple[str, str, str, list[str]]] = [
     ("workflow.cross-domain-playbooks", "cross-domain-playbooks.md", "master", ["AUTHENTICATED"]),
     ("glossary.identifiers", "glossary-identifiers.md", "master", ["AUTHENTICATED"]),
     ("order.guide", "order-guide.md", "order", ["order:order:view"]),
+    ("order.lifecycle", "order-lifecycle-rag.md", "order", ["order:order:view"]),
+    ("order.price-override", "order-price-override-rag.md", "order", ["order:price_override:view"]),
+    ("order.codes", "order-codes-rag.md", "order", ["order:order:view"]),
     ("order.returns-refunds", "returns-refunds-rag.md", "order", ["order:order:view"]),
     ("pricing.guide", "pricing-guide.md", "pricing", ["pricing:price_book:view", "pricing:rule:view"]),
+    ("pricing.promotions", "pricing-promotions-rag.md", "pricing", ["pricing:promotion:view"]),
+    ("pricing.restrictions", "pricing-restrictions-rag.md", "pricing", ["AUTHENTICATED"]),
+    ("pricing.codes", "pricing-codes-rag.md", "pricing", ["pricing:promotion:view"]),
     ("warranty.guide", "warranty-guide.md", "warranty", ["warranty:claim:view"]),
     ("tax.guide", "tax-guide.md", "tax", ["tax:mode:view"]),
     (
@@ -47,10 +61,16 @@ MANIFEST: list[tuple[str, str, str, list[str]]] = [
         "customer",
         ["crm:party:view", "crm:party:search", "crm:vehicle:view", "crm:vehicle:search", "crm:contact:view"],
     ),
+    ("crm.party-account-model", "crm-party-account-model-rag.md", "customer", ["crm:party:view"]),
+    ("crm.codes", "crm-codes-rag.md", "customer", ["crm:party:view"]),
     ("reporting.metrics", "reporting-metrics.md", "reporting", ["accounting:report:export", "workorder:dashboard:view"]),
     ("admin.governance", "admin-governance.md", "admin", ["security:permission:view", "workorder:approval_config:view"]),
     ("events.observability", "events-observability.md", "events", ["nlti:audit:read"]),
     ("security.role-permission-matrix", "role-permission-matrix.md", "security", ["security:role:view", "security:permission:view"]),
+    ("workorder.estimate-promotion", "workorder-estimate-promotion-rag.md", "workorder", ["workorder:estimate:view"]),
+    ("workorder.status-lifecycle", "workorder-status-lifecycle-rag.md", "workorder", ["workorder:workorder:view"]),
+    ("workorder.approval-config", "workorder-approval-config-rag.md", "workorder", ["workorder:approval_config:view"]),
+    ("workorder.codes", "workorder-codes-rag.md", "workorder", ["workorder:estimate:view"]),
 ]
 
 # The pseudo-permission every authenticated caller holds (mirrors PermissionAwareMetadataFilter and

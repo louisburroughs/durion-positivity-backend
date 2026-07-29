@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Seed the RAG corpus into pgvector directly from Python — no JVM, no redeploy, no auth token.
 Faithfully mirrors the production ingest path (DocumentEmbeddingIngestor + StaticRagPreloadServiceImpl)
-so a Python-only host can populate the same 17-doc corpus that `application-alpha.yml`'s preload would
+so a Python-only host can populate the same corpus that `application-alpha.yml`'s preload would
 produce on startup, letting `eval_live.py` measure the recall@k baseline BEFORE the config change is
 merged and deployed.
 
@@ -11,7 +11,7 @@ Faithful to production:
   * same metadata keys: document_id, source_path, rag_scope, required_permissions (comma-joined,
     only when non-empty), chunk_index, chunk_count;
   * same rag_scope normalization (lowercase/trim, blank -> master).
-The 17-doc manifest below is a verbatim copy of application-alpha.yml's mcp.rag.preload.docs — keep
+The manifest below is a verbatim copy of application-alpha.yml's mcp.rag.preload.docs — keep
 them in sync. This is an eval seeding aid, not a production ingestor.
 
 Idempotent: deletes existing preloaded rows (source_path LIKE 'classpath:rag/%') before inserting, so
@@ -34,7 +34,15 @@ STEP = MAX_SEGMENT - OVERLAP  # 1800
 # Verbatim from application-alpha.yml mcp.rag.preload.docs (id, source file, rag-scope, required perms).
 MANIFEST = [
     ("accounting.de-bookkeeping", "de-bookkeeping-rag.md", "accounting", []),
+    ("accounting.journal-entries", "accounting-journal-entries-rag.md", "accounting", ["accounting:je:view"]),
+    ("accounting.financial-statements", "accounting-financial-statements-rag.md", "accounting", ["reporting:view:financial-statements"]),
+    ("accounting.report-export", "accounting-report-export-rag.md", "accounting", ["accounting:report:export"]),
+    ("accounting.codes", "accounting-codes-rag.md", "accounting", ["accounting:je:view"]),
     ("inventory.inv-cntrl", "inv-cntrl-rag.md", "inventory", []),
+    ("inventory.purchase-orders", "inventory-purchase-orders-rag.md", "inventory", ["inventory:purchase_order:view"]),
+    ("inventory.receiving", "inventory-receiving-rag.md", "inventory", ["inventory:receiving:view"]),
+    ("inventory.transfers-adjustments", "inventory-transfers-adjustments-rag.md", "inventory", ["inventory:transfer:view"]),
+    ("inventory.codes", "inventory-codes-rag.md", "inventory", ["inventory:purchase_order:view"]),
     ("people.human-resources", "hr-functions-guide.md", "hr", []),
     ("shop.management", "shop-management-rag.md", "shopmanager", []),
     ("shop.management.guidelines", "shop-management-guidelines.md", "shopmanager", []),
@@ -43,12 +51,20 @@ MANIFEST = [
     ("workflow.cross-domain-playbooks", "cross-domain-playbooks.md", "master", ["AUTHENTICATED"]),
     ("glossary.identifiers", "glossary-identifiers.md", "master", ["AUTHENTICATED"]),
     ("order.guide", "order-guide.md", "order", ["order:order:view"]),
+    ("order.lifecycle", "order-lifecycle-rag.md", "order", ["order:order:view"]),
+    ("order.price-override", "order-price-override-rag.md", "order", ["order:price_override:view"]),
+    ("order.codes", "order-codes-rag.md", "order", ["order:order:view"]),
     ("order.returns-refunds", "returns-refunds-rag.md", "order", ["order:order:view"]),
     ("pricing.guide", "pricing-guide.md", "pricing", ["pricing:price_book:view", "pricing:rule:view"]),
+    ("pricing.promotions", "pricing-promotions-rag.md", "pricing", ["pricing:promotion:view"]),
+    ("pricing.restrictions", "pricing-restrictions-rag.md", "pricing", ["AUTHENTICATED"]),
+    ("pricing.codes", "pricing-codes-rag.md", "pricing", ["pricing:promotion:view"]),
     ("warranty.guide", "warranty-guide.md", "warranty", ["warranty:claim:view"]),
     ("tax.guide", "tax-guide.md", "tax", ["tax:mode:view"]),
     ("crm.customer-vehicle", "customer-vehicle-guide.md", "customer",
      ["crm:party:view", "crm:party:search", "crm:vehicle:view", "crm:vehicle:search", "crm:contact:view"]),
+    ("crm.party-account-model", "crm-party-account-model-rag.md", "customer", ["crm:party:view"]),
+    ("crm.codes", "crm-codes-rag.md", "customer", ["crm:party:view"]),
     ("reporting.metrics", "reporting-metrics.md", "reporting",
      ["accounting:report:export", "workorder:dashboard:view"]),
     ("admin.governance", "admin-governance.md", "admin",
@@ -56,6 +72,10 @@ MANIFEST = [
     ("events.observability", "events-observability.md", "events", ["nlti:audit:read"]),
     ("security.role-permission-matrix", "role-permission-matrix.md", "security",
      ["security:role:view", "security:permission:view"]),
+    ("workorder.estimate-promotion", "workorder-estimate-promotion-rag.md", "workorder", ["workorder:estimate:view"]),
+    ("workorder.status-lifecycle", "workorder-status-lifecycle-rag.md", "workorder", ["workorder:workorder:view"]),
+    ("workorder.approval-config", "workorder-approval-config-rag.md", "workorder", ["workorder:approval_config:view"]),
+    ("workorder.codes", "workorder-codes-rag.md", "workorder", ["workorder:estimate:view"]),
 ]
 
 
