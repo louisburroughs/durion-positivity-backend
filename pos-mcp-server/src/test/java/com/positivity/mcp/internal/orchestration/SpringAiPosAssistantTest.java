@@ -124,14 +124,22 @@ class SpringAiPosAssistantTest {
         ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(promptCaptor.capture());
         List<Message> promptMessages = promptCaptor.getValue().getInstructions();
-        String systemMessageText =
-                promptMessages.get(promptMessages.size() - 2).getText();
+        String systemMessageText = promptMessages.get(promptMessages.size() - 2).getText();
         assertThat(systemMessageText)
                 .contains("Relevant retrieved context:")
                 .contains("Ground your answer in the numbered snippets")
                 .containsIgnoringCase("do not state")
                 .containsIgnoringCase("say what you don't know instead of inventing")
-                .contains("PO numbers are owned by pos-inventory");
+                .contains("PO numbers are owned by pos-inventory")
+                // The instruction must guard more than identifier/format facts — a fabricated workflow
+                // (the core-charge case) slipped through the original identifier-only wording.
+                .containsIgnoringCase("workflow")
+                .containsIgnoringCase("capability")
+                // A documented non-existence must be binding: say it's not modeled, don't invent it,
+                // and don't offer to perform an unsupported action.
+                .containsIgnoringCase("not modeled")
+                .containsIgnoringCase("does not model it")
+                .containsIgnoringCase("offer to perform an action");
     }
 
     @Test
