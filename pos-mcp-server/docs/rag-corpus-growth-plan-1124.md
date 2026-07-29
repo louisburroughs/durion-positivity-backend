@@ -111,8 +111,8 @@ against:
 - **Order price-override role tiers** — flat $50/10% threshold; any `order:price_override:approve` holder
   can approve any amount.
 - **Vehicle fitment / compatibility** — not modeled in pos-customer (only a read-only `ExtVehicle`
-  replica). Lives in `pos-vehicle-inventory` (per ADR-0044), which is **not attached to this repo scope**.
-  Attach that module before planning a fitment doc; do not source it from pos-customer.
+  replica). Lives in `pos-vehicle-inventory` (per ADR-0044), which is present in this repo as its own module.
+  If/when authoring fitment docs for the corpus, source them from `pos-vehicle-inventory` — not from pos-customer.
 - **Core charges** — unchanged intentional gap (`gap-core-charge-KNOWNGAP`); no module source.
 
 ## Fixtures — grow in lockstep with each wave
