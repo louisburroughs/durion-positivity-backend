@@ -7,11 +7,14 @@ import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.domainevents.customer.CustomerConsentDecisionChangedV1;
 import com.positivity.domainevents.customer.CustomerPartyDeletedV1;
 import com.positivity.domainevents.customer.CustomerPartyTagChangedV1;
 import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
 import com.positivity.domainevents.customer.CustomerPersonIdentityUpdatedV1;
 import com.positivity.domainevents.customer.CustomerRedemptionRecordedV1;
+import com.positivity.domainevents.customer.CustomerSegmentChangedV1;
+import com.positivity.domainevents.customer.CustomerSegmentResolvedV1;
 import com.positivity.domainevents.customer.CustomerSuppressionChangedV1;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -204,6 +207,66 @@ public class CustomerFactPublisher {
         CustomerRedemptionRecordedV1 payload = new CustomerRedemptionRecordedV1(
                 redemptionId, promotionId, customerId, workorderId, promotionCode, campaignCode, discountAmount);
         publish(writer, CustomerRedemptionRecordedV1.EVENT_TYPE, customerId, payload);
+    }
+
+    /**
+     * Emit {@code customer.consent.decision-changed} for one party and channel (Story #1138).
+     *
+     * <p>Publishes the <em>resolved</em> decision rather than the raw consent fields: the
+     * commercial rule (decision O-2) belongs to this module, and re-deriving it in every
+     * consumer would guarantee the copies drift.
+     */
+    public void consentDecisionChanged(
+            @NonNull UUID partyId,
+            @NonNull String channel,
+            boolean allowed,
+            @NonNull String reason,
+            @Nullable UUID governingPartyId) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        CustomerConsentDecisionChangedV1 payload =
+                new CustomerConsentDecisionChangedV1(partyId, channel, allowed, reason, governingPartyId);
+        publish(writer, CustomerConsentDecisionChangedV1.EVENT_TYPE, partyId, payload);
+    }
+
+    /** Emit {@code customer.segment.changed} — metadata only, never membership (Story #1137). */
+    public void segmentChanged(
+            @NonNull UUID segmentId,
+            @Nullable String name,
+            @Nullable String audienceType,
+            @Nullable String type,
+            boolean active,
+            boolean deleted) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        CustomerSegmentChangedV1 payload =
+                new CustomerSegmentChangedV1(segmentId, name, audienceType, type, active, deleted);
+        publish(writer, CustomerSegmentChangedV1.EVENT_TYPE, segmentId, payload);
+    }
+
+    /**
+     * Emit {@code customer.segment.resolved} in reply to a resolve command (Story #1137).
+     *
+     * <p>Dynamic membership is derived from party data and has no event boundary, so it cannot
+     * be replicated continuously — a requester asks and this module answers.
+     */
+    public void segmentResolved(
+            @NonNull UUID requestId,
+            @NonNull UUID segmentId,
+            @NonNull String audienceType,
+            @NonNull List<UUID> partyIds,
+            boolean truncated) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        CustomerSegmentResolvedV1 payload =
+                new CustomerSegmentResolvedV1(requestId, segmentId, audienceType, partyIds, truncated);
+        publish(writer, CustomerSegmentResolvedV1.EVENT_TYPE, segmentId, payload);
     }
 
     private void publishPartyUpdated(@NonNull OutboxEventWriter writer, @NonNull AbstractParty party) {

@@ -1,6 +1,5 @@
 package com.positivity.marketing.internal.service;
 
-import com.positivity.marketing.internal.client.CustomerClient;
 import com.positivity.marketing.internal.dto.CampaignSendResponse;
 import com.positivity.marketing.internal.dto.PagedResponse;
 import com.positivity.marketing.internal.entity.Campaign;
@@ -10,6 +9,7 @@ import com.positivity.marketing.internal.enums.CampaignStatus;
 import com.positivity.marketing.internal.enums.SendStatus;
 import com.positivity.marketing.internal.exception.MarketingResourceNotFoundException;
 import com.positivity.marketing.internal.exception.MarketingUnprocessableEntityException;
+import com.positivity.marketing.internal.repository.CampaignAudienceMemberRepository;
 import com.positivity.marketing.internal.repository.CampaignRepository;
 import com.positivity.marketing.internal.repository.CampaignSendRepository;
 import com.positivity.marketing.service.CampaignSendService;
@@ -47,7 +47,8 @@ public class CampaignSendServiceImpl implements CampaignSendService {
     private final Clock clock;
     private final CampaignRepository campaignRepository;
     private final CampaignSendRepository sendRepository;
-    private final CustomerClient customerClient;
+    private final CampaignAudienceMemberRepository audienceRepository;
+    private final SegmentResolveRequester resolveRequester;
 
     @Override
     @Transactional
@@ -63,7 +64,15 @@ public class CampaignSendServiceImpl implements CampaignSendService {
             throw new MarketingUnprocessableEntityException("Campaign has no segment bound");
         }
 
-        List<UUID> recipients = customerClient.resolveSegmentPartyIds(campaign.getSegmentId());
+        // The audience is whatever the CRM last told us, materialized by the
+        // customer.segment.resolved consumer. If nothing has arrived, ask and return zero rather
+        // than dispatching to an empty set as though the segment genuinely matched nobody.
+        List<UUID> recipients = audienceRepository.findPartyIdsByCampaignId(campaignId);
+        if (recipients.isEmpty()) {
+            resolveRequester.requestResolve(campaignId, campaign.getSegmentId());
+            log.info("Campaign {} has no resolved audience yet; requested resolution and queued nothing", campaignId);
+            return 0;
+        }
         Instant now = Instant.now(clock);
         List<CampaignSend> queued = new ArrayList<>();
 

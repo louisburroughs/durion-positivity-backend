@@ -909,7 +909,11 @@ components:
         segmentMatched:
           type: integer
           format: int64
-          description: Parties matching the segment before any filtering
+          description: Parties in the current audience snapshot, before consent filtering
+        resolvedAt:
+          type: string
+          format: date-time
+          description: When the CRM resolved this snapshot; null if none has arrived yet. Membership replicates asynchronously, so these counts are as of this moment, not live.
         truncated:
           type: boolean
           description: Whether the segment resolution hit its candidate ceiling and is partial

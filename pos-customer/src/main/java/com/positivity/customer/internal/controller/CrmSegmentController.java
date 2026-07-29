@@ -199,25 +199,6 @@ public class CrmSegmentController {
     }
 
     @Operation(
-            summary = "Resolve segment membership",
-            description =
-                    "Resolve a segment to the opaque party ids it matches. Service-to-service audience building; returns identifiers only, never names or contact details.")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Party ids returned"),
-        @ApiResponse(responseCode = "404", description = "Segment not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
-    })
-    @PostMapping("/{segmentId}/resolve/party-ids")
-    @SecurityRequirement(
-            name = "bearerAuth",
-            scopes = {CrmPermissionRegistry.SEGMENT_RESOLVE})
-    @PreAuthorize("hasAuthority('crm:segment:resolve')")
-    @EmitEvent(id = "CRM_SEGMENT_RESOLVE_PARTY_IDS", apiVersion = "1")
-    public ResponseEntity<List<UUID>> resolvePartyIds(@PathVariable UUID segmentId) {
-        return ResponseEntity.ok(segmentService.resolvePartyIds(segmentId));
-    }
-
-    @Operation(
             summary = "Resolve segment",
             description =
                     "Resolve a segment to a match count, an optional per-channel eligible count, and a masked sample")

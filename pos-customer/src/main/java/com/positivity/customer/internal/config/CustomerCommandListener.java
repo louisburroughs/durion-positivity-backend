@@ -1,10 +1,12 @@
 package com.positivity.customer.internal.config;
 
 import com.positivity.customer.service.OutboxReplayService;
+import com.positivity.customer.service.SegmentService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -14,6 +16,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -36,6 +39,13 @@ public class CustomerCommandListener {
     /** Canonical dotted name normalized to command-type form: CUSTOMER_OUTBOX_REPLAY_REQUESTED. */
     private static final String COMMAND_OUTBOX_REPLAY_REQUESTED = "CUSTOMER_OUTBOX_REPLAY_REQUESTED";
 
+    /**
+     * Asynchronous membership request (Story #1137). Dynamic segment membership is derived
+     * from party data and has no event boundary, so it cannot be replicated continuously —
+     * a requester asks and this module answers with {@code customer.segment.resolved}.
+     */
+    private static final String COMMAND_SEGMENT_RESOLVE_REQUESTED = "CUSTOMER_SEGMENT_RESOLVE_REQUESTED";
+
     /** Covers the sub-millisecond skew between outbox createdAt and the eventId timestamp. */
     private static final Duration REPLAY_WINDOW_SLACK = Duration.ofSeconds(1);
 
@@ -46,6 +56,7 @@ public class CustomerCommandListener {
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final OutboxReplayService outboxReplayService;
+    private final SegmentService segmentService;
 
     @KafkaListener(
             topics = "${pos.customer.kafka.commands-topic:customer.commands.v1}",
@@ -64,6 +75,10 @@ public class CustomerCommandListener {
 
             if (COMMAND_OUTBOX_REPLAY_REQUESTED.equals(commandType)) {
                 handleOutboxReplayRequested(root);
+                return;
+            }
+            if (COMMAND_SEGMENT_RESOLVE_REQUESTED.equals(commandType)) {
+                handleSegmentResolveRequested(root);
                 return;
             }
             log.debug("Ignoring unsupported commandType={} message={}", commandType, message);
@@ -116,6 +131,47 @@ public class CustomerCommandListener {
             return Instant.parse(value);
         } catch (Exception _) {
             log.warn("Malformed payload.{}={} on outbox replay command", field, value);
+            return null;
+        }
+    }
+
+    /**
+     * Resolve a segment and reply with {@code customer.segment.resolved}.
+     *
+     * <p>Runs in its own transaction so the reply fact is written to the outbox atomically with
+     * the read that produced it. A malformed or unknown request is dropped rather than retried:
+     * neither can be fixed by redelivery, and a requester waiting on a reply will time out and
+     * ask again.
+     */
+    @Transactional
+    void handleSegmentResolveRequested(JsonNode root) {
+        JsonNode payload = root.path("payload");
+        UUID requestId = uuidOrNull(payload, "requestId");
+        UUID segmentId = uuidOrNull(payload, "segmentId");
+        if (requestId == null || segmentId == null) {
+            log.warn("Ignoring segment-resolve command missing requestId or segmentId");
+            return;
+        }
+        try {
+            segmentService
+                    .resolveAndPublish(requestId, segmentId)
+                    .ifPresent(count ->
+                            log.info("Resolved segment {} for request {}: {} party(ies)", segmentId, requestId, count));
+        } catch (TransientDataAccessException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            log.warn("Segment {} could not be resolved for request {}: {}", segmentId, requestId, e.getMessage());
+        }
+    }
+
+    private static UUID uuidOrNull(JsonNode node, String field) {
+        String value = node.path(field).stringValue(null);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException e) {
             return null;
         }
     }

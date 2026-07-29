@@ -230,10 +230,6 @@ public final class EventTypes {
                 EventTypeRegistration.search("CRM_SEGMENT_RESOLVE", "Resolve a segment to counts and a masked sample")
                         .apiVersion("1")
                         .build(),
-                EventTypeRegistration.search(
-                                "CRM_SEGMENT_RESOLVE_PARTY_IDS", "Resolve a segment to its matching party ids")
-                        .apiVersion("1")
-                        .build(),
 
                 // CrmFollowUpController - 7 events (Story #1153)
                 EventTypeRegistration.fastRead("CRM_FOLLOWUP_QUEUE", "Retrieve the CSR follow-up work queue")

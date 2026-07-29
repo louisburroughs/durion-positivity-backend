@@ -7,6 +7,7 @@ import com.positivity.customer.internal.dto.UpsertSegmentRequest;
 import com.positivity.customer.internal.enums.AudienceType;
 import com.positivity.customer.internal.enums.MarketingChannel;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -48,12 +49,20 @@ public interface SegmentService {
     SegmentResolutionResponse resolve(@NonNull UUID segmentId, @Nullable MarketingChannel channel, int sampleSize);
 
     /**
-     * The full matching party list, for a caller building a send audience.
+     * Resolve a segment and publish {@code customer.segment.resolved} in reply to a
+     * {@code SEGMENT_RESOLVE_REQUESTED} command.
      *
-     * <p>Returns opaque identifiers only — never names, addresses, or contact details — so
-     * exposing it does not turn audience building into a bulk PII export. {@link #resolve}
-     * remains the endpoint for human preview, because a marketer wants counts, not ids.
+     * <p>Not exposed over HTTP. Dynamic membership is derived from party data and has no event
+     * boundary, so it cannot be replicated continuously; a requester asks over
+     * {@code customer.commands.v1} and this module answers with a fact carrying opaque
+     * identifiers only — never names, addresses, or contact details.
+     *
+     * <p>Resolution and publication are deliberately one operation: it keeps the command
+     * listener on this public interface rather than reaching into {@code internal.service} for
+     * the fact publisher, which would create a cycle between the config and service slices.
+     *
+     * @return the number of parties published, or empty if the segment no longer exists
      */
     @NonNull
-    List<UUID> resolvePartyIds(@NonNull UUID segmentId);
+    Optional<Integer> resolveAndPublish(@NonNull UUID requestId, @NonNull UUID segmentId);
 }

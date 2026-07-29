@@ -441,8 +441,6 @@ paths:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1segments~1{segmentId}~1members~1{partyId}
   /v1/crm/segments/{segmentId}/resolve:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1segments~1{segmentId}~1resolve
-  /v1/crm/segments/{segmentId}/resolve/party-ids:
-    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1segments~1{segmentId}~1resolve~1party-ids
   /v1/crm/snapshot/party/{partyId}:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1snapshot~1party~1{partyId}
   /v1/crm/snapshot/party/{partyId}/billing-rules:

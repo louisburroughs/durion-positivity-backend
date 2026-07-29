@@ -29,6 +29,17 @@ public enum CampaignStatus {
         return this == DRAFT;
     }
 
+    /**
+     * Whether a refreshed audience snapshot may replace this campaign's current one.
+     *
+     * <p>Broader than {@link #isEditable()}: a scheduled campaign should pick up newer
+     * membership right up until it starts sending. Once dispatch begins, swapping the audience
+     * would change who gets contacted partway through a send.
+     */
+    public boolean audienceIsMutable() {
+        return this == DRAFT || this == SCHEDULED || this == PAUSED;
+    }
+
     private Set<CampaignStatus> allowedTargets() {
         return switch (this) {
             case DRAFT -> EnumSet.of(SCHEDULED, CANCELLED);

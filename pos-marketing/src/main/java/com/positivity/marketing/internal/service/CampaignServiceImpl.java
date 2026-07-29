@@ -1,22 +1,23 @@
 package com.positivity.marketing.internal.service;
 
-import com.positivity.marketing.internal.client.CatalogClient;
-import com.positivity.marketing.internal.client.CustomerClient;
-import com.positivity.marketing.internal.client.PriceClient;
 import com.positivity.marketing.internal.dto.AudiencePreviewResponse;
 import com.positivity.marketing.internal.dto.CampaignResponse;
 import com.positivity.marketing.internal.dto.UpsertCampaignRequest;
 import com.positivity.marketing.internal.entity.Campaign;
+import com.positivity.marketing.internal.entity.SegmentReplica;
 import com.positivity.marketing.internal.enums.CampaignChannel;
 import com.positivity.marketing.internal.enums.CampaignStatus;
 import com.positivity.marketing.internal.enums.ScheduleType;
 import com.positivity.marketing.internal.exception.MarketingDuplicateResourceException;
 import com.positivity.marketing.internal.exception.MarketingResourceNotFoundException;
 import com.positivity.marketing.internal.exception.MarketingUnprocessableEntityException;
+import com.positivity.marketing.internal.repository.CampaignAudienceMemberRepository;
 import com.positivity.marketing.internal.repository.CampaignRepository;
 import com.positivity.marketing.internal.repository.MessageTemplateRepository;
+import com.positivity.marketing.internal.repository.SegmentReplicaRepository;
 import com.positivity.marketing.service.CampaignService;
 import com.positivity.security.common.SecurityContextHelper;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -40,9 +41,10 @@ public class CampaignServiceImpl implements CampaignService {
 
     private final CampaignRepository campaignRepository;
     private final MessageTemplateRepository templateRepository;
-    private final CustomerClient customerClient;
-    private final PriceClient priceClient;
-    private final CatalogClient catalogClient;
+    private final SegmentReplicaRepository segmentReplicaRepository;
+    private final CampaignAudienceMemberRepository audienceRepository;
+    private final AudienceEligibilityService eligibilityService;
+    private final SegmentResolveRequester resolveRequester;
     private final MarketingFactPublisher factPublisher;
 
     @Override
@@ -175,32 +177,36 @@ public class CampaignServiceImpl implements CampaignService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public @NonNull AudiencePreviewResponse previewAudience(@NonNull UUID campaignId) {
         Campaign campaign = requireCampaign(campaignId);
         if (campaign.getSegmentId() == null) {
             throw new MarketingUnprocessableEntityException("Campaign has no segment bound; nothing to preview");
         }
-        List<AudiencePreviewResponse.ChannelPreview> channels = new ArrayList<>();
-        long matched = 0;
-        boolean truncated = false;
-        for (CampaignChannel channel : campaign.getChannels()) {
-            CustomerClient.SegmentResolution resolution =
-                    customerClient.resolveSegment(campaign.getSegmentId(), channel.name());
-            matched = Math.max(matched, resolution.totalMatched());
-            truncated = truncated || resolution.truncated();
-            channels.add(new AudiencePreviewResponse.ChannelPreview(
-                    channel.name(),
-                    resolution.totalMatched(),
-                    resolution.eligibleCount() != null ? resolution.eligibleCount() : 0L,
-                    templateFor(campaign, channel).isPresent()));
+        // Membership arrives asynchronously, so a preview reports the last snapshot and asks for
+        // a fresher one. The snapshot's age travels with the numbers so a marketer can see how
+        // current they are rather than assuming they are live.
+        List<UUID> members = audienceRepository.findPartyIdsByCampaignId(campaignId);
+        Instant resolvedAt = audienceRepository.findResolvedAt(campaignId).orElse(null);
+        if (campaign.getStatus().audienceIsMutable()) {
+            resolveRequester.requestResolve(campaignId, campaign.getSegmentId());
         }
+
+        List<AudiencePreviewResponse.ChannelPreview> channels = campaign.getChannels().stream()
+                .map(channel -> new AudiencePreviewResponse.ChannelPreview(
+                        channel.name(),
+                        members.size(),
+                        eligibilityService.countEligible(members, channel),
+                        templateFor(campaign, channel).isPresent()))
+                .toList();
+
         return new AudiencePreviewResponse(
                 campaignId,
                 campaign.getSegmentId(),
                 campaign.getAudienceType().name(),
-                matched,
-                truncated,
+                members.size(),
+                resolvedAt,
+                false,
                 channels,
                 readinessProblems(campaign));
     }
@@ -208,6 +214,11 @@ public class CampaignServiceImpl implements CampaignService {
     /**
      * Everything that would stop this campaign from going out, gathered rather than thrown one at
      * a time — a marketer fixing a campaign wants the whole list, not a game of whack-a-mole.
+     *
+     * <p>The segment is checked against the {@code ext_segment} replica. Offer and catalog
+     * validation is deliberately absent: pos-price publishes no events, so there is no fact to
+     * replicate and no synchronous read permitted across the domain wall. That check returns
+     * with FI-1 (#1134), which is the pos-price side of the work.
      */
     private List<String> readinessProblems(Campaign campaign) {
         List<String> problems = new ArrayList<>();
@@ -217,32 +228,29 @@ public class CampaignServiceImpl implements CampaignService {
         if (campaign.getSegmentId() == null) {
             problems.add("no segment bound");
         } else {
-            try {
-                CustomerClient.SegmentSummary segment = customerClient.getSegment(campaign.getSegmentId());
-                if (!segment.active()) {
-                    problems.add("segment " + segment.name() + " is inactive");
+            Optional<SegmentReplica> segment = segmentReplicaRepository.findById(campaign.getSegmentId());
+            if (segment.isEmpty()) {
+                // Either the segment does not exist or its fact has not reached us yet. Both are
+                // reasons not to schedule; the operator can retry once the replica catches up.
+                problems.add("segment " + campaign.getSegmentId() + " is not known to this module yet");
+            } else {
+                SegmentReplica replica = segment.get();
+                if (!replica.isActive()) {
+                    problems.add("segment " + replica.getName() + " is inactive");
                 }
-                if (!campaign.getAudienceType().name().equalsIgnoreCase(segment.audienceType())) {
+                if (replica.getAudienceType() != null
+                        && !campaign.getAudienceType().name().equalsIgnoreCase(replica.getAudienceType())) {
                     // A commercial campaign bound to an individual segment would render templates
                     // written for organizations against people, for every recipient.
-                    problems.add("segment audienceType " + segment.audienceType() + " does not match campaign "
+                    problems.add("segment audienceType " + replica.getAudienceType() + " does not match campaign "
                             + campaign.getAudienceType());
                 }
-            } catch (CustomerClient.CustomerUnavailableException ex) {
-                problems.add("segment could not be validated: " + ex.getMessage());
             }
         }
         for (CampaignChannel channel : campaign.getChannels()) {
             if (templateFor(campaign, channel).isEmpty()) {
                 problems.add("no " + channel + " template attached");
             }
-        }
-        if (campaign.getPromotionOfferId() != null && !priceClient.isOfferActive(campaign.getPromotionOfferId())) {
-            problems.add("promotion offer " + campaign.getPromotionOfferId() + " is not ACTIVE");
-        }
-        if (campaign.getCatalogFocusRef() != null
-                && !catalogClient.isReferenceResolvable(campaign.getCatalogFocusRef())) {
-            problems.add("catalog reference " + campaign.getCatalogFocusRef() + " does not resolve");
         }
         return problems;
     }

@@ -74,9 +74,13 @@ pos:
       enabled: ${POS_MARKETING_KAFKA_ENABLED:false}
       # This module's own fact topic.
       events-topic: ${POS_MARKETING_EVENTS_TOPIC:marketing.events.v1}
-      # Suppression + redemption facts owned by pos-customer (Stories #1140/#1142).
+      # Suppression, consent decisions, segment definitions, resolved membership, and
+      # redemption facts — all owned by pos-customer (ADR-0044 R3).
       customer-events-topic: ${POS_MARKETING_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
       customer-events-consumer-group: ${POS_MARKETING_CUSTOMER_EVENTS_CONSUMER_GROUP:pos-marketing-customer-events}
+      # Outbound: asks pos-customer to resolve a segment's membership. Membership is derived
+      # from party data and has no event boundary, so it cannot be replicated continuously.
+      customer-commands-topic: ${POS_MARKETING_CUSTOMER_COMMANDS_TOPIC:customer.commands.v1}
     send:
       # Send-worker pacing (Story #1149). The batch size bounds how many recipients one
       # drain locks; the delay paces the provider so a large campaign does not burst.
@@ -88,20 +92,15 @@ pos:
       batch-size: ${POS_MARKETING_SEND_BATCH_SIZE:100}
       poll-delay-ms: ${POS_MARKETING_SEND_POLL_DELAY_MS:5000}
       max-attempts: ${POS_MARKETING_SEND_MAX_ATTEMPTS:3}
+      # Fail-closed staleness bound on the replicated consent decision. A party whose decision
+      # is older than this is refused rather than trusted: a delayed send is recoverable, an
+      # unwanted one is not. Lower it if the CRM feed is reliably fast; never disable it.
+      max-consent-age: ${POS_MARKETING_MAX_CONSENT_AGE:PT24H}
   events:
     base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}
     api-secret: ${POS_EVENTS_API_SECRET:}
   security:
     base-url: ${POS_SECURITY_BASE_URL:http://pos-security-service:8080}
-  # Outbound sibling-service clients: Eureka service ids + base paths. Integration with
-  # pos-customer is gateway REST plus customer.events.v1 only — no compile-time dependency
-  # (plan §0.1).
-  customer:
-    service-id: customer
-    base-path: /v1/crm
-  price:
-    service-id: price
-    base-path: /v1
-  catalog:
-    service-id: catalog
-    base-path: /v1
+  # No outbound sibling-service clients: integration with pos-customer is entirely
+  # customer.events.v1 replicas plus one asynchronous command (ADR-0044 R3). pos-price and
+  # pos-catalog validation returns with FI-1 (#1134), which adds the events to replicate.

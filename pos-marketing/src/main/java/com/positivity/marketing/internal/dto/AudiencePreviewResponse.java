@@ -8,11 +8,15 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * What a campaign would actually reach if sent now (Story #1148).
+ * What a campaign would reach based on its latest audience snapshot (Story #1148).
  *
  * <p>Reports targeted and eligible counts per channel rather than a recipient list. The gap
  * between the two is the number the marketer needs: it is the difference between "my segment
  * is too narrow" and "most of these people have opted out".
+ *
+ * <p>Membership is replicated asynchronously (ADR-0044), so these counts describe a snapshot
+ * with a stated age rather than a live query. Requesting a preview also asks the CRM to refresh
+ * that snapshot, so a second call reflects any change.
  */
 @Schema(description = "Per-channel audience preview after consent and suppression filtering")
 public record AudiencePreviewResponse(
@@ -28,8 +32,16 @@ public record AudiencePreviewResponse(
                 requiredMode = REQUIRED)
         String audienceType,
 
-        @Schema(description = "Parties matching the segment before any filtering", requiredMode = REQUIRED)
+        @Schema(
+                description = "Parties in the current audience snapshot, before consent filtering",
+                requiredMode = REQUIRED)
         long segmentMatched,
+
+        @Schema(
+                description =
+                        "When the CRM resolved this snapshot; null if none has arrived yet. Membership replicates asynchronously, so these counts are as of this moment, not live.",
+                requiredMode = NOT_REQUIRED)
+        java.time.Instant resolvedAt,
 
         @Schema(
                 description = "Whether the segment resolution hit its candidate ceiling and is partial",

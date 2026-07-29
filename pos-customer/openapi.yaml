@@ -1049,39 +1049,6 @@ paths:
         - crm:segment:resolve
       x-required-permissions:
       - crm:segment:resolve
-  /v1/crm/segments/{segmentId}/resolve/party-ids:
-    post:
-      tags:
-      - CRM Segments
-      summary: Resolve segment membership
-      description: Resolve a segment to the opaque party ids it matches. Service-to-service audience building; returns identifiers only, never names or contact details.
-      operationId: resolvePartyIds
-      parameters:
-      - name: segmentId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Party ids returned
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: string
-                  format: uuid
-        '404':
-          description: Segment not found
-        '403':
-          description: Forbidden - insufficient permissions
-      security:
-      - bearerAuth:
-        - crm:segment:resolve
-      x-required-permissions:
-      - crm:segment:resolve
   /v1/crm/segments/{segmentId}/members:
     post:
       tags:

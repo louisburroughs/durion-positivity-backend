@@ -48,6 +48,7 @@ public class MarketingConsentServiceImpl implements MarketingConsentService {
     private final CommercialPartyRepository commercialPartyRepository;
     private final PersonPartyRepository personPartyRepository;
     private final ConsentEventRepository consentEventRepository;
+    private final CustomerFactPublisher factPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -141,6 +142,10 @@ public class MarketingConsentServiceImpl implements MarketingConsentService {
         }
 
         preferenceRepository.save(preference);
+        // Consumers replicate the resolved decision, so re-publish both channels whenever any
+        // consent-affecting field moves — a partial emission would leave a stale "allowed" on
+        // the other channel, which is the one failure mode that mails an opted-out customer.
+        publishDecisions(partyId);
         // Audit rows are written only for channels that actually moved, so replaying an
         // idempotent no-op update does not pollute the compliance trail.
         if (!audit.isEmpty()) {
@@ -160,6 +165,9 @@ public class MarketingConsentServiceImpl implements MarketingConsentService {
             account.setAccountMarketingOptOut(optOut);
             account.setAccountMarketingOptOutAt(optOut ? Instant.now(clock) : null);
             commercialPartyRepository.save(account);
+            // The gate governs every contact on the account, so the decision changes for the
+            // account party itself and must be republished.
+            publishDecisions(partyId);
             log.info("Account marketing gate for {} set to optOut={}", partyId, optOut);
         }
         return buildSummary(partyId);
@@ -172,6 +180,15 @@ public class MarketingConsentServiceImpl implements MarketingConsentService {
         return PagedResponse.from(
                 consentEventRepository.findByPartyIdOrderByOccurredAtDesc(partyId, pageable),
                 MarketingConsentServiceImpl::toResponse);
+    }
+
+    /** Republish the resolved decision for every channel this module models. */
+    private void publishDecisions(UUID partyId) {
+        for (MarketingChannel channel : MarketingChannel.values()) {
+            MarketingConsentDecision decision = resolveEligibility(partyId, channel);
+            factPublisher.consentDecisionChanged(
+                    partyId, channel.name(), decision.allowed(), decision.reason(), decision.governingPartyId());
+        }
     }
 
     private MarketingConsentSummaryResponse buildSummary(UUID partyId) {

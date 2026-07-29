@@ -1,6 +1,5 @@
 package com.positivity.marketing.internal.config;
 
-import com.positivity.marketing.internal.client.CustomerClient;
 import com.positivity.marketing.internal.exception.MarketingDuplicateResourceException;
 import com.positivity.marketing.internal.exception.MarketingResourceNotFoundException;
 import com.positivity.marketing.internal.exception.MarketingUnprocessableEntityException;
@@ -60,17 +59,6 @@ public class MarketingExceptionHandler {
             MarketingUnprocessableEntityException ex, HttpServletRequest request, HttpServletResponse response) {
         log.warn("Unprocessable entity on {}: {}", path(request), ex.getMessage());
         return error(request, response, HttpStatus.UNPROCESSABLE_ENTITY, "UNPROCESSABLE_ENTITY", ex.getMessage());
-    }
-
-    /**
-     * CRM being unreachable is a dependency failure, not the caller's fault — {@code 503} with a
-     * message naming pos-customer, so an operator is not left guessing which service is down.
-     */
-    @ExceptionHandler(CustomerClient.CustomerUnavailableException.class)
-    public ResponseEntity<ApiError> handleCustomerUnavailable(
-            CustomerClient.CustomerUnavailableException ex, HttpServletRequest request, HttpServletResponse response) {
-        log.error("pos-customer unavailable on {}: {}", path(request), ex.getMessage());
-        return error(request, response, HttpStatus.SERVICE_UNAVAILABLE, "CUSTOMER_UNAVAILABLE", ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

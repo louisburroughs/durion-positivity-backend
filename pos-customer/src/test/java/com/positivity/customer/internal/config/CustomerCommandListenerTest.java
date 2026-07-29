@@ -30,12 +30,14 @@ class CustomerCommandListenerTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-07-13T12:00:00Z"), ZoneOffset.UTC);
 
     private final OutboxReplayService replayService = mock(OutboxReplayService.class);
+    private final com.positivity.customer.service.SegmentService segmentService =
+            mock(com.positivity.customer.service.SegmentService.class);
 
     private CustomerCommandListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new CustomerCommandListener(TEST_CLOCK, new ObjectMapper(), replayService);
+        listener = new CustomerCommandListener(TEST_CLOCK, new ObjectMapper(), replayService, segmentService);
         ReflectionTestUtils.setField(listener, "replayMaxLookback", Duration.ofDays(30));
     }
 

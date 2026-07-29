@@ -1,6 +1,5 @@
 package com.positivity.marketing.internal.service;
 
-import com.positivity.marketing.internal.client.CustomerClient;
 import com.positivity.marketing.internal.domain.TemplateToken;
 import com.positivity.marketing.internal.entity.Campaign;
 import com.positivity.marketing.internal.entity.CampaignSend;
@@ -11,7 +10,6 @@ import com.positivity.marketing.internal.enums.SendStatus;
 import com.positivity.marketing.internal.repository.CampaignRepository;
 import com.positivity.marketing.internal.repository.CampaignSendRepository;
 import com.positivity.marketing.internal.repository.MessageTemplateRepository;
-import com.positivity.marketing.internal.repository.SuppressionReplicaRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HashMap;
@@ -48,8 +46,7 @@ public class CampaignSendWorker {
     private final CampaignSendRepository sendRepository;
     private final CampaignRepository campaignRepository;
     private final MessageTemplateRepository templateRepository;
-    private final SuppressionReplicaRepository suppressionRepository;
-    private final CustomerClient customerClient;
+    private final AudienceEligibilityService eligibilityService;
     private final MessageChannelPort messageChannel;
     private final TemplateRenderService renderService;
     private final MarketingFactPublisher factPublisher;
@@ -61,8 +58,7 @@ public class CampaignSendWorker {
             CampaignSendRepository sendRepository,
             CampaignRepository campaignRepository,
             MessageTemplateRepository templateRepository,
-            SuppressionReplicaRepository suppressionRepository,
-            CustomerClient customerClient,
+            AudienceEligibilityService eligibilityService,
             MessageChannelPort messageChannel,
             TemplateRenderService renderService,
             MarketingFactPublisher factPublisher,
@@ -72,8 +68,7 @@ public class CampaignSendWorker {
         this.sendRepository = sendRepository;
         this.campaignRepository = campaignRepository;
         this.templateRepository = templateRepository;
-        this.suppressionRepository = suppressionRepository;
-        this.customerClient = customerClient;
+        this.eligibilityService = eligibilityService;
         this.messageChannel = messageChannel;
         this.renderService = renderService;
         this.factPublisher = factPublisher;
@@ -155,29 +150,18 @@ public class CampaignSendWorker {
     }
 
     /**
-     * Why this recipient must not be contacted right now, or null if they may be. Checks the
-     * local suppression replica first — it is a cheap local read and catches the bounce and
-     * complaint cases — then asks the CRM for the authoritative consent decision.
+     * Why this recipient must not be contacted right now, or null if they may be.
+     *
+     * <p>Delegates to {@link AudienceEligibilityService}, which reads the replicated CRM
+     * decision and <strong>fails closed on missing or stale data</strong>. That matters here:
+     * with no synchronous CRM call available, a replica that has fallen behind is the one way
+     * this worker could mail someone who has since opted out, so absence of a fresh answer is
+     * treated as refusal rather than permission.
      */
     private String denialReason(CampaignSend send) {
-        if (suppressionRepository.existsByPartyIdAndChannel(
-                send.getRecipientPartyId(), send.getChannel().name())) {
-            return "SUPPRESSED";
-        }
-        try {
-            CustomerClient.ConsentDecision decision = customerClient.resolveEligibility(
-                    send.getRecipientPartyId(), send.getChannel().name());
-            return decision.allowed() ? null : decision.reason();
-        } catch (CustomerClient.CustomerUnavailableException ex) {
-            // Fail closed. Sending without a consent answer is the one outcome that cannot be
-            // undone; leaving the row PENDING costs a delay and nothing else.
-            log.warn(
-                    "Consent check unavailable for party {}; leaving send {} queued: {}",
-                    send.getRecipientPartyId(),
-                    send.getCampaignSendId(),
-                    ex.getMessage());
-            return null;
-        }
+        AudienceEligibilityService.Decision decision =
+                eligibilityService.decide(send.getRecipientPartyId(), send.getChannel());
+        return decision.allowed() ? null : decision.reason();
     }
 
     private Map<String, String> tokenValues(Campaign campaign) {

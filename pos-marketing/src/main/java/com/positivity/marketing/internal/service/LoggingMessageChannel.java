@@ -26,11 +26,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(
-        prefix = "pos.marketing.send",
-        name = "transport",
-        havingValue = "stub",
-        matchIfMissing = true)
+@ConditionalOnProperty(prefix = "pos.marketing.send", name = "transport", havingValue = "stub", matchIfMissing = true)
 public class LoggingMessageChannel implements MessageChannelPort {
 
     @Override
@@ -46,7 +42,6 @@ public class LoggingMessageChannel implements MessageChannelPort {
                 channel,
                 recipientPartyId,
                 body.length());
-        return SendOutcome.accepted(
-                "stub-" + channel.name().toLowerCase(Locale.ROOT) + "-" + recipientPartyId);
+        return SendOutcome.accepted("stub-" + channel.name().toLowerCase(Locale.ROOT) + "-" + recipientPartyId);
     }
 }

@@ -49,6 +49,7 @@ public class SegmentServiceImpl implements SegmentService {
     private final SegmentMemberRepository segmentMemberRepository;
     private final SegmentResolutionService resolutionService;
     private final MarketingConsentService marketingConsentService;
+    private final CustomerFactPublisher factPublisher;
 
     @Override
     @Transactional
@@ -66,7 +67,9 @@ public class SegmentServiceImpl implements SegmentService {
                 .active(request.getActive() == null || request.getActive())
                 .createdBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
                 .build();
-        return toResponse(segmentRepository.save(segment), 0L);
+        Segment saved = segmentRepository.save(segment);
+        publishSegment(saved, false);
+        return toResponse(saved, 0L);
     }
 
     @Override
@@ -96,7 +99,9 @@ public class SegmentServiceImpl implements SegmentService {
         if (request.getActive() != null) {
             segment.setActive(request.getActive());
         }
-        return toResponse(segmentRepository.save(segment), memberCount(segment));
+        Segment saved = segmentRepository.save(segment);
+        publishSegment(saved, false);
+        return toResponse(saved, memberCount(saved));
     }
 
     @Override
@@ -105,6 +110,7 @@ public class SegmentServiceImpl implements SegmentService {
         Segment segment = requireSegment(segmentId);
         segmentMemberRepository.deleteBySegmentId(segmentId);
         segmentRepository.delete(segment);
+        publishSegment(segment, true);
         log.info("Deleted segment {} ({})", segment.getName(), segmentId);
     }
 
@@ -195,10 +201,30 @@ public class SegmentServiceImpl implements SegmentService {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public @NonNull List<UUID> resolvePartyIds(@NonNull UUID segmentId) {
-        Segment segment = requireSegment(segmentId);
-        return resolutionService.resolve(segment, parsedPredicate(segment)).partyIds();
+    @Transactional
+    public @NonNull Optional<Integer> resolveAndPublish(@NonNull UUID requestId, @NonNull UUID segmentId) {
+        Optional<Segment> found = segmentRepository.findById(segmentId);
+        if (found.isEmpty()) {
+            // A request naming a segment that has since been deleted is not worth retrying; the
+            // requester will time out and stop asking.
+            log.info("Segment {} no longer exists; not answering resolve request {}", segmentId, requestId);
+            return Optional.empty();
+        }
+        Segment segment = found.get();
+        SegmentResolutionService.Resolution resolution = resolutionService.resolve(segment, parsedPredicate(segment));
+        factPublisher.segmentResolved(
+                requestId, segmentId, segment.getAudienceType().name(), resolution.partyIds(), resolution.truncated());
+        return Optional.of(resolution.partyIds().size());
+    }
+
+    private void publishSegment(Segment segment, boolean deleted) {
+        factPublisher.segmentChanged(
+                segment.getSegmentId(),
+                segment.getName(),
+                segment.getAudienceType().name(),
+                segment.getType().name(),
+                segment.isActive(),
+                deleted);
     }
 
     private Map<UUID, String> maskedLabels(AudienceType audienceType, List<UUID> partyIds) {
