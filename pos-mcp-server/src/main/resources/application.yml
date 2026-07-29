@@ -85,6 +85,18 @@ mcp:
           source-path: "classpath:rag/order-guide.md"
           rag-scope: "order"
           required-permissions: ["order:order:view"]
+        - id: "order.lifecycle"
+          source-path: "classpath:rag/order-lifecycle-rag.md"
+          rag-scope: "order"
+          required-permissions: ["order:order:view"]
+        - id: "order.price-override"
+          source-path: "classpath:rag/order-price-override-rag.md"
+          rag-scope: "order"
+          required-permissions: ["order:price_override:view"]
+        - id: "order.codes"
+          source-path: "classpath:rag/order-codes-rag.md"
+          rag-scope: "order"
+          required-permissions: ["order:order:view"]
         - id: "order.returns-refunds"
           source-path: "classpath:rag/returns-refunds-rag.md"
           rag-scope: "order"

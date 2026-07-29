@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Seed the RAG corpus into pgvector directly from Python — no JVM, no redeploy, no auth token.
 Faithfully mirrors the production ingest path (DocumentEmbeddingIngestor + StaticRagPreloadServiceImpl)
-so a Python-only host can populate the same 17-doc corpus that `application-alpha.yml`'s preload would
+so a Python-only host can populate the same corpus that `application-alpha.yml`'s preload would
 produce on startup, letting `eval_live.py` measure the recall@k baseline BEFORE the config change is
 merged and deployed.
 
@@ -43,6 +43,9 @@ MANIFEST = [
     ("workflow.cross-domain-playbooks", "cross-domain-playbooks.md", "master", ["AUTHENTICATED"]),
     ("glossary.identifiers", "glossary-identifiers.md", "master", ["AUTHENTICATED"]),
     ("order.guide", "order-guide.md", "order", ["order:order:view"]),
+    ("order.lifecycle", "order-lifecycle-rag.md", "order", ["order:order:view"]),
+    ("order.price-override", "order-price-override-rag.md", "order", ["order:price_override:view"]),
+    ("order.codes", "order-codes-rag.md", "order", ["order:order:view"]),
     ("order.returns-refunds", "returns-refunds-rag.md", "order", ["order:order:view"]),
     ("pricing.guide", "pricing-guide.md", "pricing", ["pricing:price_book:view", "pricing:rule:view"]),
     ("warranty.guide", "warranty-guide.md", "warranty", ["warranty:claim:view"]),
