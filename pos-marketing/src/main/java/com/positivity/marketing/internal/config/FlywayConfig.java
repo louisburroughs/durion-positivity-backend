@@ -17,7 +17,7 @@ public class FlywayConfig {
 
     @Bean(initMethod = "migrate")
     @ConditionalOnMissingBean(Flyway.class)
-    public Flyway warrantyFlyway(DataSource dataSource) {
+    public Flyway marketingFlyway(DataSource dataSource) {
         return Flyway.configure()
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
