@@ -35,6 +35,10 @@ STEP = MAX_SEGMENT - OVERLAP  # 1800
 MANIFEST = [
     ("accounting.de-bookkeeping", "de-bookkeeping-rag.md", "accounting", []),
     ("inventory.inv-cntrl", "inv-cntrl-rag.md", "inventory", []),
+    ("inventory.purchase-orders", "inventory-purchase-orders-rag.md", "inventory", ["inventory:purchase_order:view"]),
+    ("inventory.receiving", "inventory-receiving-rag.md", "inventory", ["inventory:receiving:view"]),
+    ("inventory.transfers-adjustments", "inventory-transfers-adjustments-rag.md", "inventory", ["inventory:transfer:view"]),
+    ("inventory.codes", "inventory-codes-rag.md", "inventory", ["inventory:purchase_order:view"]),
     ("people.human-resources", "hr-functions-guide.md", "hr", []),
     ("shop.management", "shop-management-rag.md", "shopmanager", []),
     ("shop.management.guidelines", "shop-management-guidelines.md", "shopmanager", []),

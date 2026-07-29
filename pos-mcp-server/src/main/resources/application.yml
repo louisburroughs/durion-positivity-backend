@@ -53,6 +53,22 @@ mcp:
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
           rag-scope: "inventory"
+        - id: "inventory.purchase-orders"
+          source-path: "classpath:rag/inventory-purchase-orders-rag.md"
+          rag-scope: "inventory"
+          required-permissions: ["inventory:purchase_order:view"]
+        - id: "inventory.receiving"
+          source-path: "classpath:rag/inventory-receiving-rag.md"
+          rag-scope: "inventory"
+          required-permissions: ["inventory:receiving:view"]
+        - id: "inventory.transfers-adjustments"
+          source-path: "classpath:rag/inventory-transfers-adjustments-rag.md"
+          rag-scope: "inventory"
+          required-permissions: ["inventory:transfer:view"]
+        - id: "inventory.codes"
+          source-path: "classpath:rag/inventory-codes-rag.md"
+          rag-scope: "inventory"
+          required-permissions: ["inventory:purchase_order:view"]
         - id: "people.human-resources"
           source-path: "classpath:rag/hr-functions-guide.md"
           rag-scope: "hr"
