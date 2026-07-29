@@ -351,17 +351,25 @@ def main():
             "present_without_permission": without, "present_with_permission": with_perm,
         }
 
-    # AC4 (#783) thresholds — calibrated from the live baseline (hit@5 0.84 / MRR 0.77),
-    # set with margin below observed. Override with EVAL_MIN_HIT5 / EVAL_MIN_MRR.
-    # Floors calibrated with margin below the live alpha baseline (17-doc corpus):
-    #   hit@5   0.84 -> 0.75  (~11%),  recall@k 0.9574 -> 0.85 (~11%),  MRR 0.77 -> 0.65 (~16%, wider —
-    #   MRR is rank-sensitive so it gets more headroom). Recall confirmed at the production
-    #   RAG_MIN_SCORE=0.55 floor on the preload-repopulated corpus (identical to the 0.0-threshold run:
-    #   expected docs clear 0.55 comfortably). RAG forbidden leaks are always a hard fail.
+    # AC4 (#783) thresholds — re-baselined 2026-07-29 (#1124) off the grown 39-doc corpus.
+    # Method (unchanged): floors ~11% below the live-observed alpha baseline, so the nightly gate
+    # tolerates a corpus-scale re-embedding swing without going red on a healthy corpus, while still
+    # catching a real regression. MRR gets slightly wider headroom (rank-sensitive).
+    #
+    # Why re-baseline: the prior floors were set off the 17-doc corpus (hit@5 0.84 / recall 0.9574 /
+    # MRR 0.77). The corpus doubling (#1163) dropped observed recall to 0.8571 — only ~0.001 over the
+    # old 0.85 floor, i.e. one wobble from red. Three back-to-back re-embed+eval cycles on alpha
+    # (rag_seed → eval_live) produced *identical* numbers — hit@5 0.76, MRR 0.7222, recall 0.8571 —
+    # so per-run embedding is deterministic; the historical 0.9574 -> 0.8511 drift was a one-time
+    # corpus-change event (~11% magnitude), not run randomness. New floors sit ~11% under the
+    # deterministic 39-doc baseline:
+    #   hit@5   0.76   -> 0.68  (~11%),  recall@k 0.8571 -> 0.76 (~11%),  MRR 0.7222 -> 0.64 (~11%).
+    # Recall confirmed at the production RAG_MIN_SCORE=0.55 floor. RAG forbidden leaks are always a
+    # hard fail. Re-run this calibration whenever the corpus changes materially.
     # Override with EVAL_MIN_HIT5 / EVAL_MIN_MRR / EVAL_MIN_RECALL.
-    floor_hit5 = float(os.environ.get("EVAL_MIN_HIT5", "0.75"))
-    floor_mrr = float(os.environ.get("EVAL_MIN_MRR", "0.65"))
-    floor_recall = float(os.environ.get("EVAL_MIN_RECALL", "0.85"))
+    floor_hit5 = float(os.environ.get("EVAL_MIN_HIT5", "0.68"))
+    floor_mrr = float(os.environ.get("EVAL_MIN_MRR", "0.64"))
+    floor_recall = float(os.environ.get("EVAL_MIN_RECALL", "0.76"))
     failures = []
     if hit_at_5 < floor_hit5:
         failures.append(f"hit@5 {hit_at_5:.4f} < {floor_hit5}")

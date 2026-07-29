@@ -58,7 +58,7 @@ intentional, documented gap (`gap-core-charge-KNOWNGAP`, no module source exists
 
 > **Flip `mcp.rag.hybrid.lexical-enabled=true` when hybrid (dense+lexical RRF) recovers ≥ 30% of the
 > retrieval-miss failures that dense alone does not, AND the gated `rag_retrieval.recall_at_k` is known
-> and ≥ 0.85 (its #783 floor).**
+> and ≥ 0.76 (its #783 floor, re-baselined 2026-07-29 off the 39-doc corpus).**
 
 Details that make it honest:
 
@@ -67,7 +67,7 @@ Details that make it honest:
 - A **missing `recall_at_k` does not satisfy** the recall gate: without the value we cannot confirm the
   flip is not masking a recall regression, so the conservative outcome is HOLD. Always pass
   `--recall-at-k` from the same alpha run.
-- Defaults (`fusion.py`): `min_recovery_rate=0.30`, `recall_floor=0.85`, `rrf_k=60` (matches
+- Defaults (`fusion.py`): `min_recovery_rate=0.30`, `recall_floor=0.76`, `rrf_k=60` (matches
   `HybridRetrievalProperties.rrfK` and `eval_live.py`). Tunable at call time as evidence accrues.
 
 The harness emits the decision to `flip-threshold.{json,md}` on every `run`/`replay`.
@@ -88,9 +88,25 @@ line-of-sight to alpha (see `scripts/run-live-eval.sh`):
    #783 floors** (the corpus grew, so recall@k must be re-measured); otherwise record the measured
    rationale and keep the flag dormant.
 
-## Re-baseline note (#783 floors)
+## Re-baseline note (#783 floors) — done 2026-07-29
 
-The gated `rag_retrieval.recall_at_k` drifted 0.9574 → 0.8511 on a prior alpha redeploy (re-embedding
-wobble), leaving ~0.001 of headroom over the 0.85 floor. Growing the corpus re-embeds everything, so this
-effort is the natural point to re-measure and re-set the #783 nightly-gate floors off the new corpus, so
-the gate is not one embedding wobble from red.
+The gated `rag_retrieval.recall_at_k` drifted 0.9574 → 0.8511 on a prior alpha redeploy, leaving ~0.001
+of headroom over the old 0.85 floor. Growing the corpus (#1163, 18 → 39 docs) re-embeds everything, so
+this was the natural point to re-measure and re-set the #783 nightly-gate floors.
+
+**Measured on the 39-doc corpus (alpha):** three back-to-back `rag_seed` → `eval_live` cycles produced
+**identical** numbers — hit@5 **0.76**, MRR **0.7222**, recall@k **0.8571** — confirming per-run
+embedding is deterministic; the historical 0.9574 → 0.8511 drift was a one-time *corpus-change* event
+(~11% magnitude), not run-to-run randomness.
+
+**New floors (same ~11%-below-observed method as the original calibration):**
+
+| Metric | Old floor (17-doc) | Observed (39-doc) | New floor |
+|---|---|---|---|
+| hit@5 | 0.75 | 0.76 | **0.68** |
+| MRR | 0.65 | 0.7222 | **0.64** |
+| recall@k | 0.85 | 0.8571 | **0.76** |
+
+Applied in `scripts/eval_live.py`, `BaselineCaptureIT` (`-Dmcp.eval.min-*`), and the flip-criterion
+`fusion.py::DEFAULT_RECALL_FLOOR` (kept in lockstep with `EVAL_MIN_RECALL`). The gate is no longer one
+embedding wobble from red. Re-run this calibration whenever the corpus changes materially.

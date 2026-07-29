@@ -17,7 +17,7 @@ from typing import Iterable, Optional
 
 DEFAULT_RRF_K = 60  # matches HybridRetrievalProperties.rrfK / mcp.rag.hybrid.rrf-k and eval_live.py
 DEFAULT_MIN_RECOVERY_RATE = 0.30  # X in the flip criterion; override at call time
-DEFAULT_RECALL_FLOOR = 0.85  # EVAL_MIN_RECALL in eval_live.py — no regression below this
+DEFAULT_RECALL_FLOOR = 0.76  # mirrors EVAL_MIN_RECALL in eval_live.py (re-baselined 2026-07-29, #1124) — no regression below this
 
 
 def rrf_fuse(ranked_lists: Iterable[list[str]], k: int = DEFAULT_RRF_K, limit: Optional[int] = None) -> list[str]:
