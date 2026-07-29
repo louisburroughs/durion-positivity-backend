@@ -105,6 +105,18 @@ mcp:
           source-path: "classpath:rag/pricing-guide.md"
           rag-scope: "pricing"
           required-permissions: ["pricing:price_book:view", "pricing:rule:view"]
+        - id: "pricing.promotions"
+          source-path: "classpath:rag/pricing-promotions-rag.md"
+          rag-scope: "pricing"
+          required-permissions: ["pricing:promotion:view"]
+        - id: "pricing.restrictions"
+          source-path: "classpath:rag/pricing-restrictions-rag.md"
+          rag-scope: "pricing"
+          required-permissions: ["AUTHENTICATED"]
+        - id: "pricing.codes"
+          source-path: "classpath:rag/pricing-codes-rag.md"
+          rag-scope: "pricing"
+          required-permissions: ["pricing:promotion:view"]
         - id: "warranty.guide"
           source-path: "classpath:rag/warranty-guide.md"
           rag-scope: "warranty"
