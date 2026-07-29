@@ -543,13 +543,13 @@ components:
           example: false
         address:
           type: string
-        stateCode:
-          type: string
-        city:
+        countryCode:
           type: string
         postalCode:
           type: string
-        countryCode:
+        city:
+          type: string
+        stateCode:
           type: string
       required:
       - destinationAddress

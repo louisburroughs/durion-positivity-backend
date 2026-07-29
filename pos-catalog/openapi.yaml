@@ -4718,14 +4718,14 @@ components:
         offset:
           type: integer
           format: int64
-        paged:
-          type: boolean
         pageNumber:
           type: integer
           format: int32
         pageSize:
           type: integer
           format: int32
+        paged:
+          type: boolean
         sort:
           $ref: '#/components/schemas/SortObject'
         unpaged:

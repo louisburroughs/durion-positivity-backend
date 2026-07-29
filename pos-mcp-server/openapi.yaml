@@ -454,11 +454,8 @@ paths:
             text/event-stream:
               schema:
                 type: array
-                additionalProperties: {}
-                contains: {}
                 items:
                   $ref: '#/components/schemas/ServerSentEventString'
-                unevaluatedItems: {}
       security:
       - bearerAuth:
         - mcp:chat:stream
@@ -562,12 +559,10 @@ paths:
         required: false
         schema:
           type: array
-          contains: {}
           default:
           - timestamp,ASC
           items:
             type: string
-          unevaluatedItems: {}
       responses:
         '200':
           description: OK
