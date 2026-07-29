@@ -8,7 +8,9 @@
 #
 # Prereqs (a host with line-of-sight to the stack — see scripts/run-live-eval.sh for the DB/embed setup):
 #   - python3 + pg8000            (pip install --user pg8000)
-#   - MCP chat API reachable      (--base-url, default http://localhost:8080)
+#   - MCP chat API reachable      (GAP_HARNESS_BASE_URL, default http://localhost:8080/mcp-server —
+#                                  the gateway route; a bare http://localhost:8080 404s, since the
+#                                  chat path lives behind the /mcp-server gateway route)
 #   - alpha Postgres reachable    (POS_MCP_DB_* / .env, for retrieved-context capture)
 #   - local Ollama embedding      (OLLAMA_EMBEDDING_BASE_URL, nomic-embed-text)
 #   - a judge chat model          (--judge ollama|openai; ungraded refusal-only pass with --judge none)
@@ -23,7 +25,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-BASE_URL="${GAP_HARNESS_BASE_URL:-http://localhost:8080}"
+# The chat endpoint lives behind the gateway's /mcp-server route (Path=/mcp-server/** + StripPrefix=1);
+# the gateway validates the JWT and injects the X-Authorities headers the service trusts. A bare
+# http://localhost:8080 has no such route and 404s — the CLI preflight now catches that early.
+BASE_URL="${GAP_HARNESS_BASE_URL:-http://localhost:8080/mcp-server}"
 OUT="${GAP_HARNESS_OUT:-pos-mcp-server/target/gap-harness}"
 
 # Pass-through: everything after the known --base-url/--out defaults goes straight to the CLI, so

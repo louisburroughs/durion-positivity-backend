@@ -22,7 +22,7 @@ logic lives in the `gap_harness` package and is unit-tested (scripts/tests/test_
 Usage:
     # Phase 1 capture + phases 2-4 in one live pass:
     POS_MCP_TOKEN_ROLE_ADMIN=... python3 scripts/rag_gap_harness.py run \\
-        --base-url http://localhost:8080 --judge ollama --judge-model llama3.1 \\
+        --base-url http://localhost:8080/mcp-server --judge ollama --judge-model llama3.1:8b \\
         --out pos-mcp-server/target/gap-harness
 
     # Iterate the judge/taxonomy offline on a captured dump:
@@ -108,6 +108,32 @@ def write_outputs(out_dir: Path, results: list[Result], recoveries, recall_at_k,
 
 
 # --- subcommand: run ---------------------------------------------------------------------------
+def preflight_chat(chat, actor, base_url):
+    """Fail fast if the chat endpoint is unreachable/unauthorized, instead of letting every question
+    fail one at a time (which — since a failed ask is now an ungraded transport row — surfaces only
+    at the end as a 100%-ungraded run). A 404 almost always means ``--base-url`` is missing the
+    gateway service route (e.g. ``/mcp-server``); a 401 means the token is missing/expired."""
+    import urllib.error
+
+    try:
+        chat.ask(actor, "ping")
+    except urllib.error.HTTPError as e:
+        hint = ""
+        if e.code == 404:
+            hint = (
+                " — path 404s: is --base-url missing the gateway service route? "
+                "e.g. http://localhost:8080/mcp-server, not bare http://localhost:8080"
+            )
+        elif e.code in (401, 403):
+            hint = " — auth rejected: the bearer token is missing, expired, or lacks mcp:chat:execute"
+        raise SystemExit(f"chat preflight to {base_url}/v1/mcp/chat failed: HTTP {e.code}{hint}")
+    except urllib.error.URLError as e:
+        raise SystemExit(
+            f"chat preflight to {base_url}/v1/mcp/chat failed: {e.reason} "
+            "(is the stack up and --base-url reachable?)"
+        )
+
+
 def cmd_run(args):
     from gap_harness.retrieval import DbRetriever
 
@@ -119,6 +145,8 @@ def cmd_run(args):
     if args.token:
         token_provider = api.static_token_provider(args.token)
     chat = api.ChatClient(args.base_url, token_provider)
+    if not args.no_preflight:
+        preflight_chat(chat, qs[0].actor, args.base_url)
     retriever = DbRetriever.connect()
     judge_llm = build_judge(args)
 
@@ -245,7 +273,16 @@ def main(argv=None):
         )
 
     r = sub.add_parser("run", help="live run against the stack")
-    r.add_argument("--base-url", required=True, help="MCP chat API base, e.g. http://localhost:8080")
+    r.add_argument(
+        "--base-url",
+        required=True,
+        help="MCP chat API base incl. the gateway service route, e.g. http://localhost:8080/mcp-server",
+    )
+    r.add_argument(
+        "--no-preflight",
+        action="store_true",
+        help="skip the one-shot chat preflight that fails fast on a 404/401 before running the batch",
+    )
     r.add_argument("--out", default=str(ROOT / "pos-mcp-server/target/gap-harness"))
     r.add_argument("--token", default=None, help="single bearer token (else POS_MCP_TOKEN_<ROLE> env)")
     r.add_argument("--include-fixtures", action="store_true", help="also draw questions from eval fixtures")
