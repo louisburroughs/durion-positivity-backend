@@ -11,7 +11,7 @@ Faithful to production:
   * same metadata keys: document_id, source_path, rag_scope, required_permissions (comma-joined,
     only when non-empty), chunk_index, chunk_count;
   * same rag_scope normalization (lowercase/trim, blank -> master).
-The 17-doc manifest below is a verbatim copy of application-alpha.yml's mcp.rag.preload.docs — keep
+The manifest below is a verbatim copy of application-alpha.yml's mcp.rag.preload.docs — keep
 them in sync. This is an eval seeding aid, not a production ingestor.
 
 Idempotent: deletes existing preloaded rows (source_path LIKE 'classpath:rag/%') before inserting, so
