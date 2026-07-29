@@ -35,17 +35,32 @@ public class ScopedContentRetrieverFactory {
         this.hybridProperties = hybridProperties;
     }
 
-    /** Dense (vector) retriever, scope-filtered to {@code ragScope}. */
+    /**
+     * Dense (vector) retriever, scope-filtered to {@code ragScope}.
+     *
+     * <p>#1124 item 4: the {@code master} scope is the <em>catch-all</em> agent (resolved whenever the
+     * selected tools are shared or span multiple domains — i.e. most general questions), not a literal
+     * doc scope. A strict {@code rag_scope = 'master'} filter there made every domain doc
+     * (order/pricing/tax/…) structurally unreachable, so cross-domain questions retrieved nothing and
+     * the assistant refused or fabricated. When the scope resolves to {@code master} we therefore drop
+     * the scope filter and search all scopes; specific domain scopes keep their narrow filter.
+     * Permission-gated docs are still excluded downstream by {@code PermissionAwareMetadataFilter}.
+     */
     public @NonNull QueryDocumentRetriever create(@Nullable String ragScope, int maxResults, double minScore) {
         String normalizedScope = RagScope.normalize(ragScope);
-        var ragScopeFilter =
-                new FilterExpressionBuilder().eq(RAG_SCOPE, normalizedScope).build();
-        return queryText -> embeddingStore.similaritySearch(SearchRequest.builder()
-                .query(queryText)
-                .topK(maxResults)
-                .similarityThreshold(minScore)
-                .filterExpression(ragScopeFilter)
-                .build());
+        var ragScopeFilter = RagScope.MASTER.equals(normalizedScope)
+                ? null
+                : new FilterExpressionBuilder().eq(RAG_SCOPE, normalizedScope).build();
+        return queryText -> {
+            SearchRequest.Builder request = SearchRequest.builder()
+                    .query(queryText)
+                    .topK(maxResults)
+                    .similarityThreshold(minScore);
+            if (ragScopeFilter != null) {
+                request.filterExpression(ragScopeFilter);
+            }
+            return embeddingStore.similaritySearch(request.build());
+        };
     }
 
     /**
