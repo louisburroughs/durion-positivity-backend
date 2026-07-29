@@ -6,12 +6,15 @@ import com.positivity.workorder.internal.config.OutboxEventWriter;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
+import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -90,7 +93,7 @@ public class ServiceCompletionFactPublisher {
                 continue;
             }
             List<WorkorderServiceLine> services = workorderServiceRepository.findByWorkOrder_Id(workorderId);
-            List<WorkorderPart> parts = workorderPartRepository.findByWorkorderId(workorderId);
+            List<WorkorderPart> parts = loadParts(workorderId);
             Instant completedAt = workorder.getCompletedAt() != null ? workorder.getCompletedAt() : Instant.now(clock);
 
             publishCompleted(writer, workorder, services, parts, completedAt);
@@ -105,7 +108,7 @@ public class ServiceCompletionFactPublisher {
             List<WorkorderPart> parts,
             Instant completedAt) {
         List<WorkorderServiceCompletedV1.PerformedService> performed = services.stream()
-                .filter(line -> !isDeclined(line.getDeclined()))
+                .filter(line -> isPerformed(line.getDeclined(), line.getStatus()))
                 .map(line -> new WorkorderServiceCompletedV1.PerformedService(
                         line.getId(),
                         line.getServiceEntityId(),
@@ -116,12 +119,12 @@ public class ServiceCompletionFactPublisher {
                 .toList();
 
         BigDecimal serviceTotal = services.stream()
-                .filter(line -> !isDeclined(line.getDeclined()))
+                .filter(line -> isPerformed(line.getDeclined(), line.getStatus()))
                 .map(WorkorderServiceLine::getLineTotal)
                 .filter(java.util.Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal partTotal = parts.stream()
-                .filter(part -> !isDeclined(part.getDeclined()))
+                .filter(part -> isPerformed(part.getDeclined(), part.getStatus()))
                 .map(WorkorderPart::getLineTotal)
                 .filter(java.util.Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -159,6 +162,31 @@ public class ServiceCompletionFactPublisher {
             writer.publish(
                     WorkorderServiceLineDeclinedV1.EVENT_TYPE, workorder.getId().toString(), payload);
         }
+    }
+
+    /**
+     * The full part set for the workorder, deduped by id — parts hang off either the workorder
+     * directly or a service line, and completion totals must count both to stay consistent with
+     * invoice / billable-scope totals (mirrors WorkorderInvoiceServiceImpl).
+     */
+    private List<WorkorderPart> loadParts(UUID workorderId) {
+        List<WorkorderPart> parts = new ArrayList<>();
+        parts.addAll(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId));
+        parts.addAll(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId));
+        Set<UUID> seen = new HashSet<>();
+        return parts.stream()
+                .filter(part -> part.getId() == null || seen.add(part.getId()))
+                .toList();
+    }
+
+    /**
+     * A line counts toward the completed-service snapshot only when it was actually performed:
+     * not declined and not CANCELLED. Workorder billable totals exclude CANCELLED (see
+     * WorkorderInvoiceServiceImpl), so the emitted completion facts must too, or CRM's amount
+     * would diverge from the invoice.
+     */
+    private static boolean isPerformed(Boolean declined, WorkorderItemStatus status) {
+        return !isDeclined(declined) && status != WorkorderItemStatus.CANCELLED;
     }
 
     private static boolean isDeclined(Boolean declined) {

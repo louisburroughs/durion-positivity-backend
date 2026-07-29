@@ -13,7 +13,9 @@ import com.positivity.domainevents.workorder.WorkorderServiceCompletedV1;
 import com.positivity.domainevents.workorder.WorkorderServiceLineDeclinedV1;
 import com.positivity.workorder.internal.config.OutboxEventWriter;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
+import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
@@ -74,6 +76,11 @@ class ServiceCompletionFactPublisherTest {
     }
 
     private WorkorderServiceLine serviceLine(String description, BigDecimal total, boolean declined, String reason) {
+        return serviceLine(description, total, declined, reason, WorkorderItemStatus.COMPLETED);
+    }
+
+    private WorkorderServiceLine serviceLine(
+            String description, BigDecimal total, boolean declined, String reason, WorkorderItemStatus status) {
         return WorkorderServiceLine.builder()
                 .id(UUID.randomUUID())
                 .serviceEntityId(UUID.randomUUID())
@@ -83,6 +90,18 @@ class ServiceCompletionFactPublisherTest {
                 .lineTotal(total)
                 .declined(declined)
                 .declineReason(reason)
+                .status(status)
+                .build();
+    }
+
+    private WorkorderPart part(BigDecimal total, WorkorderItemStatus status) {
+        return WorkorderPart.builder()
+                .id(UUID.randomUUID())
+                .quantity(BigDecimal.ONE)
+                .unitPrice(total)
+                .lineTotal(total)
+                .declined(false)
+                .status(status)
                 .build();
     }
 
@@ -102,10 +121,18 @@ class ServiceCompletionFactPublisherTest {
         WorkorderServiceLine performed = serviceLine("Oil change", new BigDecimal("100.00"), false, null);
         WorkorderServiceLine declined =
                 serviceLine("Brake pads", new BigDecimal("300.00"), true, "Defer to next visit");
+        // A non-declined CANCELLED line must not count as performed nor into the amount.
+        WorkorderServiceLine cancelled =
+                serviceLine("Tire rotation", new BigDecimal("40.00"), false, null, WorkorderItemStatus.CANCELLED);
 
         when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
-        when(workorderServiceRepository.findByWorkOrder_Id(workorderId)).thenReturn(List.of(performed, declined));
-        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+        when(workorderServiceRepository.findByWorkOrder_Id(workorderId))
+                .thenReturn(List.of(performed, declined, cancelled));
+        // A part attached to a service line (not the workorder directly) must still be counted.
+        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
+                .thenReturn(List.of(part(new BigDecimal("50.00"), WorkorderItemStatus.COMPLETED)));
+        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
+                .thenReturn(List.of());
 
         publisher.markCompleted(workorderId);
         publisher.markCompleted(workorderId);
@@ -119,8 +146,8 @@ class ServiceCompletionFactPublisherTest {
         assertThat(completionFact.vehicleId()).isEqualTo(vehicleId);
         assertThat(completionFact.services()).hasSize(1);
         assertThat(completionFact.services().get(0).description()).isEqualTo("Oil change");
-        // Only the performed line contributes to the amount; the declined line is excluded.
-        assertThat(completionFact.totalAmount()).isEqualByComparingTo("100.00");
+        // Performed service (100) + service-line part (50); declined (300) and CANCELLED (40) excluded.
+        assertThat(completionFact.totalAmount()).isEqualByComparingTo("150.00");
 
         ArgumentCaptor<Object> declinedFact = ArgumentCaptor.forClass(Object.class);
         verify(writer, times(1))
@@ -145,7 +172,10 @@ class ServiceCompletionFactPublisherTest {
         when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
         when(workorderServiceRepository.findByWorkOrder_Id(workorderId))
                 .thenReturn(List.of(serviceLine("Oil change", new BigDecimal("100.00"), false, null)));
-        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+        when(workorderPartRepository.findByWorkOrderService_WorkOrder_Id(workorderId))
+                .thenReturn(List.of());
+        when(workorderPartRepository.findByWorkorderIdAndWorkOrderServiceIsNull(workorderId))
+                .thenReturn(List.of());
 
         publisher.markCompleted(workorderId);
         fireBeforeCommit();
