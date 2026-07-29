@@ -139,7 +139,15 @@ class SpringAiPosAssistantTest {
                 // and don't offer to perform an unsupported action.
                 .containsIgnoringCase("not modeled")
                 .containsIgnoringCase("does not model it")
-                .containsIgnoringCase("offer to perform an action");
+                .containsIgnoringCase("offer to perform an action")
+                // #1124 item 4: the positive obligation must be explicit so the model answers from a
+                // covering snippet instead of over-refusing ("I don't have a reference"). It must also
+                // forbid deferring to a UI link / another system and constrain answers to snippet names.
+                .containsIgnoringCase("answer directly and completely")
+                .containsIgnoringCase("do not claim you lack a reference")
+                .containsIgnoringCase("do not ask the user for more detail")
+                .containsIgnoringCase("UI link")
+                .containsIgnoringCase("use only the entities, fields, names, and values");
     }
 
     @Test
