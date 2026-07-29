@@ -20,6 +20,14 @@ import org.jspecify.annotations.Nullable;
  * @param hasServiceHistory whether the party has any completed-service history
  * @param daysSinceDeclinedService whole days since the most recent declined recommendation, or
  *     null when the party has never declined one (FI-3, #1133)
+ * @param addressCountry ISO 3166-1 alpha-2 country code of the party's structured postal
+ *     address, or null when none is on file (FI-4, #1135) — individuals read the
+ *     ext_people_contact_person replica, commercial parties ext_organization_postal_address
+ * @param addressRegion free-text administrative area (state/province/prefecture) of the
+ *     structured address, or null
+ * @param addressCity city/locality of the structured address, or null
+ * @param addressPostalCode postal code of the structured address, or null — also null for
+ *     countries that do not use one, so prefer country/region predicates for broad targeting
  */
 public record PartyAttributes(
         UUID partyId,
@@ -42,4 +50,8 @@ public record PartyAttributes(
         @Nullable String displayLabel,
         @Nullable Integer monthsSinceLastService,
         boolean hasServiceHistory,
-        @Nullable Integer daysSinceDeclinedService) {}
+        @Nullable Integer daysSinceDeclinedService,
+        @Nullable String addressCountry,
+        @Nullable String addressRegion,
+        @Nullable String addressCity,
+        @Nullable String addressPostalCode) {}

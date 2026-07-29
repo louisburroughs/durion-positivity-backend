@@ -29,6 +29,19 @@ public final class EventTypes {
                 EventTypeRegistration.write("PEOPLE_CONTACT_PERSON_DELETE", "Delete an existing person record")
                         .build(),
 
+                // PostalAddressController (FI-4, #1135)
+                EventTypeRegistration.write(
+                                "PEOPLE_CONTACT_PERSON_ADDRESS_PUT", "Create or replace a person's postal address")
+                        .build(),
+                EventTypeRegistration.write("PEOPLE_CONTACT_PERSON_ADDRESS_DELETE", "Delete a person's postal address")
+                        .build(),
+                EventTypeRegistration.write(
+                                "PEOPLE_CONTACT_ORG_ADDRESS_PUT", "Create or replace an organization's postal address")
+                        .build(),
+                EventTypeRegistration.write(
+                                "PEOPLE_CONTACT_ORG_ADDRESS_DELETE", "Delete an organization's postal address")
+                        .build(),
+
                 // UserPersonLinkController
                 EventTypeRegistration.write("PEOPLE_CONTACT_USER_LINK_CREATE", "Link user to person")
                         .build(),

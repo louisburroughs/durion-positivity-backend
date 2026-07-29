@@ -1,10 +1,14 @@
 package com.positivity.peoplecontact.internal.service;
 
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.domainevents.peoplecontact.OrganizationAddressRemovedV1;
+import com.positivity.domainevents.peoplecontact.OrganizationAddressUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonDeletedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpdatedV1;
+import com.positivity.domainevents.peoplecontact.PostalAddressV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkRemovedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkUpdatedV1;
+import com.positivity.peoplecontact.internal.entity.PartyPostalAddress;
 import com.positivity.peoplecontact.internal.entity.Person;
 import com.positivity.peoplecontact.internal.entity.PersonContactPoint;
 import com.positivity.peoplecontact.internal.entity.UserPersonLink;
@@ -14,6 +18,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -48,7 +53,10 @@ public class PeopleContactEventPublisher {
         this.eventsTopic = eventsTopic;
     }
 
-    public void publishPersonUpdated(@NonNull Person person, @NonNull List<PersonContactPoint> contactPoints) {
+    public void publishPersonUpdated(
+            @NonNull Person person,
+            @NonNull List<PersonContactPoint> contactPoints,
+            @Nullable PartyPostalAddress postalAddress) {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
         if (writer == null) {
             return;
@@ -62,6 +70,7 @@ public class PeopleContactEventPublisher {
                         .map(cp -> new PersonUpdatedV1.ContactPointV1(
                                 cp.getContactType().name(), cp.getValue(), cp.isPrimary()))
                         .toList(),
+                toPostalAddressV1(postalAddress),
                 person.getCreatedAt(),
                 person.getUpdatedAt());
         writer.publish(
@@ -83,6 +92,38 @@ public class PeopleContactEventPublisher {
                         personId,
                         new PersonDeletedV1(personId)));
         log.debug("Queued people-contact.person.deleted personId={}", personId);
+    }
+
+    public void publishOrganizationAddressUpdated(@NonNull PartyPostalAddress address) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        OrganizationAddressUpdatedV1 payload = new OrganizationAddressUpdatedV1(
+                address.getPartyId(), toPostalAddressV1(address), address.getUpdatedAt());
+        writer.publish(
+                eventsTopic,
+                envelope(
+                        OrganizationAddressUpdatedV1.EVENT_TYPE,
+                        OrganizationAddressUpdatedV1.SCHEMA_VERSION,
+                        address.getPartyId(),
+                        payload));
+        log.debug("Queued people-contact.organization-address.updated organizationId={}", address.getPartyId());
+    }
+
+    public void publishOrganizationAddressRemoved(@NonNull UUID organizationId) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        writer.publish(
+                eventsTopic,
+                envelope(
+                        OrganizationAddressRemovedV1.EVENT_TYPE,
+                        OrganizationAddressRemovedV1.SCHEMA_VERSION,
+                        organizationId,
+                        new OrganizationAddressRemovedV1(organizationId)));
+        log.debug("Queued people-contact.organization-address.removed organizationId={}", organizationId);
     }
 
     public void publishLinkUpdated(@NonNull UserPersonLink link) {
@@ -127,6 +168,19 @@ public class PeopleContactEventPublisher {
                 "Queued people-contact.user-person-link.removed linkId={} username={}",
                 link.getId(),
                 link.getUsername());
+    }
+
+    private static @Nullable PostalAddressV1 toPostalAddressV1(@Nullable PartyPostalAddress address) {
+        if (address == null) {
+            return null;
+        }
+        return new PostalAddressV1(
+                address.getLine1(),
+                address.getLine2(),
+                address.getCity(),
+                address.getRegion(),
+                address.getPostalCode(),
+                address.getCountryCode());
     }
 
     private <T> DomainEventEnvelope<T> envelope(String eventType, int schemaVersion, UUID aggregateId, T payload) {

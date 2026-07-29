@@ -16,8 +16,9 @@ import java.util.Set;
  * resolver's query surface fixed and auditable no matter what a stored predicate contains.
  *
  * <p>Service-history attributes (FI-3, #1133) are fed by the workorder fact feed via the CRM
- * service-history read model. Geography attributes remain absent by design: they need structured
- * addresses (FI-4), which are not yet available.
+ * service-history read model. Geography attributes (FI-4, #1135) are fed by the structured
+ * postal address pos-people-contact owns: individuals via the ext_people_contact_person
+ * replica, commercial parties via ext_organization_postal_address.
  */
 public enum SegmentAttribute {
 
@@ -52,7 +53,17 @@ public enum SegmentAttribute {
     /** Whether the party has any completed-service history at all. */
     HAS_SERVICE_HISTORY("service.hasHistory", OperandKind.BOOLEAN, booleanOps()),
     /** Whole days since the party's most recent declined recommendation; unset when none. */
-    DAYS_SINCE_DECLINED_SERVICE("service.daysSinceDeclined", OperandKind.NUMBER, numeric());
+    DAYS_SINCE_DECLINED_SERVICE("service.daysSinceDeclined", OperandKind.NUMBER, numeric()),
+
+    // --- Geography, from the structured postal address (FI-4, #1135) ---
+    /** ISO 3166-1 alpha-2 country code of the structured address; unset when no address. */
+    ADDRESS_COUNTRY("address.country", OperandKind.TEXT, presenceAndEquality()),
+    /** Free-text administrative area (state, province, prefecture) — matched case-insensitively. */
+    ADDRESS_REGION("address.region", OperandKind.TEXT, presenceAndEquality()),
+    /** City/locality of the structured address. */
+    ADDRESS_CITY("address.city", OperandKind.TEXT, presenceAndEquality()),
+    /** Postal code; also unset for countries without one, so IN-lists mimic service-area sets. */
+    ADDRESS_POSTAL_CODE("address.postalCode", OperandKind.TEXT, presenceAndEquality());
 
     /** What shape of operand the attribute compares against. */
     public enum OperandKind {

@@ -11,9 +11,12 @@ import org.jspecify.annotations.Nullable;
  * (ADR-0044 §6, #874).
  *
  * <p>Published by pos-people-contact after every person mutation (create, update, resolve-create,
- * contact-point replacement). Carries the full identity snapshot pos-people-contact owns, including
- * the person's typed contact points, so consumers can maintain {@code ext_people_contact_person}
- * replicas without callbacks. Hard deletes are signalled by {@link PersonDeletedV1}.
+ * contact-point replacement, postal-address change). Carries the full identity snapshot
+ * pos-people-contact owns, including the person's typed contact points and structured postal
+ * address (FI-4, #1135), so consumers can maintain {@code ext_people_contact_person} replicas
+ * without callbacks. Hard deletes are signalled by {@link PersonDeletedV1}. {@code postalAddress}
+ * was added within schema version 1 as a nullable field: events serialized before it existed
+ * deserialize with {@code null}, which consumers already treat as "no address on file".
  *
  * <p>The envelope's {@code aggregateVersion} is the emission timestamp in epoch milliseconds
  * (the person row carries no optimistic-lock version); consumers should treat it as a
@@ -25,6 +28,7 @@ public record PersonUpdatedV1(
         @Nullable String lastName,
         @Nullable String preferredName,
         @NonNull List<ContactPointV1> contactPoints,
+        @Nullable PostalAddressV1 postalAddress,
         @Nullable Instant createdAt,
         @Nullable Instant updatedAt) {
 
