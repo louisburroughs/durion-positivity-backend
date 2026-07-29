@@ -23,7 +23,9 @@ import reactor.core.publisher.Flux;
 
 final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
 
-    private static final String RAG_CONTEXT_PREFIX = "Relevant retrieved context:";
+    // Shared with the non-streaming assistant so both paths ground identically (previously this path
+    // carried only the bare "Relevant retrieved context:" header with no grounding instruction).
+    private static final String RAG_CONTEXT_PREFIX = RagGroundingInstruction.CONTEXT_PREFIX;
     private static final int MAX_CONTEXT_DOCS = 5;
     private static final int MAX_CONTEXT_CHARS = 4_000;
 

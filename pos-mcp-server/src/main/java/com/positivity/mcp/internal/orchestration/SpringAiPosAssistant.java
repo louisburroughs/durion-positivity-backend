@@ -23,23 +23,9 @@ import org.springframework.ai.tool.ToolCallback;
 
 final class SpringAiPosAssistant implements PosAssistant {
 
-    /**
-     * #1124/#1125: the retrieved context must carry an explicit grounding instruction. Without one,
-     * the model treats the numbered snippets as loose background rather than an authoritative source
-     * to prioritize over its own trained knowledge — observed in the gap-harness alpha eval as
-     * contradicting facts (invented PO/GL formats) or flat refusals even when the correct
-     * `glossary.identifiers` snippet was present in this exact block. The instruction requires
-     * answering from the numbered snippets when they cover the question, and explicitly forbids
-     * silently falling back to trained/parametric knowledge for identifier/format/ownership facts.
-     */
-    private static final String RAG_CONTEXT_PREFIX =
-            """
-            Relevant retrieved context:
-            Ground your answer in the numbered snippets below when they cover the question. \
-            Do not state a specific identifier format, code pattern, or service ownership that \
-            contradicts or is not supported by these snippets — if the snippets don't contain the \
-            fact needed, say what you don't know instead of inventing or guessing a plausible-sounding \
-            answer from general knowledge.""";
+    /** Shared grounding instruction ({@link RagGroundingInstruction}) prepended to the RAG snippets. */
+    private static final String RAG_CONTEXT_PREFIX = RagGroundingInstruction.CONTEXT_PREFIX;
+
     private static final int MAX_CONTEXT_DOCS = 5;
     private static final int MAX_CONTEXT_CHARS = 4_000;
 
