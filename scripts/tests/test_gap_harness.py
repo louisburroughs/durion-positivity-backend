@@ -242,6 +242,26 @@ class TaxonomyTest(unittest.TestCase):
         self.assertEqual(c.cause, CAUSE_RETRIEVAL_MISS)
         self.assertIn("order.guide", c.covering_doc_ids)
 
+    def test_phantom_expected_doc_but_retrieved_doc_covers_topic_is_generation(self):
+        # The core-charge case: fixture names an unauthored doc, but order.returns-refunds (which
+        # documents core charges as "not modeled") WAS retrieved and the answer is still wrong. That
+        # is a generation failure, not a corpus gap — must not send a human to author a doc that exists.
+        q = Question("q", "how are core charges handled when a customer returns a rebuildable part",
+                     Actor("ROLE_USER", ("order:order:view",)), rag_scope="order",
+                     expected_doc_ids=("order.core-charges",))  # phantom, unauthored
+        cap = self._cap("q", ["order.returns-refunds"], ["order:order:view"])  # covering doc retrieved
+        c = taxonomy.classify(q, cap, VERDICT_UNSUPPORTED, self.idx)
+        self.assertEqual(c.cause, CAUSE_GENERATION)
+        self.assertIn("order.returns-refunds", c.covering_doc_ids)
+
+    def test_phantom_expected_doc_with_no_covering_retrieval_stays_corpus_gap(self):
+        # Guard the guard: a phantom expected doc with nothing covering the topic in the retrieved
+        # context is still a genuine corpus gap (the loyalty known-gap probe).
+        q = Question("q", "how do loyalty reward points accrue and redeem at checkout",
+                     Actor("ROLE_USER"), rag_scope="order", expected_doc_ids=("order.loyalty-points",))
+        c = taxonomy.classify(q, self._cap("q", [], []), VERDICT_REFUSED, self.idx)
+        self.assertEqual(c.cause, CAUSE_CORPUS_GAP)
+
 
 class HarnessRunTest(unittest.TestCase):
     """A failed `ask` (transport/HTTP error, e.g. a 404 from a wrong base-url) must surface as an

@@ -65,6 +65,24 @@ def classify(
     # #1 corpus gap — nothing in the corpus covers this topic (declared doc unauthored, or the
     # content lookup found no doc). This is the #1124 signal: a doc needs to be written.
     if not existing:
+        # Guard against a stale/renamed/phantom expected_doc_id: if a doc that actually REACHED the
+        # prompt covers this topic per the content lookup, the answer failed with covering context in
+        # hand — that is a generation failure (§5 #3), not a missing doc. Without this, a fixture that
+        # names an unauthored expected doc (e.g. `order.core-charges`) mis-files a hallucination that
+        # ignored a retrieved covering doc (e.g. `order.returns-refunds`, which documents the topic as
+        # "not modeled") as "write a new doc" — sending a human to author content that already exists.
+        covering = set(corpus.covering_docs(question.query, threshold=COVERAGE_THRESHOLD))
+        covering_retrieved = [d for d in retrieved if d in covering]
+        if covering_retrieved:
+            return Classification(
+                cause=CAUSE_GENERATION,
+                rationale=(
+                    f"expected {candidates} absent, but retrieved doc(s) {covering_retrieved} cover "
+                    "the topic and the answer is still not correct"
+                ),
+                covering_doc_ids=covering_retrieved,
+                retrieved_doc_ids=retrieved,
+            )
         return Classification(
             cause=CAUSE_CORPUS_GAP,
             rationale=(

@@ -171,13 +171,24 @@
       "source": "synthetic"
     },
     {
-      "id": "gap-core-charge-KNOWNGAP",
+      "id": "order-core-charge-not-modeled",
       "query": "how are core charges handled when a customer returns a rebuildable part",
       "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
       "rag_scope": "order",
-      "expected_doc_ids": ["order.core-charges"],
+      "expected_doc_ids": ["order.returns-refunds"],
+      "expected_facts": ["Core charges are NOT modeled in pos-order — no core-charge entity, permission, or calculation exists."],
+      "topic": "core charge handling (not modeled)",
+      "tags": ["not-modeled", "hallucination-guard"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-loyalty-points-KNOWNGAP",
+      "query": "how do loyalty reward points accrue and redeem at checkout",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
+      "rag_scope": "order",
+      "expected_doc_ids": ["order.loyalty-points"],
       "expected_facts": [],
-      "topic": "core charge handling",
+      "topic": "loyalty reward points",
       "tags": ["known-gap", "corpus-gap"],
       "source": "synthetic"
     },
