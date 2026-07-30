@@ -1,5 +1,6 @@
 package com.positivity.customer.service;
 
+import com.positivity.customer.internal.dto.SegmentAttributeResponse;
 import com.positivity.customer.internal.dto.SegmentMembersRequest;
 import com.positivity.customer.internal.dto.SegmentResolutionResponse;
 import com.positivity.customer.internal.dto.SegmentResponse;
@@ -34,6 +35,13 @@ public interface SegmentService {
 
     @NonNull
     List<SegmentResponse> list(@Nullable AudienceType audienceType);
+
+    /**
+     * The whitelisted attribute catalog a dynamic predicate may reference (#1144) — wire
+     * names, operand kinds, allowed operators, and descriptions, in catalog order.
+     */
+    @NonNull
+    List<SegmentAttributeResponse> attributeCatalog();
 
     /** Pin parties into a STATIC segment. Rejected for DYNAMIC segments. */
     @NonNull

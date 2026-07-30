@@ -2383,6 +2383,29 @@ paths:
         - crm:party:view
       x-required-permissions:
       - crm:party:view
+  /v1/crm/segments/attributes:
+    get:
+      tags:
+      - CRM Segments
+      summary: List the segment attribute catalog
+      description: Every whitelisted attribute a dynamic predicate may reference, with operand kind, allowed operators, and description
+      operationId: attributeCatalog
+      responses:
+        '200':
+          description: Attribute catalog returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SegmentAttributeResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - crm:segment:view
+      x-required-permissions:
+      - crm:segment:view
   /v1/crm/persons/{personId}:
     get:
       tags:
@@ -5884,6 +5907,51 @@ components:
       - snapshotId
       - stale
       - version
+    SegmentAttributeResponse:
+      type: object
+      description: One whitelisted attribute a segment predicate may reference
+      properties:
+        attribute:
+          type: string
+          description: Wire name used in predicates
+          example: service.monthsSinceLast
+        operandKind:
+          type: string
+          description: Operand shape the attribute compares against
+          enum:
+          - TEXT
+          - ENUM_TEXT
+          - NUMBER
+          - BOOLEAN
+          - UUID_LIST
+          - KEYED_TEXT
+          example: NUMBER
+        operators:
+          type: array
+          description: Operators the attribute accepts
+          example:
+          - GREATER_THAN
+          items:
+            type: string
+        commercialOnly:
+          type: boolean
+          description: Whether the attribute applies only to commercial parties
+          example: false
+        keyed:
+          type: boolean
+          description: Whether the attribute requires a bracketed key, e.g. party.externalIdentifier[QBO]
+          example: false
+        description:
+          type: string
+          description: What the attribute means
+          example: Whole months since the most recent completed service
+      required:
+      - attribute
+      - commercialOnly
+      - description
+      - keyed
+      - operandKind
+      - operators
     ContactPointDto:
       type: object
       description: Contact point details

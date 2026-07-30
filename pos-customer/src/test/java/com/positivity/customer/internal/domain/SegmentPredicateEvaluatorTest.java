@@ -40,6 +40,7 @@ class SegmentPredicateEvaluatorTest {
                 null,
                 false,
                 null,
+                false,
                 null,
                 null,
                 null,
@@ -48,6 +49,14 @@ class SegmentPredicateEvaluatorTest {
 
     private static PartyAttributes serviceParty(
             Integer monthsSinceLastService, boolean hasServiceHistory, Integer daysSinceDeclinedService) {
+        return serviceParty(monthsSinceLastService, hasServiceHistory, daysSinceDeclinedService, false);
+    }
+
+    private static PartyAttributes serviceParty(
+            Integer monthsSinceLastService,
+            boolean hasServiceHistory,
+            Integer daysSinceDeclinedService,
+            boolean serviceDue) {
         return new PartyAttributes(
                 PARTY,
                 "COMMERCIAL",
@@ -70,6 +79,7 @@ class SegmentPredicateEvaluatorTest {
                 monthsSinceLastService,
                 hasServiceHistory,
                 daysSinceDeclinedService,
+                serviceDue,
                 null,
                 null,
                 null,
@@ -99,6 +109,7 @@ class SegmentPredicateEvaluatorTest {
                 null,
                 false,
                 null,
+                false,
                 country,
                 region,
                 city,
@@ -137,6 +148,22 @@ class SegmentPredicateEvaluatorTest {
                         comparison("service.daysSinceDeclined", SegmentOperator.LESS_THAN_OR_EQUAL, "30"),
                         serviceParty(2, true, null)))
                 .isFalse();
+    }
+
+    @Test
+    @DisplayName("service-due evaluates as a boolean; a party with no history is never due (#1144)")
+    void matchesServiceDuePredicate() {
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("service.due", SegmentOperator.IS_TRUE), serviceParty(8, true, null, true)))
+                .isTrue();
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("service.due", SegmentOperator.IS_TRUE), serviceParty(2, true, null, false)))
+                .isFalse();
+        // The resolver projects serviceDue=false for a party with no service history, so an
+        // IS_FALSE predicate matches it — never-due, not tri-state unknown.
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("service.due", SegmentOperator.IS_FALSE), serviceParty(null, false, null, false)))
+                .isTrue();
     }
 
     private static SegmentPredicate.Comparison comparison(

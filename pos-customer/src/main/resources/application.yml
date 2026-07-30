@@ -73,6 +73,11 @@ springdoc:
   default-produces-media-type: application/json
 pos:
   customer:
+    crm:
+      # Service-due segment attribute (#1144): a party is `service.due` once its last completed
+      # service is at least this many whole months old. Module-wide interval until per-vehicle
+      # care-preference intervals are fed from pos-vehicle-inventory.
+      service-due-months: ${POS_CUSTOMER_SERVICE_DUE_MONTHS:6}
     inquiry:
       public:
         # Story #1154: the only unauthenticated write surface in pos-customer. OFF by default.

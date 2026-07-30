@@ -42,6 +42,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -80,6 +81,14 @@ public class SegmentResolutionService {
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
     private final ExtOrganizationPostalAddressRepository extOrganizationPostalAddressRepository;
     private final Clock clock;
+
+    /**
+     * Service-due interval in whole months (#1144). pos-vehicle-inventory owns per-vehicle
+     * care-preference intervals but does not yet emit them, so until that feed exists the
+     * catalog's {@code service.due} attribute uses this module-wide interval.
+     */
+    @Value("${pos.customer.crm.service-due-months:6}")
+    private int serviceDueMonths = 6;
 
     /** Matched party ids plus whether the candidate scan hit the ceiling. */
     public record Resolution(List<UUID> partyIds, boolean truncated) {}
@@ -169,6 +178,7 @@ public class SegmentResolutionService {
                     List<ExtVehicle> owned = vehicles.getOrDefault(account.getPartyId(), List.of());
                     CommunicationPreference preference = preferences.get(account.getPartyId());
                     ExtOrganizationPostalAddress address = addresses.get(account.getPartyId());
+                    Integer monthsSinceService = monthsSince(lastService.get(account.getPartyId()));
                     return new PartyAttributes(
                             account.getPartyId(),
                             account.getPartyType() != null
@@ -201,9 +211,10 @@ public class SegmentResolutionService {
                             owned.stream().anyMatch(ExtVehicle::isActive),
                             owned.size(),
                             account.getDisplayName() != null ? account.getDisplayName() : account.getLegalName(),
-                            monthsSince(lastService.get(account.getPartyId())),
+                            monthsSinceService,
                             lastService.containsKey(account.getPartyId()),
                             daysSince(lastDeclined.get(account.getPartyId())),
+                            serviceDue(monthsSinceService),
                             address != null ? address.getCountryCode() : null,
                             address != null ? address.getRegion() : null,
                             address != null ? address.getCity() : null,
@@ -230,6 +241,7 @@ public class SegmentResolutionService {
                     List<ExtVehicle> owned = vehicles.getOrDefault(person.getPartyId(), List.of());
                     CommunicationPreference preference = preferences.get(person.getPartyId());
                     ExtPersonReplica replica = personReplicas.get(person.getPersonId());
+                    Integer monthsSinceService = monthsSince(lastService.get(person.getPartyId()));
                     return new PartyAttributes(
                             person.getPartyId(),
                             "PERSON",
@@ -254,9 +266,10 @@ public class SegmentResolutionService {
                             // Person names live in pos-people-contact (ADR-0015); the customer
                             // number is the only local label, and it is already non-identifying.
                             person.getCustomerNumber(),
-                            monthsSince(lastService.get(person.getPartyId())),
+                            monthsSinceService,
                             lastService.containsKey(person.getPartyId()),
                             daysSince(lastDeclined.get(person.getPartyId())),
+                            serviceDue(monthsSinceService),
                             replica != null ? replica.getAddressCountryCode() : null,
                             replica != null ? replica.getAddressRegion() : null,
                             replica != null ? replica.getAddressCity() : null,
@@ -366,6 +379,16 @@ public class SegmentResolutionService {
         }
         long months = ChronoUnit.MONTHS.between(LocalDate.ofInstant(since, ZoneOffset.UTC), LocalDate.now(clock));
         return (int) Math.max(0, months);
+    }
+
+    /**
+     * Care-preference interval elapsed (#1144): true only when the party has a completed service
+     * and it is at least the configured interval old. A party with no service history projects
+     * false — never-served customers are targeted via {@code service.hasHistory} /
+     * {@code service.monthsSinceLast}, not lumped into service-due reminders.
+     */
+    private boolean serviceDue(@Nullable Integer monthsSinceLastService) {
+        return monthsSinceLastService != null && monthsSinceLastService >= serviceDueMonths;
     }
 
     /** Whole days elapsed since {@code since} (UTC calendar), or null when absent; floored at 0. */
