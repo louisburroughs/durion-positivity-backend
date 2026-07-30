@@ -82,26 +82,20 @@ pos:
       # (FI-2, docs/PLATFORM_SENDER_CONTRACT.md).
       sender-outcomes-topic: ${POS_MARKETING_SENDER_OUTCOMES_TOPIC:sender.outcomes.v1}
       sender-outcomes-consumer-group: ${POS_MARKETING_SENDER_OUTCOMES_CONSUMER_GROUP:pos-marketing-sender-outcomes}
-      # Bounce/complaint suppression feedback commands aimed at pos-customer (spec §4.3).
+      # Outbound commands to pos-customer: asynchronous segment-membership resolution
+      # (Story #1137) and bounce/complaint suppression feedback (Story #1150, spec §4.3).
       customer-commands-topic: ${POS_MARKETING_CUSTOMER_COMMANDS_TOPIC:customer.commands.v1}
-    send:
-      # Transport behind MessageChannelPort: `stub` logs instead of sending (safe default);
-      # `platform-sender` calls the shared platform sender under the FI-2 contract.
-      transport: ${POS_MARKETING_SEND_TRANSPORT:stub}
     sender:
       # Shared platform sender endpoint + shared secret; only read when transport=platform-sender.
       base-url: ${POS_MARKETING_SENDER_BASE_URL:http://localhost:8085}
       api-secret: ${POS_MARKETING_SENDER_API_SECRET:}
-      # Outbound: asks pos-customer to resolve a segment's membership. Membership is derived
-      # from party data and has no event boundary, so it cannot be replicated continuously.
-      customer-commands-topic: ${POS_MARKETING_CUSTOMER_COMMANDS_TOPIC:customer.commands.v1}
     send:
       # Send-worker pacing (Story #1149). The batch size bounds how many recipients one
       # drain locks; the delay paces the provider so a large campaign does not burst.
       enabled: ${POS_MARKETING_SEND_ENABLED:true}
-      # Transport selection: 'stub' logs what would be sent and contacts nobody. The real
-      # platform-sender adapter arrives with FI-2 (durion#369) and activates on
-      # 'platform-sender'. The two are mutually exclusive by construction.
+      # Transport selection: 'stub' logs what would be sent and contacts nobody;
+      # 'platform-sender' activates the FI-2 adapter (PlatformSenderClient, Story #1150).
+      # The two are mutually exclusive by construction.
       transport: ${POS_MARKETING_SEND_TRANSPORT:stub}
       batch-size: ${POS_MARKETING_SEND_BATCH_SIZE:100}
       poll-delay-ms: ${POS_MARKETING_SEND_POLL_DELAY_MS:5000}

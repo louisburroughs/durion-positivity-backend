@@ -54,8 +54,10 @@ stores it on the send record for bounce correlation.
 ## 2. Outcome feedback (Kafka)
 
 Topic `sender.outcomes.v1` (`pos.marketing.kafka.sender-outcomes-topic`), standard domain
-envelope (`eventId`, `eventType`, `occurredAt`, `payload`), at-least-once, keyed by
-`providerMessageId`.
+envelope (`eventId`, `eventType`, `payload`), at-least-once, keyed by `providerMessageId`.
+The `occurredAt` timestamp (ISO-8601 instant) lives **inside `payload`**, next to
+`providerMessageId`; a missing or malformed value makes pos-marketing fall back to its own
+clock.
 
 Event types and payload:
 

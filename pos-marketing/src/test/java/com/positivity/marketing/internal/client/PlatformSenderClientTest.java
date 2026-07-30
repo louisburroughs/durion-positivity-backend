@@ -69,7 +69,7 @@ class PlatformSenderClientTest {
     @DisplayName("a 4xx is a permanent refusal — retrying cannot fix it")
     void clientErrorIsPermanent() {
         server.expect(requestTo("http://sender/platform-sender/v1/messages"))
-                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_CONTENT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body("{\"code\":\"NO_RESOLVABLE_ADDRESS\"}"));
 
