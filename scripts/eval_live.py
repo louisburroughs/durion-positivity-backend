@@ -49,6 +49,11 @@ RAG_MIN_SCORE = float(os.environ.get("EVAL_RAG_MIN_SCORE", "0.55"))
 # #784: Reciprocal Rank Fusion constant for the dense+lexical hybrid diagnostic. Matches the
 # application default (HybridRetrievalProperties.rrfK / mcp.rag.hybrid.rrf-k).
 RRF_K = max(1, int(os.environ.get("EVAL_RRF_K", "60")))  # clamp: rank constant must be >= 1
+# #1164: tool-response coverage — cheap realistic-vs-no-tool classifier. A fixture counts as
+# realistic-response when the gated ANN returns a candidate whose cosine similarity clears this
+# floor; empty candidate set or a top hit below the floor is no-tool-available (the model has no
+# plausibly-serving tool to pick). This is deliberately lighter than a grounded judge (#783/#1124).
+TR_MIN_SIM = float(os.environ.get("EVAL_TOOL_RESPONSE_MIN_SIM", "0.5"))
 
 
 def env_file(key):
@@ -314,6 +319,88 @@ def main():
         except Exception as e:  # missing content_tsv (V28 not deployed), FTS error, etc.
             rag_lexical_summary = {"status": f"skipped: lexical FTS unavailable ({type(e).__name__}: {e})"}
 
+    # ---- #1164: tool-response coverage (realistic vs no-tool-available) ----
+    # Role-authored questions written FROM the personas, not from the tool set, run through the
+    # same gated selection path. Diagnostic only — never contributes to threshold failures. The
+    # gap_candidates output (actual no-tool-available, grouped by the author's gap_hypothesis) is
+    # the triage worklist: new-tool candidates feed the tool roadmap, description-gap candidates
+    # feed a *FacadeTool @Tool description-tightening pass.
+    tool_response_summary = {"status": "skipped: no tool-response fixtures"}
+    tr_fixtures = suite("tool-response")
+    if tr_fixtures:
+
+        def ann_facade_scored(query_vec, perms, workflow, limit):
+            """ann_facade + cosine similarity of each candidate (selection path, scored).
+
+            ORDER BY repeats the <=> expression rather than sorting by the sim alias: the point of
+            this query is to mirror the production ANN SQL (ToolMetadataRepositoryImpl), and
+            `ORDER BY embedding <=> constant` is the exact operator-ordering pattern pgvector
+            indexes match — same convention as every other ANN query in this script."""
+            rows = con.run(
+                """
+                SELECT t.name, 1 - (t.embedding <=> CAST(:q AS vector)) AS sim
+                FROM mcp_tool t
+                JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
+                JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
+                WHERE t.enabled = true AND t.source <> 'openapi' AND t.embedding IS NOT NULL
+                  AND ws.name = :wf
+                  AND t.id IN (SELECT tool_id FROM mcp_tool_permission WHERE permission_code = ANY(:perms))
+                ORDER BY t.embedding <=> CAST(:q AS vector), t.id
+                LIMIT :k
+                """,
+                wf=workflow, perms=list(perms), q=vec_literal(query_vec), k=limit,
+            )
+            return [(r[0], float(r[1])) for r in rows]
+
+        tr_counts = {"realistic-response": 0, "no-tool-available": 0}
+        tr_confusion, tr_mismatches, tr_gap_candidates = {}, [], {}
+        for fx in tr_fixtures:
+            actor = fx["actor"]
+            # Every authenticated caller holds the AUTHENTICATED pseudo-permission (same convention
+            # as the RAG path above), so AUTHENTICATED-gated facades are visible to all fixtures.
+            perms = sorted(set(actor.get("permission_codes", [])) | {"AUTHENTICATED"})
+            wf = actor.get("workflow_state", "IDLE")
+            ranked = ann_facade_scored(embed(fx["utterance"]), perms, wf, K)
+            top_name, top_sim = (ranked[0] if ranked else (None, None))
+            actual = (
+                "realistic-response"
+                if top_sim is not None and top_sim >= TR_MIN_SIM
+                else "no-tool-available"
+            )
+            expected_outcome = fx.get("expected", {}).get("outcome", "no-tool-available")
+            tr_counts[actual] += 1
+            cell = f"expected={expected_outcome}|actual={actual}"
+            tr_confusion[cell] = tr_confusion.get(cell, 0) + 1
+            if actual != expected_outcome:
+                tr_mismatches.append({
+                    "fixture_id": fx.get("fixture_id"),
+                    "utterance": fx.get("utterance"),
+                    "expected": expected_outcome,
+                    "actual": actual,
+                    "top_candidate": top_name,
+                    "top_similarity": round(top_sim, 4) if top_sim is not None else None,
+                })
+            if actual == "no-tool-available":
+                hypothesis = fx.get("gap_hypothesis", "n/a")
+                tr_gap_candidates.setdefault(hypothesis, []).append({
+                    "fixture_id": fx.get("fixture_id"),
+                    "utterance": fx.get("utterance"),
+                    "expected": expected_outcome,
+                    "top_candidate": top_name,
+                    "top_similarity": round(top_sim, 4) if top_sim is not None else None,
+                })
+        tr_total = len(tr_fixtures)
+        tool_response_summary = {
+            "status": "scored",
+            "scored": tr_total,
+            "min_similarity": TR_MIN_SIM,
+            "realistic_rate": round(tr_counts["realistic-response"] / tr_total, 4),
+            "no_tool_rate": round(tr_counts["no-tool-available"] / tr_total, 4),
+            "outcome_confusion": tr_confusion,
+            "outcome_mismatch_detail": tr_mismatches,
+            "gap_candidates": tr_gap_candidates,
+        }
+
     # ---- #779: permission gating (openapi tool) ---------------------------
     gating = {"status": "skipped"}
     row = con.run(
@@ -392,6 +479,7 @@ def main():
                           "forbidden_violations": len(rag_violations),
                           "forbidden_violation_detail": rag_violations},
         "rag_lexical_hybrid_784": rag_lexical_summary,
+        "tool_response_coverage": tool_response_summary,
         "permission_gating_779": gating,
         "thresholds": {"min_hit_at_5": floor_hit5, "min_mrr": floor_mrr, "min_recall_at_k": floor_recall,
                        "passed": not failures, "failures": failures},

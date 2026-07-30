@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://durion/pos-mcp-server/eval/tool-response.schema.json",
+  "title": "Tool-response coverage fixture suite",
+  "description": "Role-authored questions (deliberately NOT derived from the current tool set) run through the live selection path and bucketed as realistic-response vs no-tool-available (#1164). Lighter than rag-retrieval: no grounding judge, only coverage.",
+  "type": "object",
+  "required": ["schema_version", "fixtures"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "_comment": { "type": "string" },
+    "fixtures": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/fixture" }
+    }
+  },
+  "$defs": {
+    "fixture": {
+      "type": "object",
+      "required": ["fixture_id", "utterance", "actor", "expected", "gap_hypothesis"],
+      "additionalProperties": false,
+      "properties": {
+        "fixture_id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "utterance": { "type": "string", "minLength": 1 },
+        "actor": { "$ref": "#/$defs/actor" },
+        "expected": { "$ref": "#/$defs/expected" },
+        "gap_hypothesis": {
+          "description": "Author's prior for no-tool-available fixtures: does the gap warrant a new tool/op, or does an existing tool's description fail to route? Use n/a on realistic-response fixtures.",
+          "enum": ["new-tool", "description-gap", "n/a"]
+        },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "required": ["role", "permission_codes"],
+      "additionalProperties": false,
+      "properties": {
+        "role": { "type": "string", "pattern": "^ROLE_[A-Z_]+$" },
+        "permission_codes": { "type": "array", "items": { "type": "string" } },
+        "workflow_state": {
+          "type": "string",
+          "enum": ["IDLE", "CREATING_PO", "RECEIVING_ASN", "INVENTORY_RECON", "PROCESSING_RETURN"]
+        }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "required": ["outcome"],
+      "additionalProperties": false,
+      "properties": {
+        "outcome": { "enum": ["realistic-response", "no-tool-available"] },
+        "tool_ids": {
+          "description": "For realistic-response fixtures: the facade tool(s) plausibly able to serve the ask. Informational — coverage scoring classifies the outcome, not the ranking (that is tool-selection's job).",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

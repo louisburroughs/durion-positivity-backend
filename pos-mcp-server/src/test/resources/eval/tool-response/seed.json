@@ -1,0 +1,906 @@
+{
+  "schema_version": 1,
+  "_comment": "Tool-response coverage seed (#1164). ~100 role-authored questions written FROM the roles, deliberately NOT derived from the 16-facade tool surface, so coverage gaps are visible. expected.outcome is the author's label against the post-V29 facade surface; gap_hypothesis is the author's prior (new-tool vs description-gap) that the live run in scripts/eval_live.py (tool_response_coverage block) tests. Personas that have no KNOWN_ROLES entry (parts counter, cashier, warehouse, HR, owner, marketing, compliance) are mapped to the closest known role and carried as a persona tag.",
+  "fixtures": [
+    {
+      "fixture_id": "advisor-open-workorders-today",
+      "utterance": "Show me all open work orders for today.",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["workorder:workorder:view", "crm:party:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["WorkorderFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["service-advisor", "workorder"],
+      "notes": "WorkorderFacadeTool.searchWorkorders (by customer, status, or vehicle criteria) serves this."
+    },
+    {
+      "fixture_id": "advisor-vehicle-status-silverado",
+      "utterance": "What's the status of the Silverado we took in this morning?",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["workorder:workorder:view", "crm:party:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["WorkorderFacadeTool", "VehicleFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["service-advisor", "workorder", "vehicle"],
+      "notes": "Vehicle search + workorder status chain."
+    },
+    {
+      "fixture_id": "advisor-schedule-appointment",
+      "utterance": "Book Mrs. Nguyen in for a brake inspection next Tuesday at 9am.",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["workorder:workorder:view", "crm:party:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["service-advisor", "scheduling"],
+      "notes": "No scheduling/appointment facade exists; WorkorderFacadeTool creates work, not calendar slots."
+    },
+    {
+      "fixture_id": "advisor-text-customer-ready",
+      "utterance": "Text the customer that their car is ready for pickup.",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["workorder:workorder:view", "crm:party:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["service-advisor", "notification"],
+      "notes": "No outbound customer-messaging facade (SMS/email send)."
+    },
+    {
+      "fixture_id": "advisor-last-quote",
+      "utterance": "What did we quote this customer last time they were in?",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["workorder:workorder:view", "crm:party:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "description-gap",
+      "tags": ["service-advisor", "pricing", "quote"],
+      "notes": "pos-price has PriceQuoteController behind PricingFacadeTool, but the facade descriptions are SKU/price-list centric — nothing routes 'what did we quote this customer'."
+    },
+    {
+      "fixture_id": "advisor-add-workorder-line",
+      "utterance": "Add a synthetic oil change line to work order 4471.",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["workorder:workorder:view", "crm:party:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["service-advisor", "workorder", "mutation"],
+      "notes": "Facade surface is read-only; no workorder line mutation op."
+    },
+    {
+      "fixture_id": "advisor-usual-advisor",
+      "utterance": "Which advisor is this customer usually assigned to?",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["workorder:workorder:view", "crm:party:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["CustomerFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["service-advisor", "crm"],
+      "notes": "CustomerFacadeTool.getCustomerHistory (account history and interaction timeline) plausibly surfaces the usual advisor."
+    },
+    {
+      "fixture_id": "advisor-print-pickup-receipt",
+      "utterance": "Print a pickup receipt for the Camry on lift 3.",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["workorder:workorder:view", "crm:party:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["service-advisor", "printing"],
+      "notes": "No document/receipt generation facade (pos-document-helper is a library, not a tool surface)."
+    },
+    {
+      "fixture_id": "advisor-open-recalls",
+      "utterance": "Does this customer have any open recalls on their vehicle?",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["workorder:workorder:view", "crm:party:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["VehicleFacadeTool", "ExaWebSearchTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["service-advisor", "vehicle", "web-search"],
+      "notes": "Recall data is not in-system; VehicleFacadeTool resolves the vehicle and ExaWebSearchTool (automotive web search) can answer recalls plausibly."
+    },
+    {
+      "fixture_id": "tech-labor-time-brake-job",
+      "utterance": "What labor time is allowed for a front brake pad job on a 2019 F-150?",
+      "actor": { "role": "ROLE_TECHNICIAN", "permission_codes": ["workorder:workorder:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["ExaWebSearchTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["technician", "labor-guide", "web-search"],
+      "notes": "No labor-guide integration; ExaWebSearchTool can return a plausible industry labor time. A dedicated labor-guide tool would be stronger but web search clears the realistic bar."
+    },
+    {
+      "fixture_id": "tech-torque-spec",
+      "utterance": "Show me the torque spec for the oil drain plug on this vehicle.",
+      "actor": { "role": "ROLE_TECHNICIAN", "permission_codes": ["workorder:workorder:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["ExaWebSearchTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["technician", "spec", "web-search"],
+      "notes": "Served by web search, same as labor times."
+    },
+    {
+      "fixture_id": "tech-clock-onto-workorder",
+      "utterance": "Clock me onto work order 4471.",
+      "actor": { "role": "ROLE_TECHNICIAN", "permission_codes": ["workorder:workorder:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["technician", "timekeeping", "mutation"],
+      "notes": "No time-clock/labor-punch facade."
+    },
+    {
+      "fixture_id": "tech-next-bay-assignment",
+      "utterance": "Which bay am I assigned to next?",
+      "actor": { "role": "ROLE_TECHNICIAN", "permission_codes": ["workorder:workorder:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["technician", "dispatch"],
+      "notes": "ShopManagerFacadeTool.getShopQueue is manager-gated (shop:location:view) and shop-level; no tech-facing assignment view."
+    },
+    {
+      "fixture_id": "tech-flag-missing-part",
+      "utterance": "Flag this job as needing a part I don't have.",
+      "actor": { "role": "ROLE_TECHNICIAN", "permission_codes": ["workorder:workorder:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["technician", "workorder", "mutation"],
+      "notes": "Workorder status mutation; facade surface is read-only."
+    },
+    {
+      "fixture_id": "tech-diagnostic-history-vin",
+      "utterance": "What's the diagnostic history on this VIN?",
+      "actor": { "role": "ROLE_TECHNICIAN", "permission_codes": ["workorder:workorder:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["VehicleFacadeTool", "WorkorderFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["technician", "vehicle", "workorder"],
+      "notes": "Vehicle search by VIN + workorder history for that vehicle."
+    },
+    {
+      "fixture_id": "tech-complete-inspection-notes",
+      "utterance": "Mark the brake inspection as complete and add my notes.",
+      "actor": { "role": "ROLE_TECHNICIAN", "permission_codes": ["workorder:workorder:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["technician", "workorder", "mutation"],
+      "notes": "Workorder completion + notes mutation not on the facade surface."
+    },
+    {
+      "fixture_id": "tech-hours-logged-week",
+      "utterance": "How many hours have I logged this week?",
+      "actor": { "role": "ROLE_TECHNICIAN", "permission_codes": ["workorder:workorder:view", "crm:vehicle:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["technician", "timekeeping"],
+      "notes": "HrFacadeTool exposes schedules/availability, not actual logged time entries."
+    },
+    {
+      "fixture_id": "parts-brake-pads-in-stock",
+      "utterance": "Do we have brake pads in stock for a 2019 F-150?",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["InventoryFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["parts-counter", "inventory"],
+      "notes": "InventoryFacadeTool.searchInventory by product name."
+    },
+    {
+      "fixture_id": "parts-cost-markup-sku",
+      "utterance": "What's the cost and markup on part SKU-88123?",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["PricingFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["parts-counter", "pricing"],
+      "notes": "PricingFacadeTool.getPriceForSku (AUTHENTICATED-gated) returns price details; markup may be partial but response is on-topic."
+    },
+    {
+      "fixture_id": "parts-order-oil-filters",
+      "utterance": "Order 12 oil filters from our main supplier.",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["parts-counter", "procurement", "mutation"],
+      "notes": "CREATING_PO workflow state exists, but no purchase-order creation op is on the facade surface."
+    },
+    {
+      "fixture_id": "parts-supplier-lead-time",
+      "utterance": "Which supplier has the shortest lead time on this alternator?",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["parts-counter", "procurement"],
+      "notes": "No supplier/procurement data facade."
+    },
+    {
+      "fixture_id": "parts-below-reorder-point",
+      "utterance": "Show me parts that are below their reorder point.",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["parts-counter", "inventory", "exception-report"],
+      "notes": "InventoryFacadeTool ops are point lookups (checkStock/searchInventory/getLocationStock); no reorder-point exception op — candidate new op on InventoryFacadeTool."
+    },
+    {
+      "fixture_id": "parts-return-defective-starter",
+      "utterance": "Return this defective starter to the vendor for credit.",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search"], "workflow_state": "PROCESSING_RETURN" },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["parts-counter", "returns", "mutation"],
+      "notes": "PROCESSING_RETURN covers return-to-stock via InventoryFacadeTool; vendor RMA/credit is a different flow with no op."
+    },
+    {
+      "fixture_id": "parts-shelf-location-sku",
+      "utterance": "What's the shelf location for SKU-88123?",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "description-gap",
+      "tags": ["parts-counter", "inventory"],
+      "notes": "If the checkStock payload carries bin/aisle, the description ('check current stock level') never says so — tighten it; otherwise it's a new op."
+    },
+    {
+      "fixture_id": "parts-reserve-against-workorder",
+      "utterance": "Reserve these parts against work order 4471.",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["parts-counter", "inventory", "mutation"],
+      "notes": "No parts-reservation/allocation op."
+    },
+    {
+      "fixture_id": "parts-sales-last-month",
+      "utterance": "How much of this part did we sell last month?",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["parts-counter", "reporting"],
+      "notes": "ReportingFacadeTool.getSalesReport is period-level and gated on reporting:view:financial-statements; no SKU-level sales-history op."
+    },
+    {
+      "fixture_id": "cashier-take-card-payment",
+      "utterance": "Take a $250 card payment on invoice INV-2026-0042.",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["invoice:manage"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["cashier", "payments", "mutation"],
+      "notes": "No payment-capture facade."
+    },
+    {
+      "fixture_id": "cashier-split-tender",
+      "utterance": "Split this invoice — half on card, half cash.",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["invoice:manage"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["cashier", "payments", "mutation"],
+      "notes": "Split-tender payment; no payment facade."
+    },
+    {
+      "fixture_id": "cashier-apply-loyalty-credit",
+      "utterance": "Apply the customer's $20 loyalty credit to this sale.",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["invoice:manage"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["cashier", "loyalty", "mutation"],
+      "notes": "No loyalty-program facade."
+    },
+    {
+      "fixture_id": "cashier-discount-labor-line",
+      "utterance": "Give a 10% discount on the labor line.",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["invoice:manage"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["cashier", "pricing", "mutation"],
+      "notes": "Line-level discount mutation; pricing facade is read-only."
+    },
+    {
+      "fixture_id": "cashier-void-last-transaction",
+      "utterance": "Void the last transaction, I rang it up twice.",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["invoice:manage"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["cashier", "payments", "mutation"],
+      "notes": "No void/reversal op."
+    },
+    {
+      "fixture_id": "cashier-till-balance",
+      "utterance": "What's in the till right now?",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["invoice:manage"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["cashier", "cash-drawer"],
+      "notes": "No cash-drawer/till facade."
+    },
+    {
+      "fixture_id": "cashier-duplicate-receipt",
+      "utterance": "Print a duplicate receipt for this morning's sale.",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["invoice:manage"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["cashier", "printing"],
+      "notes": "No receipt/document generation facade."
+    },
+    {
+      "fixture_id": "cashier-refund-diagnostic-fee",
+      "utterance": "Refund the diagnostic fee back to the customer's card.",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["invoice:manage"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["cashier", "payments", "mutation"],
+      "notes": "No refund op."
+    },
+    {
+      "fixture_id": "manager-todays-revenue",
+      "utterance": "What's today's revenue so far across all bays?",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["workorder:workorder:view", "reporting:view:financial-statements", "shop:location:view", "shop:schedule:view"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["ReportingFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["location-manager", "reporting"],
+      "notes": "ReportingFacadeTool.getRevenueReport for the current period."
+    },
+    {
+      "fixture_id": "manager-top-billed-technician",
+      "utterance": "Which technician has the highest billed hours this week?",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["workorder:workorder:view", "reporting:view:financial-statements", "shop:location:view", "shop:schedule:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["location-manager", "productivity"],
+      "notes": "No technician-productivity/billed-hours op; reporting facade is sales/revenue/inventory only."
+    },
+    {
+      "fixture_id": "manager-aging-jobs",
+      "utterance": "Show me jobs that have been sitting more than 3 days.",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["workorder:workorder:view", "reporting:view:financial-statements", "shop:location:view", "shop:schedule:view"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["WorkorderFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["location-manager", "workorder"],
+      "notes": "WorkorderFacadeTool.searchWorkorders by status; age filtering may be approximate but the response is on-topic."
+    },
+    {
+      "fixture_id": "manager-approve-discount",
+      "utterance": "Approve the discount the advisor requested on work order 4471.",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["workorder:workorder:view", "reporting:view:financial-statements", "shop:location:view", "shop:schedule:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["location-manager", "approval", "mutation"],
+      "notes": "No approval-workflow op on the facade surface."
+    },
+    {
+      "fixture_id": "manager-effective-labor-rate",
+      "utterance": "What's our effective labor rate this month?",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["workorder:workorder:view", "reporting:view:financial-statements", "shop:location:view", "shop:schedule:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["location-manager", "kpi"],
+      "notes": "ELR needs billed-hours + revenue; no KPI op serves it."
+    },
+    {
+      "fixture_id": "manager-cars-completed-yesterday",
+      "utterance": "How many cars did we complete yesterday?",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["workorder:workorder:view", "reporting:view:financial-statements", "shop:location:view", "shop:schedule:view"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["WorkorderFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["location-manager", "workorder"],
+      "notes": "searchWorkorders by completed status/date."
+    },
+    {
+      "fixture_id": "manager-waiting-on-parts",
+      "utterance": "Which work orders are waiting on parts?",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["workorder:workorder:view", "reporting:view:financial-statements", "shop:location:view", "shop:schedule:view"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["WorkorderFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["location-manager", "workorder"],
+      "notes": "searchWorkorders by status."
+    },
+    {
+      "fixture_id": "manager-set-holiday-hours",
+      "utterance": "Set the shop's hours for the holiday next Monday.",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["workorder:workorder:view", "reporting:view:financial-statements", "shop:location:view", "shop:schedule:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["location-manager", "shop-config", "mutation"],
+      "notes": "ShopManagerFacadeTool is read-only; no hours/config mutation."
+    },
+    {
+      "fixture_id": "warehouse-stock-count-aisle",
+      "utterance": "Do a stock count on aisle 4 and reconcile.",
+      "actor": { "role": "ROLE_DISPATCHER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search", "inventory:goods_receipt:create"], "workflow_state": "INVENTORY_RECON" },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["warehouse", "cycle-count", "mutation"],
+      "notes": "INVENTORY_RECON workflow state exists but no count/reconcile op is on the facade surface."
+    },
+    {
+      "fixture_id": "warehouse-expired-shelf-life",
+      "utterance": "Which parts have expired or are past shelf life?",
+      "actor": { "role": "ROLE_DISPATCHER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search", "inventory:goods_receipt:create"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["warehouse", "inventory", "exception-report"],
+      "notes": "No shelf-life/expiry data op."
+    },
+    {
+      "fixture_id": "warehouse-transfer-wiper-blades",
+      "utterance": "Transfer 20 wiper blades to the downtown location.",
+      "actor": { "role": "ROLE_DISPATCHER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search", "inventory:goods_receipt:create"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["warehouse", "transfer", "mutation"],
+      "notes": "No inter-location transfer op."
+    },
+    {
+      "fixture_id": "warehouse-receive-asn",
+      "utterance": "Receive the ASN from supplier that arrived this morning.",
+      "actor": { "role": "ROLE_DISPATCHER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search", "inventory:goods_receipt:create"], "workflow_state": "RECEIVING_ASN" },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["warehouse", "receiving", "mutation"],
+      "notes": "RECEIVING_ASN workflow state exists but no goods-receipt op is on the facade surface."
+    },
+    {
+      "fixture_id": "warehouse-on-hand-valuation",
+      "utterance": "What's the total value of on-hand inventory right now?",
+      "actor": { "role": "ROLE_DISPATCHER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search", "inventory:goods_receipt:create"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["warehouse", "valuation"],
+      "notes": "ReportingFacadeTool.getInventoryReport exists but is gated on reporting:view:financial-statements, which a warehouse actor doesn't hold; an inventory-scoped valuation op is the candidate."
+    },
+    {
+      "fixture_id": "warehouse-negative-on-hand",
+      "utterance": "Show me parts with negative on-hand quantity.",
+      "actor": { "role": "ROLE_DISPATCHER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search", "inventory:goods_receipt:create"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["warehouse", "inventory", "exception-report"],
+      "notes": "searchInventory searches by name/SKU; cannot filter quantity < 0 — candidate exception-report op."
+    },
+    {
+      "fixture_id": "warehouse-write-off-damaged",
+      "utterance": "Write off the damaged parts from the shipment.",
+      "actor": { "role": "ROLE_DISPATCHER", "permission_codes": ["inventory:on_hand:view", "inventory:on_hand:search", "inventory:goods_receipt:create"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["warehouse", "adjustment", "mutation"],
+      "notes": "No inventory adjustment/write-off op."
+    },
+    {
+      "fixture_id": "accountant-show-journal-entry",
+      "utterance": "Show me journal entry JE-4000.",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["AccountingFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["accountant", "accounting"],
+      "notes": "AccountingFacadeTool.searchJournalEntries."
+    },
+    {
+      "fixture_id": "accountant-ar-balance",
+      "utterance": "What's the outstanding accounts receivable balance?",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["AccountingFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["accountant", "accounting"],
+      "notes": "getAccountBalance on the AR control account."
+    },
+    {
+      "fixture_id": "accountant-pnl-last-quarter",
+      "utterance": "Run a profit and loss for last quarter.",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["AccountingFacadeTool", "ReportingFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["accountant", "reporting"],
+      "notes": "getFinancialSummary(period) / income-statement reporting."
+    },
+    {
+      "fixture_id": "accountant-reconcile-bank-deposit",
+      "utterance": "Reconcile the bank deposit against yesterday's sales.",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["accountant", "reconciliation", "mutation"],
+      "notes": "No bank-reconciliation op."
+    },
+    {
+      "fixture_id": "accountant-overdue-invoices",
+      "utterance": "Which invoices are more than 30 days overdue?",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["InvoiceFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["accountant", "invoice"],
+      "notes": "InvoiceFacadeTool.searchInvoices by status/date."
+    },
+    {
+      "fixture_id": "accountant-post-correcting-entry",
+      "utterance": "Post a correcting entry to the parts COGS account.",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["accountant", "accounting", "mutation"],
+      "notes": "Journal-entry creation is a write; accounting facade is read-only."
+    },
+    {
+      "fixture_id": "accountant-export-general-ledger",
+      "utterance": "Export the general ledger for the auditor.",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["accountant", "export"],
+      "notes": "No export/document generation op."
+    },
+    {
+      "fixture_id": "accountant-sales-tax-owed",
+      "utterance": "What sales tax do we owe the state this period?",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:coa:view", "accounting:je:view", "reporting:view:financial-statements", "invoice:manage", "tax:calculate"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["TaxFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["accountant", "tax"],
+      "notes": "TaxFacadeTool.getTaxSummary(period); post-V29 the facade is gated on tax:calculate, which this actor holds."
+    },
+    {
+      "fixture_id": "hr-hours-worked-pay-period",
+      "utterance": "How many hours did technician J. Rivera work this pay period?",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["people:employee:view", "people:person:view", "people:availability:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["hr-payroll", "timekeeping"],
+      "notes": "HrFacadeTool exposes profiles/schedules/availability, not worked-hours actuals."
+    },
+    {
+      "fixture_id": "hr-approve-time-off",
+      "utterance": "Approve the time-off request for next Friday.",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["people:employee:view", "people:person:view", "people:availability:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["hr-payroll", "approval", "mutation"],
+      "notes": "No time-off workflow op."
+    },
+    {
+      "fixture_id": "hr-who-opens-tomorrow",
+      "utterance": "Who's scheduled to open the shop tomorrow?",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["people:employee:view", "people:person:view", "people:availability:view"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["HrFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["hr-payroll", "schedule"],
+      "notes": "HrFacadeTool.getEmployeeSchedule / searchEmployees by availability."
+    },
+    {
+      "fixture_id": "hr-add-new-hire",
+      "utterance": "Add a new hire to the technician roster.",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["people:employee:view", "people:person:view", "people:availability:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["hr-payroll", "mutation"],
+      "notes": "Employee creation is a write; HR facade is read-only."
+    },
+    {
+      "fixture_id": "hr-overtime-total-week",
+      "utterance": "What's the overtime total for the shop this week?",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["people:employee:view", "people:person:view", "people:availability:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["hr-payroll", "timekeeping"],
+      "notes": "Overtime aggregation needs worked-hours actuals; not on the surface."
+    },
+    {
+      "fixture_id": "hr-clocked-in-now",
+      "utterance": "Show me who's clocked in right now.",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["people:employee:view", "people:person:view", "people:availability:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "description-gap",
+      "tags": ["hr-payroll", "timekeeping"],
+      "notes": "getEmployeeSchedule/availability is adjacent — if availability reflects live clock-in state, the description hides it; else a time-clock op is needed."
+    },
+    {
+      "fixture_id": "hr-run-payroll",
+      "utterance": "Run payroll for this pay period.",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["people:employee:view", "people:person:view", "people:availability:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["hr-payroll", "mutation"],
+      "notes": "No payroll domain in the platform."
+    },
+    {
+      "fixture_id": "owner-compare-location-revenue",
+      "utterance": "Compare revenue between my two locations this month.",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["reporting:view:financial-statements", "accounting:coa:view", "accounting:je:view", "location:read"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["ReportingFacadeTool", "LocationFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["owner-multi-location", "reporting"],
+      "notes": "Two getRevenueReport calls chained across locations."
+    },
+    {
+      "fixture_id": "owner-best-gross-margin-location",
+      "utterance": "Which location has the best gross margin?",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["reporting:view:financial-statements", "accounting:coa:view", "accounting:je:view", "location:read"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["owner-multi-location", "analytics"],
+      "notes": "Cross-location margin analytics (revenue + COGS per location) is not served by period-level reports."
+    },
+    {
+      "fixture_id": "owner-yoy-growth",
+      "utterance": "Show me year-over-year growth for the business.",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["reporting:view:financial-statements", "accounting:coa:view", "accounting:je:view", "location:read"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["ReportingFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["owner-multi-location", "reporting"],
+      "notes": "Two period revenue reports compared."
+    },
+    {
+      "fixture_id": "owner-understaffed-vs-carcount",
+      "utterance": "Which of my shops is understaffed relative to car count?",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["reporting:view:financial-statements", "accounting:coa:view", "accounting:je:view", "location:read"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["owner-multi-location", "analytics"],
+      "notes": "Staffing-vs-demand analytics; no op joins headcount and car count."
+    },
+    {
+      "fixture_id": "owner-total-cash-position",
+      "utterance": "What's my total cash position across all stores?",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["reporting:view:financial-statements", "accounting:coa:view", "accounting:je:view", "location:read"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["AccountingFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["owner-multi-location", "accounting"],
+      "notes": "getAccountBalance on cash accounts / getFinancialSummary."
+    },
+    {
+      "fixture_id": "owner-rollup-receivables",
+      "utterance": "Roll up all open receivables company-wide.",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["reporting:view:financial-statements", "accounting:coa:view", "accounting:je:view", "location:read"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["AccountingFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["owner-multi-location", "accounting"],
+      "notes": "AR control-account balance serves the rollup."
+    },
+    {
+      "fixture_id": "fleet-open-workorders-acme",
+      "utterance": "Show me all open work orders for the ACME Fleet account.",
+      "actor": { "role": "ROLE_ACCOUNT_MANAGER", "permission_codes": ["crm:party:view", "crm:vehicle:view", "workorder:workorder:view", "invoice:manage"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["WorkorderFacadeTool", "CustomerFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["fleet", "workorder"],
+      "notes": "searchWorkorders by customer."
+    },
+    {
+      "fixture_id": "fleet-total-spend-year",
+      "utterance": "What's ACME Fleet's total spend this year?",
+      "actor": { "role": "ROLE_ACCOUNT_MANAGER", "permission_codes": ["crm:party:view", "crm:vehicle:view", "workorder:workorder:view", "invoice:manage"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["InvoiceFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["fleet", "invoice"],
+      "notes": "getInvoicesByCustomer summed over the year."
+    },
+    {
+      "fixture_id": "fleet-setup-net30-terms",
+      "utterance": "Set up net-30 billing terms for this fleet customer.",
+      "actor": { "role": "ROLE_ACCOUNT_MANAGER", "permission_codes": ["crm:party:view", "crm:vehicle:view", "workorder:workorder:view", "invoice:manage"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["fleet", "billing", "mutation"],
+      "notes": "Billing-terms configuration is a write; no op."
+    },
+    {
+      "fixture_id": "fleet-vehicles-overdue-service",
+      "utterance": "Which vehicles in the Metro Delivery fleet are overdue for service?",
+      "actor": { "role": "ROLE_ACCOUNT_MANAGER", "permission_codes": ["crm:party:view", "crm:vehicle:view", "workorder:workorder:view", "invoice:manage"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["fleet", "vehicle", "service-due"],
+      "notes": "CRM generates SERVICE_DUE_REMINDER follow-ups (#1153) but no facade op exposes service-due status; getVehiclesByCustomer lists vehicles without due-state."
+    },
+    {
+      "fixture_id": "fleet-consolidated-monthly-invoice",
+      "utterance": "Generate a consolidated monthly invoice for the whole fleet.",
+      "actor": { "role": "ROLE_ACCOUNT_MANAGER", "permission_codes": ["crm:party:view", "crm:vehicle:view", "workorder:workorder:view", "invoice:manage"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["fleet", "billing", "mutation"],
+      "notes": "Invoice generation is a write; invoice facade is read-only."
+    },
+    {
+      "fixture_id": "fleet-add-vehicle-to-account",
+      "utterance": "Add a new vehicle to the ACME Fleet account.",
+      "actor": { "role": "ROLE_ACCOUNT_MANAGER", "permission_codes": ["crm:party:view", "crm:vehicle:view", "workorder:workorder:view", "invoice:manage"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["fleet", "vehicle", "mutation"],
+      "notes": "Vehicle creation is a write; vehicle facade is read-only."
+    },
+    {
+      "fixture_id": "exec-average-ro-value-trend",
+      "utterance": "What's our average repair order value trending this quarter?",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["reporting:view:financial-statements", "shop:location:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["regional-executive", "analytics"],
+      "notes": "ARO trend needs order-count + revenue time series; period reports don't serve a trend."
+    },
+    {
+      "fixture_id": "exec-shops-missing-target",
+      "utterance": "Which shops are missing their revenue target?",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["reporting:view:financial-statements", "shop:location:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["regional-executive", "analytics"],
+      "notes": "Revenue targets don't exist as a concept anywhere in the platform."
+    },
+    {
+      "fixture_id": "exec-csat-by-location",
+      "utterance": "Show me customer satisfaction scores by location.",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["reporting:view:financial-statements", "shop:location:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["regional-executive", "csat"],
+      "notes": "No CSAT/survey domain."
+    },
+    {
+      "fixture_id": "exec-technician-utilization",
+      "utterance": "What's the technician utilization rate region-wide?",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["reporting:view:financial-statements", "shop:location:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["regional-executive", "analytics"],
+      "notes": "Utilization needs clocked vs billed hours; neither is exposed."
+    },
+    {
+      "fixture_id": "exec-fastest-growing-categories",
+      "utterance": "Which service categories are growing fastest?",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["reporting:view:financial-statements", "shop:location:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["regional-executive", "analytics"],
+      "notes": "Category-level sales trend analytics not served by period reports."
+    },
+    {
+      "fixture_id": "marketing-send-service-reminders",
+      "utterance": "Send a service reminder to everyone overdue for an oil change.",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["crm:party:view", "crm:party:search"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["marketing-crm", "campaign", "mutation"],
+      "notes": "CRM generates SERVICE_DUE_REMINDER follow-ups server-side (#1153), but there is no campaign-send facade."
+    },
+    {
+      "fixture_id": "marketing-lapsed-customers",
+      "utterance": "Which customers haven't been in for over a year?",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["crm:party:view", "crm:party:search"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "description-gap",
+      "tags": ["marketing-crm", "segmentation"],
+      "notes": "CustomerFacadeTool.searchCustomers says 'by name, phone number, email, or other criteria' — if CRM search supports last-visit filters the description hides it; else a segmentation op is needed."
+    },
+    {
+      "fixture_id": "marketing-launch-winter-promo",
+      "utterance": "Launch a promo for winter tire changeovers.",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["crm:party:view", "crm:party:search"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["marketing-crm", "promotion", "mutation"],
+      "notes": "pos-price owns promotions/campaign codes (#1134) but promo creation has no facade op."
+    },
+    {
+      "fixture_id": "marketing-new-customers-last-month",
+      "utterance": "How many new customers did we acquire last month?",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["crm:party:view", "crm:party:search"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "description-gap",
+      "tags": ["marketing-crm", "reporting"],
+      "notes": "A created-date filter on customer search would serve this; the description doesn't advertise date criteria."
+    },
+    {
+      "fixture_id": "marketing-loyalty-enrollment",
+      "utterance": "Show me customers enrolled in the loyalty program.",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["crm:party:view", "crm:party:search"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["marketing-crm", "loyalty"],
+      "notes": "No loyalty-program domain on the tool surface."
+    },
+    {
+      "fixture_id": "marketing-coupon-redemption-rate",
+      "utterance": "What's the redemption rate on last month's coupon?",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["crm:party:view", "crm:party:search"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["marketing-crm", "promotion", "analytics"],
+      "notes": "pos-price has campaign-code eligibility but no redemption analytics op."
+    },
+    {
+      "fixture_id": "compliance-labor-tax-rate",
+      "utterance": "What tax rate applies to labor in this jurisdiction?",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["tax:calculate", "reporting:view:financial-statements"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["TaxFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["compliance-tax", "tax"],
+      "notes": "TaxFacadeTool.getTaxRate(location)."
+    },
+    {
+      "fixture_id": "compliance-part-taxable-state",
+      "utterance": "Is this part taxable in the customer's state?",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["tax:calculate", "reporting:view:financial-statements"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["TaxFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["compliance-tax", "tax"],
+      "notes": "getTaxRate / calculateTax for the jurisdiction."
+    },
+    {
+      "fixture_id": "compliance-sales-tax-filing-june",
+      "utterance": "Generate the sales tax filing report for June.",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["tax:calculate", "reporting:view:financial-statements"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["TaxFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["compliance-tax", "tax"],
+      "notes": "getTaxSummary(period) is on-topic even if not filing-formatted."
+    },
+    {
+      "fixture_id": "compliance-missing-tax-code",
+      "utterance": "Show me any transactions missing a tax code.",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["tax:calculate", "reporting:view:financial-statements"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["compliance-tax", "exception-report"],
+      "notes": "Tax-code exception report; no op."
+    },
+    {
+      "fixture_id": "compliance-tax-exempt-fleet-total",
+      "utterance": "What's our tax-exempt sales total this quarter for fleet accounts?",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["tax:calculate", "reporting:view:financial-statements"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "description-gap",
+      "tags": ["compliance-tax", "tax"],
+      "notes": "getTaxSummary may already break out exempt sales; the description ('tax summary details for a reporting period') doesn't say — tighten or add a filtered op."
+    },
+    {
+      "fixture_id": "it-add-technician-user",
+      "utterance": "Add a new technician user and give them work-order view access.",
+      "actor": { "role": "ROLE_SYSTEM_ADMINISTRATOR", "permission_codes": ["security:user:view", "security:permission:view", "security:audit:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["it-admin", "security", "mutation"],
+      "notes": "User creation/role grant is a write; AdminFacadeTool is read-only."
+    },
+    {
+      "fixture_id": "it-reset-password",
+      "utterance": "Reset the password for advisor account jsmith.",
+      "actor": { "role": "ROLE_SYSTEM_ADMINISTRATOR", "permission_codes": ["security:user:view", "security:permission:view", "security:audit:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["it-admin", "security", "mutation"],
+      "notes": "Credential mutation; no op."
+    },
+    {
+      "fixture_id": "it-users-with-accounting-perms",
+      "utterance": "Which users have accounting permissions?",
+      "actor": { "role": "ROLE_SYSTEM_ADMINISTRATOR", "permission_codes": ["security:user:view", "security:permission:view", "security:audit:view"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["AdminFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["it-admin", "security"],
+      "notes": "AdminFacadeTool.listUsers + getUserPermissions."
+    },
+    {
+      "fixture_id": "it-disable-departed-tech",
+      "utterance": "Disable the account for the tech who left last week.",
+      "actor": { "role": "ROLE_SYSTEM_ADMINISTRATOR", "permission_codes": ["security:user:view", "security:permission:view", "security:audit:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["it-admin", "security", "mutation"],
+      "notes": "Account disable is a write; no op."
+    },
+    {
+      "fixture_id": "it-audit-log-workorder",
+      "utterance": "Show me the audit log for work order 4471.",
+      "actor": { "role": "ROLE_SYSTEM_ADMINISTRATOR", "permission_codes": ["security:user:view", "security:permission:view", "security:audit:view"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["AdminFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["it-admin", "audit"],
+      "notes": "AdminFacadeTool.getAuditLog(query)."
+    },
+    {
+      "fixture_id": "it-gateway-api-version",
+      "utterance": "What API version is the gateway routing to right now?",
+      "actor": { "role": "ROLE_SYSTEM_ADMINISTRATOR", "permission_codes": ["security:user:view", "security:permission:view", "security:audit:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "description-gap",
+      "tags": ["it-admin", "platform"],
+      "notes": "AdminFacadeTool.getSystemStatus ('overall platform system status and health') is adjacent but doesn't advertise gateway routing/version info."
+    },
+    {
+      "fixture_id": "it-register-returns-permission",
+      "utterance": "Register a new permission for the returns workflow.",
+      "actor": { "role": "ROLE_SYSTEM_ADMINISTRATOR", "permission_codes": ["security:user:view", "security:permission:view", "security:audit:view"] },
+      "expected": { "outcome": "no-tool-available" },
+      "gap_hypothesis": "new-tool",
+      "tags": ["it-admin", "security", "mutation"],
+      "notes": "Permission registration is code-first at service startup by design; arguably a permanent gap rather than a tool candidate."
+    },
+    {
+      "fixture_id": "it-order-domain-event-activity",
+      "utterance": "Show me recent event activity for the order domain.",
+      "actor": { "role": "ROLE_SYSTEM_ADMINISTRATOR", "permission_codes": ["security:user:view", "security:permission:view", "security:audit:view"] },
+      "expected": { "outcome": "realistic-response", "tool_ids": ["EventsFacadeTool"] },
+      "gap_hypothesis": "n/a",
+      "tags": ["it-admin", "events"],
+      "notes": "EventsFacadeTool.searchEvents / getEventHistory (AUTHENTICATED-gated)."
+    }
+  ]
+}
