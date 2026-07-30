@@ -941,6 +941,8 @@ paths:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1returns~1{returnOrderId}~1reject
   /v1/returns/{returnOrderId}/retry:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1returns~1{returnOrderId}~1retry
+  /v1/organizations/{organizationId}/postal-address:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1organizations~1{organizationId}~1postal-address
   /v1/people:
     $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people
   /v1/people/by-ids:
@@ -963,6 +965,8 @@ paths:
     $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personId}
   /v1/people/{personId}/contact-points:
     $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personId}~1contact-points
+  /v1/people/{personId}/postal-address:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personId}~1postal-address
   /v1/people/{personId}/users:
     $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personId}~1users
   /v1/people/{personUuid}/access/assignments:

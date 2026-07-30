@@ -12,6 +12,8 @@ servers:
 tags:
 - name: People API
   description: Operations related to people records
+- name: Postal Address API
+  description: Structured postal addresses for person and organization parties
 - name: User-Person Linking API
   description: Link authentication users to person records
 - name: People - Access Control
@@ -119,6 +121,99 @@ paths:
         - people-contact:person:delete
       x-required-permissions:
       - people-contact:person:delete
+  /v1/people/{personId}/postal-address:
+    get:
+      tags:
+      - Postal Address API
+      summary: Get a person's postal address
+      description: Returns the person's structured postal address, or 404 when none is on file.
+      operationId: getPersonAddress
+      parameters:
+      - name: personId
+        in: path
+        description: Person id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Address found and returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostalAddressDto'
+        '404':
+          description: No address on file for the person.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+      security:
+      - bearerAuth:
+        - people-contact:person:view
+      x-required-permissions:
+      - people-contact:person:view
+    put:
+      tags:
+      - Postal Address API
+      summary: Create or replace a person's postal address
+      description: Stores the structured, validated address. Only line1 and an ISO 3166-1 alpha-2 countryCode are required — the shape is country-agnostic (region is free text, postalCode optional) so it works for any deployment locale.
+      operationId: putPersonAddress
+      parameters:
+      - name: personId
+        in: path
+        description: Person id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostalAddressDto'
+        required: true
+      responses:
+        '200':
+          description: Address stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostalAddressDto'
+        '404':
+          description: Person not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+      security:
+      - bearerAuth:
+        - people-contact:person:edit
+      x-required-permissions:
+      - people-contact:person:edit
+    delete:
+      tags:
+      - Postal Address API
+      summary: Delete a person's postal address
+      description: Removes the person's postal address; succeeds even when none is on file.
+      operationId: deletePersonAddress
+      parameters:
+      - name: personId
+        in: path
+        description: Person id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Address removed (or none existed).
+      security:
+      - bearerAuth:
+        - people-contact:person:edit
+      x-required-permissions:
+      - people-contact:person:edit
   /v1/people/{personId}/contact-points:
     put:
       tags:
@@ -150,6 +245,93 @@ paths:
         - people-contact:person:edit
       x-required-permissions:
       - people-contact:person:edit
+  /v1/organizations/{organizationId}/postal-address:
+    get:
+      tags:
+      - Postal Address API
+      summary: Get an organization's postal address
+      description: Returns the organization party's structured postal address, or 404 when none is on file. The organization id is the party UUID owned by the CRM module.
+      operationId: getOrganizationAddress
+      parameters:
+      - name: organizationId
+        in: path
+        description: Organization party id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Address found and returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostalAddressDto'
+        '404':
+          description: No address on file for the organization.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+      security:
+      - bearerAuth:
+        - people-contact:organization:view
+      x-required-permissions:
+      - people-contact:organization:view
+    put:
+      tags:
+      - Postal Address API
+      summary: Create or replace an organization's postal address
+      description: Stores the structured, validated address for an organization party. The id is an external party reference (pos-customer commercial party) stored verbatim.
+      operationId: putOrganizationAddress
+      parameters:
+      - name: organizationId
+        in: path
+        description: Organization party id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostalAddressDto'
+        required: true
+      responses:
+        '200':
+          description: Address stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostalAddressDto'
+      security:
+      - bearerAuth:
+        - people-contact:organization:edit
+      x-required-permissions:
+      - people-contact:organization:edit
+    delete:
+      tags:
+      - Postal Address API
+      summary: Delete an organization's postal address
+      description: Removes the organization party's postal address; succeeds even when none is on file.
+      operationId: deleteOrganizationAddress
+      parameters:
+      - name: organizationId
+        in: path
+        description: Organization party id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Address removed (or none existed).
+      security:
+      - bearerAuth:
+        - people-contact:organization:edit
+      x-required-permissions:
+      - people-contact:organization:edit
   /v1/people:
     get:
       tags:
@@ -755,6 +937,49 @@ components:
           format: uri
         properties:
           type: object
+    PostalAddressDto:
+      type: object
+      description: Structured international postal address
+      properties:
+        line1:
+          type: string
+          description: First address line (street address, PO box, company name)
+          example: 1-2-3 Ginza
+          maxLength: 255
+          minLength: 0
+        line2:
+          type: string
+          description: Second address line (apartment, suite, unit, building, floor)
+          example: Chuo-ku
+          maxLength: 255
+          minLength: 0
+        city:
+          type: string
+          description: City, town, or locality
+          example: Tokyo
+          maxLength: 120
+          minLength: 0
+        region:
+          type: string
+          description: 'Administrative area: state, province, prefecture, or county (free text)'
+          example: Tokyo
+          maxLength: 120
+          minLength: 0
+        postalCode:
+          type: string
+          description: Postal or ZIP code; omit for countries without one
+          example: 104-0061
+          maxLength: 20
+          minLength: 0
+        countryCode:
+          type: string
+          description: ISO 3166-1 alpha-2 country code
+          example: JP
+          minLength: 1
+          pattern: ^[A-Za-z]{2}$
+      required:
+      - countryCode
+      - line1
     PersonRoleAssignmentRequest:
       type: object
       description: Request to assign a role to a person

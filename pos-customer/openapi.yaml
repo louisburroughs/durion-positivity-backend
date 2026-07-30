@@ -3030,7 +3030,8 @@ components:
           minLength: 0
         primaryAddress:
           type: string
-          description: Primary address label or identifier for the customer
+          deprecated: true
+          description: Legacy free-text address label. Superseded by the structured postal address in pos-people-contact (FI-4); retained for display compatibility.
           example: 123 Main St, Springfield
           maxLength: 255
           minLength: 0
@@ -5052,7 +5053,8 @@ components:
           example: NET30
         primaryAddress:
           type: string
-          description: Primary address for display, if available
+          deprecated: true
+          description: Legacy free-text address for display, if available. Superseded by the structured postal address in pos-people-contact (FI-4).
           example: 100 Trade Street, Charlotte, NC 28202
         createdAt:
           type: string
@@ -5437,12 +5439,12 @@ components:
     PageCustomerDTO:
       type: object
       properties:
-        totalPages:
-          type: integer
-          format: int32
         totalElements:
           type: integer
           format: int64
+        totalPages:
+          type: integer
+          format: int32
         size:
           type: integer
           format: int32

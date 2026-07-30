@@ -6,7 +6,9 @@ import com.positivity.vehicle.internal.repository.VehicleRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.stereotype.Service;
 
+@Service
 public class VehicleDaoImpl implements VehicleDao {
     private final VehicleRepository vehicleRepository;
 
