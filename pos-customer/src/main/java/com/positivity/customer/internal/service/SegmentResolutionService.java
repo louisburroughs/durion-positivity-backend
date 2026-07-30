@@ -382,9 +382,10 @@ public class SegmentResolutionService {
     }
 
     /**
-     * Care-preference interval elapsed (#1144): due when the last completed service is at least
-     * the configured interval old. No history is unknown, not due — win-back segments target
-     * those parties via {@code service.hasHistory} / {@code service.monthsSinceLast} instead.
+     * Care-preference interval elapsed (#1144): true only when the party has a completed service
+     * and it is at least the configured interval old. A party with no service history projects
+     * false — never-served customers are targeted via {@code service.hasHistory} /
+     * {@code service.monthsSinceLast}, not lumped into service-due reminders.
      */
     private boolean serviceDue(@Nullable Integer monthsSinceLastService) {
         return monthsSinceLastService != null && monthsSinceLastService >= serviceDueMonths;

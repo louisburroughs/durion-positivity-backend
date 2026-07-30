@@ -113,14 +113,15 @@ public enum SegmentAttribute {
      * The care interval has elapsed since the last completed service (#1144). Until per-vehicle
      * care-preference intervals are replicated from pos-vehicle-inventory, the interval is the
      * module-wide {@code pos.customer.crm.service-due-months} setting. A party with no service
-     * history is not due — it is unknown, and win-back targets it via
+     * history projects false — never-served customers are targeted via
      * {@link #HAS_SERVICE_HISTORY} / {@link #MONTHS_SINCE_LAST_SERVICE} instead.
      */
     SERVICE_DUE(
             "service.due",
             OperandKind.BOOLEAN,
             booleanOps(),
-            "Whether the service-due interval has elapsed since the last completed service"),
+            "True when the last completed service is at least the service-due interval old;"
+                    + " false when it is more recent and for parties with no service history"),
 
     // --- Geography, from the structured postal address (FI-4, #1135) ---
     /** ISO 3166-1 alpha-2 country code of the structured address; unset when no address. */

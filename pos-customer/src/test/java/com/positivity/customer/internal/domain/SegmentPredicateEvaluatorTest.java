@@ -159,8 +159,8 @@ class SegmentPredicateEvaluatorTest {
         assertThat(SegmentPredicateEvaluator.matches(
                         comparison("service.due", SegmentOperator.IS_TRUE), serviceParty(2, true, null, false)))
                 .isFalse();
-        // No service history projects serviceDue=false, so an IS_FALSE segment includes such a
-        // party only through the resolver's unknown-is-not-due rule.
+        // The resolver projects serviceDue=false for a party with no service history, so an
+        // IS_FALSE predicate matches it — never-due, not tri-state unknown.
         assertThat(SegmentPredicateEvaluator.matches(
                         comparison("service.due", SegmentOperator.IS_FALSE), serviceParty(null, false, null, false)))
                 .isTrue();
