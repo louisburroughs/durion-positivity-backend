@@ -162,6 +162,7 @@ public class PeopleContactEventsListener {
                 .region(address.region())
                 .postalCode(address.postalCode())
                 .countryCode(address.countryCode())
+                .addressUpdatedAt(payload.updatedAt())
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
@@ -171,10 +172,30 @@ public class PeopleContactEventsListener {
                 aggregateVersion);
     }
 
+    /**
+     * Removal is a versioned tombstone, not a hard delete: a delete would discard the version
+     * watermark, letting a replayed older update resurrect stale data and letting a stale
+     * removal (replayed after a newer update) wipe a current address. All-null address fields
+     * read as "no address on file" everywhere the replica is consumed.
+     */
     private void applyOrganizationAddressRemoved(JsonNode envelope) {
         OrganizationAddressRemovedV1 payload =
                 objectMapper.treeToValue(envelope.path("payload"), OrganizationAddressRemovedV1.class);
-        extOrganizationPostalAddressRepository.deleteById(payload.organizationId());
-        log.info("Deleted ext_organization_postal_address organizationId={}", payload.organizationId());
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        ExtOrganizationPostalAddress existing = extOrganizationPostalAddressRepository
+                .findById(payload.organizationId())
+                .orElse(null);
+        if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
+            return;
+        }
+        extOrganizationPostalAddressRepository.save(ExtOrganizationPostalAddress.builder()
+                .organizationId(payload.organizationId())
+                .aggregateVersion(aggregateVersion)
+                .updatedAt(Instant.now(clock))
+                .build());
+        log.info(
+                "Tombstoned ext_organization_postal_address organizationId={} version={}",
+                payload.organizationId(),
+                aggregateVersion);
     }
 }

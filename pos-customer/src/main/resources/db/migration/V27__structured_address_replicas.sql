@@ -17,6 +17,11 @@ ALTER TABLE ext_people_contact_person ADD COLUMN address_region character varyin
 ALTER TABLE ext_people_contact_person ADD COLUMN address_postal_code character varying(20);
 ALTER TABLE ext_people_contact_person ADD COLUMN address_country_code character varying(2);
 
+-- Address columns are nullable because a removal is a versioned tombstone (all address fields
+-- null, aggregate_version advanced) rather than a hard delete: outbox replays can deliver facts
+-- out of order, and a surviving row is what lets the stale-version guard reject an older
+-- update/removal after a newer one was applied. address_updated_at carries the owner's row
+-- timestamp (source of truth); updated_at is when this replica row was written.
 CREATE TABLE ext_organization_postal_address (
     organization_id uuid NOT NULL,
     line1 character varying(255),
@@ -25,6 +30,7 @@ CREATE TABLE ext_organization_postal_address (
     region character varying(120),
     postal_code character varying(20),
     country_code character varying(2),
+    address_updated_at timestamp(6) with time zone,
     aggregate_version bigint NOT NULL,
     updated_at timestamp(6) with time zone NOT NULL,
     CONSTRAINT ext_organization_postal_address_pkey PRIMARY KEY (organization_id)

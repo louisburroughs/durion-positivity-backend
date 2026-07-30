@@ -19,6 +19,11 @@ import lombok.NoArgsConstructor;
  * (FI-4, #1135). pos-people-contact is the postal-address authority for organization parties;
  * {@code organizationId} is the commercial party UUID this module minted and sent to the
  * authority verbatim. Feeds geo/region segment predicates for commercial audiences.
+ *
+ * <p>Removals are versioned tombstones (all address fields null, {@code aggregateVersion}
+ * advanced) rather than hard deletes, so out-of-order replays cannot resurrect stale data —
+ * an all-null address means "no address on file", which segment evaluation already treats as
+ * non-match.
  */
 @Data
 @Builder
@@ -50,6 +55,10 @@ public class ExtOrganizationPostalAddress {
     /** ISO 3166-1 alpha-2, upper-case as normalized by the owner. */
     @Column(name = "country_code")
     private String countryCode;
+
+    /** The owner's address-row timestamp (source of truth); null on a removal tombstone. */
+    @Column(name = "address_updated_at")
+    private Instant addressUpdatedAt;
 
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;

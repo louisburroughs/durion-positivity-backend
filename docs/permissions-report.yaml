@@ -1,9 +1,9 @@
-generatedAt: "2026-07-29T12:25:56.784525+00:00"
+generatedAt: "2026-07-30T00:45:06.516279+00:00"
 root: "."
 summary:
   manifestCount: 21
-  permissionCount: 412
-  uniquePermissionCount: 412
+  permissionCount: 414
+  uniquePermissionCount: 414
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -632,7 +632,7 @@ manifests:
     domain: "people-contact"
     serviceName: "pos-people-contact"
     version: "1.0"
-    permissionCount: 9
+    permissionCount: 11
     permissions:
       - name: "people-contact:person:create"
         description: "Create person"
@@ -642,6 +642,10 @@ manifests:
         description: "Edit person"
       - name: "people-contact:person:view"
         description: "View person"
+      - name: "people-contact:organization:edit"
+        description: "Edit organization postal address"
+      - name: "people-contact:organization:view"
+        description: "View organization postal address"
       - name: "people-contact:role:assign"
         description: "Assign roles to people"
       - name: "people-contact:role:revoke"
@@ -2467,6 +2471,18 @@ permissions:
     serviceName: "pos-order"
     module: "pos-order"
     source: "pos-order/src/main/resources/permissions.yaml"
+  - name: "people-contact:organization:edit"
+    description: "Edit organization postal address"
+    domain: "people-contact"
+    serviceName: "pos-people-contact"
+    module: "pos-people-contact"
+    source: "pos-people-contact/src/main/resources/permissions.yaml"
+  - name: "people-contact:organization:view"
+    description: "View organization postal address"
+    domain: "people-contact"
+    serviceName: "pos-people-contact"
+    module: "pos-people-contact"
+    source: "pos-people-contact/src/main/resources/permissions.yaml"
   - name: "people-contact:person:create"
     description: "Create person"
     domain: "people-contact"

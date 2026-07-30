@@ -46,6 +46,7 @@ public class PostalAddressController {
                     @Content(
                             mediaType = "application/problem+json",
                             schema = @Schema(implementation = ProblemDetail.class)))
+    @EmitEvent(id = "PEOPLE_CONTACT_PERSON_ADDRESS_GET", apiVersion = "1")
     @GetMapping("/v1/people/{personId}/postal-address")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -111,6 +112,7 @@ public class PostalAddressController {
                     @Content(
                             mediaType = "application/problem+json",
                             schema = @Schema(implementation = ProblemDetail.class)))
+    @EmitEvent(id = "PEOPLE_CONTACT_ORG_ADDRESS_GET", apiVersion = "1")
     @GetMapping("/v1/organizations/{organizationId}/postal-address")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

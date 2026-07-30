@@ -1144,7 +1144,7 @@ class SecurityGatewayConfigTest {
     @Test
     @DisplayName("CATALOG_VERSION is 40")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(40);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(41);
     }
 
     @Test
@@ -1262,8 +1262,11 @@ class SecurityGatewayConfigTest {
         // catalog v40 (#1141): writing to a party's interaction timeline is its own authority,
         // separate from reading it
         assertThat(GatewayPermissionCatalog.authorityForBit(442)).isEqualTo("PERM_crm:interaction:manage");
+        // catalog v41 (FI-4, #1135): organization postal-address authorities appended (443-444)
+        assertThat(GatewayPermissionCatalog.authorityForBit(443)).isEqualTo("PERM_people-contact:organization:edit");
+        assertThat(GatewayPermissionCatalog.authorityForBit(444)).isEqualTo("PERM_people-contact:organization:view");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(443)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(445)).isNull();
     }
 
     @Test

@@ -30,6 +30,10 @@ public final class EventTypes {
                         .build(),
 
                 // PostalAddressController (FI-4, #1135)
+                EventTypeRegistration.fastRead("PEOPLE_CONTACT_PERSON_ADDRESS_GET", "Get a person's postal address")
+                        .build(),
+                EventTypeRegistration.fastRead("PEOPLE_CONTACT_ORG_ADDRESS_GET", "Get an organization's postal address")
+                        .build(),
                 EventTypeRegistration.write(
                                 "PEOPLE_CONTACT_PERSON_ADDRESS_PUT", "Create or replace a person's postal address")
                         .build(),
