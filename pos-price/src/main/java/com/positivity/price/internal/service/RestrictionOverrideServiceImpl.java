@@ -9,8 +9,8 @@ import com.positivity.price.internal.exception.RestrictionRuleNotFoundException;
 import com.positivity.price.internal.repository.RestrictionOverrideAuditRepository;
 import com.positivity.price.internal.repository.RestrictionRuleRepository;
 import com.positivity.price.service.RestrictionOverrideService;
-import java.time.Clock;
 import com.positivity.security.common.SecurityContextHelper;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import org.jspecify.annotations.NonNull;
@@ -26,9 +26,7 @@ public class RestrictionOverrideServiceImpl implements RestrictionOverrideServic
     private final Clock clock;
 
     public RestrictionOverrideServiceImpl(
-            RestrictionOverrideAuditRepository auditRepository,
-            RestrictionRuleRepository ruleRepository,
-            Clock clock) {
+            RestrictionOverrideAuditRepository auditRepository, RestrictionRuleRepository ruleRepository, Clock clock) {
         this.auditRepository = auditRepository;
         this.ruleRepository = ruleRepository;
         this.clock = clock;

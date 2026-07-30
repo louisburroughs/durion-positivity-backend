@@ -113,7 +113,9 @@ public class PromotionEligibilityRuleController {
         var decision = eligibilityEvaluationService.evaluateEligibility(
                 promotionId,
                 context == null ? null : context.getAccountId(),
-                context == null ? null : context.getVehicleId());
+                context == null ? null : context.getVehicleId(),
+                context == null ? null : context.getAudienceType(),
+                context == null ? null : context.getCampaignCode());
         return ResponseEntity.ok(PromotionEligibilityRuleMapper.toDecisionResponse(decision));
     }
 }

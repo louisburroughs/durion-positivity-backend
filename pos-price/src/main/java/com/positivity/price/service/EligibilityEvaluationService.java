@@ -29,6 +29,21 @@ public interface EligibilityEvaluationService {
      * Issue: #96
      */
     @NonNull
+    default EligibilityDecision evaluateEligibility(
+            @NonNull UUID promotionId, @Nullable UUID accountId, @Nullable UUID vehicleId) {
+        return evaluateEligibility(promotionId, accountId, vehicleId, null, null);
+    }
+
+    /**
+     * Evaluate promotion eligibility for a given account, vehicle, and campaign
+     * context. The audience type and campaign code gate offers bound to marketing
+     * campaigns. Issue: #1134
+     */
+    @NonNull
     EligibilityDecision evaluateEligibility(
-            @NonNull UUID promotionId, @Nullable UUID accountId, @Nullable UUID vehicleId);
+            @NonNull UUID promotionId,
+            @Nullable UUID accountId,
+            @Nullable UUID vehicleId,
+            @Nullable String audienceType,
+            @Nullable String campaignCode);
 }

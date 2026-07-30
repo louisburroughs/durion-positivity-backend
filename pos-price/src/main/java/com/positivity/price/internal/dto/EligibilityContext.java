@@ -7,9 +7,9 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * API request payload for promotion eligibility evaluation context. Issue: #96
+ * API request payload for promotion eligibility evaluation context. Issues: #96, #1134
  */
-@Schema(description = "Optional account/vehicle context used to evaluate promotion eligibility")
+@Schema(description = "Optional account/vehicle/campaign context used to evaluate promotion eligibility")
 public class EligibilityContext {
 
     @Schema(
@@ -28,6 +28,23 @@ public class EligibilityContext {
     @Nullable
     private UUID vehicleId;
 
+    @Schema(
+            description = "Campaign audience type used for audience-based eligibility rules; "
+                    + "compared case-insensitively",
+            example = "COMMERCIAL",
+            nullable = true,
+            requiredMode = NOT_REQUIRED)
+    @Nullable
+    private String audienceType;
+
+    @Schema(
+            description = "Marketing campaign code used for campaign-based eligibility rules",
+            example = "SPRING-FLEET-2026",
+            nullable = true,
+            requiredMode = NOT_REQUIRED)
+    @Nullable
+    private String campaignCode;
+
     @Nullable
     public UUID getAccountId() {
         return accountId;
@@ -44,5 +61,23 @@ public class EligibilityContext {
 
     public void setVehicleId(@Nullable UUID vehicleId) {
         this.vehicleId = vehicleId;
+    }
+
+    @Nullable
+    public String getAudienceType() {
+        return audienceType;
+    }
+
+    public void setAudienceType(@Nullable String audienceType) {
+        this.audienceType = audienceType;
+    }
+
+    @Nullable
+    public String getCampaignCode() {
+        return campaignCode;
+    }
+
+    public void setCampaignCode(@Nullable String campaignCode) {
+        this.campaignCode = campaignCode;
     }
 }

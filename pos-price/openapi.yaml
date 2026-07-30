@@ -1003,6 +1003,8 @@ components:
           - ACCOUNT_ID_LIST
           - VEHICLE_TAG
           - ACCOUNT_FLEET_SIZE
+          - AUDIENCE_TYPE
+          - CAMPAIGN_CODE
           example: ACCOUNT_FLEET_SIZE
         operator:
           type: string
@@ -1053,6 +1055,8 @@ components:
           - ACCOUNT_ID_LIST
           - VEHICLE_TAG
           - ACCOUNT_FLEET_SIZE
+          - AUDIENCE_TYPE
+          - CAMPAIGN_CODE
           example: ACCOUNT_FLEET_SIZE
         operator:
           type: string
@@ -1075,7 +1079,7 @@ components:
       - value
     EligibilityContext:
       type: object
-      description: Optional account/vehicle context used to evaluate promotion eligibility
+      description: Optional account/vehicle/campaign context used to evaluate promotion eligibility
       properties:
         accountId:
           type:
@@ -1091,6 +1095,18 @@ components:
           format: uuid
           description: Vehicle identifier used for vehicle-based eligibility rules
           example: 0b4a9f7c-f5a8-4a5f-b3cb-2b7a3f4ec5a1
+        audienceType:
+          type:
+          - string
+          - 'null'
+          description: Campaign audience type used for audience-based eligibility rules; compared case-insensitively
+          example: COMMERCIAL
+        campaignCode:
+          type:
+          - string
+          - 'null'
+          description: Marketing campaign code used for campaign-based eligibility rules
+          example: SPRING-FLEET-2026
     EligibilityDecisionResponse:
       type: object
       description: Eligibility evaluation result for a promotion and context
@@ -1105,7 +1121,13 @@ components:
           - VEHICLE_TAG_NOT_PRESENT
           - VEHICLE_TAG_EXCLUDED
           - FLEET_SIZE_TOO_SMALL
+          - AUDIENCE_TYPE_NOT_MATCHED
+          - AUDIENCE_TYPE_EXCLUDED
+          - CAMPAIGN_CODE_NOT_MATCHED
+          - CAMPAIGN_CODE_EXCLUDED
           - MISSING_ACCOUNT_CONTEXT
+          - MISSING_AUDIENCE_CONTEXT
+          - MISSING_CAMPAIGN_CONTEXT
           - MISSING_VEHICLE_CONTEXT
           - EVALUATION_ERROR
           example: MISSING_ACCOUNT_CONTEXT
