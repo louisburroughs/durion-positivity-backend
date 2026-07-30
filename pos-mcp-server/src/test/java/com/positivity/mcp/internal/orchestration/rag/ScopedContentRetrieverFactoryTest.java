@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -138,10 +137,17 @@ class ScopedContentRetrieverFactoryTest {
         assertThat(lexical).isPresent();
         lexical.orElseThrow().retrieve("stock levels");
 
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Object[]> argsCaptor = ArgumentCaptor.forClass(Object[].class);
-        verify(jdbcTemplate).query(contains("websearch_to_tsquery"), any(RowMapper.class), argsCaptor.capture());
+        verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), argsCaptor.capture());
         // Bound params: query (match), normalized scope, query (rank), maxResults.
         assertThat(argsCaptor.getValue()).containsExactly("stock levels", "inventory", "stock levels", 7);
+        // #1124 residual: the parsed tsquery must be transformed to OR semantics (& -> |) so a
+        // natural-language question that merely contains an identifier still matches.
+        assertThat(sqlCaptor.getValue())
+                .contains("websearch_to_tsquery")
+                .contains("replace(")
+                .contains("' & '", "' | '");
     }
 
     @Test

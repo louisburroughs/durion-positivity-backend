@@ -29,28 +29,34 @@ final class LexicalDocumentRetriever implements QueryDocumentRetriever {
     private static final Logger LOGGER = LoggerFactory.getLogger(LexicalDocumentRetriever.class);
     private static final TypeReference<Map<String, Object>> METADATA_TYPE = new TypeReference<>() {};
 
-    // websearch_to_tsquery parses free text and quoted phrases safely (input is data, never SQL) and
-    // yields an empty query — zero rows, not an error — on unparseable input. The query term binds
-    // twice: once for the @@ match, once for ts_rank_cd ordering.
-    private static final String SQL_SCOPED = """
-            SELECT id, content, metadata::text AS metadata
-            FROM mcp_document_embedding
-            WHERE content_tsv @@ websearch_to_tsquery('english', ?)
-              AND metadata ->> 'rag_scope' = ?
-            ORDER BY ts_rank_cd(content_tsv, websearch_to_tsquery('english', ?)) DESC, id
-            LIMIT ?
-            """;
+    // #1124 item 4 (residual): websearch_to_tsquery parses free text and quoted phrases safely (input
+    // is data, never SQL), but it joins the terms with AND. For a natural-language question that merely
+    // CONTAINS an identifier ("what is the exact format of a VIN and which characters are not allowed"),
+    // AND requires one chunk to hold every lexeme (exact & format & vin & …) and matches nothing — on
+    // alpha the bare token `VIN` matched 9 chunks while the full question matched 0. We therefore switch
+    // the parsed query to OR by swapping its `&` operators for `|` in the tsquery's text form. The raw
+    // user text still passes ONLY through websearch_to_tsquery (safe parsing); the ::text/replace/
+    // ::tsquery runs on the already-parsed query, so there is no injection surface. Phrase (<->) and
+    // negation (!) operators are left intact, a bare token (no `&`) is unaffected, and an empty parse
+    // stays empty (zero rows). ts_rank_cd still ranks the OR matches so the best chunk sorts first.
+    // The tsquery term binds twice: once for the @@ match, once for ts_rank_cd ordering.
+    private static final String OR_TSQUERY = "replace(websearch_to_tsquery('english', ?)::text, ' & ', ' | ')::tsquery";
+
+    private static final String SQL_SCOPED = "SELECT id, content, metadata::text AS metadata\n"
+            + "FROM mcp_document_embedding\n"
+            + "WHERE content_tsv @@ " + OR_TSQUERY + "\n"
+            + "  AND metadata ->> 'rag_scope' = ?\n"
+            + "ORDER BY ts_rank_cd(content_tsv, " + OR_TSQUERY + ") DESC, id\n"
+            + "LIMIT ?";
 
     // #1124 item 4: the `master` scope is the catch-all agent, not a literal doc scope, so it must
     // search all scopes (mirrors the dense path in ScopedContentRetrieverFactory#create). Permission
     // gating is applied downstream by PermissionAwareMetadataFilter, not here.
-    private static final String SQL_ALL_SCOPES = """
-            SELECT id, content, metadata::text AS metadata
-            FROM mcp_document_embedding
-            WHERE content_tsv @@ websearch_to_tsquery('english', ?)
-            ORDER BY ts_rank_cd(content_tsv, websearch_to_tsquery('english', ?)) DESC, id
-            LIMIT ?
-            """;
+    private static final String SQL_ALL_SCOPES = "SELECT id, content, metadata::text AS metadata\n"
+            + "FROM mcp_document_embedding\n"
+            + "WHERE content_tsv @@ " + OR_TSQUERY + "\n"
+            + "ORDER BY ts_rank_cd(content_tsv, " + OR_TSQUERY + ") DESC, id\n"
+            + "LIMIT ?";
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
