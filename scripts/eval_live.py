@@ -330,7 +330,12 @@ def main():
     if tr_fixtures:
 
         def ann_facade_scored(query_vec, perms, workflow, limit):
-            """ann_facade + cosine similarity of each candidate (selection path, scored)."""
+            """ann_facade + cosine similarity of each candidate (selection path, scored).
+
+            ORDER BY repeats the <=> expression rather than sorting by the sim alias: the point of
+            this query is to mirror the production ANN SQL (ToolMetadataRepositoryImpl), and
+            `ORDER BY embedding <=> constant` is the exact operator-ordering pattern pgvector
+            indexes match — same convention as every other ANN query in this script."""
             rows = con.run(
                 """
                 SELECT t.name, 1 - (t.embedding <=> CAST(:q AS vector)) AS sim
