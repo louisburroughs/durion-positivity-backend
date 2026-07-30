@@ -7,9 +7,9 @@ import com.positivity.customer.internal.enums.FollowUpType;
 import com.positivity.customer.internal.repository.FollowUpTaskRepository;
 import com.positivity.customer.internal.repository.ServiceHistoryRepository;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -65,9 +65,17 @@ public class ServiceDueReminderJob {
 
     @Scheduled(cron = "${pos.customer.crm.service-due-reminder-cron:0 0 5 * * *}")
     public void generateReminders() {
-        ZonedDateTime now = ZonedDateTime.now(clock.withZone(ZoneOffset.UTC));
-        List<ServiceHistory> candidates = serviceHistoryRepository.findServiceDueCandidates(
-                now.minusMonths(serviceDueMonths).toInstant(), SOURCE_PREFIX, PageRequest.of(0, batchSize));
+        // Whole UTC calendar months, same as the service.due segment attribute
+        // (SegmentResolutionService.monthsSince, #1144): a completion is due once its date is
+        // serviceDueMonths old, regardless of time of day — so the cutoff is the start of the
+        // day after the anniversary date, not an instant offset.
+        Instant cutoff = LocalDate.now(clock)
+                .minusMonths(serviceDueMonths)
+                .plusDays(1)
+                .atStartOfDay(ZoneOffset.UTC)
+                .toInstant();
+        List<ServiceHistory> candidates =
+                serviceHistoryRepository.findServiceDueCandidates(cutoff, SOURCE_PREFIX, PageRequest.of(0, batchSize));
 
         // Two completions at the same max timestamp both satisfy the latest-row query; one
         // reminder per party/vehicle per run is enough.
@@ -77,12 +85,24 @@ public class ServiceDueReminderJob {
             if (!seenScopes.add(history.getPartyId() + ":" + history.getVehicleId())) {
                 continue;
             }
+            FollowUpTask reminder = toReminder(history);
             try {
-                followUpTaskRepository.save(toReminder(history));
+                followUpTaskRepository.save(reminder);
                 created++;
             } catch (DataIntegrityViolationException e) {
-                // Another instance won the race on the unique source_event_id; their task is ours.
-                log.debug("Service-due reminder already exists for serviceHistoryId={}", history.getServiceHistoryId());
+                if (followUpTaskRepository.existsBySourceEventId(reminder.getSourceEventId())) {
+                    // Another instance won the race on the unique source_event_id; their task is ours.
+                    log.debug(
+                            "Service-due reminder already exists for serviceHistoryId={}",
+                            history.getServiceHistoryId());
+                } else {
+                    // Some other integrity problem — surface it, but let the rest of the batch run;
+                    // the row stays a candidate and is retried next run.
+                    log.warn(
+                            "Failed to create service-due reminder for serviceHistoryId={}",
+                            history.getServiceHistoryId(),
+                            e);
+                }
             }
         }
         if (created > 0 || !candidates.isEmpty()) {

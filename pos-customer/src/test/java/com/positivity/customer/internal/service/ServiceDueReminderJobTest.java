@@ -88,16 +88,19 @@ class ServiceDueReminderJobTest {
     }
 
     @Test
-    @DisplayName("Candidates are queried with the configured interval as the cutoff")
+    @DisplayName("Cutoff is whole calendar months: any time of day on the anniversary date is due")
     void queriesWithConfiguredCutoff() {
         when(serviceHistory.findServiceDueCandidates(any(), anyString(), any(Pageable.class)))
                 .thenReturn(List.of());
 
         job.generateReminders();
 
+        // Same whole-UTC-month semantics as the service.due segment attribute (#1144): a
+        // completion anywhere on 2026-01-20 is six months old on 2026-07-20, so the cutoff is
+        // the start of the following day, not now-minus-six-months as an instant.
         verify(serviceHistory)
                 .findServiceDueCandidates(
-                        eq(Instant.parse("2026-01-20T12:00:00Z")),
+                        eq(Instant.parse("2026-01-21T00:00:00Z")),
                         eq(ServiceDueReminderJob.SOURCE_PREFIX),
                         any(Pageable.class));
     }
@@ -130,6 +133,31 @@ class ServiceDueReminderJobTest {
         when(followUps.save(any(FollowUpTask.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate source_event_id"))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        // The lost race is confirmed by the winner's row existing.
+        when(followUps.existsBySourceEventId("service-due:" + HISTORY_ID)).thenReturn(true);
+
+        job.generateReminders();
+
+        ArgumentCaptor<FollowUpTask> saved = ArgumentCaptor.forClass(FollowUpTask.class);
+        verify(followUps, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues().get(1).getPartyId()).isEqualTo(otherParty);
+    }
+
+    @Test
+    @DisplayName("An integrity failure that is not the unique-key race still lets the batch finish")
+    void continuesAfterNonRaceIntegrityFailure() {
+        Instant completedAt = Instant.parse("2026-01-05T10:00:00Z");
+        UUID otherParty = UUID.fromString("01980a58-0000-7000-8000-000000000006");
+        UUID otherHistoryId = UUID.fromString("01980a58-0000-7000-8000-000000000007");
+        when(serviceHistory.findServiceDueCandidates(any(), anyString(), any(Pageable.class)))
+                .thenReturn(List.of(
+                        history(HISTORY_ID, PARTY_ID, VEHICLE_ID, completedAt),
+                        history(otherHistoryId, otherParty, VEHICLE_ID, completedAt)));
+        when(followUps.save(any(FollowUpTask.class)))
+                .thenThrow(new DataIntegrityViolationException("outcome check violated"))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        // No row with the key exists, so this was not the race — warned, row retried next run.
+        when(followUps.existsBySourceEventId("service-due:" + HISTORY_ID)).thenReturn(false);
 
         job.generateReminders();
 
