@@ -62,6 +62,7 @@ public final class SegmentPredicateEvaluator {
             case MONTHS_SINCE_LAST_SERVICE -> nullableNumberMatch(party.monthsSinceLastService(), operator, values);
             case HAS_SERVICE_HISTORY -> booleanMatch(party.hasServiceHistory(), operator);
             case DAYS_SINCE_DECLINED_SERVICE -> nullableNumberMatch(party.daysSinceDeclinedService(), operator, values);
+            case SERVICE_DUE -> booleanMatch(party.serviceDue(), operator);
             case ADDRESS_COUNTRY -> textMatch(party.addressCountry(), operator, values);
             case ADDRESS_REGION -> textMatch(party.addressRegion(), operator, values);
             case ADDRESS_CITY -> textMatch(party.addressCity(), operator, values);

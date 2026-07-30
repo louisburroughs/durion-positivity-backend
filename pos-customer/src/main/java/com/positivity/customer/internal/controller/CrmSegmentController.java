@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.controller;
 
+import com.positivity.customer.internal.dto.SegmentAttributeResponse;
 import com.positivity.customer.internal.dto.SegmentMembersRequest;
 import com.positivity.customer.internal.dto.SegmentResolutionResponse;
 import com.positivity.customer.internal.dto.SegmentResponse;
@@ -70,6 +71,32 @@ public class CrmSegmentController {
     public ResponseEntity<List<SegmentResponse>> list(
             @RequestParam(name = "audienceType", required = false) AudienceType audienceType) {
         return ResponseEntity.ok(segmentService.list(audienceType));
+    }
+
+    @Operation(
+            summary = "List the segment attribute catalog",
+            description =
+                    "Every whitelisted attribute a dynamic predicate may reference, with operand kind, allowed operators, and description")
+    @ApiResponses({
+        @ApiResponse(
+                responseCode = "200",
+                description = "Attribute catalog returned",
+                content =
+                        @Content(
+                                mediaType = "application/json",
+                                array =
+                                        @ArraySchema(
+                                                schema = @Schema(implementation = SegmentAttributeResponse.class)))),
+        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+    })
+    @GetMapping("/attributes")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {CrmPermissionRegistry.SEGMENT_VIEW})
+    @PreAuthorize("hasAuthority('crm:segment:view')")
+    @EmitEvent(id = "CRM_SEGMENT_ATTRIBUTES", apiVersion = "1")
+    public ResponseEntity<List<SegmentAttributeResponse>> attributeCatalog() {
+        return ResponseEntity.ok(segmentService.attributeCatalog());
     }
 
     @Operation(summary = "Get segment", description = "Retrieve a segment definition by id")

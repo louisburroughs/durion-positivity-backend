@@ -79,6 +79,19 @@ class SegmentPredicateValidatorTest {
     }
 
     @Test
+    @DisplayName("service-due validates as a boolean attribute on either audience (#1144)")
+    void validatesServiceDueAttribute() {
+        assertThatCode(() -> SegmentPredicateValidator.validate(
+                        comparison("service.due", SegmentOperator.IS_TRUE), AudienceType.INDIVIDUAL))
+                .doesNotThrowAnyException();
+
+        assertThatThrownBy(() -> SegmentPredicateValidator.validate(
+                        comparison("service.due", SegmentOperator.GREATER_THAN, "6"), AudienceType.COMMERCIAL))
+                .isInstanceOf(CrmUnprocessableEntityException.class)
+                .hasMessageContaining("is not valid for attribute");
+    }
+
+    @Test
     @DisplayName("rejects a keyed attribute with no key")
     void rejectsKeyedAttributeWithoutKey() {
         SegmentPredicate predicate = comparison("party.externalIdentifier", SegmentOperator.IS_NOT_NULL);

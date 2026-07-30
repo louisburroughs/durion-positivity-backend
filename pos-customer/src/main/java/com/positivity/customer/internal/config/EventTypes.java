@@ -205,11 +205,14 @@ public final class EventTypes {
                         .apiVersion("1")
                         .build(),
 
-                // CrmSegmentController - 8 events (Story #1137)
+                // CrmSegmentController - 9 events (Story #1137, attribute catalog #1144)
                 EventTypeRegistration.fastRead("CRM_SEGMENT_LIST", "List saved audience segments")
                         .apiVersion("1")
                         .build(),
                 EventTypeRegistration.fastRead("CRM_SEGMENT_GET", "Retrieve a segment definition")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("CRM_SEGMENT_ATTRIBUTES", "List the segment attribute catalog")
                         .apiVersion("1")
                         .build(),
                 EventTypeRegistration.write("CRM_SEGMENT_CREATE", "Create an audience segment")

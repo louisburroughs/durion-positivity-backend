@@ -20,6 +20,8 @@ import org.jspecify.annotations.Nullable;
  * @param hasServiceHistory whether the party has any completed-service history
  * @param daysSinceDeclinedService whole days since the most recent declined recommendation, or
  *     null when the party has never declined one (FI-3, #1133)
+ * @param serviceDue whether the service-due interval has elapsed since the last completed
+ *     service (#1144) — false when the party has no service history, because unknown is not due
  * @param addressCountry ISO 3166-1 alpha-2 country code of the party's structured postal
  *     address, or null when none is on file (FI-4, #1135) — individuals read the
  *     ext_people_contact_person replica, commercial parties ext_organization_postal_address
@@ -51,6 +53,7 @@ public record PartyAttributes(
         @Nullable Integer monthsSinceLastService,
         boolean hasServiceHistory,
         @Nullable Integer daysSinceDeclinedService,
+        boolean serviceDue,
         @Nullable String addressCountry,
         @Nullable String addressRegion,
         @Nullable String addressCity,

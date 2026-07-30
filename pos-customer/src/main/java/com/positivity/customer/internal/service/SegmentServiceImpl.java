@@ -1,8 +1,10 @@
 package com.positivity.customer.internal.service;
 
 import com.positivity.customer.internal.domain.PartyAttributes;
+import com.positivity.customer.internal.domain.SegmentAttribute;
 import com.positivity.customer.internal.domain.SegmentPredicate;
 import com.positivity.customer.internal.domain.SegmentPredicateValidator;
+import com.positivity.customer.internal.dto.SegmentAttributeResponse;
 import com.positivity.customer.internal.dto.SegmentMembersRequest;
 import com.positivity.customer.internal.dto.SegmentResolutionResponse;
 import com.positivity.customer.internal.dto.SegmentResponse;
@@ -22,6 +24,7 @@ import com.positivity.customer.service.SegmentService;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -129,6 +132,13 @@ public class SegmentServiceImpl implements SegmentService {
                 : segmentRepository.findByAudienceTypeOrderByNameAsc(audienceType);
         return segments.stream()
                 .map(segment -> toResponse(segment, memberCount(segment)))
+                .toList();
+    }
+
+    @Override
+    public @NonNull List<SegmentAttributeResponse> attributeCatalog() {
+        return Arrays.stream(SegmentAttribute.values())
+                .map(SegmentAttributeResponse::from)
                 .toList();
     }
 
