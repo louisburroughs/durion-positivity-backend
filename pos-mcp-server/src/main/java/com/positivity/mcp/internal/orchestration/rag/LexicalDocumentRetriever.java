@@ -32,11 +32,22 @@ final class LexicalDocumentRetriever implements QueryDocumentRetriever {
     // websearch_to_tsquery parses free text and quoted phrases safely (input is data, never SQL) and
     // yields an empty query — zero rows, not an error — on unparseable input. The query term binds
     // twice: once for the @@ match, once for ts_rank_cd ordering.
-    private static final String SQL = """
+    private static final String SQL_SCOPED = """
             SELECT id, content, metadata::text AS metadata
             FROM mcp_document_embedding
             WHERE content_tsv @@ websearch_to_tsquery('english', ?)
               AND metadata ->> 'rag_scope' = ?
+            ORDER BY ts_rank_cd(content_tsv, websearch_to_tsquery('english', ?)) DESC, id
+            LIMIT ?
+            """;
+
+    // #1124 item 4: the `master` scope is the catch-all agent, not a literal doc scope, so it must
+    // search all scopes (mirrors the dense path in ScopedContentRetrieverFactory#create). Permission
+    // gating is applied downstream by PermissionAwareMetadataFilter, not here.
+    private static final String SQL_ALL_SCOPES = """
+            SELECT id, content, metadata::text AS metadata
+            FROM mcp_document_embedding
+            WHERE content_tsv @@ websearch_to_tsquery('english', ?)
             ORDER BY ts_rank_cd(content_tsv, websearch_to_tsquery('english', ?)) DESC, id
             LIMIT ?
             """;
@@ -62,7 +73,10 @@ final class LexicalDocumentRetriever implements QueryDocumentRetriever {
         if (queryText.isBlank()) {
             return List.of();
         }
-        return jdbcTemplate.query(SQL, this::mapRow, queryText, ragScope, queryText, maxResults);
+        if (RagScope.MASTER.equals(ragScope)) {
+            return jdbcTemplate.query(SQL_ALL_SCOPES, this::mapRow, queryText, queryText, maxResults);
+        }
+        return jdbcTemplate.query(SQL_SCOPED, this::mapRow, queryText, ragScope, queryText, maxResults);
     }
 
     private @NonNull Document mapRow(@NonNull ResultSet rs, int rowNum) throws SQLException {

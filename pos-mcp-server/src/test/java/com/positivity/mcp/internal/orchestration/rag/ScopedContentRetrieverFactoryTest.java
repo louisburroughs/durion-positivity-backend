@@ -63,14 +63,16 @@ class ScopedContentRetrieverFactoryTest {
     }
 
     @Test
-    void createsRetrieverFilteredToMasterScopeWhenBlankRagScopeProvided() {
+    void masterScopeSearchesAllScopesWithoutFilter() {
+        // #1124 item 4: master is the catch-all agent, not a literal doc scope. A strict
+        // rag_scope='master' filter made every domain doc unreachable for general questions, so the
+        // master scope must search all scopes (no rag_scope filter). Blank/null normalizes to master.
         PgVectorStore embeddingStore = mock(PgVectorStore.class);
         when(embeddingStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(new Document("anything")));
         ScopedContentRetrieverFactory factory =
                 factoryWith(embeddingStore, mock(JdbcTemplate.class), lexicalDisabled());
 
-        QueryDocumentRetriever retriever = factory.create(" ", 3, 0.21);
-        retriever.retrieve("anything");
+        factory.create(" ", 3, 0.21).retrieve("anything");
 
         ArgumentCaptor<SearchRequest> requestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
         verify(embeddingStore).similaritySearch(requestCaptor.capture());
@@ -78,9 +80,41 @@ class ScopedContentRetrieverFactoryTest {
         assertThat(request.getQuery()).isEqualTo("anything");
         assertThat(request.getTopK()).isEqualTo(3);
         assertThat(request.getSimilarityThreshold()).isEqualTo(0.21);
-        assertThat(request.getFilterExpression())
-                .isEqualTo(
-                        new FilterExpressionBuilder().eq("rag_scope", "master").build());
+        assertThat(request.hasFilterExpression())
+                .as("master must not filter by rag_scope")
+                .isFalse();
+    }
+
+    @Test
+    void explicitMasterScopeAlsoSearchesAllScopes() {
+        PgVectorStore embeddingStore = mock(PgVectorStore.class);
+        when(embeddingStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
+        ScopedContentRetrieverFactory factory =
+                factoryWith(embeddingStore, mock(JdbcTemplate.class), lexicalDisabled());
+
+        factory.create("master", 5, 0.6).retrieve("what is a VIN");
+
+        ArgumentCaptor<SearchRequest> requestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(embeddingStore).similaritySearch(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().hasFilterExpression()).isFalse();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void createLexicalMasterScopeIssuesUnscopedFtsQuery() {
+        // Mirror of the dense path: lexical retrieval at master scope must drop the rag_scope clause
+        // and bind only (query, query, maxResults) — no scope parameter.
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of(new Document("hit")));
+        ScopedContentRetrieverFactory factory =
+                factoryWith(mock(PgVectorStore.class), jdbcTemplate, new HybridRetrievalProperties(true, 60, 7));
+
+        factory.createLexical("master").orElseThrow().retrieve("VIN format");
+
+        ArgumentCaptor<Object[]> argsCaptor = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).query(anyString(), any(RowMapper.class), argsCaptor.capture());
+        assertThat(argsCaptor.getValue()).containsExactly("VIN format", "VIN format", 7);
     }
 
     @Test

@@ -11,6 +11,7 @@ import com.positivity.mcp.internal.orchestration.memory.SemanticChatMemoryStore;
 import com.positivity.mcp.internal.orchestration.memory.SessionSummary;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.orchestration.retrieval.PermissionAwareMetadataFilter;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
@@ -331,14 +332,17 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 ? HybridContentRetriever.reciprocalRankFusion(
                         hybridSources, TIER2_RETRIEVAL_CANDIDATES, scopedContentRetrieverFactory.rrfK())
                 : new HybridContentRetriever(hybridSources, TIER2_RETRIEVAL_CANDIDATES);
-        QueryDocumentRetriever rerankedRetriever = new RerankedContentRetriever(hybridRetriever, TIER2_FINAL_TOP_K);
+        // #1124 item 4: permission-gate the candidates BEFORE re-ranking to the final top-K, so the
+        // top-K is chosen from docs the caller may actually see and a gated doc can neither leak nor
+        // displace a visible one. This must run before the top-K cut, not after. Codes are read per
+        // request from the thread-local caller context (the agent is cached per role, the caller is
+        // not), fail-closed to public-only when absent. Broadening the master scope above makes this
+        // gating load-bearing: without it, master-scope queries would surface gated domain docs.
+        QueryDocumentRetriever permissionFilteredRetriever = permissionFiltered(hybridRetriever);
+        QueryDocumentRetriever rerankedRetriever =
+                new RerankedContentRetriever(permissionFilteredRetriever, TIER2_FINAL_TOP_K);
         QueryDocumentRetriever resilientContentRetriever =
                 new ResilientContentRetriever(rerankedRetriever, "tier2-hybrid-reranked-retriever");
-
-        // Tier 3: Role-aware metadata filtering (deferred to dynamic context resolution
-        // at runtime)
-        // Note: RoleAwareMetadataFilter requires user roles from SecurityContext.
-        // Currently applied at chat boundary where user context is available.
 
         PosAssistant agent = new SpringAiPosAssistant(
                 chatModel,
@@ -362,6 +366,25 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 tools.size(),
                 elapsedMs(startNanos));
         return agent;
+    }
+
+    /**
+     * Wraps a retriever so each retrieval is permission-gated with the <em>current request's</em>
+     * caller codes (read from the thread-local {@link RequestScopedUserContext}, since the agent is
+     * cached per role but the caller is per request). Fail-closed to public-only docs when no caller
+     * is published. See {@link PermissionAwareMetadataFilter} for the per-doc visibility rules.
+     */
+    private @NonNull QueryDocumentRetriever permissionFiltered(@NonNull QueryDocumentRetriever delegate) {
+        return queryText -> {
+            Set<String> callerCodes = requestScopedUserContext == null
+                    ? Set.of()
+                    : requestScopedUserContext
+                            .current()
+                            .map(CurrentUserContext::permissionCodes)
+                            .map(Set::copyOf)
+                            .orElseGet(Set::of);
+            return new PermissionAwareMetadataFilter(delegate, callerCodes).retrieve(queryText);
+        };
     }
 
     private @NonNull PosAssistant getOrCreateAgent(

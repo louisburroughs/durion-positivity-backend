@@ -9,6 +9,7 @@ import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
+import com.positivity.mcp.internal.orchestration.retrieval.PermissionAwareMetadataFilter;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.PermissionCodes;
@@ -283,7 +284,12 @@ public class StreamingSessionAgentManager
                 ? HybridContentRetriever.reciprocalRankFusion(
                         hybridSources, TIER2_RETRIEVAL_CANDIDATES, scopedContentRetrieverFactory.rrfK())
                 : new HybridContentRetriever(hybridSources, TIER2_RETRIEVAL_CANDIDATES);
-        QueryDocumentRetriever rerankedRetriever = new RerankedContentRetriever(hybridRetriever, TIER2_FINAL_TOP_K);
+        // #1124 item 4: permission-gate candidates BEFORE the top-K re-rank (see SessionAgentManager),
+        // so the top-K is chosen from caller-visible docs and the broadened master scope cannot leak
+        // gated docs. Codes are read per request from the thread-local caller context.
+        QueryDocumentRetriever permissionFilteredRetriever = permissionFiltered(hybridRetriever);
+        QueryDocumentRetriever rerankedRetriever =
+                new RerankedContentRetriever(permissionFilteredRetriever, TIER2_FINAL_TOP_K);
         QueryDocumentRetriever resilientContentRetriever =
                 new ResilientContentRetriever(rerankedRetriever, "tier2-hybrid-reranked-retriever");
 
@@ -308,6 +314,24 @@ public class StreamingSessionAgentManager
                 tools.size(),
                 elapsedMs(startNanos));
         return agent;
+    }
+
+    /**
+     * Wraps a retriever so each retrieval is permission-gated with the current request's caller codes
+     * (read from the thread-local {@link RequestScopedUserContext}); fail-closed to public-only docs
+     * when no caller is published. Mirrors {@code SessionAgentManager#permissionFiltered}.
+     */
+    private @NonNull QueryDocumentRetriever permissionFiltered(@NonNull QueryDocumentRetriever delegate) {
+        return queryText -> {
+            Set<String> callerCodes = requestScopedUserContext == null
+                    ? Set.of()
+                    : requestScopedUserContext
+                            .current()
+                            .map(CurrentUserContext::permissionCodes)
+                            .map(Set::copyOf)
+                            .orElseGet(Set::of);
+            return new PermissionAwareMetadataFilter(delegate, callerCodes).retrieve(queryText);
+        };
     }
 
     private void streamTokens(
