@@ -3020,10 +3020,10 @@ components:
         number:
           type: integer
           format: int32
-        sort:
-          $ref: '#/components/schemas/SortObject'
         pageable:
           $ref: '#/components/schemas/PageableObject'
+        sort:
+          $ref: '#/components/schemas/SortObject'
         first:
           type: boolean
         last:

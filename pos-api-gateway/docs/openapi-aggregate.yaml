@@ -433,6 +433,8 @@ paths:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1public~1inquiries
   /v1/crm/segments:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1segments
+  /v1/crm/segments/attributes:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1segments~1attributes
   /v1/crm/segments/{segmentId}:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1segments~1{segmentId}
   /v1/crm/segments/{segmentId}/members:
