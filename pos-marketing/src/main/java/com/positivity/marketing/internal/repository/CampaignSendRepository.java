@@ -14,29 +14,29 @@ import org.springframework.data.repository.query.Param;
 
 public interface CampaignSendRepository extends JpaRepository<CampaignSend, UUID> {
 
-        Optional<CampaignSend> findByCampaignIdAndRecipientPartyIdAndChannel(
-                        UUID campaignId, UUID recipientPartyId, CampaignChannel channel);
+    Optional<CampaignSend> findByCampaignIdAndRecipientPartyIdAndChannel(
+            UUID campaignId, UUID recipientPartyId, CampaignChannel channel);
 
-        Optional<CampaignSend> findByProviderMessageId(String providerMessageId);
+    Optional<CampaignSend> findByProviderMessageId(String providerMessageId);
 
-        Page<CampaignSend> findByCampaignId(UUID campaignId, Pageable pageable);
+    Page<CampaignSend> findByCampaignId(UUID campaignId, Pageable pageable);
 
-        List<CampaignSend> findByCampaignIdAndStatus(UUID campaignId, SendStatus status);
+    List<CampaignSend> findByCampaignIdAndStatus(UUID campaignId, SendStatus status);
 
-        /**
-         * One drain's worth of queued recipients, oldest first so a campaign progresses
-         * in order.
-         */
-        List<CampaignSend> findByStatusOrderByQueuedAtAsc(SendStatus status, Pageable pageable);
+    /**
+     * One drain's worth of queued recipients, oldest first so a campaign progresses
+     * in order.
+     */
+    List<CampaignSend> findByStatusOrderByQueuedAtAsc(SendStatus status, Pageable pageable);
 
-        long countByCampaignIdAndStatus(UUID campaignId, SendStatus status);
+    long countByCampaignIdAndStatus(UUID campaignId, SendStatus status);
 
-        long countByCampaignId(UUID campaignId);
+    long countByCampaignId(UUID campaignId);
 
-        /**
-         * Per-status totals for one campaign in a single query, for the stats funnel.
-         */
-        @Query("SELECT s.channel, s.status, COUNT(s) FROM CampaignSend s WHERE s.campaignId = :campaignId "
-                        + "GROUP BY s.channel, s.status")
-        List<Object[]> countByChannelAndStatus(@Param("campaignId") UUID campaignId);
+    /**
+     * Per-status totals for one campaign in a single query, for the stats funnel.
+     */
+    @Query("SELECT s.channel, s.status, COUNT(s) FROM CampaignSend s WHERE s.campaignId = :campaignId "
+            + "GROUP BY s.channel, s.status")
+    List<Object[]> countByChannelAndStatus(@Param("campaignId") UUID campaignId);
 }

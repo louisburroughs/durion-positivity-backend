@@ -1,7 +1,12 @@
 package com.positivity.customer.internal.config;
 
+import com.positivity.customer.internal.dto.AddSuppressionRequest;
+import com.positivity.customer.internal.enums.ConsentChangeSource;
+import com.positivity.customer.internal.enums.MarketingChannel;
+import com.positivity.customer.internal.enums.SuppressionReason;
 import com.positivity.customer.service.OutboxReplayService;
 import com.positivity.customer.service.SegmentService;
+import com.positivity.customer.service.SuppressionService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -28,6 +33,10 @@ import tools.jackson.databind.ObjectMapper;
  * <li>{@code customer.outbox.replay-requested} — consumer-initiated drift repair and replica
  * bootstrap: re-queues published outbox events created in the requested window for
  * re-publication; consumers dedupe by eventId so replay is idempotent.</li>
+ * <li>{@code customer.segment.resolve-requested} — asynchronous segment membership resolution
+ * answered with a {@code customer.segment.resolved} fact (Story #1137).</li>
+ * <li>{@code customer.suppression.add-requested} — provider bounce/complaint feedback relayed
+ * by pos-marketing into the hard suppression list (Story #1150).</li>
  * </ul>
  */
 @Slf4j
@@ -46,6 +55,13 @@ public class CustomerCommandListener {
      */
     private static final String COMMAND_SEGMENT_RESOLVE_REQUESTED = "CUSTOMER_SEGMENT_RESOLVE_REQUESTED";
 
+    /**
+     * Hard-block an address from marketing on provider feedback (Story #1150). Sent by
+     * pos-marketing when the shared platform sender reports a hard bounce or a spam complaint;
+     * {@link SuppressionService#add} is idempotent, so command replay is harmless.
+     */
+    private static final String COMMAND_SUPPRESSION_ADD_REQUESTED = "CUSTOMER_SUPPRESSION_ADD_REQUESTED";
+
     /** Covers the sub-millisecond skew between outbox createdAt and the eventId timestamp. */
     private static final Duration REPLAY_WINDOW_SLACK = Duration.ofSeconds(1);
 
@@ -57,6 +73,7 @@ public class CustomerCommandListener {
     private final ObjectMapper objectMapper;
     private final OutboxReplayService outboxReplayService;
     private final SegmentService segmentService;
+    private final SuppressionService suppressionService;
 
     @KafkaListener(
             topics = "${pos.customer.kafka.commands-topic:customer.commands.v1}",
@@ -79,6 +96,10 @@ public class CustomerCommandListener {
             }
             if (COMMAND_SEGMENT_RESOLVE_REQUESTED.equals(commandType)) {
                 handleSegmentResolveRequested(root);
+                return;
+            }
+            if (COMMAND_SUPPRESSION_ADD_REQUESTED.equals(commandType)) {
+                handleSuppressionAddRequested(root);
                 return;
             }
             log.debug("Ignoring unsupported commandType={} message={}", commandType, message);
@@ -161,6 +182,48 @@ public class CustomerCommandListener {
             throw e;
         } catch (RuntimeException e) {
             log.warn("Segment {} could not be resolved for request {}: {}", segmentId, requestId, e.getMessage());
+        }
+    }
+
+    /**
+     * Apply a provider-feedback suppression (Story #1150): pos-marketing relays a hard bounce
+     * or spam complaint from the shared platform sender, and the address gets hard-blocked
+     * here — suppression outranks whatever consent the party may still hold.
+     *
+     * <p>The raw address exists only inside this command; {@link SuppressionService#add} stores
+     * a normalized hash plus a masked hint. Malformed commands are dropped, not retried:
+     * redelivery cannot repair a missing address or an unknown enum value.
+     */
+    @Transactional
+    void handleSuppressionAddRequested(JsonNode root) {
+        JsonNode payload = root.path("payload");
+        String address = payload.path("address").stringValue(null);
+        MarketingChannel channel = enumOrNull(MarketingChannel.class, payload, "channel");
+        SuppressionReason reason = enumOrNull(SuppressionReason.class, payload, "reason");
+        if (address == null || address.isBlank() || channel == null || reason == null) {
+            log.warn("Ignoring suppression-add command missing address, channel, or reason");
+            return;
+        }
+        UUID partyId = uuidOrNull(payload, "partyId");
+        var entry = suppressionService.add(
+                new AddSuppressionRequest(channel, address, partyId, reason, ConsentChangeSource.SYSTEM));
+        log.info(
+                "Provider feedback suppressed {} address for party {} (reason {}, suppressionId {})",
+                channel,
+                partyId,
+                reason,
+                entry.suppressionId());
+    }
+
+    private static <E extends Enum<E>> @Nullable E enumOrNull(Class<E> type, JsonNode node, String field) {
+        String value = node.path(field).stringValue(null);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Enum.valueOf(type, value.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return null;
         }
     }
 

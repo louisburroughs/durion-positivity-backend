@@ -124,12 +124,21 @@ public class CampaignSendWorker {
         String body = renderService.render(template.get().getBody(), tokens);
 
         send.setAttempts(send.getAttempts() + 1);
-        MessageChannelPort.SendOutcome outcome =
-                messageChannel.send(send.getChannel(), send.getRecipientPartyId(), subject, body);
+        MessageChannelPort.SendOutcome outcome = messageChannel.send(new MessageChannelPort.OutboundMessage(
+                send.getCampaignSendId(),
+                send.getChannel(),
+                send.getRecipientPartyId(),
+                send.getContactId(),
+                campaign.getCode(),
+                subject,
+                body));
 
         if (outcome.accepted()) {
             send.setStatus(SendStatus.SENT);
             send.setProviderMessageId(outcome.providerMessageId());
+            if (outcome.addressHash() != null) {
+                send.setAddressHash(outcome.addressHash());
+            }
             send.setSentAt(Instant.now(clock));
             send.setFailureReason(null);
             touch(send);

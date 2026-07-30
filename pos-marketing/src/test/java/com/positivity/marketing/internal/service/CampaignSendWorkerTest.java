@@ -178,15 +178,23 @@ class CampaignSendWorkerTest {
         givenOneQueuedSend();
         when(eligibilityService.decide(PARTY, CampaignChannel.EMAIL))
                 .thenReturn(new AudienceEligibilityService.Decision(true, "OPT_IN"));
-        when(messageChannel.send(any(), any(), any(), anyString()))
-                .thenReturn(MessageChannelPort.SendOutcome.accepted("provider-1"));
+        when(messageChannel.send(any())).thenReturn(MessageChannelPort.SendOutcome.accepted("provider-1", "hash-1"));
 
         worker().drain();
+
+        ArgumentCaptor<MessageChannelPort.OutboundMessage> outbound =
+                ArgumentCaptor.forClass(MessageChannelPort.OutboundMessage.class);
+        verify(messageChannel).send(outbound.capture());
+        // The send record's id is the FI-2 idempotency key; losing it would let a retried
+        // HTTP call become a second email.
+        assertThat(outbound.getValue().campaignSendId()).isEqualTo(pendingSend().getCampaignSendId());
+        assertThat(outbound.getValue().campaignCode()).isEqualTo("SPRING-2026");
 
         ArgumentCaptor<CampaignSend> saved = ArgumentCaptor.forClass(CampaignSend.class);
         verify(sendRepository).save(saved.capture());
         assertThat(saved.getValue().getStatus()).isEqualTo(SendStatus.SENT);
         assertThat(saved.getValue().getProviderMessageId()).isEqualTo("provider-1");
+        assertThat(saved.getValue().getAddressHash()).isEqualTo("hash-1");
         verify(factPublisher).campaignSent(any(), anyString(), any());
     }
 

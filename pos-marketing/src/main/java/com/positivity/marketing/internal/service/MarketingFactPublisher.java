@@ -2,6 +2,7 @@ package com.positivity.marketing.internal.service;
 
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.marketing.MarketingCampaignScheduledV1;
+import com.positivity.domainevents.marketing.MarketingCampaignSendOutcomeV1;
 import com.positivity.domainevents.marketing.MarketingCampaignSentV1;
 import com.positivity.marketing.internal.config.OutboxEventWriter;
 import com.positivity.marketing.internal.entity.Campaign;
@@ -78,6 +79,26 @@ public class MarketingFactPublisher {
                 send.getChannel().name(),
                 renderedSubject);
         publish(writer, MarketingCampaignSentV1.EVENT_TYPE, send.getRecipientPartyId(), payload);
+    }
+
+    /**
+     * Emit {@code marketing.campaign.send.delivered/bounced/complained} for one sender outcome
+     * (Story #1150). The event type mirrors the status transition just applied to the send.
+     */
+    public void sendOutcome(@NonNull CampaignSend send, @NonNull String campaignCode, @NonNull String eventType) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        MarketingCampaignSendOutcomeV1 payload = new MarketingCampaignSendOutcomeV1(
+                send.getCampaignSendId(),
+                send.getCampaignId(),
+                campaignCode,
+                send.getRecipientPartyId(),
+                send.getChannel().name(),
+                send.getStatus().name(),
+                send.getFailureReason());
+        publish(writer, eventType, send.getRecipientPartyId(), payload);
     }
 
     private void publish(
