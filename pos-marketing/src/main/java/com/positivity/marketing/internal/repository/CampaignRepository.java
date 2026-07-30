@@ -7,9 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
-@Repository
 public interface CampaignRepository extends JpaRepository<Campaign, UUID> {
 
     Optional<Campaign> findByCodeIgnoreCase(String code);
@@ -22,6 +20,9 @@ public interface CampaignRepository extends JpaRepository<Campaign, UUID> {
 
     List<Campaign> findAllByOrderByCreatedAtDesc();
 
-    /** Campaigns whose scheduled moment has arrived — the dispatch worker's work queue. */
+    /**
+     * Campaigns whose scheduled moment has arrived — the dispatch worker's work
+     * queue.
+     */
     List<Campaign> findByStatusAndScheduledAtLessThanEqual(CampaignStatus status, Instant now);
 }

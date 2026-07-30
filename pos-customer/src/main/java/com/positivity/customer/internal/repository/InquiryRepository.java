@@ -9,9 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
-@Repository
 public interface InquiryRepository extends JpaRepository<Inquiry, UUID> {
 
     Page<Inquiry> findByStatusOrderByCreatedAtDesc(InquiryStatus status, Pageable pageable);
@@ -19,8 +17,10 @@ public interface InquiryRepository extends JpaRepository<Inquiry, UUID> {
     Page<Inquiry> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     /**
-     * Submissions from one source since a cut-off. Backs the public form's abuse check without
-     * keeping per-request state in memory, so the limit survives a restart and is shared across
+     * Submissions from one source since a cut-off. Backs the public form's abuse
+     * check without
+     * keeping per-request state in memory, so the limit survives a restart and is
+     * shared across
      * instances.
      */
     @Query("SELECT COUNT(i) FROM Inquiry i WHERE i.submittedFrom = :source AND i.createdAt >= :since")

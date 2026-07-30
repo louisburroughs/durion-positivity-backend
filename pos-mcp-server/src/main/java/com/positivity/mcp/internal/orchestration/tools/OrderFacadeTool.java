@@ -26,7 +26,7 @@ public class OrderFacadeTool {
         this.orderSearchUriTemplate = orderSearchUriTemplate;
     }
 
-    @Tool(description = "Look up an order by order ID")
+    @Tool(description = "Look up an order by a uuid string representation of order ID")
     public String getOrder(@ToolParam(description = "The order ID") @NonNull String orderId) {
         return restClient
                 .get()
@@ -36,7 +36,8 @@ public class OrderFacadeTool {
     }
 
     @Tool(description = "Search orders by customer name, date range, or status")
-    public String searchOrders(@ToolParam(description = "Search query: customer name, date, or status") @NonNull String query) {
+    public String searchOrders(
+            @ToolParam(description = "Search query: customer name, date, or status") @NonNull String query) {
         return restClient
                 .get()
                 .uri(orderSearchUriTemplate, Map.of("query", query))

@@ -7,16 +7,17 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
-@Repository
 public interface PartyTagAssignmentRepository extends JpaRepository<PartyTagAssignment, UUID> {
 
     List<PartyTagAssignment> findByPartyId(UUID partyId);
 
     List<PartyTagAssignment> findByTagId(UUID tagId);
 
-    /** Batch-load for segment resolution, which tests tag membership across a candidate set. */
+    /**
+     * Batch-load for segment resolution, which tests tag membership across a
+     * candidate set.
+     */
     List<PartyTagAssignment> findByPartyIdIn(java.util.Collection<UUID> partyIds);
 
     Optional<PartyTagAssignment> findByPartyIdAndTagId(UUID partyId, UUID tagId);
@@ -25,7 +26,10 @@ public interface PartyTagAssignmentRepository extends JpaRepository<PartyTagAssi
 
     void deleteByTagId(UUID tagId);
 
-    /** Party ids carrying every one of the given tags — the AND semantics segment predicates need. */
+    /**
+     * Party ids carrying every one of the given tags — the AND semantics segment
+     * predicates need.
+     */
     @Query("""
             SELECT a.partyId FROM PartyTagAssignment a
             WHERE a.tagId IN :tagIds

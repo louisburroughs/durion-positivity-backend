@@ -9,17 +9,20 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
-@Repository
 public interface ServiceHistoryRepository extends JpaRepository<ServiceHistory, UUID> {
 
-    /** Idempotency backstop for the event-fed path (FI-3, #1133), independent of processed_events. */
+    /**
+     * Idempotency backstop for the event-fed path (FI-3, #1133), independent of
+     * processed_events.
+     */
     boolean existsBySourceEventId(String sourceEventId);
 
     /**
-     * Most recent completion per party for the given candidates — the single batch query the
-     * segment resolver uses to derive last-service age and service-due (FI-3, #1133).
+     * Most recent completion per party for the given candidates — the single batch
+     * query the
+     * segment resolver uses to derive last-service age and service-due (FI-3,
+     * #1133).
      */
     @Query("select sh.partyId as partyId, max(sh.completedAt) as lastCompletedAt"
             + " from ServiceHistory sh where sh.partyId in :partyIds group by sh.partyId")
