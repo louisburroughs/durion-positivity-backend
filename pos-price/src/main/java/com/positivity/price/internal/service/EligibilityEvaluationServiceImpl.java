@@ -90,7 +90,11 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
     @NonNull
     @Transactional(readOnly = true)
     public EligibilityDecision evaluateEligibility(
-            @NonNull UUID promotionId, @Nullable UUID accountId, @Nullable UUID vehicleId) {
+            @NonNull UUID promotionId,
+            @Nullable UUID accountId,
+            @Nullable UUID vehicleId,
+            @Nullable String audienceType,
+            @Nullable String campaignCode) {
         List<PromotionEligibilityRule> rules =
                 promotionEligibilityRuleRepository.findByPromotion_PromotionOfferId(promotionId);
         if (rules.isEmpty()) {
@@ -103,7 +107,8 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
         if (combination == RuleCombination.OR) {
             EligibilityReasonCode lastFailure = EligibilityReasonCode.EVALUATION_ERROR;
             for (PromotionEligibilityRule rule : rules) {
-                EligibilityDecision decision = evaluateSingleRule(rule, accountId, vehicleId);
+                EligibilityDecision decision =
+                        evaluateSingleRule(rule, accountId, vehicleId, audienceType, campaignCode);
                 if (decision.isEligible()) {
                     return decision;
                 }
@@ -113,7 +118,7 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
         }
 
         for (PromotionEligibilityRule rule : rules) {
-            EligibilityDecision decision = evaluateSingleRule(rule, accountId, vehicleId);
+            EligibilityDecision decision = evaluateSingleRule(rule, accountId, vehicleId, audienceType, campaignCode);
             if (!decision.isEligible()) {
                 return decision;
             }
@@ -124,7 +129,11 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
 
     @NonNull
     private EligibilityDecision evaluateSingleRule(
-            @NonNull PromotionEligibilityRule rule, @Nullable UUID accountId, @Nullable UUID vehicleId) {
+            @NonNull PromotionEligibilityRule rule,
+            @Nullable UUID accountId,
+            @Nullable UUID vehicleId,
+            @Nullable String audienceType,
+            @Nullable String campaignCode) {
         ConditionType conditionType = rule.getConditionType();
         RuleOperator operator = rule.getOperator();
         String value = rule.getValue();
@@ -180,6 +189,32 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
             if (operator == RuleOperator.NOT_IN && tagPresent) {
                 return new EligibilityDecision(false, EligibilityReasonCode.VEHICLE_TAG_EXCLUDED);
             }
+        } else if (conditionType == ConditionType.AUDIENCE_TYPE) {
+            if (audienceType == null || audienceType.isBlank()) {
+                return new EligibilityDecision(false, EligibilityReasonCode.MISSING_AUDIENCE_CONTEXT);
+            }
+            // Audience types are enum-like names (COMMERCIAL, INDIVIDUAL); compare
+            // case-insensitively so client casing does not affect the outcome.
+            boolean matches = value.trim().equalsIgnoreCase(audienceType.trim());
+            if (operator == RuleOperator.EQUALS && !matches) {
+                return new EligibilityDecision(false, EligibilityReasonCode.AUDIENCE_TYPE_NOT_MATCHED);
+            }
+            if (operator == RuleOperator.NOT_IN && matches) {
+                return new EligibilityDecision(false, EligibilityReasonCode.AUDIENCE_TYPE_EXCLUDED);
+            }
+        } else if (conditionType == ConditionType.CAMPAIGN_CODE) {
+            if (campaignCode == null || campaignCode.isBlank()) {
+                return new EligibilityDecision(false, EligibilityReasonCode.MISSING_CAMPAIGN_CONTEXT);
+            }
+            List<String> campaignCodes =
+                    Arrays.stream(value.split(",")).map(String::trim).toList();
+            boolean inList = campaignCodes.contains(campaignCode.trim());
+            if ((operator == RuleOperator.EQUALS || operator == RuleOperator.IN) && !inList) {
+                return new EligibilityDecision(false, EligibilityReasonCode.CAMPAIGN_CODE_NOT_MATCHED);
+            }
+            if (operator == RuleOperator.NOT_IN && inList) {
+                return new EligibilityDecision(false, EligibilityReasonCode.CAMPAIGN_CODE_EXCLUDED);
+            }
         }
 
         return new EligibilityDecision(true, EligibilityReasonCode.ELIGIBLE);
@@ -190,6 +225,9 @@ public class EligibilityEvaluationServiceImpl implements EligibilityEvaluationSe
             case ACCOUNT_ID_LIST -> operator == RuleOperator.IN || operator == RuleOperator.NOT_IN;
             case ACCOUNT_FLEET_SIZE -> operator == RuleOperator.GREATER_THAN_OR_EQUAL_TO;
             case VEHICLE_TAG -> operator == RuleOperator.EQUALS || operator == RuleOperator.NOT_IN;
+            case AUDIENCE_TYPE -> operator == RuleOperator.EQUALS || operator == RuleOperator.NOT_IN;
+            case CAMPAIGN_CODE ->
+                operator == RuleOperator.EQUALS || operator == RuleOperator.IN || operator == RuleOperator.NOT_IN;
         };
     }
 }
