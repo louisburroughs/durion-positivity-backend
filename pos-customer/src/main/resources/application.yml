@@ -78,6 +78,13 @@ pos:
       # service is at least this many whole months old. Module-wide interval until per-vehicle
       # care-preference intervals are fed from pos-vehicle-inventory.
       service-due-months: ${POS_CUSTOMER_SERVICE_DUE_MONTHS:6}
+      # Service-due reminder feed (#1153): raises one SERVICE_DUE_REMINDER follow-up task per
+      # party/vehicle service cycle once its latest completion is service-due-months old.
+      # Idempotent via a deterministic source_event_id, so reruns and concurrent instances
+      # cannot duplicate a task.
+      service-due-reminders-enabled: ${POS_CUSTOMER_SERVICE_DUE_REMINDERS_ENABLED:true}
+      service-due-reminder-cron: ${POS_CUSTOMER_SERVICE_DUE_REMINDER_CRON:0 0 5 * * *}
+      service-due-reminder-batch-size: ${POS_CUSTOMER_SERVICE_DUE_REMINDER_BATCH_SIZE:500}
     inquiry:
       public:
         # Story #1154: the only unauthenticated write surface in pos-customer. OFF by default.
