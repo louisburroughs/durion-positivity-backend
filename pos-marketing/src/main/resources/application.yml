@@ -78,6 +78,20 @@ pos:
       # redemption facts — all owned by pos-customer (ADR-0044 R3).
       customer-events-topic: ${POS_MARKETING_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
       customer-events-consumer-group: ${POS_MARKETING_CUSTOMER_EVENTS_CONSUMER_GROUP:pos-marketing-customer-events}
+      # Delivery/bounce/complaint/open/click reports from the shared platform sender
+      # (FI-2, docs/PLATFORM_SENDER_CONTRACT.md).
+      sender-outcomes-topic: ${POS_MARKETING_SENDER_OUTCOMES_TOPIC:sender.outcomes.v1}
+      sender-outcomes-consumer-group: ${POS_MARKETING_SENDER_OUTCOMES_CONSUMER_GROUP:pos-marketing-sender-outcomes}
+      # Bounce/complaint suppression feedback commands aimed at pos-customer (spec §4.3).
+      customer-commands-topic: ${POS_MARKETING_CUSTOMER_COMMANDS_TOPIC:customer.commands.v1}
+    send:
+      # Transport behind MessageChannelPort: `stub` logs instead of sending (safe default);
+      # `platform-sender` calls the shared platform sender under the FI-2 contract.
+      transport: ${POS_MARKETING_SEND_TRANSPORT:stub}
+    sender:
+      # Shared platform sender endpoint + shared secret; only read when transport=platform-sender.
+      base-url: ${POS_MARKETING_SENDER_BASE_URL:http://localhost:8085}
+      api-secret: ${POS_MARKETING_SENDER_API_SECRET:}
       # Outbound: asks pos-customer to resolve a segment's membership. Membership is derived
       # from party data and has no event boundary, so it cannot be replicated continuously.
       customer-commands-topic: ${POS_MARKETING_CUSTOMER_COMMANDS_TOPIC:customer.commands.v1}

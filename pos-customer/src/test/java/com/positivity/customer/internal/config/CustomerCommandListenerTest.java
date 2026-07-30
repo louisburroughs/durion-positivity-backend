@@ -9,7 +9,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.customer.internal.dto.AddSuppressionRequest;
+import com.positivity.customer.internal.dto.SuppressionEntryResponse;
+import com.positivity.customer.internal.enums.ConsentChangeSource;
+import com.positivity.customer.internal.enums.MarketingChannel;
+import com.positivity.customer.internal.enums.SuppressionReason;
 import com.positivity.customer.service.OutboxReplayService;
+import com.positivity.customer.service.SuppressionService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -32,12 +38,14 @@ class CustomerCommandListenerTest {
     private final OutboxReplayService replayService = mock(OutboxReplayService.class);
     private final com.positivity.customer.service.SegmentService segmentService =
             mock(com.positivity.customer.service.SegmentService.class);
+    private final SuppressionService suppressionService = mock(SuppressionService.class);
 
     private CustomerCommandListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new CustomerCommandListener(TEST_CLOCK, new ObjectMapper(), replayService, segmentService);
+        listener = new CustomerCommandListener(
+                TEST_CLOCK, new ObjectMapper(), replayService, segmentService, suppressionService);
         ReflectionTestUtils.setField(listener, "replayMaxLookback", Duration.ofDays(30));
     }
 
@@ -86,6 +94,44 @@ class CustomerCommandListenerTest {
         assertThatCode(() -> listener.onCommand("{\"commandType\":\"something.else\"}"))
                 .doesNotThrowAnyException();
         verify(replayService, never()).replayBetween(any(), any());
+    }
+
+    @Test
+    @DisplayName("Suppression-add command from provider feedback lands in SuppressionService (#1150)")
+    void appliesSuppressionAddCommand() {
+        when(suppressionService.add(any()))
+                .thenReturn(new SuppressionEntryResponse(
+                        java.util.UUID.fromString("01960006-0000-7000-8000-000000000080"),
+                        "EMAIL",
+                        "j***@example.com",
+                        java.util.UUID.fromString("01960006-0000-7000-8000-000000000081"),
+                        "HARD_BOUNCE",
+                        "SYSTEM",
+                        null,
+                        Instant.parse("2026-07-13T12:00:00Z")));
+
+        listener.onCommand("""
+                {"commandType":"customer.suppression.add-requested","eventId":"evt-1",
+                 "payload":{"channel":"EMAIL","address":"jane@example.com",
+                            "partyId":"01960006-0000-7000-8000-000000000081","reason":"HARD_BOUNCE"}}
+                """);
+
+        ArgumentCaptor<AddSuppressionRequest> request = ArgumentCaptor.forClass(AddSuppressionRequest.class);
+        verify(suppressionService).add(request.capture());
+        assertThat(request.getValue().getChannel()).isEqualTo(MarketingChannel.EMAIL);
+        assertThat(request.getValue().getAddress()).isEqualTo("jane@example.com");
+        assertThat(request.getValue().getReason()).isEqualTo(SuppressionReason.HARD_BOUNCE);
+        assertThat(request.getValue().getSource()).isEqualTo(ConsentChangeSource.SYSTEM);
+    }
+
+    @Test
+    @DisplayName("Suppression-add command missing the address is dropped, not retried")
+    void dropsSuppressionCommandWithoutAddress() {
+        assertThatCode(() -> listener.onCommand("""
+                        {"commandType":"customer.suppression.add-requested",
+                         "payload":{"channel":"EMAIL","reason":"HARD_BOUNCE"}}
+                        """)).doesNotThrowAnyException();
+        verify(suppressionService, never()).add(any());
     }
 
     @Test

@@ -96,6 +96,14 @@ public class CampaignSend {
     @Column(name = "delivered_at")
     private Instant deliveredAt;
 
+    /** First open reported by the sender; stays null when the channel can't track opens. */
+    @Column(name = "opened_at")
+    private Instant openedAt;
+
+    /** First click reported by the sender; stays null when the channel can't track clicks. */
+    @Column(name = "clicked_at")
+    private Instant clickedAt;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 }
