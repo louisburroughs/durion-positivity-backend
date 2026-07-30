@@ -75,9 +75,11 @@ public class CreateCommercialAccountResponse {
     private String billingTermsId;
 
     @Schema(
-            description = "Primary address for display, if available",
+            description = "Legacy free-text address for display, if available. Superseded by the"
+                    + " structured postal address in pos-people-contact (FI-4).",
             example = "100 Trade Street, Charlotte, NC 28202",
-            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+            deprecated = true)
     private String primaryAddress;
 
     @NotNull

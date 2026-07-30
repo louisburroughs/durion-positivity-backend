@@ -90,10 +90,11 @@ public class PeopleReplicaEventsListener {
                 case UserPersonLinkUpdatedV1.EVENT_TYPE -> applyLinkUpdated(envelope);
                 case UserPersonLinkRemovedV1.EVENT_TYPE -> applyLinkRemoved(envelope);
                 case StaffingAssignmentUpdatedV1.EVENT_TYPE -> applyAssignmentUpdated(envelope);
-                default -> {
+                default ->
+                    // Ignored types still fall through to the processed_events insert below: the
+                    // owner's manifest counts every fact in the window, so skipping the insert
+                    // would register as replica drift and trigger a pointless replay.
                     log.debug("Ignoring {} event type={}", owner, eventType);
-                    return;
-                }
             }
         } catch (TransientDataAccessException e) {
             throw e;

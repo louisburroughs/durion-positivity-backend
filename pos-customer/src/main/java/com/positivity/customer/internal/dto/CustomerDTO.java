@@ -54,9 +54,11 @@ public class CustomerDTO {
 
     @Size(max = 255)
     @Schema(
-            description = "Primary address label or identifier for the customer",
+            description = "Legacy free-text address label. Superseded by the structured postal address"
+                    + " in pos-people-contact (FI-4); retained for display compatibility.",
             example = "123 Main St, Springfield",
-            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+            deprecated = true)
     private String primaryAddress;
 
     @Builder.Default

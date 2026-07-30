@@ -54,6 +54,12 @@ class FlywayMigrationIT {
         assertThat(droppedColumn(jdbc, "user_person_links", "user_id")).isTrue();
         assertThat(hasColumn(jdbc, "person_contact_point", "contact_type")).isTrue();
 
+        // Structured international postal address for person + organization parties (FI-4, #1135).
+        assertThat(hasColumn(jdbc, "party_postal_address", "party_type")).isTrue();
+        assertThat(hasColumn(jdbc, "party_postal_address", "line1")).isTrue();
+        assertThat(hasColumn(jdbc, "party_postal_address", "region")).isTrue();
+        assertThat(hasColumn(jdbc, "party_postal_address", "country_code")).isTrue();
+
         // Transactional outbox for people-contact.events.v1 (ADR-0044 §4).
         assertThat(hasColumn(jdbc, "event_outbox", "record_key")).isTrue();
         assertThat(hasColumn(jdbc, "event_outbox", "published_at")).isTrue();

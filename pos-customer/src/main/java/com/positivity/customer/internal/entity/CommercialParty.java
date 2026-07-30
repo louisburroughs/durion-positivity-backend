@@ -85,9 +85,16 @@ public class CommercialParty extends AbstractParty {
     @Schema(description = "External identifiers keyed by source system")
     private Map<String, String> externalIdentifiers = new HashMap<>();
 
+    /**
+     * Legacy free-text address, superseded by the structured postal address owned by
+     * pos-people-contact (FI-4, #1135) — replicated here via ext_organization_postal_address
+     * keyed by this party's id. Retained for display compatibility only.
+     */
     @Schema(
-            description = "Primary address label or identifier for the organization",
-            example = "123 Main St, Springfield")
+            description = "Legacy free-text address label. Superseded by the structured postal address"
+                    + " in pos-people-contact (FI-4); retained for display compatibility.",
+            example = "123 Main St, Springfield",
+            deprecated = true)
     private String primaryAddress;
 
     @Embedded

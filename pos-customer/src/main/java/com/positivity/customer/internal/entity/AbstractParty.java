@@ -51,7 +51,17 @@ public abstract class AbstractParty implements Party {
     @Schema(description = "Unique customer number", example = "CUST-1001")
     private String customerNumber;
 
-    @Schema(description = "Primary address label or identifier for the customer", example = "123 Main St, Springfield")
+    /**
+     * Legacy free-text address, superseded by the structured postal address owned by
+     * pos-people-contact (FI-4, #1135) — replicated here via ext_people_contact_person /
+     * ext_organization_postal_address. Retained for display compatibility only; not parseable
+     * for geo/region segmentation, so no automated backfill exists.
+     */
+    @Schema(
+            description = "Legacy free-text address label. Superseded by the structured postal address"
+                    + " in pos-people-contact (FI-4); retained for display compatibility.",
+            example = "123 Main St, Springfield",
+            deprecated = true)
     private String primaryAddress;
 
     @ElementCollection

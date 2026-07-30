@@ -5,6 +5,8 @@ import com.positivity.customer.internal.domain.SegmentPredicate;
 import com.positivity.customer.internal.domain.SegmentPredicateEvaluator;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.CommunicationPreference;
+import com.positivity.customer.internal.entity.ExtOrganizationPostalAddress;
+import com.positivity.customer.internal.entity.ExtPersonReplica;
 import com.positivity.customer.internal.entity.ExtVehicle;
 import com.positivity.customer.internal.entity.PartyTagAssignment;
 import com.positivity.customer.internal.entity.PersonParty;
@@ -14,6 +16,8 @@ import com.positivity.customer.internal.enums.MarketingConsent;
 import com.positivity.customer.internal.enums.SegmentType;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
+import com.positivity.customer.internal.repository.ExtOrganizationPostalAddressRepository;
+import com.positivity.customer.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.FollowUpTaskRepository;
 import com.positivity.customer.internal.repository.PartyTagAssignmentRepository;
@@ -73,6 +77,8 @@ public class SegmentResolutionService {
     private final SegmentMemberRepository segmentMemberRepository;
     private final ServiceHistoryRepository serviceHistoryRepository;
     private final FollowUpTaskRepository followUpTaskRepository;
+    private final ExtPersonReplicaRepository extPersonReplicaRepository;
+    private final ExtOrganizationPostalAddressRepository extOrganizationPostalAddressRepository;
     private final Clock clock;
 
     /** Matched party ids plus whether the candidate scan hit the ceiling. */
@@ -154,11 +160,15 @@ public class SegmentResolutionService {
         Map<UUID, List<ExtVehicle>> vehicles = vehiclesByAccount(ids);
         Map<UUID, Instant> lastService = lastServiceByParty(ids);
         Map<UUID, Instant> lastDeclined = lastDeclinedByParty(ids);
+        // FI-4 (#1135): organization addresses replicate from pos-people-contact keyed by the
+        // commercial party id this module minted.
+        Map<UUID, ExtOrganizationPostalAddress> addresses = orgAddressesByParty(ids);
 
         return accounts.stream()
                 .map(account -> {
                     List<ExtVehicle> owned = vehicles.getOrDefault(account.getPartyId(), List.of());
                     CommunicationPreference preference = preferences.get(account.getPartyId());
+                    ExtOrganizationPostalAddress address = addresses.get(account.getPartyId());
                     return new PartyAttributes(
                             account.getPartyId(),
                             account.getPartyType() != null
@@ -193,7 +203,11 @@ public class SegmentResolutionService {
                             account.getDisplayName() != null ? account.getDisplayName() : account.getLegalName(),
                             monthsSince(lastService.get(account.getPartyId())),
                             lastService.containsKey(account.getPartyId()),
-                            daysSince(lastDeclined.get(account.getPartyId())));
+                            daysSince(lastDeclined.get(account.getPartyId())),
+                            address != null ? address.getCountryCode() : null,
+                            address != null ? address.getRegion() : null,
+                            address != null ? address.getCity() : null,
+                            address != null ? address.getPostalCode() : null);
                 })
                 .toList();
     }
@@ -207,11 +221,15 @@ public class SegmentResolutionService {
         Map<UUID, List<ExtVehicle>> vehicles = vehiclesByAccount(ids);
         Map<UUID, Instant> lastService = lastServiceByParty(ids);
         Map<UUID, Instant> lastDeclined = lastDeclinedByParty(ids);
+        // FI-4 (#1135): individual addresses live on the person identity replica, keyed by the
+        // people-contact person id, not the local party id.
+        Map<UUID, ExtPersonReplica> personReplicas = personReplicasByPersonId(people);
 
         return people.stream()
                 .map(person -> {
                     List<ExtVehicle> owned = vehicles.getOrDefault(person.getPartyId(), List.of());
                     CommunicationPreference preference = preferences.get(person.getPartyId());
+                    ExtPersonReplica replica = personReplicas.get(person.getPersonId());
                     return new PartyAttributes(
                             person.getPartyId(),
                             "PERSON",
@@ -238,7 +256,11 @@ public class SegmentResolutionService {
                             person.getCustomerNumber(),
                             monthsSince(lastService.get(person.getPartyId())),
                             lastService.containsKey(person.getPartyId()),
-                            daysSince(lastDeclined.get(person.getPartyId())));
+                            daysSince(lastDeclined.get(person.getPartyId())),
+                            replica != null ? replica.getAddressCountryCode() : null,
+                            replica != null ? replica.getAddressRegion() : null,
+                            replica != null ? replica.getAddressCity() : null,
+                            replica != null ? replica.getAddressPostalCode() : null);
                 })
                 .toList();
     }
@@ -275,6 +297,32 @@ public class SegmentResolutionService {
                     .add(assignment.getTagId());
         }
         return byParty;
+    }
+
+    private Map<UUID, ExtOrganizationPostalAddress> orgAddressesByParty(List<UUID> partyIds) {
+        if (partyIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, ExtOrganizationPostalAddress> byParty = new HashMap<>();
+        extOrganizationPostalAddressRepository
+                .findAllById(partyIds)
+                .forEach(address -> byParty.put(address.getOrganizationId(), address));
+        return byParty;
+    }
+
+    private Map<UUID, ExtPersonReplica> personReplicasByPersonId(List<PersonParty> people) {
+        List<UUID> personIds = people.stream()
+                .map(PersonParty::getPersonId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (personIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, ExtPersonReplica> byPersonId = new HashMap<>();
+        extPersonReplicaRepository
+                .findAllById(personIds)
+                .forEach(replica -> byPersonId.put(replica.getPersonId(), replica));
+        return byPersonId;
     }
 
     private Map<UUID, List<ExtVehicle>> vehiclesByAccount(List<UUID> partyIds) {

@@ -39,6 +39,10 @@ class SegmentPredicateEvaluatorTest {
                 "Acme Towing",
                 null,
                 false,
+                null,
+                null,
+                null,
+                null,
                 null);
     }
 
@@ -65,7 +69,40 @@ class SegmentPredicateEvaluatorTest {
                 "Acme Towing",
                 monthsSinceLastService,
                 hasServiceHistory,
-                daysSinceDeclinedService);
+                daysSinceDeclinedService,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    private static PartyAttributes addressParty(String country, String region, String city, String postalCode) {
+        return new PartyAttributes(
+                PARTY,
+                "COMMERCIAL",
+                "GOLD",
+                "ACTIVE",
+                false,
+                Map.of(),
+                Set.of(),
+                Boolean.FALSE,
+                Boolean.FALSE,
+                "NET30",
+                "OPT_IN",
+                "UNSET",
+                Set.of(),
+                Set.of(),
+                Set.of(),
+                true,
+                1,
+                "Acme Towing",
+                null,
+                false,
+                null,
+                country,
+                region,
+                city,
+                postalCode);
     }
 
     @Test
@@ -159,6 +196,44 @@ class SegmentPredicateEvaluatorTest {
         assertThat(SegmentPredicateEvaluator.matches(
                         comparison("billing.creditHold", SegmentOperator.IS_TRUE), unknown))
                 .isFalse();
+    }
+
+    @Test
+    @DisplayName("geo attributes match the structured address case-insensitively (FI-4, #1135)")
+    void matchesAddressPredicates() {
+        PartyAttributes tokyo = addressParty("JP", "Tokyo", "Chiyoda", "100-0001");
+
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("address.country", SegmentOperator.EQUALS, "jp"), tokyo))
+                .isTrue();
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("address.region", SegmentOperator.IN, "Tokyo", "Osaka"), tokyo))
+                .isTrue();
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("address.city", SegmentOperator.NOT_EQUALS, "Chiyoda"), tokyo))
+                .isFalse();
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("address.postalCode", SegmentOperator.IN, "100-0001", "100-0002"), tokyo))
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("a missing address is unknown: no geo predicate matches except IS_NULL")
+    void treatsMissingAddressAsUnknown() {
+        PartyAttributes noAddress = addressParty(null, null, null, null);
+
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("address.country", SegmentOperator.EQUALS, "US"), noAddress))
+                .isFalse();
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("address.postalCode", SegmentOperator.IN, "30301"), noAddress))
+                .isFalse();
+        assertThat(SegmentPredicateEvaluator.matches(comparison("address.country", SegmentOperator.IS_NULL), noAddress))
+                .isTrue();
+        assertThat(SegmentPredicateEvaluator.matches(
+                        comparison("address.country", SegmentOperator.IS_NOT_NULL),
+                        addressParty("US", "GA", "Atlanta", "30301")))
+                .isTrue();
     }
 
     @Test
