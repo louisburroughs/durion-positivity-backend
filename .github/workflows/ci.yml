@@ -164,6 +164,8 @@ jobs:
         # every cache key, and nothing downstream consumes PR artifacts by version.
         # (The pilot's first run exposed pos-archunit's 2.4 GB fat jar, which the
         # extension's output hashing cannot read — fixed in pos-archunit/pom.xml.)
+        # The ArchUnit step below opts back out of the cache: restored modules
+        # resolve as fat JARs, not target/classes, which blinds the rules (#909).
         if: github.event_name == 'pull_request'
         run: echo "-Dmaven.build.cache.enabled=true" > .mvn/maven.config
 
@@ -226,10 +228,15 @@ jobs:
             -T 1C -B -ntp
 
       - name: Run ArchUnit rules
+        # Cache opt-out: a build-cache hit restores sibling modules as their
+        # repackaged fat JARs instead of materializing target/classes, hiding
+        # every application class under BOOT-INF/classes — the exact #909
+        # failure mode ClasspathVisibilityGuardTest exists to catch.
         run: |
           ./mvnw -pl pos-archunit -am -DskipTests=false test \
             -Dtest='com/positivity/archunit/*' \
             -Dsurefire.failIfNoSpecifiedTests=false \
+            -Dmaven.build.cache.enabled=false \
             -DskipITs -T 1C -B -ntp -q
 
       - name: Save reactor build to cache
