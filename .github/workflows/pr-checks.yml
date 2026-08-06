@@ -17,13 +17,14 @@ jobs:
     outputs:
       modules: ${{ steps.changed.outputs.modules }}
       has-changes: ${{ steps.changed.outputs.has-changes }}
-    
+      full-reactor: ${{ steps.changed.outputs.full-reactor }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      
+
       - name: Detect changed modules
         id: changed
         run: |
@@ -32,10 +33,17 @@ jobs:
           DETECTION="$(./scripts/ci/detect-modules.sh "origin/${{ github.base_ref }}" HEAD)"
           echo "Detection: ${DETECTION}"
 
-          # This workflow only lints per-module Dockerfiles, so the full-reactor
-          # flag is irrelevant here — only the concrete changed-module list matters.
-          CHANGED_MODULES="$(jq -r '.modules | join(",")' <<< "${DETECTION}")"
+          FULL_REACTOR="$(jq -r '.full_reactor' <<< "${DETECTION}")"
+          if [[ "${FULL_REACTOR}" == "true" ]]; then
+            # A full-reactor change (root pom, .mvn/**, BOM, ci.yml, compose)
+            # affects every module: the detection's module list is empty by
+            # contract, so lint every containerized module's Dockerfile.
+            CHANGED_MODULES="$(ls -d pos-*/ | cut -d'/' -f1 | paste -sd, -)"
+          else
+            CHANGED_MODULES="$(jq -r '.modules | join(",")' <<< "${DETECTION}")"
+          fi
 
+          echo "full-reactor=${FULL_REACTOR}" >> $GITHUB_OUTPUT
           if [ -z "$CHANGED_MODULES" ]; then
             echo "has-changes=false" >> $GITHUB_OUTPUT
             echo "modules=" >> $GITHUB_OUTPUT
@@ -121,10 +129,13 @@ jobs:
         with:
           script: |
             const modules = '${{ needs.detect-changes.outputs.modules }}';
-            
+            const fullReactor = '${{ needs.detect-changes.outputs.full-reactor }}' === 'true';
+
             let comment = '## 🔍 PR Analysis\n\n';
-            
-            if (!modules) {
+
+            if (fullReactor) {
+              comment += '🔄 Build-wide change (root pom / `.mvn` / BOM / CI config): **all modules** are affected and the full reactor will be tested.\n';
+            } else if (!modules) {
               comment += '✅ No backend modules were modified in this PR.\n';
             } else {
               comment += '### Changed Modules\n';
