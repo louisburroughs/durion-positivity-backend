@@ -1,15 +1,15 @@
 name: Build and Push to ECR
 
+# Promotes the JARs that passed CI instead of rebuilding from source
+# (BACKEND_BUILD_SPEC.md §4.6): runs after a successful "Backend CI/CD"
+# main-push run and downloads its service-jars artifact, so the image
+# contains the tested bytes and a red CI run can never race a green ECR
+# push for the same commit.
 on:
-  push:
+  workflow_run:
+    workflows: ["Backend CI/CD"]
+    types: [completed]
     branches: [main]
-    paths:
-      - "pos-*/**"
-      - "pom.xml"
-      - "docker-compose.yml"
-      - "postgres/**"
-      - "deployment/alpha/docker-compose.prod.yml"
-      - ".github/workflows/build-push-ecr.yml"
   workflow_dispatch:
     inputs:
       deploy_alpha:
@@ -19,7 +19,7 @@ on:
         type: boolean
 
 concurrency:
-  group: ecr-push-backend-${{ github.ref }}
+  group: ecr-push-backend-${{ github.event.workflow_run.head_branch || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -27,6 +27,10 @@ env:
   JAVA_VERSION: "25"
   JAVA_DISTRIBUTION: temurin
   MAVEN_OPTS: -Xmx3072m
+  # The commit being shipped: the CI run's head for workflow_run events,
+  # the current ref for manual dispatches. github.sha would be the default
+  # branch head at event time, which can race ahead of the tested commit.
+  BUILD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────
@@ -35,6 +39,12 @@ jobs:
   detect-services:
     name: Detect Changed Services
     runs-on: ubuntu-latest
+    # Promote only successful CI runs for pushes to main; manual dispatch
+    # keeps working as a full rebuild-and-push.
+    if: github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
     outputs:
       services: ${{ steps.detect.outputs.services }}
       modules-csv: ${{ steps.detect.outputs.modules-csv }}
@@ -46,6 +56,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{ env.BUILD_SHA }}
 
       - name: Detect services to build
         id: detect
@@ -76,11 +87,13 @@ jobs:
             exit 0
           fi
 
-          DIFF_BASE="${{ github.event.before }}"
-          DIFF_HEAD="${{ github.sha }}"
-          if [[ -z "${DIFF_BASE}" || "${DIFF_BASE}" == "0000000000000000000000000000000000000000" ]]; then
-            DIFF_BASE="$(git rev-parse HEAD~1)"
-          fi
+          # workflow_run events carry no push before/after pair; diff the shipped
+          # commit against its first parent. Squash-merged PRs (the norm here) are
+          # one commit, so this covers the whole change; a rare multi-commit push
+          # can under-select, and AUTO_DEPLOY_ALPHA=true or a manual dispatch
+          # forces the full set regardless.
+          DIFF_HEAD="${BUILD_SHA}"
+          DIFF_BASE="$(git rev-parse "${DIFF_HEAD}~1")"
 
           CHANGED_FILES="$(git diff --name-only "${DIFF_BASE}" "${DIFF_HEAD}" || true)"
 
@@ -123,40 +136,75 @@ jobs:
           fi
 
   # ─────────────────────────────────────────────────────────────────────────
-  # Job 2: Build changed JARs with Maven and upload as a shared artifact
+  # Job 2: Collect the tested JARs from the triggering CI run (spec §4.6);
+  # build from source only what the artifact is missing (or on dispatch).
   # ─────────────────────────────────────────────────────────────────────────
   build-jars:
-    name: Maven Package (selected modules)
+    name: Collect tested JARs
     needs: detect-services
     if: needs.detect-services.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read # cross-run artifact download from the CI workflow run
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ env.BUILD_SHA }}
+
+      - name: Download tested JARs from CI run
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v5
+        continue-on-error: true
+        with:
+          name: service-jars
+          path: ci-jars
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Stage tested JARs, list missing services
+        id: stage
+        run: |
+          set -euo pipefail
+          rm -rf artifact-jars
+          MISSING=()
+          for service in $(jq -r '.[]' <<< '${{ needs.detect-services.outputs.services }}'); do
+            JAR_PATH="$(find ci-jars -type f -path "*/${service}/target/*.jar" 2>/dev/null | head -n 1 || true)"
+            if [[ -n "${JAR_PATH}" ]]; then
+              mkdir -p "artifact-jars/${service}/target"
+              cp "${JAR_PATH}" "artifact-jars/${service}/target/"
+              echo "tested JAR: ${service}"
+            else
+              MISSING+=("${service}")
+              echo "missing from CI artifact: ${service}"
+            fi
+          done
+          MISSING_CSV="$(IFS=,; echo "${MISSING[*]-}")"
+          echo "missing-csv=${MISSING_CSV}" >> "$GITHUB_OUTPUT"
 
       - name: Set Maven revision
+        if: steps.stage.outputs.missing-csv != ''
         run: printf -- "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT\n-Dmaven.build.cache.enabled=false\n" > .mvn/maven.config
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
+        if: steps.stage.outputs.missing-csv != ''
         uses: actions/setup-java@v5
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
 
-      - name: Build selected JARs (skip tests — tested separately in ci.yml)
-        run: ./mvnw -pl ${{ needs.detect-services.outputs.modules-csv }} -am package -B -DskipTests -q
-
-      - name: Stage JAR artifacts
+      - name: Build missing JARs from source (fallback)
+        if: steps.stage.outputs.missing-csv != ''
         run: |
           set -euo pipefail
-          rm -rf artifact-jars
-          jq -r '.[]' <<< '${{ needs.detect-services.outputs.services }}' | while read -r service; do
+          ./mvnw -pl "${{ steps.stage.outputs.missing-csv }}" -am package -B -DskipTests -T 1C -q
+          for service in $(tr ',' ' ' <<< "${{ steps.stage.outputs.missing-csv }}"); do
             mkdir -p "artifact-jars/${service}/target"
-            cp "${service}"/target/*.jar "artifact-jars/${service}/target/"
+            find "${service}/target" -maxdepth 1 -name '*.jar' ! -name '*.jar.original' \
+              -exec cp {} "artifact-jars/${service}/target/" \;
           done
 
       - name: Store JAR artifacts
@@ -187,6 +235,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ env.BUILD_SHA }}
 
       - name: Download JAR artifacts
         uses: actions/download-artifact@v5
@@ -226,7 +276,7 @@ jobs:
       - name: Set image metadata
         id: meta
         run: |
-          SHORT_SHA="${GITHUB_SHA::7}"
+          SHORT_SHA="${BUILD_SHA::7}"
           IMAGE_TAG="sha-${SHORT_SHA}"
           SERVICE="${{ matrix.service }}"
           # Some services publish to repository names that differ from the module directory.
@@ -275,7 +325,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          SHORT_SHA="${GITHUB_SHA::7}"
+          SHORT_SHA="${BUILD_SHA::7}"
           IMAGE_TAG="sha-${SHORT_SHA}"
           SERVICE_COUNT="$(jq 'length' <<< '${{ needs.detect-services.outputs.services }}')"
           # Derived from the canonical list in detect-services so it can't go stale
@@ -306,7 +356,7 @@ jobs:
             echo "This run published only changed services. Unchanged services were not retagged to \`${IMAGE_TAG}\`, so this tag is not valid for whole-stack deployment." >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Commit: \`${GITHUB_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit: \`${BUILD_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
 
   deploy-alpha:
     name: Deploy Backend to Alpha
@@ -325,6 +375,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ env.BUILD_SHA }}
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
@@ -361,7 +413,7 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${SECURITY_SEED_ADMIN_PASSWORD_HASH}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ github.sha }}'\"]}" \
+            --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${SECURITY_SEED_ADMIN_PASSWORD_HASH}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ env.BUILD_SHA }}'\"]}" \
             --timeout-seconds 2700 \
             --query "Command.CommandId" --output text)
           echo "SSM Command ID: $COMMAND_ID"
