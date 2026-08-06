@@ -82,7 +82,7 @@ artifact, and fans out one Docker build-and-push job per service consuming that 
 3. **Bounded effective concurrency.** Total concurrency ≈ reactor threads × Surefire forks ×
    JUnit threads. Exactly one of the three multiplies per pipeline stage; the others stay at 1
    unless a measurement says otherwise.
-4. **Build once, promote the artifact.** The bytes that passed `verify` are the bytes that ship.
+4. **Build once, promote the artifact.** The bytes that passed the CI test lifecycle are the bytes that ship.
 5. **Every optimisation is piloted behind a measurement.** Adopt only what beats the baseline on
    the recorded timings (§6.4).
 
@@ -97,9 +97,9 @@ artifact, and fans out one Docker build-and-push job per service consuming that 
 | 2 | Reactor parallelism `-T 1C` first, watch non-thread-safe plugins | **Already in place** for install/test commands; extend to the stragglers in G3. Keep `-T 1C`, do not raise to `2C`. |
 | 3 | Class-level JUnit parallelism, fixed parallelism 2 | **Pilot, opt-in per module** (§4.4). Most tests here are `@SpringBootTest`-style with shared H2/context state; blanket enablement is unsafe. Note we already have an unused fork-level alternative (`-DparallelTests=true` → `forkCount=1C`) that is safer for Spring tests. |
 | 4 | Prebuild dependencies once, share to matrix jobs via artifact | **Already implemented** via SHA-keyed `actions/cache` on `~/.m2/repository`; keep that mechanism (restore is one step and survives matrix retries). No change, except it becomes less load-bearing once the matrix collapses. |
-| 5 | Maven Build Cache Extension | **Pilot on PR builds only** (§4.5). Maven 3.9.14 qualifies. Release/ECR builds stay uncached. |
+| 5 | Maven Build Cache Extension | **Pilot on PR builds only** (§4.5); `main` joins only after the pilot passes the §4.5 validation gate. Maven 3.9.14 qualifies. Release/ECR builds stay uncached permanently. |
 | 6 | Separate dependency cache from build-output cache; `cache-read-only` on fan-outs | **Adopt.** Keep `setup-java` `cache: maven` on the single writer job; all remaining fan-out jobs (Docker matrix) set `cache-read-only: true`. |
-| 7 | Build once, deploy the tested artifact; prefer one `verify` over `test`+`package`+`deploy` | **Adopt in two steps** (§4.6). Step 1: single `verify` per pipeline stage (no repeated lifecycle prefixes) — closes G3. Step 2: hand tested JARs from CI to the ECR workflow — closes G4. |
+| 7 | Build once, deploy the tested artifact; prefer one `verify` over `test`+`package`+`deploy` | **Adopt in two steps** (§4.6). Step 1: a single lifecycle invocation per pipeline stage (no repeated lifecycle prefixes) — closes G3. On `main` that invocation is `install`, not `verify`: downstream jobs consume reactor output via the `~/.m2` cache, and only `install` puts reactor artifacts there (§4.3). Step 2: hand tested JARs from CI to the ECR workflow — closes G4. |
 
 ---
 
@@ -108,8 +108,21 @@ artifact, and fans out one Docker build-and-push job per service consuming that 
 ### 4.1 Change detection (single source of truth)
 
 One reusable script, `scripts/ci/detect-modules.sh`, replacing the inline logic in `ci.yml`,
-`pr-checks.yml`, and `build-push-ecr.yml`. Output: a JSON array of changed `pos-*` modules plus a
-`full-reactor` boolean.
+`pr-checks.yml`, and `build-push-ecr.yml`. Output: a single JSON object on stdout (workflows lift
+its fields into `$GITHUB_OUTPUT`):
+
+```json
+{ "full_reactor": false, "modules": ["pos-order", "pos-price"] }
+```
+
+```json
+{ "full_reactor": true, "modules": [] }
+```
+
+`modules` is the deduplicated list of changed `pos-*` module directories, empty when
+`full_reactor` is `true` (the whole reactor builds, so no selection is meaningful). Consumers
+must branch on `full_reactor`, never on whether `modules` is empty — an empty list with
+`full_reactor: false` means "nothing to build" (docs-only change) and skips the build entirely.
 
 **Full-reactor triggers** (any changed path matching):
 
@@ -122,18 +135,16 @@ build-tools/**               # shared build plugins/config
 ```
 
 Everything else resolves to the set of changed `pos-*` module directories. The script does **not**
-compute the downstream closure itself — that is delegated to Maven:
-
-```bash
-./mvnw -B -ntp -T 1C -pl "$CHANGED_MODULES" -am -amd <phase>
-```
+compute the downstream closure itself — that is delegated to Maven
+(`-pl "$CHANGED_MODULES" -am -amd`, selective mode only; see §4.2 for both command forms):
 
 - `-am` builds upstream dependencies of the selection (each exactly once, reactor-ordered).
 - `-amd` adds downstream dependents, so a change to `pos-shared-dtos` compiles and tests every
   service that consumes it. **This closes G1** and removes the need to enumerate shared libraries
   in the trigger list (they stay listed anyway as belt-and-braces).
 
-`pos-archunit` is always appended to the selection (current behaviour, preserved).
+In selective mode, `pos-archunit` is appended to the selection (current behaviour, preserved);
+in full-reactor mode it is already part of the reactor and no selection exists to append to.
 
 ### 4.2 PR pipeline (the common path)
 
@@ -153,15 +164,29 @@ The single job runs:
 # Lint/policy checks once, not per matrix leg (closes G5)
 ./scripts/check-noarg-now.sh
 ./scripts/check-flyway-hygiene.sh
+```
 
-# One reactor invocation, stopped at `test`
+then one reactor invocation, stopped at `test`, in the form selected by the detect-modules
+output (§4.1):
+
+```bash
+# full_reactor=false, modules non-empty — selective build.
+# ("pos-archunit" is appended by the workflow, so the -pl list is never empty here.)
 ./mvnw -B -ntp -T 1C \
   -pl "$CHANGED_MODULES,pos-archunit" \
   -am -amd \
   test \
   org.jacoco:jacoco-maven-plugin:0.8.14:report \
   -DskipITs
+
+# full_reactor=true — no -pl at all; every module (incl. pos-archunit) is in the reactor.
+./mvnw -B -ntp -T 1C \
+  test \
+  org.jacoco:jacoco-maven-plugin:0.8.14:report \
+  -DskipITs
 ```
+
+(`full_reactor=false` with an empty `modules` list skips the build job entirely — §4.1.)
 
 Design notes:
 
@@ -194,32 +219,45 @@ module count. This is a measured exception, not the default shape.
 detect-modules
       │
       ▼
-build-verify                 ONE reactor invocation to `verify` (unit + failsafe ITs + package)
+build-install                ONE reactor invocation to `install` (unit + failsafe ITs + package
+      │                       + install to ~/.m2 — see note below on why not `verify`)
       │        ├─ upload service JARs as workflow artifact (tested bytes)
+      │        ├─ save ~/.m2/repository to SHA-keyed reactor cache
       │        └─ upload surefire/failsafe/jacoco reports
       ▼
 archunit                     ./mvnw -pl pos-archunit -am test -o   (test phase; #909-safe)
       ▼
-compose-smoke │ security-scan │ sonar    — all consume the build-verify output; none re-run
+compose-smoke │ security-scan │ sonar    — all consume the build-install output; none re-run
       ▼                                    package/install from scratch (closes G3)
 docker-build-and-push        matrix over changed services, consuming the JAR artifact (§4.6)
 ```
 
-`build-verify` command:
+`build-install` command:
 
 ```bash
 ./mvnw -B -ntp -T 1C \
   -pl "$CHANGED_MODULES" \
   -am -amd \
-  verify \
+  install \
   -Darchunit.skipTests=true
 ```
 
-- On `main`, `verify` is required (failsafe ITs, packaged JARs). Because that repackages siblings,
-  **pos-archunit runs as its own downstream step** at the `test` phase against the offline
-  reactor — the one place the special case survives, matching today's proven pattern.
+- **`install`, not `verify`, on `main` — deliberately.** `verify` runs every test and packages
+  the JARs but stops one phase short of copying reactor artifacts into `~/.m2/repository`, so an
+  `~/.m2` cache saved after a `verify` run would not contain the just-built internal modules and
+  downstream jobs could not resolve them (they would silently fall back to stale snapshots or
+  fail offline). `install` is the cheapest way to make the reactor output consumable by later
+  jobs through the existing cache mechanism; it adds only a local file copy per module on top of
+  `verify`, and it is exactly what today's `build-reactor` job does. (The alternative — uploading
+  `target/` trees or the internal `com/positivity` subtree of `~/.m2` as workflow artifacts — is
+  rejected as a second transport mechanism with no benefit over the cache.)
+- On `main` the full lifecycle is required (failsafe ITs, packaged JARs). Because packaging
+  repackages siblings into fat JARs, **pos-archunit runs as its own downstream step** at the
+  `test` phase (`-am` builds siblings from source, so their classes resolve from
+  `target/classes`; `-o` works because `install` populated the local repo) — the one place the
+  #909 special case survives, matching today's proven pattern.
 - Jobs that only need compiled/packaged output (Sonar, compose smoke test, OWASP) restore the
-  SHA-keyed reactor cache written by `build-verify` instead of rebuilding (the cache mechanism
+  SHA-keyed reactor cache written by `build-install` instead of rebuilding (the cache mechanism
   from §1.1 stays, relocated to the main path where multiple consumers still exist).
 
 ### 4.4 Test parallelism (pilot, opt-in)
@@ -268,17 +306,18 @@ flakiness appears.
 </extensions>
 ```
 
-Rollout policy:
+Rollout policy — the pilot scope is **PR builds only** (matching the §3 disposition); `main`
+stays uncached until the pilot passes its validation gate:
 
-| Context | Cache |
-|---|---|
-| Pull requests | **Enabled** (local cache persisted via `actions/cache`; remote cache later if warranted) |
-| `main` | Enabled, plus a scheduled weekly clean (`-Dmaven.build.cache.enabled=false`) verification run |
-| ECR / release builds | **Disabled always** (`-Dmaven.build.cache.enabled=false` in `build-push-ecr.yml`) |
+| Context | During pilot | After pilot passes validation gate |
+|---|---|---|
+| Pull requests | **Enabled** (local cache persisted via `actions/cache`; remote cache later if warranted) | Enabled |
+| `main` | **Disabled** (`-Dmaven.build.cache.enabled=false`) | Enabled, plus a scheduled weekly clean (cache-disabled) verification run |
+| ECR / release builds | **Disabled always** (`-Dmaven.build.cache.enabled=false` in `build-push-ecr.yml`) | Disabled always |
 
-Validation gate before enabling on PRs: run the same SHA twice, confirm 100% cache restore on the
-second run; then mutate one file in `pos-order` and confirm exactly `pos-order` + dependents
-rebuild. Known risks to audit during the pilot: generated sources (OpenAPI), Flyway resources,
+Validation gate (evaluated on the PR pilot, and the precondition for touching `main`): run the
+same SHA twice, confirm 100% cache restore on the second run; then mutate one file in `pos-order`
+and confirm exactly `pos-order` + dependents rebuild. Known risks to audit during the pilot: generated sources (OpenAPI), Flyway resources,
 `-Drevision`-stamped `maven.config` (run-number-based revision would defeat the cache — the
 revision stamp must move out of hashed input or be normalised; verify with
 `-Dmaven.build.cache.debug=true`). If the pilot cannot demonstrate correct invalidation, the
@@ -288,7 +327,7 @@ extension is dropped — §4.1–4.3 do not depend on it.
 
 Target end-state for `main`:
 
-1. `build-verify` (ci.yml) uploads `service-jars` (the JARs that passed `verify`) with the commit
+1. `build-install` (ci.yml) uploads `service-jars` (the JARs that passed the full test lifecycle) with the commit
    SHA in the artifact name.
 2. `build-push-ecr.yml` converts from a parallel `push` trigger to `workflow_run` on Backend
    CI/CD success (or merges into `ci.yml` as a final stage — preferred for artifact locality),
@@ -296,7 +335,7 @@ Target end-state for `main`:
    is deleted. **This closes G4**: the image contains the tested bytes, and a red CI run can no
    longer race a green ECR push for the same commit.
 3. Lifecycle hygiene everywhere: no `test` + `package` + `install` chains; each pipeline stage
-   invokes exactly one lifecycle target (`test` on PRs, `verify` on main) and later stages consume
+   invokes exactly one lifecycle target (`test` on PRs, `install` on main) and later stages consume
    its outputs.
 
 The `sha-<short>` image-tagging scheme, per-service `scope=` BuildKit caches, and the alpha
@@ -340,7 +379,7 @@ the recorded baseline.
 | 0 | **Record baseline**: per-job and per-module timings from the last 20 CI runs (queue time, setup time, test time) into `docs/build-timings-baseline.md` | — | none |
 | 1 | Shared `detect-modules.sh`; add `-amd` + expanded full-reactor triggers to the existing matrix pipeline (matrix untouched) | G1, G6 | Wider PR runs for shared-lib changes — correct, but visible |
 | 2 | Collapse PR unit-test matrix into the single `test`-phase reactor job (§4.2); remove archunit special-casing on the PR path; lint scripts run once | G2, G5 | Wall-clock regression on wide changes → escape hatch §4.2 |
-| 3 | Main path: single `verify` + downstream consumers on cache/artifacts; stop rebuilds in smoke/Sonar/OWASP jobs | G3 | Job wiring |
+| 3 | Main path: single `install` + downstream consumers on cache/artifacts; stop rebuilds in smoke/Sonar/OWASP jobs | G3 | Job wiring |
 | 4 | Artifact promotion into ECR workflow (§4.6) | G4 | Trigger-model change (`workflow_run`/merge) needs a dry run |
 | 5 | JUnit class-level parallelism pilot on 3 library modules (§4.4) | G7 | Flakiness — revert per module |
 | 6 | Build Cache Extension pilot on PRs (§4.5) with the two-run validation gate | G7 | Cache correctness — hard gate, easy removal |
