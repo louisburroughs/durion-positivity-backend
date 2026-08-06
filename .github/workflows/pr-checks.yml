@@ -27,14 +27,15 @@ jobs:
       - name: Detect changed modules
         id: changed
         run: |
-          # Get changed files between base and head
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
-          echo "Changed files:"
-          echo "$CHANGED_FILES"
-          
-          # Extract unique module names
-          CHANGED_MODULES=$(echo "$CHANGED_FILES" | grep '^pos-' | cut -d'/' -f1 | sort -u | tr '\n' ',' | sed 's/,$//')
-          
+          set -euo pipefail
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          DETECTION="$(./scripts/ci/detect-modules.sh "origin/${{ github.base_ref }}" HEAD)"
+          echo "Detection: ${DETECTION}"
+
+          # This workflow only lints per-module Dockerfiles, so the full-reactor
+          # flag is irrelevant here — only the concrete changed-module list matters.
+          CHANGED_MODULES="$(jq -r '.modules | join(",")' <<< "${DETECTION}")"
+
           if [ -z "$CHANGED_MODULES" ]; then
             echo "has-changes=false" >> $GITHUB_OUTPUT
             echo "modules=" >> $GITHUB_OUTPUT
@@ -42,7 +43,7 @@ jobs:
             echo "has-changes=true" >> $GITHUB_OUTPUT
             echo "modules=$CHANGED_MODULES" >> $GITHUB_OUTPUT
           fi
-          
+
           echo "Changed modules: $CHANGED_MODULES"
 
   # Note: Build and test are now handled by ci.yml to avoid duplication.

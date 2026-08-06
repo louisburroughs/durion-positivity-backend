@@ -47,6 +47,8 @@ jobs:
     if: github.event_name != 'schedule'
     outputs:
       modules: ${{ steps.detect.outputs.modules }}
+      changed-modules: ${{ steps.detect.outputs.changed-modules }}
+      full-reactor: ${{ steps.detect.outputs.full-reactor }}
       has-changes: ${{ steps.detect.outputs.has-changes }}
 
     steps:
@@ -60,53 +62,42 @@ jobs:
         run: |
           set -euo pipefail
 
-          ARCHUNIT_MODULE="pos-archunit"
-          NON_TEST_MODULES_JSON='["pos-dependencies","pos-coverage-aggregate"]'
-          ALL_MODULES_JSON=$(ls -d pos-* | jq -R -s -c --argjson excluded "${NON_TEST_MODULES_JSON}" 'split("\n")[:-1] | map(select((. as $module | $excluded | index($module)) | not))')
-
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "modules=${ALL_MODULES_JSON}" >> "$GITHUB_OUTPUT"
-            echo "has-changes=true" >> "$GITHUB_OUTPUT"
-            echo "workflow_dispatch: testing all modules"
-            exit 0
-          fi
-
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            git fetch origin "${{ github.base_ref }}" --depth=1
-            DIFF_BASE="origin/${{ github.base_ref }}"
-            DIFF_HEAD="${{ github.sha }}"
+            DETECTION="$(./scripts/ci/detect-modules.sh --full)"
           else
-            DIFF_BASE="${{ github.event.before }}"
-            DIFF_HEAD="${{ github.sha }}"
-            if [[ -z "${DIFF_BASE}" || "${DIFF_BASE}" == "0000000000000000000000000000000000000000" ]]; then
-              DIFF_BASE="$(git rev-parse HEAD~1)"
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              git fetch origin "${{ github.base_ref }}" --depth=1
+              DIFF_BASE="origin/${{ github.base_ref }}"
+              DIFF_HEAD="${{ github.sha }}"
+            else
+              DIFF_BASE="${{ github.event.before }}"
+              DIFF_HEAD="${{ github.sha }}"
+              if [[ -z "${DIFF_BASE}" || "${DIFF_BASE}" == "0000000000000000000000000000000000000000" ]]; then
+                DIFF_BASE="$(git rev-parse HEAD~1)"
+              fi
             fi
+            DETECTION="$(./scripts/ci/detect-modules.sh "${DIFF_BASE}" "${DIFF_HEAD}")"
           fi
 
-          CHANGED_FILES=$(git diff --name-only "${DIFF_BASE}" "${DIFF_HEAD}" || true)
+          echo "Detection: ${DETECTION}"
+          FULL_REACTOR="$(jq -r '.full_reactor' <<< "${DETECTION}")"
+          CHANGED_JSON="$(jq -c '.modules' <<< "${DETECTION}")"
 
-          if echo "${CHANGED_FILES}" | grep -Eq '^(pom\.xml|\.github/workflows/ci\.yml|docker-compose\.yml)$'; then
-            echo "modules=${ALL_MODULES_JSON}" >> "$GITHUB_OUTPUT"
-            echo "has-changes=true" >> "$GITHUB_OUTPUT"
-            echo "Core CI/build file changed: testing all modules"
-            exit 0
-          fi
-
-          CHANGED_MODULES_JSON=$(echo "${CHANGED_FILES}" | grep '^pos-' | cut -d'/' -f1 | sort -u | jq -R -s -c --argjson excluded "${NON_TEST_MODULES_JSON}" 'split("\n")[:-1] | map(select((. as $module | $excluded | index($module)) | not))')
-          MATRIX_MODULES_JSON=$(jq -cn \
-            --argjson changed "${CHANGED_MODULES_JSON}" \
-            --arg archunit "${ARCHUNIT_MODULE}" \
-            '$changed + [$archunit] | unique')
-
-          if [[ "${CHANGED_MODULES_JSON}" == "[]" ]]; then
-            echo "modules=${MATRIX_MODULES_JSON}" >> "$GITHUB_OUTPUT"
-            echo "has-changes=true" >> "$GITHUB_OUTPUT"
-            echo "No pos-* module changes detected; running ${ARCHUNIT_MODULE}"
+          # Matrix view of the detection: every selectable module when the whole
+          # reactor is affected, otherwise the changed modules plus pos-archunit
+          # (current behaviour, preserved — a CI-triggering change that maps to
+          # no module still runs pos-archunit, so has-changes is always true).
+          NON_TEST_MODULES_JSON='["pos-dependencies","pos-coverage-aggregate"]'
+          if [[ "${FULL_REACTOR}" == "true" ]]; then
+            MATRIX_JSON=$(ls -d pos-* | jq -R -s -c --argjson excluded "${NON_TEST_MODULES_JSON}" 'split("\n")[:-1] | map(select((. as $module | $excluded | index($module)) | not))')
           else
-            echo "modules=${MATRIX_MODULES_JSON}" >> "$GITHUB_OUTPUT"
-            echo "has-changes=true" >> "$GITHUB_OUTPUT"
-            echo "Changed modules (+${ARCHUNIT_MODULE}): ${MATRIX_MODULES_JSON}"
+            MATRIX_JSON=$(jq -c '. + ["pos-archunit"] | unique' <<< "${CHANGED_JSON}")
           fi
+
+          echo "full-reactor=${FULL_REACTOR}" >> "$GITHUB_OUTPUT"
+          echo "changed-modules=${CHANGED_JSON}" >> "$GITHUB_OUTPUT"
+          echo "modules=${MATRIX_JSON}" >> "$GITHUB_OUTPUT"
+          echo "has-changes=true" >> "$GITHUB_OUTPUT"
 
   build-reactor:
     name: Build Reactor (install all)
