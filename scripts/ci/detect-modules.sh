@@ -6,17 +6,14 @@
 #   {"full_reactor": true,  "modules": []}
 #
 # modules is the deduplicated list of changed pos-* module directories, empty
-# when full_reactor is true. Consumers must branch on full_reactor, never on
-# whether modules is empty: an empty list with full_reactor=false means
-# "nothing to build".
+# when full_reactor is true. Consumers must check full_reactor before looking
+# at modules — an empty list only means "no module selection" when
+# full_reactor is false (ci.yml then runs its ArchUnit-only fallback rather
+# than a selective test pass; it never means the whole reactor is affected).
 #
 # Usage:
 #   detect-modules.sh --full                    # unconditional full reactor
 #   detect-modules.sh <diff-base> <diff-head>   # diff-driven detection
-#
-# Extra full-reactor trigger paths (regexes, one per line) can be appended via
-# the EXTRA_FULL_REACTOR_TRIGGERS environment variable — build-push-ecr.yml
-# uses this for its deploy-file triggers.
 
 set -euo pipefail
 
@@ -51,12 +48,6 @@ CHANGED_FILES="$(git diff --name-only "${DIFF_BASE}" "${DIFF_HEAD}")"
 FULL_REACTOR_TRIGGERS='^(pom\.xml|\.mvn/|pos-dependencies/|build-tools/|\.github/workflows/ci\.yml|docker-compose\.yml)'
 
 if echo "${CHANGED_FILES}" | grep -Eq "${FULL_REACTOR_TRIGGERS}"; then
-  emit true '[]'
-  exit 0
-fi
-
-if [[ -n "${EXTRA_FULL_REACTOR_TRIGGERS:-}" ]] \
-  && echo "${CHANGED_FILES}" | grep -Eq "${EXTRA_FULL_REACTOR_TRIGGERS}"; then
   emit true '[]'
   exit 0
 fi

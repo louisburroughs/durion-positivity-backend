@@ -121,8 +121,10 @@ its fields into `$GITHUB_OUTPUT`):
 
 `modules` is the deduplicated list of changed `pos-*` module directories, empty when
 `full_reactor` is `true` (the whole reactor builds, so no selection is meaningful). Consumers
-must branch on `full_reactor`, never on whether `modules` is empty — an empty list with
-`full_reactor: false` means "nothing to build" (docs-only change) and skips the build entirely.
+must check `full_reactor` before interpreting `modules` — an empty list never implies a full
+build. An empty list with `full_reactor: false` (a CI-triggering change that maps to no module,
+e.g. the root `Dockerfile`) skips the selective test pass; the build job still runs its install
+and ArchUnit invocations, preserving the pre-existing "always run pos-archunit" behaviour.
 
 **Full-reactor triggers** (any changed path matching):
 

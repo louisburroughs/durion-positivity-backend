@@ -292,10 +292,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    needs: [ build-test ]
-    # Only run on main branch pushes or when pom.xml files change (dependency updates)
+    needs: [ detect-test-modules, build-test ]
+    # Only run on main branch pushes or on PRs whose changes reach the whole
+    # reactor (root pom / BOM / .mvn — where dependency versions live). The
+    # previous gate tested contains(pull_request.changed_files, 'pom.xml'),
+    # but changed_files is a numeric count, so it never matched.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' ||
-      contains(github.event.pull_request.changed_files, 'pom.xml')
+      (github.event_name == 'pull_request' &&
+       needs.detect-test-modules.outputs.full-reactor == 'true')
 
     steps:
       - name: Checkout code
