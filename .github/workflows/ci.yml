@@ -162,10 +162,10 @@ jobs:
         # Build Cache Extension pilot, PR builds only (spec §4.5). PRs skip the
         # run-number revision stamp: a version that changes every run would poison
         # every cache key, and nothing downstream consumes PR artifacts by version.
-        run: |
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "-Dmaven.build.cache.enabled=true" > .mvn/maven.config
-          fi
+        # (The pilot's first run exposed pos-archunit's 2.4 GB fat jar, which the
+        # extension's output hashing cannot read — fixed in pos-archunit/pom.xml.)
+        if: github.event_name == 'pull_request'
+        run: echo "-Dmaven.build.cache.enabled=true" > .mvn/maven.config
 
       - name: Restore build cache (PR pilot)
         if: github.event_name == 'pull_request'

@@ -307,6 +307,16 @@ flakiness appears.
 </extensions>
 ```
 
+**Pilot status (2026-08-06):** the first enabled run failed with
+`OutOfMemoryError: Required array size too large` in the extension's output hashing. Root
+cause (reproduced and fixed locally): `pos-archunit` carried a no-op-looking
+`spring-boot-maven-plugin` declaration whose repackage embedded its ~22 sibling fat-JAR
+dependencies into a **2.4 GB** `pos-archunit.jar` — unreadable into a byte array (2 GiB
+limit), and silently bloating every SHA-keyed reactor cache before this. With the repackage
+removed (the module is test-only; nothing consumes its jar, now 4.8 KB) the full-reactor
+`install` passes with the cache enabled and a same-inputs second run restores all modules
+from cache — the validation gate's first two checks, verified locally.
+
 Rollout policy — the pilot scope is **PR builds only** (matching the §3 disposition); `main`
 stays uncached until the pilot passes its validation gate:
 
