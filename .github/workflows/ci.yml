@@ -99,8 +99,30 @@ jobs:
           echo "modules=${MATRIX_JSON}" >> "$GITHUB_OUTPUT"
           echo "has-changes=true" >> "$GITHUB_OUTPUT"
 
-  build-reactor:
-    name: Build Reactor (install all)
+  build-test:
+    # One job, three reactor invocations (BACKEND_BUILD_SPEC.md §4.2/§4.3, adapted):
+    #
+    #  1. install -DskipTests        — full reactor, ~2 min warm. Needed because
+    #     Maven's -amd includes dependents of the selection but NOT the dependents'
+    #     own upstream dependencies, so a purely selective build cannot resolve on
+    #     a clean runner; and pos-archunit depends on nearly every module anyway.
+    #     This also populates ~/.m2 with every internal artifact for the SHA-keyed
+    #     reactor cache and packages every service JAR for downstream jobs.
+    #  2. selective tests            — -pl <changed> -amd runs the changed modules'
+    #     tests plus every dependent's tests (gap G1): PRs stop at `test` (ITs
+    #     skipped), main pushes run `verify` (failsafe ITs included). Dependencies
+    #     absent from the -amd reactor resolve from the step-1 install.
+    #  3. pos-archunit rules         — its own -am reactor stopped at the `test`
+    #     phase, where sibling classes resolve from target/classes. Running the
+    #     rules past `package` lets spring-boot:repackage swap siblings for fat
+    #     JARs whose classes hide under BOOT-INF/classes, and every rule passes
+    #     vacuously (#909) — which is also why -Darchunit.skipTests=true is set on
+    #     invocations 1 and 2.
+    #
+    # Replaces the former build-reactor job and both per-module test matrices:
+    # same three build shapes, minus ~70s×N of per-job setup/cache-restore
+    # overhead and the inter-job queue gaps (docs/build-timings-baseline.md).
+    name: Build & Test (reactor)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -130,193 +152,129 @@ jobs:
           key: ${{ runner.os }}-maven-wrapper-${{
             hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
-      - name: Install all modules (skip tests)
-        run: ./mvnw install -DskipTests -DskipITs -T 1C -B -q
-
-      - name: Warm up test-execution infrastructure for offline jobs
-        # Run a real test on the smallest module so Maven downloads all Surefire /
-        # JUnit Platform runtime artifacts (surefire-junit-platform, junit-platform-launcher,
-        # etc.) before they are needed by the offline matrix jobs.
-        run: ./mvnw -pl pos-events test -DskipITs -T 1C -B -q
-
-      - name: Save reactor build to cache
-        uses: actions/cache/save@v5
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-reactor-${{ github.sha }}
-
-  unit-tests:
-    name: Unit Tests (${{ matrix.module }})
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    needs: [ detect-test-modules, build-reactor ]
-    if: needs.detect-test-modules.outputs.has-changes == 'true'
-
-    strategy:
-      fail-fast: false
-      matrix:
-        module: ${{ fromJson(needs.detect-test-modules.outputs.modules) }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0 # Full history for better change detection
-
-      - name: Set Maven revision
-        run: echo "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT" > .mvn/maven.config
-
-      - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v5
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: ${{ env.JAVA_DISTRIBUTION }}
-
-      - name: Cache Maven wrapper binary
-        uses: actions/cache@v5
-        with:
-          path: ~/.m2/wrapper
-          key: ${{ runner.os }}-maven-wrapper-${{
-            hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
-
-      - name: Restore reactor build cache
-        id: restore-reactor-cache
-        uses: actions/cache/restore@v5
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-reactor-${{ github.sha }}
-
-      - name: Bootstrap local Maven repo on cache miss
-        if: steps.restore-reactor-cache.outputs.cache-hit != 'true'
-        run: |
-          ./mvnw install -DskipTests -DskipITs -T 1C -B -q
-          ./mvnw -pl pos-events test -DskipITs -T 1C -B -q
-
       - name: Enforce no-arg now() policy
         run: ./scripts/check-noarg-now.sh
 
       - name: Enforce Flyway migration hygiene
         run: ./scripts/check-flyway-hygiene.sh
 
-      - name: Run unit tests
-        # pos-archunit's cross-module rules need sibling modules' target/classes on the
-        # classpath: the installed Spring Boot fat jars hide application classes under
-        # BOOT-INF/classes and every rule passes vacuously (#909). Build it as a reactor
-        # (-am) while running only its own tests in the upstream modules' place.
+      - name: Install reactor (skip tests)
+        run: ./mvnw install -DskipTests -DskipITs -Darchunit.skipTests=true -T 1C -B -ntp -q
+
+      - name: Compute test selection
+        id: selection
+        env:
+          FULL_REACTOR: ${{ needs.detect-test-modules.outputs.full-reactor }}
+          CHANGED_MODULES: ${{ needs.detect-test-modules.outputs.changed-modules }}
         run: |
-          if [[ "${{ matrix.module }}" == "pos-archunit" ]]; then
-            ./mvnw -pl pos-archunit -am test \
-              org.jacoco:jacoco-maven-plugin:0.8.14:report \
-              -Dtest='com/positivity/archunit/*' \
-              -Dsurefire.failIfNoSpecifiedTests=false \
-              -DskipITs -T 1C -B -q -o
+          set -euo pipefail
+          if [[ "${FULL_REACTOR}" == "true" ]]; then
+            # Whole reactor affected: no -pl, every module's tests run.
+            echo "args=" >> "$GITHUB_OUTPUT"
+            echo "run-tests=true" >> "$GITHUB_OUTPUT"
           else
-            ./mvnw -pl ${{ matrix.module }} test \
-              org.jacoco:jacoco-maven-plugin:0.8.14:report -DskipITs -T 1C -B -q -o
+            CSV="$(jq -r 'join(",")' <<< "${CHANGED_MODULES}")"
+            if [[ -z "${CSV}" ]]; then
+              # No module changed (e.g. root Dockerfile): archunit still runs below.
+              echo "args=" >> "$GITHUB_OUTPUT"
+              echo "run-tests=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "args=-pl ${CSV} -amd" >> "$GITHUB_OUTPUT"
+              echo "run-tests=true" >> "$GITHUB_OUTPUT"
+            fi
           fi
+
+      - name: Test changed modules and dependents (PR)
+        if: github.event_name == 'pull_request' && steps.selection.outputs.run-tests == 'true'
+        # lowResourceTests bounds each Surefire fork to 1 GiB: with -T 1C up to four
+        # module builds fork test JVMs concurrently, and default heap sizing would
+        # overcommit the 16 GB runner.
+        run: |
+          ./mvnw ${{ steps.selection.outputs.args }} \
+            -DskipTests=false test \
+            org.jacoco:jacoco-maven-plugin:0.8.14:report \
+            -Darchunit.skipTests=true \
+            -DlowResourceTests=true \
+            -DskipITs -T 1C -B -ntp
+
+      - name: Test changed modules and dependents incl. ITs (main)
+        if: github.event_name != 'pull_request' && steps.selection.outputs.run-tests == 'true'
+        run: |
+          ./mvnw ${{ steps.selection.outputs.args }} \
+            -DskipTests=false verify \
+            org.jacoco:jacoco-maven-plugin:0.8.14:report \
+            -Darchunit.skipTests=true \
+            -DlowResourceTests=true \
+            -T 1C -B -ntp
+
+      - name: Run ArchUnit rules
+        run: |
+          ./mvnw -pl pos-archunit -am -DskipTests=false test \
+            -Dtest='com/positivity/archunit/*' \
+            -Dsurefire.failIfNoSpecifiedTests=false \
+            -DskipITs -T 1C -B -ntp -q
+
+      - name: Save reactor build to cache
+        if: github.event_name != 'pull_request'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-reactor-${{ github.sha }}
+
+      - name: Stage service JARs
+        if: github.event_name != 'pull_request'
+        # The bytes downstream Docker/ECR jobs ship (spec §4.6): one JAR per
+        # containerized module, all packaged by the step-1 install.
+        run: |
+          set -euo pipefail
+          rm -rf artifact-jars
+          for dockerfile in pos-*/Dockerfile; do
+            service="${dockerfile%%/*}"
+            jar="$(find "${service}/target" -maxdepth 1 -name '*.jar' ! -name '*.jar.original' 2>/dev/null | head -n 1 || true)"
+            if [[ -n "${jar}" ]]; then
+              mkdir -p "artifact-jars/${service}/target"
+              cp "${jar}" "artifact-jars/${service}/target/"
+            fi
+          done
+          find artifact-jars -maxdepth 2 -print | sort
+
+      - name: Upload service JARs
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v6
+        with:
+          name: service-jars
+          path: artifact-jars
+          retention-days: 3
+          if-no-files-found: error
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: unit-test-results-${{ matrix.module }}
+          name: test-results-reactor
           path: |
             **/target/surefire-reports/*.xml
+            **/target/failsafe-reports/*.xml
+          if-no-files-found: ignore
           retention-days: 30
 
       - name: Upload JaCoCo coverage report
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: jacoco-coverage-${{ matrix.module }}
+          name: jacoco-coverage-reactor
           path: |
             **/target/site/jacoco/jacoco.xml
           if-no-files-found: ignore
           retention-days: 7
 
-  integration-tests-modules:
-    name: Integration Tests (${{ matrix.module }})
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    needs: [ detect-test-modules, build-reactor ]
-    if: needs.detect-test-modules.outputs.has-changes == 'true' &&
-      (github.event_name == 'workflow_dispatch' || (github.event_name == 'push'
-      && github.ref == 'refs/heads/main'))
-
-    strategy:
-      fail-fast: false
-      matrix:
-        module: ${{ fromJson(needs.detect-test-modules.outputs.modules) }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Set Maven revision
-        run: echo "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT" > .mvn/maven.config
-
-      - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v5
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: ${{ env.JAVA_DISTRIBUTION }}
-
-      - name: Cache Maven wrapper binary
-        uses: actions/cache@v5
-        with:
-          path: ~/.m2/wrapper
-          key: ${{ runner.os }}-maven-wrapper-${{
-            hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
-
-      - name: Restore reactor build cache
-        id: restore-reactor-cache
-        uses: actions/cache/restore@v5
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-reactor-${{ github.sha }}
-
-      - name: Bootstrap local Maven repo on cache miss
-        if: steps.restore-reactor-cache.outputs.cache-hit != 'true'
-        run: |
-          ./mvnw install -DskipTests -DskipITs -T 1C -B -q
-          ./mvnw -pl pos-events test -DskipITs -T 1C -B -q
-
-      - name: Run integration tests
-        # pos-archunit has no failsafe ITs, and running `verify` on the -am reactor
-        # takes the upstream modules through package, where spring-boot:repackage
-        # swaps their jars for fat jars whose classes hide under BOOT-INF/classes —
-        # ArchUnit then sees nothing and ClasspathVisibilityGuardTest fails (#909).
-        # Stop at the test phase so siblings resolve to target/classes, exactly as
-        # in the unit-tests job.
-        run: |
-          if [[ "${{ matrix.module }}" == "pos-archunit" ]]; then
-            ./mvnw -pl pos-archunit -am -DskipTests=false test \
-              -Dtest='com/positivity/archunit/*' \
-              -Dsurefire.failIfNoSpecifiedTests=false \
-              -DskipITs -T 1C -B -q -o
-          else
-            ./mvnw -pl ${{ matrix.module }} -DskipTests=false verify -T 1C -B -q -o
-          fi
-
-      - name: Upload integration test results
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: integration-test-results-${{ matrix.module }}
-          path: |
-            **/target/failsafe-reports/*.xml
-          retention-days: 30
 
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    needs: [ unit-tests ]
+    needs: [ build-test ]
     # Only run on main branch pushes or when pom.xml files change (dependency updates)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' ||
       contains(github.event.pull_request.changed_files, 'pom.xml')
@@ -333,7 +291,6 @@ jobs:
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
-          cache: maven
 
       - name: Cache Maven wrapper binary
         uses: actions/cache@v5
@@ -342,8 +299,18 @@ jobs:
           key: ${{ runner.os }}-maven-wrapper-${{
             hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
-      - name: Install internal snapshot artifacts
-        run: ./mvnw install -DskipTests -DskipITs -B -q
+      - name: Restore reactor build cache
+        id: restore-reactor-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-reactor-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-maven-reactor-
+
+      - name: Install internal snapshot artifacts (cache-miss fallback)
+        if: steps.restore-reactor-cache.outputs.cache-hit != 'true'
+        run: ./mvnw install -DskipTests -DskipITs -T 1C -B -q
 
       - name: Get current week for cache key
         id: date
@@ -384,7 +351,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    needs: [ unit-tests ]
+    needs: [ build-test ]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
       services: ${{ steps.detect-services.outputs.services }}
@@ -443,7 +410,6 @@ jobs:
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
-          cache: maven
 
       - name: Cache Maven wrapper binary
         uses: actions/cache@v5
@@ -452,9 +418,29 @@ jobs:
           key: ${{ runner.os }}-maven-wrapper-${{
             hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
-      - name: Build service JAR
-        run: ./mvnw clean package -pl ${{ matrix.service }} -am -DskipTests -DskipITs -T
-          1C -B
+      - name: Download tested service JAR
+        id: tested-jar
+        # Prefer the JAR that passed build-test (spec §4.6). Fall back to a scoped
+        # Maven build only if this service wasn't part of the tested artifact.
+        uses: actions/download-artifact@v5
+        continue-on-error: true
+        with:
+          name: service-jars
+          path: downloaded-jars
+
+      - name: Restore tested JAR or build from source
+        run: |
+          set -euo pipefail
+          JAR_PATH="$(find downloaded-jars -type f \
+            -path "*/${{ matrix.service }}/target/*.jar" 2>/dev/null | head -n 1 || true)"
+          if [[ -n "${JAR_PATH}" ]]; then
+            mkdir -p "${{ matrix.service }}/target"
+            cp "${JAR_PATH}" "${{ matrix.service }}/target/"
+            echo "Using tested JAR from build-test: ${JAR_PATH}"
+          else
+            echo "No tested JAR for ${{ matrix.service }}; building from source"
+            ./mvnw package -pl ${{ matrix.service }} -am -DskipTests -DskipITs -T 1C -B
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -498,7 +484,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    needs: [ unit-tests ]
+    needs: [ build-test ]
     if: github.event_name != 'schedule'
 
     steps:
@@ -525,10 +511,15 @@ jobs:
             hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Restore reactor build cache
+        # Only populated on main pushes (build-test saves it after `install`);
+        # a PR-run miss is expected and harmless.
+        if: github.event_name != 'pull_request'
         uses: actions/cache/restore@v5
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-reactor-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-maven-reactor-
 
       - name: Run Checkstyle
         if: github.event_name != 'pull_request'
@@ -662,7 +653,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    needs: [ unit-tests ]
+    needs: [ build-test ]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     env:
@@ -697,7 +688,6 @@ jobs:
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
-          cache: maven
 
       - name: Cache Maven wrapper binary
         uses: actions/cache@v5
@@ -706,8 +696,24 @@ jobs:
           key: ${{ runner.os }}-maven-wrapper-${{
             hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
-      - name: Build all modules
-        run: ./mvnw clean package -DskipTests -DskipITs -B
+      - name: Restore reactor build cache
+        # Supersedes setup-java's dependency cache here: it contains the external
+        # dependencies plus the internal modules build-test installed.
+        uses: actions/cache/restore@v5
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-reactor-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-maven-reactor-
+
+      - name: Package smoke-test services
+        # Only the services this smoke test actually starts (plus their in-repo
+        # dependencies via -am) — not the whole reactor (G3). Internal deps build
+        # from source in-reactor, so this is correct even when build-test's
+        # selective install didn't cover these modules.
+        run: ./mvnw package -pl
+          pos-service-discovery,pos-security-service,pos-api-gateway -am -DskipTests
+          -DskipITs -T 1C -B
 
       - name: Detect Docker Compose command
         run: |
@@ -759,7 +765,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       [
-        unit-tests,
+        build-test,
         security-scan,
         docker-build,
         docker-build-matrix,
@@ -771,7 +777,7 @@ jobs:
     steps:
       - name: Check build status
         run: |
-          if [ "${{ needs.unit-tests.result }}" != "success" ]; then
+          if [ "${{ needs.build-test.result }}" != "success" ]; then
             echo "Build failed!"
             exit 1
           fi
