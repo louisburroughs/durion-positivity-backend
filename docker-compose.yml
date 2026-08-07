@@ -424,12 +424,8 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      POS_CATALOG_BASE_URL: http://pos-catalog:8080
-      POS_CUSTOMER_BASE_URL: http://pos-customer:8080
-      POS_PEOPLE_BASE_URL: http://pos-people:8080
-      POS_PRICE_BASE_URL: http://pos-price:8080
-      POS_VEHICLE_INVENTORY_BASE_URL: http://pos-vehicle-inventory:8080
-      POS_VEHICLE_FITMENT_BASE_URL: http://pos-vehicle-fitment:8080
+      # Sibling-service targets resolve via Eureka service ids (#641); the
+      # POS_*_SERVICE_ID env vars exist for override but the yml defaults are correct.
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)

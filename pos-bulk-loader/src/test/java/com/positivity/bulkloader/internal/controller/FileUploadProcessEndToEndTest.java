@@ -73,6 +73,11 @@ class FileUploadProcessEndToEndTest {
     @MockitoBean
     RestClient.Builder restClientBuilder;
 
+    // The ingest writers inject the load-balanced builder (#641), so it must be mocked
+    // alongside the plain builder to keep the e2e flow off the network.
+    @MockitoBean(name = "loadBalancedRestClientBuilder")
+    RestClient.Builder loadBalancedRestClientBuilder;
+
     @MockitoBean
     BulkLoaderEventTypeInitializer bulkLoaderEventTypeInitializer;
 
@@ -96,6 +101,9 @@ class FileUploadProcessEndToEndTest {
 
         when(restClientBuilder.baseUrl(nullable(String.class))).thenReturn(restClientBuilder);
         when(restClientBuilder.build()).thenReturn(mockRestClient);
+        when(loadBalancedRestClientBuilder.baseUrl(nullable(String.class)))
+                .thenReturn(loadBalancedRestClientBuilder);
+        when(loadBalancedRestClientBuilder.build()).thenReturn(mockRestClient);
         when(mockRestClient.post()).thenReturn(requestBodyUriSpec);
         when(requestBodyUriSpec.uri(anyString())).thenReturn(requestBodySpec);
         when(requestBodySpec.retrieve()).thenReturn(responseSpec);

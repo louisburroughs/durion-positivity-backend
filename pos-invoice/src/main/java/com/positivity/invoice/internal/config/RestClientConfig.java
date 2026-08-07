@@ -2,6 +2,7 @@ package com.positivity.invoice.internal.config;
 
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -29,9 +30,25 @@ public class RestClientConfig {
     public RestClient.Builder restClientBuilder(
             @Value("${pos.restclient.connect.timeout:2000}") int connectTimeoutMs,
             @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
+        return RestClient.builder().requestFactory(timeoutFactory(connectTimeoutMs, readTimeoutMs));
+    }
+
+    /**
+     * Load-balanced builder resolving Eureka service ids for sibling-service clients
+     * (internal client guide, #641).
+     */
+    @Bean
+    @LoadBalanced
+    public RestClient.Builder loadBalancedRestClientBuilder(
+            @Value("${pos.restclient.connect.timeout:2000}") int connectTimeoutMs,
+            @Value("${pos.restclient.read.timeout:5000}") int readTimeoutMs) {
+        return RestClient.builder().requestFactory(timeoutFactory(connectTimeoutMs, readTimeoutMs));
+    }
+
+    private SimpleClientHttpRequestFactory timeoutFactory(int connectTimeoutMs, int readTimeoutMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
         factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
-        return RestClient.builder().requestFactory(factory);
+        return factory;
     }
 }

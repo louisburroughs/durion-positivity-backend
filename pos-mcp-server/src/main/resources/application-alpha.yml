@@ -249,8 +249,8 @@ pos:
   shopmanager:
     base-url: ${POS_SHOPMANAGER_BASE_URL:http://pos-api-gateway}
   tax:
-    # ADR-0021: pos-tax internal-only exemption
-    base-url: ${POS_TAX_BASE_URL:http://pos-tax/v1/tax}
+    # ADR-0021: pos-tax internal-only exemption; pos-tax listens on 8091 (#641)
+    base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091/v1/tax}
   vehicle:
     base-url: ${POS_VEHICLE_BASE_URL:http://pos-api-gateway}
   workorder:

@@ -355,8 +355,9 @@ pos:
     queue-uri-template: ${POS_SHOPMANAGER_QUEUE_URI_TEMPLATE:/shop-manager/v1/shop/{shopId}/queue}
     search-uri-template: ${POS_SHOPMANAGER_SEARCH_URI_TEMPLATE:/shop-manager/v1/shop/search?q={query}}
   tax:
-    # ADR-0021: pos-tax is internal-only and excluded from Eureka/gateway migration
-    base-url: ${POS_TAX_BASE_URL:http://pos-tax/v1/tax}
+    # ADR-0021: pos-tax is internal-only and excluded from Eureka/gateway migration.
+    # pos-tax listens on 8091 (no port-80 mapping), so the port is required (#641).
+    base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091/v1/tax}
     tax-rate-uri-template: ${POS_TAX_RATE_URI_TEMPLATE:/rates/{locationId}}
     tax-calculate-uri-template: ${POS_TAX_CALCULATE_URI_TEMPLATE:/calculate?amount={amount}&locationId={locationId}}
     tax-summary-uri-template: ${POS_TAX_SUMMARY_URI_TEMPLATE:/summary/{period}}

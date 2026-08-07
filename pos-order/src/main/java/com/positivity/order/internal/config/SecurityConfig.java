@@ -1,9 +1,11 @@
 package com.positivity.order.internal.config;
 
 import com.positivity.security.common.GatewaySecurityConfig;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -34,10 +36,22 @@ public class SecurityConfig {
     // Gateway-based authentication is configured by GatewaySecurityConfig
 
     /**
-     * RestClient.Builder bean for components that create service-specific clients.
+     * RestClient.Builder bean for components that create service-specific clients
+     * (direct-URL callers: startup registration and the pos-tax exception).
      */
     @Bean
+    @Primary
     public RestClient.Builder restClientBuilder() {
+        return RestClient.builder();
+    }
+
+    /**
+     * Load-balanced builder resolving Eureka service ids for sibling-service clients
+     * (internal client guide, #641).
+     */
+    @Bean
+    @LoadBalanced
+    public RestClient.Builder loadBalancedRestClientBuilder() {
         return RestClient.builder();
     }
 

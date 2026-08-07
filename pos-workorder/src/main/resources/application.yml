@@ -78,8 +78,6 @@ springdoc:
 pos:
   customer:
     service-id: ${POS_CUSTOMER_SERVICE_ID:customer}
-  vehicle:
-    base-url: ${POS_VEHICLE_BASE_URL:http://pos-vehicle:8088}
   tax:
     base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}
   people:

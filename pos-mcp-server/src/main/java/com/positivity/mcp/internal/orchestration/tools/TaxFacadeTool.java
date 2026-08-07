@@ -1,13 +1,21 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+/**
+ * Facade over pos-tax lookup endpoints.
+ *
+ * <p>Direct-call exception (#641): unlike the other facade tools, this one injects the plain
+ * {@code @Primary} builder, not {@code loadBalancedRestClientBuilder} — pos-tax is internal-only
+ * and sets {@code register-with-eureka: false} (ADR-0021), so neither Eureka resolution nor the
+ * gateway route can reach it. The base URL stays an explicit Docker DNS address.
+ */
 @Component
 public class TaxFacadeTool {
 
@@ -39,7 +47,8 @@ public class TaxFacadeTool {
 
     @Tool(description = "Calculate estimated tax amount for an amount and location")
     public String calculateTax(
-            @ToolParam(description = "The taxable amount") @NonNull String amount, @ToolParam(description = "The location ID") @NonNull String locationId) {
+            @ToolParam(description = "The taxable amount") @NonNull String amount,
+            @ToolParam(description = "The location ID") @NonNull String locationId) {
         return restClient
                 .get()
                 .uri(taxCalculateUriTemplate, Map.of("amount", amount, "locationId", locationId))
