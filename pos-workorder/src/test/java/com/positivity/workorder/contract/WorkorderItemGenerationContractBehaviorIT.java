@@ -369,32 +369,39 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
 
         List<WorkorderPart> partItems = workorderPartRepository.findByWorkorderId(workorderId);
 
-        int totalWorkorderItems = laborItems.size() + partItems.size();
-        assertThat(totalWorkorderItems).isEqualTo(2); // Only 2 APPROVED items should be copied
+        // Only the 2 APPROVED items become billable workorder items; the declined
+        // LABOR item is also promoted, but as a non-billable declined service line
+        // (FI-3, #1133) with declined=true.
+        List<com.positivity.workorder.internal.entity.WorkorderServiceLine> billableLabor = laborItems.stream()
+                .filter(ws -> !Boolean.TRUE.equals(ws.getDeclined()))
+                .toList();
 
-        // Verify each workorder item traces back to an APPROVED estimate item
+        int totalBillableItems = billableLabor.size() + partItems.size();
+        assertThat(totalBillableItems).isEqualTo(2);
+
+        // Verify each billable workorder item traces back to an APPROVED estimate item
         List<UUID> approvedItemIds =
                 approvedItems.stream().map(EstimateItem::getId).toList();
-        for (com.positivity.workorder.internal.entity.WorkorderServiceLine laborItem : laborItems) {
+        for (com.positivity.workorder.internal.entity.WorkorderServiceLine laborItem : billableLabor) {
             assertThat(approvedItemIds).contains(laborItem.getOriginEstimateItemId());
         }
         for (WorkorderPart partItem : partItems) {
             assertThat(approvedItemIds).contains(partItem.getOriginEstimateItemId());
         }
 
-        // Verify declined and pending items were NOT copied
+        // Verify declined and pending items were NOT copied as billable items
         List<EstimateItem> nonApprovedItems = allItems.stream()
                 .filter(item -> item.getApprovalStatus() != ApprovalStatus.APPROVED)
                 .toList();
 
         for (EstimateItem nonApprovedItem : nonApprovedItems) {
-            boolean foundInWorkorder = laborItems.stream()
+            boolean foundAsBillable = billableLabor.stream()
                             .anyMatch(ws -> ws.getOriginEstimateItemId().equals(nonApprovedItem.getId()))
                     || partItems.stream()
                             .anyMatch(wp -> wp.getOriginEstimateItemId().equals(nonApprovedItem.getId()));
 
-            assertThat(foundInWorkorder)
-                    .as("Non-approved item %s should not be in workorder", nonApprovedItem.getId())
+            assertThat(foundAsBillable)
+                    .as("Non-approved item %s should not be a billable workorder item", nonApprovedItem.getId())
                     .isFalse();
         }
     }
