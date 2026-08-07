@@ -230,6 +230,90 @@
       "topic": "warranty settle-customer-first invariant",
       "tags": ["scope-coverage", "positive"],
       "source": "synthetic"
+    },
+    {
+      "id": "gap-order-cancel-failed-workexec",
+      "query": "what does CANCEL_FAILED_WORKEXEC mean on a sales order and where can it go next",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
+      "rag_scope": "order",
+      "expected_doc_ids": ["order.lifecycle"],
+      "expected_facts": [
+        "CANCEL_FAILED_WORKEXEC is a SalesOrderStatus in the pos-order cancel saga; it transitions only to CANCEL_REQUESTED or CANCEL_REQUIRES_MANUAL_REVIEW.",
+        "CANCEL_REQUESTED can move to WORKORDER_CANCELLED, PAYMENT_REVERSED, CANCELLED, CANCEL_FAILED_WORKEXEC, or CANCEL_FAILED_BILLING; COMPLETED, VOIDED, and CANCELLED are terminal."
+      ],
+      "topic": "sales-order cancel-saga status",
+      "tags": ["exact-code", "bare-enum"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-inventory-received-short",
+      "query": "what does receiving line status RECEIVED_SHORT mean and what variance type is created",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["inventory:receiving:view"] },
+      "rag_scope": "inventory",
+      "expected_doc_ids": ["inventory.receiving"],
+      "expected_facts": [
+        "A receiving line with received quantity lower than expected becomes RECEIVED_SHORT and creates a SHORTAGE variance; higher becomes RECEIVED_OVER with an OVERAGE variance; equal becomes RECEIVED.",
+        "Receipt posting writes GOODS_RECEIPT ledger entries, and a receiving session is set COMPLETED only when all lines are in terminal receiving states."
+      ],
+      "topic": "receiving line status and variance",
+      "tags": ["exact-code", "bare-enum"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-pricing-allow-with-override",
+      "query": "when does a price restriction evaluation return ALLOW_WITH_OVERRIDE instead of BLOCK",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "pricing",
+      "expected_doc_ids": ["pricing.restrictions"],
+      "expected_facts": [
+        "Per evaluated item: no matching rules returns ALLOW; any matching non-overrideable rule returns BLOCK; matching rules that are all overrideable return ALLOW_WITH_OVERRIDE.",
+        "On timeout or exception, the commit contexts CHECKOUT, INVOICE_FINALIZE, and COMMIT_SALE throw RestrictionServiceUnavailableException while non-commit contexts return RESTRICTION_UNKNOWN."
+      ],
+      "topic": "restriction decision semantics",
+      "tags": ["exact-code", "bare-enum"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-accounting-je-error-tokens",
+      "query": "which error code is returned when reversing a journal entry that was already reversed or posting into a hard locked period",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["accounting:je:view"] },
+      "rag_scope": "accounting",
+      "expected_doc_ids": ["accounting.journal-entries"],
+      "expected_facts": [
+        "Reversing an already-reversed journal entry fails with JE_ALREADY_REVERSED; period locks surface PERIOD_CLOSED or PERIOD_HARD_LOCKED; the other error tokens are UNBALANCED_ENTRY, ENTRY_ALREADY_POSTED, and JE_NOT_POSTED.",
+        "Only DRAFT entries can be posted and only POSTED entries reversed; entries must balance within BALANCE_TOLERANCE 0.0001 and are numbered JE-{YYYYMM}-{seq} during post/reverse."
+      ],
+      "topic": "journal-entry error tokens",
+      "tags": ["exact-code", "gated"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-workorder-promote-event",
+      "query": "which event id and permission gate promoting an estimate to a workorder and what error is returned when the approval has expired",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["workorder:estimate:view"] },
+      "rag_scope": "workorder",
+      "expected_doc_ids": ["workorder.estimate-promotion"],
+      "expected_facts": [
+        "POST /v1/workorders/estimates/{estimateId}/promote is gated by workorder:estimate:promote and emits WORKORDER_ESTIMATE_PROMOTE.",
+        "PromotionValidationServiceImpl gates in order: ESTIMATE_NOT_FOUND, ALREADY_PROMOTED, APPROVAL_INVALID (status must be APPROVED), APPROVAL_EXPIRED, NO_APPROVED_ITEMS; the created workorder lands in DRAFT and an EST- estimate number is swapped to WO- when free."
+      ],
+      "topic": "estimate promotion event and gates",
+      "tags": ["exact-code", "event-id"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-order-price-override-approve-perm",
+      "query": "which permission code lets someone approve a price override and is there a dollar limit above their authority",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["order:price_override:view"] },
+      "rag_scope": "order",
+      "expected_doc_ids": ["order.price-override"],
+      "expected_facts": [
+        "Approving a price override is gated by order:price_override:approve (POST /v1/orders/price-overrides/{overrideId}/approve, event ORDER_PRICE_OVERRIDE_APPROVE); approval is required when discountAmount >= 50.0 or discountPercentage > 10.0.",
+        "The threshold is flat, not tiered: any order:price_override:approve holder can approve any amount. Approve allows only PENDING_APPROVAL -> APPROVED and reject only PENDING_APPROVAL -> REJECTED."
+      ],
+      "topic": "price-override approval permission",
+      "tags": ["exact-code", "permission-code"],
+      "source": "synthetic"
     }
   ]
 }

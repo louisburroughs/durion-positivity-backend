@@ -91,6 +91,27 @@ class EvalFixtureValidationTest {
     }
 
     @Test
+    @DisplayName("rag-lexical fixtures are structurally valid")
+    void ragLexicalFixturesValid() throws IOException {
+        // #1178: same shape as rag-retrieval (query + actor + expected.doc_ids). This suite feeds the
+        // dense-vs-hybrid diagnostic in eval_live.py (rag_lexical_hybrid_784), so a malformed fixture
+        // would silently drop out of the dense-miss denominator instead of failing loudly.
+        for (Path file : suiteFiles("rag-lexical")) {
+            JsonNode root = parseSuite(file);
+            Set<String> ids = new HashSet<>();
+            for (JsonNode fx : root.get("fixtures")) {
+                String id = requireId(fx, file, ids);
+                requireText(fx, "query", file, id);
+                validateActor(fx.get("actor"), file, id, false);
+                JsonNode expected = required(fx, "expected", file, id);
+                assertThat(expected.has("doc_ids"))
+                        .as("%s[%s]: expected.doc_ids required", file, id)
+                        .isTrue();
+            }
+        }
+    }
+
+    @Test
     @DisplayName("write-safety fixtures are structurally valid")
     void writeSafetyFixturesValid() throws IOException {
         for (Path file : suiteFiles("write-safety")) {

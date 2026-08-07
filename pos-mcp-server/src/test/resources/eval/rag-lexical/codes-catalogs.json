@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "_comment": "#1178 bare-code lexical fixtures for the #1124 wave docs — the per-doc fixture class the corpus-growth plan (rag-corpus-growth-plan-1124.md §Fixtures item 1) calls for: bare enum constants, domain:resource:action permission codes, and @EmitEvent ids with no semantic hook, targeting the {scope}.codes catalog docs (plus accounting.journal-entries for its unique error tokens). Dense embeddings under-retrieve bare codes against the per-scope cosine floor; Postgres FTS matches them exactly, so these fixtures give the rag_lexical_hybrid_784 block dense-miss headroom inside domain scopes (the dense-miss-questions.json file covers the master-scope NL-question class). Every token is verbatim from the target doc, which is itself source-verified against the owning pos-* module. Actors hold each doc's required_permissions so PermissionAwareMetadataFilter passes.",
+  "fixtures": [
+    {
+      "fixture_id": "rag-lexical-order-codes-cancel-failed-workexec",
+      "query": "CANCEL_FAILED_WORKEXEC",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["order:order:view"] },
+      "expected": { "doc_ids": ["order.codes"], "k": 5 },
+      "rag_scope": "order",
+      "tags": ["positive", "lexical", "exact-code", "bare-token"],
+      "notes": "Bare SalesOrderStatus cancel-saga constant; verbatim in order.codes (and order.lifecycle). No semantic hook for dense."
+    },
+    {
+      "fixture_id": "rag-lexical-order-codes-override-approve-perm",
+      "query": "order:price_override:approve",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["order:order:view"] },
+      "expected": { "doc_ids": ["order.codes"], "k": 5 },
+      "rag_scope": "order",
+      "tags": ["positive", "lexical", "permission-code", "bare-token"],
+      "notes": "Bare domain:resource:action permission code; verbatim in order.codes."
+    },
+    {
+      "fixture_id": "rag-lexical-pricing-codes-restriction-decisions",
+      "query": "ALLOW_WITH_OVERRIDE RESTRICTION_UNKNOWN",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["pricing:promotion:view"] },
+      "expected": { "doc_ids": ["pricing.codes"], "k": 5 },
+      "rag_scope": "pricing",
+      "tags": ["positive", "lexical", "exact-code", "bare-token"],
+      "notes": "Bare RestrictionDecision constants; verbatim in pricing.codes."
+    },
+    {
+      "fixture_id": "rag-lexical-inventory-codes-receiving-transfer",
+      "query": "RECEIVED_SHORT LOST_IN_TRANSIT",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["inventory:purchase_order:view"] },
+      "expected": { "doc_ids": ["inventory.codes"], "k": 5 },
+      "rag_scope": "inventory",
+      "tags": ["positive", "lexical", "exact-code", "bare-token"],
+      "notes": "Bare ReceivingLineStatus + TransferShortCloseDisposition constants; verbatim in inventory.codes."
+    },
+    {
+      "fixture_id": "rag-lexical-accounting-codes-manual-je-reasons",
+      "query": "ACCRUAL_ADJUSTMENT ERROR_CORRECTION RECLASSIFICATION",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:je:view"] },
+      "expected": { "doc_ids": ["accounting.codes"], "k": 5 },
+      "rag_scope": "accounting",
+      "tags": ["positive", "lexical", "exact-code", "bare-token", "gated"],
+      "notes": "Bare ManualJEReasonCode constants; verbatim in accounting.codes. Doc is permission-gated (accounting:je:view), which the actor holds."
+    },
+    {
+      "fixture_id": "rag-lexical-accounting-je-error-tokens",
+      "query": "JE_ALREADY_REVERSED PERIOD_HARD_LOCKED",
+      "actor": { "role": "ROLE_ACCOUNTING_ASSOCIATE", "permission_codes": ["accounting:je:view"] },
+      "expected": { "doc_ids": ["accounting.journal-entries"], "k": 5 },
+      "rag_scope": "accounting",
+      "tags": ["positive", "lexical", "exact-code", "bare-token", "gated"],
+      "notes": "Post/reverse error tokens unique to accounting.journal-entries (not in accounting.codes), so recall pins the specific doc."
+    },
+    {
+      "fixture_id": "rag-lexical-workorder-codes-promotion-errors",
+      "query": "APPROVAL_EXPIRED NO_APPROVED_ITEMS",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["workorder:estimate:view"] },
+      "expected": { "doc_ids": ["workorder.codes"], "k": 5 },
+      "rag_scope": "workorder",
+      "tags": ["positive", "lexical", "exact-code", "bare-token"],
+      "notes": "Bare PromotionErrorCode constants; verbatim in workorder.codes."
+    },
+    {
+      "fixture_id": "rag-lexical-workorder-codes-promote-event",
+      "query": "WORKORDER_ESTIMATE_PROMOTE",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["workorder:estimate:view"] },
+      "expected": { "doc_ids": ["workorder.codes"], "k": 5 },
+      "rag_scope": "workorder",
+      "tags": ["positive", "lexical", "event-id", "bare-token"],
+      "notes": "Bare @EmitEvent id; verbatim in workorder.codes (and workorder.estimate-promotion)."
+    },
+    {
+      "fixture_id": "rag-lexical-crm-codes-contact-roles",
+      "query": "PAYMENT_AUTHORIZER PRIMARY_BUSINESS_CONTACT",
+      "actor": { "role": "ROLE_ACCOUNT_MANAGER", "permission_codes": ["crm:party:view"] },
+      "expected": { "doc_ids": ["crm.codes"], "k": 5 },
+      "rag_scope": "customer",
+      "tags": ["positive", "lexical", "exact-code", "bare-token"],
+      "notes": "Bare ContactRole constants; verbatim in crm.codes."
+    }
+  ]
+}

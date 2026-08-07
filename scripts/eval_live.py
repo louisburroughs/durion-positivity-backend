@@ -49,6 +49,18 @@ RAG_MIN_SCORE = float(os.environ.get("EVAL_RAG_MIN_SCORE", "0.55"))
 # #784: Reciprocal Rank Fusion constant for the dense+lexical hybrid diagnostic. Matches the
 # application default (HybridRetrievalProperties.rrfK / mcp.rag.hybrid.rrf-k).
 RRF_K = max(1, int(os.environ.get("EVAL_RRF_K", "60")))  # clamp: rank constant must be >= 1
+# #1178: the rag-lexical block scores its DENSE pass at the primary production floor (0.6 —
+# SessionAgentManager's semanticRetriever, ScopedContentRetrieverFactory.create(scope, 10, 0.6)),
+# because that is the path whose live dense misses the dense-miss fixtures encode (#1170: VIN
+# question, glossary.identifiers similarity 0.58 < 0.60). The gated rag-retrieval suite keeps the
+# looser 0.55 RAG_MIN_SCORE above, unchanged.
+LEX_DENSE_MIN_SCORE = float(os.environ.get("EVAL_LEXICAL_DENSE_MIN_SCORE", "0.6"))
+# #1178: regression gate for the lexical path. Of the lexical fixtures where dense alone misses
+# (dense_recall < 1.0), at least this fraction must be improved by hybrid RRF fusion. Applied only
+# when the dense-miss denominator is non-zero, so a corpus where dense recalls everything cannot go
+# red vacuously; a broken lexical path (tsquery construction, content_tsv loss on re-embed, RRF
+# wiring) drives recovery to 0 and turns the suite red. Set to 0 to restore diagnostic-only mode.
+MIN_LEXICAL_RECOVERY = float(os.environ.get("EVAL_MIN_LEXICAL_RECOVERY", "0.5"))
 # #1164: tool-response coverage — cheap realistic-vs-no-tool classifier. A fixture counts as
 # realistic-response when the gated ANN returns a candidate whose cosine similarity clears this
 # floor; empty candidate set or a top hit below the floor is no-tool-available (the model has no
@@ -159,23 +171,43 @@ def main():
         )
         return [r[0] for r in rows]
 
-    def rag_visible_docs(query_vec, scope, caller_perms, want):
+    def rag_visible_docs(query_vec, scope, caller_perms, want, min_score=RAG_MIN_SCORE, master_all_scopes=False):
         """Reproduce the production RAG path: ScopedContentRetrieverFactory (ANN filtered by the
-        rag_scope metadata + a cosine similarity floor RAG_MIN_SCORE) + PermissionAwareMetadataFilter
-        (drop docs whose required_permissions the caller lacks). Returns ordered distinct document_ids
-        (chunks collapsed to their document)."""
-        rows = con.run(
-            """
-            SELECT metadata->>'document_id'        AS document_id,
-                   metadata->>'required_permissions' AS required_permissions
-            FROM mcp_document_embedding
-            WHERE metadata->>'rag_scope' = :scope AND embedding IS NOT NULL
-              AND (1 - (embedding <=> CAST(:q AS vector))) >= :min_score
-            ORDER BY embedding <=> CAST(:q AS vector), id
-            LIMIT :limit
-            """,
-            scope=scope, q=vec_literal(query_vec), min_score=RAG_MIN_SCORE, limit=max(want * 10, 50),
-        )
+        rag_scope metadata + a cosine similarity floor) + PermissionAwareMetadataFilter (drop docs
+        whose required_permissions the caller lacks). Returns ordered distinct document_ids (chunks
+        collapsed to their document).
+
+        With master_all_scopes=True the 'master' scope drops the scope filter and searches every
+        scope, mirroring #1169 (ScopedContentRetrieverFactory#create: master is the catch-all agent,
+        not a literal doc scope). The gated rag-retrieval suite keeps the historical scoped behavior
+        (default False) so its recall@k floor calibration is undisturbed; the #1178 lexical block
+        opts in to reproduce the live dense path that produced the verified misses."""
+        if master_all_scopes and scope == "master":
+            rows = con.run(
+                """
+                SELECT metadata->>'document_id'        AS document_id,
+                       metadata->>'required_permissions' AS required_permissions
+                FROM mcp_document_embedding
+                WHERE embedding IS NOT NULL
+                  AND (1 - (embedding <=> CAST(:q AS vector))) >= :min_score
+                ORDER BY embedding <=> CAST(:q AS vector), id
+                LIMIT :limit
+                """,
+                q=vec_literal(query_vec), min_score=min_score, limit=max(want * 10, 50),
+            )
+        else:
+            rows = con.run(
+                """
+                SELECT metadata->>'document_id'        AS document_id,
+                       metadata->>'required_permissions' AS required_permissions
+                FROM mcp_document_embedding
+                WHERE metadata->>'rag_scope' = :scope AND embedding IS NOT NULL
+                  AND (1 - (embedding <=> CAST(:q AS vector))) >= :min_score
+                ORDER BY embedding <=> CAST(:q AS vector), id
+                LIMIT :limit
+                """,
+                scope=scope, q=vec_literal(query_vec), min_score=min_score, limit=max(want * 10, 50),
+            )
         caller = set(caller_perms) | {"AUTHENTICATED"}  # any authenticated caller holds AUTHENTICATED
         ordered = []
         for document_id, required in rows:
@@ -191,22 +223,34 @@ def main():
 
     def rag_lexical_docs(query_text, scope, caller_perms, want):
         """#784: lexical (Postgres FTS) counterpart of rag_visible_docs — mirrors
-        LexicalDocumentRetriever (websearch_to_tsquery / ts_rank_cd over content_tsv, scope-filtered)
-        plus the same PermissionAwareMetadataFilter. Returns ordered distinct document_ids. Raises if
-        the content_tsv column is absent (migration V28 not applied); the caller treats that as
-        'lexical unavailable' and skips the diagnostic rather than failing."""
-        rows = con.run(
-            """
-            SELECT metadata->>'document_id'          AS document_id,
-                   metadata->>'required_permissions' AS required_permissions
-            FROM mcp_document_embedding
-            WHERE metadata->>'rag_scope' = :scope
-              AND content_tsv @@ websearch_to_tsquery('english', :q)
-            ORDER BY ts_rank_cd(content_tsv, websearch_to_tsquery('english', :q)) DESC, id
-            LIMIT :limit
-            """,
-            scope=scope, q=query_text, limit=max(want * 10, 50),
+        LexicalDocumentRetriever plus the same PermissionAwareMetadataFilter. Returns ordered
+        distinct document_ids. Raises if the content_tsv column is absent (migration V28 not
+        applied); the caller treats that as 'lexical unavailable' and skips the diagnostic rather
+        than failing.
+
+        Kept in lockstep with LexicalDocumentRetriever (#1178 — a drifted mirror is exactly the
+        regression this suite exists to catch):
+        - #1170: websearch_to_tsquery ANDs every term, so an NL question that merely CONTAINS an
+          identifier matched nothing; the parsed tsquery is OR-transformed (its '&' operators swapped
+          for '|' in text form — raw user text still passes only through websearch_to_tsquery, so no
+          injection surface) and ts_rank_cd ranks the OR matches.
+        - #1169: the 'master' scope is the catch-all agent, not a literal doc scope, so it searches
+          all scopes (SQL_ALL_SCOPES); domain scopes keep their narrow filter."""
+        or_tsquery = "replace(websearch_to_tsquery('english', :q)::text, ' & ', ' | ')::tsquery"
+        scope_filter = "" if scope == "master" else "  AND metadata->>'rag_scope' = :scope\n"
+        sql = (
+            "SELECT metadata->>'document_id'          AS document_id,\n"
+            "       metadata->>'required_permissions' AS required_permissions\n"
+            "FROM mcp_document_embedding\n"
+            f"WHERE content_tsv @@ {or_tsquery}\n"
+            f"{scope_filter}"
+            f"ORDER BY ts_rank_cd(content_tsv, {or_tsquery}) DESC, id\n"
+            "LIMIT :limit"
         )
+        params = {"q": query_text, "limit": max(want * 10, 50)}
+        if scope != "master":
+            params["scope"] = scope
+        rows = con.run(sql, **params)
         caller = set(caller_perms) | {"AUTHENTICATED"}
         ordered = []
         for document_id, required in rows:
@@ -278,10 +322,15 @@ def main():
 
     recall_at_k = sum(recalls) / len(recalls) if recalls else 0.0
 
-    # ---- #784: lexical vs hybrid recall on the exact-code suite (diagnostic, NOT gated) ----
-    # Scores the separate 'rag-lexical' suite under dense-only vs dense+lexical(RRF) so the value of
-    # the hybrid path is measurable. Never contributes to threshold failures, and degrades to a
-    # 'skipped' status (rather than aborting the eval) when the FTS column / fixtures are absent.
+    # ---- #784/#1178: lexical vs hybrid recall on the exact-code suite ----
+    # Scores the separate 'rag-lexical' suite under dense-only vs dense+lexical(RRF). The dense pass
+    # runs at the primary production floor (LEX_DENSE_MIN_SCORE=0.6) with master searching all
+    # scopes, reproducing the live path whose verified dense misses (#1170: VIN / invoice-number)
+    # the dense-miss fixtures encode. #1178 adds a regression gate: fixtures where dense alone
+    # misses form the dense_misses denominator, and hybrid must recover at least
+    # MIN_LEXICAL_RECOVERY of them — a silently broken lexical path (tsquery construction,
+    # content_tsv loss on re-embed, RRF wiring, flag off) drives recovery to 0 and turns the suite
+    # red. Degrades to a 'skipped' status (never gated) when the FTS column / fixtures are absent.
     rag_lexical_summary = {"status": "skipped: no rag-lexical fixtures"}
     lexical_fixtures = suite("rag-lexical")
     if lexical_fixtures:
@@ -295,7 +344,8 @@ def main():
                 scope = fx.get("rag_scope", "master")
                 k = fx.get("expected", {}).get("k", K)
                 qvec = embed(fx["query"])
-                dense = rag_visible_docs(qvec, scope, perms, k)[:k]
+                dense = rag_visible_docs(
+                    qvec, scope, perms, k, min_score=LEX_DENSE_MIN_SCORE, master_all_scopes=True)[:k]
                 lexical = rag_lexical_docs(fx["query"], scope, perms, k)
                 hybrid = rrf_fuse([dense, lexical], k=RRF_K, limit=k)
                 dense_r = sum(1 for d in expected_docs if d in dense) / len(expected_docs)
@@ -308,12 +358,19 @@ def main():
                     "hybrid_recall": round(hybrid_r, 4), "dense_top_k": dense, "hybrid_top_k": hybrid,
                 })
             n = len(dense_recalls)
+            dense_miss = [pf for pf in per_fixture if pf["dense_recall"] < 1.0]
+            recovered = [pf for pf in dense_miss if pf["hybrid_recall"] > pf["dense_recall"]]
             rag_lexical_summary = {
                 "status": "scored",
                 "scored": n,
                 "rrf_k": RRF_K,
+                "dense_min_score": LEX_DENSE_MIN_SCORE,
                 "dense_recall_at_k": round(sum(dense_recalls) / n, 4) if n else 0.0,
                 "hybrid_recall_at_k": round(sum(hybrid_recalls) / n, 4) if n else 0.0,
+                "dense_misses": len(dense_miss),
+                "hybrid_recovered": len(recovered),
+                "recovery_rate": round(len(recovered) / len(dense_miss), 4) if dense_miss else None,
+                "dense_miss_fixture_ids": [pf["fixture_id"] for pf in dense_miss],
                 "detail": per_fixture,
             }
         except Exception as e:  # missing content_tsv (V28 not deployed), FTS error, etc.
@@ -470,6 +527,15 @@ def main():
         failures.append(f"recall@k {recall_at_k:.4f} < {floor_recall}")
     if gating.get("status") == "FAIL":
         failures.append("permission_gating_779 FAIL")
+    # #1178: lexical regression gate — only when the dense-miss denominator is non-zero (see
+    # MIN_LEXICAL_RECOVERY above). A skipped lexical block (no fixtures / FTS unavailable) never gates.
+    if rag_lexical_summary.get("status") == "scored" and rag_lexical_summary.get("dense_misses", 0) > 0:
+        recovery = rag_lexical_summary.get("recovery_rate") or 0.0
+        if recovery < MIN_LEXICAL_RECOVERY:
+            failures.append(
+                f"lexical_recovery {recovery:.4f} < {MIN_LEXICAL_RECOVERY} "
+                f"(dense_misses={rag_lexical_summary['dense_misses']}, "
+                f"hybrid_recovered={rag_lexical_summary['hybrid_recovered']})")
 
     result = {
         "tool_selection": {"hit_at_5": round(hit_at_5, 4), "mrr": round(mrr, 4),
@@ -482,6 +548,7 @@ def main():
         "tool_response_coverage": tool_response_summary,
         "permission_gating_779": gating,
         "thresholds": {"min_hit_at_5": floor_hit5, "min_mrr": floor_mrr, "min_recall_at_k": floor_recall,
+                       "min_lexical_recovery": MIN_LEXICAL_RECOVERY,
                        "passed": not failures, "failures": failures},
     }
     out = ROOT / "pos-mcp-server/target/eval/baseline-live-python.json"
