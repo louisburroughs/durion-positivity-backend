@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.client.RoleDefaultPermissionsClient;
 import com.positivity.mcp.internal.domain.WorkflowState;
+import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.memory.SemanticChatMemoryStore;
@@ -52,6 +53,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
@@ -403,6 +406,23 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     public void evict(@NonNull String userId) {
         chatMemoryCache.asMap().keySet().removeIf(key -> key.startsWith(userId + MEMORY_KEY_SEPARATOR));
         requestCountCache.invalidate(userId);
+    }
+
+    /**
+     * Drops every cached role agent when runtime agent configuration changes (a system-prompt write
+     * or an {@code mcp_tool_permission} grant/revoke), so the next request rebuilds against the
+     * committed configuration instead of waiting out the TTL (#639). Runs after the publishing
+     * transaction commits; {@code fallbackExecution} covers non-transactional publishers.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onAgentConfigurationChanged(@NonNull AgentCacheInvalidationEvent event) {
+        long cachedAgents = roleAgentCache.estimatedSize();
+        roleAgentCache.invalidateAll();
+        LOGGER.info(
+                "Invalidated MCP role-agent cache cachedAgents={} source={} detail={}",
+                cachedAgents,
+                event.source(),
+                event.detail());
     }
 
     private void prebuildRoleAgents() {

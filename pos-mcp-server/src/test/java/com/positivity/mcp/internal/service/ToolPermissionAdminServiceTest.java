@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class ToolPermissionAdminServiceTest {
@@ -24,8 +26,11 @@ class ToolPermissionAdminServiceTest {
     @Mock
     private ToolMetadataRepository repository;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private ToolPermissionAdminService service() {
-        return new ToolPermissionAdminService(repository);
+        return new ToolPermissionAdminService(repository, eventPublisher);
     }
 
     @Test
@@ -37,6 +42,7 @@ class ToolPermissionAdminServiceTest {
         var response = service().grantPermission(TOOL, "event-receiver:event_type:view");
 
         verify(repository).addToolPermission(TOOL_ID, "event-receiver:event_type:view");
+        verify(eventPublisher).publishEvent(AgentCacheInvalidationEvent.toolPermissionChanged(TOOL));
         assertThat(response.toolName()).isEqualTo(TOOL);
         assertThat(response.permissionCodes()).containsExactly("AUTHENTICATED", "event-receiver:event_type:view");
     }
@@ -48,6 +54,7 @@ class ToolPermissionAdminServiceTest {
         service().revokePermission(TOOL, "AUTHENTICATED");
 
         verify(repository).removeToolPermission(TOOL_ID, "AUTHENTICATED");
+        verify(eventPublisher).publishEvent(AgentCacheInvalidationEvent.toolPermissionChanged(TOOL));
     }
 
     @Test

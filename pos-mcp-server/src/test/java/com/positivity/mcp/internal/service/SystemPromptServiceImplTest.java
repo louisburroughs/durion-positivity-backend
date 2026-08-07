@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.dto.SystemPromptRequest;
 import com.positivity.mcp.internal.dto.SystemPromptResponse;
 import com.positivity.mcp.internal.entity.SystemPrompt;
+import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.repository.SystemPromptRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -21,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * Tests for {@link SystemPromptServiceImpl}.
@@ -36,6 +39,9 @@ class SystemPromptServiceImplTest {
 
     @Mock
     private SystemPromptRepository repository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private SystemPromptServiceImpl service;
@@ -72,6 +78,7 @@ class SystemPromptServiceImplTest {
         assertThat(result.name()).isEqualTo("default-prompt");
         assertThat(result.content()).isEqualTo("You are a helpful assistant.");
         verify(repository).save(any(SystemPrompt.class));
+        verify(eventPublisher).publishEvent(AgentCacheInvalidationEvent.systemPromptChanged("default-prompt"));
     }
 
     @Test
@@ -151,6 +158,7 @@ class SystemPromptServiceImplTest {
 
         assertThat(result.id()).isEqualTo(EXISTING_ID);
         verify(repository).save(prompt);
+        verify(eventPublisher).publishEvent(AgentCacheInvalidationEvent.systemPromptChanged("default-prompt"));
     }
 
     @Test
@@ -199,8 +207,22 @@ class SystemPromptServiceImplTest {
     @Test
     @DisplayName("delete(id) delegates to repository.deleteById")
     void delete_delegatesToRepositoryDeleteById() {
+        when(repository.findById(EXISTING_ID)).thenReturn(Optional.of(buildPrompt(EXISTING_ID, "default-prompt")));
+
         service.delete(EXISTING_ID);
 
         verify(repository).deleteById(EXISTING_ID);
+        verify(eventPublisher).publishEvent(AgentCacheInvalidationEvent.systemPromptChanged("default-prompt"));
+    }
+
+    @Test
+    @DisplayName("delete(id) publishes no invalidation event when the prompt does not exist")
+    void delete_whenPromptMissing_publishesNoInvalidationEvent() {
+        when(repository.findById(MISSING_ID)).thenReturn(Optional.empty());
+
+        service.delete(MISSING_ID);
+
+        verify(repository).deleteById(MISSING_ID);
+        verifyNoInteractions(eventPublisher);
     }
 }

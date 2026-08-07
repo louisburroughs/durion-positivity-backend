@@ -1,10 +1,12 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.dto.ToolPermissionsResponse;
+import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 /**
@@ -16,9 +18,12 @@ import org.springframework.stereotype.Service;
 public class ToolPermissionAdminService {
 
     private final ToolMetadataRepository repository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public ToolPermissionAdminService(@NonNull ToolMetadataRepository repository) {
+    public ToolPermissionAdminService(
+            @NonNull ToolMetadataRepository repository, @NonNull ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
+        this.eventPublisher = eventPublisher;
     }
 
     public @NonNull ToolPermissionsResponse listPermissions(@NonNull String toolName) {
@@ -29,12 +34,14 @@ public class ToolPermissionAdminService {
     public @NonNull ToolPermissionsResponse grantPermission(@NonNull String toolName, @NonNull String permissionCode) {
         UUID toolId = resolve(toolName);
         repository.addToolPermission(toolId, permissionCode);
+        eventPublisher.publishEvent(AgentCacheInvalidationEvent.toolPermissionChanged(toolName));
         return new ToolPermissionsResponse(toolName, repository.listToolPermissions(toolId));
     }
 
     public void revokePermission(@NonNull String toolName, @NonNull String permissionCode) {
         UUID toolId = resolve(toolName);
         repository.removeToolPermission(toolId, permissionCode);
+        eventPublisher.publishEvent(AgentCacheInvalidationEvent.toolPermissionChanged(toolName));
     }
 
     private @NonNull UUID resolve(@NonNull String toolName) {
