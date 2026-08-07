@@ -1,5 +1,6 @@
 package com.positivity.vehicle.internal.service;
 
+import com.positivity.domainevents.vehicle.VehicleCarePreferenceUpdatedV1;
 import com.positivity.vehicle.internal.config.CarePreferenceEventPublisher;
 import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
 import com.positivity.vehicle.internal.entity.VehicleCarePreference;
@@ -35,8 +36,8 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
     /** Legacy blob key promoted into the structured column by the V4 migration (#1175). */
     static final String LEGACY_INTERVAL_KEY = "serviceIntervalMonths";
 
-    private static final int MIN_INTERVAL_MONTHS = 1;
-    private static final int MAX_INTERVAL_MONTHS = 120;
+    private static final int MIN_INTERVAL_MONTHS = VehicleCarePreferenceUpdatedV1.MIN_SERVICE_INTERVAL_MONTHS;
+    private static final int MAX_INTERVAL_MONTHS = VehicleCarePreferenceUpdatedV1.MAX_SERVICE_INTERVAL_MONTHS;
 
     private final VehicleCarePreferenceRepository preferencesRepository;
     private final VehicleRecordRepository vehicleRepository;
@@ -71,8 +72,9 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
         }
 
         Integer legacyInterval = extractLegacyInterval(request.getPreferences());
+        // Boxed explicitly so the conditional stays Integer and a null legacyInterval survives.
         Integer serviceIntervalMonths = request.getServiceIntervalMonths() != null
-                ? (Integer) validateInterval(request.getServiceIntervalMonths())
+                ? Integer.valueOf(validateInterval(request.getServiceIntervalMonths()))
                 : legacyInterval;
 
         var existing = preferencesRepository.findByVehicle_VehicleId(request.getVehicleId());
@@ -127,8 +129,9 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
                 .orElseThrow(() -> new EntityNotFoundException("No preferences found for vehicle: " + vehicleId));
 
         Integer legacyInterval = extractLegacyInterval(partialPreferences);
-        Integer effectiveInterval =
-                serviceIntervalMonths != null ? (Integer) validateInterval(serviceIntervalMonths) : legacyInterval;
+        Integer effectiveInterval = serviceIntervalMonths != null
+                ? Integer.valueOf(validateInterval(serviceIntervalMonths))
+                : legacyInterval;
 
         // Merge new values into existing preferences
         var currentPreferences = existing.getPreferences();
@@ -172,6 +175,9 @@ public class VehiclePreferencesServiceImpl implements VehiclePreferencesService 
      * blob write cannot silently drop the interval (#1175).
      */
     private static @Nullable Integer extractLegacyInterval(Map<String, Object> preferences) {
+        if (!preferences.containsKey(LEGACY_INTERVAL_KEY)) {
+            return null;
+        }
         Object raw = preferences.remove(LEGACY_INTERVAL_KEY);
         if (raw == null) {
             return null;
