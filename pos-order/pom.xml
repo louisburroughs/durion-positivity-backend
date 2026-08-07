@@ -112,6 +112,13 @@
             <artifactId>spring-boot-starter-kafka</artifactId>
         </dependency>
 
+        <!-- Eureka registration + load-balanced sibling clients (#641); also makes the
+             gateway's lb://ORDER route resolvable -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+
         <!-- Security Common (Gateway Authentication) -->
         <dependency>
             <groupId>com.positivity</groupId>

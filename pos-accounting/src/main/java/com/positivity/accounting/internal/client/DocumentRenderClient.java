@@ -4,6 +4,7 @@ import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -13,10 +14,10 @@ import org.springframework.web.client.RestClient;
  * Renders financial-report artifacts to PDF via the internal pos-documents service
  * (ADR-0020: centralized document creation).
  *
- * <p>pos-documents is internal-only (no gateway route); reached directly over the service
- * network. The render endpoint is guarded by {@code documents:render}, propagated via the
- * gateway authorities header for this service-to-service call (see the pos-invoice
- * {@code DocumentRenderClient} pattern).
+ * <p>pos-documents is internal-only (no gateway route); resolved via the {@code documents}
+ * Eureka service id through the load-balanced builder (#641). The render endpoint is guarded by
+ * {@code documents:render}, propagated via the gateway authorities header for this
+ * service-to-service call (see the pos-invoice {@code DocumentRenderClient} pattern).
  */
 @Component
 public class DocumentRenderClient {
@@ -26,9 +27,11 @@ public class DocumentRenderClient {
     private final RestClient restClient;
 
     public DocumentRenderClient(
-            RestClient.Builder restClientBuilder,
-            @Value("${accounting.documents.base-url:http://pos-documents:8092/v1/documents}") String documentsBaseUrl) {
-        this.restClient = restClientBuilder.baseUrl(documentsBaseUrl).build();
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("${pos.documents.service-id:documents}") String serviceId,
+            @Value("${accounting.documents.base-path:/v1/documents}") String basePath) {
+        this.restClient =
+                restClientBuilder.baseUrl("http://" + serviceId + basePath).build();
     }
 
     /**

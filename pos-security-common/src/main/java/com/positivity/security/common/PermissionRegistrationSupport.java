@@ -28,7 +28,7 @@ import org.springframework.web.client.RestClientException;
  *     public class CatalogPermissionRegistration extends PermissionRegistrationSupport {
  *
  *         public CatalogPermissionRegistration(RestClient.Builder builder,
- *                 &#64;Value("${pos.security.base-url:http://pos-security-service:8086}") String securityServiceUrl,
+ *                 &#64;Value("${pos.security.base-url:http://pos-security-service:8080}") String securityServiceUrl,
  *                 &#64;Value("${pos.security.permission-registration.enabled:true}") boolean enabled) {
  *             super(builder, securityServiceUrl, enabled, "permissions.yaml");
  *         }

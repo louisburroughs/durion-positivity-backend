@@ -38,6 +38,7 @@ import org.springframework.batch.infrastructure.item.ItemWriter;
 import org.springframework.batch.infrastructure.item.file.FlatFileItemReader;
 import org.springframework.batch.infrastructure.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.batch.infrastructure.item.file.mapping.BeanWrapperFieldSetMapper;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -74,23 +75,25 @@ public class BatchConfiguration {
     private final RecordFileParserRegistry recordFileParserRegistry;
     private final ColumnMappingService columnMappingService;
 
-    @Value("${pos.catalog.base-url:http://localhost:8082}")
-    private String catalogBaseUrl;
+    // Eureka service ids resolved through the load-balanced builder (#641); the ingest
+    // writers address sibling services by discovery instead of host:port base URLs.
+    @Value("${pos.catalog.service-id:catalog}")
+    private String catalogServiceId;
 
-    @Value("${pos.customer.base-url:http://localhost:8086}")
-    private String customerBaseUrl;
+    @Value("${pos.customer.service-id:customer}")
+    private String customerServiceId;
 
-    @Value("${pos.people.base-url:http://localhost:8087}")
-    private String peopleBaseUrl;
+    @Value("${pos.people.service-id:people}")
+    private String peopleServiceId;
 
-    @Value("${pos.price.base-url:http://localhost:8088}")
-    private String priceBaseUrl;
+    @Value("${pos.price.service-id:price}")
+    private String priceServiceId;
 
-    @Value("${pos.vehicle-inventory.base-url:http://localhost:8091}")
-    private String vehicleInventoryBaseUrl;
+    @Value("${pos.vehicle-inventory.service-id:vehicle-inventory}")
+    private String vehicleInventoryServiceId;
 
-    @Value("${pos.vehicle-fitment.base-url:http://localhost:8092}")
-    private String vehicleFitmentBaseUrl;
+    @Value("${pos.vehicle-fitment.service-id:vehicle-fitment}")
+    private String vehicleFitmentServiceId;
 
     @Value("${bulk-loader.storage.local-root:/tmp/bulk-loader}")
     private String storageRoot;
@@ -183,11 +186,12 @@ public class BatchConfiguration {
     @Bean
     @StepScope
     public ItemWriter<CatalogProductRecord> catalogBulkIngestWriter(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
-        RestClient client = restClientBuilder.baseUrl(catalogBaseUrl).build();
+        RestClient client =
+                restClientBuilder.baseUrl("http://" + catalogServiceId).build();
         return chunk -> {
             JobContext context =
                     resolveJobContext("catalogBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
@@ -279,11 +283,12 @@ public class BatchConfiguration {
     @Bean
     @StepScope
     public ItemWriter<CustomerPersonRecord> customerBulkIngestWriter(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
-        RestClient client = restClientBuilder.baseUrl(customerBaseUrl).build();
+        RestClient client =
+                restClientBuilder.baseUrl("http://" + customerServiceId).build();
         return chunk -> {
             JobContext context =
                     resolveJobContext("customerBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
@@ -375,11 +380,12 @@ public class BatchConfiguration {
     @Bean
     @StepScope
     public ItemWriter<PersonRecord> peopleBulkIngestWriter(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
-        RestClient client = restClientBuilder.baseUrl(peopleBaseUrl).build();
+        RestClient client =
+                restClientBuilder.baseUrl("http://" + peopleServiceId).build();
         return chunk -> {
             JobContext context = resolveJobContext("peopleBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
             if (context == null) {
@@ -470,11 +476,12 @@ public class BatchConfiguration {
     @Bean
     @StepScope
     public ItemWriter<BasePriceRecord> priceBulkIngestWriter(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
-        RestClient client = restClientBuilder.baseUrl(priceBaseUrl).build();
+        RestClient client =
+                restClientBuilder.baseUrl("http://" + priceServiceId).build();
         return chunk -> {
             JobContext context = resolveJobContext("priceBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
             if (context == null) {
@@ -575,11 +582,12 @@ public class BatchConfiguration {
     @Bean
     @StepScope
     public ItemWriter<VehicleBulkRecord> vehicleBulkIngestWriter(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
-        RestClient client = restClientBuilder.baseUrl(vehicleInventoryBaseUrl).build();
+        RestClient client =
+                restClientBuilder.baseUrl("http://" + vehicleInventoryServiceId).build();
         return chunk -> {
             JobContext context =
                     resolveJobContext("vehicleBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());
@@ -681,11 +689,12 @@ public class BatchConfiguration {
     @Bean
     @StepScope
     public ItemWriter<VehicleFitmentRecord> vehicleFitmentBulkIngestWriter(
-            RestClient.Builder restClientBuilder,
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
             @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
             @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
-        RestClient client = restClientBuilder.baseUrl(vehicleFitmentBaseUrl).build();
+        RestClient client =
+                restClientBuilder.baseUrl("http://" + vehicleFitmentServiceId).build();
         return chunk -> {
             JobContext context =
                     resolveJobContext("vehicleFitmentBulkIngestWriter", jobIdParam, locationIdParam, chunk.size());

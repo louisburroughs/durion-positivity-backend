@@ -24,46 +24,46 @@
       "defaultValue": 536870912
     },
     {
-      "name": "pos.catalog.base-url",
+      "name": "pos.catalog.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for bulk-ingest calls to pos-catalog.",
-      "defaultValue": "http://localhost:8082"
+      "description": "Eureka service id for bulk-ingest calls to pos-catalog (load-balanced, #641).",
+      "defaultValue": "catalog"
     },
     {
-      "name": "pos.customer.base-url",
+      "name": "pos.customer.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for bulk-ingest calls to pos-customer.",
-      "defaultValue": "http://localhost:8086"
+      "description": "Eureka service id for bulk-ingest calls to pos-customer (load-balanced, #641).",
+      "defaultValue": "customer"
     },
     {
-      "name": "pos.people.base-url",
+      "name": "pos.people.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for bulk-ingest calls to pos-people.",
-      "defaultValue": "http://localhost:8087"
+      "description": "Eureka service id for bulk-ingest calls to pos-people (load-balanced, #641).",
+      "defaultValue": "people"
     },
     {
-      "name": "pos.price.base-url",
+      "name": "pos.price.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for bulk-ingest calls to pos-price.",
-      "defaultValue": "http://localhost:8088"
+      "description": "Eureka service id for bulk-ingest calls to pos-price (load-balanced, #641).",
+      "defaultValue": "price"
     },
     {
-      "name": "pos.vehicle-inventory.base-url",
+      "name": "pos.vehicle-inventory.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for bulk-ingest calls to pos-vehicle-inventory.",
-      "defaultValue": "http://localhost:8091"
+      "description": "Eureka service id for bulk-ingest calls to pos-vehicle-inventory (load-balanced, #641).",
+      "defaultValue": "vehicle-inventory"
     },
     {
-      "name": "pos.vehicle-fitment.base-url",
+      "name": "pos.vehicle-fitment.service-id",
       "type": "java.lang.String",
-      "description": "Base URL for bulk-ingest calls to pos-vehicle-fitment.",
-      "defaultValue": "http://localhost:8092"
+      "description": "Eureka service id for bulk-ingest calls to pos-vehicle-fitment (load-balanced, #641).",
+      "defaultValue": "vehicle-fitment"
     },
     {
       "name": "pos.events.base-url",
       "type": "java.lang.String",
       "description": "Base URL of the pos-events/event-receiver API.",
-      "defaultValue": "http://localhost:8085"
+      "defaultValue": "http://pos-event-receiver:8080"
     },
     {
       "name": "pos.events.api-secret",
@@ -74,7 +74,7 @@
       "name": "pos.security.base-url",
       "type": "java.lang.String",
       "description": "Base URL for permission registration against pos-security-service.",
-      "defaultValue": "http://pos-security-service:8086"
+      "defaultValue": "http://pos-security-service:8080"
     },
     {
       "name": "pos.security.permission-registration.enabled",

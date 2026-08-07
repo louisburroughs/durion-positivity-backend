@@ -1,5 +1,24 @@
 # Service Discovery Migration: Open Items Plan
 
+> **Status 2026-08-07: Items 1–5 below are all complete on `main`.** A follow-up closure wave
+> (branch `feature/641-internal-client-migration`) addressed the residual gaps found afterwards:
+>
+> - **pos-order had no Eureka client dependency at all**, so the gateway's `lb://ORDER` route
+>   could never resolve. Added `spring-cloud-starter-netflix-eureka-client` plus an `eureka:`
+>   block, an `@LoadBalanced` builder, and migrated `PriceClientConfig` / `InvoiceClientConfig`
+>   to the `service-id` pattern (`TaxClientConfig` stays direct per ADR-0021).
+> - **pos-accounting / pos-invoice `DocumentRenderClient`** migrated from
+>   `http://pos-documents:8092/v1/documents` to the `documents` service id + `base-path` split;
+>   `pos-invoice ManagerApprovalClient` migrated to the `security-service` service id.
+> - **pos-bulk-loader `BatchConfiguration`** six ingest writers migrated from localhost base
+>   URLs to load-balanced service ids; docker-compose `POS_*_BASE_URL` overrides removed.
+> - **pos-workorder dead config removed**: `pos.vehicle.base-url` (`http://pos-vehicle:8088`,
+>   no such service, no Java reader).
+> - **pos-mcp-server tax default fixed**: `http://pos-tax/v1/tax` (port 80, unreachable) →
+>   `http://pos-tax:8091/v1/tax`.
+>
+> The item descriptions below are retained for history.
+
 Remaining work after the initial migration waves. Items are ordered by commit sequence — active bugs first, then correctness fixes, then documentation.
 
 ---

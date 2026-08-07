@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -27,9 +28,11 @@ public class ManagerApprovalClient {
     private final RestClient securityRestClient;
 
     public ManagerApprovalClient(
-            RestClient.Builder restClientBuilder,
-            @Value("${invoice.security.base-url:http://pos-security-service:8080/v1/users}") String securityBaseUrl) {
-        this.securityRestClient = restClientBuilder.baseUrl(securityBaseUrl).build();
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("${pos.security-service.service-id:security-service}") String serviceId,
+            @Value("${invoice.security.base-path:/v1/users}") String basePath) {
+        this.securityRestClient =
+                restClientBuilder.baseUrl("http://" + serviceId + basePath).build();
     }
 
     /**
