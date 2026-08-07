@@ -100,8 +100,8 @@ public class SessionAgentManagerTestConfiguration {
             }
 
             @Override
-            public void addToolPermission(java.util.UUID toolId, String permissionCode) {
-                // no-op stub
+            public boolean addToolPermission(java.util.UUID toolId, String permissionCode) {
+                return false; // no-op stub
             }
 
             @Override
@@ -115,8 +115,8 @@ public class SessionAgentManagerTestConfiguration {
             }
 
             @Override
-            public void removeToolPermission(java.util.UUID toolId, String permissionCode) {
-                // no-op stub
+            public boolean removeToolPermission(java.util.UUID toolId, String permissionCode) {
+                return false; // no-op stub
             }
         };
     }

@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Gate 3 (#785): admin management of the {@code mcp_tool_permission} grants that gate discovered
@@ -31,17 +32,23 @@ public class ToolPermissionAdminService {
         return new ToolPermissionsResponse(toolName, repository.listToolPermissions(toolId));
     }
 
+    @Transactional
     public @NonNull ToolPermissionsResponse grantPermission(@NonNull String toolName, @NonNull String permissionCode) {
         UUID toolId = resolve(toolName);
-        repository.addToolPermission(toolId, permissionCode);
-        eventPublisher.publishEvent(AgentCacheInvalidationEvent.toolPermissionChanged(toolName));
+        // Idempotent SQL: only flush agent caches when the mapping set actually changed, so a
+        // repeated grant does not trigger an unnecessary full rebuild.
+        if (repository.addToolPermission(toolId, permissionCode)) {
+            eventPublisher.publishEvent(AgentCacheInvalidationEvent.toolPermissionChanged(toolName));
+        }
         return new ToolPermissionsResponse(toolName, repository.listToolPermissions(toolId));
     }
 
+    @Transactional
     public void revokePermission(@NonNull String toolName, @NonNull String permissionCode) {
         UUID toolId = resolve(toolName);
-        repository.removeToolPermission(toolId, permissionCode);
-        eventPublisher.publishEvent(AgentCacheInvalidationEvent.toolPermissionChanged(toolName));
+        if (repository.removeToolPermission(toolId, permissionCode)) {
+            eventPublisher.publishEvent(AgentCacheInvalidationEvent.toolPermissionChanged(toolName));
+        }
     }
 
     private @NonNull UUID resolve(@NonNull String toolName) {

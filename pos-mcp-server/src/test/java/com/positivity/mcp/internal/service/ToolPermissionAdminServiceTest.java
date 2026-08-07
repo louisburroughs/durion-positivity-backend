@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
@@ -36,6 +37,8 @@ class ToolPermissionAdminServiceTest {
     @Test
     void grant_addsPermissionAndReturnsFullSet() {
         when(repository.findDiscoveredToolIdByName(TOOL)).thenReturn(Optional.of(TOOL_ID));
+        when(repository.addToolPermission(TOOL_ID, "event-receiver:event_type:view"))
+                .thenReturn(true);
         when(repository.listToolPermissions(TOOL_ID))
                 .thenReturn(List.of("AUTHENTICATED", "event-receiver:event_type:view"));
 
@@ -48,13 +51,36 @@ class ToolPermissionAdminServiceTest {
     }
 
     @Test
+    void grant_whenAlreadyGranted_publishesNoInvalidationEvent() {
+        when(repository.findDiscoveredToolIdByName(TOOL)).thenReturn(Optional.of(TOOL_ID));
+        when(repository.addToolPermission(TOOL_ID, "AUTHENTICATED")).thenReturn(false);
+        when(repository.listToolPermissions(TOOL_ID)).thenReturn(List.of("AUTHENTICATED"));
+
+        var response = service().grantPermission(TOOL, "AUTHENTICATED");
+
+        assertThat(response.permissionCodes()).containsExactly("AUTHENTICATED");
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
     void revoke_removesPermission() {
         when(repository.findDiscoveredToolIdByName(TOOL)).thenReturn(Optional.of(TOOL_ID));
+        when(repository.removeToolPermission(TOOL_ID, "AUTHENTICATED")).thenReturn(true);
 
         service().revokePermission(TOOL, "AUTHENTICATED");
 
         verify(repository).removeToolPermission(TOOL_ID, "AUTHENTICATED");
         verify(eventPublisher).publishEvent(AgentCacheInvalidationEvent.toolPermissionChanged(TOOL));
+    }
+
+    @Test
+    void revoke_whenAlreadyAbsent_publishesNoInvalidationEvent() {
+        when(repository.findDiscoveredToolIdByName(TOOL)).thenReturn(Optional.of(TOOL_ID));
+        when(repository.removeToolPermission(TOOL_ID, "AUTHENTICATED")).thenReturn(false);
+
+        service().revokePermission(TOOL, "AUTHENTICATED");
+
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
