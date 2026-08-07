@@ -16,8 +16,9 @@ import org.springframework.web.client.RestClient;
  *
  * <p>pos-documents is internal-only (no gateway route); resolved via the {@code documents}
  * Eureka service id through the load-balanced builder (#641). The render endpoint is guarded by
- * {@code documents:render}, propagated via the gateway authorities header for this
- * service-to-service call (see the pos-invoice {@code DocumentRenderClient} pattern).
+ * {@code documents:render}; this client asserts the trusted internal {@code X-User} /
+ * {@code X-Authorities} headers itself (gateway header format, but set by the caller — the
+ * gateway is not on this path; see the pos-invoice {@code DocumentRenderClient} pattern).
  */
 @Component
 public class DocumentRenderClient {

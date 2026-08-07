@@ -67,7 +67,7 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
      *
      * @param restClientBuilder  RestClient builder for HTTP requests
      * @param securityServiceUrl Base URL of pos-security-service (e.g.,
-     *                           http://pos-security-service:8086)
+     *                           http://pos-security-service:8080)
      * @param domain             Domain name for permissions (e.g., "catalog",
      *                           "crm")
      * @param serviceName        Name of the registering service (e.g.,
@@ -86,7 +86,7 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
      *
      * @param restClientBuilder  RestClient builder for HTTP requests
      * @param securityServiceUrl Base URL of pos-security-service (e.g.,
-     *                           http://pos-security-service:8086)
+     *                           http://pos-security-service:8080)
      * @param domain             Domain name for permissions (e.g., "catalog",
      *                           "crm")
      * @param serviceName        Name of the registering service (e.g.,
