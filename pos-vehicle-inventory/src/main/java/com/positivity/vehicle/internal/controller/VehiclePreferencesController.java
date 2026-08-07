@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -117,13 +118,13 @@ public class VehiclePreferencesController {
             @Parameter(description = "Vehicle ID") @PathVariable UUID vehicleId,
             @Valid @RequestBody PreferencesMergeDto request) {
 
-        log.info(
-                "PATCH /v1/vehicles/{}/preferences - merging keys={}",
-                vehicleId,
-                request.partialPreferences().keySet());
+        // partialPreferences is optional: a PATCH may update only serviceIntervalMonths.
+        Map<String, Object> partialPreferences =
+                request.partialPreferences() != null ? request.partialPreferences() : new HashMap<>();
+        log.info("PATCH /v1/vehicles/{}/preferences - merging keys={}", vehicleId, partialPreferences.keySet());
 
         var preference = preferencesService.mergePreferences(
-                vehicleId, request.partialPreferences(), request.serviceIntervalMonths(), request.updatedByUserId());
+                vehicleId, partialPreferences, request.serviceIntervalMonths(), request.updatedByUserId());
         return ResponseEntity.ok(VehicleCarePreferenceMapper.toResponse(preference));
     }
 

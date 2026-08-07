@@ -28,7 +28,8 @@ import org.jspecify.annotations.Nullable;
  * (and therefore ordering) with the vehicle's registry facts.
  *
  * @param vehicleId owning vehicle (also the envelope aggregateId and record key)
- * @param serviceIntervalMonths structured service interval in whole months; null = use CRM default
+ * @param serviceIntervalMonths structured service interval in whole months (1–120); null = use
+ *     CRM default
  * @param deleted true when the care-preference row was deleted (tombstone)
  * @param updatedAt when the owner last modified the preference; null on deletes
  */
@@ -41,13 +42,21 @@ public record VehicleCarePreferenceUpdatedV1(
     public static final String EVENT_TYPE = "vehicle.care-preference.updated";
     public static final int SCHEMA_VERSION = 1;
 
+    /** Interval bounds, matching the owner's API validation and DB CHECK constraint. */
+    public static final int MIN_SERVICE_INTERVAL_MONTHS = 1;
+
+    public static final int MAX_SERVICE_INTERVAL_MONTHS = 120;
+
     public VehicleCarePreferenceUpdatedV1 {
         if (vehicleId == null) {
             throw new IllegalArgumentException("vehicleId must not be null");
         }
-        if (serviceIntervalMonths != null && serviceIntervalMonths < 1) {
-            throw new IllegalArgumentException(
-                    "serviceIntervalMonths must be >= 1 when present but was: " + serviceIntervalMonths);
+        if (serviceIntervalMonths != null
+                && (serviceIntervalMonths < MIN_SERVICE_INTERVAL_MONTHS
+                        || serviceIntervalMonths > MAX_SERVICE_INTERVAL_MONTHS)) {
+            throw new IllegalArgumentException("serviceIntervalMonths must be between "
+                    + MIN_SERVICE_INTERVAL_MONTHS + " and " + MAX_SERVICE_INTERVAL_MONTHS
+                    + " when present but was: " + serviceIntervalMonths);
         }
         if (deleted && serviceIntervalMonths != null) {
             throw new IllegalArgumentException("a deleted care preference must not carry an interval");

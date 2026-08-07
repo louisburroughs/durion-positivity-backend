@@ -48,6 +48,8 @@ class VehicleCarePreferenceUpdatedV1Test {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new VehicleCarePreferenceUpdatedV1(VEHICLE_ID, 0, false, null))
                 .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new VehicleCarePreferenceUpdatedV1(VEHICLE_ID, 121, false, null))
+                .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new VehicleCarePreferenceUpdatedV1(VEHICLE_ID, 4, true, null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
