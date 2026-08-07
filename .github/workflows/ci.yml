@@ -299,11 +299,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    needs: [ detect-test-modules, build-test ]
     # Only run on the nightly schedule or on manual dispatch. Even with an NVD
     # API key, a cold NVD sync via the API takes hours (observed ~2.5h for 48%
     # of the DB on 2026-08-07), so the scan is kept out of the push/PR path and
-    # runs overnight against the datafeed mirror instead.
+    # runs overnight against the datafeed mirror instead. No `needs`:
+    # detect-test-modules/build-test are skipped on schedule, and a job whose
+    # needs are skipped is skipped — the reactor cache restore below (plus its
+    # cache-miss fallback install) makes this job self-sufficient anyway.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
 
     steps:
