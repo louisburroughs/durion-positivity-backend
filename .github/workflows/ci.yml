@@ -300,13 +300,11 @@ jobs:
     permissions:
       contents: read
     needs: [ detect-test-modules, build-test ]
-    # Only run on main branch pushes or on PRs whose changes reach the whole
-    # reactor (root pom / BOM / .mvn — where dependency versions live). The
-    # previous gate tested contains(pull_request.changed_files, 'pom.xml'),
-    # but changed_files is a numeric count, so it never matched.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' ||
-      (github.event_name == 'pull_request' &&
-       needs.detect-test-modules.outputs.full-reactor == 'true')
+    # Only run on the nightly schedule or on manual dispatch. Even with an NVD
+    # API key, a cold NVD sync via the API takes hours (observed ~2.5h for 48%
+    # of the DB on 2026-08-07), so the scan is kept out of the push/PR path and
+    # runs overnight against the datafeed mirror instead.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout code
@@ -356,15 +354,14 @@ jobs:
             ${{ runner.os }}-owasp-nvd-
 
       - name: Run OWASP Dependency Check
-        env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-        run: |
-          if [ -n "${NVD_API_KEY}" ]; then
-            ./mvnw org.owasp:dependency-check-maven:check -DnvdApiKey="${NVD_API_KEY}" -B
-          else
-            echo "NVD_API_KEY is not configured; dependency-check NVD updates may be slow."
-            ./mvnw org.owasp:dependency-check-maven:check -B
-          fi
+        # The NVD API is unusably slow even with an API key (a cold sync was
+        # observed taking >2.5h for half the DB), so pull the pre-built NVD
+        # cache the dependency-check project publishes daily instead — the
+        # {0} placeholder expands to a year or "modified" per feed file.
+        run: >-
+          ./mvnw org.owasp:dependency-check-maven:check
+          -DnvdDatafeedUrl="https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz"
+          -B
         continue-on-error: true
 
       - name: Upload dependency check report
