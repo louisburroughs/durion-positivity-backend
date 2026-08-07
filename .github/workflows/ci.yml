@@ -186,9 +186,13 @@ jobs:
         # the -am band-aid can't cover dependents' own upstreams). Forcing the
         # install plugin to run installs the restored artifacts without
         # rebuilding them, keeping the cache's compile/test savings.
+        # flatten must be forced too: without it a cache-hit module installs its
+        # RAW pom.xml whose parent/version is the unresolved ${revision} literal,
+        # poisoning ~/.m2 so the selective reactor fails descriptor resolution on
+        # every sibling (run 31211645364, pos-archunit -> pos-accounting et al.).
         run: >-
           ./mvnw install -DskipTests -DskipITs -Darchunit.skipTests=true
-          -Dmaven.build.cache.alwaysRunPlugins=maven-install-plugin:install
+          -Dmaven.build.cache.alwaysRunPlugins=flatten-maven-plugin:flatten,maven-install-plugin:install
           -T 1C -B -ntp -q
 
       - name: Compute test selection
