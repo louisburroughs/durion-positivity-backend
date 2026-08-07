@@ -22,6 +22,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.domain.WorkflowState;
+import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
@@ -451,6 +452,17 @@ class StreamingSessionAgentManagerTest {
         expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "second");
 
         verify(toolSelectionEngine, times(3)).selectRoleTools(eq("ROLE_CASHIER"), any(), any());
+    }
+
+    @Test
+    @DisplayName("onAgentConfigurationChanged empties the streaming role-agent cache")
+    void onAgentConfigurationChanged_emptiesRoleAgentCache() {
+        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first");
+        assertThat(roleAgentCacheKeys(manager)).isNotEmpty();
+
+        manager.onAgentConfigurationChanged(AgentCacheInvalidationEvent.systemPromptChanged("ROLE_CASHIER"));
+
+        assertThat(roleAgentCacheKeys(manager)).isEmpty();
     }
 
     @SuppressWarnings("unchecked")

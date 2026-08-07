@@ -21,6 +21,7 @@ import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.domain.WorkflowState;
+import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
@@ -406,6 +407,30 @@ class SessionAgentManagerTest {
         expiringManager.getOrCreateAgent("user-1", "ROLE_CASHIER");
 
         verify(toolRegistry, times(2)).resolveDomainTools("ROLE_CASHIER");
+    }
+
+    @Test
+    @DisplayName("onAgentConfigurationChanged evicts prebuilt role agents so the next request rebuilds")
+    void onAgentConfigurationChanged_evictsCachedRoleAgents() {
+        // Prebuilt at construction time — a warm request is served from cache without a rebuild.
+        manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
+        verify(toolRegistry, never()).resolveDomainTools("ROLE_CASHIER");
+
+        manager.onAgentConfigurationChanged(AgentCacheInvalidationEvent.systemPromptChanged("ROLE_CASHIER"));
+        manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
+
+        verify(toolRegistry, times(1)).resolveDomainTools("ROLE_CASHIER");
+    }
+
+    @Test
+    @DisplayName("onAgentConfigurationChanged also rebuilds after a tool-permission change")
+    void onAgentConfigurationChanged_toolPermissionChange_evictsCachedRoleAgents() {
+        manager.getOrCreateAgent("user-1", "ROLE_TECHNICIAN");
+
+        manager.onAgentConfigurationChanged(AgentCacheInvalidationEvent.toolPermissionChanged("inventory_stockcheck"));
+        manager.getOrCreateAgent("user-1", "ROLE_TECHNICIAN");
+
+        verify(toolRegistry, times(2)).resolveDomainTools("ROLE_TECHNICIAN");
     }
 
     private static CurrentUserContext userContext(String username, UUID userId, String primaryRole) {

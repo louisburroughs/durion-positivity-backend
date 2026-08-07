@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.service;
 import com.positivity.mcp.internal.entity.SystemPrompt;
 import com.positivity.mcp.internal.repository.SystemPromptRepository;
 import com.positivity.mcp.service.RolePromptResolver;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -19,10 +20,20 @@ public class RolePromptResolverImpl implements RolePromptResolver {
     private static final String MASTER_PROMPT_NAME = SystemPromptDefaults.MASTER_PROMPT_NAME;
     private static final String BUILT_IN_PROMPT = SystemPromptDefaults.DEFAULT_PROMPT_TEXT;
 
-    private final SystemPromptRepository systemPromptRepository;
+    /** Incremented whenever prompt resolution falls back past the requested prompt (#639). */
+    static final String METRIC_PROMPT_FALLBACK = "mcp.prompt.fallback";
 
-    public RolePromptResolverImpl(@NonNull SystemPromptRepository systemPromptRepository) {
+    static final String REASON_MASTER_PROMPT = "master-prompt";
+    static final String REASON_BUILT_IN = "built-in";
+    static final String REASON_MISSING_ROLE_LAYER = "missing-role-layer";
+
+    private final SystemPromptRepository systemPromptRepository;
+    private final MeterRegistry meterRegistry;
+
+    public RolePromptResolverImpl(
+            @NonNull SystemPromptRepository systemPromptRepository, @NonNull MeterRegistry meterRegistry) {
         this.systemPromptRepository = systemPromptRepository;
+        this.meterRegistry = meterRegistry;
     }
 
     @Override
@@ -35,6 +46,7 @@ public class RolePromptResolverImpl implements RolePromptResolver {
                     LOGGER.warn(
                             "MCP no agent system prompt found promptName={}; falling back to master prompt",
                             promptName);
+                    recordFallback(REASON_MASTER_PROMPT, promptName);
                     return systemPromptRepository.findByName(MASTER_PROMPT_NAME).map(SystemPrompt::getContent);
                 })
                 .orElseGet(() -> {
@@ -42,6 +54,7 @@ public class RolePromptResolverImpl implements RolePromptResolver {
                             "MCP no system prompt found promptName={} name={}; using built-in prompt",
                             promptName,
                             MASTER_PROMPT_NAME);
+                    recordFallback(REASON_BUILT_IN, promptName);
                     return BUILT_IN_PROMPT;
                 });
     }
@@ -53,11 +66,13 @@ public class RolePromptResolverImpl implements RolePromptResolver {
         StringBuilder text = new StringBuilder();
 
         // BASE — master operating rules (built-in fallback if unseeded).
-        String base = systemPromptRepository
-                .findByName(MASTER_PROMPT_NAME)
-                .map(SystemPrompt::getContent)
-                .orElse(BUILT_IN_PROMPT);
-        text.append(base);
+        Optional<String> base =
+                systemPromptRepository.findByName(MASTER_PROMPT_NAME).map(SystemPrompt::getContent);
+        if (base.isEmpty()) {
+            LOGGER.warn("MCP no master prompt seeded name={}; using built-in BASE layer", MASTER_PROMPT_NAME);
+            recordFallback(REASON_BUILT_IN, MASTER_PROMPT_NAME);
+        }
+        text.append(base.orElse(BUILT_IN_PROMPT));
         layers.add("BASE");
 
         // ROLE — persona overlay, resolved by the caller's role (role-first). Persona only.
@@ -67,6 +82,7 @@ public class RolePromptResolverImpl implements RolePromptResolver {
             layers.add("ROLE");
         } else {
             LOGGER.warn("MCP no role persona seeded role={}; assembling without ROLE layer", role);
+            recordFallback(REASON_MISSING_ROLE_LAYER, role);
         }
 
         // DOMAIN — existing domain prompt, keyed by RAG scope. Skipped for master/shared scope.
@@ -85,5 +101,15 @@ public class RolePromptResolverImpl implements RolePromptResolver {
         layers.add("TOOL_USE");
 
         return new AssembledPrompt(text.toString(), List.copyOf(layers));
+    }
+
+    /**
+     * Counts a prompt-resolution fallback. {@code requested} is the prompt/role name that missed;
+     * both tag values come from the bounded role/domain prompt-name sets, so cardinality stays low.
+     */
+    private void recordFallback(@NonNull String reason, @NonNull String requested) {
+        meterRegistry
+                .counter(METRIC_PROMPT_FALLBACK, "reason", reason, "requested", requested)
+                .increment();
     }
 }

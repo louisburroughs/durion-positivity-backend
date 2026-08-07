@@ -231,12 +231,12 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
     }
 
     @Override
-    public void addToolPermission(@NonNull UUID toolId, @NonNull String permissionCode) {
-        jdbcTemplate.update("""
+    public boolean addToolPermission(@NonNull UUID toolId, @NonNull String permissionCode) {
+        return jdbcTemplate.update("""
                 INSERT INTO mcp_tool_permission (tool_id, permission_code)
                 VALUES (?, ?)
                 ON CONFLICT DO NOTHING
-                """, toolId, permissionCode);
+                """, toolId, permissionCode) > 0;
     }
 
     @Override
@@ -257,9 +257,12 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
     }
 
     @Override
-    public void removeToolPermission(@NonNull UUID toolId, @NonNull String permissionCode) {
-        jdbcTemplate.update(
-                "DELETE FROM mcp_tool_permission WHERE tool_id = ? AND permission_code = ?", toolId, permissionCode);
+    public boolean removeToolPermission(@NonNull UUID toolId, @NonNull String permissionCode) {
+        return jdbcTemplate.update(
+                        "DELETE FROM mcp_tool_permission WHERE tool_id = ? AND permission_code = ?",
+                        toolId,
+                        permissionCode)
+                > 0;
     }
 
     private DiscoveredOperation mapDiscovered(ResultSet rs, int rowNum) throws SQLException {
