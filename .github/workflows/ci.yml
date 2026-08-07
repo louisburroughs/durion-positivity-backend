@@ -179,7 +179,17 @@ jobs:
             ${{ runner.os }}-mvn-build-cache-
 
       - name: Install reactor (skip tests)
-        run: ./mvnw install -DskipTests -DskipITs -Darchunit.skipTests=true -T 1C -B -ntp -q
+        # alwaysRunPlugins: on a build-cache hit the extension skips the install
+        # goal, so sibling snapshots never reach ~/.m2 and the selective test
+        # reactor below fails resolution on any module outside its own graph
+        # (first pos-shared-dtos, then pos-tax-common via an -amd dependent —
+        # the -am band-aid can't cover dependents' own upstreams). Forcing the
+        # install plugin to run installs the restored artifacts without
+        # rebuilding them, keeping the cache's compile/test savings.
+        run: >-
+          ./mvnw install -DskipTests -DskipITs -Darchunit.skipTests=true
+          -Dmaven.build.cache.alwaysRunPlugins=maven-install-plugin:install
+          -T 1C -B -ntp -q
 
       - name: Compute test selection
         id: selection
