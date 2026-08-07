@@ -5,7 +5,7 @@
     {
       "fixture_id": "rag-lexical-glossary-wo-number",
       "query": "WO-2026-1001 workorder number format",
-      "actor": { "role": "ROLE_STAFF", "permission_codes": [] },
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
       "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
       "rag_scope": "master",
       "tags": ["positive", "lexical", "exact-code"],
@@ -14,7 +14,7 @@
     {
       "fixture_id": "rag-lexical-glossary-est-number",
       "query": "EST-YYYY-NNNN estimate number unique per location",
-      "actor": { "role": "ROLE_STAFF", "permission_codes": [] },
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
       "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
       "rag_scope": "master",
       "tags": ["positive", "lexical", "exact-code"],
@@ -23,7 +23,7 @@
     {
       "fixture_id": "rag-lexical-glossary-sku-constraint",
       "query": "uk_product_sku unique immutable SKU",
-      "actor": { "role": "ROLE_STAFF", "permission_codes": [] },
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
       "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
       "rag_scope": "master",
       "tags": ["positive", "lexical", "exact-identifier"],
@@ -32,7 +32,7 @@
     {
       "fixture_id": "rag-lexical-glossary-vin-pattern",
       "query": "vin_normalized 17 character pattern ^[A-HJ-NPR-Z0-9]{17}$",
-      "actor": { "role": "ROLE_STAFF", "permission_codes": [] },
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
       "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
       "rag_scope": "master",
       "tags": ["positive", "lexical", "exact-identifier"],
@@ -41,7 +41,7 @@
     {
       "fixture_id": "rag-lexical-glossary-gr-receipt",
       "query": "GR- goods receipt number prefix",
-      "actor": { "role": "ROLE_STAFF", "permission_codes": [] },
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
       "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
       "rag_scope": "master",
       "tags": ["positive", "lexical", "exact-code"],
@@ -50,7 +50,7 @@
     {
       "fixture_id": "rag-lexical-glossary-invoice-number",
       "query": "INV- epochMillis invoice number generateInvoiceNumber",
-      "actor": { "role": "ROLE_STAFF", "permission_codes": [] },
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
       "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
       "rag_scope": "master",
       "tags": ["positive", "lexical", "exact-code"],
