@@ -404,6 +404,23 @@ class WorkorderItemGenerationContractBehaviorIT extends BaseContractIntegrationT
                     .as("Non-approved item %s should not be a billable workorder item", nonApprovedItem.getId())
                     .isFalse();
         }
+
+        // Verify the DECLINED LABOR item WAS promoted as a non-billable declined
+        // service line (FI-3, #1133) with declined=true and status CANCELLED
+        List<EstimateItem> declinedItems = allItems.stream()
+                .filter(item -> item.getApprovalStatus() == ApprovalStatus.DECLINED)
+                .toList();
+        assertThat(declinedItems).hasSize(1);
+
+        for (EstimateItem declinedItem : declinedItems) {
+            com.positivity.workorder.internal.entity.WorkorderServiceLine declinedLine = laborItems.stream()
+                    .filter(ws -> ws.getOriginEstimateItemId().equals(declinedItem.getId()))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError(
+                            "Declined LABOR item " + declinedItem.getId() + " was not promoted as a service line"));
+            assertThat(declinedLine.getDeclined()).isTrue();
+            assertThat(declinedLine.getStatus()).isEqualTo(WorkorderItemStatus.CANCELLED);
+        }
     }
 
     private UUID seedEstimateWithMixedApprovalStatuses() {
