@@ -378,19 +378,29 @@ class LaborOverheadReportServiceImplTest {
         assertThat(report.getAverageRate()).isEqualByComparingTo("17");
     }
 
+    private void localCurrencyPlant(String currency, String perUsd, String averageRate) {
+        LocationProfile profile = new LocationProfile();
+        profile.setLocationCode(LOCATION);
+        profile.setLocationLabel("Local Plant");
+        profile.setCurrencyCode(currency);
+        when(locationProfileRepository.findByLocationCode(eq(LOCATION))).thenReturn(Optional.of(profile));
+        LocationFxRate fxRate = new LocationFxRate();
+        fxRate.setLocationCode(LOCATION);
+        fxRate.setFiscalYear(FISCAL_YEAR);
+        fxRate.setLocalCurrencyPerUsd(money(perUsd));
+        fxRate.setAverageRate(money(averageRate));
+        lenient()
+                .when(locationFxRateRepository.findByLocationCodeAndFiscalYear(eq(LOCATION), eq(FISCAL_YEAR)))
+                .thenReturn(Optional.of(fxRate));
+    }
+
     @Test
     void generate_convertsUsdOnlyLineUsingAverageRateOnLocalCurrencyPlant() {
         mappings(mapping("2.11.4", ACCT_INV), mapping("2.11.1", ACCT_UTIL));
         postedLines(
                 line(ACCT_INV, 1, LOCATION, money("100"), BigDecimal.ZERO),
                 line(ACCT_UTIL, 1, LOCATION, money("34"), BigDecimal.ZERO));
-        LocationFxRate fxRate = new LocationFxRate();
-        fxRate.setLocationCode(LOCATION);
-        fxRate.setFiscalYear(FISCAL_YEAR);
-        fxRate.setLocalCurrencyPerUsd(money("2.000000"));
-        fxRate.setAverageRate(money("2.000000"));
-        when(locationFxRateRepository.findByLocationCodeAndFiscalYear(eq(LOCATION), eq(FISCAL_YEAR)))
-                .thenReturn(Optional.of(fxRate));
+        localCurrencyPlant("MXN", "2.000000", "2.000000");
 
         LaborOverheadCostReport report = service.generate(LOCATION, FISCAL_YEAR, 12);
 
@@ -400,6 +410,43 @@ class LaborOverheadReportServiceImplTest {
         // Other lines and the 2.11 subtotal stay in local currency (subtotal uses unconverted child).
         assertThat(find(report, "2.11.1").getMonthly().get(0)).isEqualByComparingTo("34");
         assertThat(find(report, "2.11").getMonthly().get(0)).isEqualByComparingTo("134");
+    }
+
+    @Test
+    void generate_ignoresFxConfigWithoutLocationProfile() {
+        mappings(mapping("2.11.4", ACCT_INV));
+        postedLines(line(ACCT_INV, 1, LOCATION, money("100"), BigDecimal.ZERO));
+        LocationFxRate fxRate = new LocationFxRate();
+        fxRate.setLocationCode(LOCATION);
+        fxRate.setFiscalYear(FISCAL_YEAR);
+        fxRate.setLocalCurrencyPerUsd(money("2.000000"));
+        fxRate.setAverageRate(money("2.000000"));
+        lenient()
+                .when(locationFxRateRepository.findByLocationCodeAndFiscalYear(eq(LOCATION), eq(FISCAL_YEAR)))
+                .thenReturn(Optional.of(fxRate));
+
+        LaborOverheadCostReport report = service.generate(LOCATION, FISCAL_YEAR, 12);
+
+        // No profile -> US plant defaults; the orphaned FX row must not skew rates or convert.
+        assertThat(report.getCurrency()).isEqualTo("USD");
+        assertThat(report.getLocalCurrencyPerUsd()).isEqualByComparingTo("1.00");
+        assertThat(report.getAverageRate()).isEqualByComparingTo("1.00");
+        assertThat(find(report, "2.11.4").getMonthly().get(0)).isEqualByComparingTo("100");
+    }
+
+    @Test
+    void generate_usdProfilePlantIgnoresFxConfig() {
+        mappings(mapping("2.11.4", ACCT_INV));
+        postedLines(line(ACCT_INV, 1, LOCATION, money("100"), BigDecimal.ZERO));
+        localCurrencyPlant("USD", "2.000000", "2.000000");
+
+        LaborOverheadCostReport report = service.generate(LOCATION, FISCAL_YEAR, 12);
+
+        // USD plant: FX config (even if present) is inactive; no conversion, rates stay 1.00.
+        assertThat(report.getCurrency()).isEqualTo("USD");
+        assertThat(report.getLocalCurrencyPerUsd()).isEqualByComparingTo("1.00");
+        assertThat(report.getAverageRate()).isEqualByComparingTo("1.00");
+        assertThat(find(report, "2.11.4").getMonthly().get(0)).isEqualByComparingTo("100");
     }
 
     @Test
