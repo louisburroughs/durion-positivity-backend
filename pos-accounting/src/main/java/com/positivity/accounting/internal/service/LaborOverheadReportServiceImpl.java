@@ -45,9 +45,10 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Issue #731 enrichment: mappings are per-location-overridable (location rows replace global
  * rows per line code); the report header resolves {@code locationLabel}/{@code currency} from the
- * accounting-side {@link LocationProfile} and the FX rates from {@link LocationFxRate}, both
- * defaulting to a US plant (USD, 1.00) when unconfigured. The {@code usdOnly} line (2.11.4) is
- * presented in USD on local-currency plants via the year's average rate.
+ * accounting-side {@link LocationProfile}, defaulting to a US plant (USD, 1.00) when unconfigured.
+ * FX ({@link LocationFxRate}) is consulted only for a profiled non-USD plant — an orphaned FX row
+ * never skews a USD report — and only then is the {@code usdOnly} line (2.11.4) presented in USD
+ * via the year's average rate.
  */
 @Service
 @Transactional(readOnly = true)
@@ -92,16 +93,21 @@ public class LaborOverheadReportServiceImpl implements LaborOverheadReportServic
 
         LocationProfile profile =
                 locationProfileRepository.findByLocationCode(locationId).orElse(null);
-        LocationFxRate fxRate = locationFxRateRepository
-                .findByLocationCodeAndFiscalYear(locationId, fiscalYear)
-                .orElse(null);
+        // FX is active only for a profiled local-currency plant; a partial FX config without a
+        // profile (or for a USD plant) must not skew the header rates or convert any line.
+        boolean localCurrencyPlant = profile != null && !CURRENCY_USD.equals(profile.getCurrencyCode());
+        LocationFxRate fxRate = localCurrencyPlant
+                ? locationFxRateRepository
+                        .findByLocationCodeAndFiscalYear(locationId, fiscalYear)
+                        .orElse(null)
+                : null;
         BigDecimal averageRate = fxRate != null ? fxRate.getAverageRate() : RATE_US_PLANT;
 
         Map<String, BigDecimal[]> monthlyByCode = new HashMap<>();
         List<LaborOverheadReportLine> reportLines = new ArrayList<>();
         for (LineDef def : LaborOverheadTaxonomy.lines()) {
             BigDecimal[] monthly = computeMonthly(def, leafMonthly, monthlyByCode);
-            if (def.usdOnly()) {
+            if (def.usdOnly() && localCurrencyPlant) {
                 monthly = toUsd(monthly, averageRate);
             }
             reportLines.add(toReportLine(def, monthly, resolvedAsOfMonth));

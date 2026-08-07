@@ -17,6 +17,5 @@ public interface LocationProfileRepository extends JpaRepository<LocationProfile
      * @param locationCode the location code (e.g. {@code LOC-107})
      * @return the profile, or empty when the location has no accounting-side master data
      */
-    @NonNull
     Optional<LocationProfile> findByLocationCode(@NonNull String locationCode);
 }
