@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<extensions>
+    <!-- Maven Build Cache Extension pilot (docs/BACKEND_BUILD_SPEC.md section 4.5).
+         Disabled by default via .mvn/maven.config; CI enables it on pull-request
+         builds only. Release/ECR builds and main stay uncached until the pilot
+         passes the validation gate. -->
+    <extension>
+        <groupId>org.apache.maven.extensions</groupId>
+        <artifactId>maven-build-cache-extension</artifactId>
+        <version>1.2.3</version>
+    </extension>
+</extensions>

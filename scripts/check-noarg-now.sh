@@ -6,7 +6,13 @@ cd "$ROOT_DIR"
 
 PATTERN='\b(Instant\.now|LocalDateTime\.now|LocalDate\.now|Year\.now)\(\s*\)'
 
-matches=$(rg -n --no-heading "$PATTERN" --glob "**/src/main/**" . || true)
+# CI runners have no ripgrep: `rg` used to fail with exit 127, `|| true`
+# swallowed it, and the check passed vacuously. Fall back to GNU grep.
+if command -v rg >/dev/null 2>&1; then
+  matches=$(rg -n --no-heading "$PATTERN" --glob "**/src/main/**" . || true)
+else
+  matches=$(grep -rEn "$PATTERN" --include='*.java' ./*/src/main 2>/dev/null || true)
+fi
 
 if [[ -n "$matches" ]]; then
   echo "ERROR: Found forbidden no-arg time calls in src/main:"

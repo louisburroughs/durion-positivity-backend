@@ -121,8 +121,10 @@ its fields into `$GITHUB_OUTPUT`):
 
 `modules` is the deduplicated list of changed `pos-*` module directories, empty when
 `full_reactor` is `true` (the whole reactor builds, so no selection is meaningful). Consumers
-must branch on `full_reactor`, never on whether `modules` is empty — an empty list with
-`full_reactor: false` means "nothing to build" (docs-only change) and skips the build entirely.
+must check `full_reactor` before interpreting `modules` — an empty list never implies a full
+build. An empty list with `full_reactor: false` (a CI-triggering change that maps to no module,
+e.g. the root `Dockerfile`) skips the selective test pass; the build job still runs its install
+and ArchUnit invocations, preserving the pre-existing "always run pos-archunit" behaviour.
 
 **Full-reactor triggers** (any changed path matching):
 
@@ -158,49 +160,52 @@ build-and-unit-test          ONE job, one reactor invocation
 quality gates (Sonar PR scan)  [unchanged]
 ```
 
-The single job runs:
+The single job runs the lint/policy checks once (not per matrix leg — closes G5), then **three
+reactor invocations**:
 
 ```bash
-# Lint/policy checks once, not per matrix leg (closes G5)
 ./scripts/check-noarg-now.sh
 ./scripts/check-flyway-hygiene.sh
-```
 
-then one reactor invocation, stopped at `test`, in the form selected by the detect-modules
-output (§4.1):
+# 1. Full-reactor install, tests skipped (~2 min warm — measured baseline).
+./mvnw -B -ntp -T 1C install -DskipTests -DskipITs -Darchunit.skipTests=true
 
-```bash
-# full_reactor=false, modules non-empty — selective build.
-# ("pos-archunit" is appended by the workflow, so the -pl list is never empty here.)
+# 2. Selective tests: changed modules plus every dependent (closes G1).
+#    full_reactor=true → same command without -pl/-amd; empty selection → skipped.
 ./mvnw -B -ntp -T 1C \
-  -pl "$CHANGED_MODULES,pos-archunit" \
-  -am -amd \
-  test \
+  -pl "$CHANGED_MODULES" -amd \
+  -DskipTests=false test \
   org.jacoco:jacoco-maven-plugin:0.8.14:report \
+  -Darchunit.skipTests=true \
   -DskipITs
 
-# full_reactor=true — no -pl at all; every module (incl. pos-archunit) is in the reactor.
-./mvnw -B -ntp -T 1C \
-  test \
-  org.jacoco:jacoco-maven-plugin:0.8.14:report \
-  -DskipITs
+# 3. ArchUnit rules: -am reactor stopped at the test phase (#909-safe).
+./mvnw -B -ntp -T 1C -pl pos-archunit -am -DskipTests=false test \
+  -Dtest='com/positivity/archunit/*' -Dsurefire.failIfNoSpecifiedTests=false -DskipITs
 ```
 
-(`full_reactor=false` with an empty `modules` list skips the build job entirely — §4.1.)
+**Why three invocations and not the single selective one originally sketched here** (implementation
+finding, phase 2): Maven's `-amd` adds the *dependents* of the selection to the reactor but not
+those dependents' own upstream dependencies, so a purely selective `-pl <changed> -am -amd` build
+cannot resolve on a clean runner (verified: `-pl pos-shared-dtos -am -amd` yields a 29-project
+reactor that contains `pos-order` but not `pos-order`'s dependency `pos-events`). And
+`pos-archunit` declares dependencies on ~22 modules, so any dependent-closure that includes it is
+the full reactor anyway. The cheap full `install -DskipTests` (step 1) makes every internal
+artifact resolvable from `~/.m2`, after which the selective `-amd` test pass and the archunit
+reactor are both correct. Step 1 is the same build the old `build-reactor` job ran — the savings
+come from eliminating the per-module matrix jobs, not from skipping compilation.
 
 Design notes:
 
 - **`test`, not `verify`, on PRs — deliberately.** Failsafe ITs already run only on `main`
-  push / dispatch (current policy, kept). Stopping before `package` also means
-  `spring-boot:repackage` never runs, sibling modules resolve to `target/classes`, and
-  **pos-archunit can run inside the same reactor invocation** with no special-casing — the #909
-  hazard only exists past the `package` phase. The two workarounds in today's unit-test and
-  integration-test jobs collapse into nothing.
+  push / dispatch (current policy, kept). `-Darchunit.skipTests=true` is set on invocations 1
+  and 2: past the `package` phase (and against installed fat JARs) the ArchUnit rules pass
+  vacuously (#909), so they run only in invocation 3 where siblings resolve to `target/classes`.
 - `-amd` may pull in a large dependent set for shared-library changes. That is the point (G1).
   For a full-reactor trigger, `-pl` is omitted entirely.
-- The `build-reactor` install job and SHA-keyed reactor cache are **no longer needed on the PR
-  path** (nothing runs offline in a separate job). `setup-java`'s `cache: maven` keeps external
-  dependencies cached, keyed on `**/pom.xml`.
+- The separate `build-reactor` job disappears (its install moved into this job); the SHA-keyed
+  reactor cache is **not saved on the PR path** (no separate job consumes it). `setup-java`'s
+  `cache: maven` keeps external dependencies cached, keyed on `**/pom.xml`.
 - Checkout uses `fetch-depth: 0` only in `detect-modules`; the build job checks out at depth 1.
 - Memory budget: `-T 1C` on a 4-vCPU runner = up to 4 concurrent module builds, each with
   `forkCount=1` reused test JVM. `MAVEN_OPTS: -Xmx3072m` for the reactor JVM; test JVMs inherit
@@ -219,28 +224,24 @@ module count. This is a measured exception, not the default shape.
 detect-modules
       │
       ▼
-build-install                ONE reactor invocation to `install` (unit + failsafe ITs + package
-      │                       + install to ~/.m2 — see note below on why not `verify`)
-      │        ├─ upload service JARs as workflow artifact (tested bytes)
+build-install                same job shape as the PR path (§4.2), three invocations:
+      │                       1. full-reactor `install -DskipTests` (populates ~/.m2,
+      │                          packages every service JAR)
+      │                       2. `-pl <changed> -amd verify` — unit + failsafe ITs for
+      │                          changed modules and dependents
+      │                       3. pos-archunit rules at the test phase (#909-safe)
+      │        ├─ upload service JARs as workflow artifact (tested bytes, all services)
       │        ├─ save ~/.m2/repository to SHA-keyed reactor cache
       │        └─ upload surefire/failsafe/jacoco reports
-      ▼
-archunit                     ./mvnw -pl pos-archunit -am test -o   (test phase; #909-safe)
       ▼
 compose-smoke │ security-scan │ sonar    — all consume the build-install output; none re-run
       ▼                                    package/install from scratch (closes G3)
 docker-build-and-push        matrix over changed services, consuming the JAR artifact (§4.6)
 ```
 
-`build-install` command:
-
-```bash
-./mvnw -B -ntp -T 1C \
-  -pl "$CHANGED_MODULES" \
-  -am -amd \
-  install \
-  -Darchunit.skipTests=true
-```
+The full-reactor step-1 install (see §4.2 for why it is required) has a main-path bonus: every
+service JAR exists for every main commit, so whole-stack deploy tags (ECR `BACKEND_TAG`) can
+always be satisfied from the artifact regardless of how narrow the triggering change was.
 
 - **`install`, not `verify`, on `main` — deliberately.** `verify` runs every test and packages
   the JARs but stops one phase short of copying reactor artifacts into `~/.m2/repository`, so an
@@ -252,10 +253,10 @@ docker-build-and-push        matrix over changed services, consuming the JAR art
   `target/` trees or the internal `com/positivity` subtree of `~/.m2` as workflow artifacts — is
   rejected as a second transport mechanism with no benefit over the cache.)
 - On `main` the full lifecycle is required (failsafe ITs, packaged JARs). Because packaging
-  repackages siblings into fat JARs, **pos-archunit runs as its own downstream step** at the
-  `test` phase (`-am` builds siblings from source, so their classes resolve from
-  `target/classes`; `-o` works because `install` populated the local repo) — the one place the
-  #909 special case survives, matching today's proven pattern.
+  repackages siblings into fat JARs, **pos-archunit runs as invocation 3 inside the same job**
+  at the `test` phase (`-am` builds siblings from source, so their classes resolve from
+  `target/classes`) — the one place the #909 special case survives, matching today's proven
+  pattern without paying a separate job's overhead.
 - Jobs that only need compiled/packaged output (Sonar, compose smoke test, OWASP) restore the
   SHA-keyed reactor cache written by `build-install` instead of rebuilding (the cache mechanism
   from §1.1 stays, relocated to the main path where multiple consumers still exist).
@@ -305,6 +306,16 @@ flakiness appears.
     </extension>
 </extensions>
 ```
+
+**Pilot status (2026-08-06):** the first enabled run failed with
+`OutOfMemoryError: Required array size too large` in the extension's output hashing. Root
+cause (reproduced and fixed locally): `pos-archunit` carried a no-op-looking
+`spring-boot-maven-plugin` declaration whose repackage embedded its ~22 sibling fat-JAR
+dependencies into a **2.4 GB** `pos-archunit.jar` — unreadable into a byte array (2 GiB
+limit), and silently bloating every SHA-keyed reactor cache before this. With the repackage
+removed (the module is test-only; nothing consumes its jar, now 4.8 KB) the full-reactor
+`install` passes with the cache enabled and a same-inputs second run restores all modules
+from cache — the validation gate's first two checks, verified locally.
 
 Rollout policy — the pilot scope is **PR builds only** (matching the §3 disposition); `main`
 stays uncached until the pilot passes its validation gate:

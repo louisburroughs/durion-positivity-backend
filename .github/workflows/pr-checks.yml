@@ -17,24 +17,33 @@ jobs:
     outputs:
       modules: ${{ steps.changed.outputs.modules }}
       has-changes: ${{ steps.changed.outputs.has-changes }}
-    
+      full-reactor: ${{ steps.changed.outputs.full-reactor }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      
+
       - name: Detect changed modules
         id: changed
         run: |
-          # Get changed files between base and head
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
-          echo "Changed files:"
-          echo "$CHANGED_FILES"
-          
-          # Extract unique module names
-          CHANGED_MODULES=$(echo "$CHANGED_FILES" | grep '^pos-' | cut -d'/' -f1 | sort -u | tr '\n' ',' | sed 's/,$//')
-          
+          set -euo pipefail
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          DETECTION="$(./scripts/ci/detect-modules.sh "origin/${{ github.base_ref }}" HEAD)"
+          echo "Detection: ${DETECTION}"
+
+          FULL_REACTOR="$(jq -r '.full_reactor' <<< "${DETECTION}")"
+          if [[ "${FULL_REACTOR}" == "true" ]]; then
+            # A full-reactor change (root pom, .mvn/**, BOM, ci.yml, compose)
+            # affects every module: the detection's module list is empty by
+            # contract, so lint every containerized module's Dockerfile.
+            CHANGED_MODULES="$(ls -d pos-*/ | cut -d'/' -f1 | paste -sd, -)"
+          else
+            CHANGED_MODULES="$(jq -r '.modules | join(",")' <<< "${DETECTION}")"
+          fi
+
+          echo "full-reactor=${FULL_REACTOR}" >> $GITHUB_OUTPUT
           if [ -z "$CHANGED_MODULES" ]; then
             echo "has-changes=false" >> $GITHUB_OUTPUT
             echo "modules=" >> $GITHUB_OUTPUT
@@ -42,7 +51,7 @@ jobs:
             echo "has-changes=true" >> $GITHUB_OUTPUT
             echo "modules=$CHANGED_MODULES" >> $GITHUB_OUTPUT
           fi
-          
+
           echo "Changed modules: $CHANGED_MODULES"
 
   # Note: Build and test are now handled by ci.yml to avoid duplication.
@@ -120,10 +129,13 @@ jobs:
         with:
           script: |
             const modules = '${{ needs.detect-changes.outputs.modules }}';
-            
+            const fullReactor = '${{ needs.detect-changes.outputs.full-reactor }}' === 'true';
+
             let comment = '## 🔍 PR Analysis\n\n';
-            
-            if (!modules) {
+
+            if (fullReactor) {
+              comment += '🔄 Build-wide change (root pom / `.mvn` / BOM / CI config): **all modules** are affected and the full reactor will be tested.\n';
+            } else if (!modules) {
               comment += '✅ No backend modules were modified in this PR.\n';
             } else {
               comment += '### Changed Modules\n';
