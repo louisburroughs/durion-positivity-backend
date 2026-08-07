@@ -23,6 +23,7 @@ erDiagram
 		UUID id
 		UUID vehicle_id
 		jsonb preferences
+		Integer service_interval_months
 		TEXT service_notes
 		UUID created_by_user_id
 		UUID updated_by_user_id

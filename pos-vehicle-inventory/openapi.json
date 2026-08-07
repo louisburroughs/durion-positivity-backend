@@ -825,6 +825,13 @@
             "additionalProperties": true,
             "description": "Complete preference map (replaces existing preferences)"
           },
+          "serviceIntervalMonths": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1,
+            "maximum": 120,
+            "description": "Structured service interval in whole months; null clears the per-vehicle override (#1175)"
+          },
           "serviceNotes": {
             "type": "string",
             "description": "Service notes"
@@ -853,6 +860,13 @@
             "type": "object",
             "additionalProperties": true,
             "description": "Partial preference map to merge (does not replace existing keys)"
+          },
+          "serviceIntervalMonths": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1,
+            "maximum": 120,
+            "description": "Structured service interval in whole months; null leaves the current value unchanged (#1175)"
           },
           "updatedByUserId": {
             "type": "string",

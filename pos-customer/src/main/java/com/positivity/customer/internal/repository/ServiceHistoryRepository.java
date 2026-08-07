@@ -20,19 +20,23 @@ public interface ServiceHistoryRepository extends JpaRepository<ServiceHistory, 
     boolean existsBySourceEventId(String sourceEventId);
 
     /**
-     * Most recent completion per party for the given candidates — the single batch
-     * query the
-     * segment resolver uses to derive last-service age and service-due (FI-3,
-     * #1133).
+     * Most recent completion per (party, vehicle) for the given candidates — the single batch
+     * query the segment resolver uses to derive last-service age (max across scopes) and to
+     * evaluate service-due against the effective per-vehicle interval (FI-3, #1133, #1175).
+     * Vehicle-less history rows group under a null vehicleId and are judged against the module
+     * default.
      */
-    @Query("select sh.partyId as partyId, max(sh.completedAt) as lastCompletedAt"
-            + " from ServiceHistory sh where sh.partyId in :partyIds group by sh.partyId")
+    @Query("select sh.partyId as partyId, sh.vehicleId as vehicleId, max(sh.completedAt) as lastCompletedAt"
+            + " from ServiceHistory sh where sh.partyId in :partyIds group by sh.partyId, sh.vehicleId")
     @NonNull
-    List<PartyLastServiceView> findLastServiceByParty(@Param("partyIds") @NonNull Collection<UUID> partyIds);
+    List<PartyVehicleLastServiceView> findLastServiceByPartyAndVehicle(
+            @Param("partyIds") @NonNull Collection<UUID> partyIds);
 
-    /** Projection: a party and its most recent service-completion timestamp. */
-    interface PartyLastServiceView {
+    /** Projection: a (party, vehicle) scope and its most recent service-completion timestamp. */
+    interface PartyVehicleLastServiceView {
         UUID getPartyId();
+
+        UUID getVehicleId();
 
         Instant getLastCompletedAt();
     }

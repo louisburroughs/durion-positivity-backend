@@ -4,6 +4,8 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import java.util.Map;
 import java.util.UUID;
@@ -33,6 +35,14 @@ public class UpsertPreferencesRequest {
             example = "{\"oilType\":\"synthetic\",\"washPreference\":\"hand\"}")
     @NotNull
     private Map<String, Object> preferences;
+
+    @Schema(
+            description = "Structured service interval in whole months; null means use the CRM default (#1175)",
+            example = "6",
+            requiredMode = NOT_REQUIRED)
+    @Min(1)
+    @Max(120)
+    private Integer serviceIntervalMonths;
 
     @Schema(
             description = "Optional service notes for technicians",

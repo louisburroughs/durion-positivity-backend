@@ -8,6 +8,7 @@ Vehicle registry and inventory service for the Durion Positivity ETSMS platform.
 - Search vehicles by VIN, account, or full-text criteria
 - Manage customer care preferences per vehicle
 - Publish `vehicle.vehicle.updated` events on `vehicle.events.v1` via a transactional outbox (ADR-0044 §6, #843); frontends write vehicles here directly through the gateway, and pos-customer keeps a read-only `ext_vehicle` replica fed by these events
+- Publish `vehicle.care-preference.updated` events on the same topic after care-preference mutations (#1175); pos-customer projects the structured `serviceIntervalMonths` into an `ext_vehicle_care_preference` replica that drives per-vehicle CRM service-due resolution
 - Serve replay/bootstrap commands on `vehicle.commands.v1` and publish reconciliation manifests on `vehicle.manifest.v1`
 - Support legacy vehicle data migration (`VehicleLegacyService`)
 - Expose bulk vehicle import via `POST /v1/vehicles/bulk-ingest`

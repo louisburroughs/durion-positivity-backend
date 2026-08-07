@@ -10,6 +10,7 @@ public final class VehicleCarePreferenceMapper {
                 .id(preference.getId())
                 .vehicleId(preference.getVehicleId())
                 .preferences(preference.getPreferences())
+                .serviceIntervalMonths(preference.getServiceIntervalMonths())
                 .serviceNotes(preference.getServiceNotes())
                 .createdByUserId(preference.getCreatedByUserId())
                 .updatedByUserId(preference.getUpdatedByUserId())

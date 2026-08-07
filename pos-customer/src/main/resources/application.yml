@@ -75,8 +75,10 @@ pos:
   customer:
     crm:
       # Service-due segment attribute (#1144): a party is `service.due` once its last completed
-      # service is at least this many whole months old. Module-wide interval until per-vehicle
-      # care-preference intervals are fed from pos-vehicle-inventory.
+      # service is at least this many whole months old. Fallback interval only (#1175): a
+      # vehicle's care-preference interval replicated from pos-vehicle-inventory
+      # (ext_vehicle_care_preference) takes precedence; this default covers vehicles without an
+      # override and vehicle-less service history.
       service-due-months: ${POS_CUSTOMER_SERVICE_DUE_MONTHS:6}
       # Service-due reminder feed (#1153): raises one SERVICE_DUE_REMINDER follow-up task per
       # party/vehicle service cycle once its latest completion is service-due-months old.

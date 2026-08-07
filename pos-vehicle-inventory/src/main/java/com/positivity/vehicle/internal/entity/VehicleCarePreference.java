@@ -64,6 +64,14 @@ public class VehicleCarePreference {
     @Column(name = "preferences", columnDefinition = "jsonb", nullable = false)
     private Map<String, Object> preferences;
 
+    /**
+     * Structured service interval in whole months, promoted out of the JSONB blob (#1175) so it
+     * can be validated and fed to CRM as a {@code vehicle.care-preference.updated} fact. Null
+     * means "no per-vehicle override" — CRM consumers fall back to their module-wide default.
+     */
+    @Column(name = "service_interval_months")
+    private Integer serviceIntervalMonths;
+
     @Column(name = "service_notes", columnDefinition = "TEXT")
     private String serviceNotes;
 
