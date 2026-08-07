@@ -41,7 +41,7 @@ primary 0.6 floor). Three fixture classes:
 
 - **bare-token** (`glossary-identifiers.json`, `returns-refunds.json`, `codes-catalogs.json`) —
   exact enum constants, `domain:resource:action` permission codes, and event ids with no semantic
-  hook, per the per-doc fixture spec in `docs/rag-corpus-growth-plan-1124.md`.
+  hook, per the per-doc fixture spec in `../../../../docs/rag-corpus-growth-plan-1124.md`.
 - **dense-miss NL questions** (`dense-miss-questions.json`) — natural-language identifier questions;
   the VIN and invoice-number entries are live-verified dense misses (#1170) recovered only by the
   lexical path. These give the suite a non-zero `dense_misses` denominator.
@@ -52,7 +52,7 @@ primary 0.6 floor). Three fixture classes:
   `rag_retrieval.recall_at_k` floor is untouched by all of this.
 
 After changing these fixtures, verify on alpha per
-`docs/rag-corpus-growth-and-flip-threshold-1124.md`: re-run `eval_live.py`, confirm
+`../../../../docs/rag-corpus-growth-and-flip-threshold-1124.md`: re-run `eval_live.py`, confirm
 `rag_lexical_hybrid_784.dense_misses > 0` and `hybrid_recall_at_k > dense_recall_at_k`, and update
 each fixture's `dense-miss-candidate` tag to `dense-miss` (or adjust the query) based on the
 observed per-fixture detail.
