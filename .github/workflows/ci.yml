@@ -191,15 +191,24 @@ jobs:
           if [[ "${FULL_REACTOR}" == "true" ]]; then
             # Whole reactor affected: no -pl, every module's tests run.
             echo "args=" >> "$GITHUB_OUTPUT"
+            echo "args-pr=" >> "$GITHUB_OUTPUT"
             echo "run-tests=true" >> "$GITHUB_OUTPUT"
           else
             CSV="$(jq -r 'join(",")' <<< "${CHANGED_MODULES}")"
             if [[ -z "${CSV}" ]]; then
               # No module changed (e.g. root Dockerfile): archunit still runs below.
               echo "args=" >> "$GITHUB_OUTPUT"
+              echo "args-pr=" >> "$GITHUB_OUTPUT"
               echo "run-tests=false" >> "$GITHUB_OUTPUT"
             else
               echo "args=-pl ${CSV} -amd" >> "$GITHUB_OUTPUT"
+              # PR variant adds -am: with the build-cache pilot enabled, a cache
+              # hit on the install step skips installing sibling snapshots into
+              # ~/.m2, so the test session must materialize upstream modules in
+              # its own reactor (cache restores them cheaply). Without this, any
+              # re-run that hits the restored cache fails dependency resolution
+              # ("Could not find artifact com.positivity:pos-events:...").
+              echo "args-pr=-pl ${CSV} -amd -am" >> "$GITHUB_OUTPUT"
               echo "run-tests=true" >> "$GITHUB_OUTPUT"
             fi
           fi
@@ -210,7 +219,7 @@ jobs:
         # module builds fork test JVMs concurrently, and default heap sizing would
         # overcommit the 16 GB runner.
         run: |
-          ./mvnw ${{ steps.selection.outputs.args }} \
+          ./mvnw ${{ steps.selection.outputs.args-pr }} \
             -DskipTests=false test \
             org.jacoco:jacoco-maven-plugin:0.8.14:report \
             -Darchunit.skipTests=true \
