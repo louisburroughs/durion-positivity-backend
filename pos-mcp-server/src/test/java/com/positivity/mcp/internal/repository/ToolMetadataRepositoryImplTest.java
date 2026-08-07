@@ -53,7 +53,8 @@ class ToolMetadataRepositoryImplTest {
 
     @BeforeEach
     void setUp() {
-        repository = new ToolMetadataRepositoryImpl(jdbcTemplate);
+        repository = new ToolMetadataRepositoryImpl(
+                jdbcTemplate, new com.positivity.mcp.internal.config.RagEmbeddingSettings("embedding", 768));
     }
 
     @Test

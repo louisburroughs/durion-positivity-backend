@@ -37,6 +37,11 @@ public final class EventTypes {
                 EventTypeRegistration.write(
                                 "NLTI_SESSION_WORKFLOW_STATE_SET", "Advance the workflow state of a NLTI session")
                         .build(),
+                EventTypeRegistration.approval(
+                                "NLTI_WRITE_PLAN_CONFIRM", "Confirm and execute a previewed NLTI write plan")
+                        .build(),
+                EventTypeRegistration.write("NLTI_WRITE_PLAN_CANCEL", "Cancel a previewed NLTI write plan")
+                        .build(),
                 EventTypeRegistration.fastRead("NLTI_AUDIT_QUERY", "Query the NLTI audit event ledger")
                         .build(),
                 EventTypeRegistration.approval(

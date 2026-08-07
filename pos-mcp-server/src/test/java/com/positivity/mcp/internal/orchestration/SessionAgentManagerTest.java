@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.orchestration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -124,6 +125,7 @@ class SessionAgentManagerTest {
     private InventoryFacadeTool inventoryFacadeTool;
     private OrderFacadeTool orderFacadeTool;
     private SimpleChatClassifier simpleChatClassifier;
+    private SimpleChatFastPath simpleChatFastPath;
     private SharedOrchestrationSupport sharedOrchestrationSupport;
 
     private SessionAgentManager manager;
@@ -145,7 +147,7 @@ class SessionAgentManagerTest {
         lenient().when(workflowStateService.resolveActiveState(anyString())).thenReturn(Optional.empty());
         lenient().when(rolePromptResolver.resolvePrompt(anyString())).thenReturn("Default role prompt");
         lenient()
-                .when(rolePromptResolver.assemble(anyString(), anyString()))
+                .when(rolePromptResolver.assemble(anyString(), anyString(), anyBoolean()))
                 .thenReturn(new RolePromptResolver.AssembledPrompt("prompt", List.of("BASE", "ROLE")));
         lenient().when(embeddingModel.embed(anyString())).thenReturn(new float[] {0.1f});
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
@@ -162,6 +164,8 @@ class SessionAgentManagerTest {
                 "/order/v1/orders/search?q={query}");
         simpleChatClassifier = new SimpleChatClassifier(SimpleChatRuleDefaults.defaultCatalog());
         sharedOrchestrationSupport = new SharedOrchestrationSupport();
+        simpleChatFastPath =
+                new SimpleChatFastPath(simpleChatClassifier, rolePromptResolver, sharedOrchestrationSupport);
         QueryDocumentRetriever scopedRetriever = mock(QueryDocumentRetriever.class);
         lenient().when(toolRegistry.sharedTools()).thenReturn(List.of());
         lenient()
@@ -184,13 +188,16 @@ class SessionAgentManagerTest {
                 null,
                 null, // sessionSummary
                 rolePromptResolver,
-                simpleChatClassifier,
+                simpleChatFastPath,
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // answerResolutionLadder
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
                 workflowStateService,
+                null, // nltiRouter
+                null, // tieredChatModelResolver
+                true, // tieringEnabled (no-op without a router)
                 FIXED_CLOCK,
                 30,
                 500,
@@ -389,13 +396,16 @@ class SessionAgentManagerTest {
                 null,
                 null, // sessionSummary
                 rolePromptResolver,
-                simpleChatClassifier,
+                simpleChatFastPath,
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // answerResolutionLadder
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
                 workflowStateService,
+                null, // nltiRouter
+                null, // tieredChatModelResolver
+                true, // tieringEnabled (no-op without a router)
                 FIXED_CLOCK,
                 0,
                 500,
@@ -455,13 +465,16 @@ class SessionAgentManagerTest {
                 null,
                 null,
                 rolePromptResolver,
-                simpleChatClassifier,
+                simpleChatFastPath,
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // answerResolutionLadder
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
                 workflowStateService,
+                null, // nltiRouter
+                null, // tieredChatModelResolver
+                true, // tieringEnabled (no-op without a router)
                 FIXED_CLOCK,
                 30,
                 500,

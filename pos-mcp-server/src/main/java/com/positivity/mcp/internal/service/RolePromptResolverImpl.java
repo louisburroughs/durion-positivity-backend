@@ -61,8 +61,9 @@ public class RolePromptResolverImpl implements RolePromptResolver {
 
     @Override
     @Transactional(readOnly = true)
-    public @NonNull AssembledPrompt assemble(@NonNull String role, @NonNull String ragScope) {
-        List<String> layers = new ArrayList<>(4);
+    public @NonNull AssembledPrompt assemble(
+            @NonNull String role, @NonNull String ragScope, boolean writeCapableToolsPresent) {
+        List<String> layers = new ArrayList<>(5);
         StringBuilder text = new StringBuilder();
 
         // BASE — master operating rules (built-in fallback if unseeded).
@@ -99,6 +100,12 @@ public class RolePromptResolverImpl implements RolePromptResolver {
         // TOOL-USE — argument-grounding contract, always present.
         text.append("\n\n").append(SystemPromptDefaults.TOOL_USE_LAYER_TEXT);
         layers.add("TOOL_USE");
+
+        // WRITE-GATE (Gate 6, #1193) — only when a write-capable tool is in the candidate set.
+        if (writeCapableToolsPresent) {
+            text.append("\n\n").append(SystemPromptDefaults.WRITE_GATE_LAYER_TEXT);
+            layers.add("WRITE_GATE");
+        }
 
         return new AssembledPrompt(text.toString(), List.copyOf(layers));
     }

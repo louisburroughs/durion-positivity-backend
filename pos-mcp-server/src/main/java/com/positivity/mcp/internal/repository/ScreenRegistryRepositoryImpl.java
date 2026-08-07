@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.repository;
 
+import com.positivity.mcp.internal.config.RagEmbeddingSettings;
 import com.positivity.mcp.internal.domain.ScreenCandidate;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
@@ -19,8 +20,13 @@ public class ScreenRegistryRepositoryImpl implements ScreenRegistryRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
-    public ScreenRegistryRepositoryImpl(@NonNull JdbcTemplate jdbcTemplate) {
+    /** Validated vector column (Gate 5 G5.4, #1194): {@code embedding} or {@code embedding_1024}. */
+    private final String embeddingColumn;
+
+    public ScreenRegistryRepositoryImpl(
+            @NonNull JdbcTemplate jdbcTemplate, @NonNull RagEmbeddingSettings embeddingSettings) {
         this.jdbcTemplate = jdbcTemplate;
+        this.embeddingColumn = embeddingSettings.embeddingColumn();
     }
 
     @Override
@@ -28,14 +34,14 @@ public class ScreenRegistryRepositoryImpl implements ScreenRegistryRepository {
             float @NonNull [] queryEmbedding, @Nullable String domain, int limit) {
         StringBuilder sql = new StringBuilder("""
                 SELECT screen_key, title, url_template, domain, required_perm,
-                       1 - (embedding <=> ?::vector) AS score
+                       1 - (%1$s <=> ?::vector) AS score
                 FROM mcp_screen_registry
-                WHERE embedding IS NOT NULL
-                """);
+                WHERE %1$s IS NOT NULL
+                """.formatted(embeddingColumn));
         if (domain != null) {
             sql.append("  AND domain = ?\n");
         }
-        sql.append("ORDER BY embedding <=> ?::vector\nLIMIT ?\n");
+        sql.append("ORDER BY %s <=> ?::vector\nLIMIT ?\n".formatted(embeddingColumn));
 
         PGobject vector = toVectorPGobject(queryEmbedding);
         return jdbcTemplate.query(

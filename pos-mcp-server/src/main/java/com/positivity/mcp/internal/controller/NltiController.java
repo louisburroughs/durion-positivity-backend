@@ -4,8 +4,11 @@ import com.positivity.events.EmitEvent;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
+import com.positivity.mcp.internal.dto.WritePlanResponseV1;
 import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
+import com.positivity.mcp.internal.service.NltiWritePlanService;
+import com.positivity.mcp.internal.service.PermissionCodes;
 import com.positivity.mcp.service.NltiRequestService;
 import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,11 +39,15 @@ public class NltiController {
 
     private final NltiRequestService nltiRequestService;
     private final NltiWorkflowStateService workflowStateService;
+    private final NltiWritePlanService writePlanService;
 
     NltiController(
-            @NonNull NltiRequestService nltiRequestService, @NonNull NltiWorkflowStateService workflowStateService) {
+            @NonNull NltiRequestService nltiRequestService,
+            @NonNull NltiWorkflowStateService workflowStateService,
+            @NonNull NltiWritePlanService writePlanService) {
         this.nltiRequestService = nltiRequestService;
         this.workflowStateService = workflowStateService;
+        this.writePlanService = writePlanService;
     }
 
     @PostMapping("/requests")
@@ -89,6 +96,59 @@ public class NltiController {
         WorkflowState updatedState = workflowStateService.advance(sessionId, subjectId, request.workflowState());
         return ResponseEntity.ok(new WorkflowStateResponse(sessionId, updatedState));
     }
+
+    /**
+     * Gate 6 (#1193): explicit confirmation of a previewed write plan. Executes the plan's exact
+     * persisted arguments (never a re-parse of the user's text) after re-checking permission,
+     * expiry, idempotency, and stale-data invariants. Ownership-checked: the caller may only
+     * confirm plans on their own session.
+     */
+    @PostMapping("/requests/{requestId}/confirm")
+    @EmitEvent(id = "NLTI_WRITE_PLAN_CONFIRM", apiVersion = "1")
+    @PreAuthorize("hasAuthority('" + McpPermissions.NLTI_REQUEST_SUBMIT + "')")
+    @Operation(
+            summary = "Confirm a previewed write plan",
+            description = "Executes the exact persisted arguments of the write plan attached to the request. "
+                    + "Rejects expired plans, re-checks the caller's permission at execution time, and returns "
+                    + "the prior outcome for an already-executed idempotency key instead of re-executing.")
+    ResponseEntity<WritePlanResponseV1> confirmWritePlan(
+            @PathVariable @NonNull UUID requestId,
+            @RequestBody(required = false) ConfirmWritePlanRequest request,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+        String subjectId = requireSubjectId("write-plan confirmation");
+        return ResponseEntity.ok(writePlanService.confirm(
+                requestId,
+                subjectId,
+                PermissionCodes.extract(SecurityContextHelper.getAuthorities()),
+                request == null ? null : request.idempotencyKey(),
+                authorizationHeader));
+    }
+
+    /** Gate 6 (#1193): cancels a previewed write plan (idempotent for already-inactive plans). */
+    @PostMapping("/requests/{requestId}/cancel")
+    @EmitEvent(id = "NLTI_WRITE_PLAN_CANCEL", apiVersion = "1")
+    @PreAuthorize("hasAuthority('" + McpPermissions.NLTI_REQUEST_SUBMIT + "')")
+    @Operation(
+            summary = "Cancel a previewed write plan",
+            description = "Cancels the pending write plan attached to the request without executing it.")
+    ResponseEntity<WritePlanResponseV1> cancelWritePlan(@PathVariable @NonNull UUID requestId) {
+        String subjectId = requireSubjectId("write-plan cancellation");
+        return ResponseEntity.ok(writePlanService.cancel(requestId, subjectId));
+    }
+
+    private static @NonNull String requireSubjectId(@NonNull String operation) {
+        // Fail fast on a missing authenticated principal: subjectId is the session-ownership key.
+        return SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new AuthenticationCredentialsNotFoundException(
+                        "No authenticated username available for " + operation));
+    }
+
+    @Schema(name = "ConfirmWritePlanRequest", description = "Optional confirmation payload")
+    public record ConfirmWritePlanRequest(
+            @Schema(
+                    description = "Idempotency key from the plan preview; when present it must match the plan",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            String idempotencyKey) {}
 
     @Schema(name = "WorkflowStateUpdateRequest", description = "Requested workflow state for the session")
     public record WorkflowStateUpdateRequest(

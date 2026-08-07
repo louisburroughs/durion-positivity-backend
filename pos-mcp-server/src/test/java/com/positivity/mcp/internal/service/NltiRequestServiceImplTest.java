@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.dto.IntentV1;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
 import com.positivity.mcp.internal.entity.NltiSession;
@@ -12,6 +13,7 @@ import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.exception.SessionOwnershipViolationException;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
+import com.positivity.mcp.service.IntentParserService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -51,6 +53,12 @@ class NltiRequestServiceImplTest {
     private static final String OTHER_SUBJECT = "nlti-other-user";
 
     @Mock
+    private IntentParserService intentParserService;
+
+    @Mock
+    private NltiWritePlanService writePlanService;
+
+    @Mock
     private NltiSessionRepository sessionRepository;
 
     @Mock
@@ -66,11 +74,26 @@ class NltiRequestServiceImplTest {
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        service = new NltiRequestServiceImpl(sessionRepository, requestRepository, clock, meterRegistry);
+        service = new NltiRequestServiceImpl(
+                sessionRepository, requestRepository, intentParserService, writePlanService, clock, meterRegistry);
 
         UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(SUBJECT, null, List.of());
         auth.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, SUBJECT));
         SecurityContextHolder.getContext().setAuthentication(auth);
+
+        // Gate 6 (#1193): default to a QUERY classification so submit keeps the ACCEPTED path.
+        org.mockito.Mockito.lenient()
+                .when(intentParserService.parse(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new IntentV1(
+                        UUID.fromString("00000000-0000-7000-8000-00000000fee1"),
+                        "QUERY",
+                        "READY",
+                        "LOW",
+                        java.util.List.of(),
+                        java.util.List.of()));
         lenient().when(clock.instant()).thenReturn(Instant.parse("2026-01-01T12:00:00Z"));
         lenient().when(clock.getZone()).thenReturn(ZoneOffset.UTC);
     }
@@ -170,5 +193,45 @@ class NltiRequestServiceImplTest {
         session.setCreatedAt(OffsetDateTime.parse("2026-01-01T11:30:00Z"));
         session.setUpdatedAt(OffsetDateTime.parse("2026-01-01T11:55:00Z"));
         return session;
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName(
+            "Gate 6 (#1193): an ACTION-classified request is routed to the write-plan preview, not ACCEPTED")
+    void submit_actionIntent_delegatesToWritePlanPreview() {
+        org.mockito.Mockito.when(intentParserService.parse(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new IntentV1(
+                        UUID.fromString("00000000-0000-7000-8000-00000000fee2"),
+                        "ACTION",
+                        "READY",
+                        "MEDIUM",
+                        java.util.List.of(),
+                        java.util.List.of()));
+        NltiResponseV1 preview = new NltiResponseV1(
+                UUID.fromString("00000000-0000-7000-8000-00000000fee3"),
+                UUID.fromString("00000000-0000-7000-8000-00000000fee4"),
+                UUID.fromString("00000000-0000-7000-8000-00000000fee5"),
+                "PENDING_CONFIRMATION",
+                null,
+                null);
+        org.mockito.Mockito.when(writePlanService.previewAction(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(preview);
+
+        NltiResponseV1 response = service.submit(new NltiRequestDTO("create a purchase order", null, null));
+
+        org.assertj.core.api.Assertions.assertThat(response.status()).isEqualTo("PENDING_CONFIRMATION");
+        org.mockito.Mockito.verify(writePlanService)
+                .previewAction(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any());
     }
 }

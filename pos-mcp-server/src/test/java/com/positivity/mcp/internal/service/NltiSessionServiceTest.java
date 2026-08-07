@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.dto.IntentV1;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
 import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
+import com.positivity.mcp.service.IntentParserService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -50,6 +52,12 @@ class NltiSessionServiceTest {
     private static final String SUBJECT = "nlti-test-user";
 
     @Mock
+    private IntentParserService intentParserService;
+
+    @Mock
+    private NltiWritePlanService writePlanService;
+
+    @Mock
     private NltiSessionRepository sessionRepository;
 
     @Mock
@@ -65,11 +73,26 @@ class NltiSessionServiceTest {
     @BeforeEach
     void setUpSecurityContext() {
         meterRegistry = new SimpleMeterRegistry();
-        service = new NltiRequestServiceImpl(sessionRepository, requestRepository, clock, meterRegistry);
+        service = new NltiRequestServiceImpl(
+                sessionRepository, requestRepository, intentParserService, writePlanService, clock, meterRegistry);
 
         UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(SUBJECT, null, List.of());
         auth.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, SUBJECT));
         SecurityContextHolder.getContext().setAuthentication(auth);
+
+        // Gate 6 (#1193): default to a QUERY classification so submit keeps the ACCEPTED path.
+        org.mockito.Mockito.lenient()
+                .when(intentParserService.parse(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new IntentV1(
+                        UUID.fromString("00000000-0000-7000-8000-00000000fee1"),
+                        "QUERY",
+                        "READY",
+                        "LOW",
+                        java.util.List.of(),
+                        java.util.List.of()));
 
         // Fix ADR-0024: inject deterministic clock; use a base time in the past so "now - 24h" expiry
         // checks work consistently. Tests that need historical data set their own offsets from this base.

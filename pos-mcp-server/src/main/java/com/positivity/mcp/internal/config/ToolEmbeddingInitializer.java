@@ -5,9 +5,9 @@ import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.postgresql.util.PGobject;
-import org.springframework.ai.embedding.EmbeddingModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
@@ -27,15 +27,22 @@ public class ToolEmbeddingInitializer implements ApplicationRunner {
     private final JdbcTemplate jdbcTemplate;
     private final EmbeddingModel embeddingModel;
 
-    public ToolEmbeddingInitializer(@NonNull JdbcTemplate jdbcTemplate, @NonNull EmbeddingModel embeddingModel) {
+    /** Validated vector column (Gate 5 G5.4, #1194): {@code embedding} or {@code embedding_1024}. */
+    private final String embeddingColumn;
+
+    public ToolEmbeddingInitializer(
+            @NonNull JdbcTemplate jdbcTemplate,
+            @NonNull EmbeddingModel embeddingModel,
+            @NonNull RagEmbeddingSettings embeddingSettings) {
         this.jdbcTemplate = jdbcTemplate;
         this.embeddingModel = embeddingModel;
+        this.embeddingColumn = embeddingSettings.embeddingColumn();
     }
 
     @Override
     public void run(ApplicationArguments args) {
         long totalStartNanos = System.nanoTime();
-        String query = "SELECT id, name, description FROM mcp_tool WHERE embedding IS NULL";
+        String query = "SELECT id, name, description FROM mcp_tool WHERE %s IS NULL".formatted(embeddingColumn);
         List<ToolDescriptionRow> rows = jdbcTemplate.query(
                 query,
                 (resultSet, rowNum) -> new ToolDescriptionRow(
@@ -50,7 +57,9 @@ public class ToolEmbeddingInitializer implements ApplicationRunner {
             try {
                 float[] vector = embeddingModel.embed(row.description());
                 jdbcTemplate.update(
-                        "UPDATE mcp_tool SET embedding = ?::vector WHERE id = ?", toVectorPGobject(vector), row.id());
+                        "UPDATE mcp_tool SET %s = ?::vector WHERE id = ?".formatted(embeddingColumn),
+                        toVectorPGobject(vector),
+                        row.id());
                 populated++;
                 LOGGER.info(
                         "Populated embedding for tool {} ({}) in {} ms",

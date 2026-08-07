@@ -36,6 +36,11 @@ public class RequestScopedUserContext {
     // (facade vs openapi source). Written by OpenApiToolProvider inside agent.chat, read by the
     // manager when it emits the per-request telemetry event.
     private static final ThreadLocal<List<String>> DISCOVERED_OPENAPI_TOOLS = new ThreadLocal<>();
+    // Whether this request's resolved candidate tools include a write-capable one (a discovered op
+    // with a non-GET http method). Written by OpenApiToolProvider inside agent.chat BEFORE the
+    // system prompt is assembled, read by the per-request prompt supplier (WRITE-GATE layer, #1193)
+    // and by the manager's telemetry emission. Unset fail-closes to false (no WRITE_GATE layer).
+    private static final ThreadLocal<Boolean> WRITE_CAPABLE_TOOLS_PRESENT = new ThreadLocal<>();
 
     public void set(@NonNull CurrentUserContext context) {
         set(context, null);
@@ -54,9 +59,20 @@ public class RequestScopedUserContext {
         return names == null ? List.of() : names;
     }
 
+    /** Records whether the request's resolved tools include a write-capable one (#1193). */
+    public void recordWriteCapableToolsPresent(boolean present) {
+        WRITE_CAPABLE_TOOLS_PRESENT.set(present);
+    }
+
+    /** True when this request's resolved tools include a write-capable one; false when unrecorded. */
+    public boolean currentWriteCapableToolsPresent() {
+        return Boolean.TRUE.equals(WRITE_CAPABLE_TOOLS_PRESENT.get());
+    }
+
     public void clear() {
         HOLDER.remove();
         DISCOVERED_OPENAPI_TOOLS.remove();
+        WRITE_CAPABLE_TOOLS_PRESENT.remove();
     }
 
     public @NonNull Optional<CurrentUserContext> current() {

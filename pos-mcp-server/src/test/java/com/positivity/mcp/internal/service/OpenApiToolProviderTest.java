@@ -83,6 +83,45 @@ class OpenApiToolProviderTest {
     }
 
     @Test
+    @DisplayName("#1193: records write-capability — non-GET discovered op sets the flag, GET-only does not")
+    void recordsWriteCapableToolsPresent() {
+        userContext.set(new CurrentUserContext(
+                "advisor",
+                UUID.randomUUID(),
+                "ROLE_SERVICE_ADVISOR",
+                Set.of("ROLE_SERVICE_ADVISOR"),
+                Set.of("AUTHENTICATED"),
+                Set.of("workorder:workorder:view")));
+        when(embeddingModel.embed(anyString())).thenReturn(new float[] {0.1f, 0.2f});
+        DiscoveredOperation readOp = new DiscoveredOperation(
+                "workorders_getallworkorders",
+                "List workorders",
+                "GET",
+                "/v1/workorders",
+                "pos-workorder",
+                null,
+                List.of());
+        DiscoveredOperation writeOp = new DiscoveredOperation(
+                "workorders_createworkorder",
+                "Create workorder",
+                "POST",
+                "/v1/workorders",
+                "pos-workorder",
+                null,
+                List.of());
+
+        when(repository.findDiscoveredCandidatesForPermissions(any(), anyInt(), any(), anyString()))
+                .thenReturn(List.of(readOp));
+        provider.resolveToolCallbacks("show open workorders");
+        assertThat(userContext.currentWriteCapableToolsPresent()).isFalse();
+
+        when(repository.findDiscoveredCandidatesForPermissions(any(), anyInt(), any(), anyString()))
+                .thenReturn(List.of(readOp, writeOp));
+        provider.resolveToolCallbacks("create a workorder");
+        assertThat(userContext.currentWriteCapableToolsPresent()).isTrue();
+    }
+
+    @Test
     @DisplayName("#779: shared provider does not leak a high-permission tool to a low-permission caller")
     void doesNotLeakAcrossCallersViaSharedProvider() {
         when(embeddingModel.embed(anyString())).thenReturn(new float[] {0.1f, 0.2f});

@@ -92,6 +92,21 @@ public final class SystemPromptDefaults {
             """;
 
     /**
+     * WRITE-GATE layer (Gate 6, #1193): appended only when a write-capable tool is in the request's
+     * candidate set. The model must never execute a mutation directly — writes go through the
+     * preview → explicit confirmation → exact persisted-args execution flow.
+     */
+    static final String WRITE_GATE_LAYER_TEXT = """
+            Write-action gate:
+            - Never execute a create, update, delete, posting, or cancellation directly. Writes require an explicit user confirmation step.
+            - When the user asks for a write action, present a preview of exactly what would happen and ask them to confirm.
+            - Echo every argument you will send, verbatim, in the preview — omit nothing important.
+            - Disclose any argument you filled with an inferred default (e.g. "defaulting priority to normal — change?") and offer to change it.
+            - For high-risk actions (money movement, postings, deletions, irreversible changes), never rely on inferred defaults; require the user's explicit selection.
+            - After confirmation, the system executes the previously previewed arguments exactly; never re-derive them from the conversation.
+            """;
+
+    /**
      * Resolves the system prompt key for a RAG scope.
      *
      * <p>Null or blank values normalize to {@link RagScope#MASTER}.

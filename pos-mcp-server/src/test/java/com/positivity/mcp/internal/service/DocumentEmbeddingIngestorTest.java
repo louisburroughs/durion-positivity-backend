@@ -4,8 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -29,9 +29,9 @@ class DocumentEmbeddingIngestorTest {
     void addsNormalizedRagScopeToSegmentMetadata() {
         Map<String, Object> metadata = Map.of("document_id", "inventory.stock", "rag_scope", " INVENTORY ");
 
-                PgVectorStore embeddingStore = mock(PgVectorStore.class);
+        PgVectorStore embeddingStore = mock(PgVectorStore.class);
         EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
-                when(embeddingModel.embed(anyList())).thenReturn(List.of(new float[] {1.0f}));
+        when(embeddingModel.embed(anyList())).thenReturn(List.of(new float[] {1.0f}));
         DocumentEmbeddingIngestor ingestor =
                 new DocumentEmbeddingIngestor(embeddingStore, embeddingModel, false, 2000, 200);
 
@@ -40,7 +40,8 @@ class DocumentEmbeddingIngestorTest {
         ArgumentCaptor<List<Document>> segmentCaptor = listCaptor();
         verify(embeddingStore).add(segmentCaptor.capture());
         assertTrue(segmentCaptor.getValue().stream()
-                .allMatch(segment -> "inventory".equals(String.valueOf(segment.getMetadata().get("rag_scope")))));
+                .allMatch(segment ->
+                        "inventory".equals(String.valueOf(segment.getMetadata().get("rag_scope")))));
     }
 
     @Test
@@ -67,9 +68,8 @@ class DocumentEmbeddingIngestorTest {
         EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
         // With segment size 10 and configured overlap 9, effective overlap is capped to 5.
         when(embeddingModel.embed(anyList()))
-                .thenAnswer(invocation -> ((List<String>) invocation.getArgument(0)).stream()
-                        .map(ignored -> new float[] {1.0f})
-                        .toList());
+                .thenAnswer(invocation -> ((List<String>) invocation.getArgument(0))
+                        .stream().map(ignored -> new float[] {1.0f}).toList());
         DocumentEmbeddingIngestor ingestor =
                 new DocumentEmbeddingIngestor(embeddingStore, embeddingModel, true, 10, 9, 100);
 
@@ -108,15 +108,14 @@ class DocumentEmbeddingIngestorTest {
         PgVectorStore embeddingStore = mock(PgVectorStore.class);
         EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
         when(embeddingModel.embed(anyList()))
-                .thenAnswer(invocation -> ((List<String>) invocation.getArgument(0)).stream()
-                        .map(ignored -> new float[] {1.0f})
-                        .toList());
+                .thenAnswer(invocation -> ((List<String>) invocation.getArgument(0))
+                        .stream().map(ignored -> new float[] {1.0f}).toList());
         // Large segment size so no section needs further sliding-window splitting; only the
         // heading-based split should apply.
-        DocumentEmbeddingIngestor ingestor = new DocumentEmbeddingIngestor(embeddingStore, embeddingModel, true, 2000, 200);
+        DocumentEmbeddingIngestor ingestor =
+                new DocumentEmbeddingIngestor(embeddingStore, embeddingModel, true, 2000, 200);
 
-        String content =
-                """
+        String content = """
                 # Glossary
 
                 ## Purpose
@@ -160,9 +159,8 @@ class DocumentEmbeddingIngestorTest {
         PgVectorStore embeddingStore = mock(PgVectorStore.class);
         EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
         when(embeddingModel.embed(anyList()))
-                .thenAnswer(invocation -> ((List<String>) invocation.getArgument(0)).stream()
-                        .map(ignored -> new float[] {1.0f})
-                        .toList());
+                .thenAnswer(invocation -> ((List<String>) invocation.getArgument(0))
+                        .stream().map(ignored -> new float[] {1.0f}).toList());
         DocumentEmbeddingIngestor ingestor = new DocumentEmbeddingIngestor(embeddingStore, embeddingModel, true, 20, 0);
 
         String content = "## Big section\n" + "x".repeat(100);
@@ -178,9 +176,8 @@ class DocumentEmbeddingIngestorTest {
         PgVectorStore embeddingStore = mock(PgVectorStore.class);
         EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
         when(embeddingModel.embed(anyList()))
-                .thenAnswer(invocation -> ((List<String>) invocation.getArgument(0)).stream()
-                        .map(ignored -> new float[] {1.0f})
-                        .toList());
+                .thenAnswer(invocation -> ((List<String>) invocation.getArgument(0))
+                        .stream().map(ignored -> new float[] {1.0f}).toList());
         DocumentEmbeddingIngestor ingestor =
                 new DocumentEmbeddingIngestor(embeddingStore, embeddingModel, true, 10, 9, 100);
 

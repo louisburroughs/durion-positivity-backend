@@ -49,7 +49,8 @@ public class DocumentEmbeddingIngestor {
         this.embeddingModel = embeddingModel;
         this.chunkingEnabled = chunkingEnabled;
         this.maxSegmentSize = Math.max(1, maxSegmentSize);
-        int overlapCap = Math.max(0, Math.min(this.maxSegmentSize - 1, (int) (this.maxSegmentSize * MAX_OVERLAP_RATIO)));
+        int overlapCap =
+                Math.max(0, Math.min(this.maxSegmentSize - 1, (int) (this.maxSegmentSize * MAX_OVERLAP_RATIO)));
         this.maxOverlapSize = Math.clamp(maxOverlapSize, 0, overlapCap);
         this.segmentStepSize = Math.max(1, this.maxSegmentSize - this.maxOverlapSize);
         this.maxChunksPerDocument = Math.max(1, maxChunksPerDocument);
@@ -82,7 +83,8 @@ public class DocumentEmbeddingIngestor {
         try {
             List<Document> segments = segments(content, normalizedMetadata, documentId);
             long embeddingStartNanos = System.nanoTime();
-            List<float[]> embeddings = embeddingModel.embed(segments.stream().map(Document::getText).toList());
+            List<float[]> embeddings = embeddingModel.embed(
+                    segments.stream().map(Document::getText).toList());
             LOGGER.info(
                     "Embedded RAG document {} with {} segments in {} ms",
                     documentId,

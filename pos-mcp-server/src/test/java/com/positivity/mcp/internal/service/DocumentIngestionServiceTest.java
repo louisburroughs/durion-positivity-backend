@@ -57,8 +57,8 @@ class DocumentIngestionServiceTest {
         service.ingestDocument("some text", Map.of("source", "test"));
 
         verify(embeddingModel, times(1))
-            .embed(argThat((List<String> segments) ->
-                segments.size() == 1 && segments.get(0).equals("some text")));
+                .embed(argThat((List<String> segments) ->
+                        segments.size() == 1 && segments.get(0).equals("some text")));
         verify(embeddingStore, times(1)).add(any());
     }
 
@@ -86,13 +86,14 @@ class DocumentIngestionServiceTest {
     @Test
     @DisplayName("ingestDocuments continues processing remaining docs when one embed fails")
     void ingestDocuments_singleFailure_doesNotAbortBatch() {
-        when(embeddingModel.embed(org.mockito.ArgumentMatchers.<List<String>>any())).thenAnswer(invocation -> {
-            List<String> segments = invocation.getArgument(0);
-            if (segments.get(0).equals("doc0")) {
-                throw new RuntimeException("embed failed");
-            }
-            return embeddingsFor(segments);
-        });
+        when(embeddingModel.embed(org.mockito.ArgumentMatchers.<List<String>>any()))
+                .thenAnswer(invocation -> {
+                    List<String> segments = invocation.getArgument(0);
+                    if (segments.get(0).equals("doc0")) {
+                        throw new RuntimeException("embed failed");
+                    }
+                    return embeddingsFor(segments);
+                });
 
         service.ingestDocuments(
                 List.of("doc0", "doc1", "doc2"), List.of(Map.of("i", 0), Map.of("i", 1), Map.of("i", 2)));
@@ -131,16 +132,16 @@ class DocumentIngestionServiceTest {
         org.assertj.core.api.Assertions.assertThat(segments).hasSizeGreaterThan(1);
         for (int index = 0; index < segments.size(); index++) {
             org.assertj.core.api.Assertions.assertThat(
-                        String.valueOf(segments.get(index).getMetadata().get("document_id")))
+                            String.valueOf(segments.get(index).getMetadata().get("document_id")))
                     .isEqualTo("policy-1");
             org.assertj.core.api.Assertions.assertThat(
-                        String.valueOf(segments.get(index).getMetadata().get("source")))
+                            String.valueOf(segments.get(index).getMetadata().get("source")))
                     .isEqualTo("manual");
             org.assertj.core.api.Assertions.assertThat(
-                        ((Number) segments.get(index).getMetadata().get("chunk_index")).intValue())
+                            ((Number) segments.get(index).getMetadata().get("chunk_index")).intValue())
                     .isEqualTo(index);
             org.assertj.core.api.Assertions.assertThat(
-                        ((Number) segments.get(index).getMetadata().get("chunk_count")).intValue())
+                            ((Number) segments.get(index).getMetadata().get("chunk_count")).intValue())
                     .isEqualTo(segments.size());
         }
     }
@@ -167,16 +168,17 @@ class DocumentIngestionServiceTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<Document>> segmentsCaptor = ArgumentCaptor.forClass(List.class);
         verify(embeddingStore).add(segmentsCaptor.capture());
-        org.assertj.core.api.Assertions.assertThat(
-                String.valueOf(segmentsCaptor.getValue().get(0).getMetadata().get("document_id")))
+        org.assertj.core.api.Assertions.assertThat(String.valueOf(
+                        segmentsCaptor.getValue().get(0).getMetadata().get("document_id")))
                 .isNotBlank();
     }
 
     private void mockEmbeddingsForAnySegments() {
-        when(embeddingModel.embed(org.mockito.ArgumentMatchers.<List<String>>any())).thenAnswer(invocation -> {
-            List<String> segments = invocation.getArgument(0);
-            return embeddingsFor(segments);
-        });
+        when(embeddingModel.embed(org.mockito.ArgumentMatchers.<List<String>>any()))
+                .thenAnswer(invocation -> {
+                    List<String> segments = invocation.getArgument(0);
+                    return embeddingsFor(segments);
+                });
     }
 
     private static List<float[]> embeddingsFor(List<String> segments) {

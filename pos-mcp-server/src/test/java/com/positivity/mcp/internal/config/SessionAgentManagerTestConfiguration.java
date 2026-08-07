@@ -110,6 +110,12 @@ public class SessionAgentManagerTestConfiguration {
             }
 
             @Override
+            public java.util.Optional<com.positivity.mcp.internal.domain.DiscoveredOperation>
+                    findDiscoveredOperationByName(String name) {
+                return java.util.Optional.empty();
+            }
+
+            @Override
             public java.util.List<String> listToolPermissions(java.util.UUID toolId) {
                 return List.of();
             }

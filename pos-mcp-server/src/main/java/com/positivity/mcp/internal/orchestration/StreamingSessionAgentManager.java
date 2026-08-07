@@ -4,6 +4,8 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.client.RoleDefaultPermissionsClient;
+import com.positivity.mcp.internal.config.TieredChatModelResolver;
+import com.positivity.mcp.internal.domain.ModelTier;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
@@ -11,12 +13,15 @@ import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.orchestration.retrieval.PermissionAwareMetadataFilter;
+import com.positivity.mcp.internal.service.NltiRouter;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.PermissionCodes;
 import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.TierRouting;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.RolePromptResolver;
@@ -32,6 +37,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -41,6 +47,7 @@ import org.slf4j.MDC;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.StreamingChatModel;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
@@ -73,6 +80,7 @@ public class StreamingSessionAgentManager
     private final ToolSelectionEngine toolSelectionEngine;
     private final ScopedContentRetrieverFactory scopedContentRetrieverFactory;
     private final RolePromptResolver rolePromptResolver;
+    private final SimpleChatFastPath simpleChatFastPath;
 
     @Nullable
     private final ToolExecutionAuditLogger toolExecutionAuditLogger;
@@ -91,6 +99,10 @@ public class StreamingSessionAgentManager
 
     private final NltiWorkflowStateService workflowStateService;
 
+    private final @Nullable NltiRouter nltiRouter;
+    private final @Nullable TieredChatModelResolver tieredChatModelResolver;
+    private final boolean tieringEnabled;
+
     private final Clock clock;
 
     private final int memoryMaxMessages;
@@ -103,12 +115,16 @@ public class StreamingSessionAgentManager
             @NonNull ToolSelectionEngine toolSelectionEngine,
             @NonNull ScopedContentRetrieverFactory scopedContentRetrieverFactory,
             @NonNull RolePromptResolver rolePromptResolver,
+            @NonNull SimpleChatFastPath simpleChatFastPath,
             @Nullable ToolExecutionAuditLogger toolExecutionAuditLogger,
             @Nullable NltiTelemetryEmitter telemetryEmitter,
             @Nullable OpenApiToolProvider openApiToolProvider,
             @Nullable RequestScopedUserContext requestScopedUserContext,
             @Nullable RoleDefaultPermissionsClient roleDefaultPermissionsClient,
             @NonNull NltiWorkflowStateService workflowStateService,
+            @Nullable NltiRouter nltiRouter,
+            @Nullable TieredChatModelResolver tieredChatModelResolver,
+            @Value("${mcp.model.tiering-enabled:true}") boolean tieringEnabled,
             @NonNull Clock clock,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
@@ -120,12 +136,16 @@ public class StreamingSessionAgentManager
         this.toolSelectionEngine = toolSelectionEngine;
         this.scopedContentRetrieverFactory = scopedContentRetrieverFactory;
         this.rolePromptResolver = rolePromptResolver;
+        this.simpleChatFastPath = simpleChatFastPath;
         this.toolExecutionAuditLogger = toolExecutionAuditLogger;
         this.telemetryEmitter = telemetryEmitter;
         this.openApiToolProvider = openApiToolProvider;
         this.requestScopedUserContext = requestScopedUserContext;
         this.roleDefaultPermissionsClient = roleDefaultPermissionsClient;
         this.workflowStateService = workflowStateService;
+        this.nltiRouter = nltiRouter;
+        this.tieredChatModelResolver = tieredChatModelResolver;
+        this.tieringEnabled = tieringEnabled;
         this.clock = clock;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
@@ -167,6 +187,22 @@ public class StreamingSessionAgentManager
                 tokenCount(message),
                 messagePreview);
 
+        // Gate 4 / Gate 2A closure: shared T0 rule fast-path (previously blocking-only) — pure
+        // social chat streams straight from the default model with no tool selection or RAG.
+        if (simpleChatFastPath.isSimpleChat(message)) {
+            LOGGER.debug(
+                    "MCP streaming simple chat dispatch username={} role={} preview=\"{}\"",
+                    username,
+                    role,
+                    messagePreview);
+            return simpleStreamChat(currentUserContext, message, startMs);
+        }
+
+        // Gate 4 (#1192): classify with the T1 router (temperature 0) and select the executor tier.
+        // Null when tiering is disabled or the router is not wired — default model (rollback path).
+        NltiRouter.RoutingDecision routingDecision = routeTier(message);
+        ModelTier tier = routingDecision == null ? null : routingDecision.tier();
+
         // #778: gate tool selection by the subject's persisted session workflow state when they have
         // one; otherwise fall back to message-heuristic derivation (session-less callers).
         Optional<WorkflowState> persistedState = workflowStateService.resolveActiveState(username);
@@ -184,23 +220,35 @@ public class StreamingSessionAgentManager
                 cacheKey,
                 sharedOrchestrationSupport.toolNames(allTools));
         StreamingPosAssistant agent =
-                roleAgentCache.get(role + MEMORY_KEY_SEPARATOR + cacheKey, ignored -> buildAgent(role, allTools));
+                roleAgentCache.get(agentCacheKey(role, cacheKey, tier), ignored -> buildAgent(role, allTools, tier));
 
         // Capture on the calling thread: the Reactor completion signals run on a scheduler thread
         // where the request MDC (correlationId) and prompt layers are no longer available.
         List<String> toolNames = sharedOrchestrationSupport.toolNames(allTools);
         String ragScope = toolRegistry.resolveRagScopeForTools(allTools);
-        AssembledPrompt assembled = rolePromptResolver.assemble(role, ragScope);
+        AssembledPrompt assembled = rolePromptResolver.assemble(role, ragScope, false);
         List<String> promptLayers = assembled.layers();
         String correlationId = resolveCorrelationId();
         String workflowState = selection.workflowState().name();
+        TierRouting tierRouting = tierRoutingOf(routingDecision);
+        // #1193: the write-capability signal is only known once the agent resolves this request's
+        // tools inside streamTokens (on the subscribing thread); captured there, read by the
+        // completion signals after the thread-local holder has been cleared.
+        AtomicBoolean writeCapableToolsPresent = new AtomicBoolean(false);
 
         String userContext = formatUserContext(currentUserContext);
         // Capture the caller's Authorization on the request thread; the Flux is subscribed later on a
         // Reactor thread where RequestContextHolder is no longer populated.
         String authorizationHeader = currentAuthorizationHeader();
         return Flux.<String>create(emitter -> streamTokens(
-                        agent, memoryId, message, userContext, currentUserContext, authorizationHeader, emitter))
+                        agent,
+                        memoryId,
+                        message,
+                        userContext,
+                        currentUserContext,
+                        authorizationHeader,
+                        writeCapableToolsPresent,
+                        emitter))
                 .doOnComplete(() -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
                     LOGGER.debug(
@@ -212,15 +260,19 @@ public class StreamingSessionAgentManager
                     if (toolExecutionAuditLogger != null) {
                         toolExecutionAuditLogger.logToolExecution(null, username, true, false, elapsedMs, null);
                     }
+                    boolean writeCapable = writeCapableToolsPresent.get();
                     emitStreamTelemetry(
                             correlationId,
                             currentUserContext,
                             toolNames,
-                            promptLayers,
+                            withWriteGateLayer(promptLayers, writeCapable),
                             workflowState,
                             elapsedMs,
                             "SUCCESS",
-                            null);
+                            null,
+                            false,
+                            tierRouting,
+                            writeCapable);
                 })
                 .doOnError(exception -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -247,8 +299,125 @@ public class StreamingSessionAgentManager
                             workflowState,
                             elapsedMs,
                             "ERROR",
-                            exception.getClass().getSimpleName());
+                            exception.getClass().getSimpleName(),
+                            false,
+                            tierRouting,
+                            writeCapableToolsPresent.get());
                 });
+    }
+
+    /**
+     * Streams a T0 (rule fast-path) reply: master prompt + caller context, default model, no tools,
+     * no RAG, no memory. Mirrors the blocking manager's {@code simpleChat} (Gate 2A closure).
+     */
+    private @NonNull Flux<String> simpleStreamChat(
+            @NonNull CurrentUserContext currentUserContext, @NonNull String message, long startMs) {
+        String username = currentUserContext.username();
+        String role = currentUserContext.primaryRole();
+        String correlationId = resolveCorrelationId();
+        Prompt prompt = simpleChatFastPath.prompt(currentUserContext, message);
+        return Flux.defer(() -> streamingChatModel.stream(prompt))
+                .map(response -> {
+                    if (response.getResult() == null || response.getResult().getOutput() == null) {
+                        return "";
+                    }
+                    String text = response.getResult().getOutput().getText();
+                    return text == null ? "" : text;
+                })
+                .filter(token -> !token.isEmpty())
+                .doOnComplete(() -> {
+                    int elapsedMs = (int) (System.currentTimeMillis() - startMs);
+                    LOGGER.debug(
+                            "MCP streaming simple chat completed username={} role={} totalElapsedMs={}",
+                            username,
+                            role,
+                            elapsedMs);
+                    if (toolExecutionAuditLogger != null) {
+                        toolExecutionAuditLogger.logToolExecution(null, username, true, false, elapsedMs, null);
+                    }
+                    emitStreamTelemetry(
+                            correlationId,
+                            currentUserContext,
+                            List.of(),
+                            List.of(),
+                            null,
+                            elapsedMs,
+                            "SUCCESS",
+                            null,
+                            true,
+                            null,
+                            false);
+                })
+                .doOnError(exception -> {
+                    int elapsedMs = (int) (System.currentTimeMillis() - startMs);
+                    LOGGER.warn(
+                            "MCP streaming simple chat failed username={} role={} error={}",
+                            username,
+                            role,
+                            exception.getClass().getSimpleName());
+                    if (toolExecutionAuditLogger != null) {
+                        toolExecutionAuditLogger.logToolExecution(
+                                null,
+                                username,
+                                false,
+                                false,
+                                elapsedMs,
+                                exception.getClass().getSimpleName());
+                    }
+                    emitStreamTelemetry(
+                            correlationId,
+                            currentUserContext,
+                            List.of(),
+                            List.of(),
+                            null,
+                            elapsedMs,
+                            "ERROR",
+                            exception.getClass().getSimpleName(),
+                            true,
+                            null,
+                            false);
+                });
+    }
+
+    /**
+     * Classifies the request via the Gate 4 T1 router; null (default model, no tier key segment)
+     * when tiering is disabled ({@code mcp.model.tiering-enabled=false}, the documented rollback) or
+     * the router is not wired. Never throws — router failures safe-default inside
+     * {@link NltiRouter#classify}.
+     */
+    private NltiRouter.@Nullable RoutingDecision routeTier(@NonNull String message) {
+        if (!tieringEnabled || nltiRouter == null) {
+            return null;
+        }
+        return nltiRouter.classify(message);
+    }
+
+    private @Nullable TierRouting tierRoutingOf(NltiRouter.@Nullable RoutingDecision decision) {
+        if (decision == null) {
+            return null;
+        }
+        String tierModel =
+                tieredChatModelResolver == null ? null : tieredChatModelResolver.modelNameFor(decision.tier());
+        String routerModel =
+                tieredChatModelResolver == null ? null : tieredChatModelResolver.modelNameFor(ModelTier.T1_ROUTER);
+        return new TierRouting(
+                decision.classification().intentType().name(),
+                decision.classification().riskLevel().name(),
+                decision.classification().domain(),
+                decision.classification().complexity().name(),
+                NltiRequestTelemetry.Tier.valueOf(decision.tier().name()),
+                tierModel,
+                routerModel);
+    }
+
+    /** Appends the WRITE_GATE layer to the captured baseline layers when the request assembled it. */
+    private static @NonNull List<String> withWriteGateLayer(@NonNull List<String> layers, boolean writeCapable) {
+        if (!writeCapable || layers.contains("WRITE_GATE")) {
+            return layers;
+        }
+        List<String> withWriteGate = new ArrayList<>(layers);
+        withWriteGate.add("WRITE_GATE");
+        return List.copyOf(withWriteGate);
     }
 
     @Override
@@ -283,10 +452,11 @@ public class StreamingSessionAgentManager
     private @NonNull StreamingPosAssistant buildAgent(@NonNull String role) {
         List<Object> tools = sharedOrchestrationSupport.mergeTools(
                 toolRegistry.resolveDomainTools(role), toolSelectionEngine.fullFallbackTools());
-        return buildAgent(role, tools);
+        return buildAgent(role, tools, null);
     }
 
-    private @NonNull StreamingPosAssistant buildAgent(@NonNull String role, @NonNull List<Object> tools) {
+    private @NonNull StreamingPosAssistant buildAgent(
+            @NonNull String role, @NonNull List<Object> tools, @Nullable ModelTier tier) {
         long startNanos = System.nanoTime();
         String ragScope = toolRegistry.resolveRagScopeForTools(tools);
         String promptName = SystemPromptDefaults.promptNameForRagScope(ragScope);
@@ -314,27 +484,57 @@ public class StreamingSessionAgentManager
         QueryDocumentRetriever resilientContentRetriever =
                 new ResilientContentRetriever(rerankedRetriever, "tier2-hybrid-reranked-retriever");
 
+        // #1193 cache safety: the WRITE-GATE layer is applied per request (the supplier reads the
+        // request-scoped write-capability signal, resolved the same way tools are), so a cached
+        // agent can never bake a WRITE_GATE prompt into requests without write-capable tools.
         StreamingPosAssistant agent = new SpringAiStreamingPosAssistant(
-                streamingChatModel,
-                () -> rolePromptResolver.assemble(role, ragScope).text(),
+                executorStreamingChatModel(tier),
+                () -> rolePromptResolver
+                        .assemble(role, ragScope, currentWriteCapableToolsPresent())
+                        .text(),
                 tools,
                 resilientContentRetriever,
                 this::chatMemoryFor,
                 openApiToolProvider);
         LOGGER.debug(
-                "Built MCP streaming role agent role={} promptName={} ragScope={} toolNames={}",
+                "Built MCP streaming role agent role={} promptName={} ragScope={} tier={} toolNames={}",
                 role,
                 promptName,
                 ragScope,
+                tier,
                 sharedOrchestrationSupport.toolNames(tools));
         LOGGER.info(
-                "Built MCP streaming role agent role={} promptName={} ragScope={} tools={} in {} ms",
+                "Built MCP streaming role agent role={} promptName={} ragScope={} tier={} tools={} in {} ms",
                 role,
                 promptName,
                 ragScope,
+                tier,
                 tools.size(),
                 elapsedMs(startNanos));
         return agent;
+    }
+
+    /** The streaming model serving {@code tier}; the default model when untiered or no resolver wired. */
+    private @NonNull StreamingChatModel executorStreamingChatModel(@Nullable ModelTier tier) {
+        if (tier == null || tieredChatModelResolver == null) {
+            return streamingChatModel;
+        }
+        return tieredChatModelResolver.streamingChatModelFor(tier);
+    }
+
+    private boolean currentWriteCapableToolsPresent() {
+        return requestScopedUserContext != null && requestScopedUserContext.currentWriteCapableToolsPresent();
+    }
+
+    /**
+     * Cache key for a streaming role agent: {@code role::toolCacheKey[::tier]}. Gate 4 cache safety:
+     * the tier is part of the key, so a T2-simple agent (small model) is never reused for a
+     * T2-complex request or vice versa. Untiered agents keep the historical shape.
+     */
+    private static @NonNull String agentCacheKey(
+            @NonNull String role, @NonNull String toolCacheKey, @Nullable ModelTier tier) {
+        String base = role + MEMORY_KEY_SEPARATOR + toolCacheKey;
+        return tier == null ? base : base + MEMORY_KEY_SEPARATOR + tier.name();
     }
 
     /**
@@ -362,6 +562,7 @@ public class StreamingSessionAgentManager
             @NonNull String userContext,
             @NonNull CurrentUserContext currentUserContext,
             @Nullable String authorizationHeader,
+            @NonNull AtomicBoolean writeCapableToolsPresent,
             @NonNull FluxSink<String> emitter) {
         // Publish the caller for OpenApiToolProvider.provideTools, which the tool callback resolver invokes
         // synchronously while building the request context inside start(). Cleared in finally on this
@@ -371,8 +572,12 @@ public class StreamingSessionAgentManager
             requestScopedUserContext.set(currentUserContext, authorizationHeader);
         }
         try {
-            agent.chat(memoryId, message, userContext)
-                    .doOnNext(token -> {
+            // agent.chat resolves this request's tools synchronously at Flux-assembly time, so the
+            // write-capability signal (#1193) is recorded in the holder by the time it returns —
+            // capture it for the completion-signal telemetry before the finally-clear below.
+            Flux<String> tokens = agent.chat(memoryId, message, userContext);
+            writeCapableToolsPresent.set(currentWriteCapableToolsPresent());
+            tokens.doOnNext(token -> {
                         if (!emitter.isCancelled()) {
                             emitter.next(token);
                         }
@@ -390,6 +595,10 @@ public class StreamingSessionAgentManager
     private void prebuildRoleAgents() {
         long startNanos = System.nanoTime();
         int prebuilt = 0;
+        // Gate 4: warm the T2-complex agent (the safe-default routing target) when tiering is
+        // active; simple-tier agents build on first demand. Untiered warm-up otherwise.
+        ModelTier warmTier =
+                (tieringEnabled && nltiRouter != null && tieredChatModelResolver != null) ? ModelTier.T2_COMPLEX : null;
         for (String role : toolRegistry.preloadableRoleIdentifiers()) {
             try {
                 // No CurrentUserContext is available during startup warm-up. #782: seed the role's
@@ -402,7 +611,8 @@ public class StreamingSessionAgentManager
                 List<Object> selectedTools =
                         sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
                 String warmCacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
-                roleAgentCache.put(role + MEMORY_KEY_SEPARATOR + warmCacheKey, buildAgent(role, selectedTools));
+                roleAgentCache.put(
+                        agentCacheKey(role, warmCacheKey, warmTier), buildAgent(role, selectedTools, warmTier));
 
                 // Keep the legacy full key warm for direct role-level access paths.
                 roleAgentCache.put(role + MEMORY_KEY_SEPARATOR + FULL_TOOL_CACHE_KEY, buildAgent(role));
@@ -443,14 +653,8 @@ public class StreamingSessionAgentManager
         return null;
     }
 
-    private static @NonNull String formatUserContext(@NonNull CurrentUserContext currentUserContext) {
-        return "Authenticated user context: username=" + currentUserContext.username()
-                + ", userId=" + currentUserContext.userId()
-                + ", primaryRole=" + currentUserContext.primaryRole()
-                + ", roles=" + currentUserContext.roles()
-                + ", authorityCount=" + currentUserContext.authorities().size()
-                + ". Interpret references to 'me', 'my', or 'current user' as this authenticated user."
-                + " If a question depends on the user's exact permissions, prefer a self-service permissions tool before asking for identifiers.";
+    private @NonNull String formatUserContext(@NonNull CurrentUserContext currentUserContext) {
+        return sharedOrchestrationSupport.formatUserContext(currentUserContext);
     }
 
     private static int tokenCount(@NonNull String text) {
@@ -471,7 +675,10 @@ public class StreamingSessionAgentManager
             @Nullable String workflowState,
             long totalMs,
             @NonNull String status,
-            @Nullable String errorCode) {
+            @Nullable String errorCode,
+            boolean simpleChat,
+            @Nullable TierRouting tierRouting,
+            boolean writeCapableToolsPresent) {
         if (telemetryEmitter == null) {
             return;
         }
@@ -485,12 +692,14 @@ public class StreamingSessionAgentManager
                     // Streaming is fail-closed for openapi tools (Reactor-context propagation deferred).
                     List.of(),
                     promptLayers,
-                    false,
+                    simpleChat,
                     null,
                     workflowState,
                     totalMs,
                     status,
-                    errorCode));
+                    errorCode,
+                    tierRouting,
+                    writeCapableToolsPresent));
         } catch (RuntimeException telemetryFailure) {
             LOGGER.warn(
                     "MCP streaming telemetry emission failed role={} status={}",

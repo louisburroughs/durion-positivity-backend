@@ -511,6 +511,14 @@ def main():
     # Recall confirmed at the production RAG_MIN_SCORE=0.55 floor. RAG forbidden leaks are always a
     # hard fail. Re-run this calibration whenever the corpus changes materially.
     # Override with EVAL_MIN_HIT5 / EVAL_MIN_MRR / EVAL_MIN_RECALL.
+    #
+    # OPEN (#1179): these floors were measured 2026-07-29, BEFORE the pipeline changed on
+    # 2026-07-30 (#1169 master all-scope + permission filter in both chains, #1167 lexical on by
+    # default, #1170 OR-semantics tsquery) and before the #1180 compound-question rerank change.
+    # Since lexical is now on by default, the nightly recall@k gate measures HYBRID retrieval —
+    # that is intentional and answers the #1179 "should the floor apply to hybrid" question.
+    # To close #1179: run `eval_live.py --baseline 3` on alpha against the current image and
+    # commit the suggested floors it prints, replacing the defaults below.
     floor_hit5 = float(os.environ.get("EVAL_MIN_HIT5", "0.68"))
     floor_mrr = float(os.environ.get("EVAL_MIN_MRR", "0.64"))
     floor_recall = float(os.environ.get("EVAL_MIN_RECALL", "0.76"))
@@ -563,5 +571,54 @@ def main():
     print("\nTHRESHOLDS OK")
 
 
+def baseline_mode(runs: int) -> None:
+    """#1179: measure the stable metric level + wobble on the CURRENT pipeline and suggest floors.
+
+    Re-runs the full eval `runs` times as subprocesses with the metric floors disabled (forbidden
+    leaks still hard-fail and abort the baseline), collects hit@5 / MRR / recall@k from each run's
+    baseline-live-python.json, and prints mean/min/max/stddev plus a suggested floor per metric:
+    the lower of (mean - 2*stddev) and (mean * 0.89) — the variance rule from #1179 combined with
+    the ~11% headroom method used for the deterministic 2026-07-29 calibration (stddev may be 0
+    because per-run embedding is deterministic; the floor must still absorb a corpus-scale
+    re-embed swing). Run this on alpha after any corpus or retrieval-pipeline change, then commit
+    the new EVAL_MIN_* defaults with this output as the measured basis.
+    """
+    import statistics
+    import subprocess
+
+    out_json = ROOT / "pos-mcp-server/target/eval/baseline-live-python.json"
+    env = dict(os.environ, EVAL_MIN_HIT5="0", EVAL_MIN_MRR="0", EVAL_MIN_RECALL="0",
+               EVAL_MIN_LEXICAL_RECOVERY="0")
+    samples: dict[str, list[float]] = {"hit_at_5": [], "mrr": [], "recall_at_k": []}
+    for i in range(1, runs + 1):
+        print(f"=== baseline run {i}/{runs} ===")
+        proc = subprocess.run([sys.executable, __file__], env=env)
+        if proc.returncode != 0:
+            sys.exit(f"baseline run {i} failed hard (forbidden leak or infra error) — aborting.")
+        result = json.loads(out_json.read_text())
+        samples["hit_at_5"].append(result["tool_selection"]["hit_at_5"])
+        samples["mrr"].append(result["tool_selection"]["mrr"])
+        samples["recall_at_k"].append(result["rag_retrieval"]["recall_at_k"])
+
+    stats = {}
+    print(f"\n#1179 baseline over {runs} runs (current pipeline):")
+    print(f"{'metric':<12} {'mean':>8} {'min':>8} {'max':>8} {'stddev':>8} {'suggested_floor':>16}")
+    for metric, values in samples.items():
+        mean = statistics.fmean(values)
+        stddev = statistics.pstdev(values)
+        floor = round(min(mean - 2 * stddev, mean * 0.89), 2)
+        stats[metric] = {"runs": values, "mean": round(mean, 4), "min": min(values),
+                         "max": max(values), "stddev": round(stddev, 4), "suggested_floor": floor}
+        print(f"{metric:<12} {mean:>8.4f} {min(values):>8.4f} {max(values):>8.4f} "
+              f"{stddev:>8.4f} {floor:>16.2f}")
+    stats_path = out_json.parent / "baseline-stats.json"
+    stats_path.write_text(json.dumps({"runs": runs, "metrics": stats}, indent=2))
+    print(f"\nwrote {stats_path}")
+    print("Commit new EVAL_MIN_* defaults in this file with the table above as the measured basis (#1179).")
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--baseline":
+        baseline_mode(int(sys.argv[2]) if len(sys.argv) > 2 else 3)
+    else:
+        main()

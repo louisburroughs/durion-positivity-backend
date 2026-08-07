@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.repository;
 
+import com.positivity.mcp.internal.config.RagEmbeddingSettings;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import java.sql.ResultSet;
@@ -24,8 +25,13 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
-    public ToolMetadataRepositoryImpl(@NonNull JdbcTemplate jdbcTemplate) {
+    /** Validated vector column (Gate 5 G5.4, #1194): {@code embedding} or {@code embedding_1024}. */
+    private final String embeddingColumn;
+
+    public ToolMetadataRepositoryImpl(
+            @NonNull JdbcTemplate jdbcTemplate, @NonNull RagEmbeddingSettings embeddingSettings) {
         this.jdbcTemplate = jdbcTemplate;
+        this.embeddingColumn = embeddingSettings.embeddingColumn();
     }
 
     @Override
@@ -103,12 +109,12 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
                 WHERE t.enabled = true
                   AND t.source <> 'openapi'
-                  AND t.embedding IS NOT NULL
+                  AND t.%1$s IS NOT NULL
                   AND ws.name = ?
                   AND t.id IN (SELECT tool_id FROM mcp_tool_permission WHERE permission_code = ANY(?))
-                ORDER BY t.embedding <=> ?::vector, t.id
+                ORDER BY t.%1$s <=> ?::vector, t.id
                 LIMIT ?
-                """;
+                """.formatted(embeddingColumn);
 
         return jdbcTemplate.query(
                 sql,
@@ -136,13 +142,13 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
                 JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
                 WHERE t.enabled = true
-                  AND t.embedding IS NOT NULL
+                  AND t.%1$s IS NOT NULL
                   AND t.source = 'openapi'
                   AND ws.name = ?
                   AND t.id IN (SELECT tool_id FROM mcp_tool_permission WHERE permission_code = ANY(?))
-                ORDER BY t.embedding <=> ?::vector, t.id
+                ORDER BY t.%1$s <=> ?::vector, t.id
                 LIMIT ?
-                """;
+                """.formatted(embeddingColumn);
         return jdbcTemplate.query(
                 sql,
                 ps -> {
@@ -240,6 +246,16 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
     }
 
     @Override
+    public @NonNull Optional<DiscoveredOperation> findDiscoveredOperationByName(@NonNull String name) {
+        List<DiscoveredOperation> operations = jdbcTemplate.query("""
+                SELECT name, description, http_method, http_path, service_id, input_schema
+                FROM mcp_tool
+                WHERE name = ? AND source = 'openapi'
+                """, this::mapDiscovered, name);
+        return operations.isEmpty() ? Optional.empty() : Optional.of(operations.get(0));
+    }
+
+    @Override
     public @NonNull Optional<UUID> findDiscoveredToolIdByName(@NonNull String name) {
         List<UUID> ids = jdbcTemplate.query(
                 "SELECT id FROM mcp_tool WHERE name = ? AND source = 'openapi'",
@@ -286,10 +302,10 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 FROM mcp_tool
                 WHERE enabled = true
                   AND source <> 'openapi'
-                  AND embedding IS NOT NULL
-                ORDER BY embedding <=> ?::vector, id
+                  AND %1$s IS NOT NULL
+                ORDER BY %1$s <=> ?::vector, id
                 LIMIT ?
-                """;
+                """.formatted(embeddingColumn);
 
         return jdbcTemplate.query(sql, this::mapRow, toVectorPGobject(embedding), limit);
     }

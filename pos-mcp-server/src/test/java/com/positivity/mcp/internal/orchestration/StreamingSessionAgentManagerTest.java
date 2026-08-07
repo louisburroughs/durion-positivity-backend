@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.orchestration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -19,6 +20,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.github.benmanes.caffeine.cache.Cache;
+import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.domain.WorkflowState;
@@ -123,6 +125,7 @@ class StreamingSessionAgentManagerTest {
     private InventoryFacadeTool inventoryFacadeTool;
     private OrderFacadeTool orderFacadeTool;
     private SharedOrchestrationSupport sharedOrchestrationSupport;
+    private SimpleChatFastPath simpleChatFastPath;
 
     private StreamingSessionAgentManager manager;
 
@@ -141,7 +144,7 @@ class StreamingSessionAgentManagerTest {
         lenient().when(workflowStateService.resolveActiveState(any())).thenReturn(Optional.empty());
         lenient().when(rolePromptResolver.resolvePrompt(any())).thenReturn("Default role prompt");
         lenient()
-                .when(rolePromptResolver.assemble(any(), any()))
+                .when(rolePromptResolver.assemble(any(), any(), anyBoolean()))
                 .thenReturn(new RolePromptResolver.AssembledPrompt("prompt", List.of("BASE", "ROLE")));
         lenient()
                 .when(toolSelectionEngine.selectRoleTools(any(), any(), any()))
@@ -159,6 +162,10 @@ class StreamingSessionAgentManagerTest {
                 "/order/v1/orders/{orderId}",
                 "/order/v1/orders/search?q={query}");
         sharedOrchestrationSupport = new SharedOrchestrationSupport();
+        simpleChatFastPath = new SimpleChatFastPath(
+                new SimpleChatClassifier(SimpleChatRuleDefaults.defaultCatalog()),
+                rolePromptResolver,
+                sharedOrchestrationSupport);
         QueryDocumentRetriever scopedRetriever = mock(QueryDocumentRetriever.class);
         lenient().when(toolRegistry.sharedTools()).thenReturn(List.of());
         lenient()
@@ -177,12 +184,16 @@ class StreamingSessionAgentManagerTest {
                 toolSelectionEngine,
                 scopedContentRetrieverFactory,
                 rolePromptResolver,
+                simpleChatFastPath,
                 null, // toolAuditService
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
                 workflowStateService,
+                null, // nltiRouter
+                null, // tieredChatModelResolver
+                true, // tieringEnabled (no-op without a router)
                 FIXED_CLOCK,
                 30,
                 500,
@@ -214,8 +225,8 @@ class StreamingSessionAgentManagerTest {
     @Test
     @DisplayName("streamChat reuses cached agent for same userId+role")
     void streamChat_cachesAgentForSameUser() {
-        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first message");
-        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "second message");
+        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show inventory stock");
+        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show inventory stock");
 
         verify(toolRegistry, never()).resolveDomainTools("ROLE_CASHIER");
     }
@@ -223,9 +234,9 @@ class StreamingSessionAgentManagerTest {
     @Test
     @DisplayName("evict removes cached agent so next streamChat rebuilds it")
     void evict_removesFromCache() {
-        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first message");
+        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show inventory stock");
         manager.evict("user-1");
-        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "after evict");
+        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show inventory stock");
 
         verify(toolRegistry, never()).resolveDomainTools("ROLE_CASHIER");
     }
@@ -233,8 +244,8 @@ class StreamingSessionAgentManagerTest {
     @Test
     @DisplayName("streamChat rebuilds agent when role changes for same userId")
     void streamChat_roleChange_rebuildsAgent() {
-        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first");
-        manager.streamChat(userContext("user-1", USER_ID, "ROLE_MANAGER"), "second");
+        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show inventory stock");
+        manager.streamChat(userContext("user-1", USER_ID, "ROLE_MANAGER"), "show inventory stock");
 
         verify(toolRegistry, never()).resolveDomainTools("ROLE_CASHIER");
         verify(toolRegistry, never()).resolveDomainTools("ROLE_MANAGER");
@@ -243,12 +254,13 @@ class StreamingSessionAgentManagerTest {
     @Test
     @DisplayName("streamChat skips fallback tools already resolved for the role")
     void streamChat_skipsDuplicateFallbackTool() {
-        when(toolSelectionEngine.selectRoleTools("ROLE_DUPLICATE", PERMISSION_CODES, "hello"))
+        when(toolSelectionEngine.selectRoleTools(
+                        "ROLE_DUPLICATE", PERMISSION_CODES, "search the internet for tire prices"))
                 .thenReturn(new ToolSelectionEngine.ToolSelectionResult(
                         List.of(exaWebSearchTool), List.of(exaWebSearchTool)));
 
-        Flux<String> result =
-                manager.streamChat(userContext("user-with-role-tool", USER_ID, "ROLE_DUPLICATE"), "hello");
+        Flux<String> result = manager.streamChat(
+                userContext("user-with-role-tool", USER_ID, "ROLE_DUPLICATE"), "search the internet for tire prices");
 
         assertThat(result).isNotNull();
         assertThat(roleAgentCacheKeys(manager)).contains("ROLE_DUPLICATE::ExaWebSearchTool");
@@ -349,7 +361,8 @@ class StreamingSessionAgentManagerTest {
         clearInvocations(toolRegistryService);
         clearInvocations(scopedContentRetrieverFactory);
 
-        Flux<String> result = selectorManager.streamChat(userContext("user-3", USER_ID, "ROLE_CASHIER"), "anything");
+        Flux<String> result =
+                selectorManager.streamChat(userContext("user-3", USER_ID, "ROLE_CASHIER"), "show sales orders");
 
         assertThat(result).isNotNull();
         verify(toolRegistryService).resolveCandidateTools(any(ToolSelectionContext.class), eq(3));
@@ -370,12 +383,16 @@ class StreamingSessionAgentManagerTest {
                 toolSelectionEngine,
                 scopedContentRetrieverFactory,
                 rolePromptResolver,
+                simpleChatFastPath,
                 null,
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
                 workflowStateService,
+                null, // nltiRouter
+                null, // tieredChatModelResolver
+                true, // tieringEnabled (no-op without a router)
                 FIXED_CLOCK,
                 30,
                 500,
@@ -418,7 +435,7 @@ class StreamingSessionAgentManagerTest {
 
         StreamingSessionAgentManager selectorManager = streamingManagerWithToolSelectionEngine(realToolSelectionEngine);
 
-        selectorManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "latest internet news");
+        selectorManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "find latest internet news");
 
         assertThat(roleAgentCacheKeys(selectorManager))
                 .contains("ROLE_CASHIER::ExaWebSearchTool")
@@ -435,12 +452,16 @@ class StreamingSessionAgentManagerTest {
                 toolSelectionEngine,
                 scopedContentRetrieverFactory,
                 rolePromptResolver,
+                simpleChatFastPath,
                 null,
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
                 workflowStateService,
+                null, // nltiRouter
+                null, // tieredChatModelResolver
+                true, // tieringEnabled (no-op without a router)
                 FIXED_CLOCK,
                 0,
                 500,
@@ -448,8 +469,8 @@ class StreamingSessionAgentManagerTest {
                 100);
         clearInvocations(toolRegistry);
 
-        expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first");
-        expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "second");
+        expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show inventory stock");
+        expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show inventory stock");
 
         verify(toolSelectionEngine, times(3)).selectRoleTools(eq("ROLE_CASHIER"), any(), any());
     }
@@ -457,7 +478,7 @@ class StreamingSessionAgentManagerTest {
     @Test
     @DisplayName("onAgentConfigurationChanged empties the streaming role-agent cache")
     void onAgentConfigurationChanged_emptiesRoleAgentCache() {
-        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "first");
+        manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show inventory stock");
         assertThat(roleAgentCacheKeys(manager)).isNotEmpty();
 
         manager.onAgentConfigurationChanged(AgentCacheInvalidationEvent.systemPromptChanged("ROLE_CASHIER"));
@@ -481,12 +502,16 @@ class StreamingSessionAgentManagerTest {
                 selectionEngine,
                 scopedContentRetrieverFactory,
                 rolePromptResolver,
+                simpleChatFastPath,
                 null,
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
                 workflowStateService,
+                null, // nltiRouter
+                null, // tieredChatModelResolver
+                true, // tieringEnabled (no-op without a router)
                 FIXED_CLOCK,
                 30,
                 500,
@@ -543,19 +568,24 @@ class StreamingSessionAgentManagerTest {
                 toolSelectionEngine,
                 scopedContentRetrieverFactory,
                 rolePromptResolver,
+                simpleChatFastPath,
                 null,
                 telemetryEmitter,
                 openApiToolProvider,
                 requestContext,
                 null, // roleDefaultPermissionsClient
                 workflowStateService,
+                null, // nltiRouter
+                null, // tieredChatModelResolver
+                true, // tieringEnabled (no-op without a router)
                 FIXED_CLOCK,
                 30,
                 500,
                 50,
                 100);
 
-        Flux<String> result = providerManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "hello");
+        Flux<String> result =
+                providerManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show open invoices");
 
         assertThat(result).isNotNull();
         // The caller is published/cleared only inside streamTokens (on subscribe), so building the

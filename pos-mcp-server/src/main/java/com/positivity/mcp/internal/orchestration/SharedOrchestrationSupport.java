@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.orchestration;
 
+import com.positivity.mcp.service.CurrentUserContext;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
@@ -30,6 +31,17 @@ public class SharedOrchestrationSupport {
 
     public @NonNull String toolName(@NonNull Object tool) {
         return ClassUtils.getUserClass(tool).getSimpleName();
+    }
+
+    /** The caller-context suffix appended to system prompts by both managers and the T0 fast path. */
+    public @NonNull String formatUserContext(@NonNull CurrentUserContext userContext) {
+        return "Authenticated user context: username=" + userContext.username()
+                + ", userId=" + userContext.userId() + ", primaryRole="
+                + userContext.primaryRole() + ", roles="
+                + userContext.roles() + ", authorityCount="
+                + userContext.authorities().size()
+                + ". Interpret references to 'me', 'my', or 'current user' as this authenticated user."
+                + " If a question depends on the user's exact permissions, prefer a self-service permissions tool before asking for identifiers.";
     }
 
     public @NonNull String preview(@NonNull String text) {

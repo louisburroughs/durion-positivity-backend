@@ -15,6 +15,36 @@
 
 ---
 
+## Re-baseline 2026-08-07 (post-Spring-AI)
+
+Recorded per #1197. Two things changed since the 2026-07-01 live pass below: (1) the runtime
+migrated LangChain4j → Spring AI via PR #987 (merged 2026-07-21; see
+`docs/spring-ai-big-bang-migration-checklist.md`, final decision PASS de facto, and
+`docs/spring-ai-migration-review.md`), so LangChain4j class names in the historical evidence
+below are pre-migration references — the invariants they evidenced were carried through the
+migration and re-proven by the hardening waves; (2) substantial gate work closed via tracked
+issues. The historical execution-result sections below are the record and are **not** rewritten;
+this section is the current per-gate status, and each sign-off block carries a one-line
+`2026-08-07:` pointer. All issue states verified via `gh issue view` on 2026-08-07.
+
+| Gate | Current status (2026-08-07) | Evidence |
+| --- | --- | --- |
+| 0 | Largely shipped — eval harness with retrieval-quality gates (hit@5/MRR) in CI, fixtures at volume, lexical dense-miss regression fixtures added | #783 CLOSED (`081cf4291`), fixtures `16649d56a`, #1178 CLOSED; residue: floors re-baseline → #1179 OPEN |
+| 1 | Prompt assembly carried through the Spring AI migration; live answer-quality eval still open | PR #987; no dedicated tracker |
+| 2A | Shared orchestration path preserved through the migration; live equivalence run still open | PR #987; T0 divergence tracked under Gate 4 → #1192 |
+| 2B | Shipped — legacy role tables dropped, fail-closed negative case proven by IT | #780 CLOSED (`920774f8c`), permission-gating IT `d501b6ea2` + #1114 review `dc3538727` |
+| 2C | **Shipped** via #778 CLOSED — persisted session workflow state threaded into gating, blocking + streaming parity | `8cb5157c7`, `28105bd40` |
+| 3 | **Core shipped** via #779 CLOSED + #645 batch PRs (Wave 1 #1102, gateway-routing IT #1120, orphan pruning #1122) | Residue → #1196 OPEN (streaming openapi live proof + cached-agent leakage test); #645 OPEN (final alpha check) |
+| 4 | Pending — decision core built (2026-06-30), router not wired into the chat managers | → #1192 OPEN |
+| 5 | **Largely shipped** — retrieval-quality floors (#783 CLOSED), hybrid dense+lexical RRF (#784 CLOSED via PR #1123), corpus grown to 39 docs with lexical retrieval enabled by default (#1124 CLOSED, `4aa34b818`, `8c58fadbf`), gap-discovery harness (#1125 CLOSED) | Residue: bge-m3 1024-dim migration → #1194 OPEN |
+| 6 | Pending — foundations only (status enum, `NltiWritePlan`, policy invariants) | → #1193 OPEN |
+| 7 | Partially shipped — admin `mcp_tool_permission` endpoints delivered (#785 CLOSED, `ToolPermissionController` per Gate 3 record) | Residue: adaptive tuning shadow mode + gated live promotion → #1195 OPEN |
+
+Cross-cutting open items: retrieval-floor re-baseline (recall@k sits 0.007 above the gate) →
+#1179 OPEN; compound-question RRF + top-5 rerank chunk loss → #1180 OPEN.
+
+---
+
 ## Live verification pass — 2026-07-01 (alpha, image `sha-559d554`)
 
 First live run against the deployed stack (`durion-alpha`, containers up, `pos_mcp` DB, gateway `/mcp-server/**`). Evidence recorded into the relevant gates below. Summary:
@@ -79,6 +109,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 - Metrics table filled: [ ] (baseline PENDING live backend) · Decision: **HOLD**
 - Exceptions (owner/expiry): n/a · Approver/date: pending · Rollback verified/documented: [x] (config-only; revertable)
+- 2026-08-07: harness + retrieval-quality gates shipped and in CI (#783 CLOSED, `081cf4291`; fixtures to volume `16649d56a`; lexical regression fixtures #1178 CLOSED); floors re-baseline open → #1179.
 
 #### Gate 0 — Execution results (2026-06-29, branch `feat/nl-interface-gates`)
 
@@ -156,6 +187,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 - Metrics filled: [ ] (answer-quality eval needs live stack) · Decision: **HOLD** (2 items pending)
 - Exceptions: n/a · Approver/date: pending · Rollback (swap assemble→resolvePrompt in both managers) verified: [x] documented
+- 2026-08-07: assembly carried through the Spring AI migration (PR #987); live answer-quality eval still open, no dedicated tracker (see Re-baseline table).
 
 #### Gate 1 — Execution results (2026-06-30)
 
@@ -220,6 +252,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 ### Gate 2A sign-off
 
 - Metrics filled: [ ] (live equivalence run deferred) · Decision: **HOLD** (live equivalence pending)
+- 2026-08-07: shared path preserved through the Spring AI migration (PR #987); T0 blocking-vs-streaming divergence now tracked with the router wiring → #1192.
 
 #### Gate 2A — Execution results (2026-06-30)
 
@@ -284,6 +317,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 ### Gate 2B sign-off
 
 - Metrics filled: [ ] · Decision: **HOLD** (live fail-closed run + migration DB test deferred; #781/#782 cross-service)
+- 2026-08-07: legacy role tables dropped (#780 CLOSED, `920774f8c`); the pending negative fail-closed case is now proven by the permission-gating IT (`d501b6ea2`; #1114 review `dc3538727`).
 
 #### Gate 2B — Execution results (2026-06-30, code-first)
 
@@ -346,6 +380,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 ### Gate 2C sign-off
 
 - Metrics filled: [ ] · Decision: **HOLD** (runtime session propagation + non-IDLE DB activation deferred to live)
+- 2026-08-07: **shipped** via #778 (CLOSED) — persisted session workflow state threaded into tool gating (`8cb5157c7`) with blocking/streaming parity test (`28105bd40`).
 
 #### Gate 2C — Execution results (2026-06-30, code-first)
 
@@ -411,6 +446,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 ### Gate 3 sign-off
 
 - Metrics filled: [ ] · Decision: **HOLD** — core execution bridge live-proven (positive E2E), but Pass held on: (1) negative/leakage E2E, (2) argument-schema validation, (3) telemetry facade-vs-openapi source tag, (4) streaming Reactor-context parity, (5) permission-seeding source (#785).
+- 2026-08-07: core shipped as Spring AI `ToolCallback`s via #779 (CLOSED) + the #645 batch (PR #1102 Wave 1, gateway-routing IT PR #1120, orphan-pruning PR #1122 for #1121); #785 CLOSED. Residue → #1196 (OPEN: streaming openapi live proof + cached-agent leakage test) and #645 (OPEN: final alpha check).
 
 #### Gate 3 — Execution results (2026-06-30)
 
@@ -510,6 +546,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 ### Gate 4 sign-off
 
 - Metrics filled: [ ] · Decision: **HOLD — design complete, implementation pending**
+- 2026-08-07: still pending — router wiring into the chat managers tracked → #1192 (OPEN).
 
 #### Gate 4 — Execution results (2026-06-30)
 
@@ -571,6 +608,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 ### Gate 5 sign-off
 
 - Metrics filled: [ ] · Decision: **HOLD — design complete, implementation pending**
+- 2026-08-07: **largely shipped** — retrieval-quality floors #783 CLOSED (`081cf4291`, `15ab613cb`); hybrid dense+lexical FTS with RRF fusion #784 CLOSED (PR #1123, `7b38ed34f`); corpus grown to 39 docs with lexical retrieval enabled by default #1124 CLOSED (`a1bf14fa3`, `4aa34b818`, `8c58fadbf`); gap-discovery harness #1125 CLOSED. Residue: bge-m3 1024-dim migration → #1194 (OPEN); floors re-baseline → #1179 (OPEN); compound-question rerank → #1180 (OPEN).
 
 #### Gate 5 — Execution results (2026-06-30)
 
@@ -652,6 +690,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 ### Gate 6 sign-off
 
 - Metrics filled: [ ] · Decision: **HOLD — design complete, implementation pending**
+- 2026-08-07: still pending — write-action confirmation gate implementation tracked → #1193 (OPEN).
 
 #### Gate 6 — Execution results (2026-06-30)
 
@@ -709,6 +748,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 ### Gate 7 sign-off
 
 - Metrics filled: [ ] · Decision: **HOLD — design complete, implementation pending**
+- 2026-08-07: admin `mcp_tool_permission` endpoints delivered (#785 CLOSED; `ToolPermissionController`, perm-bits #809 — see Gate 3 record); adaptive tuning shadow mode + gated live promotion tracked → #1195 (OPEN).
 
 #### Gate 7 — Execution results (2026-06-30)
 

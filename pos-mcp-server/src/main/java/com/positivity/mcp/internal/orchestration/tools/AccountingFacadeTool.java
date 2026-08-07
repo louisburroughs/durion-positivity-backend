@@ -1,9 +1,9 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -40,7 +40,8 @@ public class AccountingFacadeTool {
     }
 
     @Tool(description = "Search accounting journal entries using text or filter terms")
-    public String searchJournalEntries(@ToolParam(description = "Search query for journal entries") @NonNull String query) {
+    public String searchJournalEntries(
+            @ToolParam(description = "Search query for journal entries") @NonNull String query) {
         return restClient
                 .get()
                 .uri(journalEntriesSearchUriTemplate, Map.of("query", query))

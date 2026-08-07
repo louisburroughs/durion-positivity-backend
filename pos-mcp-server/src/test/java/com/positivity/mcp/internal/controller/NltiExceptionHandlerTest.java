@@ -63,6 +63,9 @@ class NltiExceptionHandlerTest {
     @MockitoBean
     private NltiWorkflowStateService workflowStateService;
 
+    @MockitoBean
+    private com.positivity.mcp.internal.service.NltiWritePlanService writePlanService;
+
     private String validRequestBody() throws Exception {
         return objectMapper.writeValueAsString(new NltiRequestDTO("test prompt for handler", null, null));
     }
