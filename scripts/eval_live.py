@@ -606,7 +606,7 @@ def baseline_mode(runs: int) -> None:
     for metric, values in samples.items():
         mean = statistics.fmean(values)
         stddev = statistics.pstdev(values)
-        floor = round(min(mean - 2 * stddev, mean * 0.89), 2)
+        floor = round(max(0.0, min(mean - 2 * stddev, mean * 0.89)), 2)
         stats[metric] = {"runs": values, "mean": round(mean, 4), "min": min(values),
                          "max": max(values), "stddev": round(stddev, 4), "suggested_floor": floor}
         print(f"{metric:<12} {mean:>8.4f} {min(values):>8.4f} {max(values):>8.4f} "

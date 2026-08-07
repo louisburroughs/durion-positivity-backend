@@ -250,7 +250,7 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
         List<DiscoveredOperation> operations = jdbcTemplate.query("""
                 SELECT name, description, http_method, http_path, service_id, input_schema
                 FROM mcp_tool
-                WHERE name = ? AND source = 'openapi'
+                WHERE name = ? AND source = 'openapi' AND enabled = true
                 """, this::mapDiscovered, name);
         return operations.isEmpty() ? Optional.empty() : Optional.of(operations.get(0));
     }
