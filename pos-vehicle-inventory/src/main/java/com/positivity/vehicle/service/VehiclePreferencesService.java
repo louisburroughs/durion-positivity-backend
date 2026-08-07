@@ -19,10 +19,16 @@ public interface VehiclePreferencesService {
     VehicleCarePreference upsertPreferences(UpsertPreferencesRequest request);
 
     /**
-     * Updates specific preference fields without replacing the entire map.
+     * Updates specific preference fields without replacing the entire map. A null
+     * {@code serviceIntervalMonths} leaves the structured interval unchanged (use the upsert to
+     * clear it); a legacy {@code serviceIntervalMonths} key inside {@code partialPreferences} is
+     * promoted into the structured field instead of being stored in the blob (#1175).
      */
     VehicleCarePreference mergePreferences(
-            UUID vehicleId, Map<String, Object> partialPreferences, UUID updatedByUserId);
+            UUID vehicleId,
+            Map<String, Object> partialPreferences,
+            Integer serviceIntervalMonths,
+            UUID updatedByUserId);
 
     /**
      * Deletes preferences for a vehicle.

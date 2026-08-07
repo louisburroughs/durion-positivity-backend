@@ -20,9 +20,10 @@ import org.jspecify.annotations.Nullable;
  * @param hasServiceHistory whether the party has any completed-service history
  * @param daysSinceDeclinedService whole days since the most recent declined recommendation, or
  *     null when the party has never declined one (FI-3, #1133)
- * @param serviceDue true only when the party has a completed service at least the configured
- *     service-due interval old (#1144); false when the interval has not elapsed and also when
- *     the party has no service history at all
+ * @param serviceDue true only when the party has a completed service at least the effective
+ *     service-due interval old (#1144) — the vehicle's replicated care-preference interval where
+ *     one exists, the configured default otherwise (#1175); false when no scope's interval has
+ *     elapsed and also when the party has no service history at all
  * @param addressCountry ISO 3166-1 alpha-2 country code of the party's structured postal
  *     address, or null when none is on file (FI-4, #1135) — individuals read the
  *     ext_people_contact_person replica, commercial parties ext_organization_postal_address

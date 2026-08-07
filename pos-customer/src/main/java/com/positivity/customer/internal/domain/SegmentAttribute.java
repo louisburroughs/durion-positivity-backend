@@ -110,9 +110,10 @@ public enum SegmentAttribute {
             numeric(),
             "Whole days since the most recent declined service recommendation; unknown when none"),
     /**
-     * The care interval has elapsed since the last completed service (#1144). Until per-vehicle
-     * care-preference intervals are replicated from pos-vehicle-inventory, the interval is the
-     * module-wide {@code pos.customer.crm.service-due-months} setting. A party with no service
+     * The care interval has elapsed since the last completed service (#1144). The interval is
+     * resolved per vehicle (#1175): a vehicle's care-preference override replicated from
+     * pos-vehicle-inventory ({@code ext_vehicle_care_preference}) where one exists, the
+     * module-wide {@code pos.customer.crm.service-due-months} setting otherwise. A party with no service
      * history projects false — never-served customers are targeted via
      * {@link #HAS_SERVICE_HISTORY} / {@link #MONTHS_SINCE_LAST_SERVICE} instead.
      */

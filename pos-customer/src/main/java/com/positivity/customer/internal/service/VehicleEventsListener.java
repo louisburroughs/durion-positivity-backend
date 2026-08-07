@@ -3,12 +3,15 @@ package com.positivity.customer.internal.service;
 import com.positivity.customer.internal.entity.AbstractParty;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.ExtVehicle;
+import com.positivity.customer.internal.entity.ExtVehicleCarePreference;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.entity.ProcessedEvent;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.internal.repository.ExtVehicleCarePreferenceRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessedEventRepository;
+import com.positivity.domainevents.vehicle.VehicleCarePreferenceUpdatedV1;
 import com.positivity.domainevents.vehicle.VehicleUpdatedV1;
 import java.time.Clock;
 import java.time.Instant;
@@ -27,11 +30,15 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Consumes {@code vehicle.events.v1} into the {@code ext_vehicle} replica (ADR-0044 §6, #843).
+ * Consumes {@code vehicle.events.v1} into the {@code ext_vehicle} and
+ * {@code ext_vehicle_care_preference} replicas (ADR-0044 §6, #843, #1175).
  *
  * <p>Same contract as pos-accounting's replica listeners: idempotent via {@code processed_events}
- * in the upsert transaction, stale envelopes (aggregateVersion at or below the replica's) skipped,
- * transient DB errors rethrown for container retry/DLQ, malformed payloads logged and skipped.
+ * in the upsert transaction, stale envelopes skipped, transient DB errors rethrown for container
+ * retry/DLQ, malformed payloads logged and skipped. Every parsed envelope with an eventId is
+ * recorded in {@code processed_events} — including event types this module ignores — because the
+ * owner's reconciliation manifest counts every event on the topic and an unrecorded eventId would
+ * read as drift (#1175).
  *
  * <p>Beyond the replica, this listener maintains the vehicle-party association pos-customer owns
  * (ADR-0012): the event's {@code accountId} is the owning party, so the VIN is added to that
@@ -50,6 +57,7 @@ public class VehicleEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtVehicleRepository extVehicleRepository;
+    private final ExtVehicleCarePreferenceRepository extVehicleCarePreferenceRepository;
     private final PersonPartyRepository personPartyRepository;
     private final CommercialPartyRepository commercialPartyRepository;
 
@@ -65,11 +73,6 @@ public class VehicleEventsListener {
             log.warn("Skipping unparsable vehicle event: {}", message, e);
             return;
         }
-        String eventType = envelope.path("eventType").stringValue(null);
-        if (!VehicleUpdatedV1.EVENT_TYPE.equals(eventType)) {
-            log.debug("Ignoring vehicle event type={}", eventType);
-            return;
-        }
         String eventId = envelope.path("eventId").stringValue(null);
         if (eventId == null || eventId.isBlank()) {
             log.warn("Skipping vehicle event without eventId: {}", message);
@@ -80,8 +83,17 @@ public class VehicleEventsListener {
             return;
         }
 
+        String eventType = envelope.path("eventType").stringValue(null);
         try {
-            applyVehicleUpdate(envelope);
+            if (VehicleUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                applyVehicleUpdate(envelope);
+            } else if (VehicleCarePreferenceUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                applyCarePreferenceUpdate(envelope);
+            } else {
+                // Recorded below anyway: the owner's manifest counts every event on the topic,
+                // so an ignored-but-unrecorded eventId would read as drift every window (#1175).
+                log.debug("Ignoring vehicle event type={}", eventType);
+            }
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
             throw e;
@@ -140,6 +152,43 @@ public class VehicleEventsListener {
                 payload.accountId(),
                 payload.active(),
                 aggregateVersion);
+    }
+
+    private void applyCarePreferenceUpdate(JsonNode envelope) {
+        VehicleCarePreferenceUpdatedV1 payload =
+                objectMapper.treeToValue(envelope.path("payload"), VehicleCarePreferenceUpdatedV1.class);
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        UUID vehicleId = payload.vehicleId();
+
+        ExtVehicleCarePreference existing =
+                extVehicleCarePreferenceRepository.findById(vehicleId).orElse(null);
+        // The care-preference aggregateVersion is a last-writer-wins epoch-millis stamp, not a
+        // JPA row version (the row is hard-deleted and re-created upstream), so the guard is
+        // strictly-greater — an equal stamp applies (people-contact replica precedent).
+        if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
+            log.debug(
+                    "Skipping stale care-preference event vehicleId={} eventVersion={} replicaVersion={}",
+                    vehicleId,
+                    aggregateVersion,
+                    existing.getAggregateVersion());
+            return;
+        }
+
+        // A delete is a versioned tombstone (interval null, version advanced), never a hard
+        // delete: a surviving row is what lets this guard reject a replayed older update after
+        // the removal was applied.
+        extVehicleCarePreferenceRepository.save(ExtVehicleCarePreference.builder()
+                .vehicleId(vehicleId)
+                .serviceIntervalMonths(payload.deleted() ? null : payload.serviceIntervalMonths())
+                .preferenceUpdatedAt(payload.updatedAt())
+                .aggregateVersion(aggregateVersion)
+                .updatedAt(Instant.now(clock))
+                .build());
+        log.info(
+                "Updated ext_vehicle_care_preference replica vehicleId={} serviceIntervalMonths={} deleted={}",
+                vehicleId,
+                payload.serviceIntervalMonths(),
+                payload.deleted());
     }
 
     /**

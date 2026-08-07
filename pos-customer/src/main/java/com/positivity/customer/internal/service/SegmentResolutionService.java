@@ -18,12 +18,14 @@ import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.CommunicationPreferenceRepository;
 import com.positivity.customer.internal.repository.ExtOrganizationPostalAddressRepository;
 import com.positivity.customer.internal.repository.ExtPersonReplicaRepository;
+import com.positivity.customer.internal.repository.ExtVehicleCarePreferenceRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.FollowUpTaskRepository;
 import com.positivity.customer.internal.repository.PartyTagAssignmentRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.SegmentMemberRepository;
 import com.positivity.customer.internal.repository.ServiceHistoryRepository;
+import com.positivity.customer.internal.repository.ServiceHistoryRepository.PartyVehicleLastServiceView;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -80,12 +82,14 @@ public class SegmentResolutionService {
     private final FollowUpTaskRepository followUpTaskRepository;
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
     private final ExtOrganizationPostalAddressRepository extOrganizationPostalAddressRepository;
+    private final ExtVehicleCarePreferenceRepository extVehicleCarePreferenceRepository;
     private final Clock clock;
 
     /**
-     * Service-due interval in whole months (#1144). pos-vehicle-inventory owns per-vehicle
-     * care-preference intervals but does not yet emit them, so until that feed exists the
-     * catalog's {@code service.due} attribute uses this module-wide interval.
+     * Fallback service-due interval in whole months (#1144). Per-vehicle care-preference
+     * intervals replicate from pos-vehicle-inventory into {@code ext_vehicle_care_preference}
+     * (#1175) and take precedence where vehicle-scoped history exists; this module-wide interval
+     * covers vehicles without an override and vehicle-less service history.
      */
     @Value("${pos.customer.crm.service-due-months:6}")
     private int serviceDueMonths = 6;
@@ -167,7 +171,9 @@ public class SegmentResolutionService {
         Map<UUID, CommunicationPreference> preferences = preferencesByParty(ids);
         Map<UUID, Set<UUID>> tags = tagsByParty(ids);
         Map<UUID, List<ExtVehicle>> vehicles = vehiclesByAccount(ids);
-        Map<UUID, Instant> lastService = lastServiceByParty(ids);
+        Map<UUID, List<PartyVehicleLastServiceView>> lastServiceRows = lastServiceByPartyVehicle(ids);
+        Map<UUID, Instant> lastService = latestByParty(lastServiceRows);
+        Map<UUID, Integer> intervalOverrides = intervalOverridesByVehicle(lastServiceRows);
         Map<UUID, Instant> lastDeclined = lastDeclinedByParty(ids);
         // FI-4 (#1135): organization addresses replicate from pos-people-contact keyed by the
         // commercial party id this module minted.
@@ -214,7 +220,8 @@ public class SegmentResolutionService {
                             monthsSinceService,
                             lastService.containsKey(account.getPartyId()),
                             daysSince(lastDeclined.get(account.getPartyId())),
-                            serviceDue(monthsSinceService),
+                            serviceDue(
+                                    lastServiceRows.getOrDefault(account.getPartyId(), List.of()), intervalOverrides),
                             address != null ? address.getCountryCode() : null,
                             address != null ? address.getRegion() : null,
                             address != null ? address.getCity() : null,
@@ -230,7 +237,9 @@ public class SegmentResolutionService {
         Map<UUID, CommunicationPreference> preferences = preferencesByParty(ids);
         Map<UUID, Set<UUID>> tags = tagsByParty(ids);
         Map<UUID, List<ExtVehicle>> vehicles = vehiclesByAccount(ids);
-        Map<UUID, Instant> lastService = lastServiceByParty(ids);
+        Map<UUID, List<PartyVehicleLastServiceView>> lastServiceRows = lastServiceByPartyVehicle(ids);
+        Map<UUID, Instant> lastService = latestByParty(lastServiceRows);
+        Map<UUID, Integer> intervalOverrides = intervalOverridesByVehicle(lastServiceRows);
         Map<UUID, Instant> lastDeclined = lastDeclinedByParty(ids);
         // FI-4 (#1135): individual addresses live on the person identity replica, keyed by the
         // people-contact person id, not the local party id.
@@ -269,7 +278,7 @@ public class SegmentResolutionService {
                             monthsSinceService,
                             lastService.containsKey(person.getPartyId()),
                             daysSince(lastDeclined.get(person.getPartyId())),
-                            serviceDue(monthsSinceService),
+                            serviceDue(lastServiceRows.getOrDefault(person.getPartyId(), List.of()), intervalOverrides),
                             replica != null ? replica.getAddressCountryCode() : null,
                             replica != null ? replica.getAddressRegion() : null,
                             replica != null ? replica.getAddressCity() : null,
@@ -346,17 +355,47 @@ public class SegmentResolutionService {
                 .collect(Collectors.groupingBy(ExtVehicle::getAccountId));
     }
 
-    private Map<UUID, Instant> lastServiceByParty(List<UUID> partyIds) {
+    private Map<UUID, List<PartyVehicleLastServiceView>> lastServiceByPartyVehicle(List<UUID> partyIds) {
         if (partyIds.isEmpty()) {
             return Map.of();
         }
+        return serviceHistoryRepository.findLastServiceByPartyAndVehicle(partyIds).stream()
+                .filter(row -> row.getLastCompletedAt() != null)
+                .collect(Collectors.groupingBy(PartyVehicleLastServiceView::getPartyId));
+    }
+
+    /** Party-level last completion: the max across the party's per-vehicle scopes. */
+    private static Map<UUID, Instant> latestByParty(Map<UUID, List<PartyVehicleLastServiceView>> rowsByParty) {
         Map<UUID, Instant> byParty = new HashMap<>();
-        for (var row : serviceHistoryRepository.findLastServiceByParty(partyIds)) {
-            if (row.getLastCompletedAt() != null) {
-                byParty.put(row.getPartyId(), row.getLastCompletedAt());
-            }
-        }
+        rowsByParty.forEach((partyId, rows) -> rows.stream()
+                .map(PartyVehicleLastServiceView::getLastCompletedAt)
+                .max(Instant::compareTo)
+                .ifPresent(last -> byParty.put(partyId, last)));
         return byParty;
+    }
+
+    /**
+     * Per-vehicle interval overrides for every vehicle appearing in the candidates' service
+     * history, batch-loaded from the {@code ext_vehicle_care_preference} replica in one query
+     * (#1175). Vehicles without an override (or with a tombstoned one) are simply absent.
+     */
+    private Map<UUID, Integer> intervalOverridesByVehicle(Map<UUID, List<PartyVehicleLastServiceView>> rowsByParty) {
+        Set<UUID> vehicleIds = rowsByParty.values().stream()
+                .flatMap(List::stream)
+                .map(PartyVehicleLastServiceView::getVehicleId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (vehicleIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Integer> byVehicle = new HashMap<>();
+        extVehicleCarePreferenceRepository.findAllById(vehicleIds).forEach(preference -> {
+            // A non-positive replica value can only be corrupt data; fall back to the default.
+            if (preference.getServiceIntervalMonths() != null && preference.getServiceIntervalMonths() >= 1) {
+                byVehicle.put(preference.getVehicleId(), preference.getServiceIntervalMonths());
+            }
+        });
+        return byVehicle;
     }
 
     private Map<UUID, Instant> lastDeclinedByParty(List<UUID> partyIds) {
@@ -382,13 +421,28 @@ public class SegmentResolutionService {
     }
 
     /**
-     * Care-preference interval elapsed (#1144): true only when the party has a completed service
-     * and it is at least the configured interval old. A party with no service history projects
-     * false — never-served customers are targeted via {@code service.hasHistory} /
+     * Care-preference interval elapsed (#1144, #1175): true when any of the party's service
+     * scopes — a vehicle with history, or the vehicle-less scope — has its most recent completion
+     * at least the effective interval old. The effective interval is the vehicle's replicated
+     * care-preference override where one exists, the module-wide default otherwise (vehicle-less
+     * history always uses the default). A party with no service history projects false —
+     * never-served customers are targeted via {@code service.hasHistory} /
      * {@code service.monthsSinceLast}, not lumped into service-due reminders.
      */
-    private boolean serviceDue(@Nullable Integer monthsSinceLastService) {
-        return monthsSinceLastService != null && monthsSinceLastService >= serviceDueMonths;
+    private boolean serviceDue(
+            List<PartyVehicleLastServiceView> lastServiceRows, Map<UUID, Integer> intervalOverrides) {
+        for (PartyVehicleLastServiceView row : lastServiceRows) {
+            Integer months = monthsSince(row.getLastCompletedAt());
+            if (months == null) {
+                continue;
+            }
+            Integer override = row.getVehicleId() != null ? intervalOverrides.get(row.getVehicleId()) : null;
+            int interval = override != null ? override : serviceDueMonths;
+            if (months >= interval) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Whole days elapsed since {@code since} (UTC calendar), or null when absent; floored at 0. */

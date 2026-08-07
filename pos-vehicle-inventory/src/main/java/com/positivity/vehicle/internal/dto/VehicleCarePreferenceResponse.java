@@ -34,6 +34,12 @@ public class VehicleCarePreferenceResponse {
     Map<String, Object> preferences;
 
     @Schema(
+            description = "Structured service interval in whole months; null means use the CRM default (#1175)",
+            example = "6",
+            requiredMode = NOT_REQUIRED)
+    Integer serviceIntervalMonths;
+
+    @Schema(
             description = "Service notes for technicians",
             example = "Customer prefers synthetic oil only",
             requiredMode = NOT_REQUIRED)

@@ -75,6 +75,35 @@ class ServiceHistoryRepositoryTest {
     }
 
     @Test
+    @DisplayName("Latest completion is grouped per (party, vehicle), with a null-vehicle scope of its own (#1175)")
+    void groupsLatestCompletionPerPartyAndVehicle() {
+        UUID party = UUID.randomUUID();
+        UUID vehicleA = UUID.randomUUID();
+        UUID vehicleB = UUID.randomUUID();
+        saveHistory(party, vehicleA, STALE);
+        saveHistory(party, vehicleA, RECENT);
+        saveHistory(party, vehicleB, STALE);
+        saveHistory(party, null, RECENT);
+
+        var rows = serviceHistoryRepository.findLastServiceByPartyAndVehicle(List.of(party));
+
+        assertThat(rows).hasSize(3);
+        assertThat(rows)
+                .anySatisfy(row -> {
+                    assertThat(row.getVehicleId()).isEqualTo(vehicleA);
+                    assertThat(row.getLastCompletedAt()).isEqualTo(RECENT);
+                })
+                .anySatisfy(row -> {
+                    assertThat(row.getVehicleId()).isEqualTo(vehicleB);
+                    assertThat(row.getLastCompletedAt()).isEqualTo(STALE);
+                })
+                .anySatisfy(row -> {
+                    assertThat(row.getVehicleId()).isNull();
+                    assertThat(row.getLastCompletedAt()).isEqualTo(RECENT);
+                });
+    }
+
+    @Test
     @DisplayName("A completion with an existing keyed reminder is excluded, open or closed")
     void excludesAlreadyRemindedCompletions() {
         ServiceHistory reminded = saveHistory(UUID.randomUUID(), UUID.randomUUID(), STALE);

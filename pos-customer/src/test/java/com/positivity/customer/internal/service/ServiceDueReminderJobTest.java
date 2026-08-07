@@ -5,14 +5,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.customer.internal.entity.ExtVehicleCarePreference;
 import com.positivity.customer.internal.entity.FollowUpTask;
 import com.positivity.customer.internal.entity.ServiceHistory;
 import com.positivity.customer.internal.enums.FollowUpStatus;
 import com.positivity.customer.internal.enums.FollowUpType;
+import com.positivity.customer.internal.repository.ExtVehicleCarePreferenceRepository;
 import com.positivity.customer.internal.repository.FollowUpTaskRepository;
 import com.positivity.customer.internal.repository.ServiceHistoryRepository;
 import java.time.Clock;
@@ -43,12 +46,24 @@ class ServiceDueReminderJobTest {
 
     private final ServiceHistoryRepository serviceHistory = mock(ServiceHistoryRepository.class);
     private final FollowUpTaskRepository followUps = mock(FollowUpTaskRepository.class);
+    private final ExtVehicleCarePreferenceRepository carePreferences = mock(ExtVehicleCarePreferenceRepository.class);
 
     private ServiceDueReminderJob job;
 
     @BeforeEach
     void setUp() {
-        job = new ServiceDueReminderJob(TEST_CLOCK, serviceHistory, followUps);
+        job = new ServiceDueReminderJob(TEST_CLOCK, serviceHistory, followUps, carePreferences);
+        when(carePreferences.findAllById(any())).thenReturn(List.of());
+    }
+
+    private void stubIntervalOverride(UUID vehicleId, int months) {
+        when(carePreferences.findAllById(any()))
+                .thenReturn(List.of(ExtVehicleCarePreference.builder()
+                        .vehicleId(vehicleId)
+                        .serviceIntervalMonths(months)
+                        .aggregateVersion(1000L)
+                        .updatedAt(Instant.now(TEST_CLOCK))
+                        .build()));
     }
 
     private ServiceHistory history(UUID historyId, UUID partyId, UUID vehicleId, Instant completedAt) {
@@ -103,6 +118,58 @@ class ServiceDueReminderJobTest {
                         eq(Instant.parse("2026-01-21T00:00:00Z")),
                         eq(ServiceDueReminderJob.SOURCE_PREFIX),
                         any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("A tighter per-vehicle interval widens the SQL cutoff and drives the reminder's dueDate (#1175)")
+    void tighterPerVehicleIntervalAppliesEarlier() {
+        when(carePreferences.findMinServiceIntervalMonths()).thenReturn(3);
+        stubIntervalOverride(VEHICLE_ID, 3);
+        Instant completedAt = Instant.parse("2026-02-05T10:00:00Z");
+        when(serviceHistory.findServiceDueCandidates(any(), anyString(), any(Pageable.class)))
+                .thenReturn(List.of(history(HISTORY_ID, PARTY_ID, VEHICLE_ID, completedAt)));
+
+        job.generateReminders();
+
+        // The SQL cutoff is the loosest interval in effect — min(3, 6) = 3 months.
+        verify(serviceHistory)
+                .findServiceDueCandidates(
+                        eq(Instant.parse("2026-04-21T00:00:00Z")),
+                        eq(ServiceDueReminderJob.SOURCE_PREFIX),
+                        any(Pageable.class));
+        ArgumentCaptor<FollowUpTask> saved = ArgumentCaptor.forClass(FollowUpTask.class);
+        verify(followUps).save(saved.capture());
+        // dueDate uses the vehicle's own interval, not the module default.
+        assertThat(saved.getValue().getDueDate()).isEqualTo(LocalDate.of(2026, 5, 5));
+    }
+
+    @Test
+    @DisplayName("A looser per-vehicle interval defers the reminder past the module default (#1175)")
+    void looserPerVehicleIntervalDefers() {
+        stubIntervalOverride(VEHICLE_ID, 12);
+        // Six months old — due at the module default, but the vehicle's interval is 12 months.
+        Instant completedAt = Instant.parse("2026-01-05T10:00:00Z");
+        when(serviceHistory.findServiceDueCandidates(any(), anyString(), any(Pageable.class)))
+                .thenReturn(List.of(history(HISTORY_ID, PARTY_ID, VEHICLE_ID, completedAt)));
+
+        job.generateReminders();
+
+        verify(followUps, never()).save(any(FollowUpTask.class));
+    }
+
+    @Test
+    @DisplayName("A vehicle-less candidate is judged against the module default even when overrides exist")
+    void vehicleLessCandidateUsesDefault() {
+        when(carePreferences.findMinServiceIntervalMonths()).thenReturn(3);
+        Instant completedAt = Instant.parse("2026-01-05T10:00:00Z");
+        when(serviceHistory.findServiceDueCandidates(any(), anyString(), any(Pageable.class)))
+                .thenReturn(List.of(history(HISTORY_ID, PARTY_ID, null, completedAt)));
+
+        job.generateReminders();
+
+        ArgumentCaptor<FollowUpTask> saved = ArgumentCaptor.forClass(FollowUpTask.class);
+        verify(followUps).save(saved.capture());
+        assertThat(saved.getValue().getDueDate()).isEqualTo(LocalDate.of(2026, 7, 5));
     }
 
     @Test
