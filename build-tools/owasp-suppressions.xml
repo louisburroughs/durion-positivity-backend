@@ -35,7 +35,7 @@
     <suppress>
         <notes>DOMPurify bundled in swagger-ui; Swagger UI disabled in production; no springdoc 3.x fix available yet.</notes>
         <packageUrl regex="true">^pkg:javascript/DOMPurify@.*$</packageUrl>
-        <ghsa>GHSA-39q2-94rc-95cp</ghsa>
+        <vulnerabilityName>GHSA-39q2-94rc-95cp</vulnerabilityName>
     </suppress>
 
 </suppressions>
