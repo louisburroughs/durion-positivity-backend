@@ -3,14 +3,19 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.LaborOverheadCostReport;
 import com.positivity.accounting.internal.dto.LaborOverheadReportLine;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
+import com.positivity.accounting.internal.entity.LocationFxRate;
+import com.positivity.accounting.internal.entity.LocationProfile;
 import com.positivity.accounting.internal.enums.StatementType;
 import com.positivity.accounting.internal.report.LaborOverheadTaxonomy;
 import com.positivity.accounting.internal.report.LaborOverheadTaxonomy.LineDef;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
+import com.positivity.accounting.internal.repository.LocationFxRateRepository;
+import com.positivity.accounting.internal.repository.LocationProfileRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import com.positivity.accounting.service.LaborOverheadReportService;
 import com.positivity.security.common.LogSanitizer;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -37,6 +42,12 @@ import org.springframework.transaction.annotation.Transactional;
  * (debit − credit) by month for the requested {@code locationId} dimension, computes subtotal rows
  * column-wise from the taxonomy, and derives YTD over the elapsed months. Mirrors the posted-state
  * semantic ({@code je.status = 'POSTED'}) used by the existing financial reporting.
+ *
+ * <p>Issue #731 enrichment: mappings are per-location-overridable (location rows replace global
+ * rows per line code); the report header resolves {@code locationLabel}/{@code currency} from the
+ * accounting-side {@link LocationProfile} and the FX rates from {@link LocationFxRate}, both
+ * defaulting to a US plant (USD, 1.00) when unconfigured. The {@code usdOnly} line (2.11.4) is
+ * presented in USD on local-currency plants via the year's average rate.
  */
 @Service
 @Transactional(readOnly = true)
@@ -51,12 +62,18 @@ public class LaborOverheadReportServiceImpl implements LaborOverheadReportServic
 
     private final StatementLineMappingRepository statementLineMappingRepository;
     private final JournalEntryLineRepository journalEntryLineRepository;
+    private final LocationProfileRepository locationProfileRepository;
+    private final LocationFxRateRepository locationFxRateRepository;
 
     public LaborOverheadReportServiceImpl(
             StatementLineMappingRepository statementLineMappingRepository,
-            JournalEntryLineRepository journalEntryLineRepository) {
+            JournalEntryLineRepository journalEntryLineRepository,
+            LocationProfileRepository locationProfileRepository,
+            LocationFxRateRepository locationFxRateRepository) {
         this.statementLineMappingRepository = statementLineMappingRepository;
         this.journalEntryLineRepository = journalEntryLineRepository;
+        this.locationProfileRepository = locationProfileRepository;
+        this.locationFxRateRepository = locationFxRateRepository;
     }
 
     @Override
@@ -70,41 +87,69 @@ public class LaborOverheadReportServiceImpl implements LaborOverheadReportServic
                 fiscalYear,
                 resolvedAsOfMonth);
 
-        Map<String, Set<UUID>> leafToAccounts = resolveLeafToAccounts();
+        Map<String, Set<UUID>> leafToAccounts = resolveLeafToAccounts(locationId);
         Map<String, BigDecimal[]> leafMonthly = aggregateLeafMonthly(leafToAccounts, locationId, fiscalYear);
+
+        LocationProfile profile =
+                locationProfileRepository.findByLocationCode(locationId).orElse(null);
+        LocationFxRate fxRate = locationFxRateRepository
+                .findByLocationCodeAndFiscalYear(locationId, fiscalYear)
+                .orElse(null);
+        BigDecimal averageRate = fxRate != null ? fxRate.getAverageRate() : RATE_US_PLANT;
 
         Map<String, BigDecimal[]> monthlyByCode = new HashMap<>();
         List<LaborOverheadReportLine> reportLines = new ArrayList<>();
         for (LineDef def : LaborOverheadTaxonomy.lines()) {
             BigDecimal[] monthly = computeMonthly(def, leafMonthly, monthlyByCode);
+            if (def.usdOnly()) {
+                monthly = toUsd(monthly, averageRate);
+            }
             reportLines.add(toReportLine(def, monthly, resolvedAsOfMonth));
         }
 
         return LaborOverheadCostReport.builder()
                 .locationId(locationId)
-                .locationLabel(locationId)
+                .locationLabel(profile != null ? profile.getLocationLabel() : locationId)
                 .fiscalYear(fiscalYear)
                 .asOfMonth(resolvedAsOfMonth)
-                .currency(CURRENCY_USD)
-                .localCurrencyPerUsd(RATE_US_PLANT)
-                .averageRate(RATE_US_PLANT)
+                .currency(profile != null ? profile.getCurrencyCode() : CURRENCY_USD)
+                .localCurrencyPerUsd(fxRate != null ? fxRate.getLocalCurrencyPerUsd() : RATE_US_PLANT)
+                .averageRate(averageRate)
                 .lines(reportLines)
                 .build();
     }
 
-    /** Group LABOR_OVERHEAD mappings by line code into the set of contributing GL account ids. */
-    private Map<String, Set<UUID>> resolveLeafToAccounts() {
-        Map<String, Set<UUID>> leafToAccounts = new HashMap<>();
+    /**
+     * Group LABOR_OVERHEAD mappings by line code into the set of contributing GL account ids.
+     *
+     * <p>Rows with a {@code null} location are the global default; rows carrying the requested
+     * location <b>replace</b> the global rows for that line code. Rows scoped to other locations are
+     * ignored.
+     */
+    private Map<String, Set<UUID>> resolveLeafToAccounts(String locationId) {
+        Map<String, Set<UUID>> globalAccounts = new HashMap<>();
+        Map<String, Set<UUID>> overrideAccounts = new HashMap<>();
         statementLineMappingRepository
                 .findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(StatementType.LABOR_OVERHEAD)
                 .forEach(mapping -> {
                     UUID accountId = mapping.getGlAccountId();
-                    if (accountId != null && mapping.getStatementLineCode() != null) {
-                        leafToAccounts
-                                .computeIfAbsent(mapping.getStatementLineCode(), key -> new LinkedHashSet<>())
-                                .add(accountId);
+                    if (accountId == null || mapping.getStatementLineCode() == null) {
+                        return;
                     }
+                    String mappingLocation = mapping.getLocationId();
+                    Map<String, Set<UUID>> target;
+                    if (mappingLocation == null) {
+                        target = globalAccounts;
+                    } else if (mappingLocation.equals(locationId)) {
+                        target = overrideAccounts;
+                    } else {
+                        return;
+                    }
+                    target.computeIfAbsent(mapping.getStatementLineCode(), key -> new LinkedHashSet<>())
+                            .add(accountId);
                 });
+        Map<String, Set<UUID>> leafToAccounts = new HashMap<>(globalAccounts);
+        leafToAccounts.putAll(overrideAccounts);
         return leafToAccounts;
     }
 
@@ -199,6 +244,24 @@ public class LaborOverheadReportServiceImpl implements LaborOverheadReportServic
                 .monthly(List.of(monthly))
                 .ytd(ytd)
                 .build();
+    }
+
+    /**
+     * Convert a monthly array from local currency to USD using the year's average rate
+     * ({@code usd = local / averageRate}). Applied only to {@code usdOnly} lines (2.11.4) on
+     * local-currency plants; subtotals are computed from the unconverted local amounts, so a
+     * local-currency subtotal is not the arithmetic sum of a converted USD child (source-form
+     * behavior). Returns a new array — the memoized subtotal inputs are never mutated.
+     */
+    private static BigDecimal[] toUsd(BigDecimal[] monthly, BigDecimal averageRate) {
+        if (BigDecimal.ONE.compareTo(averageRate) == 0) {
+            return monthly;
+        }
+        BigDecimal[] converted = new BigDecimal[MONTHS];
+        for (int m = 0; m < MONTHS; m++) {
+            converted[m] = monthly[m].divide(averageRate, 2, RoundingMode.HALF_UP);
+        }
+        return converted;
     }
 
     private boolean matchesLocation(JournalEntryLine line, String locationId) {

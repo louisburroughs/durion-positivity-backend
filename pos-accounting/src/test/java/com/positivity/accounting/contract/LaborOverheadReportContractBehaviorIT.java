@@ -10,6 +10,8 @@ import com.positivity.accounting.internal.dto.LaborOverheadReportLine;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
+import com.positivity.accounting.internal.entity.LocationFxRate;
+import com.positivity.accounting.internal.entity.LocationProfile;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
@@ -18,6 +20,8 @@ import com.positivity.accounting.internal.enums.StatementType;
 import com.positivity.accounting.internal.report.LaborOverheadTaxonomy;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.repository.LocationFxRateRepository;
+import com.positivity.accounting.internal.repository.LocationProfileRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -47,6 +51,12 @@ class LaborOverheadReportContractBehaviorIT extends BaseContractIntegrationTest 
 
     @Autowired
     private JournalEntryRepository journalEntryRepository;
+
+    @Autowired
+    private LocationProfileRepository locationProfileRepository;
+
+    @Autowired
+    private LocationFxRateRepository locationFxRateRepository;
 
     @Test
     @DisplayName("Report leaf + subtotal amounts trace to a posted journal entry for the location")
@@ -111,6 +121,70 @@ class LaborOverheadReportContractBehaviorIT extends BaseContractIntegrationTest 
         assertThat(wages.getYtd()).isEqualByComparingTo("1000.00");
     }
 
+    @Test
+    @DisplayName("Header enrichment: locationLabel/currency from the location profile, rates from the FX config,"
+            + " and line 2.11.4 reported in USD on a local-currency plant")
+    void enrichesHeaderAndReportsUsdOnlyLineInUsd() throws Exception {
+        String location = "LOC-IT-316-MX";
+        LocationProfile profile = new LocationProfile();
+        profile.setLocationCode(location);
+        profile.setLocationLabel("Planta Monterrey");
+        profile.setCurrencyCode("MXN");
+        locationProfileRepository.save(profile);
+        LocationFxRate fxRate = new LocationFxRate();
+        fxRate.setLocationCode(location);
+        fxRate.setFiscalYear(FISCAL_YEAR);
+        fxRate.setLocalCurrencyPerUsd(new BigDecimal("17.500000"));
+        fxRate.setAverageRate(new BigDecimal("2.000000"));
+        locationFxRateRepository.save(fxRate);
+
+        GLAccount mrtDepreciation = seedAccount("6450-IT", "Retread MRT Equipment Depreciation (IT)");
+        seedMapping("2.11.4", mrtDepreciation);
+        seedPostedExpense(mrtDepreciation, 5, location, new BigDecimal("100.00")); // MXN in GL
+
+        String json = mockMvc.perform(withAuth(get(PATH)
+                        .param("locationId", location)
+                        .param("fiscalYear", String.valueOf(FISCAL_YEAR))
+                        .param("asOfMonth", "12")))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        LaborOverheadCostReport report = objectMapper.readValue(json, LaborOverheadCostReport.class);
+        assertThat(report.getLocationLabel()).isEqualTo("Planta Monterrey");
+        assertThat(report.getCurrency()).isEqualTo("MXN");
+        assertThat(report.getLocalCurrencyPerUsd()).isEqualByComparingTo("17.5");
+        assertThat(report.getAverageRate()).isEqualByComparingTo("2");
+        // 100 MXN / 2.0 average rate -> 50 USD on the usdOnly line.
+        assertThat(line(report, "2.11.4").getMonthly().get(4)).isEqualByComparingTo("50.00");
+        assertThat(line(report, "2.11.4").getYtd()).isEqualByComparingTo("50.00");
+    }
+
+    @Test
+    @DisplayName("A location-scoped mapping overrides the global mapping for that line")
+    void locationScopedMappingOverridesGlobal() throws Exception {
+        String location = "LOC-IT-316-OVR";
+        GLAccount globalAccount = seedAccount("6010-IT3", "Retread Plant Hourly Wages (IT3)");
+        GLAccount overrideAccount = seedAccount("6011-IT3", "Retread Plant Hourly Wages Override (IT3)");
+        seedMapping("1.1.1", globalAccount);
+        seedMapping("1.1.1", overrideAccount, location);
+        seedPostedExpense(globalAccount, 3, location, new BigDecimal("1000.00"));
+        seedPostedExpense(overrideAccount, 3, location, new BigDecimal("400.00"));
+
+        String json = mockMvc.perform(withAuth(get(PATH)
+                        .param("locationId", location)
+                        .param("fiscalYear", String.valueOf(FISCAL_YEAR))
+                        .param("asOfMonth", "12")))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        LaborOverheadReportLine wages = line(objectMapper.readValue(json, LaborOverheadCostReport.class), "1.1.1");
+        assertThat(wages.getMonthly().get(2)).isEqualByComparingTo("400.00"); // override replaces global
+    }
+
     private GLAccount seedAccount(String code, String name) {
         GLAccount account = new GLAccount();
         account.setAccountCode(code);
@@ -122,6 +196,10 @@ class LaborOverheadReportContractBehaviorIT extends BaseContractIntegrationTest 
     }
 
     private void seedMapping(String lineCode, GLAccount account) {
+        seedMapping(lineCode, account, null);
+    }
+
+    private void seedMapping(String lineCode, GLAccount account, String locationId) {
         StatementLineMapping mapping = new StatementLineMapping();
         mapping.setStatementType(StatementType.LABOR_OVERHEAD);
         mapping.setStatementLineCode(lineCode);
@@ -129,6 +207,7 @@ class LaborOverheadReportContractBehaviorIT extends BaseContractIntegrationTest 
         mapping.setAccountName(account.getAccountCode());
         mapping.setOperation(OperationType.SUM);
         mapping.setDisplayOrder(1);
+        mapping.setLocationId(locationId);
         statementLineMappingRepository.save(mapping);
     }
 
