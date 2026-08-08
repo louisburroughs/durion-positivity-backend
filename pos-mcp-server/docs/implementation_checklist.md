@@ -410,7 +410,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 - [x] LangChain4j `ToolProvider` for `source='openapi'` implemented — _ev: `OpenApiToolProvider`, wired #797._
 - [x] Ops invoked via `OperationProxyFactory` — _ev: live `Tool proxy GET .../event-receiver/v1/eventTypes/active -> 200` (#796/#801)._
 - [x] User context + permission codes propagated — _ev: auth relay #799 (caller bearer token forwarded); permission codes gate selection._
-- [~] Cached-agent permission leakage prevented — _ev: dynamic `provideTools` reads `RequestScopedUserContext` per request (design-safe); negative/leakage NOT yet live-tested._
+- [x] Cached-agent permission leakage prevented — _ev: 2026-08-08 — `CachedAgentOpenApiPermissionLeakageTest` (shipped PR #1199): user A (holds gated permission) warms the cached role agent, user B (lacks it) reuses the same cached instance; B's prompt carries zero openapi callbacks (not offered ⇒ not executable), gating + selection layers verified to receive each request's own codes, fail-closed with unwired/unpublished context, thread-local cleared after each request._
 - [x] Facade tools still work — _ev: #788 §B.6 facade regression PASS._
 
 ### Completeness gate
@@ -418,18 +418,18 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 - [x] Discovered ops can become agent-callable — _ev: 348 ops discovered/persisted; agent invoked `event-receiver_getactiveeventtypes` live._
 - [x] Only selected + permission-eligible ops exposed — _ev: `findDiscoveredCandidatesForPermissions` (source='openapi' ∩ permission ∩ workflow); fail-closed with no permission._
 - [x] Proxied calls include current user context — _ev: auth relay #799; op executed as caller → 200._
-- [~] Cached agents cannot expose prior higher-permission user's tools — _ev: per-request dynamic provider (design-safe); leakage not yet live-tested._
+- [x] Cached agents cannot expose prior higher-permission user's tools — _ev: 2026-08-08 — proven by `CachedAgentOpenApiPermissionLeakageTest` (warm-then-reuse through the real `roleAgentCache`/`OpenApiToolProvider` seam; see Correctness tests)._
 - [x] Facade + OpenAPI tools coexist — _ev: facade selection + openapi provider both active in the same request (live logs)._
 - [x] Telemetry distinguishes facade vs OpenAPI source — _ev: `NltiRequestTelemetry.Tools.discoveredOpenapi` lists openapi-source tools separately from facade `selected`; `OpenApiToolProvider` publishes the surfaced names request-scoped, `SessionAgentManager` includes them in the event. Unit-tested._
 
 ### Correctness tests
 
 - [x] E2E: execute a discovered op with no facade — _ev: 2026-07-01 live, `event-receiver_getactiveeventtypes` → gateway 200, agent returned 276 active event types._
-- [x] Lower-permission user cannot call higher-permission op — _ev: 2026-07-01 live (alpha) — an op seeded with a permission the caller LACKS (`gate3:negative:notheld`) is excluded by the gating filter, while an op with a held permission (`AUTHENTICATED`) is eligible; caller-perms ∩ `mcp_tool_permission` fail-closed confirmed with real data. (Two-distinct-user + cached-agent leakage still covered only by design — see `[~]` above.)_
+- [x] Lower-permission user cannot call higher-permission op — _ev: 2026-07-01 live (alpha) — an op seeded with a permission the caller LACKS (`gate3:negative:notheld`) is excluded by the gating filter, while an op with a held permission (`AUTHENTICATED`) is eligible; caller-perms ∩ `mcp_tool_permission` fail-closed confirmed with real data. (Two-distinct-user + cached-agent leakage: covered since PR #1199 by `CachedAgentOpenApiPermissionLeakageTest`.)_
 - [x] Permission re-checked at call time, not only cache-build — _ev: `provideTools` (isDynamic) queries `caller.permissionCodes()` per request, not at agent build._
 - [x] Arguments schema-validated before proxy call — _ev: `OpenApiToolProvider.buildParameterSchema` builds a `JsonObjectSchema` envelope with **typed + required path params** (from the path template) and **typed + required query params** (from `input_schema`, which the mapper now persists from `operation.getParameters()`; type mapped string/integer/number/boolean). The runtime validator enforces both. Only headers/body remain free-form objects._
 - [x] Failed proxy → controlled error, not hallucinated success — _ev: `OpenApiOperationExecutor` renders controlled error string; unit-tested (missing service_id → controlled error)._
-- [~] Blocking & streaming support bridge identically — _ev: blocking wired + live-proven; streaming now wires `OpenApiToolProvider` too — the caller is published to `RequestScopedUserContext` synchronously inside `streamTokens` and cleared in `finally` on the same thread (no cross-request leak; fail-closed if provideTools ran past the clear). Functional streaming-openapi selection is pending live SSE verification._
+- [x] Blocking & streaming support bridge identically — _ev: 2026-08-08 — live on alpha: streaming `POST /v1/mcp/chat/stream` via the gateway resolved and attached discovered tools per request with the real caller context (`MCP openapi tool provider role=ROLE_ADMIN permissionCount=336 discoveredTools=8`), write-gate signal recorded from the resolved candidate set, unauthenticated request 401 in 5 ms. The execution leg was blocked by a streaming-only auth defect (WebClient missing the `OLLAMA_API_KEY` header — fixed in PR #1202, merged 2026-08-08) and re-verified after the fix (#1196 item 1 closed by owner)._
 
 ### Drift checks (assert true)
 
@@ -445,8 +445,9 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Gate 3 sign-off
 
-- Metrics filled: [ ] · Decision: **HOLD** — core execution bridge live-proven (positive E2E), but Pass held on: (1) negative/leakage E2E, (2) argument-schema validation, (3) telemetry facade-vs-openapi source tag, (4) streaming Reactor-context parity, (5) permission-seeding source (#785).
-- 2026-08-07: core shipped as Spring AI `ToolCallback`s via #779 (CLOSED) + the #645 batch (PR #1102 Wave 1, gateway-routing IT PR #1120, orphan-pruning PR #1122 for #1121); #785 CLOSED. Residue → #1196 (OPEN: streaming openapi live proof + cached-agent leakage test) and #645 (OPEN: final alpha check).
+- Metrics filled: [ ] · Decision: **PASS** (2026-08-08) — all five HOLD conditions resolved: (1) negative/leakage — `CachedAgentOpenApiPermissionLeakageTest`; (2) argument-schema validation; (3) telemetry source tag (#806); (4) streaming parity — live selection proof + auth fix PR #1202, #1196 item 1 closed; (5) permission-seeding source (#785, CLOSED).
+- 2026-08-07: core shipped as Spring AI `ToolCallback`s via #779 (CLOSED) + the #645 batch (PR #1102 Wave 1, gateway-routing IT PR #1120, orphan-pruning PR #1122 for #1121); #785 CLOSED. Residue → #1196 (streaming openapi live proof + cached-agent leakage test) and #645 (final alpha check).
+- 2026-08-08: #645 CLOSED — alpha zero-404 pass (67 param-free GET openapi ops via gateway: 34× 200, 19× 400, 13× 403; the single 404 proven a documented business 404, not a routing miss; see the dated verification record in `gate3-openapi-bridge-design.md`). #1196 residues folded in: leakage test cited above; streaming live session found + fixed the WebClient auth defect (PR #1202).
 
 #### Gate 3 — Execution results (2026-06-30)
 
@@ -478,7 +479,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 - [x] Wire `.toolProvider(openApiToolProvider)` into the blocking manager + set/clear `RequestScopedUserContext` around `agent.chat` (#797).
 - [x] Relay caller auth to the op call (#799) — else the gateway 401s.
 - [x] Boot-crash hotfix (#800) — openapi rows (null handler_bean) excluded from the facade/bean-loading queries so the registry loader doesn't `getBean(null)`.
-- [~] Streaming context wiring — `OpenApiToolProvider` wired into the streaming agent; caller published/cleared synchronously in `streamTokens` (no Reactor-context accessor needed; leak-safe). Live SSE proof pending.
+- [x] Streaming context wiring — `OpenApiToolProvider` wired into the streaming agent; caller published/cleared synchronously in `streamTokens` (no Reactor-context accessor needed; leak-safe). Live SSE proof 2026-08-08 (see Gate 3 sign-off).
 - Rollback: omit `.toolProvider(...)` → facade-only (current behavior).
 
 **LIVE VERIFICATION (2026-07-01, alpha `sha-559d554`)**
@@ -492,7 +493,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 - [x] Negative permission-gating — an op behind a not-held permission is excluded (live, #805). _Remaining:_ cached-agent reuse across two distinct users is still design-covered only (`[~]`), not live-tested.
 - [x] Argument-schema validation — path + query params typed + required (query from persisted `input_schema`); only headers/body free-form.
 - [x] Telemetry facade-vs-openapi source tag (#806).
-- [~] Streaming context wiring — provider wired + caller published/cleared synchronously in `streamTokens` (leak-safe). Live SSE verification of streaming-openapi selection is the remaining proof.
+- [x] Streaming context wiring — provider wired + caller published/cleared synchronously in `streamTokens` (leak-safe). Live SSE proof 2026-08-08: per-request openapi tool resolution with real caller context observed on the streaming path (`discoveredTools=8`), auth defect blocking execution fixed in PR #1202 (#1196 item 1 closed).
 - [x] Permission-seeding source (admin tooling / #785) — `ToolPermissionController` (`/v1/tools/{toolName}/permissions` GET/POST/DELETE, gated by `mcp:tool:view` / `mcp:tool:manage`) grants/lists/revokes an openapi tool's `mcp_tool_permission` rows, replacing manual SQL (#807). Perm-bits registered (bits 347/348, catalog v16, #809). _Deploy:_ fleet redeploy for catalog v16, then grant `mcp:tool:manage` to an admin role; SDK regen is downstream ([[controller-change-openapi-sdk-chain]]).\_
 
 ---
