@@ -64,9 +64,12 @@ import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * Gate 4 (#1192) manager wiring: tier-keyed agent caching (a T2-simple agent is never reused for a
- * T2-complex request), the tiering feature flag (disabled = legacy keys + default model), router
- * decision + model names in telemetry, and the WRITE-GATE per-request propagation (#1193) with its
+ * Gate 4 (#1192) manager wiring: tier-keyed agent caching (a T2-simple agent is
+ * never reused for a
+ * T2-complex request), the tiering feature flag (disabled = legacy keys +
+ * default model), router
+ * decision + model names in telemetry, and the WRITE-GATE per-request
+ * propagation (#1193) with its
  * write telemetry signal.
  */
 @ExtendWith(MockitoExtension.class)
@@ -113,7 +116,7 @@ class SessionAgentManagerTieringTest {
     void setUp() {
         chatModel = mock(ChatModel.class, withSettings().extraInterfaces(StreamingChatModel.class));
         lenient()
-                .when(chatModel.getDefaultOptions())
+                .when(chatModel.getOptions())
                 .thenReturn(OllamaChatOptions.builder()
                         .model("gpt-oss:120b")
                         .temperature(0.2d)
@@ -186,8 +189,8 @@ class SessionAgentManagerTieringTest {
     @DisplayName("telemetry carries the router decision, selected tier, and actual model names")
     void telemetryCarriesRouterDecisionAndModelNames() {
         when(nltiRouter.classify(SIMPLE_MESSAGE)).thenReturn(decision(NltiIntentType.QUERY, ModelTier.T2_SIMPLE));
-        TieredChatModelResolver resolver =
-                new TieredChatModelResolver(chatModel, (StreamingChatModel) chatModel, "qwen3:4b", "qwen3:8b", "");
+        TieredChatModelResolver resolver = new TieredChatModelResolver(chatModel, (StreamingChatModel) chatModel,
+                "qwen3:4b", "qwen3:8b", "");
         SessionAgentManager manager = buildManager(true, nltiRouter, resolver, null, null);
 
         manager.chat(userContext("user-1"), SIMPLE_MESSAGE);
@@ -221,15 +224,16 @@ class SessionAgentManagerTieringTest {
                     requestScopedUserContext.recordWriteCapableToolsPresent(false);
                     return List.of();
                 });
-        SessionAgentManager manager =
-                buildManager(true, nltiRouter, null, openApiToolProvider, requestScopedUserContext);
+        SessionAgentManager manager = buildManager(true, nltiRouter, null, openApiToolProvider,
+                requestScopedUserContext);
 
         manager.chat(userContext("user-1"), SIMPLE_MESSAGE);
         manager.chat(userContext("user-1"), SIMPLE_MESSAGE);
 
         // Both requests hit one and the same cached (tier-keyed) agent.
         assertThat(roleAgentCacheKeys(manager)).containsExactly("ROLE_ADMIN::none::T2_SIMPLE");
-        // The per-request prompt supplier called the 3-arg overload with the request's own flag.
+        // The per-request prompt supplier called the 3-arg overload with the request's
+        // own flag.
         verify(rolePromptResolver, atLeastOnce()).assemble(anyString(), eq("master"), eq(true));
         verify(rolePromptResolver, atLeastOnce()).assemble(anyString(), eq("master"), eq(false));
 
@@ -249,8 +253,8 @@ class SessionAgentManagerTieringTest {
 
     private NltiRouter.RoutingDecision decision(NltiIntentType intent, ModelTier tier) {
         NltiRiskLevel risk = tier == ModelTier.T2_COMPLEX ? NltiRiskLevel.HIGH : NltiRiskLevel.LOW;
-        RequestComplexity complexity =
-                tier == ModelTier.T2_COMPLEX ? RequestComplexity.MULTI_DOMAIN : RequestComplexity.SINGLE_LOOKUP;
+        RequestComplexity complexity = tier == ModelTier.T2_COMPLEX ? RequestComplexity.MULTI_DOMAIN
+                : RequestComplexity.SINGLE_LOOKUP;
         return new NltiRouter.RoutingDecision(new RouterClassification(intent, risk, complexity, "customer"), tier);
     }
 

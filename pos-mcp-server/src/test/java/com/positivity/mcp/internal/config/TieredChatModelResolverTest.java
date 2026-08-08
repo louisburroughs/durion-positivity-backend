@@ -23,8 +23,10 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
 
 /**
- * Gate 4 (G4.3, #1192): tier→model resolution — configured tier models override the default model's
- * options, unconfigured tiers fall back to the default model, the router tier always runs at
+ * Gate 4 (G4.3, #1192): tier→model resolution — configured tier models override
+ * the default model's
+ * options, unconfigured tiers fall back to the default model, the router tier
+ * always runs at
  * temperature 0, and non-mutable default options can never break construction.
  */
 class TieredChatModelResolverTest {
@@ -37,7 +39,7 @@ class TieredChatModelResolverTest {
     @BeforeEach
     void setUp() {
         defaultChatModel = mock(ChatModel.class, withSettings().extraInterfaces(StreamingChatModel.class));
-        when(defaultChatModel.getDefaultOptions())
+        when(defaultChatModel.getOptions())
                 .thenReturn(OllamaChatOptions.builder()
                         .model(DEFAULT_MODEL)
                         .temperature(0.2d)
@@ -55,17 +57,17 @@ class TieredChatModelResolverTest {
         TieredChatModelResolver resolver = resolver("qwen3:4b", "qwen3:8b", "qwen3:32b");
 
         assertThat(resolver.chatModelFor(ModelTier.T2_SIMPLE)
-                        .getDefaultOptions()
-                        .getModel())
+                .getOptions()
+                .getModel())
                 .isEqualTo("qwen3:8b");
         assertThat(resolver.chatModelFor(ModelTier.T2_COMPLEX)
-                        .getDefaultOptions()
-                        .getModel())
+                .getOptions()
+                .getModel())
                 .isEqualTo("qwen3:32b");
         // Non-router tiers keep the default temperature.
         assertThat(resolver.chatModelFor(ModelTier.T2_SIMPLE)
-                        .getDefaultOptions()
-                        .getTemperature())
+                .getOptions()
+                .getTemperature())
                 .isEqualTo(0.2d);
     }
 
@@ -84,7 +86,7 @@ class TieredChatModelResolverTest {
     void routerTierIsDeterministic() {
         TieredChatModelResolver resolver = resolver("qwen3:4b", "", "");
 
-        var routerOptions = resolver.chatModelFor(ModelTier.T1_ROUTER).getDefaultOptions();
+        var routerOptions = resolver.chatModelFor(ModelTier.T1_ROUTER).getOptions();
         assertThat(routerOptions.getModel()).isEqualTo("qwen3:4b");
         assertThat(routerOptions.getTemperature()).isEqualTo(0.0d);
     }
@@ -94,7 +96,7 @@ class TieredChatModelResolverTest {
     void routerTierWithoutModelStillForcesTemperatureZero() {
         TieredChatModelResolver resolver = resolver("", "", "");
 
-        var routerOptions = resolver.chatModelFor(ModelTier.T1_ROUTER).getDefaultOptions();
+        var routerOptions = resolver.chatModelFor(ModelTier.T1_ROUTER).getOptions();
         assertThat(routerOptions.getModel()).isEqualTo(DEFAULT_MODEL);
         assertThat(routerOptions.getTemperature()).isEqualTo(0.0d);
     }
@@ -118,10 +120,10 @@ class TieredChatModelResolverTest {
     @DisplayName("non-mutable default options (test fakes) fall back to the default model — never breaks boot")
     void nonMutableDefaultsFallBackToDefaultModel() {
         ChatModel bareModel = mock(ChatModel.class);
-        when(bareModel.getDefaultOptions()).thenReturn(null);
+        when(bareModel.getOptions()).thenReturn(null);
 
-        TieredChatModelResolver resolver =
-                new TieredChatModelResolver(bareModel, null, "qwen3:4b", "qwen3:8b", "qwen3:32b");
+        TieredChatModelResolver resolver = new TieredChatModelResolver(bareModel, null, "qwen3:4b", "qwen3:8b",
+                "qwen3:32b");
 
         assertThat(resolver.chatModelFor(ModelTier.T2_SIMPLE)).isSameAs(bareModel);
         assertThat(resolver.chatModelFor(ModelTier.T1_ROUTER)).isSameAs(bareModel);
@@ -135,7 +137,7 @@ class TieredChatModelResolverTest {
         assertThat(resolver.modelNameFor(ModelTier.T2_COMPLEX)).isEqualTo(DEFAULT_MODEL);
 
         ChatModel bareModel = mock(ChatModel.class);
-        when(bareModel.getDefaultOptions()).thenReturn(null);
+        when(bareModel.getOptions()).thenReturn(null);
         TieredChatModelResolver bareResolver = new TieredChatModelResolver(bareModel, null, "", "", "");
         assertThat(bareResolver.modelNameFor(ModelTier.T2_COMPLEX)).isEqualTo("default");
     }

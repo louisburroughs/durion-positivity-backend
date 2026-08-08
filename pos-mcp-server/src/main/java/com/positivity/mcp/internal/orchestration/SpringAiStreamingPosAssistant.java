@@ -23,11 +23,11 @@ import reactor.core.publisher.Flux;
 
 final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
 
-    // Shared with the non-streaming assistant so both paths ground identically (previously this path
-    // carried only the bare "Relevant retrieved context:" header with no grounding instruction).
+    // Shared with the non-streaming assistant so both paths ground identically
+    // (previously this path
+    // carried only the bare "Relevant retrieved context:" header with no grounding
+    // instruction).
     private static final String RAG_CONTEXT_PREFIX = RagGroundingInstruction.CONTEXT_PREFIX;
-    private static final int MAX_CONTEXT_DOCS = 5;
-    private static final int MAX_CONTEXT_CHARS = 4_000;
 
     private final StreamingChatModel streamingChatModel;
     private final Supplier<String> systemPromptSupplier;
@@ -55,8 +55,10 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
     public @NonNull Flux<String> chat(
             @NonNull String memoryId, @NonNull String userMessage, @NonNull String userContext) {
         ChatMemory chatMemory = chatMemoryProvider.apply(memoryId);
-        // Tools are resolved BEFORE the system prompt so the per-request WRITE-GATE signal
-        // (recorded by OpenApiToolProvider in the request-scoped holder, #1193) is visible to the
+        // Tools are resolved BEFORE the system prompt so the per-request WRITE-GATE
+        // signal
+        // (recorded by OpenApiToolProvider in the request-scoped holder, #1193) is
+        // visible to the
         // prompt supplier when it assembles the layered prompt.
         List<ToolCallback> toolCallbacks = new ArrayList<>(staticToolCallbacks);
         if (openApiToolProvider != null) {
@@ -69,7 +71,7 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
         chatMemory.add(memoryId, List.of(new UserMessage(userMessage)));
         AtomicReference<StringBuilder> responseText = new AtomicReference<>(new StringBuilder());
         return streamingChatModel.stream(new Prompt(
-                        promptMessages, SpringAiPosAssistant.toolCallingOptions(defaultOptions(), toolCallbacks)))
+                promptMessages, SpringAiPosAssistant.toolCallingOptions(defaultOptions(), toolCallbacks)))
                 .map(response -> {
                     if (response.getResult() == null || response.getResult().getOutput() == null) {
                         return "";
@@ -103,32 +105,18 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
     }
 
     private @NonNull String ragContext(@NonNull String userMessage) {
-        StringBuilder builder = new StringBuilder();
-        List<org.springframework.ai.document.Document> documents = ragRetriever.retrieve(userMessage);
-        int maxDocs = Math.min(MAX_CONTEXT_DOCS, documents.size());
-        for (int index = 0; index < maxDocs; index++) {
-            String text = documents.get(index).getText();
-            if (text == null || text.isBlank()) {
-                continue;
-            }
-            if (builder.length() > 0) {
-                builder.append(System.lineSeparator()).append(System.lineSeparator());
-            }
-            builder.append("[").append(index + 1).append("] ").append(text.trim());
-            if (builder.length() >= MAX_CONTEXT_CHARS) {
-                builder.setLength(MAX_CONTEXT_CHARS);
-                break;
-            }
-        }
-        return builder.toString();
+        return RagContextBuilder.build(ragRetriever.retrieve(userMessage));
     }
 
     /**
-     * Returns the streaming chat model's configured default options, used as the base for the
-     * per-request tool-calling options. Only {@link ChatModel} exposes {@code getDefaultOptions()};
-     * the concrete Ollama bean implements both {@link StreamingChatModel} and {@link ChatModel}.
+     * Returns the streaming chat model's configured default options, used as the
+     * base for the
+     * per-request tool-calling options. Only {@link ChatModel} exposes
+     * {@code getOptions()};
+     * the concrete Ollama bean implements both {@link StreamingChatModel} and
+     * {@link ChatModel}.
      */
     private @Nullable ChatOptions defaultOptions() {
-        return streamingChatModel instanceof ChatModel chatModel ? chatModel.getDefaultOptions() : null;
+        return streamingChatModel instanceof ChatModel chatModel ? chatModel.getOptions() : null;
     }
 }
