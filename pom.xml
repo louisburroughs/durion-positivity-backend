@@ -412,6 +412,10 @@
 				<plugin>
 					<groupId>org.owasp</groupId>
 					<artifactId>dependency-check-maven</artifactId>
+					<!-- Pinned so the failBuildOnCVSS gate is reproducible: an unpinned
+					     version floats to the latest release, whose analyzer/CVSS changes
+					     could flip pass/fail results between runs. -->
+					<version>13.0.0</version>
 					<configuration>
 						<suppressionFile>${maven.multiModuleProjectDirectory}/build-tools/owasp-suppressions.xml</suppressionFile>
 						<!-- Fail on CRITICAL/HIGH (CVSS >= 7) so new findings break CI instead of
