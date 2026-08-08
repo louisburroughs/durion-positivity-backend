@@ -86,7 +86,7 @@ public class TieredChatModelResolver {
         if (configured != null) {
             return configured;
         }
-        ChatOptions defaults = defaultChatModel.getDefaultOptions();
+        ChatOptions defaults = defaultChatModel.getOptions();
         String model = defaults != null ? defaults.getModel() : null;
         return (model == null || model.isBlank()) ? DEFAULT_MODEL_LABEL : model;
     }
@@ -103,7 +103,7 @@ public class TieredChatModelResolver {
         if (modelName == null && temperature == null) {
             return defaultChatModel;
         }
-        ChatOptions overridden = overrideOptions(defaultChatModel.getDefaultOptions(), modelName, temperature);
+        ChatOptions overridden = overrideOptions(defaultChatModel.getOptions(), modelName, temperature);
         if (overridden == null) {
             LOGGER.warn(
                     "MCP tiered model resolver: default chat model options are not mutable; tier={} uses the default model unchanged",
@@ -125,7 +125,7 @@ public class TieredChatModelResolver {
             return defaultStreamingChatModel;
         }
         ChatOptions defaults =
-                defaultStreamingChatModel instanceof ChatModel chatModel ? chatModel.getDefaultOptions() : null;
+                defaultStreamingChatModel instanceof ChatModel chatModel ? chatModel.getOptions() : null;
         ChatOptions overridden = overrideOptions(defaults, modelName, temperature);
         if (overridden == null) {
             LOGGER.warn(
@@ -158,7 +158,7 @@ public class TieredChatModelResolver {
     }
 
     /**
-     * A chat model bound to one tier's options. {@code getDefaultOptions()} exposes the tier options
+     * A chat model bound to one tier's options. {@code getOptions()} exposes the tier options
      * so per-request tool-calling options (built by the assistants via {@code mutate()}) carry the
      * tier's model name; a prompt sent without options has the tier options attached before
      * delegation, so direct calls (e.g. the T1 router) also hit the tier model.
@@ -179,7 +179,7 @@ public class TieredChatModelResolver {
         }
 
         @Override
-        public ChatOptions getDefaultOptions() {
+        public ChatOptions getOptions() {
             return tierOptions;
         }
 
