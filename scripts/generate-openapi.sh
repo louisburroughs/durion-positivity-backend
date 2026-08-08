@@ -261,6 +261,18 @@ fi
 echo "Validation mode: $VALIDATION_MODE"
 echo
 
+module_list=$(IFS=,; echo "${MODULES[*]}")
+bootstrap_cmd=("$MVNW" "-pl" "$module_list" "-am" -DskipTests -DskipITs install)
+echo "Installing reactor artifacts in the local Maven repository..."
+echo "${bootstrap_cmd[*]}"
+if [[ "$DRY_RUN" == false ]]; then
+  if ! "${bootstrap_cmd[@]}"; then
+    echo "ERROR: Failed to install reactor artifacts required for OpenAPI generation." >&2
+    exit 1
+  fi
+fi
+echo
+
 JMX_PORT=9119
 CURRENT_MODULE=""
 
@@ -312,7 +324,7 @@ for module in "${MODULES[@]}"; do
   kill_port_if_held "$JMX_PORT"
   CURRENT_MODULE="$module"
 
-  cmd=("$MVNW" "-pl" "$module" "-am" "-P$PROFILE" "${SKIP_FLAGS[@]}" "$PHASE")
+  cmd=("$MVNW" "-pl" "$module" "-P$PROFILE" "${SKIP_FLAGS[@]}" "$PHASE")
   echo "==> $module"
   echo "${cmd[*]}"
   if [[ "$DRY_RUN" == false ]]; then
