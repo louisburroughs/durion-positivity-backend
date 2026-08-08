@@ -383,11 +383,12 @@ jobs:
         # observed taking >2.5h for half the DB), so pull the pre-built NVD
         # cache the dependency-check project publishes daily instead — the
         # {0} placeholder expands to a year or "modified" per feed file.
+        # Fails the job on CVSS >= 7 findings (failBuildOnCVSS in the plugin
+        # config); suppressions live in build-tools/owasp-suppressions.xml.
         run: >-
           ./mvnw org.owasp:dependency-check-maven:check
           -DnvdDatafeedUrl="https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz"
           -B
-        continue-on-error: true
 
       - name: Upload dependency check report
         if: always()
