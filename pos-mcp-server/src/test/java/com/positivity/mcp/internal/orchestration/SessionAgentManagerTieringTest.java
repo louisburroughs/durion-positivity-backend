@@ -189,8 +189,8 @@ class SessionAgentManagerTieringTest {
     @DisplayName("telemetry carries the router decision, selected tier, and actual model names")
     void telemetryCarriesRouterDecisionAndModelNames() {
         when(nltiRouter.classify(SIMPLE_MESSAGE)).thenReturn(decision(NltiIntentType.QUERY, ModelTier.T2_SIMPLE));
-        TieredChatModelResolver resolver = new TieredChatModelResolver(chatModel, (StreamingChatModel) chatModel,
-                "qwen3:4b", "qwen3:8b", "");
+        TieredChatModelResolver resolver =
+                new TieredChatModelResolver(chatModel, (StreamingChatModel) chatModel, "qwen3:4b", "qwen3:8b", "");
         SessionAgentManager manager = buildManager(true, nltiRouter, resolver, null, null);
 
         manager.chat(userContext("user-1"), SIMPLE_MESSAGE);
@@ -224,8 +224,8 @@ class SessionAgentManagerTieringTest {
                     requestScopedUserContext.recordWriteCapableToolsPresent(false);
                     return List.of();
                 });
-        SessionAgentManager manager = buildManager(true, nltiRouter, null, openApiToolProvider,
-                requestScopedUserContext);
+        SessionAgentManager manager =
+                buildManager(true, nltiRouter, null, openApiToolProvider, requestScopedUserContext);
 
         manager.chat(userContext("user-1"), SIMPLE_MESSAGE);
         manager.chat(userContext("user-1"), SIMPLE_MESSAGE);
@@ -253,8 +253,8 @@ class SessionAgentManagerTieringTest {
 
     private NltiRouter.RoutingDecision decision(NltiIntentType intent, ModelTier tier) {
         NltiRiskLevel risk = tier == ModelTier.T2_COMPLEX ? NltiRiskLevel.HIGH : NltiRiskLevel.LOW;
-        RequestComplexity complexity = tier == ModelTier.T2_COMPLEX ? RequestComplexity.MULTI_DOMAIN
-                : RequestComplexity.SINGLE_LOOKUP;
+        RequestComplexity complexity =
+                tier == ModelTier.T2_COMPLEX ? RequestComplexity.MULTI_DOMAIN : RequestComplexity.SINGLE_LOOKUP;
         return new NltiRouter.RoutingDecision(new RouterClassification(intent, risk, complexity, "customer"), tier);
     }
 
