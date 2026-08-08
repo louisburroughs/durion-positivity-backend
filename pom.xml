@@ -106,17 +106,17 @@
 				that Spring Cloud / Netflix Eureka / Archaius pull in.
 				commons-configuration-1.10 (CVE-2025-46392) has no 1.x fix release and is
 				suppressed in build-tools/owasp-suppressions.xml pending Spring Cloud dropping Archaius 1.x.
-				swagger-ui-5.32.2 DOMPurify CVEs are also suppressed there pending a springdoc 3.x update.
 			-->
 			<dependency>
 				<groupId>org.apache.httpcomponents</groupId>
 				<artifactId>httpclient</artifactId>
 				<version>4.5.14</version>
 			</dependency>
+			<!-- CVE-2025-66453 -->
 			<dependency>
 				<groupId>org.mozilla</groupId>
 				<artifactId>rhino</artifactId>
-				<version>1.8.0</version>
+				<version>1.9.1</version>
 			</dependency>
 			<dependency>
 				<groupId>commons-jxpath</groupId>
@@ -198,27 +198,8 @@
 				<version>${uuid-creator.version}</version>
 			</dependency>
 
-			<!-- JACKSON 3.1 (for JSON serialization/deserialization) -->
-			<dependency>
-				<groupId>tools.jackson.core</groupId>
-				<artifactId>jackson-databind</artifactId>
-				<version>3.1.2</version>
-			</dependency>
-			<dependency>
-				<groupId>tools.jackson.core</groupId>
-				<artifactId>jackson-annotations</artifactId>
-				<version>3.1.2</version>
-			</dependency>
-			<dependency>
-				<groupId>tools.jackson.datatype</groupId>
-				<artifactId>jackson-datatype-jdk8</artifactId>
-				<version>3.1.2</version>
-			</dependency>
-			<dependency>
-				<groupId>tools.jackson.datatype</groupId>
-				<artifactId>jackson-datatype-jsr310</artifactId>
-				<version>3.1.2</version>
-			</dependency>
+			<!-- Jackson 3.x versions come from the Spring Boot BOM (jackson-bom.version property);
+			     do not re-pin individual artifacts here — a stale pin can downgrade below the BOM. -->
 
 			<!-- RESILIENCE4J (for Retry Patterns) -->
 			<dependency>
@@ -310,8 +291,27 @@
 		<maven.compiler.source>25</maven.compiler.source>
 		<maven.compiler.target>25</maven.compiler.target>
 		<spring-cloud.version>2025.1.2</spring-cloud.version>
-		<!-- CVE-2026-42198: override Spring Boot BOM postgresql version -->
-		<postgresql.version>42.7.11</postgresql.version>
+		<!--
+			CVE mitigations: override Spring Boot 4.1.0 BOM versions of vulnerable dependencies.
+			Remove each override once a Spring Boot 4.1.x patch release manages the fixed version.
+			Sourced from the 2026-08-08 OWASP dependency-check scan (issue #1200).
+		-->
+		<!-- CVE-2026-42198, CVE-2026-54291 -->
+		<postgresql.version>42.7.13</postgresql.version>
+		<!-- CVE-2026-53434, CVE-2026-55276, CVE-2026-59083, CVE-2026-59084 et al. -->
+		<tomcat.version>11.0.24</tomcat.version>
+		<!-- CVE-2026-56820, CVE-2026-44891 et al. (19 CVEs fixed in 4.2.16) -->
+		<netty.version>4.2.17.Final</netty.version>
+		<!-- CVE-2026-54512 .. CVE-2026-54518 (fixed in 3.1.4) -->
+		<jackson-bom.version>3.1.5</jackson-bom.version>
+		<!-- CVE-2026-54515 (Jackson 2 compat line) -->
+		<jackson-2-bom.version>2.21.5</jackson-2-bom.version>
+		<!-- CVE-2026-54399, CVE-2026-54428 -->
+		<httpcore5.version>5.4.3</httpcore5.version>
+		<!-- CVE-2026-34481, CVE-2026-49844 -->
+		<log4j2.version>2.25.5</log4j2.version>
+		<!-- CVE-2026-41115 (fixed in 4.3.1); spring-kafka 4.0.x manages 4.2.1 -->
+		<kafka.version>4.3.1</kafka.version>
 		<archunit.version>1.4.2</archunit.version>
 		<!-- Test Dependencies - JUnit managed by Spring Boot -->
 		<mockito.version>5.20.0</mockito.version>
@@ -320,8 +320,10 @@
 		<!-- Utility Libraries -->
 		<lombok.version>1.18.46</lombok.version>
 		<slf4j.version>2.0.17</slf4j.version>
-		<springdoc-openapi.version>3.0.3</springdoc-openapi.version>
-		<swagger-annotations.version>2.2.48</swagger-annotations.version>
+		<!-- 3.1.0 bundles swagger-ui 5.32.11 / DOMPurify 3.4.12, clearing the DOMPurify CVE set -->
+		<springdoc-openapi.version>3.1.0</springdoc-openapi.version>
+		<!-- keep in sync with the swagger-api version used by springdoc-openapi -->
+		<swagger-annotations.version>2.2.52</swagger-annotations.version>
 		<!-- OpenTelemetry -->
 		<opentelemetry.version>1.55.0</opentelemetry.version>
 		<!-- UUID v7 Generator -->
@@ -410,8 +412,15 @@
 				<plugin>
 					<groupId>org.owasp</groupId>
 					<artifactId>dependency-check-maven</artifactId>
+					<!-- Pinned so the failBuildOnCVSS gate is reproducible: an unpinned
+					     version floats to the latest release, whose analyzer/CVSS changes
+					     could flip pass/fail results between runs. -->
+					<version>13.0.0</version>
 					<configuration>
 						<suppressionFile>${maven.multiModuleProjectDirectory}/build-tools/owasp-suppressions.xml</suppressionFile>
+						<!-- Fail on CRITICAL/HIGH (CVSS >= 7) so new findings break CI instead of
+						     only producing a report artifact. MEDIUM and below stay report-only. -->
+						<failBuildOnCVSS>7</failBuildOnCVSS>
 					</configuration>
 				</plugin>
 				<plugin>

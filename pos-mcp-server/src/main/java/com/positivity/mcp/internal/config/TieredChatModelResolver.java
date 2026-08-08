@@ -124,8 +124,7 @@ public class TieredChatModelResolver {
         if (modelName == null && temperature == null) {
             return defaultStreamingChatModel;
         }
-        ChatOptions defaults =
-                defaultStreamingChatModel instanceof ChatModel chatModel ? chatModel.getOptions() : null;
+        ChatOptions defaults = defaultStreamingChatModel instanceof ChatModel chatModel ? chatModel.getOptions() : null;
         ChatOptions overridden = overrideOptions(defaults, modelName, temperature);
         if (overridden == null) {
             LOGGER.warn(

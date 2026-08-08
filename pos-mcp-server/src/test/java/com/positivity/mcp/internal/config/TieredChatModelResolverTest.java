@@ -56,18 +56,12 @@ class TieredChatModelResolverTest {
     void configuredTierOverridesModelName() {
         TieredChatModelResolver resolver = resolver("qwen3:4b", "qwen3:8b", "qwen3:32b");
 
-        assertThat(resolver.chatModelFor(ModelTier.T2_SIMPLE)
-                .getOptions()
-                .getModel())
+        assertThat(resolver.chatModelFor(ModelTier.T2_SIMPLE).getOptions().getModel())
                 .isEqualTo("qwen3:8b");
-        assertThat(resolver.chatModelFor(ModelTier.T2_COMPLEX)
-                .getOptions()
-                .getModel())
+        assertThat(resolver.chatModelFor(ModelTier.T2_COMPLEX).getOptions().getModel())
                 .isEqualTo("qwen3:32b");
         // Non-router tiers keep the default temperature.
-        assertThat(resolver.chatModelFor(ModelTier.T2_SIMPLE)
-                .getOptions()
-                .getTemperature())
+        assertThat(resolver.chatModelFor(ModelTier.T2_SIMPLE).getOptions().getTemperature())
                 .isEqualTo(0.2d);
     }
 
@@ -122,8 +116,8 @@ class TieredChatModelResolverTest {
         ChatModel bareModel = mock(ChatModel.class);
         when(bareModel.getOptions()).thenReturn(null);
 
-        TieredChatModelResolver resolver = new TieredChatModelResolver(bareModel, null, "qwen3:4b", "qwen3:8b",
-                "qwen3:32b");
+        TieredChatModelResolver resolver =
+                new TieredChatModelResolver(bareModel, null, "qwen3:4b", "qwen3:8b", "qwen3:32b");
 
         assertThat(resolver.chatModelFor(ModelTier.T2_SIMPLE)).isSameAs(bareModel);
         assertThat(resolver.chatModelFor(ModelTier.T1_ROUTER)).isSameAs(bareModel);

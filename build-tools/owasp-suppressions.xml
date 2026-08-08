@@ -17,25 +17,17 @@
     </suppress>
 
     <!--
-        swagger-ui-5.32.2 — DOMPurify 3.3.2 — CVE-2026-41240, CVE-2026-41238, CVE-2026-41239,
-                                                GHSA-39q2-94rc-95cp
-        DOMPurify 3.3.2 is bundled inside the swagger-ui webjar pulled by springdoc-openapi 3.0.3.
-        springdoc-openapi 3.0.3 is the only available 3.x release (Spring Boot 4 compatible) and no
-        newer version ships a fixed DOMPurify version.  The Swagger UI endpoint (/swagger-ui.html)
-        is only enabled in dev/local profiles and is not reachable in production deployments.
-        Revisit when springdoc-openapi 3.x ships with DOMPurify >= 3.4.0.
+        kotlin-stdlib / kotlin-reflect — CVE-2026-53914
+        The fix is Kotlin 2.4.20, which has no stable release on Maven Central yet (only
+        2.4.20-Beta2).  Kotlin is a runtime-only transitive dependency here (pulled by
+        springdoc-openapi for reflection); no Kotlin code in this codebase processes
+        untrusted input.  Revisit when Kotlin 2.4.20 goes GA or a Spring Boot 4.1.x
+        patch release manages it.
     -->
     <suppress>
-        <notes>DOMPurify bundled in swagger-ui; Swagger UI disabled in production; no springdoc 3.x fix available yet.</notes>
-        <packageUrl regex="true">^pkg:javascript/DOMPurify@.*$</packageUrl>
-        <cve>CVE-2026-41240</cve>
-        <cve>CVE-2026-41238</cve>
-        <cve>CVE-2026-41239</cve>
-    </suppress>
-    <suppress>
-        <notes>DOMPurify bundled in swagger-ui; Swagger UI disabled in production; no springdoc 3.x fix available yet.</notes>
-        <packageUrl regex="true">^pkg:javascript/DOMPurify@.*$</packageUrl>
-        <vulnerabilityName>GHSA-39q2-94rc-95cp</vulnerabilityName>
+        <notes>Fix (Kotlin 2.4.20) not GA yet; runtime-only transitive via springdoc; no Kotlin code paths process untrusted input.</notes>
+        <gav regex="true">^org\.jetbrains\.kotlin:kotlin-(stdlib|reflect).*$</gav>
+        <cve>CVE-2026-53914</cve>
     </suppress>
 
 </suppressions>

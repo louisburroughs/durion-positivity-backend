@@ -71,7 +71,7 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
         chatMemory.add(memoryId, List.of(new UserMessage(userMessage)));
         AtomicReference<StringBuilder> responseText = new AtomicReference<>(new StringBuilder());
         return streamingChatModel.stream(new Prompt(
-                promptMessages, SpringAiPosAssistant.toolCallingOptions(defaultOptions(), toolCallbacks)))
+                        promptMessages, SpringAiPosAssistant.toolCallingOptions(defaultOptions(), toolCallbacks)))
                 .map(response -> {
                     if (response.getResult() == null || response.getResult().getOutput() == null) {
                         return "";

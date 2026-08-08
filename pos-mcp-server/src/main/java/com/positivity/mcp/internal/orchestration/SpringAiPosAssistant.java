@@ -140,8 +140,8 @@ final class SpringAiPosAssistant implements PosAssistant {
         if (defaultOptions instanceof ToolCallingChatOptions toolCallingDefaults) {
             return toolCallingDefaults.mutate().toolCallbacks(toolCallbacks).build();
         }
-        DefaultToolCallingChatOptions.Builder builder = DefaultToolCallingChatOptions.builder()
-                .toolCallbacks(toolCallbacks);
+        DefaultToolCallingChatOptions.Builder builder =
+                DefaultToolCallingChatOptions.builder().toolCallbacks(toolCallbacks);
         String model = defaultOptions != null ? defaultOptions.getModel() : null;
         if (model != null && !model.isBlank()) {
             builder.model(model);
