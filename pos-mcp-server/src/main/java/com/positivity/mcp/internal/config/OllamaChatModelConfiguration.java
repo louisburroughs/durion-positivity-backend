@@ -15,6 +15,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.reactive.function.client.WebClient;
 
 @Configuration
 @Profile("!test")
@@ -75,13 +76,19 @@ public class OllamaChatModelConfiguration {
         requestFactory.setReadTimeout(timeoutMillis);
 
         RestClient.Builder restClientBuilder = RestClient.builder().requestFactory(requestFactory);
+        // OllamaApi talks to the backend over the RestClient for blocking calls and over a separate
+        // WebClient for streaming — the API key must be attached to both, or streaming chat 401s
+        // against authenticated backends (e.g. ollama.com) while blocking chat works.
+        WebClient.Builder webClientBuilder = WebClient.builder();
         if (!apiKey.isBlank()) {
             restClientBuilder.defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey);
+            webClientBuilder.defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey);
         }
 
         OllamaApi ollamaApi = OllamaApi.builder()
                 .baseUrl(baseUrl)
                 .restClientBuilder(restClientBuilder)
+                .webClientBuilder(webClientBuilder)
                 .build();
 
         OllamaChatOptions.Builder optionsBuilder =
