@@ -174,9 +174,15 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.m2/build-cache
-          key: ${{ runner.os }}-mvn-build-cache-${{ github.run_id }}
+          # v2: the v1 cache pool was poisoned with a compiled test class
+          # (RagContextBuilderTest) that exists in no commit — restore-keys
+          # reuse caches across branches, so one branch's stale/experimental
+          # target/test-classes can leak into every later PR build and fail
+          # surefire on phantom tests (PR #1201). Bumping the namespace
+          # abandons the poisoned entries.
+          key: ${{ runner.os }}-mvn-build-cache-v2-${{ github.run_id }}
           restore-keys: |
-            ${{ runner.os }}-mvn-build-cache-
+            ${{ runner.os }}-mvn-build-cache-v2-
 
       - name: Install reactor (skip tests)
         # alwaysRunPlugins: on a build-cache hit the extension skips the install
