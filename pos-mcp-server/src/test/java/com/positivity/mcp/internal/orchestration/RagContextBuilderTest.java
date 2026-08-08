@@ -8,20 +8,20 @@ import org.springframework.ai.document.Document;
 
 class RagContextBuilderTest {
 
-  @Test
-  void buildsCompactContextFromNonBlankDocumentsOnly() {
-    List<Document> documents = List.of(
-        new Document("First document"),
-        new Document("   "),
-        new Document("Second document"),
-        new Document("Third document"));
+    @Test
+    void skipsBlankDocumentsKeepingRetrievalIndexLabels() {
+        List<Document> documents = List.of(
+                new Document("First document"),
+                new Document("   "),
+                new Document("Second document"),
+                new Document("Third document"));
 
-    String context = RagContextBuilder.build(documents);
+        String context = RagContextBuilder.build(documents);
 
-    assertThat(context)
-        .contains("[1] First document")
-        .contains("[2] Second document")
-        .contains("[3] Third document")
-        .doesNotContain("[4]");
-  }
+        assertThat(context)
+                .contains("[1] First document")
+                .contains("[3] Second document")
+                .contains("[4] Third document")
+                .doesNotContain("[2]");
+    }
 }
