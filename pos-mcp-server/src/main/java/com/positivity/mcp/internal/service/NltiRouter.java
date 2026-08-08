@@ -45,12 +45,17 @@ public class NltiRouter {
             - domain examples: workorder, invoice, accounting, tax, inventory, pricing, customer, vehicle, admin, security, shopmanager, master.
             """;
 
+    /** A router run: the T1 classification and the tier it selects. */
+    public record RoutingDecision(
+            @NonNull RouterClassification classification,
+            @NonNull ModelTier tier) {}
+
     private final ChatModel chatModel;
     private final ObjectMapper objectMapper;
     private final TierSelector tierSelector;
 
     public NltiRouter(
-            @Qualifier("chatModel") @NonNull ChatModel chatModel,
+            @Qualifier("routerChatModel") @NonNull ChatModel chatModel,
             @NonNull ObjectMapper objectMapper,
             @NonNull TierSelector tierSelector) {
         this.chatModel = chatModel;
@@ -60,17 +65,25 @@ public class NltiRouter {
 
     /** Routes a request to a model tier. Any failure defaults to {@link ModelTier#T2_COMPLEX}. */
     public @NonNull ModelTier route(@NonNull String message) {
+        return classify(message).tier();
+    }
+
+    /**
+     * Classifies a request and selects its tier. Never throws: any model or parse failure yields the
+     * safe default classification and {@link ModelTier#T2_COMPLEX}.
+     */
+    public @NonNull RoutingDecision classify(@NonNull String message) {
         try {
-            String output = chatModel.call(new Prompt(
-                            new SystemMessage(SYSTEM_PROMPT),
-                            new UserMessage("User request:\n" + message)))
+            String output = chatModel
+                    .call(new Prompt(new SystemMessage(SYSTEM_PROMPT), new UserMessage("User request:\n" + message)))
                     .getResult()
                     .getOutput()
                     .getText();
-            return tierSelector.select(parse(output));
+            RouterClassification classification = parse(output);
+            return new RoutingDecision(classification, tierSelector.select(classification));
         } catch (RuntimeException exception) {
             LOGGER.warn("MCP router classification failed; defaulting to T2_COMPLEX error={}", exception.toString());
-            return ModelTier.T2_COMPLEX;
+            return new RoutingDecision(RouterClassification.safeDefault(), ModelTier.T2_COMPLEX);
         }
     }
 

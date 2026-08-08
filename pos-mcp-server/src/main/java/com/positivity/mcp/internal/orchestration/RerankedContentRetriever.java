@@ -1,26 +1,82 @@
 package com.positivity.mcp.internal.orchestration;
 
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 import org.springframework.ai.document.Document;
 
 /**
  * Re-ranks retrieved content by lexical overlap and source rank.
+ *
+ * <p>#1180 compound questions: a query carrying two information needs (e.g. "what does an invoice
+ * number look like <em>and</em> what permission is needed to read an invoice") scores every
+ * candidate against the <em>whole</em> query, so chunks serving the dominant need crowd the other
+ * need's best chunk out of the top-K cut. When the query splits into multiple sub-queries (clauses
+ * joined by a conjunction that starts a new question, or separate sentences), each sub-query's
+ * best-matching candidate is guaranteed a slot in the final top-K; the remaining slots are filled
+ * in the normal overall-score order. Single-need queries never split, so their results are
+ * byte-for-byte unchanged. Gated by {@code mcp.rag.rerank.compound-slots-enabled} (default
+ * {@code true}), applied via {@link CompoundRerankTuning}.
  */
 final class RerankedContentRetriever implements QueryDocumentRetriever {
 
+    static final boolean DEFAULT_COMPOUND_SLOTS_ENABLED = true;
+    static final int DEFAULT_MAX_SUB_QUERIES = 3;
+
+    /**
+     * Startup-installed defaults for the manager-built instances (see {@link CompoundRerankTuning});
+     * the retriever itself is constructed per role-agent, not Spring-managed.
+     */
+    private static volatile boolean defaultCompoundSlotsEnabled = DEFAULT_COMPOUND_SLOTS_ENABLED;
+
+    private static volatile int defaultMaxSubQueries = DEFAULT_MAX_SUB_QUERIES;
+
+    /**
+     * A sub-query boundary is either (a) a coordinating conjunction followed by a word that starts a
+     * new question/clause (interrogative or auxiliary verb) — so "returns and refunds" never splits —
+     * or (b) a sentence boundary ({@code ?} / {@code ;}) with trailing text.
+     */
+    private static final Pattern SUB_QUERY_BOUNDARY = Pattern.compile("(?i)\\s+(?:and|plus|but)\\s+"
+            + "(?=(?:also\\s+)?(?:what|which|who|whom|whose|when|where|why|how"
+            + "|is|are|was|were|do|does|did|can|could|should|would|will|may|must)\\b)"
+            + "|(?<=[?;])\\s+");
+
+    /** Fragments shorter than this are not information needs of their own; they suppress the split. */
+    private static final int MIN_SUB_QUERY_TOKENS = 3;
+
+    private static final Comparator<RankedContent> OVERALL_SCORE_ORDER =
+            Comparator.comparingDouble(RankedContent::score).reversed().thenComparingInt(RankedContent::originalRank);
+
     private final QueryDocumentRetriever delegate;
     private final int topK;
+    private final boolean compoundSlotsEnabled;
+    private final int maxSubQueries;
 
     RerankedContentRetriever(@NonNull QueryDocumentRetriever delegate, int topK) {
+        this(delegate, topK, defaultCompoundSlotsEnabled, defaultMaxSubQueries);
+    }
+
+    RerankedContentRetriever(
+            @NonNull QueryDocumentRetriever delegate, int topK, boolean compoundSlotsEnabled, int maxSubQueries) {
         this.delegate = delegate;
         this.topK = Math.max(1, topK);
+        this.compoundSlotsEnabled = compoundSlotsEnabled;
+        this.maxSubQueries = Math.max(1, maxSubQueries);
+    }
+
+    /** #1180: install the {@code mcp.rag.rerank.*} tuning as the defaults for new instances. */
+    static void configureCompoundSlotDefaults(boolean compoundSlotsEnabled, int maxSubQueries) {
+        defaultCompoundSlotsEnabled = compoundSlotsEnabled;
+        defaultMaxSubQueries = Math.max(1, maxSubQueries);
     }
 
     @Override
@@ -36,13 +92,92 @@ final class RerankedContentRetriever implements QueryDocumentRetriever {
             deduped.merge(key, candidate, (left, right) -> left.score() >= right.score() ? left : right);
         }
 
-        return deduped.values().stream()
-                .sorted(Comparator.comparingDouble(RankedContent::score)
-                        .reversed()
-                        .thenComparingInt(RankedContent::originalRank))
-                .limit(topK)
+        List<RankedContent> overallOrder =
+                deduped.values().stream().sorted(OVERALL_SCORE_ORDER).toList();
+        if (!compoundSlotsEnabled || overallOrder.size() <= topK) {
+            return topKOf(overallOrder);
+        }
+        List<String> subQueries = splitSubQueries(queryText, maxSubQueries);
+        if (subQueries.size() < 2) {
+            return topKOf(overallOrder);
+        }
+
+        // #1180: reserve a slot for each sub-query's best candidate so one information need cannot
+        // crowd the other's best chunk out of the cut, then fill the rest in overall-score order.
+        LinkedHashSet<RankedContent> selected = new LinkedHashSet<>();
+        for (String subQuery : subQueries) {
+            if (selected.size() >= topK) {
+                break;
+            }
+            selected.add(bestForSubQuery(subQuery, overallOrder));
+        }
+        for (RankedContent candidate : overallOrder) {
+            if (selected.size() >= topK) {
+                break;
+            }
+            selected.add(candidate);
+        }
+        return selected.stream()
+                .sorted(OVERALL_SCORE_ORDER)
                 .map(RankedContent::content)
                 .toList();
+    }
+
+    private @NonNull List<Document> topKOf(@NonNull List<RankedContent> overallOrder) {
+        return overallOrder.stream().limit(topK).map(RankedContent::content).toList();
+    }
+
+    /**
+     * Splits a query into its information needs. Returns fewer than two entries when the query is
+     * single-need, in which case re-ranking behaves exactly as before #1180.
+     */
+    static @NonNull List<String> splitSubQueries(@NonNull String queryText, int maxSubQueries) {
+        List<String> subQueries = new ArrayList<>();
+        for (String part : SUB_QUERY_BOUNDARY.split(normalize(queryText))) {
+            String trimmed = part.trim();
+            if (!trimmed.isBlank() && tokens(trimmed).size() >= MIN_SUB_QUERY_TOKENS) {
+                subQueries.add(trimmed);
+            }
+            if (subQueries.size() >= Math.max(1, maxSubQueries)) {
+                break;
+            }
+        }
+        return List.copyOf(subQueries);
+    }
+
+    private static @NonNull RankedContent bestForSubQuery(
+            @NonNull String subQuery, @NonNull Collection<RankedContent> candidates) {
+        Set<String> subQueryTokens = tokens(subQuery);
+        return candidates.stream()
+                .max(Comparator.<RankedContent>comparingDouble(
+                                candidate -> subQueryScore(candidate.content(), subQuery, subQueryTokens))
+                        .thenComparing(Comparator.comparingInt(RankedContent::originalRank)
+                                .reversed()))
+                .orElseThrow();
+    }
+
+    /**
+     * Relevance of a candidate to one sub-query: lexical overlap plus exact-phrase boost. The fused
+     * source rank is deliberately excluded — it encodes the full compound query's dominant-need
+     * bias, which is exactly what slot reservation corrects for (ties break on source rank instead).
+     */
+    private static double subQueryScore(
+            @NonNull Document document, @NonNull String subQuery, @NonNull Set<String> subQueryTokens) {
+        String contentText = contentText(document);
+        Set<String> contentTokens = tokens(contentText);
+        int overlap = 0;
+        for (String subQueryToken : subQueryTokens) {
+            if (contentTokens.contains(subQueryToken)) {
+                overlap++;
+            }
+        }
+        double lexicalScore = subQueryTokens.isEmpty() ? 0.0 : (double) overlap / subQueryTokens.size();
+        double phraseBoost = contentText
+                        .toLowerCase(Locale.ROOT)
+                        .contains(normalize(subQuery).toLowerCase(Locale.ROOT))
+                ? 0.2
+                : 0.0;
+        return (0.6 * lexicalScore) + phraseBoost;
     }
 
     private static @NonNull RankedContent rankContent(

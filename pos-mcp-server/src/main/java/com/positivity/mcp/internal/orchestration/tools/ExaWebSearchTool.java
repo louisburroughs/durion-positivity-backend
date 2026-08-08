@@ -1,11 +1,11 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -36,8 +36,9 @@ public class ExaWebSearchTool {
         this.maxResults = maxResults;
     }
 
-    @Tool(description = "Search the web for current information about automotive parts, "
-            + "industry news, product specifications, or general knowledge")
+    @Tool(
+            description = "Search the web for current information about automotive parts, "
+                    + "industry news, product specifications, or general knowledge")
     public @NonNull String webSearch(@ToolParam(description = "The search query") @NonNull String query) {
         if (apiKey.isBlank()) {
             logger.warn("EXA_API_KEY is not configured; skipping web search for query='{}'", query);

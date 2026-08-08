@@ -871,6 +871,10 @@ paths:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1nlt~1audit
   /v1/nlt/requests:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1nlt~1requests
+  /v1/nlt/requests/{requestId}/cancel:
+    $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1nlt~1requests~1{requestId}~1cancel
+  /v1/nlt/requests/{requestId}/confirm:
+    $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1nlt~1requests~1{requestId}~1confirm
   /v1/nlt/sessions/{sessionId}/workflow-state:
     $ref: ../../pos-mcp-server/openapi.yaml#/paths/~1v1~1nlt~1sessions~1{sessionId}~1workflow-state
   /v1/prompts:

@@ -55,16 +55,18 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
     public @NonNull Flux<String> chat(
             @NonNull String memoryId, @NonNull String userMessage, @NonNull String userContext) {
         ChatMemory chatMemory = chatMemoryProvider.apply(memoryId);
+        // Tools are resolved BEFORE the system prompt so the per-request WRITE-GATE signal
+        // (recorded by OpenApiToolProvider in the request-scoped holder, #1193) is visible to the
+        // prompt supplier when it assembles the layered prompt.
+        List<ToolCallback> toolCallbacks = new ArrayList<>(staticToolCallbacks);
+        if (openApiToolProvider != null) {
+            toolCallbacks.addAll(openApiToolProvider.resolveToolCallbacks(userMessage));
+        }
         String systemPrompt = buildSystemPrompt(userMessage, userContext);
         List<Message> promptMessages = new ArrayList<>(chatMemory.get(memoryId));
         promptMessages.add(new SystemMessage(systemPrompt));
         promptMessages.add(new UserMessage(userMessage));
         chatMemory.add(memoryId, List.of(new UserMessage(userMessage)));
-
-        List<ToolCallback> toolCallbacks = new ArrayList<>(staticToolCallbacks);
-        if (openApiToolProvider != null) {
-            toolCallbacks.addAll(openApiToolProvider.resolveToolCallbacks(userMessage));
-        }
         AtomicReference<StringBuilder> responseText = new AtomicReference<>(new StringBuilder());
         return streamingChatModel.stream(new Prompt(
                         promptMessages, SpringAiPosAssistant.toolCallingOptions(defaultOptions(), toolCallbacks)))

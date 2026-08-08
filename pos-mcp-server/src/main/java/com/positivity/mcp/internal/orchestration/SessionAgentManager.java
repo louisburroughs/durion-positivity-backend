@@ -4,6 +4,8 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.positivity.mcp.internal.classification.SimpleChatRuleCatalog;
 import com.positivity.mcp.internal.client.RoleDefaultPermissionsClient;
+import com.positivity.mcp.internal.config.TieredChatModelResolver;
+import com.positivity.mcp.internal.domain.ModelTier;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
@@ -14,12 +16,15 @@ import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
 import com.positivity.mcp.internal.orchestration.retrieval.PermissionAwareMetadataFilter;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder;
+import com.positivity.mcp.internal.service.NltiRouter;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.PermissionCodes;
 import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.TierRouting;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import com.positivity.mcp.service.AgentOrchestrationService;
 import com.positivity.mcp.service.CurrentUserContext;
@@ -43,10 +48,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.messages.SystemMessage;
-import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -87,13 +89,16 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private final SessionSummary sessionSummary;
 
     private final RolePromptResolver rolePromptResolver;
-    private final SimpleChatClassifier simpleChatClassifier;
+    private final SimpleChatFastPath simpleChatFastPath;
     private final @Nullable NltiTelemetryEmitter telemetryEmitter;
     private final @Nullable OpenApiToolProvider openApiToolProvider;
     private final @Nullable AnswerResolutionLadder answerResolutionLadder;
     private final @Nullable RequestScopedUserContext requestScopedUserContext;
     private final @Nullable RoleDefaultPermissionsClient roleDefaultPermissionsClient;
     private final NltiWorkflowStateService workflowStateService;
+    private final @Nullable NltiRouter nltiRouter;
+    private final @Nullable TieredChatModelResolver tieredChatModelResolver;
+    private final boolean tieringEnabled;
     private final Clock clock;
 
     private final int memoryMaxMessages;
@@ -110,13 +115,16 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @Nullable ToolExecutionAuditLogger toolExecutionAuditLogger,
             @Nullable SessionSummary sessionSummary,
             @NonNull RolePromptResolver rolePromptResolver,
-            @NonNull SimpleChatClassifier simpleChatClassifier,
+            @NonNull SimpleChatFastPath simpleChatFastPath,
             @Nullable NltiTelemetryEmitter telemetryEmitter,
             @Nullable OpenApiToolProvider openApiToolProvider,
             @Nullable AnswerResolutionLadder answerResolutionLadder,
             @Nullable RequestScopedUserContext requestScopedUserContext,
             @Nullable RoleDefaultPermissionsClient roleDefaultPermissionsClient,
             @NonNull NltiWorkflowStateService workflowStateService,
+            @Nullable NltiRouter nltiRouter,
+            @Nullable TieredChatModelResolver tieredChatModelResolver,
+            @Value("${mcp.model.tiering-enabled:true}") boolean tieringEnabled,
             @NonNull Clock clock,
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
@@ -132,13 +140,16 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         this.toolExecutionAuditLogger = toolExecutionAuditLogger;
         this.sessionSummary = sessionSummary;
         this.rolePromptResolver = rolePromptResolver;
-        this.simpleChatClassifier = simpleChatClassifier;
+        this.simpleChatFastPath = simpleChatFastPath;
         this.telemetryEmitter = telemetryEmitter;
         this.openApiToolProvider = openApiToolProvider;
         this.answerResolutionLadder = answerResolutionLadder;
         this.requestScopedUserContext = requestScopedUserContext;
         this.roleDefaultPermissionsClient = roleDefaultPermissionsClient;
         this.workflowStateService = workflowStateService;
+        this.nltiRouter = nltiRouter;
+        this.tieredChatModelResolver = tieredChatModelResolver;
+        this.tieringEnabled = tieringEnabled;
         this.clock = clock;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
@@ -178,8 +189,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         }
 
         long startMs = System.currentTimeMillis();
+        NltiRouter.RoutingDecision routingDecision = null;
         try {
-            boolean simpleChat = simpleChatClassifier.isSimpleChat(message);
+            boolean simpleChat = simpleChatFastPath.isSimpleChat(message);
             if (LOGGER.isDebugEnabled()) {
                 String messagePreview = sharedOrchestrationSupport.preview(message);
                 int tokenCount = tokenCount(message);
@@ -198,6 +210,13 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                         "MCP simple chat dispatch username={} role={} preview=\"{}\"", username, role, messagePreview);
                 return simpleChat(currentUserContext, message, startMs);
             }
+
+            // Gate 4 (#1192): classify the request with the T1 router (temperature 0) and select the
+            // executor tier. Null when tiering is disabled or the router is not wired — the request
+            // then uses the default model (documented rollback). The router picks a MODEL only; it
+            // never affects tool or permission gating (Permission lock).
+            routingDecision = routeTier(message);
+            ModelTier tier = routingDecision == null ? null : routingDecision.tier();
 
             // #778: gate tool selection by the subject's persisted session workflow state when they
             // have one; otherwise fall back to message-heuristic derivation (session-less callers).
@@ -227,7 +246,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                         sharedOrchestrationSupport.toolNames(selection.fallbackTools()),
                         messagePreview);
             }
-            PosAssistant agent = getOrCreateAgent(role, cacheKey, selection.roleTools(), selection.fallbackTools());
+            PosAssistant agent =
+                    getOrCreateAgent(role, cacheKey, selection.roleTools(), selection.fallbackTools(), tier);
             // Gate 3 (G3.3): publish the caller so the dynamic OpenApiToolProvider
             // (running inside the
             // cached agent) resolves this request's permission-eligible tools; cleared
@@ -249,7 +269,11 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             }
             List<String> toolNames = sharedOrchestrationSupport.toolNames(selectedTools);
             String ragScope = toolRegistry.resolveRagScopeForTools(selectedTools);
-            AssembledPrompt assembled = rolePromptResolver.assemble(role, ragScope);
+            // #1193: read the per-request write-capability signal (recorded by OpenApiToolProvider
+            // during agent.chat, before the finally-clear below) so the telemetry prompt layers
+            // match what the per-request prompt supplier actually assembled.
+            boolean writeCapableToolsPresent = currentWriteCapableToolsPresent();
+            AssembledPrompt assembled = rolePromptResolver.assemble(role, ragScope, writeCapableToolsPresent);
             List<String> promptLayers = assembled != null ? assembled.layers() : List.of();
             emitChatTelemetry(
                     currentUserContext,
@@ -260,7 +284,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     selection.workflowState().name(),
                     elapsedMs,
                     "SUCCESS",
-                    null);
+                    null,
+                    tierRoutingOf(routingDecision),
+                    writeCapableToolsPresent);
             return response;
         } catch (RuntimeException exception) {
             int elapsedMs = (int) (System.currentTimeMillis() - startMs);
@@ -282,7 +308,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     null,
                     elapsedMs,
                     "ERROR",
-                    exception.getClass().getSimpleName());
+                    exception.getClass().getSimpleName(),
+                    tierRoutingOf(routingDecision),
+                    currentWriteCapableToolsPresent());
             throw new IllegalStateException(
                     "MCP chat failed role=%s elapsedMs=%d errorName=%s"
                             .formatted(role, elapsedMs, exception.getClass().getSimpleName()),
@@ -309,11 +337,14 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     }
 
     private PosAssistant buildAgent(@NonNull String role) {
-        return buildAgent(role, toolRegistry.resolveDomainTools(role), toolSelectionEngine.fullFallbackTools());
+        return buildAgent(role, toolRegistry.resolveDomainTools(role), toolSelectionEngine.fullFallbackTools(), null);
     }
 
     private PosAssistant buildAgent(
-            @NonNull String role, @NonNull Collection<Object> roleTools, @NonNull Collection<Object> fallbackTools) {
+            @NonNull String role,
+            @NonNull Collection<Object> roleTools,
+            @NonNull Collection<Object> fallbackTools,
+            @Nullable ModelTier tier) {
         long startNanos = System.nanoTime();
         List<Object> tools = sharedOrchestrationSupport.mergeTools(roleTools, fallbackTools);
         String ragScope = toolRegistry.resolveRagScopeForTools(tools);
@@ -347,28 +378,78 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         QueryDocumentRetriever resilientContentRetriever =
                 new ResilientContentRetriever(rerankedRetriever, "tier2-hybrid-reranked-retriever");
 
+        // #1193 cache safety: the WRITE-GATE layer is applied per request (the supplier reads the
+        // request-scoped write-capability signal, resolved the same way tools are), so a cached
+        // agent can never bake a WRITE_GATE prompt into requests without write-capable tools.
         PosAssistant agent = new SpringAiPosAssistant(
-                chatModel,
-                () -> rolePromptResolver.assemble(role, ragScope).text(),
+                executorChatModel(tier),
+                () -> rolePromptResolver
+                        .assemble(role, ragScope, currentWriteCapableToolsPresent())
+                        .text(),
                 tools,
                 resilientContentRetriever,
                 this::chatMemoryFor,
                 openApiToolProvider,
                 answerResolutionLadder);
         LOGGER.debug(
-                "Built MCP role agent role={} promptName={} ragScope={} toolNames={}",
+                "Built MCP role agent role={} promptName={} ragScope={} tier={} toolNames={}",
                 role,
                 promptName,
                 ragScope,
+                tier,
                 sharedOrchestrationSupport.toolNames(tools));
         LOGGER.info(
-                "Built MCP role agent role={} promptName={} ragScope={} tools={} in {} ms",
+                "Built MCP role agent role={} promptName={} ragScope={} tier={} tools={} in {} ms",
                 role,
                 promptName,
                 ragScope,
+                tier,
                 tools.size(),
                 elapsedMs(startNanos));
         return agent;
+    }
+
+    /** The chat model serving {@code tier}; the default model when untiered or no resolver is wired. */
+    private @NonNull ChatModel executorChatModel(@Nullable ModelTier tier) {
+        if (tier == null || tieredChatModelResolver == null) {
+            return chatModel;
+        }
+        return tieredChatModelResolver.chatModelFor(tier);
+    }
+
+    /**
+     * Classifies the request via the Gate 4 T1 router. Returns null (default model, no tier key
+     * segment) when tiering is disabled ({@code mcp.model.tiering-enabled=false} — the documented
+     * rollback) or the router is not wired. Never throws: router failures safe-default inside
+     * {@link NltiRouter#classify}.
+     */
+    private NltiRouter.@Nullable RoutingDecision routeTier(@NonNull String message) {
+        if (!tieringEnabled || nltiRouter == null) {
+            return null;
+        }
+        return nltiRouter.classify(message);
+    }
+
+    private @Nullable TierRouting tierRoutingOf(NltiRouter.@Nullable RoutingDecision decision) {
+        if (decision == null) {
+            return null;
+        }
+        String tierModel =
+                tieredChatModelResolver == null ? null : tieredChatModelResolver.modelNameFor(decision.tier());
+        String routerModel =
+                tieredChatModelResolver == null ? null : tieredChatModelResolver.modelNameFor(ModelTier.T1_ROUTER);
+        return new TierRouting(
+                decision.classification().intentType().name(),
+                decision.classification().riskLevel().name(),
+                decision.classification().domain(),
+                decision.classification().complexity().name(),
+                NltiRequestTelemetry.Tier.valueOf(decision.tier().name()),
+                tierModel,
+                routerModel);
+    }
+
+    private boolean currentWriteCapableToolsPresent() {
+        return requestScopedUserContext != null && requestScopedUserContext.currentWriteCapableToolsPresent();
     }
 
     /**
@@ -394,9 +475,22 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @NonNull String role,
             @NonNull String toolCacheKey,
             @NonNull List<Object> roleTools,
-            @NonNull List<Object> fallbackTools) {
+            @NonNull List<Object> fallbackTools,
+            @Nullable ModelTier tier) {
         return roleAgentCache.get(
-                role + MEMORY_KEY_SEPARATOR + toolCacheKey, ignored -> buildAgent(role, roleTools, fallbackTools));
+                agentCacheKey(role, toolCacheKey, tier), ignored -> buildAgent(role, roleTools, fallbackTools, tier));
+    }
+
+    /**
+     * Cache key for a role agent: {@code role::toolCacheKey[::tier]}. Gate 4 cache safety: the tier
+     * is part of the key, so a T2-simple agent (small model) is never reused for a T2-complex
+     * request or vice versa. Untiered agents (tiering disabled, or the legacy full-tool path) keep
+     * the historical {@code role::toolCacheKey} shape.
+     */
+    private static @NonNull String agentCacheKey(
+            @NonNull String role, @NonNull String toolCacheKey, @Nullable ModelTier tier) {
+        String base = role + MEMORY_KEY_SEPARATOR + toolCacheKey;
+        return tier == null ? base : base + MEMORY_KEY_SEPARATOR + tier.name();
     }
 
     /**
@@ -428,6 +522,10 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private void prebuildRoleAgents() {
         long startNanos = System.nanoTime();
         int prebuilt = 0;
+        // Gate 4: warm the T2-complex agent (the safe-default routing target) when tiering is
+        // active; simple-tier agents build on first demand. Untiered warm-up otherwise.
+        ModelTier warmTier =
+                (tieringEnabled && nltiRouter != null && tieredChatModelResolver != null) ? ModelTier.T2_COMPLEX : null;
         for (String role : toolRegistry.preloadableRoleIdentifiers()) {
             try {
                 // No CurrentUserContext is available during startup warm-up. #782: seed the role's
@@ -441,8 +539,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                         sharedOrchestrationSupport.mergeTools(selection.roleTools(), selection.fallbackTools());
                 String warmCacheKey = sharedOrchestrationSupport.toolCacheKey(selectedTools);
                 roleAgentCache.put(
-                        role + MEMORY_KEY_SEPARATOR + warmCacheKey,
-                        buildAgent(role, selection.roleTools(), selection.fallbackTools()));
+                        agentCacheKey(role, warmCacheKey, warmTier),
+                        buildAgent(role, selection.roleTools(), selection.fallbackTools(), warmTier));
 
                 // Keep the legacy full key warm for direct role-level access paths.
                 roleAgentCache.put(role + MEMORY_KEY_SEPARATOR + FULL_TOOL_CACHE_KEY, buildAgent(role));
@@ -475,11 +573,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private @NonNull String simpleChat(
             @NonNull CurrentUserContext currentUserContext, @NonNull String message, long requestStartMs) {
         long simpleStartNanos = System.nanoTime();
-        String prompt = rolePromptResolver.resolvePrompt(SystemPromptDefaults.MASTER_PROMPT_NAME)
-                + System.lineSeparator()
-                + formatUserContext(currentUserContext);
         String response = ChatResponseText.extract(chatModel
-                .call(new Prompt(new SystemMessage(prompt), new UserMessage(message)))
+                .call(simpleChatFastPath.prompt(currentUserContext, message))
                 .getResult()
                 .getOutput());
         int elapsedMs = (int) (System.currentTimeMillis() - requestStartMs);
@@ -492,7 +587,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             toolExecutionAuditLogger.logToolExecution(
                     null, currentUserContext.username(), true, false, elapsedMs, null);
         }
-        emitChatTelemetry(currentUserContext, List.of(), List.of(), true, null, null, elapsedMs, "SUCCESS", null);
+        emitChatTelemetry(
+                currentUserContext, List.of(), List.of(), true, null, null, elapsedMs, "SUCCESS", null, null, false);
         return response;
     }
 
@@ -511,7 +607,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @Nullable String workflowState,
             long totalMs,
             @NonNull String status,
-            @Nullable String errorCode) {
+            @Nullable String errorCode,
+            @Nullable TierRouting tierRouting,
+            boolean writeCapableToolsPresent) {
         if (telemetryEmitter == null) {
             return;
         }
@@ -536,7 +634,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                     workflowState,
                     totalMs,
                     status,
-                    errorCode));
+                    errorCode,
+                    tierRouting,
+                    writeCapableToolsPresent));
         } catch (RuntimeException telemetryFailure) {
             LOGGER.warn(
                     "MCP telemetry emission failed role={} status={}",
@@ -546,14 +646,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         }
     }
 
-    private static @NonNull String formatUserContext(@NonNull CurrentUserContext currentUserContext) {
-        return "Authenticated user context: username=" + currentUserContext.username()
-                + ", userId=" + currentUserContext.userId() + ", primaryRole="
-                + currentUserContext.primaryRole() + ", roles="
-                + currentUserContext.roles() + ", authorityCount="
-                + currentUserContext.authorities().size()
-                + ". Interpret references to 'me', 'my', or 'current user' as this authenticated user."
-                + " If a question depends on the user's exact permissions, prefer a self-service permissions tool before asking for identifiers.";
+    private @NonNull String formatUserContext(@NonNull CurrentUserContext currentUserContext) {
+        return sharedOrchestrationSupport.formatUserContext(currentUserContext);
     }
 
     private static int tokenCount(@NonNull String text) {

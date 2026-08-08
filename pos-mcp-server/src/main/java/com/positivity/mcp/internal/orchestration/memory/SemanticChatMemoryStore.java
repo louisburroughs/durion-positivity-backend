@@ -8,13 +8,13 @@ import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Tier 3: Persistent semantic chat memory with session summaries and retrieval.
@@ -107,7 +107,9 @@ public class SemanticChatMemoryStore implements ChatMemory {
     @Override
     public void clear(@NonNull String conversationId) {
         synchronized (messagesByConversation) {
-            int count = messagesByConversation.getOrDefault(conversationId, List.of()).size();
+            int count = messagesByConversation
+                    .getOrDefault(conversationId, List.of())
+                    .size();
             LOGGER.debug(
                     "Clearing SemanticChatMemoryStore sessionId={} conversationId={} messageCount={}",
                     sessionId,
@@ -262,7 +264,8 @@ public class SemanticChatMemoryStore implements ChatMemory {
 
     @Override
     public String toString() {
-        int messageCount = messagesByConversation.values().stream().mapToInt(List::size).sum();
+        int messageCount =
+                messagesByConversation.values().stream().mapToInt(List::size).sum();
         return "SemanticChatMemoryStore{" + "sessionId='" + sessionId + '\'' + ", messages=" + messageCount
                 + ", maxMessages=" + maxMessages + '}';
     }

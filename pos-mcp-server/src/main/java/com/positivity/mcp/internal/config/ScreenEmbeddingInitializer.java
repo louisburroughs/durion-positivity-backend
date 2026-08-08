@@ -30,15 +30,23 @@ public class ScreenEmbeddingInitializer implements ApplicationRunner {
     private final JdbcTemplate jdbcTemplate;
     private final EmbeddingModel embeddingModel;
 
-    public ScreenEmbeddingInitializer(@NonNull JdbcTemplate jdbcTemplate, @NonNull EmbeddingModel embeddingModel) {
+    /** Validated vector column (Gate 5 G5.4, #1194): {@code embedding} or {@code embedding_1024}. */
+    private final String embeddingColumn;
+
+    public ScreenEmbeddingInitializer(
+            @NonNull JdbcTemplate jdbcTemplate,
+            @NonNull EmbeddingModel embeddingModel,
+            @NonNull RagEmbeddingSettings embeddingSettings) {
         this.jdbcTemplate = jdbcTemplate;
         this.embeddingModel = embeddingModel;
+        this.embeddingColumn = embeddingSettings.embeddingColumn();
     }
 
     @Override
     public void run(ApplicationArguments args) {
         List<ScreenDescriptionRow> rows = jdbcTemplate.query(
-                "SELECT id, screen_key, description FROM mcp_screen_registry WHERE embedding IS NULL",
+                "SELECT id, screen_key, description FROM mcp_screen_registry WHERE %s IS NULL"
+                        .formatted(embeddingColumn),
                 (resultSet, rowNum) -> new ScreenDescriptionRow(
                         resultSet.getObject("id", UUID.class),
                         resultSet.getString("screen_key"),
@@ -50,7 +58,7 @@ public class ScreenEmbeddingInitializer implements ApplicationRunner {
             try {
                 float[] vector = embeddingModel.embed(row.description());
                 jdbcTemplate.update(
-                        "UPDATE mcp_screen_registry SET embedding = ?::vector WHERE id = ?",
+                        "UPDATE mcp_screen_registry SET %s = ?::vector WHERE id = ?".formatted(embeddingColumn),
                         toVectorPGobject(vector),
                         row.id());
                 populated++;

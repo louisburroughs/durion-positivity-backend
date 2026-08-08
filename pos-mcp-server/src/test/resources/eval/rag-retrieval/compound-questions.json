@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "_comment": "#1180 compound-question fixtures. A compound question carries two information needs in one query; pre-#1180 the RRF-fused candidates were cut to the final top-5 by whole-query overlap, so chunks serving the dominant need (e.g. permission/role chunks) crowded the other need's best chunk (e.g. the identifier-format chunk of glossary.identifiers) out of the context window. This is the item-4 probe residual verified live on alpha (#1124/#1170 chain): lexical FTS retrieves glossary.identifiers, but it did not survive RRF + top-5 rerank. The fix reserves a final-top-K slot for each sub-query's best chunk (mcp.rag.rerank.compound-slots-enabled, default true). expected.doc_ids lists BOTH needs' docs: recall@k only passes when the reserved-slot cut keeps each need's chunk in the top-5.",
+  "fixtures": [
+    {
+      "fixture_id": "compound-invoice-number-format-and-permission",
+      "query": "what does an invoice number look like and what permission is needed to read an invoice",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": ["security:role:view", "security:permission:view"]
+      },
+      "expected": { "doc_ids": ["glossary.identifiers", "security.role-permission-matrix"], "k": 5 },
+      "rag_scope": "master",
+      "tags": ["compound", "multi-intent", "positive"],
+      "notes": "LIVE-VERIFIED residual (#1180, item-4 probe 6/7): the permission clause pulls security.role-permission-matrix as top lexical hit and glossary.identifiers (dense-miss, lexical-recovered per #1170) is pushed out of the top-5 by the RRF + whole-query rerank. Both docs must survive the cut for the answer to cover both halves. Actor carries the role/permission-view codes so the matrix doc is visible pre-rerank."
+    },
+    {
+      "fixture_id": "compound-workorder-number-format-and-estimate-permission",
+      "query": "what is the format of a workorder number and which permission do I need to view an estimate",
+      "actor": {
+        "role": "ROLE_SERVICE_ADVISOR",
+        "permission_codes": ["workorder:estimate:view"]
+      },
+      "expected": { "doc_ids": ["glossary.identifiers", "workorder.estimate-promotion"], "k": 5 },
+      "rag_scope": "master",
+      "tags": ["compound", "multi-intent", "candidate"],
+      "notes": "Same compound shape as the verified invoice case: identifier-format need (glossary.identifiers, dense-miss class per #1178) joined with a permission need served by a domain doc. Guards the slot-reservation cut on a second doc pair; live status to be confirmed on alpha per the #1124 runbook."
+    }
+  ]
+}

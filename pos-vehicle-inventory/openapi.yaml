@@ -698,8 +698,7 @@ components:
         serviceIntervalMonths:
           type: integer
           format: int32
-          description: Structured service interval in whole months; null clears the
-            per-vehicle override so CRM falls back to its default (#1175)
+          description: Structured service interval in whole months; null clears the per-vehicle override so CRM falls back to its default (#1175)
           example: 6
           maximum: 120
           minimum: 1
@@ -742,8 +741,7 @@ components:
         serviceIntervalMonths:
           type: integer
           format: int32
-          description: Structured service interval in whole months; null means use
-            the CRM default (#1175)
+          description: Structured service interval in whole months; null means use the CRM default (#1175)
           example: 6
         serviceNotes:
           type: string
@@ -1326,8 +1324,7 @@ components:
         serviceIntervalMonths:
           type: integer
           format: int32
-          description: Structured service interval in whole months; null leaves the
-            current value unchanged (#1175)
+          description: Structured service interval in whole months; null leaves the current value unchanged (#1175)
           example: 6
           maximum: 120
           minimum: 1

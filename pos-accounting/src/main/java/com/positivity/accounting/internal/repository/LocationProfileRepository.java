@@ -5,10 +5,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /** Repository for the accounting-side location dimension (issue #731). */
-@Repository
 public interface LocationProfileRepository extends JpaRepository<LocationProfile, UUID> {
 
     /**

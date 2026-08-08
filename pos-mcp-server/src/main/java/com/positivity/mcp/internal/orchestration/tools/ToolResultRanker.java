@@ -144,7 +144,8 @@ public class ToolResultRanker {
               Respond with a single decimal number (e.g., 0.85):
               """, userQuery, truncate(result, 500));
 
-                String scoreText = chatModel.call(new Prompt(new SystemMessage(prompt)))
+            String scoreText = chatModel
+                    .call(new Prompt(new SystemMessage(prompt)))
                     .getResult()
                     .getOutput()
                     .getText()

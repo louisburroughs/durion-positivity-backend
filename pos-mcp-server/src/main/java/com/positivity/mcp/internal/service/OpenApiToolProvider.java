@@ -158,6 +158,12 @@ public class OpenApiToolProvider {
         return params;
     }
 
+    /** A discovered operation is write-capable when it executes with a non-GET HTTP method. */
+    private static boolean isWriteCapable(@NonNull DiscoveredOperation op) {
+        String method = op.httpMethod();
+        return method != null && !"GET".equalsIgnoreCase(method.trim());
+    }
+
     private static String describeOperation(@NonNull DiscoveredOperation op) {
         return op.description() + " [" + op.httpMethod() + " " + op.httpPath() + "]";
     }
@@ -206,11 +212,13 @@ public class OpenApiToolProvider {
                 embedding, candidateLimit, caller.permissionCodes(), WorkflowState.DEFAULT.name());
 
         List<ToolCallback> tools = new ArrayList<>();
+        boolean writeCapableToolsPresent = false;
         for (DiscoveredOperation op : ops) {
             if (!op.isExecutable()) {
                 LOGGER.debug("MCP openapi op missing execution coordinates name={}; skipping", op.name());
                 continue;
             }
+            writeCapableToolsPresent = writeCapableToolsPresent || isWriteCapable(op);
             OpenApiOperationExecutor executor =
                     new OpenApiOperationExecutor(proxyFactory, op, objectMapper, executionTimeout, authHeader);
             tools.add(new OpenApiSpringAiToolCallback(
@@ -224,6 +232,11 @@ public class OpenApiToolProvider {
         userContext.recordDiscoveredOpenapiTools(tools.stream()
                 .map(callback -> callback.getToolDefinition().name())
                 .toList());
+        // #1193: recorded BEFORE the assistant assembles the system prompt (tools are resolved
+        // first), so the per-request prompt supplier can append the WRITE-GATE layer exactly when a
+        // write-capable tool is in this request's candidate set. Facade tools are read-only (GET
+        // lookups), so discovered non-GET operations are the only write-capable candidates.
+        userContext.recordWriteCapableToolsPresent(writeCapableToolsPresent);
         LOGGER.debug(
                 "MCP openapi tool provider role={} permissionCount={} discoveredTools={}",
                 caller.primaryRole(),

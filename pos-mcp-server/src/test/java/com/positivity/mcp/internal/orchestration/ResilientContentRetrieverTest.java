@@ -31,7 +31,7 @@ class ResilientContentRetrieverTest {
         QueryDocumentRetriever delegate = mock(QueryDocumentRetriever.class);
         String query = "inventory stock";
         when(delegate.retrieve(query))
-            .thenThrow(new RuntimeException("model \"nomic-embed-text\" not found, try pulling it first"));
+                .thenThrow(new RuntimeException("model \"nomic-embed-text\" not found, try pulling it first"));
 
         ResilientContentRetriever retriever = new ResilientContentRetriever(delegate, "test-retriever");
 

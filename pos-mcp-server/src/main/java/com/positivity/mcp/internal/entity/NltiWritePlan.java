@@ -81,4 +81,8 @@ public class NltiWritePlan {
     private OffsetDateTime createdAt;
 
     private OffsetDateTime executedAt;
+
+    /** Outcome of the executed tool call; an idempotent re-confirm returns this verbatim. */
+    @Column(columnDefinition = "text")
+    private String executionResult;
 }

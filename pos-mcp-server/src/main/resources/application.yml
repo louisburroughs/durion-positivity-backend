@@ -41,15 +41,30 @@ mcp:
     expected-version: ${SITEMAP_EXPECTED_VERSION:1}
   security:
     permit-all-transport: false
+  write-plan:
+    # Gate 6 (#1193): minutes a previewed write plan stays confirmable before it expires.
+    ttl-minutes: ${MCP_WRITE_PLAN_TTL_MINUTES:10}
   rag:
     table-name: mcp_document_embedding
-    dimension: 768
+    # Gate 5 (G5.4, #1194): which vector column all pgvector reads/writes use. Default stays the
+    # 768-dim column; flip to embedding_1024 (with dimension 1024 and the bge-m3 embedding model)
+    # only after the alpha re-embed is validated — see docs/gate5-rag-hybrid-design.md.
+    embedding-column: ${MCP_RAG_EMBEDDING_COLUMN:embedding}
+    dimension: ${MCP_RAG_DIMENSION:768}
     index-type: ivfflat
     hybrid:
       # Exact identifiers (VINs, SKUs, permission/event codes) routinely score below the dense
       # tier-1 floor. Keep the literal FTS source in the live candidate set; operators can disable
       # it immediately if the retrieval-quality gate detects a regression.
       lexical-enabled: ${MCP_RAG_LEXICAL_ENABLED:true}
+    rerank:
+      # #1180: compound questions (two information needs in one query) reserve a slot in the final
+      # top-K for each sub-query's best chunk, so chunks serving one need cannot crowd the other
+      # need's best chunk out of the context window. Single-need queries are unaffected; operators
+      # can disable instantly if the retrieval-quality gate detects a regression.
+      compound-slots-enabled: ${MCP_RAG_RERANK_COMPOUND_SLOTS_ENABLED:true}
+      # Cap on detected sub-queries eligible for a reserved slot.
+      max-sub-queries: 3
     preload:
       docs:
         - id: "accounting.de-bookkeeping"
@@ -222,11 +237,34 @@ mcp:
     # Minimum cosine similarity for a screen to be offered as a deep link.
     min-score: ${MCP_SCREEN_MIN_SCORE:0.6}
   tuning:
-    # Gate 0 (NL-interface plan): adaptive tuning disabled until the retrieval-quality
-    # regression harness exists. Re-enable only via shadow→controlled-live promotion (Gate 7).
-    enabled: ${MCP_TUNING_ENABLED:false}
+    # Gate 7 (#1195): adaptive tool-priority tuning mode — off | shadow | live.
+    # shadow computes proposals and emits them (logger mcp.tuning.shadow, counter
+    # mcp.tuning.proposals) without persisting; live writes only when the newest eval baseline
+    # (eval-result-path, produced by scripts/eval_live.py) reports thresholds.passed=true and is
+    # younger than eval-freshness-hours — otherwise the run downgrades to shadow with a WARN.
+    # Legacy mcp.tuning.enabled=true (deprecated, kept for operators still setting
+    # MCP_TUNING_ENABLED) is treated as mode=live when mode is unset.
+    mode: ${MCP_TUNING_MODE:off}
+    enabled: ${MCP_TUNING_ENABLED:}
+    eval-result-path: ${MCP_TUNING_EVAL_RESULT_PATH:target/eval/baseline-live-python.json}
+    eval-freshness-hours: ${MCP_TUNING_EVAL_FRESHNESS_HOURS:48}
     cron: "0 0 2 * * ?"
   model:
+    # Gate 4 (#1192) tiered model router. Feature flag / rollback: set
+    # MCP_MODEL_TIERING_ENABLED=false and every request uses the single default executor model
+    # (spring.ai.ollama.chat.options.model) with the historical cache keys.
+    tiering-enabled: ${MCP_MODEL_TIERING_ENABLED:true}
+    # T1 router/classifier model (strict JSON, always temperature 0). Deliberately small. If the
+    # model is not pulled on the Ollama host the router call fails fast and the request safely
+    # defaults to T2-complex — never silently to a smaller model.
+    router: ${MCP_MODEL_ROUTER:qwen3:4b}
+    # T2-simple executor (single-tool lookups). Blank = use the default executor model; set to a
+    # smaller pulled model (e.g. qwen3:8b) to realize the latency/cost win.
+    simple: ${MCP_MODEL_SIMPLE:}
+    # T2-complex executor (multi-tool, writes, accounting/tax/admin/security). Blank = use the
+    # default executor model (gpt-oss:120b), which is already the complex-class model.
+    complex: ${MCP_MODEL_COMPLEX:}
+    # Failover (primary -> secondary within a tier) — orthogonal to tier routing above.
     fallback:
       enabled: ${MCP_MODEL_FALLBACK_ENABLED:false}
       secondary-model-name: ${OLLAMA_FALLBACK_MODEL:gpt-oss:20b}

@@ -68,6 +68,14 @@ public interface ToolMetadataRepository {
     List<String> listToolPermissions(@NonNull UUID toolId);
 
     /**
+     * Gate 6 (#1193): resolves a discovered ({@code source='openapi'}) operation's execution
+     * coordinates by its unique name, for confirmed write-plan execution. Empty when no such
+     * openapi tool exists — facade rows are never returned.
+     */
+    @NonNull
+    Optional<DiscoveredOperation> findDiscoveredOperationByName(@NonNull String name);
+
+    /**
      * Gate 3 (#785): revokes a permission code from a tool. Idempotent (no-op if absent).
      * Returns {@code true} when a row was deleted, {@code false} when the grant was already absent.
      */

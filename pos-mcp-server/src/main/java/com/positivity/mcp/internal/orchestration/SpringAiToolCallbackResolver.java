@@ -24,11 +24,9 @@ import org.springframework.ai.tool.metadata.ToolMetadata;
 final class SpringAiToolCallbackResolver {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
-    };
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
-    private SpringAiToolCallbackResolver() {
-    }
+    private SpringAiToolCallbackResolver() {}
 
     static @NonNull List<ToolCallback> fromObjects(@NonNull List<Object> toolObjects) {
         List<ToolCallback> callbacks = new ArrayList<>();
@@ -102,8 +100,8 @@ final class SpringAiToolCallbackResolver {
             Object[] resolved = new Object[parameters.length];
             for (ParameterBinding binding : bindings) {
                 Object rawValue = firstPresent(arguments, binding.candidateNames());
-                resolved[binding.index()] = rawValue == null ? null
-                        : OBJECT_MAPPER.convertValue(rawValue, binding.parameterType());
+                resolved[binding.index()] =
+                        rawValue == null ? null : OBJECT_MAPPER.convertValue(rawValue, binding.parameterType());
             }
             return resolved;
         }
@@ -168,11 +166,7 @@ final class SpringAiToolCallbackResolver {
                 }
                 candidateNames.add("arg" + index);
                 bindings.add(new ParameterBinding(
-                        index,
-                        parameter.getType(),
-                        schemaName,
-                        description,
-                        List.copyOf(candidateNames)));
+                        index, parameter.getType(), schemaName, description, List.copyOf(candidateNames)));
             }
             return List.copyOf(bindings);
         }
@@ -217,9 +211,7 @@ final class SpringAiToolCallbackResolver {
                     || long.class.equals(type)) {
                 return "integer";
             }
-            if (Number.class.isAssignableFrom(type)
-                    || double.class.equals(type)
-                    || float.class.equals(type)) {
+            if (Number.class.isAssignableFrom(type) || double.class.equals(type) || float.class.equals(type)) {
                 return "number";
             }
             return "string";

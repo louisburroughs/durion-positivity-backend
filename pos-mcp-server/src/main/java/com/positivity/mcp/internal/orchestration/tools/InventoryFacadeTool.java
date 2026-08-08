@@ -1,9 +1,9 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -39,7 +39,8 @@ public class InventoryFacadeTool {
     }
 
     @Tool(description = "Search inventory by product name or partial SKU")
-    public String searchInventory(@ToolParam(description = "Search term: product name or partial SKU") @NonNull String query) {
+    public String searchInventory(
+            @ToolParam(description = "Search term: product name or partial SKU") @NonNull String query) {
         return restClient
                 .get()
                 .uri(inventorySearchUriTemplate, Map.of("query", query))

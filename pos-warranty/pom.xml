@@ -221,6 +221,8 @@
                                         <argument>--logging.level.root=WARN</argument>
                                         <argument>--logging.level.org.hibernate.SQL=ERROR</argument>
                                     </arguments>
+                                    <wait>8000</wait>
+                                    <maxAttempts>180</maxAttempts>
                                 </configuration>
                             </execution>
                             <execution>

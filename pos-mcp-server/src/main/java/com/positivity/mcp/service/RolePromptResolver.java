@@ -17,8 +17,19 @@ public interface RolePromptResolver {
      * <p>Role drives persona only; it never affects tool or document access.
      */
     @NonNull
-    AssembledPrompt assemble(@NonNull String role, @NonNull String ragScope);
+    default AssembledPrompt assemble(@NonNull String role, @NonNull String ragScope) {
+        return assemble(role, ragScope, false);
+    }
 
-    /** Result of {@link #assemble(String, String)}: composed prompt text and the layers included. */
+    /**
+     * As {@link #assemble(String, String)}, additionally appending the WRITE-GATE layer (Gate 6,
+     * #1193) when {@code writeCapableToolsPresent} is true — i.e. when a write-capable tool is in
+     * the request's candidate set. The layer instructs the model to preview and require explicit
+     * confirmation instead of executing mutations directly.
+     */
+    @NonNull
+    AssembledPrompt assemble(@NonNull String role, @NonNull String ragScope, boolean writeCapableToolsPresent);
+
+    /** Result of {@code assemble}: composed prompt text and the layers included. */
     record AssembledPrompt(@NonNull String text, @NonNull List<String> layers) {}
 }

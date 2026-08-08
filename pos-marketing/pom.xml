@@ -221,6 +221,8 @@
                                         <argument>--logging.level.root=WARN</argument>
                                         <argument>--logging.level.org.hibernate.SQL=ERROR</argument>
                                     </arguments>
+                                    <wait>8000</wait>
+                                    <maxAttempts>180</maxAttempts>
                                 </configuration>
                             </execution>
                             <execution>
@@ -237,7 +239,7 @@
                         <artifactId>springdoc-openapi-maven-plugin</artifactId>
                         <version>${springdoc-openapi-maven-plugin.version}</version>
                         <configuration>
-                            <apiDocsUrl>http://localhost:8097/v3/api-docs.yaml</apiDocsUrl>
+                            <apiDocsUrl>http://localhost:8098/v3/api-docs.yaml</apiDocsUrl>
                             <outputFileName>openapi.yaml</outputFileName>
                             <outputDir>${project.basedir}</outputDir>
                         </configuration>

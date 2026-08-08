@@ -53,7 +53,8 @@ class ToolMetadataRepositoryImplTest {
 
     @BeforeEach
     void setUp() {
-        repository = new ToolMetadataRepositoryImpl(jdbcTemplate);
+        repository = new ToolMetadataRepositoryImpl(
+                jdbcTemplate, new com.positivity.mcp.internal.config.RagEmbeddingSettings("embedding", 768));
     }
 
     @Test
@@ -191,5 +192,19 @@ class ToolMetadataRepositoryImplTest {
         inOrder.verify(jdbcTemplate).update(contains("DELETE FROM mcp_tool_workflow"), any(Object[].class));
         inOrder.verify(jdbcTemplate).update(contains("UPDATE mcp_tool_invocation_log"), any(Object[].class));
         inOrder.verify(jdbcTemplate).update(contains("DELETE FROM mcp_tool WHERE id IN"), any(Object[].class));
+    }
+
+    @Test
+    @DisplayName("findDiscoveredOperationByName only matches enabled openapi tools (execution fails closed)")
+    @SuppressWarnings("unchecked")
+    void findDiscoveredOperationByName_filtersOnEnabled() {
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("customer_getall")))
+                .thenReturn(List.of());
+
+        assertThat(repository.findDiscoveredOperationByName("customer_getall")).isEmpty();
+
+        // A tool disabled after plan creation (e.g. emergency kill switch) must not resolve for execution.
+        verify(jdbcTemplate)
+                .query(contains("source = 'openapi' AND enabled = true"), any(RowMapper.class), eq("customer_getall"));
     }
 }

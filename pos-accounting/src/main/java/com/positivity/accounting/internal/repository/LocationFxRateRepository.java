@@ -5,10 +5,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /** Repository for configured location/fiscal-year FX rates (issue #731). */
-@Repository
 public interface LocationFxRateRepository extends JpaRepository<LocationFxRate, UUID> {
 
     /**
@@ -18,5 +16,6 @@ public interface LocationFxRateRepository extends JpaRepository<LocationFxRate, 
      * @param fiscalYear the fiscal year the rate applies to
      * @return the configured rate, or empty when the location defaults to a US plant (1.00)
      */
-    Optional<LocationFxRate> findByLocationCodeAndFiscalYear(@NonNull String locationCode, int fiscalYear);
+    Optional<LocationFxRate> findByLocationCodeAndFiscalYear(@NonNull String locationCode,
+            int fiscalYear);
 }

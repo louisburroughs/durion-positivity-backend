@@ -6,10 +6,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.dto.IntentV1;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
+import com.positivity.mcp.service.IntentParserService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
@@ -58,6 +60,12 @@ class NltiMetricsTest {
     private static final Instant FIXED_INSTANT = Instant.parse("2026-03-12T10:00:00Z");
 
     @Mock
+    private IntentParserService intentParserService;
+
+    @Mock
+    private NltiWritePlanService writePlanService;
+
+    @Mock
     private NltiSessionRepository sessionRepository;
 
     @Mock
@@ -86,11 +94,26 @@ class NltiMetricsTest {
         requestLatencyMs = Timer.builder("nlt.request.latency_ms").register(registry);
         errorCount = Counter.builder("nlt.error.count").register(registry);
 
-        service = new NltiRequestServiceImpl(sessionRepository, requestRepository, clock, registry);
+        service = new NltiRequestServiceImpl(
+                sessionRepository, requestRepository, intentParserService, writePlanService, clock, registry);
 
         UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(SUBJECT, null, List.of());
         auth.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, SUBJECT));
         SecurityContextHolder.getContext().setAuthentication(auth);
+
+        // Gate 6 (#1193): default to a QUERY classification so submit keeps the ACCEPTED path.
+        org.mockito.Mockito.lenient()
+                .when(intentParserService.parse(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new IntentV1(
+                        UUID.fromString("00000000-0000-7000-8000-00000000fee1"),
+                        "QUERY",
+                        "READY",
+                        "LOW",
+                        java.util.List.of(),
+                        java.util.List.of()));
 
         lenient().when(clock.instant()).thenReturn(FIXED_INSTANT);
         lenient().when(clock.getZone()).thenReturn(ZoneOffset.UTC);

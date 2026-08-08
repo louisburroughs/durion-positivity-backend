@@ -57,15 +57,17 @@ final class SpringAiPosAssistant implements PosAssistant {
     @Override
     public @NonNull String chat(@NonNull String memoryId, @NonNull String userMessage, @NonNull String userContext) {
         ChatMemory chatMemory = chatMemoryProvider.apply(memoryId);
-        String systemPrompt = buildSystemPrompt(userMessage, userContext);
-        List<Message> promptMessages = new ArrayList<>(chatMemory.get(memoryId));
-        promptMessages.add(new SystemMessage(systemPrompt));
-        promptMessages.add(new UserMessage(userMessage));
-
+        // Tools are resolved BEFORE the system prompt so the per-request WRITE-GATE signal
+        // (recorded by OpenApiToolProvider in the request-scoped holder, #1193) is visible to the
+        // prompt supplier when it assembles the layered prompt.
         List<ToolCallback> toolCallbacks = new ArrayList<>(staticToolCallbacks);
         if (openApiToolProvider != null) {
             toolCallbacks.addAll(openApiToolProvider.resolveToolCallbacks(userMessage));
         }
+        String systemPrompt = buildSystemPrompt(userMessage, userContext);
+        List<Message> promptMessages = new ArrayList<>(chatMemory.get(memoryId));
+        promptMessages.add(new SystemMessage(systemPrompt));
+        promptMessages.add(new UserMessage(userMessage));
 
         AssistantMessage output = chatModel
                 .call(new Prompt(promptMessages, toolCallingOptions(chatModel.getDefaultOptions(), toolCallbacks)))

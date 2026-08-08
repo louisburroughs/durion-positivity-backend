@@ -47,6 +47,11 @@ pure dense ANN. Add a lexical retriever and fold it into the existing Tier-2 hyb
   sparse, decide by harness recall, and record the comparison.
 
 ## G5.4 — Embedding migration 768 → 1024 (`bge-m3`)
+> **Superseded (#1194):** the migration sketch below predates the V24 finding that Spring AI
+> `PgVectorStore` hardcodes the `embedding` column name. The implemented mechanism and the exact
+> alpha cutover steps are in [G5.4 implementation — dual-column cutover (V31, #1194)](#g54-implementation--dual-column-cutover-v31-1194)
+> at the end of this document.
+
 One-way, whole-corpus re-embed — do it once, reversibly:
 1. Add `bge-m3` `EmbeddingModel` bean; add `embedding_1024 vector(1024)` column (keep the 768 column).
 2. Re-embed the full corpus into `embedding_1024`; build the index (ivfflat now, **HNSW** when the
@@ -93,3 +98,42 @@ Hygiene (Retrieval lock): every doc needs deterministic id, content hash, `rag_s
 G5.5 (author docs — offline) → G5.2 (metadata + preload/ingest fields) → G5.1 (permission filter,
 reuse Gate 3 holder; retire role filter) → G5.3 (FTS retriever + hybrid merge) → G5.4 (bge-m3 1024
 migration, dual-column) → live §B.8 with the #783 harness.
+
+## G5.4 implementation — dual-column cutover (V31, #1194)
+
+Supersedes the G5.4 migration sketch above. Implemented (schema + config path only; the live
+re-embed happens on alpha):
+
+- **Schema (pg `V31__bge_m3_dual_embedding_column.sql`)**: nullable `embedding_1024 vector(1024)`
+  on `mcp_document_embedding`, `mcp_tool`, and `mcp_screen_registry`; ivfflat cosine indexes on the
+  first two (mirroring V2/V6); updatable view `mcp_document_embedding_1024` aliasing
+  `embedding_1024 AS embedding`, because `PgVectorStore` hardcodes the `embedding` column (V24) —
+  the view supports both `<=>` reads and `INSERT … ON CONFLICT (id) DO UPDATE` upserts (verified on
+  pgvector/PG16). H2 mirror `V23` is a documented no-op (H2 has no pgvector). Rollback: drop the
+  view, the two `_1024` indexes, and the three columns.
+- **Config**: `mcp.rag.embedding-column` (`embedding` default | `embedding_1024`;
+  env `MCP_RAG_EMBEDDING_COLUMN`) + `mcp.rag.dimension` (env `MCP_RAG_DIMENSION`).
+  `RagEmbeddingSettings` fails startup unless column and dimension agree
+  (`embedding`↔768, `embedding_1024`↔1024), so the unpopulated 1024 column can never be read by a
+  half-flipped config. The knob drives: the `PgVectorStore` table/view + dimension
+  (`RagConfiguration`), tool vector search (`ToolMetadataRepositoryImpl`), screen vector search
+  (`ScreenRegistryRepositoryImpl`), and the startup embedding backfills
+  (`ToolEmbeddingInitializer`, `ScreenEmbeddingInitializer`). `LexicalDocumentRetriever` is
+  FTS-only (V28) and is unaffected.
+
+### Alpha cutover steps (in order)
+
+1. **Re-embed with bge-m3 into the 1024 columns** while the service keeps running on 768: pull
+   `bge-m3` in Ollama, then batch-populate `mcp_document_embedding.embedding_1024` (from `content`),
+   `mcp_tool.embedding_1024` (from `description`), and `mcp_screen_registry.embedding_1024` (from
+   `description`). The 768 columns and all live traffic are untouched.
+2. **Validate retrieval quality**: run `scripts/eval_live.py --baseline` against a scratch instance
+   started with the flipped config (step 3 values) and compare hit@5 / MRR / recall to the current
+   768 baseline in `pos-mcp-server/target/eval/baseline-live-python.json`. Do not proceed on a
+   regression.
+3. **Flip config atomically** (all three together, then restart):
+   `MCP_RAG_EMBEDDING_COLUMN=embedding_1024`, `MCP_RAG_DIMENSION=1024`,
+   `OLLAMA_EMBEDDING_MODEL=bge-m3`. Startup fails fast if the trio is inconsistent.
+4. **Keep the 768 columns until 1024 is validated in live use** (runbook §B.8, #783 harness).
+   Rollback is the reverse flip of the same three values. Only after sign-off does a follow-up
+   migration drop the 768 columns/indexes and the then-unused view indirection.

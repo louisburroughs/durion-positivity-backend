@@ -52,10 +52,8 @@ public class ScopedContentRetrieverFactory {
                 ? null
                 : new FilterExpressionBuilder().eq(RAG_SCOPE, normalizedScope).build();
         return queryText -> {
-            SearchRequest.Builder request = SearchRequest.builder()
-                    .query(queryText)
-                    .topK(maxResults)
-                    .similarityThreshold(minScore);
+            SearchRequest.Builder request =
+                    SearchRequest.builder().query(queryText).topK(maxResults).similarityThreshold(minScore);
             if (ragScopeFilter != null) {
                 request.filterExpression(ragScopeFilter);
             }
