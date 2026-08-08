@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.security.common.GatewayAuthoritiesFilter;
 import com.positivity.security.common.GatewaySecurityConfig;
+import jakarta.servlet.DispatcherType;
 import java.time.Clock;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -54,7 +55,17 @@ public class SecurityConfiguration {
         http.securityMatcher("/v1/mcp/**", "/v1/nlt/**")
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                // The ASYNC dispatch is container-internal: it only happens after the original
+                // REQUEST dispatch was authenticated and authorized, and a client cannot trigger it
+                // directly. It must be permitted explicitly because GatewayAuthoritiesFilter (an
+                // OncePerRequestFilter) does not run on async dispatches, so re-authorizing there
+                // finds an empty security context — an SSE stream that completed without emitting
+                // any event then surfaced as a spurious 401 from the entry point instead of its
+                // real (empty 200) outcome.
+                .authorizeHttpRequests(auth -> auth.dispatcherTypeMatchers(DispatcherType.ASYNC)
+                        .permitAll()
+                        .anyRequest()
+                        .authenticated())
                 .exceptionHandling(handler -> handler.authenticationEntryPoint(apiErrorEntryPoint))
                 .addFilterBefore(gatewayAuthoritiesFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
