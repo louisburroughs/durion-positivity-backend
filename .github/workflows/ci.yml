@@ -250,6 +250,32 @@ jobs:
             -DlowResourceTests=true \
             -T 1C -B -ntp
 
+      - name: Summarize test failures
+        # With -T 1C the parallel reactor interleaves module output and the
+        # failing module's surefire detail can scroll far from the end of the
+        # log; re-print every failed <testcase> here so the failure names and
+        # messages sit in the job log's tail where they are easy to find.
+        if: failure()
+        run: |
+          python3 - <<'EOF'
+          import glob, xml.etree.ElementTree as ET
+          for f in sorted(glob.glob('*/target/surefire-reports/TEST-*.xml') + glob.glob('*/target/failsafe-reports/TEST-*.xml')):
+              try:
+                  root = ET.parse(f).getroot()
+              except ET.ParseError:
+                  continue
+              if int(root.get('failures', '0')) == 0 and int(root.get('errors', '0')) == 0:
+                  continue
+              print(f"::group::{f}")
+              for tc in root.iter('testcase'):
+                  for kind in ('failure', 'error'):
+                      for node in tc.findall(kind):
+                          print(f"{kind.upper()}: {tc.get('classname')}.{tc.get('name')}")
+                          print(f"  message: {node.get('message', '')[:500]}")
+                          print((node.text or '')[:3000])
+              print("::endgroup::")
+          EOF
+
       - name: Run ArchUnit rules
         # Cache opt-out: a build-cache hit restores sibling modules as their
         # repackaged fat JARs instead of materializing target/classes, hiding
