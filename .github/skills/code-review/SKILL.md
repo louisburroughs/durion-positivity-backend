@@ -1,9 +1,9 @@
 ---
-name: pr-code-reviewer
-description: 'Review PR remediation changes against issue acceptance criteria, ADRs, and repository policy. Use this skill when validating fixes, checking test adequacy, or preparing a review verdict for a pull request.'
+name: code-review
+description: 'Review PR against issue acceptance criteria, ADRs, and repository policy. Use this skill when validating fixes, checking test adequacy, or preparing a review verdict for a pull request.'
 ---
 
-# PR Code Reviewer
+# Code Review
 
 Use this skill for review-only validation of pull request remediation work.
 It is intended for the final pass after a coder or test-fixer has implemented changes.
@@ -12,7 +12,7 @@ It is intended for the final pass after a coder or test-fixer has implemented ch
 
 Use this skill when the task involves:
 
-- reviewing a PR fix loop or remediation cycle
+- reviewing a Pull Request or fix loop or remediation cycle
 - validating acceptance criteria against code changes
 - checking ADR compliance and repo policy adherence
 - reviewing comments or unresolved review threads
