@@ -15,7 +15,7 @@
 
 ---
 
-## Re-baseline 2026-08-07 (post-Spring-AI)
+## Re-baseline 2026-08-07, updated 2026-08-09 (post-Spring-AI)
 
 Recorded per #1197. Two things changed since the 2026-07-01 live pass below: (1) the runtime
 migrated LangChain4j → Spring AI via PR #987 (merged 2026-07-21; see
@@ -25,9 +25,11 @@ below are pre-migration references — the invariants they evidenced were carrie
 migration and re-proven by the hardening waves; (2) substantial gate work closed via tracked
 issues. The historical execution-result sections below are the record and are **not** rewritten;
 this section is the current per-gate status, and each sign-off block carries a one-line
-`2026-08-07:` pointer. All issue states verified via `gh issue view` on 2026-08-07.
+`2026-08-07:` pointer. All issue states verified via `gh issue view` on 2026-08-07; rows carrying
+a `2026-08-09` note were updated during the Gate 5 bge-m3 cutover session (see
+`gate5-rag-hybrid-design.md`).
 
-| Gate | Current status (2026-08-07) | Evidence |
+| Gate | Current status (as of 2026-08-09) | Evidence |
 | --- | --- | --- |
 | 0 | Largely shipped — eval harness with retrieval-quality gates (hit@5/MRR) in CI, fixtures at volume, lexical dense-miss regression fixtures added | #783 CLOSED (`081cf4291`), fixtures `16649d56a`, #1178 CLOSED; floors re-baselined 2026-08-09 on the bge-m3 pipeline (#1179: 0.68/0.65/0.82) |
 | 1 | Prompt assembly carried through the Spring AI migration; live answer-quality eval still open | PR #987; no dedicated tracker |
