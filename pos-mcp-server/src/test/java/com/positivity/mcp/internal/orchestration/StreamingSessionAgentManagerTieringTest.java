@@ -197,7 +197,9 @@ class StreamingSessionAgentManagerTieringTest {
                 30,
                 500,
                 50,
-                100);
+                100,
+                0.6,
+                0.55);
     }
 
     private static CurrentUserContext userContext(String username) {

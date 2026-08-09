@@ -202,7 +202,9 @@ class SessionAgentManagerTest {
                 30,
                 500,
                 50,
-                100);
+                100,
+                0.6,
+                0.55);
         clearInvocations(toolRegistry);
         clearInvocations(toolRegistryService);
         clearInvocations(toolSelectionEngine);
@@ -410,7 +412,9 @@ class SessionAgentManagerTest {
                 0,
                 500,
                 50,
-                100);
+                100,
+                0.6,
+                0.55);
         clearInvocations(toolRegistry);
 
         expiringManager.getOrCreateAgent("user-1", "ROLE_CASHIER");
@@ -479,7 +483,9 @@ class SessionAgentManagerTest {
                 30,
                 500,
                 50,
-                100);
+                100,
+                0.6,
+                0.55);
     }
 
     private ToolSelectionEngine realToolSelectionEngine() {

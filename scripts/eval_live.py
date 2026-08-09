@@ -95,6 +95,13 @@ DB_USER = cfg("POS_MCP_DB_USER", "SPRING_DATASOURCE_USERNAME", "POSTGRES_USER")
 DB_PASS = cfg("POS_MCP_DB_PASSWORD", "SPRING_DATASOURCE_PASSWORD", "POSTGRES_PASSWORD")
 OLLAMA = cfg("OLLAMA_EMBEDDING_BASE_URL", default="http://localhost:11434").rstrip("/")
 MODEL = cfg("OLLAMA_EMBEDDING_MODEL", default="nomic-embed-text")
+# #1194: which pgvector column the eval reads. Default preserves historical behavior (the 768
+# `embedding` column). Set EVAL_EMBEDDING_COLUMN=embedding_1024 (together with
+# OLLAMA_EMBEDDING_MODEL=bge-m3) to validate the 1024-dim bge-m3 path against the dual-column
+# data BEFORE flipping the live config. Allowlisted because the name is interpolated into SQL.
+EMB_COL = cfg("EVAL_EMBEDDING_COLUMN", default="embedding")
+if EMB_COL not in ("embedding", "embedding_1024"):
+    sys.exit(f"Invalid EVAL_EMBEDDING_COLUMN '{EMB_COL}' (expected 'embedding' or 'embedding_1024')")
 
 
 def embed(text):
@@ -153,18 +160,18 @@ def main():
     con = pg8000.native.Connection(
         user=DB_USER, password=DB_PASS, host=DB_HOST, port=DB_PORT, database=DB_NAME
     )
-    print(f"DB={DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}  embed={OLLAMA} ({MODEL})\n")
+    print(f"DB={DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}  embed={OLLAMA} ({MODEL})  column={EMB_COL}\n")
 
     def ann_facade(query_vec, perms, workflow, limit):
         rows = con.run(
-            """
+            f"""
             SELECT t.name FROM mcp_tool t
             JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
             JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
-            WHERE t.enabled = true AND t.source <> 'openapi' AND t.embedding IS NOT NULL
+            WHERE t.enabled = true AND t.source <> 'openapi' AND t.{EMB_COL} IS NOT NULL
               AND ws.name = :wf
               AND t.id IN (SELECT tool_id FROM mcp_tool_permission WHERE permission_code = ANY(:perms))
-            ORDER BY t.embedding <=> CAST(:q AS vector), t.id
+            ORDER BY t.{EMB_COL} <=> CAST(:q AS vector), t.id
             LIMIT :k
             """,
             wf=workflow, perms=list(perms), q=vec_literal(query_vec), k=limit,
@@ -184,26 +191,26 @@ def main():
         opts in to reproduce the live dense path that produced the verified misses."""
         if master_all_scopes and scope == "master":
             rows = con.run(
-                """
+                f"""
                 SELECT metadata->>'document_id'        AS document_id,
                        metadata->>'required_permissions' AS required_permissions
                 FROM mcp_document_embedding
-                WHERE embedding IS NOT NULL
-                  AND (1 - (embedding <=> CAST(:q AS vector))) >= :min_score
-                ORDER BY embedding <=> CAST(:q AS vector), id
+                WHERE {EMB_COL} IS NOT NULL
+                  AND (1 - ({EMB_COL} <=> CAST(:q AS vector))) >= :min_score
+                ORDER BY {EMB_COL} <=> CAST(:q AS vector), id
                 LIMIT :limit
                 """,
                 q=vec_literal(query_vec), min_score=min_score, limit=max(want * 10, 50),
             )
         else:
             rows = con.run(
-                """
+                f"""
                 SELECT metadata->>'document_id'        AS document_id,
                        metadata->>'required_permissions' AS required_permissions
                 FROM mcp_document_embedding
-                WHERE metadata->>'rag_scope' = :scope AND embedding IS NOT NULL
-                  AND (1 - (embedding <=> CAST(:q AS vector))) >= :min_score
-                ORDER BY embedding <=> CAST(:q AS vector), id
+                WHERE metadata->>'rag_scope' = :scope AND {EMB_COL} IS NOT NULL
+                  AND (1 - ({EMB_COL} <=> CAST(:q AS vector))) >= :min_score
+                ORDER BY {EMB_COL} <=> CAST(:q AS vector), id
                 LIMIT :limit
                 """,
                 scope=scope, q=vec_literal(query_vec), min_score=min_score, limit=max(want * 10, 50),
@@ -394,15 +401,15 @@ def main():
             `ORDER BY embedding <=> constant` is the exact operator-ordering pattern pgvector
             indexes match — same convention as every other ANN query in this script."""
             rows = con.run(
-                """
-                SELECT t.name, 1 - (t.embedding <=> CAST(:q AS vector)) AS sim
+                f"""
+                SELECT t.name, 1 - (t.{EMB_COL} <=> CAST(:q AS vector)) AS sim
                 FROM mcp_tool t
                 JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
                 JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
-                WHERE t.enabled = true AND t.source <> 'openapi' AND t.embedding IS NOT NULL
+                WHERE t.enabled = true AND t.source <> 'openapi' AND t.{EMB_COL} IS NOT NULL
                   AND ws.name = :wf
                   AND t.id IN (SELECT tool_id FROM mcp_tool_permission WHERE permission_code = ANY(:perms))
-                ORDER BY t.embedding <=> CAST(:q AS vector), t.id
+                ORDER BY t.{EMB_COL} <=> CAST(:q AS vector), t.id
                 LIMIT :k
                 """,
                 wf=workflow, perms=list(perms), q=vec_literal(query_vec), k=limit,
@@ -461,10 +468,10 @@ def main():
     # ---- #779: permission gating (openapi tool) ---------------------------
     gating = {"status": "skipped"}
     row = con.run(
-        """
+        f"""
         SELECT t.name, t.description, MIN(tp.permission_code) AS perm
         FROM mcp_tool t JOIN mcp_tool_permission tp ON tp.tool_id = t.id
-        WHERE t.source = 'openapi' AND t.embedding IS NOT NULL
+        WHERE t.source = 'openapi' AND t.{EMB_COL} IS NOT NULL
         GROUP BY t.id, t.name, t.description
         HAVING COUNT(*) = 1 AND MIN(tp.permission_code) <> 'AUTHENTICATED'
         LIMIT 1
@@ -476,11 +483,11 @@ def main():
 
         def openapi_hit(perms):
             r = con.run(
-                """
+                f"""
                 SELECT t.name FROM mcp_tool t
-                WHERE t.source = 'openapi' AND t.embedding IS NOT NULL
+                WHERE t.source = 'openapi' AND t.{EMB_COL} IS NOT NULL
                   AND t.id IN (SELECT tool_id FROM mcp_tool_permission WHERE permission_code = ANY(:perms))
-                ORDER BY t.embedding <=> CAST(:q AS vector), t.id
+                ORDER BY t.{EMB_COL} <=> CAST(:q AS vector), t.id
                 LIMIT :k
                 """,
                 perms=list(perms), q=qv, k=max(K, 10),

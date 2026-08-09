@@ -198,7 +198,9 @@ class StreamingSessionAgentManagerTest {
                 30,
                 500,
                 50,
-                100);
+                100,
+                0.6,
+                0.55);
         clearInvocations(toolRegistry);
         clearInvocations(toolSelectionEngine);
         clearInvocations(scopedContentRetrieverFactory);
@@ -397,7 +399,9 @@ class StreamingSessionAgentManagerTest {
                 30,
                 500,
                 50,
-                100);
+                100,
+                0.6,
+                0.55);
 
         ArgumentCaptor<List<Object>> fallbackToolsCaptor = listCaptor();
         verify(sharedSupportSpy, atLeastOnce()).mergeTools(argThat(Collection::isEmpty), fallbackToolsCaptor.capture());
@@ -406,6 +410,42 @@ class StreamingSessionAgentManagerTest {
                         .containsExactly(exaWebSearchTool, inventoryFacadeTool, orderFacadeTool));
         verify(scopedContentRetrieverFactory, atLeastOnce()).create("master", 10, 0.6);
         verify(scopedContentRetrieverFactory, atLeastOnce()).create("master", 20, 0.55);
+    }
+
+    @Test
+    @DisplayName("#1194: configured similarity floors propagate to the dense retrievers")
+    void constructor_customRagFloors_propagateToRetrieverFactory() {
+        SharedOrchestrationSupport sharedSupportSpy = spy(new SharedOrchestrationSupport());
+        when(toolRegistry.resolveDomainTools("ROLE_CASHIER")).thenReturn(new ArrayList<>());
+        when(toolRegistry.preloadableRoleIdentifiers()).thenReturn(Set.of("ROLE_CASHIER"));
+
+        new StreamingSessionAgentManager(
+                streamingChatModel,
+                toolRegistry,
+                sharedSupportSpy,
+                toolSelectionEngine,
+                scopedContentRetrieverFactory,
+                rolePromptResolver,
+                simpleChatFastPath,
+                null,
+                telemetryEmitter,
+                null, // openApiToolProvider
+                null, // requestScopedUserContext
+                null, // roleDefaultPermissionsClient
+                workflowStateService,
+                null, // nltiRouter
+                null, // tieredChatModelResolver
+                true, // tieringEnabled (no-op without a router)
+                FIXED_CLOCK,
+                30,
+                500,
+                50,
+                100,
+                0.42,
+                0.37);
+
+        verify(scopedContentRetrieverFactory, atLeastOnce()).create("master", 10, 0.42);
+        verify(scopedContentRetrieverFactory, atLeastOnce()).create("master", 20, 0.37);
     }
 
     @Test
@@ -466,7 +506,9 @@ class StreamingSessionAgentManagerTest {
                 0,
                 500,
                 50,
-                100);
+                100,
+                0.6,
+                0.55);
         clearInvocations(toolRegistry);
 
         expiringManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show inventory stock");
@@ -516,7 +558,9 @@ class StreamingSessionAgentManagerTest {
                 30,
                 500,
                 50,
-                100);
+                100,
+                0.6,
+                0.55);
     }
 
     private ToolSelectionEngine realToolSelectionEngine() {
@@ -582,7 +626,9 @@ class StreamingSessionAgentManagerTest {
                 30,
                 500,
                 50,
-                100);
+                100,
+                0.6,
+                0.55);
 
         Flux<String> result =
                 providerManager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show open invoices");
