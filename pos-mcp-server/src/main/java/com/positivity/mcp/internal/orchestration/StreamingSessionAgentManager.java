@@ -105,6 +105,12 @@ public class StreamingSessionAgentManager
 
     private final Clock clock;
 
+    // #1194: dense-retrieval similarity floors — calibrated per embedding model (see application.yml).
+
+    private final double ragMinScore;
+
+    private final double ragTier2MinScore;
+
     private final int memoryMaxMessages;
     private final int rateLimitPerSession;
 
@@ -129,7 +135,9 @@ public class StreamingSessionAgentManager
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
             @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
-            @Value("${pos.nlti.rate-limit.per-session:100}") int rateLimitPerSession) {
+            @Value("${pos.nlti.rate-limit.per-session:100}") int rateLimitPerSession,
+            @Value("${mcp.rag.min-score:0.6}") double ragMinScore,
+            @Value("${mcp.rag.tier2-min-score:0.55}") double ragTier2MinScore) {
         this.streamingChatModel = streamingChatModel;
         this.toolRegistry = toolRegistry;
         this.sharedOrchestrationSupport = sharedOrchestrationSupport;
@@ -147,6 +155,8 @@ public class StreamingSessionAgentManager
         this.tieredChatModelResolver = tieredChatModelResolver;
         this.tieringEnabled = tieringEnabled;
         this.clock = clock;
+        this.ragMinScore = ragMinScore;
+        this.ragTier2MinScore = ragTier2MinScore;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
         int sanitizedMaxCachedAgents = Math.max(1, maxCachedAgents);
@@ -460,9 +470,9 @@ public class StreamingSessionAgentManager
         long startNanos = System.nanoTime();
         String ragScope = toolRegistry.resolveRagScopeForTools(tools);
         String promptName = SystemPromptDefaults.promptNameForRagScope(ragScope);
-        QueryDocumentRetriever semanticRetriever = scopedContentRetrieverFactory.create(ragScope, 10, 0.6);
+        QueryDocumentRetriever semanticRetriever = scopedContentRetrieverFactory.create(ragScope, 10, ragMinScore);
         QueryDocumentRetriever broadSemanticRetriever =
-                scopedContentRetrieverFactory.create(ragScope, TIER2_RETRIEVAL_CANDIDATES, 0.55);
+                scopedContentRetrieverFactory.create(ragScope, TIER2_RETRIEVAL_CANDIDATES, ragTier2MinScore);
         QueryDocumentRetriever expandedRetriever = new QueryExpansionContentRetriever(
                 broadSemanticRetriever, TIER2_EXPANDED_QUERY_LIMIT, TIER2_RETRIEVAL_CANDIDATES);
         // #784: dense + query-expansion, plus the lexical (FTS) source when enabled. RRF fusion when

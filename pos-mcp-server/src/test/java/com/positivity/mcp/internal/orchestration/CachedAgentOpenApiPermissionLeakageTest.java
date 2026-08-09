@@ -310,7 +310,9 @@ class CachedAgentOpenApiPermissionLeakageTest {
                 30,
                 500,
                 50,
-                100);
+                100,
+                0.6,
+                0.55);
     }
 
     /** Names of the OpenAPI-discovered tool callbacks attached to the prompt's tool-calling options. */

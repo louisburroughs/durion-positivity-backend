@@ -51,6 +51,13 @@ mcp:
     # only after the alpha re-embed is validated — see docs/gate5-rag-hybrid-design.md.
     embedding-column: ${MCP_RAG_EMBEDDING_COLUMN:embedding}
     dimension: ${MCP_RAG_DIMENSION:768}
+    # #1194: dense-retrieval cosine-similarity floors (primary retriever / tier-2 wide
+    # retriever), calibrated per embedding model. The defaults fit nomic-embed-text (768).
+    # bge-m3 similarities sit ~0.10-0.15 lower on the same corpus, so flip these together with
+    # the column/dimension/model trio (~0.45/0.40 per the alpha floor sweep — see
+    # docs/gate5-rag-hybrid-design.md G5.4).
+    min-score: ${MCP_RAG_MIN_SCORE:0.6}
+    tier2-min-score: ${MCP_RAG_TIER2_MIN_SCORE:0.55}
     index-type: ivfflat
     hybrid:
       # Exact identifiers (VINs, SKUs, permission/event codes) routinely score below the dense

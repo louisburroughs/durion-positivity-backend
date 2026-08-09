@@ -100,6 +100,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private final @Nullable TieredChatModelResolver tieredChatModelResolver;
     private final boolean tieringEnabled;
     private final Clock clock;
+    // #1194: dense-retrieval similarity floors — calibrated per embedding model (see application.yml).
+    private final double ragMinScore;
+    private final double ragTier2MinScore;
 
     private final int memoryMaxMessages;
     private final int rateLimitPerSession;
@@ -129,7 +132,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @Value("${mcp.agent.cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
             @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
-            @Value("${pos.nlti.rate-limit.per-session:100}") int rateLimitPerSession) {
+            @Value("${pos.nlti.rate-limit.per-session:100}") int rateLimitPerSession,
+            @Value("${mcp.rag.min-score:0.6}") double ragMinScore,
+            @Value("${mcp.rag.tier2-min-score:0.55}") double ragTier2MinScore) {
         this.chatModel = chatModel;
         this.embeddingModel = embeddingModel;
         this.embeddingStore = embeddingStore;
@@ -151,6 +156,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         this.tieredChatModelResolver = tieredChatModelResolver;
         this.tieringEnabled = tieringEnabled;
         this.clock = clock;
+        this.ragMinScore = ragMinScore;
+        this.ragTier2MinScore = ragTier2MinScore;
         this.memoryMaxMessages = memoryMaxMessages;
         this.rateLimitPerSession = rateLimitPerSession;
         this.requestCountCache = Caffeine.newBuilder()
@@ -351,9 +358,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         String promptName = SystemPromptDefaults.promptNameForRagScope(ragScope);
 
         // 2. Tier 2 retrieval pipeline: semantic + expanded + hybrid + re-ranking.
-        QueryDocumentRetriever semanticRetriever = scopedContentRetrieverFactory.create(ragScope, 10, 0.6);
+        QueryDocumentRetriever semanticRetriever = scopedContentRetrieverFactory.create(ragScope, 10, ragMinScore);
         QueryDocumentRetriever broadSemanticRetriever =
-                scopedContentRetrieverFactory.create(ragScope, TIER2_RETRIEVAL_CANDIDATES, 0.55);
+                scopedContentRetrieverFactory.create(ragScope, TIER2_RETRIEVAL_CANDIDATES, ragTier2MinScore);
         QueryDocumentRetriever expandedRetriever = new QueryExpansionContentRetriever(
                 broadSemanticRetriever, TIER2_EXPANDED_QUERY_LIMIT, TIER2_RETRIEVAL_CANDIDATES);
         // #784: dense + query-expansion, plus the lexical (FTS) source when enabled. RRF fusion when
