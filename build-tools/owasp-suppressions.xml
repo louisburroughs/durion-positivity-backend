@@ -31,6 +31,20 @@
     </suppress>
 
     <!--
+        Same CVE, second match path: the GAV rule above only applies when Dependency-Check has
+        Maven coordinates for the artifact.  In pos-coverage-aggregate the Archive Analyzer scans
+        the repackaged Spring Boot jars of sibling modules and finds kotlin-stdlib/kotlin-reflect
+        nested under BOOT-INF/lib without GAV evidence (CPE match only), so the same finding
+        resurfaces there.  Match those occurrences by file name.  Remove together with the rule
+        above once Kotlin 2.4.20 goes GA.
+    -->
+    <suppress>
+        <notes>Nested-jar duplicate of the kotlin CVE-2026-53914 suppression above (no GAV evidence inside boot jars).</notes>
+        <filePath regex="true">.*[\\/]kotlin-(stdlib|reflect)[^\\/]*\.jar$</filePath>
+        <cve>CVE-2026-53914</cve>
+    </suppress>
+
+    <!--
         tomcat-embed-core-11.0.24 — CVE-2026-66299
         DoS via uncontrolled resource consumption in the WebSocket chat example of Tomcat's
         examples web application.  Embedded Tomcat as used by Spring Boot never ships the
