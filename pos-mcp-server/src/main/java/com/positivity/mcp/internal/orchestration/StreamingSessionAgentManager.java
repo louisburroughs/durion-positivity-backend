@@ -136,8 +136,8 @@ public class StreamingSessionAgentManager
             @Value("${mcp.agent.max-cached-agents:500}") int maxCachedAgents,
             @Value("${mcp.agent.memory-max-messages:100}") int memoryMaxMessages,
             @Value("${pos.nlti.rate-limit.per-session:100}") int rateLimitPerSession,
-            @Value("${mcp.rag.min-score:0.6}") double ragMinScore,
-            @Value("${mcp.rag.tier2-min-score:0.55}") double ragTier2MinScore) {
+            @Value("${mcp.rag.min-score:0.45}") double ragMinScore,
+            @Value("${mcp.rag.tier2-min-score:0.40}") double ragTier2MinScore) {
         this.streamingChatModel = streamingChatModel;
         this.toolRegistry = toolRegistry;
         this.sharedOrchestrationSupport = sharedOrchestrationSupport;

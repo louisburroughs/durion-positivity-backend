@@ -465,7 +465,7 @@ Improve answer grounding, exact-code retrieval, and permission-safe knowledge vi
 - Add hybrid retrieval.
 - Migrate embeddings to `bge-m3` 1024-dimensional vectors. _(Done 2026-08-09 on alpha — #1194;
   dual-column flip with bge-m3-calibrated similarity floors, HNSW 1024 indexes via V32; the 768
-  columns are the retained rollback path until live sign-off. Record: `gate5-rag-hybrid-design.md`.)_
+  columns were retired by V33 after sign-off (#1207); recovery is a re-embed from content. Record: `gate5-rag-hybrid-design.md`.)_
 - Preserve rollback path during migration.
 
 ## Completeness gate
