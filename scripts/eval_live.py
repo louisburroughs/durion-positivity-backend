@@ -42,19 +42,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 EVAL = ROOT / "pos-mcp-server/src/test/resources/eval"
 K = 5
-# Production RAG retrieval applies a cosine similarity floor (SessionAgentManager:
-# ScopedContentRetrieverFactory.create(scope, 10, 0.6) and (scope, 20, 0.55)). Score at the loosest
-# value a doc must clear to enter the pipeline (0.55) so recall@k isn't over-reported vs the live path.
-RAG_MIN_SCORE = float(os.environ.get("EVAL_RAG_MIN_SCORE", "0.55"))
 # #784: Reciprocal Rank Fusion constant for the dense+lexical hybrid diagnostic. Matches the
 # application default (HybridRetrievalProperties.rrfK / mcp.rag.hybrid.rrf-k).
 RRF_K = max(1, int(os.environ.get("EVAL_RRF_K", "60")))  # clamp: rank constant must be >= 1
-# #1178: the rag-lexical block scores its DENSE pass at the primary production floor (0.6 —
-# SessionAgentManager's semanticRetriever, ScopedContentRetrieverFactory.create(scope, 10, 0.6)),
-# because that is the path whose live dense misses the dense-miss fixtures encode (#1170: VIN
-# question, glossary.identifiers similarity 0.58 < 0.60). The gated rag-retrieval suite keeps the
-# looser 0.55 RAG_MIN_SCORE above, unchanged.
-LEX_DENSE_MIN_SCORE = float(os.environ.get("EVAL_LEXICAL_DENSE_MIN_SCORE", "0.6"))
 # #1178: regression gate for the lexical path. Of the lexical fixtures where dense alone misses
 # (dense_recall < 1.0), at least this fraction must be improved by hybrid RRF fusion. Applied only
 # when the dense-miss denominator is non-zero, so a corpus where dense recalls everything cannot go
@@ -94,14 +84,28 @@ DB_NAME = cfg("POS_MCP_DB_NAME", default="pos_mcp")
 DB_USER = cfg("POS_MCP_DB_USER", "SPRING_DATASOURCE_USERNAME", "POSTGRES_USER")
 DB_PASS = cfg("POS_MCP_DB_PASSWORD", "SPRING_DATASOURCE_PASSWORD", "POSTGRES_PASSWORD")
 OLLAMA = cfg("OLLAMA_EMBEDDING_BASE_URL", default="http://localhost:11434").rstrip("/")
-MODEL = cfg("OLLAMA_EMBEDDING_MODEL", default="nomic-embed-text")
+# The embedding model must track the live pipeline (#1194: bge-m3 after the flip), so the .env
+# value is honored when the shell env is unset. The base URL deliberately does NOT read .env — it
+# holds the docker-internal hostname (http://ollama:11434 resolves only inside the compose network).
+MODEL = cfg("OLLAMA_EMBEDDING_MODEL", "OLLAMA_EMBEDDING_MODEL", default="nomic-embed-text")
 # #1194: which pgvector column the eval reads. Default preserves historical behavior (the 768
 # `embedding` column). Set EVAL_EMBEDDING_COLUMN=embedding_1024 (together with
 # OLLAMA_EMBEDDING_MODEL=bge-m3) to validate the 1024-dim bge-m3 path against the dual-column
 # data BEFORE flipping the live config. Allowlisted because the name is interpolated into SQL.
-EMB_COL = cfg("EVAL_EMBEDDING_COLUMN", default="embedding")
+EMB_COL = cfg("EVAL_EMBEDDING_COLUMN", "MCP_RAG_EMBEDDING_COLUMN", default="embedding")
 if EMB_COL not in ("embedding", "embedding_1024"):
     sys.exit(f"Invalid EVAL_EMBEDDING_COLUMN '{EMB_COL}' (expected 'embedding' or 'embedding_1024')")
+# Production RAG retrieval applies a cosine similarity floor (SessionAgentManager:
+# ScopedContentRetrieverFactory.create(scope, 10, 0.6) and (scope, 20, 0.55)). Score at the loosest
+# value a doc must clear to enter the pipeline — following the live MCP_RAG_TIER2_MIN_SCORE
+# from .env when set (#1194: the floors flip with the embedding model) (0.55 by default) so recall@k isn't over-reported vs the live path.
+RAG_MIN_SCORE = float(cfg("EVAL_RAG_MIN_SCORE", "MCP_RAG_TIER2_MIN_SCORE", default="0.55"))
+# #1178: the rag-lexical block scores its DENSE pass at the primary production floor (0.6 —
+# SessionAgentManager's semanticRetriever, ScopedContentRetrieverFactory.create(scope, 10, 0.6)),
+# because that is the path whose live dense misses the dense-miss fixtures encode (#1170: VIN
+# question, glossary.identifiers similarity 0.58 < 0.60). The gated rag-retrieval suite keeps the
+# looser RAG_MIN_SCORE above, unchanged. Follows the live MCP_RAG_MIN_SCORE from .env when set.
+LEX_DENSE_MIN_SCORE = float(cfg("EVAL_LEXICAL_DENSE_MIN_SCORE", "MCP_RAG_MIN_SCORE", default="0.6"))
 
 
 def embed(text):
@@ -502,33 +506,40 @@ def main():
             "present_without_permission": without, "present_with_permission": with_perm,
         }
 
-    # AC4 (#783) thresholds — re-baselined 2026-07-29 (#1124) off the grown 39-doc corpus.
-    # Method (unchanged): floors ~11% below the live-observed alpha baseline, so the nightly gate
-    # tolerates a corpus-scale re-embedding swing without going red on a healthy corpus, while still
-    # catching a real regression. MRR gets slightly wider headroom (rank-sensitive).
+    # AC4 (#783) thresholds — re-baselined 2026-08-09 (#1179) on the bge-m3 1024-dim pipeline
+    # (#1194 cutover). Method (unchanged from #1124): floors ~11% below the live-observed alpha
+    # baseline — min(mean - 2*stddev, mean * 0.89) as printed by `--baseline` — so the nightly gate
+    # tolerates a corpus-scale re-embedding swing without going red on a healthy corpus while still
+    # catching a real regression.
     #
-    # Why re-baseline: the prior floors were set off the 17-doc corpus (hit@5 0.84 / recall 0.9574 /
-    # MRR 0.77). The corpus doubling (#1163) dropped observed recall to 0.8571 — only ~0.001 over the
-    # old 0.85 floor, i.e. one wobble from red. Three back-to-back re-embed+eval cycles on alpha
-    # (rag_seed → eval_live) produced *identical* numbers — hit@5 0.76, MRR 0.7222, recall 0.8571 —
-    # so per-run embedding is deterministic; the historical 0.9574 -> 0.8511 drift was a one-time
-    # corpus-change event (~11% magnitude), not run randomness. New floors sit ~11% under the
-    # deterministic 39-doc baseline:
-    #   hit@5   0.76   -> 0.68  (~11%),  recall@k 0.8571 -> 0.76 (~11%),  MRR 0.7222 -> 0.64 (~11%).
-    # Recall confirmed at the production RAG_MIN_SCORE=0.55 floor. RAG forbidden leaks are always a
-    # hard fail. Re-run this calibration whenever the corpus changes materially.
-    # Override with EVAL_MIN_HIT5 / EVAL_MIN_MRR / EVAL_MIN_RECALL.
+    # Measured basis (2026-08-09, `eval_live.py --baseline 3` on alpha):
+    #   image sha-486c132; pipeline: bge-m3 1024-dim (MCP_RAG_EMBEDDING_COLUMN=embedding_1024,
+    #   MCP_RAG_DIMENSION=1024, OLLAMA_EMBEDDING_MODEL=bge-m3), similarity floors
+    #   MCP_RAG_MIN_SCORE=0.45 / MCP_RAG_TIER2_MIN_SCORE=0.40 (bge-m3 calibration — see
+    #   gate5-rag-hybrid-design.md G5.4), hybrid dense+lexical ON, OR-semantics tsquery,
+    #   compound-slots rerank ON. Eval scored at the matching floors (EVAL_RAG_MIN_SCORE=0.40,
+    #   EVAL_LEXICAL_DENSE_MIN_SCORE=0.45).
+    #   Per-run values — identical across all 3 runs (stddev 0.0; per-run embedding is
+    #   deterministic, as first observed in the #1124 re-baseline):
+    #     hit@5 0.76 / 0.76 / 0.76        -> floor 0.68  (mean*0.89)
+    #     MRR   0.7333 / 0.7333 / 0.7333  -> floor 0.65  (mean*0.89)
+    #     recall@k 0.9216 / 0.9216 / 0.9216 -> floor 0.82 (mean*0.89)
+    #   For reference, the 768/nomic pipeline measured the same day: hit@5 0.76, MRR 0.7222,
+    #   recall@k 0.8431 — the 1024 cutover raised gated recall by ~0.08.
+    # RAG forbidden leaks are always a hard fail. Re-run this calibration whenever the corpus or
+    # the embedding pipeline changes materially. Override with EVAL_MIN_HIT5/EVAL_MIN_MRR/
+    # EVAL_MIN_RECALL.
     #
-    # OPEN (#1179): these floors were measured 2026-07-29, BEFORE the pipeline changed on
-    # 2026-07-30 (#1169 master all-scope + permission filter in both chains, #1167 lexical on by
-    # default, #1170 OR-semantics tsquery) and before the #1180 compound-question rerank change.
-    # Since lexical is now on by default, the nightly recall@k gate measures HYBRID retrieval —
-    # that is intentional and answers the #1179 "should the floor apply to hybrid" question.
-    # To close #1179: run `eval_live.py --baseline 3` on alpha against the current image and
-    # commit the suggested floors it prints, replacing the defaults below.
+    # Hybrid-gating decision (#1179, standing question): the gated recall@k floor deliberately
+    # scores the DENSE path only. Rationale: (1) a dense/embedding regression must not be masked
+    # by a lexical-FTS rescue — hybrid-scored recall would stay green while the embedding pipeline
+    # rotted; (2) the lexical/hybrid path has its own regression gate (#1178 lexical_recovery
+    # below: >=50% of dense-miss fixtures must be recovered by hybrid RRF), so a lexical break
+    # trips the suite independently. Together the two gates cover both halves of the hybrid
+    # retriever without either masking the other.
     floor_hit5 = float(os.environ.get("EVAL_MIN_HIT5", "0.68"))
-    floor_mrr = float(os.environ.get("EVAL_MIN_MRR", "0.64"))
-    floor_recall = float(os.environ.get("EVAL_MIN_RECALL", "0.76"))
+    floor_mrr = float(os.environ.get("EVAL_MIN_MRR", "0.65"))
+    floor_recall = float(os.environ.get("EVAL_MIN_RECALL", "0.82"))
     failures = []
     if hit_at_5 < floor_hit5:
         failures.append(f"hit@5 {hit_at_5:.4f} < {floor_hit5}")

@@ -15,7 +15,7 @@
 
 ---
 
-## Re-baseline 2026-08-07 (post-Spring-AI)
+## Re-baseline 2026-08-07, updated 2026-08-09 (post-Spring-AI)
 
 Recorded per #1197. Two things changed since the 2026-07-01 live pass below: (1) the runtime
 migrated LangChain4j → Spring AI via PR #987 (merged 2026-07-21; see
@@ -25,23 +25,28 @@ below are pre-migration references — the invariants they evidenced were carrie
 migration and re-proven by the hardening waves; (2) substantial gate work closed via tracked
 issues. The historical execution-result sections below are the record and are **not** rewritten;
 this section is the current per-gate status, and each sign-off block carries a one-line
-`2026-08-07:` pointer. All issue states verified via `gh issue view` on 2026-08-07.
+`2026-08-07:` pointer. All issue states verified via `gh issue view` on 2026-08-07; rows carrying
+a `2026-08-09` note were updated during the Gate 5 bge-m3 cutover session (see
+`gate5-rag-hybrid-design.md`).
 
-| Gate | Current status (2026-08-07) | Evidence |
+| Gate | Current status (as of 2026-08-09) | Evidence |
 | --- | --- | --- |
-| 0 | Largely shipped — eval harness with retrieval-quality gates (hit@5/MRR) in CI, fixtures at volume, lexical dense-miss regression fixtures added | #783 CLOSED (`081cf4291`), fixtures `16649d56a`, #1178 CLOSED; residue: floors re-baseline → #1179 OPEN |
+| 0 | Largely shipped — eval harness with retrieval-quality gates (hit@5/MRR) in CI, fixtures at volume, lexical dense-miss regression fixtures added | #783 CLOSED (`081cf4291`), fixtures `16649d56a`, #1178 CLOSED; floors re-baselined 2026-08-09 on the bge-m3 pipeline (#1179: 0.68/0.65/0.82) |
 | 1 | Prompt assembly carried through the Spring AI migration; live answer-quality eval still open | PR #987; no dedicated tracker |
 | 2A | Shared orchestration path preserved through the migration; live equivalence run still open | PR #987; T0 divergence tracked under Gate 4 → #1192 |
 | 2B | Shipped — legacy role tables dropped, fail-closed negative case proven by IT | #780 CLOSED (`920774f8c`), permission-gating IT `d501b6ea2` + #1114 review `dc3538727` |
 | 2C | **Shipped** via #778 CLOSED — persisted session workflow state threaded into gating, blocking + streaming parity | `8cb5157c7`, `28105bd40` |
 | 3 | **Core shipped** via #779 CLOSED + #645 batch PRs (Wave 1 #1102, gateway-routing IT #1120, orphan pruning #1122) | Residue → #1196 OPEN (streaming openapi live proof + cached-agent leakage test); #645 OPEN (final alpha check) |
 | 4 | Pending — decision core built (2026-06-30), router not wired into the chat managers | → #1192 OPEN |
-| 5 | **Largely shipped** — retrieval-quality floors (#783 CLOSED), hybrid dense+lexical RRF (#784 CLOSED via PR #1123), corpus grown to 39 docs with lexical retrieval enabled by default (#1124 CLOSED, `4aa34b818`, `8c58fadbf`), gap-discovery harness (#1125 CLOSED) | Residue: bge-m3 1024-dim migration → #1194 OPEN |
+| 5 | **Largely shipped** — retrieval-quality floors (#783 CLOSED), hybrid dense+lexical RRF (#784 CLOSED via PR #1123), corpus grown to 39 docs with lexical retrieval enabled by default (#1124 CLOSED, `4aa34b818`, `8c58fadbf`), gap-discovery harness (#1125 CLOSED) | Residue: #1194 executed on alpha 2026-08-09 (bge-m3 1024 live, HNSW via V32; 768-column drop pending live sign-off) |
 | 6 | Pending — foundations only (status enum, `NltiWritePlan`, policy invariants) | → #1193 OPEN |
 | 7 | Partially shipped — admin `mcp_tool_permission` endpoints delivered (#785 CLOSED, `ToolPermissionController` per Gate 3 record) | Residue: adaptive tuning shadow mode + gated live promotion → #1195 OPEN |
 
-Cross-cutting open items: retrieval-floor re-baseline (recall@k sits 0.007 above the gate) →
-#1179 OPEN; compound-question RRF + top-5 rerank chunk loss → #1180 OPEN.
+Cross-cutting items resolved 2026-08-09: retrieval floors re-baselined on the bge-m3 1024
+pipeline (#1179 — recall@k 0.9216 vs floor 0.82); the compound-question residual (#1180) was
+re-root-caused during the cutover: not RRF/rerank chunk loss but tool-driven rag-scope collapse
+(the permission clause selects AdminFacadeTool → ragScope=admin → master-scope glossary
+unreachable) — see the cutover record in `gate5-rag-hybrid-design.md`.
 
 ---
 
@@ -569,7 +574,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 - [ ] All docs tagged `rag-scope` + `min-permission`/permission set — _ev:_
 - [ ] Permission-aware RAG filtering enforced — _ev:_
 - [ ] Hybrid retrieval added — _ev:_
-- [ ] Embeddings migrated to `bge-m3` 1024-dim — _ev:_
+- [x] Embeddings migrated to `bge-m3` 1024-dim — _ev: 2026-08-09 alpha cutover (image `sha-486c132`): whole-corpus re-embed into `embedding_1024` (163 chunks + 529 tools + 3 screens, snapshot retained), five-value flip live (column/dimension/model + bge-m3-calibrated floors 0.45/0.40 via PR #1205), startup validation passed, V32 replaced the empty-built V31 ivfflat indexes with HNSW, post-flip eval green (recall@k 0.9216 vs 768's 0.8431). 768 columns retained until live sign-off — dated record in `gate5-rag-hybrid-design.md`._
 - [ ] Rollback path preserved during migration — _ev:_
 
 ### Completeness gate
@@ -609,7 +614,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 ### Gate 5 sign-off
 
 - Metrics filled: [ ] · Decision: **HOLD — design complete, implementation pending**
-- 2026-08-07: **largely shipped** — retrieval-quality floors #783 CLOSED (`081cf4291`, `15ab613cb`); hybrid dense+lexical FTS with RRF fusion #784 CLOSED (PR #1123, `7b38ed34f`); corpus grown to 39 docs with lexical retrieval enabled by default #1124 CLOSED (`a1bf14fa3`, `4aa34b818`, `8c58fadbf`); gap-discovery harness #1125 CLOSED. Residue: bge-m3 1024-dim migration → #1194 (OPEN); floors re-baseline → #1179 (OPEN); compound-question rerank → #1180 (OPEN).
+- 2026-08-07: **largely shipped** — retrieval-quality floors #783 CLOSED (`081cf4291`, `15ab613cb`); hybrid dense+lexical FTS with RRF fusion #784 CLOSED (PR #1123, `7b38ed34f`); corpus grown to 39 docs with lexical retrieval enabled by default #1124 CLOSED (`a1bf14fa3`, `4aa34b818`, `8c58fadbf`); gap-discovery harness #1125 CLOSED. Residue resolved 2026-08-09: bge-m3 1024-dim migration executed on alpha (#1194 — 768-column drop still pending live sign-off); floors re-baselined on the flipped pipeline (#1179 — 0.68/0.65/0.82, dense-only gating documented); compound-question probe at 6/7 with the residual re-root-caused to tool-driven rag-scope collapse, not rerank (#1180 — see `gate5-rag-hybrid-design.md` cutover record).
 
 #### Gate 5 — Execution results (2026-06-30)
 
