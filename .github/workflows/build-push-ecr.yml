@@ -186,7 +186,7 @@ jobs:
 
       - name: Set Maven revision
         if: steps.stage.outputs.missing-csv != ''
-        run: printf -- "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT\n-Dmaven.build.cache.enabled=false\n" > .mvn/maven.config
+        run: printf -- "-Drevision=0.1.%s-SNAPSHOT\n-Dmaven.build.cache.enabled=false\n" "${GITHUB_SHA::7}" > .mvn/maven.config
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         if: steps.stage.outputs.missing-csv != ''
