@@ -42,10 +42,13 @@ final class LexicalDocumentRetriever implements QueryDocumentRetriever {
     // The tsquery term binds twice: once for the @@ match, once for ts_rank_cd ordering.
     private static final String OR_TSQUERY = "replace(websearch_to_tsquery('english', ?)::text, ' & ', ' | ')::tsquery";
 
+    // #1180: domain scopes also match 'master' — master-scope docs (glossary, capability catalog)
+    // are the global tier and must stay reachable from every domain scope (mirrors the dense path
+    // in ScopedContentRetrieverFactory#create). Permission gating stays downstream.
     private static final String SQL_SCOPED = "SELECT id, content, metadata::text AS metadata\n"
             + "FROM mcp_document_embedding\n"
             + "WHERE content_tsv @@ " + OR_TSQUERY + "\n"
-            + "  AND metadata ->> 'rag_scope' = ?\n"
+            + "  AND metadata ->> 'rag_scope' IN (?, 'master')\n"
             + "ORDER BY ts_rank_cd(content_tsv, " + OR_TSQUERY + ") DESC, id\n"
             + "LIMIT ?";
 

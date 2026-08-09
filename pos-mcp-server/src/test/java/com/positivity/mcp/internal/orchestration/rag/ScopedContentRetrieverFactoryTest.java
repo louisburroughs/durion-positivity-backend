@@ -55,9 +55,11 @@ class ScopedContentRetrieverFactoryTest {
         assertThat(request.getQuery()).isEqualTo("stock");
         assertThat(request.getTopK()).isEqualTo(7);
         assertThat(request.getSimilarityThreshold()).isEqualTo(0.42);
+        // #1180: a domain scope includes master-scope docs (glossary/capability tier) alongside
+        // its own — a strict eq filter made them structurally unreachable from domain agents.
         assertThat(request.getFilterExpression())
                 .isEqualTo(new FilterExpressionBuilder()
-                        .eq("rag_scope", "inventory")
+                        .in("rag_scope", "inventory", RagScope.MASTER)
                         .build());
     }
 
