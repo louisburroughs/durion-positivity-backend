@@ -99,7 +99,7 @@ MODEL = cfg("OLLAMA_EMBEDDING_MODEL", default="nomic-embed-text")
 # `embedding` column). Set EVAL_EMBEDDING_COLUMN=embedding_1024 (together with
 # OLLAMA_EMBEDDING_MODEL=bge-m3) to validate the 1024-dim bge-m3 path against the dual-column
 # data BEFORE flipping the live config. Allowlisted because the name is interpolated into SQL.
-EMB_COL = os.environ.get("EVAL_EMBEDDING_COLUMN", "embedding")
+EMB_COL = cfg("EVAL_EMBEDDING_COLUMN", default="embedding")
 if EMB_COL not in ("embedding", "embedding_1024"):
     sys.exit(f"Invalid EVAL_EMBEDDING_COLUMN '{EMB_COL}' (expected 'embedding' or 'embedding_1024')")
 
