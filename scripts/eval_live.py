@@ -84,7 +84,10 @@ DB_NAME = cfg("POS_MCP_DB_NAME", default="pos_mcp")
 DB_USER = cfg("POS_MCP_DB_USER", "SPRING_DATASOURCE_USERNAME", "POSTGRES_USER")
 DB_PASS = cfg("POS_MCP_DB_PASSWORD", "SPRING_DATASOURCE_PASSWORD", "POSTGRES_PASSWORD")
 OLLAMA = cfg("OLLAMA_EMBEDDING_BASE_URL", default="http://localhost:11434").rstrip("/")
-MODEL = cfg("OLLAMA_EMBEDDING_MODEL", default="nomic-embed-text")
+# The embedding model must track the live pipeline (#1194: bge-m3 after the flip), so the .env
+# value is honored when the shell env is unset. The base URL deliberately does NOT read .env — it
+# holds the docker-internal hostname (http://ollama:11434 resolves only inside the compose network).
+MODEL = cfg("OLLAMA_EMBEDDING_MODEL", "OLLAMA_EMBEDDING_MODEL", default="nomic-embed-text")
 # #1194: which pgvector column the eval reads. Default preserves historical behavior (the 768
 # `embedding` column). Set EVAL_EMBEDDING_COLUMN=embedding_1024 (together with
 # OLLAMA_EMBEDDING_MODEL=bge-m3) to validate the 1024-dim bge-m3 path against the dual-column
