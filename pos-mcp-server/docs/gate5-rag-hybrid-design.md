@@ -137,3 +137,69 @@ re-embed happens on alpha):
 4. **Keep the 768 columns until 1024 is validated in live use** (runbook §B.8, #783 harness).
    Rollback is the reverse flip of the same three values. Only after sign-off does a follow-up
    migration drop the 768 columns/indexes and the then-unused view indirection.
+
+### Alpha cutover record — 2026-08-09 (#1194 executed, #1179 re-baselined, #1180 re-diagnosed)
+
+Executed on alpha, image `sha-486c132` (PR #1205: configurable similarity floors + eval column
+selector; includes PR #1199). Flyway V31 verified applied before starting.
+
+**Snapshot:** `/home/ec2-user/gate5-768-snapshot-20260809T024338Z.sql.gz` on the alpha host
+(pg_dump of `mcp_document_embedding`, `mcp_tool`, `mcp_screen_registry`; 2.77 MB, verified) —
+recoverable beyond the built-in reverse-flip rollback.
+
+**Step 1 — re-embed (2026-08-09 ~02:45Z):** whole-corpus bge-m3 into `embedding_1024`:
+163 document chunks (39 docs, from `content`), 529 tool rows (from `description`), 3 screen rows
+(from `description`); zero NULL `embedding_1024` afterward; 690 s.
+
+**Step 2 — validation:** first attempt (2026-08-09 early) STOPPED on the no-regression gate:
+recall@k 0.8431 (768) → 0.6078 (1024) at the then-hardcoded floors — root-caused to bge-m3's
+cosine-similarity scale sitting ~0.10–0.15 below nomic's (rank metrics flat-to-better: hit@5 0.76
+both, MRR 0.7222 → 0.7333). Floor sweep on the 1024 path: 0.45 → 0.8235, 0.40 → 0.8627,
+0.35 → 0.9216, forbidden 0 throughout. Outcome: PR #1205 made the floors configurable
+(`MCP_RAG_MIN_SCORE` / `MCP_RAG_TIER2_MIN_SCORE`, defaults 0.6/0.55 unchanged).
+
+**Step 3 — flip (2026-08-09T13:07:39Z):** five values together in `/opt/durion/alpha/.env` —
+`MCP_RAG_EMBEDDING_COLUMN=embedding_1024`, `MCP_RAG_DIMENSION=1024`,
+`OLLAMA_EMBEDDING_MODEL=bge-m3`, `MCP_RAG_MIN_SCORE=0.45`, `MCP_RAG_TIER2_MIN_SCORE=0.40` —
+then `redeploy-backend-tag.sh sha-486c132 pos-mcp-server`. Startup consistency validation passed
+(`Configured Ollama embedding model … modelName=bge-m3 dimensions=1024`); the initializers
+backfilled 233 newly-discovered tool rows into `embedding_1024` with bge-m3 on the flipped write
+path. Pre-flip env backed up at `/tmp/alpha.env.bak.preflip-1194` on the host.
+
+**Post-flip defect found + fixed live — V31 ivfflat indexes were built empty (V32):** an ivfflat
+index trains centroids at build time; V31 created the 1024 indexes on empty columns, and even a
+post-population REINDEX left `lists=100` spreading 163 chunks at 1–2 rows per list with
+`probes=1`. Live document ANN through the 1024 column returned a single candidate (first
+post-flip probe: PO-number question lost its glossary grounding). Replaced both 1024 indexes
+with HNSW (pgvector 0.7.2) live at ~13:25Z; migration `V32__hnsw_1024_indexes.sql` (pg) /
+`V24` (H2 no-op) records the same statements. ANN verified complete afterward. The 768 ivfflat
+indexes are untouched (rollback path).
+
+**Step 2 re-validation + #1179 re-baseline (post-flip):** `eval_live.py --baseline 3`
+(bge-m3/1024, eval floors mirroring production 0.40/0.45): hit@5 0.76, MRR 0.7333, recall@k
+0.9216 — identical across all 3 runs (stddev 0.0). Dense-vs-hybrid: bge-m3 leaves a single
+dense-miss fixture (nomic left 10 at its floors); hybrid recovers it (recovery 1.0). New floors
+committed in `eval_live.py` at mean×0.89: hit@5 0.68 (unchanged) / MRR 0.65 / recall@k 0.82,
+with the measured basis and the dense-only-gating decision recorded in the threshold comment
+block. Final floored sanity run on the end state: PASS with margin, `rag_forbidden` 0. The eval
+now follows the live `.env` (embedding column, model, floors) so the nightly gate tracks the
+flipped pipeline without cron changes.
+
+**Step 4:** 768 columns + indexes retained. Dropping them is a follow-up migration after live
+sign-off; rollback = reverse flip of the five env values.
+
+**#1180 probe (7-question item-4, blocking chat, gpt-oss:120b):** 6/7 grounded. VIN, PO-number,
+pricing, tax, returns, core-charge all answer from the corpus (VIN and PO — the former lexical
+rescues — are now dense hits under bge-m3). The compound invoice question still fails, but the
+root cause is NOT the RRF/top-5 rerank hypothesis this issue was filed with: under bge-m3 the
+`glossary.identifiers` invoice chunk ranks dense #1 (0.671) for the full compound query. The
+live drop is upstream: tool selection for the question picks only `AdminFacadeTool` (the
+"permission" clause dominates), `resolveRagScopeForTools` therefore resolves `ragScope=admin`,
+and scoped retrieval searches admin-scope docs only — the master-scope glossary is unreachable
+regardless of ranking (the #1169 all-scope behavior applies only when the scope resolves to
+`master`). Secondary: when gpt-oss then answers in its thinking channel (blank content), the
+answer-resolution ladder replaces even the recovered text with a screen deflection; and
+`OLLAMA_CHAT_THINK` was not passed through docker-compose at all (fixed alongside this record).
+Candidate fix directions (for #1180): include master-scope docs in domain-scoped retrieval
+(scope filter `rag_scope IN (:scope, 'master')`), and/or ladder should prefer thinking-recovered
+text over a deflection when retrieval produced context.
