@@ -19,7 +19,7 @@ spring:
       embedding:
         base-url: ${OLLAMA_EMBEDDING_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
         options:
-          model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+          model: ${OLLAMA_EMBEDDING_MODEL:bge-m3}
         timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
 mcp:
   server:
@@ -46,18 +46,17 @@ mcp:
     ttl-minutes: ${MCP_WRITE_PLAN_TTL_MINUTES:10}
   rag:
     table-name: mcp_document_embedding
-    # Gate 5 (G5.4, #1194): which vector column all pgvector reads/writes use. Default stays the
-    # 768-dim column; flip to embedding_1024 (with dimension 1024 and the bge-m3 embedding model)
-    # only after the alpha re-embed is validated — see docs/gate5-rag-hybrid-design.md.
+    # G5.4 #1194 cutover complete + #1207 (V33): the embedding column is 1024-dim bge-m3; the 768
+    # nomic columns and the dual-column selector were retired. The knobs remain for a future
+    # embedding-model migration — see docs/gate5-rag-hybrid-design.md.
     embedding-column: ${MCP_RAG_EMBEDDING_COLUMN:embedding}
-    dimension: ${MCP_RAG_DIMENSION:768}
+    dimension: ${MCP_RAG_DIMENSION:1024}
     # #1194: dense-retrieval cosine-similarity floors (primary retriever / tier-2 wide
-    # retriever), calibrated per embedding model. The defaults fit nomic-embed-text (768).
-    # bge-m3 similarities sit ~0.10-0.15 lower on the same corpus, so flip these together with
-    # the column/dimension/model trio (~0.45/0.40 per the alpha floor sweep — see
-    # docs/gate5-rag-hybrid-design.md G5.4).
-    min-score: ${MCP_RAG_MIN_SCORE:0.6}
-    tier2-min-score: ${MCP_RAG_TIER2_MIN_SCORE:0.55}
+    # retriever), calibrated per embedding model. Defaults fit bge-m3 (the alpha floor sweep chose
+    # 0.45/0.40; nomic-embed-text needed 0.6/0.55 — its similarities sit ~0.10-0.15 higher). Flip
+    # together with the embedding model — see docs/gate5-rag-hybrid-design.md G5.4.
+    min-score: ${MCP_RAG_MIN_SCORE:0.45}
+    tier2-min-score: ${MCP_RAG_TIER2_MIN_SCORE:0.40}
     index-type: ivfflat
     hybrid:
       # Exact identifiers (VINs, SKUs, permission/event codes) routinely score below the dense

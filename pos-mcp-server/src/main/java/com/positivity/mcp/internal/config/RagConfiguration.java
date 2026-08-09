@@ -21,13 +21,8 @@ public class RagConfiguration {
             @NonNull RagEmbeddingSettings embeddingSettings,
             @Value("${mcp.rag.table-name:mcp_document_embedding}") String tableName,
             @Value("${mcp.rag.create-table:false}") boolean createTable) {
-        // Gate 5 (G5.4, #1194): the settings bean selects the 768 base table or the V31 1024 view
-        // (PgVectorStore hardcodes the column name "embedding"; the view aliases embedding_1024).
-        if (createTable && !RagEmbeddingSettings.COLUMN_768.equals(embeddingSettings.embeddingColumn())) {
-            throw new IllegalStateException(
-                    "mcp.rag.create-table=true is only supported with mcp.rag.embedding-column=embedding; "
-                            + "the embedding_1024 path targets the V31 view, which Flyway owns.");
-        }
+        // #1207 (V33): the base table's embedding column is 1024-dim and PgVectorStore targets it
+        // directly — the V31 view indirection is gone. RagEmbeddingSettings validates the config.
         return PgVectorStore.builder(new JdbcTemplate(dataSource), embeddingModel)
                 .vectorTableName(embeddingSettings.vectorTableFor(tableName))
                 .dimensions(embeddingSettings.dimension())

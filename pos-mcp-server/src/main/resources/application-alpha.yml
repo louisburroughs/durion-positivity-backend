@@ -26,7 +26,7 @@ spring:
       embedding:
         base-url: ${OLLAMA_EMBEDDING_BASE_URL:http://ollama:11434}
         options:
-          model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+          model: ${OLLAMA_EMBEDDING_MODEL:bge-m3}
         timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
 
 eureka:
@@ -47,10 +47,10 @@ mcp:
       - /internal/
   rag:
     table-name: mcp_document_embedding
-    # Gate 5 (G5.4, #1194): flip both to embedding_1024 / 1024 (with OLLAMA_EMBEDDING_MODEL=bge-m3)
-    # only after the alpha re-embed is validated — see docs/gate5-rag-hybrid-design.md.
+    # G5.4 #1194 cutover complete + #1207 (V33): single embedding column, 1024-dim bge-m3 —
+    # mirrors the base application.yml defaults; see docs/gate5-rag-hybrid-design.md.
     embedding-column: ${MCP_RAG_EMBEDDING_COLUMN:embedding}
-    dimension: ${MCP_RAG_DIMENSION:768}
+    dimension: ${MCP_RAG_DIMENSION:1024}
     index-type: ivfflat
     preload:
       docs:

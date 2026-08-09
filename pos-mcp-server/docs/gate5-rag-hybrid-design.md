@@ -203,3 +203,18 @@ answer-resolution ladder replaces even the recovered text with a screen deflecti
 Candidate fix directions (for #1180): include master-scope docs in domain-scoped retrieval
 (scope filter `rag_scope IN (:scope, 'master')`), and/or ladder should prefer thinking-recovered
 text over a deflection when retrieval produced context.
+
+### 768-column retirement — #1207 (V33)
+
+Signed off 2026-08-09/10 after the flipped pipeline held green across repeated floored evals
+(hit@5 0.76 / MRR 0.7333 / recall@k 0.9216, `rag_forbidden` 0, deterministic) and the item-4 probe
+reached 7/7 (PR #1209). V33 closes the dual-column window: drops the three 768 `embedding` columns
+and their ivfflat indexes (V2/V6 — both were built-on-empty and only functioned by accident of
+their degenerate layout), renames `embedding_1024` → `embedding` (taking over the historical index
+names; HNSW since V32), and drops the `mcp_document_embedding_1024` view (PgVectorStore now
+targets the base table directly). Defaults across application.yml / compose / the managers / the
+eval moved to the bge-m3 pairing: model `bge-m3`, dimension 1024, floors 0.45/0.40.
+`RagEmbeddingSettings` now validates the single `embedding`↔1024 pairing (kept as the
+SQL-injection guard and the seam for any future dual-column migration). Recovery from here is a
+re-embed from `content`/`description` — embeddings are derived data; the pre-cutover snapshot and
+env backups on the alpha host are removed once V33 is verified live.

@@ -36,9 +36,9 @@ public class OllamaEmbeddingModelConfiguration {
                             "${spring.ai.ollama.embedding.base-url:${OLLAMA_EMBEDDING_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}}")
                     @NonNull
                     String baseUrl,
-            @Value("${spring.ai.ollama.embedding.options.model:${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}}") @NonNull
+            @Value("${spring.ai.ollama.embedding.options.model:${OLLAMA_EMBEDDING_MODEL:bge-m3}}") @NonNull
                     String modelName,
-            @Value("${mcp.rag.dimension:768}") int dimensions,
+            @Value("${mcp.rag.dimension:1024}") int dimensions,
             @Value("${spring.ai.ollama.embedding.timeout:${OLLAMA_EMBEDDING_TIMEOUT:30s}}") @NonNull Duration timeout,
             @Value("${OLLAMA_API_KEY:}") @NonNull String apiKey) {
         return new HostedOllamaEmbeddingModel(restClientBuilder, baseUrl, modelName, dimensions, timeout, apiKey);

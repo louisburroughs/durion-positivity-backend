@@ -3,8 +3,8 @@
 Postgres/pgvector and the local Ollama embedding model. Java-free alternative to BaselineCaptureIT
 (#783) and OpenApiToolPermissionGatingIT (#779) for hosts that have Python but not a JDK.
 
-It embeds each fixture utterance with nomic-embed-text (the same model that produced the stored
-mcp_tool.embedding vectors) and runs the exact permission+workflow-gated ANN query from
+It embeds each fixture utterance with bge-m3 (the same model that produced the stored
+mcp_tool.embedding vectors since the #1194 cutover; V33/#1207 made 1024-dim the only pipeline) and runs the exact permission+workflow-gated ANN query from
 ToolMetadataRepositoryImpl.findTopKByEmbeddingForPermissions:
 
     SELECT t.name FROM mcp_tool t
@@ -87,25 +87,26 @@ OLLAMA = cfg("OLLAMA_EMBEDDING_BASE_URL", default="http://localhost:11434").rstr
 # The embedding model must track the live pipeline (#1194: bge-m3 after the flip), so the .env
 # value is honored when the shell env is unset. The base URL deliberately does NOT read .env — it
 # holds the docker-internal hostname (http://ollama:11434 resolves only inside the compose network).
-MODEL = cfg("OLLAMA_EMBEDDING_MODEL", "OLLAMA_EMBEDDING_MODEL", default="nomic-embed-text")
-# #1194: which pgvector column the eval reads. Default preserves historical behavior (the 768
-# `embedding` column). Set EVAL_EMBEDDING_COLUMN=embedding_1024 (together with
-# OLLAMA_EMBEDDING_MODEL=bge-m3) to validate the 1024-dim bge-m3 path against the dual-column
-# data BEFORE flipping the live config. Allowlisted because the name is interpolated into SQL.
+MODEL = cfg("OLLAMA_EMBEDDING_MODEL", "OLLAMA_EMBEDDING_MODEL", default="bge-m3")
+# #1194/#1207: which pgvector column the eval reads. Since V33 dropped the 768 columns and renamed
+# embedding_1024 to embedding, only `embedding` (1024-dim bge-m3) exists; the selector remains for
+# a future dual-column migration. Allowlisted because the name is interpolated into SQL.
 EMB_COL = cfg("EVAL_EMBEDDING_COLUMN", "MCP_RAG_EMBEDDING_COLUMN", default="embedding")
-if EMB_COL not in ("embedding", "embedding_1024"):
-    sys.exit(f"Invalid EVAL_EMBEDDING_COLUMN '{EMB_COL}' (expected 'embedding' or 'embedding_1024')")
+if EMB_COL != "embedding":
+    sys.exit(f"Invalid EVAL_EMBEDDING_COLUMN '{EMB_COL}' — only 'embedding' exists since V33 (#1207); "
+             "remove any EVAL_EMBEDDING_COLUMN/MCP_RAG_EMBEDDING_COLUMN override.")
 # Production RAG retrieval applies a cosine similarity floor (SessionAgentManager:
-# ScopedContentRetrieverFactory.create(scope, 10, 0.6) and (scope, 20, 0.55)). Score at the loosest
+# ScopedContentRetrieverFactory.create — 0.45 primary / 0.40 tier-2 by default since the bge-m3
+# cutover, #1194/#1207). Score at the loosest
 # value a doc must clear to enter the pipeline — following the live MCP_RAG_TIER2_MIN_SCORE
-# from .env when set (#1194: the floors flip with the embedding model) (0.55 by default) so recall@k isn't over-reported vs the live path.
-RAG_MIN_SCORE = float(cfg("EVAL_RAG_MIN_SCORE", "MCP_RAG_TIER2_MIN_SCORE", default="0.55"))
+# from .env when set (#1194: the floors flip with the embedding model) (0.40 by default) so recall@k isn't over-reported vs the live path.
+RAG_MIN_SCORE = float(cfg("EVAL_RAG_MIN_SCORE", "MCP_RAG_TIER2_MIN_SCORE", default="0.40"))
 # #1178: the rag-lexical block scores its DENSE pass at the primary production floor (0.6 —
 # SessionAgentManager's semanticRetriever, ScopedContentRetrieverFactory.create(scope, 10, 0.6)),
 # because that is the path whose live dense misses the dense-miss fixtures encode (#1170: VIN
 # question, glossary.identifiers similarity 0.58 < 0.60). The gated rag-retrieval suite keeps the
 # looser RAG_MIN_SCORE above, unchanged. Follows the live MCP_RAG_MIN_SCORE from .env when set.
-LEX_DENSE_MIN_SCORE = float(cfg("EVAL_LEXICAL_DENSE_MIN_SCORE", "MCP_RAG_MIN_SCORE", default="0.6"))
+LEX_DENSE_MIN_SCORE = float(cfg("EVAL_LEXICAL_DENSE_MIN_SCORE", "MCP_RAG_MIN_SCORE", default="0.45"))
 
 
 def embed(text):
