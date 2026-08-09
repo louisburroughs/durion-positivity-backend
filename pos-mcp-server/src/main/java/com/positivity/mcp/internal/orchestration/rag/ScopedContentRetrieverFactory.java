@@ -43,14 +43,23 @@ public class ScopedContentRetrieverFactory {
      * doc scope. A strict {@code rag_scope = 'master'} filter there made every domain doc
      * (order/pricing/tax/…) structurally unreachable, so cross-domain questions retrieved nothing and
      * the assistant refused or fabricated. When the scope resolves to {@code master} we therefore drop
-     * the scope filter and search all scopes; specific domain scopes keep their narrow filter.
-     * Permission-gated docs are still excluded downstream by {@code PermissionAwareMetadataFilter}.
+     * the scope filter and search all scopes.
+     *
+     * <p>#1180: domain scopes include {@code master}-scope docs alongside their own. Master-scope
+     * docs are the global tier — glossary/identifier formats, the capability catalog — relevant in
+     * every domain. A strictly-scoped filter reproduced the #1124 failure shape one level down:
+     * when tool selection resolves a specific domain scope (e.g. the compound invoice question
+     * selects only the admin facade → {@code ragScope=admin}), the master-scope glossary was
+     * structurally unreachable no matter how well it ranked. Permission-gated docs are still
+     * excluded downstream by {@code PermissionAwareMetadataFilter}.
      */
     public @NonNull QueryDocumentRetriever create(@Nullable String ragScope, int maxResults, double minScore) {
         String normalizedScope = RagScope.normalize(ragScope);
         var ragScopeFilter = RagScope.MASTER.equals(normalizedScope)
                 ? null
-                : new FilterExpressionBuilder().eq(RAG_SCOPE, normalizedScope).build();
+                : new FilterExpressionBuilder()
+                        .in(RAG_SCOPE, normalizedScope, RagScope.MASTER)
+                        .build();
         return queryText -> {
             SearchRequest.Builder request =
                     SearchRequest.builder().query(queryText).topK(maxResults).similarityThreshold(minScore);
