@@ -3,8 +3,8 @@
 Postgres/pgvector and the local Ollama embedding model. Java-free alternative to BaselineCaptureIT
 (#783) and OpenApiToolPermissionGatingIT (#779) for hosts that have Python but not a JDK.
 
-It embeds each fixture utterance with nomic-embed-text (the same model that produced the stored
-mcp_tool.embedding vectors) and runs the exact permission+workflow-gated ANN query from
+It embeds each fixture utterance with bge-m3 (the same model that produced the stored
+mcp_tool.embedding vectors since the #1194 cutover; V33/#1207 made 1024-dim the only pipeline) and runs the exact permission+workflow-gated ANN query from
 ToolMetadataRepositoryImpl.findTopKByEmbeddingForPermissions:
 
     SELECT t.name FROM mcp_tool t
@@ -87,7 +87,7 @@ OLLAMA = cfg("OLLAMA_EMBEDDING_BASE_URL", default="http://localhost:11434").rstr
 # The embedding model must track the live pipeline (#1194: bge-m3 after the flip), so the .env
 # value is honored when the shell env is unset. The base URL deliberately does NOT read .env — it
 # holds the docker-internal hostname (http://ollama:11434 resolves only inside the compose network).
-MODEL = cfg("OLLAMA_EMBEDDING_MODEL", "OLLAMA_EMBEDDING_MODEL", default="nomic-embed-text")
+MODEL = cfg("OLLAMA_EMBEDDING_MODEL", "OLLAMA_EMBEDDING_MODEL", default="bge-m3")
 # #1194/#1207: which pgvector column the eval reads. Since V33 dropped the 768 columns and renamed
 # embedding_1024 to embedding, only `embedding` (1024-dim bge-m3) exists; the selector remains for
 # a future dual-column migration. Allowlisted because the name is interpolated into SQL.
