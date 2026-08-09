@@ -136,7 +136,13 @@ jobs:
           fetch-depth: 1
 
       - name: Set Maven revision
-        run: printf -- "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT\n-Dmaven.build.cache.enabled=false\n" > .mvn/maven.config
+        # Commit-stamped, not run-stamped: the reactor cache below is keyed by
+        # SHA, so the artifact version must be a function of the SHA too. A
+        # run-number version made every cache hit useless — a later job on the
+        # same commit (e.g. the nightly security scan) restored artifacts
+        # published under a different run's version and failed dependency
+        # resolution (run 31298480848).
+        run: printf -- "-Drevision=0.1.%s-SNAPSHOT\n-Dmaven.build.cache.enabled=false\n" "${GITHUB_SHA::7}" > .mvn/maven.config
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v5
@@ -160,7 +166,7 @@ jobs:
 
       - name: Configure build cache (PR pilot)
         # Build Cache Extension pilot, PR builds only (spec §4.5). PRs skip the
-        # run-number revision stamp: a version that changes every run would poison
+        # commit-stamped revision: a version that changes every commit would poison
         # every cache key, and nothing downstream consumes PR artifacts by version.
         # (The pilot's first run exposed pos-archunit's 2.4 GB fat jar, which the
         # extension's output hashing cannot read — fixed in pos-archunit/pom.xml.)
@@ -368,7 +374,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Set Maven revision
-        run: printf -- "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT\n-Dmaven.build.cache.enabled=false\n" > .mvn/maven.config
+        run: printf -- "-Drevision=0.1.%s-SNAPSHOT\n-Dmaven.build.cache.enabled=false\n" "${GITHUB_SHA::7}" > .mvn/maven.config
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v5
@@ -578,7 +584,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set Maven revision
-        run: printf -- "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT\n-Dmaven.build.cache.enabled=false\n" > .mvn/maven.config
+        run: printf -- "-Drevision=0.1.%s-SNAPSHOT\n-Dmaven.build.cache.enabled=false\n" "${GITHUB_SHA::7}" > .mvn/maven.config
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v5
@@ -681,7 +687,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set Maven revision
-        run: printf -- "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT\n-Dmaven.build.cache.enabled=false\n" > .mvn/maven.config
+        run: printf -- "-Drevision=0.1.%s-SNAPSHOT\n-Dmaven.build.cache.enabled=false\n" "${GITHUB_SHA::7}" > .mvn/maven.config
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v5
@@ -765,7 +771,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Set Maven revision
-        run: printf -- "-Drevision=0.1.${{ github.run_number }}-SNAPSHOT\n-Dmaven.build.cache.enabled=false\n" > .mvn/maven.config
+        run: printf -- "-Drevision=0.1.%s-SNAPSHOT\n-Dmaven.build.cache.enabled=false\n" "${GITHUB_SHA::7}" > .mvn/maven.config
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v5
