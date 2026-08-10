@@ -1,6 +1,5 @@
 package com.positivity.mcp.internal.repository;
 
-import com.positivity.mcp.internal.config.RagEmbeddingSettings;
 import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import java.sql.ResultSet;
@@ -11,7 +10,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.postgresql.util.PGobject;
 import org.springframework.context.annotation.Profile;
@@ -19,19 +17,19 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * JDBC tool-metadata store. The pgvector column referenced by the vector-search statements is the
+ * single validated value from {@code RagEmbeddingSettings} (V33, #1207 — always {@code embedding}),
+ * written literally so every statement stays a constant (java:S2077).
+ */
 @Repository
 @Profile({"!test", "openapi"})
 public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
-    /** Validated vector column (Gate 5 G5.4, #1194): {@code embedding} or {@code embedding_1024}. */
-    private final String embeddingColumn;
-
-    public ToolMetadataRepositoryImpl(
-            @NonNull JdbcTemplate jdbcTemplate, @NonNull RagEmbeddingSettings embeddingSettings) {
+    public ToolMetadataRepositoryImpl(@NonNull JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
-        this.embeddingColumn = embeddingSettings.embeddingColumn();
     }
 
     @Override
@@ -109,12 +107,12 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
                 WHERE t.enabled = true
                   AND t.source <> 'openapi'
-                  AND t.%1$s IS NOT NULL
+                  AND t.embedding IS NOT NULL
                   AND ws.name = ?
                   AND t.id IN (SELECT tool_id FROM mcp_tool_permission WHERE permission_code = ANY(?))
-                ORDER BY t.%1$s <=> ?::vector, t.id
+                ORDER BY t.embedding <=> ?::vector, t.id
                 LIMIT ?
-                """.formatted(embeddingColumn);
+                """;
 
         return jdbcTemplate.query(
                 sql,
@@ -142,13 +140,13 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 JOIN mcp_tool_workflow tw ON t.id = tw.tool_id
                 JOIN mcp_workflow_state ws ON tw.workflow_state_id = ws.id
                 WHERE t.enabled = true
-                  AND t.%1$s IS NOT NULL
+                  AND t.embedding IS NOT NULL
                   AND t.source = 'openapi'
                   AND ws.name = ?
                   AND t.id IN (SELECT tool_id FROM mcp_tool_permission WHERE permission_code = ANY(?))
-                ORDER BY t.%1$s <=> ?::vector, t.id
+                ORDER BY t.embedding <=> ?::vector, t.id
                 LIMIT ?
-                """.formatted(embeddingColumn);
+                """;
         return jdbcTemplate.query(
                 sql,
                 ps -> {
@@ -206,25 +204,33 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
         if (keptNames.isEmpty()) {
             return 0;
         }
-        String keptPlaceholders = keptNames.stream().map(name -> "?").collect(Collectors.joining(", "));
-        Object[] keptArgs = keptNames.toArray();
+        // Array binds (name <> ALL(?), tool_id = ANY(?)) keep every statement a constant string —
+        // no placeholder-list concatenation (java:S2077) — matching the ANY(?) style used by the
+        // permission-filtered queries above.
+        Object[] keptArray = keptNames.toArray();
         List<UUID> orphanIds = jdbcTemplate.query(
-                "SELECT id FROM mcp_tool WHERE source = 'openapi' AND name NOT IN (" + keptPlaceholders + ")",
-                (rs, rowNum) -> rs.getObject("id", UUID.class),
-                keptArgs);
+                "SELECT id FROM mcp_tool WHERE source = 'openapi' AND name <> ALL(?)",
+                ps -> ps.setArray(1, ps.getConnection().createArrayOf("varchar", keptArray)),
+                (rs, rowNum) -> rs.getObject("id", UUID.class));
         if (orphanIds.isEmpty()) {
             return 0;
         }
-        String idPlaceholders = orphanIds.stream().map(id -> "?").collect(Collectors.joining(", "));
-        Object[] idArgs = orphanIds.toArray();
+        Object[] idArray = orphanIds.toArray();
         // Clear FK children explicitly (portable across Postgres and the H2 test schema, which may not
         // declare ON DELETE CASCADE): permission grants and workflow links are deleted; the nullable
         // invocation log's tool_id is nulled so historical audit rows survive the tool's removal.
-        jdbcTemplate.update("DELETE FROM mcp_tool_permission WHERE tool_id IN (" + idPlaceholders + ")", idArgs);
-        jdbcTemplate.update("DELETE FROM mcp_tool_workflow WHERE tool_id IN (" + idPlaceholders + ")", idArgs);
         jdbcTemplate.update(
-                "UPDATE mcp_tool_invocation_log SET tool_id = NULL WHERE tool_id IN (" + idPlaceholders + ")", idArgs);
-        return jdbcTemplate.update("DELETE FROM mcp_tool WHERE id IN (" + idPlaceholders + ")", idArgs);
+                "DELETE FROM mcp_tool_permission WHERE tool_id = ANY(?)",
+                ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", idArray)));
+        jdbcTemplate.update(
+                "DELETE FROM mcp_tool_workflow WHERE tool_id = ANY(?)",
+                ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", idArray)));
+        jdbcTemplate.update(
+                "UPDATE mcp_tool_invocation_log SET tool_id = NULL WHERE tool_id = ANY(?)",
+                ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", idArray)));
+        return jdbcTemplate.update(
+                "DELETE FROM mcp_tool WHERE id = ANY(?)",
+                ps -> ps.setArray(1, ps.getConnection().createArrayOf("uuid", idArray)));
     }
 
     @Override
@@ -302,10 +308,10 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 FROM mcp_tool
                 WHERE enabled = true
                   AND source <> 'openapi'
-                  AND %1$s IS NOT NULL
-                ORDER BY %1$s <=> ?::vector, id
+                  AND embedding IS NOT NULL
+                ORDER BY embedding <=> ?::vector, id
                 LIMIT ?
-                """.formatted(embeddingColumn);
+                """;
 
         return jdbcTemplate.query(sql, this::mapRow, toVectorPGobject(embedding), limit);
     }

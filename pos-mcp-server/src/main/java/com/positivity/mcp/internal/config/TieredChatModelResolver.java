@@ -4,6 +4,7 @@ import com.positivity.mcp.internal.domain.ModelTier;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -86,8 +87,11 @@ public class TieredChatModelResolver {
         if (configured != null) {
             return configured;
         }
-        ChatOptions defaults = defaultChatModel.getOptions();
-        String model = defaults != null ? defaults.getModel() : null;
+        // ChatModel#getOptions defaults to non-null, but overriding fakes/mocks may return null
+        // (covered by TieredChatModelResolverTest) — tolerate it and fall back to the label.
+        String model = Optional.ofNullable(defaultChatModel.getOptions())
+                .map(ChatOptions::getModel)
+                .orElse(null);
         return (model == null || model.isBlank()) ? DEFAULT_MODEL_LABEL : model;
     }
 

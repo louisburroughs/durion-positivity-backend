@@ -44,7 +44,7 @@ class WriteGatePromptLayerTest {
     void assemble_withoutWriteCapableTools_omitsWriteGateLayer() {
         AssembledPrompt prompt = resolver.assemble("ROLE_SERVICE_ADVISOR", "master", false);
 
-        assertThat(prompt.layers()).doesNotContain("WRITE_GATE");
+        assertThat(prompt.layers()).isNotEmpty().doesNotContain("WRITE_GATE");
         assertThat(prompt.text()).doesNotContain("Write-action gate:");
     }
 
@@ -53,6 +53,6 @@ class WriteGatePromptLayerTest {
     void assemble_twoArgOverload_hasNoWriteGate() {
         AssembledPrompt prompt = resolver.assemble("ROLE_SERVICE_ADVISOR", "master");
 
-        assertThat(prompt.layers()).doesNotContain("WRITE_GATE");
+        assertThat(prompt.layers()).isNotEmpty().doesNotContain("WRITE_GATE");
     }
 }
