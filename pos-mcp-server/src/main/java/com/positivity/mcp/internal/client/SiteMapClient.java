@@ -13,6 +13,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -56,7 +57,9 @@ public class SiteMapClient implements SiteMapService {
     private final Clock clock;
     private final Object refreshLock = new Object();
 
-    private volatile @Nullable Cached cached;
+    // Holds an immutable record; AtomicReference gives the safe-publication semantics volatile was
+    // providing without a mutable-object-behind-volatile hazard (java:S3077).
+    private final AtomicReference<@Nullable Cached> cached = new AtomicReference<>();
 
     // Inject the shared Clock bean rather than Clock.systemUTC() so the accelerated-clock profile can
     // replace application time (enforced by the pos-archunit time rule).
@@ -87,12 +90,12 @@ public class SiteMapClient implements SiteMapService {
 
     @Override
     public @NonNull SiteMap getSiteMap() {
-        Cached current = cached;
+        Cached current = cached.get();
         if (current != null && !isExpired(current)) {
             return current.value();
         }
         synchronized (refreshLock) {
-            Cached rechecked = cached;
+            Cached rechecked = cached.get();
             if (rechecked != null && !isExpired(rechecked)) {
                 return rechecked.value(); // another thread refreshed while we waited on the lock
             }
@@ -109,7 +112,7 @@ public class SiteMapClient implements SiteMapService {
 
     @Override
     public @NonNull List<SiteMapSection> visibleSections(@NonNull Collection<String> userRoles) {
-        Cached current = cached;
+        Cached current = cached.get();
         if (current == null) {
             return List.of();
         }
@@ -127,14 +130,14 @@ public class SiteMapClient implements SiteMapService {
     private SiteMap fetchAndCacheOrFallback() {
         try {
             SiteMap fresh = doFetch();
-            cached = new Cached(fresh, clock.instant().plus(properties.cacheTtl()));
+            cached.set(new Cached(fresh, clock.instant().plus(properties.cacheTtl())));
             return fresh;
         } catch (RuntimeException ex) {
-            Cached fallback = cached;
+            Cached fallback = cached.get();
             if (fallback != null) {
                 log.warn("Site-map fetch failed; serving last-known-good copy: {}", ex.getMessage());
                 // Extend the served copy's lifetime so we don't hammer a down frontend every access.
-                cached = new Cached(fallback.value(), clock.instant().plus(properties.cacheTtl()));
+                cached.set(new Cached(fallback.value(), clock.instant().plus(properties.cacheTtl())));
                 return fallback.value();
             }
             log.warn("Site-map fetch failed and no cached copy is available: {}", ex.getMessage());

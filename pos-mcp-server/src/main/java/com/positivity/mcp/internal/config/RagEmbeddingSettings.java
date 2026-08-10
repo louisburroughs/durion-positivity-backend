@@ -14,10 +14,10 @@ import org.springframework.stereotype.Component;
  * configuration is now {@code embedding} at dimension 1024, and the view indirection is gone
  * ({@code PgVectorStore} reads the base table directly).
  *
- * <p>The single-value whitelist doubles as the SQL-injection guard for the repositories that
- * interpolate the column name into their vector-search statements. The class is retained (rather
- * than inlining constants) so a future embedding-model migration can reintroduce a dual-column
- * flip without re-plumbing the injection sites.
+ * <p>Since only {@code embedding} is valid, the repositories and embedding initializers write the
+ * column name literally in their SQL (constant statements, java:S2077); this class remains the
+ * startup guard that rejects any stale column/dimension override. It is retained (rather than
+ * inlining constants) so a future embedding-model migration can reintroduce a dual-column flip.
  */
 @Component
 public class RagEmbeddingSettings {

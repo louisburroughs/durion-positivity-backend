@@ -79,7 +79,9 @@ public class NltiRouter {
                     .getResult()
                     .getOutput()
                     .getText();
-            RouterClassification classification = parse(output);
+            // getText() is @Nullable; parse() requires @NonNull (java:S2637) — an empty model
+            // reply routes to the safe default, same as an unparseable one.
+            RouterClassification classification = output == null ? RouterClassification.safeDefault() : parse(output);
             return new RoutingDecision(classification, tierSelector.select(classification));
         } catch (RuntimeException exception) {
             LOGGER.warn("MCP router classification failed; defaulting to T2_COMPLEX error={}", exception.toString());

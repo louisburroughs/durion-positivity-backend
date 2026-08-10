@@ -27,22 +27,17 @@ public class ToolEmbeddingInitializer implements ApplicationRunner {
     private final JdbcTemplate jdbcTemplate;
     private final EmbeddingModel embeddingModel;
 
-    /** Validated vector column (Gate 5 G5.4, #1194): {@code embedding} or {@code embedding_1024}. */
-    private final String embeddingColumn;
-
-    public ToolEmbeddingInitializer(
-            @NonNull JdbcTemplate jdbcTemplate,
-            @NonNull EmbeddingModel embeddingModel,
-            @NonNull RagEmbeddingSettings embeddingSettings) {
+    public ToolEmbeddingInitializer(@NonNull JdbcTemplate jdbcTemplate, @NonNull EmbeddingModel embeddingModel) {
         this.jdbcTemplate = jdbcTemplate;
         this.embeddingModel = embeddingModel;
-        this.embeddingColumn = embeddingSettings.embeddingColumn();
     }
 
     @Override
     public void run(ApplicationArguments args) {
         long totalStartNanos = System.nanoTime();
-        String query = "SELECT id, name, description FROM mcp_tool WHERE %s IS NULL".formatted(embeddingColumn);
+        // The vector column is the single validated value from RagEmbeddingSettings (V33, #1207),
+        // written literally so the SQL stays a constant (java:S2077).
+        String query = "SELECT id, name, description FROM mcp_tool WHERE embedding IS NULL";
         List<ToolDescriptionRow> rows = jdbcTemplate.query(
                 query,
                 (resultSet, rowNum) -> new ToolDescriptionRow(
@@ -57,9 +52,7 @@ public class ToolEmbeddingInitializer implements ApplicationRunner {
             try {
                 float[] vector = embeddingModel.embed(row.description());
                 jdbcTemplate.update(
-                        "UPDATE mcp_tool SET %s = ?::vector WHERE id = ?".formatted(embeddingColumn),
-                        toVectorPGobject(vector),
-                        row.id());
+                        "UPDATE mcp_tool SET embedding = ?::vector WHERE id = ?", toVectorPGobject(vector), row.id());
                 populated++;
                 LOGGER.info(
                         "Populated embedding for tool {} ({}) in {} ms",
