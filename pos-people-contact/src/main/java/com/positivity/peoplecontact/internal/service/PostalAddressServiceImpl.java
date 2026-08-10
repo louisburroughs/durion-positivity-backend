@@ -74,8 +74,8 @@ public class PostalAddressServiceImpl implements PostalAddressService {
         entity.setPostalCode(trimToNull(address.getPostalCode()));
         entity.setCountryCode(countryCode);
         // Spring Data's save() is contractually non-null, but the dataflow analyzer (javabugs:S2259)
-        // cannot see that; falling back to the managed entity keeps toDto() provably NPE-free.
-        PartyPostalAddress saved = Objects.requireNonNullElse(addressRepository.save(entity), entity);
+        // cannot see that; requireNonNull fails fast rather than publishing an unsaved entity.
+        PartyPostalAddress saved = Objects.requireNonNull(addressRepository.save(entity));
 
         publishChanged(partyType, partyId, saved);
         return toDto(saved);
