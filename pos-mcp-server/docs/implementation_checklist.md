@@ -114,7 +114,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Gate 0 sign-off
 
-- Metrics table filled: [ ] (baseline PENDING live backend) · Decision: **HOLD**
+- Metrics table filled: [ ] (baseline PENDING live backend) · Decision: **HOLD** · Close-out tracked → #1212
 - Exceptions (owner/expiry): n/a · Approver/date: pending · Rollback verified/documented: [x] (config-only; revertable)
 - 2026-08-07: harness + retrieval-quality gates shipped and in CI (#783 CLOSED, `081cf4291`; fixtures to volume `16649d56a`; lexical regression fixtures #1178 CLOSED); floors re-baseline open → #1179.
 
@@ -192,7 +192,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Gate 1 sign-off
 
-- Metrics filled: [ ] (answer-quality eval needs live stack) · Decision: **HOLD** (2 items pending)
+- Metrics filled: [ ] (answer-quality eval needs live stack) · Decision: **HOLD** (2 items pending) · Close-out tracked → #1213
 - Exceptions: n/a · Approver/date: pending · Rollback (swap assemble→resolvePrompt in both managers) verified: [x] documented
 - 2026-08-07: assembly carried through the Spring AI migration (PR #987); live answer-quality eval still open, no dedicated tracker (see Re-baseline table).
 
@@ -258,7 +258,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Gate 2A sign-off
 
-- Metrics filled: [ ] (live equivalence run deferred) · Decision: **HOLD** (live equivalence pending)
+- Metrics filled: [ ] (live equivalence run deferred) · Decision: **HOLD** (live equivalence pending) · Close-out tracked → #1214
 - 2026-08-07: shared path preserved through the Spring AI migration (PR #987); T0 blocking-vs-streaming divergence now tracked with the router wiring → #1192.
 - 2026-08-08: T0 divergence closed — PR #1199 (#1192 CLOSED) ships a shared T0 fast path used by both the blocking and streaming managers. Remaining 2A HOLD item is only the live "same request → same tools/prompt/persona/scope/workflow" equivalence run.
 
@@ -324,7 +324,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Gate 2B sign-off
 
-- Metrics filled: [ ] · Decision: **HOLD** (live fail-closed run + migration DB test deferred; #781/#782 cross-service)
+- Metrics filled: [ ] · Decision: **HOLD** (live fail-closed run + migration DB test deferred; #781/#782 cross-service) · Close-out tracked → #1214
 - 2026-08-07: legacy role tables dropped (#780 CLOSED, `920774f8c`); the pending negative fail-closed case is now proven by the permission-gating IT (`d501b6ea2`; #1114 review `dc3538727`).
 - 2026-08-09: cross-service dependencies resolved — #781 (requiredPermissions customizer + AUTHENTICATED sentinel across services) and #782 (role-default-permissions endpoint) both CLOSED. Remaining 2B item is only the metrics-table fill for the formal Pass.
 
@@ -388,7 +388,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Gate 2C sign-off
 
-- Metrics filled: [ ] · Decision: **HOLD** (runtime session propagation + non-IDLE DB activation deferred to live)
+- Metrics filled: [ ] · Decision: **HOLD** (runtime session propagation + non-IDLE DB activation deferred to live) · Close-out tracked → #1215
 - 2026-08-07: **shipped** via #778 (CLOSED) — persisted session workflow state threaded into tool gating (`8cb5157c7`) with blocking/streaming parity test (`28105bd40`).
 
 #### Gate 2C — Execution results (2026-06-30, code-first)
@@ -555,7 +555,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 
 ### Gate 4 sign-off
 
-- Metrics filled: [ ] (live routing-mix/latency/quality metrics not yet captured) · Decision: **HOLD — implementation shipped, live metrics pending**
+- Metrics filled: [ ] (live routing-mix/latency/quality metrics not yet captured) · Decision: **HOLD — implementation shipped, live metrics pending** · Close-out tracked → #1216
 - 2026-08-07: still pending — router wiring into the chat managers tracked → #1192 (OPEN).
 - 2026-08-08: **implementation shipped** — PR #1199 (#1192 CLOSED): `NltiRouter`/`TierSelector` wired into both managers behind `mcp.model.tiering-enabled` (default true); `TieredChatModelResolver` (`mcp.model.router/simple/complex`, blank = default model so default config is behavior-safe); tier-suffixed agent cache keys; shared T0 fast path for blocking + streaming (closes the Gate 2A divergence); router/tier/model/write telemetry; 14 tiering tests. Remaining: live routing-% / cost / quality measurement on alpha (runbook §B.7), then metrics table + Pass decision.
 
@@ -618,7 +618,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 
 ### Gate 5 sign-off
 
-- Metrics filled: [x] cutover eval green (recall@k 0.9216 vs floor 0.82; floors re-baselined 0.68/0.65/0.82 per #1179) · Decision: **HOLD — shipped + bge-m3 cutover complete; retrieval-lock sweep over the 39-doc corpus not yet asserted**
+- Metrics filled: [x] cutover eval green (recall@k 0.9216 vs floor 0.82; floors re-baselined 0.68/0.65/0.82 per #1179) · Decision: **HOLD — shipped + bge-m3 cutover complete; retrieval-lock sweep over the 39-doc corpus not yet asserted** · Close-out tracked → #1217
 - 2026-08-07: **largely shipped** — retrieval-quality floors #783 CLOSED (`081cf4291`, `15ab613cb`); hybrid dense+lexical FTS with RRF fusion #784 CLOSED (PR #1123, `7b38ed34f`); corpus grown to 39 docs with lexical retrieval enabled by default #1124 CLOSED (`a1bf14fa3`, `4aa34b818`, `8c58fadbf`); gap-discovery harness #1125 CLOSED. Residue resolved 2026-08-09: bge-m3 1024-dim migration executed on alpha (#1194 CLOSED; 768 columns dropped by V33, #1207); floors re-baselined on the flipped pipeline (#1179 — 0.68/0.65/0.82, dense-only gating documented); compound-question probe at 6/7 with the residual re-root-caused to tool-driven rag-scope collapse, not rerank (#1180 — see `gate5-rag-hybrid-design.md` cutover record).
 
 #### Gate 5 — Execution results (2026-06-30)
@@ -700,7 +700,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 
 ### Gate 6 sign-off
 
-- Metrics filled: [ ] (write-safety fixture pass rate not yet captured live) · Decision: **HOLD — implementation shipped, live full-flow verification pending**
+- Metrics filled: [ ] (write-safety fixture pass rate not yet captured live) · Decision: **HOLD — implementation shipped, live full-flow verification pending** · Close-out tracked → #1218
 - 2026-08-07: still pending — write-action confirmation gate implementation tracked → #1193 (OPEN).
 - 2026-08-08: **implementation shipped** — PR #1199 (#1193 CLOSED): `NltiWritePlanService` — ACTION intents produce a persisted preview plan (never execute); `POST /v1/nlt/requests/{id}/confirm` executes the exact persisted args with dual permission check, TTL expiry, idempotent re-confirm (`execution_result` column, V30 pg / V22 h2), stale-data cancel at risk≥MEDIUM, single-pending supersede; `/cancel`; full PLAN→…→EXECUTION audit chain; WRITE-GATE prompt layer per request; 29 write-gate tests. Remaining: live full-flow + DB verification on alpha (runbook §B.9), then Write-lock assertion + metrics + Pass decision.
 
@@ -759,7 +759,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 
 ### Gate 7 sign-off
 
-- Metrics filled: [ ] (live dashboard/tuning verification not yet run) · Decision: **HOLD — implementation largely shipped, live verification pending**
+- Metrics filled: [ ] (live dashboard/tuning verification not yet run) · Decision: **HOLD — implementation largely shipped, live verification pending** · Close-out tracked → #1219
 - 2026-08-07: admin `mcp_tool_permission` endpoints delivered (#785 CLOSED; `ToolPermissionController`, perm-bits #809 — see Gate 3 record); adaptive tuning shadow mode + gated live promotion tracked → #1195 (OPEN).
 - 2026-08-08: **tuning mode shipped** — PR #1199 (#1195 CLOSED): `mcp.tuning.mode=off|shadow|live` (legacy `enabled=true` → live + deprecation WARN); shadow computes and logs proposals (dedicated logger + Micrometer counters) without writing; live is gated on a fresh passing eval result file and degrades to shadow otherwise; 18 tuning tests. Remaining: live admin-flow/dashboard/shadow→live verification on alpha (runbook §B.10), then metrics + Pass decision.
 
