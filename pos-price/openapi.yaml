@@ -443,6 +443,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PriceQuoteResponse'
+        '404':
+          description: No base price effective for the product at the pricing instant (PRICE_BASE_UNAVAILABLE).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceQuoteResponse'
       security:
       - bearerAuth: []
       x-required-permissions:
@@ -875,6 +881,7 @@ components:
           format: int32
           description: Maximum number of times promotion can be applied
           example: 100
+          minimum: 0
         storeCode:
           type:
           - string

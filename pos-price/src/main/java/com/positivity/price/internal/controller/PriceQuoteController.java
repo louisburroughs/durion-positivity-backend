@@ -48,6 +48,9 @@ public class PriceQuoteController {
     @ApiResponse(responseCode = "200", description = "Price quote calculated successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid quote request.")
     @ApiResponse(responseCode = "403", description = "Forbidden.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No base price effective for the product at the pricing instant (PRICE_BASE_UNAVAILABLE).")
     public ResponseEntity<PriceQuoteResponse> calculatePriceQuote(@Valid @RequestBody PriceQuoteRequest request) {
         return ResponseEntity.ok(priceQuoteService.calculatePrice(request));
     }

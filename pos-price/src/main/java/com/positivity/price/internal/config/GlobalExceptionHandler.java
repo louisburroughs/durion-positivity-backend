@@ -1,8 +1,9 @@
 package com.positivity.price.internal.config;
 
+import com.positivity.price.internal.exception.BasePriceUnavailableException;
+import com.positivity.price.internal.exception.BasePriceWindowConflictException;
 import com.positivity.price.internal.exception.DuplicatePromoCodeException;
 import com.positivity.price.internal.exception.EligibilityRuleNotFoundException;
-import com.positivity.price.internal.exception.ProductNotFoundException;
 import com.positivity.price.internal.exception.PromotionCodeNotFoundException;
 import com.positivity.price.internal.exception.PromotionMultipleNotAllowedException;
 import com.positivity.price.internal.exception.PromotionNotApplicableException;
@@ -65,10 +66,18 @@ public class GlobalExceptionHandler {
                 request);
     }
 
-    @ExceptionHandler(ProductNotFoundException.class)
-    public ResponseEntity<ApiError> handleProductNotFound(
-            ProductNotFoundException exception, HttpServletRequest request) {
-        return buildErrorResponse(HttpStatus.NOT_FOUND, "PRODUCT_NOT_FOUND", exception.getMessage(), null, request);
+    @ExceptionHandler(BasePriceUnavailableException.class)
+    public ResponseEntity<ApiError> handleBasePriceUnavailable(
+            BasePriceUnavailableException exception, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.NOT_FOUND, "PRICE_BASE_UNAVAILABLE", exception.getMessage(), null, request);
+    }
+
+    @ExceptionHandler(BasePriceWindowConflictException.class)
+    public ResponseEntity<ApiError> handleBasePriceWindowConflict(
+            BasePriceWindowConflictException exception, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.CONFLICT, "PRICE_BASE_WINDOW_CONFLICT", exception.getMessage(), null, request);
     }
 
     @ExceptionHandler(SnapshotNotFoundException.class)

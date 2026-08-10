@@ -17,9 +17,12 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
- * Base MSRP price record for a product.
+ * Base price record for a product, retained as history: each row is one effective window
+ * (half-open, {@code effectiveFrom <= t < effectiveTo}; null {@code effectiveTo} = open-ended)
+ * per (productId, currency). Price changes append a new row and close the predecessor's window
+ * rather than updating in place (ADR-0054 §4).
  *
- * Issue: #51
+ * Issue: #51, #1233
  */
 @Data
 @Entity
@@ -30,6 +33,9 @@ public class ProductBasePrice {
     @Id
     @GeneratedValue
     @UUIDv7Id
+    private UUID id;
+
+    @Column(name = "product_id", nullable = false)
     private UUID productId;
 
     @Column(nullable = false, precision = 10, scale = 4)
