@@ -503,7 +503,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 - [x] Argument-schema validation — path + query params typed + required (query from persisted `input_schema`); only headers/body free-form.
 - [x] Telemetry facade-vs-openapi source tag (#806).
 - [x] Streaming context wiring — provider wired + caller published/cleared synchronously in `streamTokens` (leak-safe). Live SSE proof 2026-08-08: per-request openapi tool resolution with real caller context observed on the streaming path (`discoveredTools=8`), auth defect blocking execution fixed in PR #1202 (#1196 item 1 closed).
-- [x] Permission-seeding source (admin tooling / #785) — `ToolPermissionController` (`/v1/tools/{toolName}/permissions` GET/POST/DELETE, gated by `mcp:tool:view` / `mcp:tool:manage`) grants/lists/revokes an openapi tool's `mcp_tool_permission` rows, replacing manual SQL (#807). Perm-bits registered (bits 347/348, catalog v16, #809). _Deploy:_ fleet redeploy for catalog v16, then grant `mcp:tool:manage` to an admin role; SDK regen is downstream ([[controller-change-openapi-sdk-chain]]).\_
+- [x] Permission-seeding source (admin tooling / #785) — `ToolPermissionController` (`/v1/tools/{toolName}/permissions` GET/POST/DELETE, gated by `mcp:tool:view` / `mcp:tool:manage`) grants/lists/revokes an openapi tool's `mcp_tool_permission` rows, replacing manual SQL (#807). Perm-bits registered (bits 347/348, catalog v16, #809). _Deploy:_ fleet redeploy for catalog v16, then grant `mcp:tool:manage` to an admin role; SDK regen is downstream ([[controller-change-openapi-sdk-chain]]) — **done 2026-08-10: SDKs regenerated and tarballs loaded.**
 
 ---
 
