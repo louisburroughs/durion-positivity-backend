@@ -1,11 +1,13 @@
 # Gate 5 — RAG Expansion, Permission-Aware Filtering, Hybrid Retrieval (design)
 
-> **Status:** DESIGN. Improves grounding, exact-code recall, and permission-safe visibility.
-> Retrieval-quality verification is live (needs pgvector + the embedding model) — runbook §B.8.
-> **Note:** authoring the new RAG documents (G5.5) is the one part that is NOT live-blocked and can
-> proceed offline at any time.
+> **Status:** IMPLEMENTED + CUT OVER. Hybrid dense+lexical RRF shipped (#784, PR #1123); corpus at
+> 39 docs (#1124); bge-m3 1024-dim cutover executed on alpha 2026-08-09 (#1194; HNSW via V32;
+> 768 columns retired by V33, #1207); floors re-baselined (#1179 — 0.68/0.65/0.82); item-4 probe
+> 7/7 after master-scope docs were included in domain-scoped retrieval (PR #1209, #1180 CLOSED).
+> See the dated cutover records at the end of this doc and the Gate 5 sign-off in
+> `implementation_checklist.md`. Design + historical state retained below as the record.
 
-## Current state (grounded)
+## Current state at design time (historical — pre-cutover)
 - Embeddings: `nomic-embed-text`, `mcp.rag.dimension=768`, table `mcp_document_embedding`, ivfflat.
 - Tier-2 chain (built): baseline + query-expanded dense retrievers → `HybridContentRetriever` (merge)
   → `RerankedContentRetriever` → top-5. Scope filter via `ScopedContentRetrieverFactory` on the

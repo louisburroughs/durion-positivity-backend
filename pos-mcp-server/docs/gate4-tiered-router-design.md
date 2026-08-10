@@ -1,7 +1,12 @@
 # Gate 4 — Tiered Model Router (implementation-ready design)
 
-> **Status:** DESIGN. Route each request to the cheapest model tier that preserves quality + safety.
-> Verification (routing %, latency, quality) is live — see runbook §B.7.
+> **Status:** IMPLEMENTED (PR #1199, 2026-08-08 — #1192 CLOSED): router wired into both chat
+> managers behind `mcp.model.tiering-enabled` (default true), `TieredChatModelResolver`
+> (`mcp.model.router/simple/complex`, blank = default model), tier-suffixed agent cache keys,
+> shared T0 fast path for blocking + streaming, router/tier telemetry; 14 tiering tests.
+> Live verification (routing %, latency, quality) still open — see runbook §B.7 and the Gate 4
+> sign-off in `implementation_checklist.md`. Design retained below as the implementation record.
+> Route each request to the cheapest model tier that preserves quality + safety.
 
 ## Why
 Measured: `qwen3.5:cloud` takes ~28s for a trivial completion (reasoning model). Using it for routing

@@ -1,10 +1,12 @@
 # Gate 3 — OpenAPI Tool Execution Bridge (implementation-ready design)
 
-> **Status:** DESIGN COMPLETE / implementation deferred to live stack. Gate 3 is the security-path
-> gate (per-call permission propagation, cached-agent leakage prevention) and requires end-to-end
-> verification against a running model backend + gateway. Unlike Gates 0–2C, its code cannot be
-> responsibly landed without the live stack — so it is specified here to be implemented and verified
-> together when the DB/embedding/gateway tunnel is reachable.
+> **Status:** IMPLEMENTED + VERIFIED — Gate 3 signed **PASS 2026-08-08** (see
+> `implementation_checklist.md` Gate 3 sign-off): core shipped via #779 + the #645 batch PRs,
+> cached-agent leakage proven by `CachedAgentOpenApiPermissionLeakageTest` (PR #1199), streaming
+> live proof + auth fixes in PRs #1202/#1204 (#1196 CLOSED), alpha zero-404 pass (#645 CLOSED).
+> The design below is retained as the implementation record. Original design premise (historical):
+> Gate 3 is the security-path gate (per-call permission propagation, cached-agent leakage
+> prevention) and required end-to-end verification against a running model backend + gateway.
 
 ## Goal
 
