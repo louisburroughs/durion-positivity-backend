@@ -10,6 +10,7 @@ import com.positivity.peoplecontact.internal.repository.PersonContactPointReposi
 import com.positivity.peoplecontact.internal.repository.PersonRepository;
 import com.positivity.peoplecontact.service.PostalAddressService;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -72,7 +73,9 @@ public class PostalAddressServiceImpl implements PostalAddressService {
         entity.setRegion(trimToNull(address.getRegion()));
         entity.setPostalCode(trimToNull(address.getPostalCode()));
         entity.setCountryCode(countryCode);
-        PartyPostalAddress saved = addressRepository.save(entity);
+        // Spring Data's save() is contractually non-null, but the dataflow analyzer (javabugs:S2259)
+        // cannot see that; falling back to the managed entity keeps toDto() provably NPE-free.
+        PartyPostalAddress saved = Objects.requireNonNullElse(addressRepository.save(entity), entity);
 
         publishChanged(partyType, partyId, saved);
         return toDto(saved);
