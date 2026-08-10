@@ -2,6 +2,37 @@
 
 Product catalog service for the Durion Positivity ETSMS platform. Manages the product master, price books, unit-of-measure conversions, supplier item costs, MSRP records, location-level price overrides, and product lifecycle transitions.
 
+## Sell-Price Boundary (ADR-0054)
+
+pos-catalog's pricing surface is **list/MSRP reference data only**: price books, MSRP history,
+list prices, and reference series (including PRICAT suggested retail per ADR-0053 §4) are
+displayable and reportable, but **never the source of a transactional price**. Every
+transactional sell-price resolution (quotes, workorder/estimate pricing, checkout) is owned
+exclusively by pos-price. Catalog customer-tier price books define **reference/list prices for a
+tier**; pos-price customer-tier *discounts* are the applied transactional mechanism — the two are
+never competing resolvers.
+
+`supplier_item_cost`'s successor — the append-only supplier price entries of ADR-0053 §2 — is
+**cost input**, also outside sell-price resolution: neither the pos-price quote chain nor the
+catalog price-book resolver reads it.
+
+### Which module owns a price fact?
+
+| Price fact | Owning module | Governing ADR |
+| --- | --- | --- |
+| Transactional sell price (quote, workorder/estimate, checkout) | pos-price | ADR-0054 §1 |
+| Base price (effective-dated, history-retaining) | pos-price | ADR-0054 §4 |
+| Location price override (transactional) | pos-price | ADR-0054 §1 |
+| Customer-tier discount (applied transactional mechanism) | pos-price | ADR-0054 §3 |
+| MSRP / list reference price | pos-catalog | ADR-0054 §1 |
+| Customer-tier reference books (tier list prices) | pos-catalog | ADR-0054 §3 |
+| Supplier cost (PRICAT supplier price entries — cost input, outside sell-price resolution) | pos-catalog | ADR-0053 §2 |
+| Inventory valuation cost | pos-inventory | ADR-0048 |
+| PRICAT suggested retail (reference series) | pos-catalog | ADR-0053 §4 |
+
+Routing rule for new stories: computing **what a customer pays** → pos-price; showing a
+**list/MSRP/reference price** → pos-catalog.
+
 ## Responsibilities
 
 - Maintain product master data (inventory and non-inventory products)
