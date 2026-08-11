@@ -134,14 +134,27 @@ class AuthReferenceRulesTest {
     }
 
     @Test
-    void unsupportedSchemeRejectionNamesTheSchemeAndTheAllowlist() {
+    void unsupportedSchemeRejectionNamesTheFieldAndTheAllowlist() {
         assertThatThrownBy(() -> AuthReferenceRules.validate(
                         withRef(valid(BASIC), "passwordRef", "user:hunter2"), SUPPORTED_SCHEMES))
                 .isInstanceOf(SupplierValidationException.class)
                 .hasFieldOrPropertyWithValue("code", SupplierValidationException.SECRET_REF_MALFORMED)
                 .hasMessageContaining("passwordRef")
-                .hasMessageContaining("user:")
                 .hasMessageContaining("env:");
+    }
+
+    /**
+     * The rejected "scheme" is the leading fragment of whatever the operator typed. For a
+     * plaintext password containing a colon that fragment IS part of the credential, so it must
+     * not reach the message -- which goes to the startup log and the API error envelope.
+     */
+    @Test
+    void unsupportedSchemeRejectionNeverNamesTheOffendingSchemeBecauseItMayBeCredentialText() {
+        assertThatThrownBy(() -> AuthReferenceRules.validate(
+                        withRef(valid(BASIC), "passwordRef", "Passw0rd:2026"), SUPPORTED_SCHEMES))
+                .isInstanceOf(SupplierValidationException.class)
+                .hasMessageNotContaining("Passw0rd")
+                .hasMessageNotContaining("2026");
     }
 
     @Test
@@ -151,7 +164,8 @@ class AuthReferenceRulesTest {
         assertThatThrownBy(() -> AuthReferenceRules.validate(
                         withRef(valid(BASIC), "passwordRef", "user:hunter2"), SUPPORTED_SCHEMES))
                 .isInstanceOf(SupplierValidationException.class)
-                .hasMessageNotContaining("hunter2");
+                .hasMessageNotContaining("hunter2")
+                .hasMessageNotContaining("user");
     }
 
     @Test

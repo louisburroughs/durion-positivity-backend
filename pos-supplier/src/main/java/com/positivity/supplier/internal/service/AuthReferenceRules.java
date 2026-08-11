@@ -93,13 +93,15 @@ public final class AuthReferenceRules {
                             + " never a plaintext credential (ADR-0050 §4)");
         }
         if (!supportedSchemes.contains(parsed.scheme())) {
-            // A well-formed reference in an unresolvable scheme is very often a plaintext
-            // credential that happens to contain a colon. Never echo the value back.
+            // Deliberately does NOT name the offending scheme. A rejected value is very often a
+            // plaintext credential that merely contains a colon, and the "scheme" is then its
+            // leading fragment: "Passw0rd:2026" would put "Passw0rd" into the startup log and the
+            // API error envelope. The field name plus the supported list is enough for an operator
+            // to correct their own configuration, and it cannot leak (ADR-0050 §4/§6).
             throw new SupplierValidationException(
                     SupplierValidationException.SECRET_REF_MALFORMED,
-                    field + " uses secret reference scheme '" + parsed.scheme()
-                            + ":' which no configured resolver supports; supported schemes: "
-                            + describe(supportedSchemes)
+                    field + " uses a secret reference scheme that no configured resolver supports;"
+                            + " supported schemes: " + describe(supportedSchemes)
                             + ". A value in an unsupported scheme is treated as a plaintext credential and"
                             + " rejected (ADR-0050 §4)");
         }

@@ -327,9 +327,11 @@ class SupplierYamlBootstrapTest {
         assertThatThrownBy(() -> bootstrap.reconcile(properties(spec)))
                 .isInstanceOf(SupplierConfigurationException.class)
                 .hasFieldOrPropertyWithValue("code", SupplierConfigurationException.YAML_BOOTSTRAP_INVALID)
-                .hasMessageContaining("user:")
                 .hasMessageContaining("env:")
-                .hasMessageNotContaining("hunter2");
+                // Neither half of the rejected value may reach the startup log: for a plaintext
+                // password containing a colon, the "scheme" is part of the credential.
+                .hasMessageNotContaining("hunter2")
+                .hasMessageNotContaining("user");
         assertThat(profileRepository.findBySupplierRef("michelin-eu")).isEmpty();
     }
 

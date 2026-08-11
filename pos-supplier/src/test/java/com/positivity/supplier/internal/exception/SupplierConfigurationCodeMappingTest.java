@@ -21,6 +21,13 @@ import org.springframework.http.HttpStatus;
  * <p>The mapping is only durable if it cannot silently fall behind the exception. This test walks
  * the exception's declared code constants by reflection and fails when any is unmapped, so adding
  * a code forces an explicit HTTP decision rather than inheriting 500 by default.
+ *
+ * <p><strong>Scope.</strong> This class constrains the static {@code CONFIGURATION_STATUS} table
+ * only: it proves the table is complete and correctly valued, <em>not</em> that the handler reads
+ * it. The behavioural half lives in {@code SupplierAdminControllersWebMvcTest.ErrorEnvelope}, which
+ * drives the real controller advice over HTTP and asserts the 409, the 404, and the
+ * 500-with-generic-message — including that the secret reference never reaches the response body.
+ * Both halves are needed: this one alone would still pass against a handler that ignored the table.
  */
 class SupplierConfigurationCodeMappingTest {
 

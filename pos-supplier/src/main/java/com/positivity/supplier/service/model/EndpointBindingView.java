@@ -46,9 +46,12 @@ public record EndpointBindingView(
         String protocolFamily,
 
         @Schema(
-                description =
-                        "Adapter version within the protocol family. Free-form data, deliberately not an enum (ADR-0051 §3).",
-                example = "2.5")
+                description = "Adapter version key within the protocol family. Free-form data, deliberately not an enum"
+                        + " (ADR-0051 §3) so a vendor's new norm needs no code change. NOT validated on write:"
+                        + " a key with no registered codec is accepted here and then resolves to"
+                        + " CAPABILITY_NOT_CONFIGURED on every call, so it must match a codec exactly."
+                        + " Keys shipped today: A2_5, B2_1, B3_3, B4_0, C1_0, C1_1, C1_2, S2S_V1.",
+                example = "A2_5")
         @NonNull
         String version,
 
@@ -76,8 +79,10 @@ public record EndpointBindingView(
         String schedule,
 
         @Schema(
-                description =
-                        "Whether the profile's bindings resolve at all. A disabled profile resolves every capability to a typed not-configured outcome.",
+                description = "Whether THIS binding resolves. A disabled binding behaves exactly as an absent one:"
+                        + " only this capability stops resolving for this supplier, and it reports the typed"
+                        + " CAPABILITY_NOT_CONFIGURED outcome. This is a per-capability toggle, NOT a"
+                        + " supplier-wide kill switch -- for that, disable the vendor profile itself.",
                 example = "true")
         boolean enabled,
 

@@ -56,8 +56,10 @@ public class SupplierAccountAdminController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "401",
-            description = "Authentication is missing or the bearer token is invalid.",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+            description = "Authentication is missing or the bearer token is invalid."
+                    + " The response has NO body: the gateway rejects unauthenticated calls with a bodiless"
+                    + " status, so clients must not attempt to parse an error envelope here.",
+            content = @Content(schema = @Schema(hidden = true)))
     @ApiResponse(
             responseCode = "403",
             description = "Authenticated caller lacks the required supplier permission.",
@@ -99,8 +101,10 @@ public class SupplierAccountAdminController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "401",
-            description = "Authentication is missing or the bearer token is invalid.",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+            description = "Authentication is missing or the bearer token is invalid."
+                    + " The response has NO body: the gateway rejects unauthenticated calls with a bodiless"
+                    + " status, so clients must not attempt to parse an error envelope here.",
+            content = @Content(schema = @Schema(hidden = true)))
     @ApiResponse(
             responseCode = "403",
             description = "Authenticated caller lacks the required supplier permission.",
@@ -141,8 +145,10 @@ public class SupplierAccountAdminController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "401",
-            description = "Authentication is missing or the bearer token is invalid.",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+            description = "Authentication is missing or the bearer token is invalid."
+                    + " The response has NO body: the gateway rejects unauthenticated calls with a bodiless"
+                    + " status, so clients must not attempt to parse an error envelope here.",
+            content = @Content(schema = @Schema(hidden = true)))
     @ApiResponse(
             responseCode = "403",
             description = "Authenticated caller lacks the required supplier permission.",
@@ -191,8 +197,10 @@ public class SupplierAccountAdminController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "401",
-            description = "Authentication is missing or the bearer token is invalid.",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+            description = "Authentication is missing or the bearer token is invalid."
+                    + " The response has NO body: the gateway rejects unauthenticated calls with a bodiless"
+                    + " status, so clients must not attempt to parse an error envelope here.",
+            content = @Content(schema = @Schema(hidden = true)))
     @ApiResponse(
             responseCode = "403",
             description = "Authenticated caller lacks the required supplier permission.",

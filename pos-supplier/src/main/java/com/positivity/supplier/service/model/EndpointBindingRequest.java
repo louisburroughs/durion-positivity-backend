@@ -32,8 +32,12 @@ import org.jspecify.annotations.Nullable;
  *     the deployment default
  */
 @Schema(
-        description =
-                "Create/update payload for a capability endpoint binding (ADR-0050 §3): at most one binding per capability per profile. An absent binding means the capability is disabled for the supplier and resolves to the typed SUPPLIER_CAPABILITY_NOT_CONFIGURED outcome.")
+        description = "Create/update payload for a capability endpoint binding (ADR-0050 §3): at most one binding per"
+                + " capability per profile. An absent or disabled binding means the capability is disabled for"
+                + " the supplier and resolves to the typed CAPABILITY_NOT_CONFIGURED status -- a value of the"
+                + " capability response's own status enum, returned with HTTP 200, not an error."
+                + " Do not confuse it with the ApiError code SUPPLIER_CAPABILITY_NOT_CONFIGURED, which is the"
+                + " same condition escaping as a 4xx and indicates a defect, not a normal outcome.")
 public record EndpointBindingRequest(
         @Schema(
                 description =
@@ -50,9 +54,12 @@ public record EndpointBindingRequest(
         String protocolFamily,
 
         @Schema(
-                description =
-                        "Adapter version within the protocol family. Free-form data, deliberately not an enum (ADR-0051 §3).",
-                example = "2.5")
+                description = "Adapter version key within the protocol family. Free-form data, deliberately not an enum"
+                        + " (ADR-0051 §3) so a vendor's new norm needs no code change. NOT validated on write:"
+                        + " a key with no registered codec is accepted here and then resolves to"
+                        + " CAPABILITY_NOT_CONFIGURED on every call, so it must match a codec exactly."
+                        + " Keys shipped today: A2_5, B2_1, B3_3, B4_0, C1_0, C1_1, C1_2, S2S_V1.",
+                example = "A2_5")
         @NonNull
         String version,
 
@@ -80,8 +87,10 @@ public record EndpointBindingRequest(
         String schedule,
 
         @Schema(
-                description =
-                        "Whether the profile's bindings resolve at all. A disabled profile resolves every capability to a typed not-configured outcome.",
+                description = "Whether THIS binding resolves. A disabled binding behaves exactly as an absent one:"
+                        + " only this capability stops resolving for this supplier, and it reports the typed"
+                        + " CAPABILITY_NOT_CONFIGURED outcome. This is a per-capability toggle, NOT a"
+                        + " supplier-wide kill switch -- for that, disable the vendor profile itself.",
                 example = "true")
         boolean enabled,
 

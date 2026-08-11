@@ -49,11 +49,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -111,11 +107,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -157,11 +149,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -228,11 +216,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -282,11 +266,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -353,11 +333,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -407,11 +383,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -478,11 +450,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -532,11 +500,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -564,11 +528,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/VendorProfileView'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -611,11 +571,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -658,11 +614,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -720,11 +672,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -767,11 +715,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -829,11 +773,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -876,11 +816,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -938,11 +874,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '401':
-          description: Authentication is missing or the bearer token is invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
           description: Authenticated caller lacks the required supplier permission.
           content:
@@ -1124,7 +1056,7 @@ components:
           example: EXPONENTIAL
     EndpointBindingRequest:
       type: object
-      description: 'Create/update payload for a capability endpoint binding (ADR-0050 §3): at most one binding per capability per profile. An absent binding means the capability is disabled for the supplier and resolves to the typed SUPPLIER_CAPABILITY_NOT_CONFIGURED outcome.'
+      description: 'Create/update payload for a capability endpoint binding (ADR-0050 §3): at most one binding per capability per profile. An absent or disabled binding means the capability is disabled for the supplier and resolves to the typed CAPABILITY_NOT_CONFIGURED status -- a value of the capability response''s own status enum, returned with HTTP 200, not an error. Do not confuse it with the ApiError code SUPPLIER_CAPABILITY_NOT_CONFIGURED, which is the same condition escaping as a 4xx and indicates a defect, not a normal outcome.'
       properties:
         capability:
           type: string
@@ -1136,8 +1068,8 @@ components:
           example: EDIWHEEL_A25
         version:
           type: string
-          description: Adapter version within the protocol family. Free-form data, deliberately not an enum (ADR-0051 §3).
-          example: '2.5'
+          description: 'Adapter version key within the protocol family. Free-form data, deliberately not an enum (ADR-0051 §3) so a vendor''s new norm needs no code change. NOT validated on write: a key with no registered codec is accepted here and then resolves to CAPABILITY_NOT_CONFIGURED on every call, so it must match a codec exactly. Keys shipped today: A2_5, B2_1, B3_3, B4_0, C1_0, C1_1, C1_2, S2S_V1.'
+          example: A2_5
         baseUrl:
           type: string
           description: Base URL of the vendor endpoint for this capability.
@@ -1156,7 +1088,7 @@ components:
           example: 0 0 3 * * *
         enabled:
           type: boolean
-          description: Whether the profile's bindings resolve at all. A disabled profile resolves every capability to a typed not-configured outcome.
+          description: 'Whether THIS binding resolves. A disabled binding behaves exactly as an absent one: only this capability stops resolving for this supplier, and it reports the typed CAPABILITY_NOT_CONFIGURED outcome. This is a per-capability toggle, NOT a supplier-wide kill switch -- for that, disable the vendor profile itself.'
           example: true
         captureLevel:
           type: string
@@ -1185,8 +1117,8 @@ components:
           example: EDIWHEEL_A25
         version:
           type: string
-          description: Adapter version within the protocol family. Free-form data, deliberately not an enum (ADR-0051 §3).
-          example: '2.5'
+          description: 'Adapter version key within the protocol family. Free-form data, deliberately not an enum (ADR-0051 §3) so a vendor''s new norm needs no code change. NOT validated on write: a key with no registered codec is accepted here and then resolves to CAPABILITY_NOT_CONFIGURED on every call, so it must match a codec exactly. Keys shipped today: A2_5, B2_1, B3_3, B4_0, C1_0, C1_1, C1_2, S2S_V1.'
+          example: A2_5
         baseUrl:
           type: string
           description: Base URL of the vendor endpoint for this capability.
@@ -1205,7 +1137,7 @@ components:
           example: 0 0 3 * * *
         enabled:
           type: boolean
-          description: Whether the profile's bindings resolve at all. A disabled profile resolves every capability to a typed not-configured outcome.
+          description: 'Whether THIS binding resolves. A disabled binding behaves exactly as an absent one: only this capability stops resolving for this supplier, and it reports the typed CAPABILITY_NOT_CONFIGURED outcome. This is a per-capability toggle, NOT a supplier-wide kill switch -- for that, disable the vendor profile itself.'
           example: true
         captureLevel:
           type: string

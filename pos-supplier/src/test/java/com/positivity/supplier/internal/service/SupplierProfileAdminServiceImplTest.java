@@ -282,6 +282,55 @@ class SupplierProfileAdminServiceImplTest {
                 SupplierValidationException.SECRET_REF_MALFORMED);
     }
 
+    /**
+     * The scheme allowlist must guard <em>update</em>, not only create. Deleting the
+     * {@code AuthReferenceRules.validate} call from {@code updateAuthConfig} leaves every other
+     * test in this module green, so without this case the "guards create but not update" miss the
+     * original review named would be undefended for the next editor (ADR-0050 §4).
+     */
+    @Test
+    void updateAuthConfigRejectsAWellFormedReferenceInAnUnsupportedScheme() {
+        UUID profileId =
+                adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
+        UUID authConfigId = adminService
+                .createAuthConfig(
+                        profileId,
+                        new AuthConfigRequest(
+                                "ediwheel-basic",
+                                SupplierAuthType.BASIC_PLUS_APIKEY,
+                                "env:M_USER",
+                                "env:M_PASSWORD",
+                                "env:M_APIKEY",
+                                "apikey",
+                                null,
+                                null,
+                                null,
+                                null))
+                .authConfigId();
+
+        // "user:hunter2" is shape-legal scheme:key AND a plaintext password.
+        assertValidationFailure(
+                () -> adminService.updateAuthConfig(
+                        profileId,
+                        authConfigId,
+                        new AuthConfigRequest(
+                                "ediwheel-basic",
+                                SupplierAuthType.BASIC_PLUS_APIKEY,
+                                "env:M_USER",
+                                "user:hunter2",
+                                "env:M_APIKEY",
+                                "apikey",
+                                null,
+                                null,
+                                null,
+                                null)),
+                SupplierValidationException.SECRET_REF_MALFORMED);
+
+        // And the stored row must be untouched by the rejected update.
+        assertThat(authConfigRepository.findById(authConfigId).orElseThrow().getPasswordRef())
+                .isEqualTo("env:M_PASSWORD");
+    }
+
     @Test
     void authViewsCarryNoReferenceValuesAndPersistRefsWriteOnly() {
         UUID profileId =
