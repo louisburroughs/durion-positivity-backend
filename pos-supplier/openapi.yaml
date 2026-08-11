@@ -19,7 +19,7 @@ tags:
 - name: Supplier Vendor Profiles
   description: Admin CRUD over vendor profiles — one row per configured supplier connection
 paths:
-  /supplier/admin/profiles/{vendorProfileId}:
+  /v1/supplier/admin/profiles/{vendorProfileId}:
     get:
       tags:
       - Supplier Vendor Profiles
@@ -125,7 +125,7 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - supplier:profile:write
-  /supplier/admin/profiles/{vendorProfileId}/bindings/{bindingId}:
+  /v1/supplier/admin/profiles/{vendorProfileId}/bindings/{bindingId}:
     put:
       tags:
       - Supplier Endpoint Bindings
@@ -214,7 +214,7 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - supplier:profile:write
-  /supplier/admin/profiles/{vendorProfileId}/auth-configs/{authConfigId}:
+  /v1/supplier/admin/profiles/{vendorProfileId}/auth-configs/{authConfigId}:
     put:
       tags:
       - Supplier Auth Configs
@@ -303,7 +303,7 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - supplier:profile:write
-  /supplier/admin/profiles/{vendorProfileId}/accounts/{accountId}:
+  /v1/supplier/admin/profiles/{vendorProfileId}/accounts/{accountId}:
     put:
       tags:
       - Supplier Commercial Accounts
@@ -392,7 +392,7 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - supplier:profile:write
-  /supplier/admin/profiles:
+  /v1/supplier/admin/profiles:
     get:
       tags:
       - Supplier Vendor Profiles
@@ -447,7 +447,7 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - supplier:profile:write
-  /supplier/admin/profiles/{vendorProfileId}/bindings:
+  /v1/supplier/admin/profiles/{vendorProfileId}/bindings:
     get:
       tags:
       - Supplier Endpoint Bindings
@@ -532,7 +532,7 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - supplier:profile:write
-  /supplier/admin/profiles/{vendorProfileId}/auth-configs:
+  /v1/supplier/admin/profiles/{vendorProfileId}/auth-configs:
     get:
       tags:
       - Supplier Auth Configs
@@ -617,7 +617,7 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - supplier:profile:write
-  /supplier/admin/profiles/{vendorProfileId}/accounts:
+  /v1/supplier/admin/profiles/{vendorProfileId}/accounts:
     get:
       tags:
       - Supplier Commercial Accounts

@@ -101,7 +101,7 @@ class SupplierAdminControllersWebMvcTest {
 
     private static final UUID PROFILE_ID = UUID.fromString("018f0000-0000-7000-8000-000000000501");
     private static final UUID CHILD_ID = UUID.fromString("018f0000-0000-7000-8000-000000000502");
-    private static final String BASE = "/supplier/admin/profiles";
+    private static final String BASE = "/v1/supplier/admin/profiles";
     private static final String CORRELATION_HEADER = "X-Correlation-Id";
 
     @Autowired

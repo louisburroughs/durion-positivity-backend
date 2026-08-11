@@ -40,7 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Validated
 @SecurityRequirement(name = "bearerAuth")
-@RequestMapping("/supplier/admin/profiles")
+@RequestMapping("/v1/supplier/admin/profiles")
 public class SupplierProfileAdminController {
 
     private final SupplierProfileAdminService adminService;
