@@ -25,15 +25,19 @@ public interface ProductBasePriceRepository extends JpaRepository<ProductBasePri
     @Query("""
             SELECT p FROM ProductBasePrice p
             WHERE p.productId = :productId
+            AND p.currency = :currency
             AND p.effectiveFrom <= :effectiveAt
             AND (p.effectiveTo IS NULL OR p.effectiveTo > :effectiveAt)
             ORDER BY p.effectiveFrom DESC
             """)
     List<ProductBasePrice> findActiveAt(
-            @Param("productId") UUID productId, @Param("effectiveAt") Instant effectiveAt, Pageable pageable);
+            @Param("productId") UUID productId,
+            @Param("currency") String currency,
+            @Param("effectiveAt") Instant effectiveAt,
+            Pageable pageable);
 
-    default Optional<ProductBasePrice> findActiveAt(UUID productId, Instant effectiveAt) {
-        return findActiveAt(productId, effectiveAt, PageRequest.of(0, 1)).stream()
+    default Optional<ProductBasePrice> findActiveAt(UUID productId, String currency, Instant effectiveAt) {
+        return findActiveAt(productId, currency, effectiveAt, PageRequest.of(0, 1)).stream()
                 .findFirst();
     }
 }

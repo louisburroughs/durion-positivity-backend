@@ -18,8 +18,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,16 +37,19 @@ public class PriceQuoteServiceImpl implements PriceQuoteService {
     private final ProductBasePriceRepository productPriceRepository;
     private final LocationPriceOverrideRepository locationOverrideRepository;
     private final CustomerTierPricingRuleRepository customerTierPricingRuleRepository;
+    private final String defaultCurrency;
 
     public PriceQuoteServiceImpl(
             ProductBasePriceRepository productPriceRepository,
             LocationPriceOverrideRepository locationOverrideRepository,
             CustomerTierPricingRuleRepository customerTierPricingRuleRepository,
-            Clock clock) {
+            Clock clock,
+            @Value("${pos.price.default-currency:USD}") String defaultCurrency) {
         this.clock = clock;
         this.productPriceRepository = productPriceRepository;
         this.locationOverrideRepository = locationOverrideRepository;
         this.customerTierPricingRuleRepository = customerTierPricingRuleRepository;
+        this.defaultCurrency = defaultCurrency.toUpperCase(Locale.ROOT);
     }
 
     @Override
@@ -53,10 +58,13 @@ public class PriceQuoteServiceImpl implements PriceQuoteService {
     public PriceQuoteResponse calculatePrice(@NonNull PriceQuoteRequest request) {
         Instant effectiveAt =
                 request.getEffectiveTimestamp() != null ? request.getEffectiveTimestamp() : Instant.now(clock);
+        String quoteCurrency =
+                request.getCurrency() != null ? request.getCurrency().toUpperCase(Locale.ROOT) : defaultCurrency;
 
         ProductBasePrice basePrice = productPriceRepository
-                .findActiveAt(request.getProductId(), effectiveAt)
-                .orElseThrow(() -> new BasePriceUnavailableException(request.getProductId(), effectiveAt));
+                .findActiveAt(request.getProductId(), quoteCurrency, effectiveAt)
+                .orElseThrow(
+                        () -> new BasePriceUnavailableException(request.getProductId(), quoteCurrency, effectiveAt));
 
         List<PricingBreakdownEntry> breakdownEntries = new ArrayList<>();
         String currency = basePrice.getCurrency();
@@ -65,8 +73,8 @@ public class PriceQuoteServiceImpl implements PriceQuoteService {
 
         breakdownEntries.add(createBreakdownEntry("BASE_PRICE", "BASE_PRICE", BigDecimal.ZERO, currentPrice, currency));
 
-        Optional<LocationPriceOverride> locationOverride =
-                locationOverrideRepository.findActiveAt(request.getProductId(), request.getLocationId(), effectiveAt);
+        Optional<LocationPriceOverride> locationOverride = locationOverrideRepository.findActiveAt(
+                request.getProductId(), request.getLocationId(), quoteCurrency, effectiveAt);
 
         if (locationOverride.isPresent()) {
             BigDecimal adjustment = locationOverride.get().getOverridePrice().subtract(currentPrice);

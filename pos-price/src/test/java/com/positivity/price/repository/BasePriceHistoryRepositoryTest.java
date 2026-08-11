@@ -56,14 +56,54 @@ class BasePriceHistoryRepositoryTest {
         basePriceService.saveBasePrice(productId, new BigDecimal("100.0000"), "USD", T1);
         basePriceService.saveBasePrice(productId, new BigDecimal("120.0000"), "USD", T2);
 
-        BasePriceView beforeCutover =
-                basePriceService.getBasePriceAt(productId, T2.minusSeconds(1)).orElseThrow();
-        BasePriceView atCutover = basePriceService.getBasePriceAt(productId, T2).orElseThrow();
+        BasePriceView beforeCutover = basePriceService
+                .getBasePriceAt(productId, "USD", T2.minusSeconds(1))
+                .orElseThrow();
+        BasePriceView atCutover =
+                basePriceService.getBasePriceAt(productId, "USD", T2).orElseThrow();
 
         assertEquals(new BigDecimal("100.0000"), beforeCutover.msrp());
         assertEquals(new BigDecimal("120.0000"), atCutover.msrp());
-        assertTrue(
-                basePriceService.getBasePriceAt(productId, T1.minusSeconds(1)).isEmpty());
+        assertTrue(basePriceService
+                .getBasePriceAt(productId, "USD", T1.minusSeconds(1))
+                .isEmpty());
+    }
+
+    @Test
+    @DisplayName("windows are independent per currency and selected deterministically by currency")
+    void windowsAreIndependentPerCurrency() {
+        UUID productId = UUID.randomUUID();
+        basePriceService.saveBasePrice(productId, new BigDecimal("100.0000"), "USD", T1);
+        basePriceService.saveBasePrice(productId, new BigDecimal("130.0000"), "CAD", T1);
+
+        assertEquals(
+                new BigDecimal("100.0000"),
+                basePriceService
+                        .getBasePriceAt(productId, "USD", T2)
+                        .orElseThrow()
+                        .msrp());
+        assertEquals(
+                new BigDecimal("130.0000"),
+                basePriceService
+                        .getBasePriceAt(productId, "CAD", T2)
+                        .orElseThrow()
+                        .msrp());
+        assertTrue(basePriceService.getBasePriceAt(productId, "EUR", T2).isEmpty());
+    }
+
+    @Test
+    @DisplayName("currency is normalized on write and read: lowercase ingest stores and resolves uppercase")
+    void currencyNormalizedOnWriteAndRead() {
+        UUID productId = UUID.randomUUID();
+        UUID rowId = basePriceService.saveBasePrice(productId, new BigDecimal("100.0000"), "usd", T1);
+
+        BasePriceView stored =
+                basePriceService.getBasePriceAt(productId, "Usd", T2).orElseThrow();
+        assertEquals("USD", stored.currency());
+        assertEquals(rowId, stored.id());
+
+        UUID replayedRowId = basePriceService.saveBasePrice(productId, new BigDecimal("100.0000"), "USD", T1);
+        assertEquals(rowId, replayedRowId);
     }
 
     @Test

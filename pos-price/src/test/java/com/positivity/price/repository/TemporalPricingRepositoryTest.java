@@ -53,11 +53,11 @@ class TemporalPricingRepositoryTest {
         locationPriceOverrideRepository.saveAndFlush(future);
 
         LocationPriceOverride activeBeforeCutover = locationPriceOverrideRepository
-                .findActiveAt(productId, locationId, Instant.parse("2025-05-01T00:00:00Z"))
+                .findActiveAt(productId, locationId, "USD", Instant.parse("2025-05-01T00:00:00Z"))
                 .orElseThrow();
 
         LocationPriceOverride activeAfterCutover = locationPriceOverrideRepository
-                .findActiveAt(productId, locationId, Instant.parse("2025-06-15T00:00:00Z"))
+                .findActiveAt(productId, locationId, "USD", Instant.parse("2025-06-15T00:00:00Z"))
                 .orElseThrow();
 
         assertEquals(new BigDecimal("95.0000"), activeBeforeCutover.getOverridePrice());
