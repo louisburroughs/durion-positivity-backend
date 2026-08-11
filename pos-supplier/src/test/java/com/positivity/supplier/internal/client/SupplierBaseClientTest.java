@@ -531,6 +531,32 @@ class SupplierBaseClientTest {
                     .isInstanceOf(SupplierConfigurationException.class)
                     .hasFieldOrPropertyWithValue("code", SupplierConfigurationException.AUTH_TOKEN_RESPONSE_INVALID);
         }
+        /**
+         * A vendor can revoke an access token before its stated expiry. Without dropping the cache on
+         * a 401 the same dead token is re-sent until natural expiry -- potentially an hour of
+         * guaranteed failures -- and the invalidate() method existed with no caller at all.
+         */
+        @Test
+        void a401DropsTheCachedTokenSoTheNextCallMintsAFreshOne() {
+            server.respondOk("{\"access_token\":\"tok-1\",\"token_type\":\"Bearer\",\"expires_in\":3600}");
+            SupplierHttpRequest req = oauthRequest(server.baseUrl(), 0);
+            // First call mints and caches a token (the same stub answers both legs).
+            client.exchange(req);
+            int afterFirst = server.receivedRequests();
+
+            // Now the business endpoint rejects with 401.
+            server.respondStatus(401, "token revoked");
+            client.exchange(req);
+            int afterRejection = server.receivedRequests();
+
+            // A third call must go back to the token endpoint rather than reuse the dead token.
+            server.respondOk("{\"access_token\":\"tok-2\",\"token_type\":\"Bearer\",\"expires_in\":3600}");
+            client.exchange(req);
+
+            assertThat(server.receivedRequests())
+                    .as("after a 401 the cached token must be dropped, so the next call re-authenticates")
+                    .isGreaterThan(afterRejection + (afterRejection - afterFirst));
+        }
     }
 
     // ── Redirects mean our configuration is wrong ────────────────────────────────────

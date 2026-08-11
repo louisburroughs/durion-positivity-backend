@@ -307,17 +307,18 @@ public class SupplierBaseClient {
             // A response WAS received, so the body reached the vendor: 4xx is a definitive
             // rejection, 5xx is ambiguous (it acted on the request and then failed).
             int status = ex.getStatusCode().value();
-            ExchangeOutcome outcome;
-            if (ex.getStatusCode().is3xxRedirection()) {
-                // followRedirects(NEVER) means a 3xx surfaces here. It says OUR configuration is
-                // wrong -- this baseUrl is not where the API lives -- not that the vendor refused
-                // the document. Calling it a definitive rejection would report "vendor permanently
-                // refused this order" when the actionable truth is "fix this profile's baseUrl".
-                outcome = ExchangeOutcome.CONFIGURATION_ERROR;
-            } else if (ex.getStatusCode().is4xxClientError()) {
-                outcome = ExchangeOutcome.DEFINITIVE_REJECTION;
-            } else {
-                outcome = ExchangeOutcome.POST_SEND_AMBIGUOUS;
+            // 3xx cannot reach here: Spring's retrieve() raises only for 4xx/5xx, so redirects are
+            // classified on the success path above.
+            ExchangeOutcome outcome = ex.getStatusCode().is4xxClientError()
+                    ? ExchangeOutcome.DEFINITIVE_REJECTION
+                    : ExchangeOutcome.POST_SEND_AMBIGUOUS;
+            if (status == 401) {
+                // A cached OAuth2 access token can be revoked before its stated expiry. Without
+                // dropping it here the same dead token is re-sent until it expires naturally --
+                // potentially an hour of guaranteed 401s. Deliberately NOT retried in-call: a 401 is
+                // also what a genuinely wrong credential returns, and retrying that would hammer the
+                // vendor. Dropping the cache lets the NEXT call recover instead.
+                authStrategies.invalidateCachedCredential(binding.authConfig());
             }
             throw failed(recordAndBuild(
                     request,

@@ -72,6 +72,27 @@ public class SupplierAuthStrategies {
     }
 
     /**
+     * Discards any cached credential for an auth config, so the next exchange acquires a fresh one.
+     *
+     * <p>Called when a vendor answers 401: a cached OAuth2 access token can be revoked server-side
+     * before its stated expiry, and without this the same dead token would be re-sent until it
+     * expired naturally — up to an hour of guaranteed failures. A no-op for auth types that hold no
+     * cache, which is every type except OAuth2.
+     *
+     * @param authConfig the auth config whose cached credential should be dropped
+     */
+    public void invalidateCachedCredential(@NonNull SupplierAuthConfigEntity authConfig) {
+        Objects.requireNonNull(authConfig, "authConfig must not be null");
+        if (authConfig.getType() != SupplierAuthType.OAUTH2_CLIENT_CREDENTIALS || authConfig.getId() == null) {
+            return;
+        }
+        if (strategiesByType.get(SupplierAuthType.OAUTH2_CLIENT_CREDENTIALS)
+                instanceof OAuth2ClientCredentialsAuthStrategy oauth) {
+            oauth.invalidate(authConfig.getId());
+        }
+    }
+
+    /**
      * The strategy for a type, for targeted use such as OAuth2 token invalidation.
      *
      * @param type the auth type

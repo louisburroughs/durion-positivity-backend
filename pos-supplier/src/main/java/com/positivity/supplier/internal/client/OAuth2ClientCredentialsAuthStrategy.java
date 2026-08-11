@@ -89,7 +89,13 @@ public class OAuth2ClientCredentialsAuthStrategy implements SupplierAuthStrategy
         headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken(authConfig));
     }
 
-    /** Drops any cached token for an auth config — used when a vendor rejects it as invalid. */
+    /**
+     * Drops any cached token for an auth config.
+     *
+     * <p>Called by {@code SupplierBaseClient} when a vendor answers 401, through
+     * {@link SupplierAuthStrategies#invalidateCachedCredential}, so a token revoked before its stated
+     * expiry is not re-sent until it expires naturally.
+     */
     public void invalidate(@NonNull UUID authConfigId) {
         tokensByAuthConfigId.remove(Objects.requireNonNull(authConfigId, "authConfigId"));
     }
