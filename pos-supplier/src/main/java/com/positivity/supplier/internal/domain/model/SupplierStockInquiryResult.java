@@ -22,7 +22,9 @@ import org.jspecify.annotations.Nullable;
  * @param asOf vendor-stated snapshot instant; present when status is {@link Status#OK}
  */
 public record SupplierStockInquiryResult(
-        @NonNull Status status, @NonNull List<Line> lines, @Nullable Instant asOf) {
+        @NonNull Status status,
+        @NonNull List<Line> lines,
+        @Nullable Instant asOf) {
 
     public enum Status {
         /** The vendor answered the inquiry. */

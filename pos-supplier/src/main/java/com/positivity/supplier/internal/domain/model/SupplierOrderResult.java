@@ -16,7 +16,9 @@ import org.jspecify.annotations.Nullable;
  * @param vendorReason vendor-supplied rejection reason, verbatim
  */
 public record SupplierOrderResult(
-        @NonNull Status status, @Nullable String supplierOrderNumber, @Nullable String vendorReason) {
+        @NonNull Status status,
+        @Nullable String supplierOrderNumber,
+        @Nullable String vendorReason) {
 
     public enum Status {
         CONFIRMED,

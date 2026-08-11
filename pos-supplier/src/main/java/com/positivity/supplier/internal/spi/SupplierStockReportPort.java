@@ -21,6 +21,7 @@ import org.jspecify.annotations.NonNull;
 public interface SupplierStockReportPort {
 
     /** Fetches the vendor's current stock snapshot for the profile's market. */
-    @NonNull SupplierExchange<SupplierStockInquiryResult> fetchStockSnapshot(
+    @NonNull
+    SupplierExchange<SupplierStockInquiryResult> fetchStockSnapshot(
             @NonNull SupplierRef supplierRef, @NonNull PartyContext partyContext);
 }

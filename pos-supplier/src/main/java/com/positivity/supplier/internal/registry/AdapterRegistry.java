@@ -62,7 +62,8 @@ public class AdapterRegistry {
      *     {@link AdapterResolution.NotConfigured} otherwise — never {@code null}, never an
      *     exception for the unbound case
      */
-    @NonNull public AdapterResolution resolve(
+    @NonNull
+    public AdapterResolution resolve(
             @NonNull SupplierCapability capability, @NonNull ProtocolFamily family, @NonNull ProtocolVersion version) {
         Objects.requireNonNull(capability, "capability must not be null");
         Objects.requireNonNull(family, "family must not be null");

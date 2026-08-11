@@ -26,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+
 /**
  * Typed-failure matrix of {@link SupplierProfileResolver} (ADR-0050 §3/§5): every
  * configuration gap fails with a {@link SupplierConfigurationException} carrying the

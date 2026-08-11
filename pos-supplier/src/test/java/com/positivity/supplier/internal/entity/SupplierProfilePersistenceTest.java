@@ -76,12 +76,12 @@ class SupplierProfilePersistenceTest {
         assertThat(profile.getUpdatedBy()).isEqualTo("system");
         assertThat(profile.getVersion()).isZero();
 
-        SupplierAuthConfigEntity auth = authConfigRepository.saveAndFlush(
-                basicAuth(profile.getVendorProfileId(), "ediwheel-basic"));
+        SupplierAuthConfigEntity auth =
+                authConfigRepository.saveAndFlush(basicAuth(profile.getVendorProfileId(), "ediwheel-basic"));
         SupplierAccountEntity billing =
                 accountRepository.saveAndFlush(billingAccount(profile.getVendorProfileId(), "0000012345"));
-        SupplierAccountEntity delivery = accountRepository.saveAndFlush(
-                deliveryAccount(profile.getVendorProfileId(), LOCATION_A, "0000067890"));
+        SupplierAccountEntity delivery =
+                accountRepository.saveAndFlush(deliveryAccount(profile.getVendorProfileId(), LOCATION_A, "0000067890"));
         SupplierEndpointBindingEntity binding = bindingRepository.saveAndFlush(
                 binding(profile.getVendorProfileId(), SupplierCapability.STOCK_INQUIRY, "ediwheel-basic"));
 
@@ -198,5 +198,4 @@ class SupplierProfilePersistenceTest {
                         binding(profile.getVendorProfileId(), SupplierCapability.STOCK_INQUIRY, "ediwheel-basic")))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
-
 }

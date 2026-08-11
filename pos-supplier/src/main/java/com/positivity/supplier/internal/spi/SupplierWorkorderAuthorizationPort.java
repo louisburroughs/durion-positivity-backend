@@ -19,6 +19,7 @@ import org.jspecify.annotations.NonNull;
 public interface SupplierWorkorderAuthorizationPort {
 
     /** Requests authorization for the given workorder from the vendor's fleet program. */
-    @NonNull SupplierExchange<SupplierWorkorderAuthorization> requestAuthorization(
+    @NonNull
+    SupplierExchange<SupplierWorkorderAuthorization> requestAuthorization(
             @NonNull SupplierRef supplierRef, @NonNull PartyContext partyContext, @NonNull UUID workorderId);
 }

@@ -26,8 +26,9 @@ class AdapterRegistryTest {
                 registry.resolve(SupplierCapability.STOCK_INQUIRY, ProtocolFamily.TEST, TestFamilyCodec.TEST_V1);
 
         assertThat(resolution)
-                .isInstanceOfSatisfying(AdapterResolution.Resolved.class, resolved -> assertThat(resolved.codec())
-                        .isSameAs(codec));
+                .isInstanceOfSatisfying(
+                        AdapterResolution.Resolved.class,
+                        resolved -> assertThat(resolved.codec()).isSameAs(codec));
         assertThat(registry.size()).isEqualTo(1);
     }
 
@@ -59,8 +60,9 @@ class AdapterRegistryTest {
                 registry.resolve(SupplierCapability.ORDER_STATUS, ProtocolFamily.TEST, new ProtocolVersion("TEST_2"));
 
         assertThat(resolvedV2)
-                .isInstanceOfSatisfying(AdapterResolution.Resolved.class, resolved -> assertThat(resolved.codec())
-                        .isSameAs(v2));
+                .isInstanceOfSatisfying(
+                        AdapterResolution.Resolved.class,
+                        resolved -> assertThat(resolved.codec()).isSameAs(v2));
     }
 
     @Test

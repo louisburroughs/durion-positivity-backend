@@ -33,7 +33,8 @@ public record StockInquiryRequest(
      * @param supplierArticleCode vendor's own article code, when known
      * @param requestedQuantity quantity whose availability is being checked; {@code >= 1}
      */
-    public record Line(@Nullable String articleEan, @Nullable String supplierArticleCode, int requestedQuantity) {
+    public record Line(
+            @Nullable String articleEan, @Nullable String supplierArticleCode, int requestedQuantity) {
 
         public Line {
             if (requestedQuantity < 1) {

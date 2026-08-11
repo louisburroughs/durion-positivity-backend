@@ -17,6 +17,7 @@ import org.jspecify.annotations.NonNull;
 public interface SupplierShipmentTrackingPort {
 
     /** Fetches the tracking events the vendor has recorded for the given order reference. */
-    @NonNull SupplierExchange<List<SupplierShipmentEvent>> fetchTrackingEvents(
+    @NonNull
+    SupplierExchange<List<SupplierShipmentEvent>> fetchTrackingEvents(
             @NonNull SupplierRef supplierRef, @NonNull PartyContext partyContext, @NonNull String orderReference);
 }

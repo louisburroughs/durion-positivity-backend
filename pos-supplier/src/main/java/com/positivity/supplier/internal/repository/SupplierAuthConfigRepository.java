@@ -14,7 +14,8 @@ public interface SupplierAuthConfigRepository extends JpaRepository<SupplierAuth
 
     /** Name lookup within a profile — {@code name} is unique per profile (ADR-0050 §4). */
     @NonNull
-    Optional<SupplierAuthConfigEntity> findByVendorProfileIdAndName(@NonNull UUID vendorProfileId, @NonNull String name);
+    Optional<SupplierAuthConfigEntity> findByVendorProfileIdAndName(
+            @NonNull UUID vendorProfileId, @NonNull String name);
 
     /** Child lookup scoped to its owning profile (a foreign profile's child is not-found). */
     @NonNull

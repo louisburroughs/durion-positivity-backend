@@ -62,7 +62,8 @@ public record SupplierProfileProperties(@Nullable List<ProfileSpec> profiles) {
      * @param maxAttempts pre-send retry budget
      * @param backoff backoff strategy key ({@code FIXED}/{@code EXPONENTIAL})
      */
-    public record Retry(@Nullable Integer maxAttempts, @Nullable String backoff) {}
+    public record Retry(
+            @Nullable Integer maxAttempts, @Nullable String backoff) {}
 
     /**
      * Commercial accounts (§7 {@code accounts}). {@code sellerPartyId}/{@code sellerAgencyCode}
@@ -86,7 +87,8 @@ public record SupplierProfileProperties(@Nullable List<ProfileSpec> profiles) {
      * @param accountNumber vendor billing account number
      * @param agencyCode identification agency code (e.g. EAN/GLN)
      */
-    public record Billing(@Nullable String accountNumber, @Nullable String agencyCode) {}
+    public record Billing(
+            @Nullable String accountNumber, @Nullable String agencyCode) {}
 
     /**
      * Delivery account mapping (§7 {@code accounts.delivery[]}).
@@ -95,7 +97,10 @@ public record SupplierProfileProperties(@Nullable List<ProfileSpec> profiles) {
      * @param accountNumber vendor delivery account number
      * @param agencyCode identification agency code
      */
-    public record Delivery(@Nullable UUID locationId, @Nullable String accountNumber, @Nullable String agencyCode) {}
+    public record Delivery(
+            @Nullable UUID locationId,
+            @Nullable String accountNumber,
+            @Nullable String agencyCode) {}
 
     /**
      * Auth config spec (§7 {@code auth[]}) — secret references only, never plaintext.
@@ -154,5 +159,6 @@ public record SupplierProfileProperties(@Nullable List<ProfileSpec> profiles) {
      * @param enabled whether the profile runs against the vendor's sandbox environment
      * @param baseUrlOverride sandbox base URL override
      */
-    public record Sandbox(@Nullable Boolean enabled, @Nullable String baseUrlOverride) {}
+    public record Sandbox(
+            @Nullable Boolean enabled, @Nullable String baseUrlOverride) {}
 }

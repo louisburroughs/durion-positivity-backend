@@ -63,8 +63,8 @@ class PosSupplierApplicationSmokeTest {
         // ADR-0044 §4 / platform processed_events convention (pos-people-contact V3,
         // pos-catalog V5): event_id varchar(36) PK, owner varchar(64), processed_at
         // timestamptz — all NOT NULL — plus the (owner, event_id) lookup index.
-        List<Map<String, Object>> columns = jdbcTemplate.queryForList(
-                "SELECT column_name, data_type, character_maximum_length, is_nullable"
+        List<Map<String, Object>> columns =
+                jdbcTemplate.queryForList("SELECT column_name, data_type, character_maximum_length, is_nullable"
                         + " FROM information_schema.columns WHERE table_name = 'PROCESSED_EVENTS'"
                         + " ORDER BY ordinal_position");
 
@@ -98,8 +98,8 @@ class PosSupplierApplicationSmokeTest {
 
     @Test
     void registryCollectsSpringRegisteredCodecBeans() {
-        AdapterResolution resolution = adapterRegistry.resolve(
-                SupplierCapability.STOCK_INQUIRY, ProtocolFamily.TEST, TestFamilyCodec.TEST_V1);
+        AdapterResolution resolution =
+                adapterRegistry.resolve(SupplierCapability.STOCK_INQUIRY, ProtocolFamily.TEST, TestFamilyCodec.TEST_V1);
 
         assertThat(resolution).isInstanceOf(AdapterResolution.Resolved.class);
     }

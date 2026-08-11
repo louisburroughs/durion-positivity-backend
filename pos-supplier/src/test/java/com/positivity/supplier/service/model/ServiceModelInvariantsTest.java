@@ -53,8 +53,8 @@ class ServiceModelInvariantsTest {
 
         @Test
         void rejectsBlankAccountNumber() {
-            assertThatThrownBy(() -> new CommercialAccountRequest(
-                            SupplierAccountRole.DELIVERY, " ", null, UUID.randomUUID()))
+            assertThatThrownBy(() ->
+                            new CommercialAccountRequest(SupplierAccountRole.DELIVERY, " ", null, UUID.randomUUID()))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("accountNumber");
         }
@@ -68,8 +68,8 @@ class ServiceModelInvariantsTest {
 
         @Test
         void rejectsEmptyLines() {
-            assertThatThrownBy(() -> new StockInquiryRequest(
-                            UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), List.of()))
+            assertThatThrownBy(() ->
+                            new StockInquiryRequest(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), List.of()))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("lines must not be empty");
         }
@@ -77,12 +77,12 @@ class ServiceModelInvariantsTest {
         @Test
         void rejectsNullIdentityFields() {
             assertThatNullPointerException()
-                    .isThrownBy(() -> new StockInquiryRequest(
-                            null, UUID.randomUUID(), UUID.randomUUID(), List.of(VALID_LINE)))
+                    .isThrownBy(() ->
+                            new StockInquiryRequest(null, UUID.randomUUID(), UUID.randomUUID(), List.of(VALID_LINE)))
                     .withMessageContaining("inquiryId");
             assertThatNullPointerException()
-                    .isThrownBy(() -> new StockInquiryRequest(
-                            UUID.randomUUID(), UUID.randomUUID(), null, List.of(VALID_LINE)))
+                    .isThrownBy(() ->
+                            new StockInquiryRequest(UUID.randomUUID(), UUID.randomUUID(), null, List.of(VALID_LINE)))
                     .withMessageContaining("deliveryLocationId");
         }
 
@@ -123,8 +123,7 @@ class ServiceModelInvariantsTest {
             // Degradation contract of the single approved synchronous supplier read
             // (ADR-0049 §4): "vendor did not state" must remain distinguishable from
             // "vendor stated zero".
-            StockInquiryResponse.Line unstated =
-                    new StockInquiryResponse.Line("4019238001234", null, null, null, null);
+            StockInquiryResponse.Line unstated = new StockInquiryResponse.Line("4019238001234", null, null, null, null);
 
             assertThat(unstated.availableQuantity()).isNull();
             assertThat(unstated.quotedUnitPrice()).isNull();
@@ -182,8 +181,15 @@ class ServiceModelInvariantsTest {
         @Test
         void rejectsBlankKeysNamingTheOffendingField() {
             assertThatThrownBy(() -> new EndpointBindingRequest(
-                            "STOCK_INQUIRY", "EDIWHEEL_A25", " ", "https://vendor", "/stock", "basic-main",
-                            null, true, null))
+                            "STOCK_INQUIRY",
+                            "EDIWHEEL_A25",
+                            " ",
+                            "https://vendor",
+                            "/stock",
+                            "basic-main",
+                            null,
+                            true,
+                            null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("version must not be blank");
         }

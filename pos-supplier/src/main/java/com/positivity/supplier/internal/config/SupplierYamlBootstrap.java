@@ -88,9 +88,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
      */
     @Transactional
     public void reconcile(@Nullable SupplierProfileProperties configuration) {
-        List<ProfileSpec> specs = configuration == null || configuration.profiles() == null
-                ? List.of()
-                : configuration.profiles();
+        List<ProfileSpec> specs =
+                configuration == null || configuration.profiles() == null ? List.of() : configuration.profiles();
         validate(specs);
         AuditActorContext.withActor(BOOTSTRAP_ACTOR, () -> {
             Set<String> yamlKeys = new HashSet<>();
@@ -110,9 +109,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     // ── Reconciliation ──────────────────────────────────────────────────────────────
 
     private void reconcileProfile(@NonNull ProfileSpec spec) {
-        SupplierProfileEntity profile = profileRepository
-                .findBySupplierRef(spec.key())
-                .orElseGet(SupplierProfileEntity::new);
+        SupplierProfileEntity profile =
+                profileRepository.findBySupplierRef(spec.key()).orElseGet(SupplierProfileEntity::new);
         if (profile.getVendorProfileId() != null && profile.getSourceOfTruth() == ProfileSourceOfTruth.ADMIN) {
             throw invalid("YAML profile '" + spec.key() + "' collides with an existing ADMIN-managed profile"
                     + " of the same supplierRef; remove one configuration source (ADR-0050 §6)");
@@ -121,7 +119,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
         profile.setDisplayName(spec.displayName());
         profile.setEnabled(spec.enabled() == null || spec.enabled());
         profile.setSourceOfTruth(ProfileSourceOfTruth.YAML);
-        profile.setSandbox(spec.sandbox() != null && Boolean.TRUE.equals(spec.sandbox().enabled()));
+        profile.setSandbox(
+                spec.sandbox() != null && Boolean.TRUE.equals(spec.sandbox().enabled()));
         profile.setSandboxBaseUrlOverride(
                 spec.sandbox() == null ? null : spec.sandbox().baseUrlOverride());
         if (spec.protocolDefaults() != null) {
@@ -228,7 +227,9 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             entity.setScheduleCron(bindingSpec.schedule());
             entity.setEnabled(bindingSpec.enabled() == null || bindingSpec.enabled());
             entity.setCaptureLevel(
-                    bindingSpec.captureLevel() == null ? null : PayloadCaptureLevel.valueOf(bindingSpec.captureLevel()));
+                    bindingSpec.captureLevel() == null
+                            ? null
+                            : PayloadCaptureLevel.valueOf(bindingSpec.captureLevel()));
             bindingRepository.save(entity);
         }
         bindingRepository.deleteAll(existing.values());
@@ -331,7 +332,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             return;
         }
         var billing = spec.accounts().billing();
-        if (billing != null && (billing.accountNumber() == null || billing.accountNumber().isBlank())) {
+        if (billing != null
+                && (billing.accountNumber() == null || billing.accountNumber().isBlank())) {
             throw invalid("profile '" + spec.key() + "': accounts.billing.accountNumber must not be blank");
         }
         Set<UUID> locations = new HashSet<>();

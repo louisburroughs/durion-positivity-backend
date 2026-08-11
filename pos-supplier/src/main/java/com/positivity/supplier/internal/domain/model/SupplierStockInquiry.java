@@ -16,7 +16,8 @@ import org.jspecify.annotations.Nullable;
  * @param inquiryId caller-minted correlation identity for this inquiry
  * @param lines articles to inquire about; never empty
  */
-public record SupplierStockInquiry(@NonNull UUID inquiryId, @NonNull List<Line> lines) {
+public record SupplierStockInquiry(
+        @NonNull UUID inquiryId, @NonNull List<Line> lines) {
 
     /**
      * One inquired article. At least one product identity (EAN or supplier article code) is
@@ -26,7 +27,8 @@ public record SupplierStockInquiry(@NonNull UUID inquiryId, @NonNull List<Line> 
      * @param supplierArticleCode vendor's own article code, when known
      * @param requestedQuantity quantity whose availability is being checked; {@code >= 1}
      */
-    public record Line(@Nullable String articleEan, @Nullable String supplierArticleCode, int requestedQuantity) {
+    public record Line(
+            @Nullable String articleEan, @Nullable String supplierArticleCode, int requestedQuantity) {
 
         public Line {
             if (requestedQuantity < 1) {

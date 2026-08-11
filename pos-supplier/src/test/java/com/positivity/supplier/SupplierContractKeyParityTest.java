@@ -42,8 +42,7 @@ class SupplierContractKeyParityTest {
 
     @Test
     void capabilityEnumNamesMatchTheContractKeySetExactly() {
-        Set<String> enumNames = Arrays.stream(
-                        com.positivity.supplier.internal.domain.model.SupplierCapability.values())
+        Set<String> enumNames = Arrays.stream(com.positivity.supplier.internal.domain.model.SupplierCapability.values())
                 .map(Enum::name)
                 .collect(Collectors.toSet());
 

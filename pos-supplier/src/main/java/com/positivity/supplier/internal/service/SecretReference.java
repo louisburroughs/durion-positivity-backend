@@ -13,7 +13,8 @@ import org.jspecify.annotations.NonNull;
  * @param scheme the resolution scheme (e.g. {@code env}); never blank
  * @param key the scheme-local key; never blank
  */
-public record SecretReference(@NonNull String scheme, @NonNull String key) {
+public record SecretReference(
+        @NonNull String scheme, @NonNull String key) {
 
     private static final Pattern SCHEME_PATTERN = Pattern.compile("[a-zA-Z][a-zA-Z0-9+.-]*");
 

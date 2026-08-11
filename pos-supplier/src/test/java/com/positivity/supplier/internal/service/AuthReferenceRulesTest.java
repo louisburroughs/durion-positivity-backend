@@ -118,10 +118,21 @@ class AuthReferenceRulesTest {
 
     private static AuthConfigRequest valid(SupplierAuthType type) {
         return switch (type) {
-            case BASIC_PLUS_APIKEY -> new AuthConfigRequest(
-                    "auth", type, "env:USER", "env:PASSWORD", "env:APIKEY", "apikey", null, null, null, null);
-            case OAUTH2_CLIENT_CREDENTIALS -> new AuthConfigRequest(
-                    "auth", type, null, null, null, null, "env:TOKEN_URL", "env:CLIENT_ID", "env:CLIENT_SECRET", null);
+            case BASIC_PLUS_APIKEY ->
+                new AuthConfigRequest(
+                        "auth", type, "env:USER", "env:PASSWORD", "env:APIKEY", "apikey", null, null, null, null);
+            case OAUTH2_CLIENT_CREDENTIALS ->
+                new AuthConfigRequest(
+                        "auth",
+                        type,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "env:TOKEN_URL",
+                        "env:CLIENT_ID",
+                        "env:CLIENT_SECRET",
+                        null);
             case BEARER -> new AuthConfigRequest("auth", type, null, null, null, null, null, null, null, "env:BEARER");
         };
     }

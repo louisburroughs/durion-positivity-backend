@@ -22,6 +22,7 @@ public interface SupplierOrderStatusPort {
      * ({@code DocumentID}/{@code CustomerReference}, derived from the transmission intent per
      * ADR-0052 §1).
      */
-    @NonNull SupplierExchange<SupplierOrderStatusResult> queryOrderStatus(
+    @NonNull
+    SupplierExchange<SupplierOrderStatusResult> queryOrderStatus(
             @NonNull SupplierRef supplierRef, @NonNull PartyContext partyContext, @NonNull String documentId);
 }

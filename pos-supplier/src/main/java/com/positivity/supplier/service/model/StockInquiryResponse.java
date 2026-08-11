@@ -23,7 +23,10 @@ import org.jspecify.annotations.Nullable;
  * @param asOf vendor-stated snapshot instant; present when status is {@link Status#OK}
  */
 public record StockInquiryResponse(
-        @NonNull UUID inquiryId, @NonNull Status status, @NonNull List<Line> lines, @Nullable Instant asOf) {
+        @NonNull UUID inquiryId,
+        @NonNull Status status,
+        @NonNull List<Line> lines,
+        @Nullable Instant asOf) {
 
     /** Typed inquiry outcomes; the non-OK cases map ADR-0050 §3/§5 without leaking errors. */
     public enum Status {

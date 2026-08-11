@@ -24,6 +24,7 @@ public interface SupplierOrderPort {
      * definitive decision. Ambiguous outcomes (timeout after send) surface as exceptions for
      * the orchestrator's reconciliation flow (ADR-0052 §3), never as a fabricated result.
      */
-    @NonNull SupplierExchange<SupplierOrderResult> createOrder(
+    @NonNull
+    SupplierExchange<SupplierOrderResult> createOrder(
             @NonNull SupplierRef supplierRef, @NonNull PartyContext partyContext, @NonNull SupplierPurchaseOrder order);
 }

@@ -76,8 +76,8 @@ public class SupplierProfileResolver {
                 .findByVendorProfileIdAndCapability(profile.getVendorProfileId(), capability)
                 .orElseThrow(() -> new SupplierConfigurationException(
                         SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
-                        "Capability " + capability + " has no endpoint binding for supplier '"
-                                + supplierRef.value() + "'"));
+                        "Capability " + capability + " has no endpoint binding for supplier '" + supplierRef.value()
+                                + "'"));
         if (!binding.isEnabled()) {
             throw new SupplierConfigurationException(
                     SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
@@ -116,13 +116,14 @@ public class SupplierProfileResolver {
     public ResolvedPartyAccounts resolvePartyContext(
             @NonNull SupplierRef supplierRef, @Nullable UUID deliveryLocationId) {
         SupplierProfileEntity profile = requireEnabledProfile(supplierRef);
-        SupplierAccountEntity billing = accountRepository
-                .findByVendorProfileIdAndRole(profile.getVendorProfileId(), SupplierAccountRole.BILLING)
-                .stream()
-                .findFirst()
-                .orElseThrow(() -> new SupplierConfigurationException(
-                        SupplierConfigurationException.MISSING_BILLING_ACCOUNT,
-                        "Supplier '" + supplierRef.value() + "' has no billing account configured"));
+        SupplierAccountEntity billing =
+                accountRepository
+                        .findByVendorProfileIdAndRole(profile.getVendorProfileId(), SupplierAccountRole.BILLING)
+                        .stream()
+                        .findFirst()
+                        .orElseThrow(() -> new SupplierConfigurationException(
+                                SupplierConfigurationException.MISSING_BILLING_ACCOUNT,
+                                "Supplier '" + supplierRef.value() + "' has no billing account configured"));
         SupplierAccountEntity delivery = null;
         if (deliveryLocationId != null) {
             delivery = accountRepository
@@ -169,5 +170,6 @@ public class SupplierProfileResolver {
      * present exactly when a delivery location was requested.
      */
     public record ResolvedPartyAccounts(
-            @NonNull SupplierAccountEntity billing, @Nullable SupplierAccountEntity delivery) {}
+            @NonNull SupplierAccountEntity billing,
+            @Nullable SupplierAccountEntity delivery) {}
 }

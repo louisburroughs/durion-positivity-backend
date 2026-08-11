@@ -12,7 +12,8 @@ import org.jspecify.annotations.NonNull;
  * @param payload the canonical result
  * @param metadata the exchange metadata (audit reference, correlation, norm, unmapped fields)
  */
-public record SupplierExchange<T>(@NonNull T payload, @NonNull ExchangeMetadata metadata) {
+public record SupplierExchange<T>(
+        @NonNull T payload, @NonNull ExchangeMetadata metadata) {
 
     public SupplierExchange {
         Objects.requireNonNull(payload, "payload must not be null");

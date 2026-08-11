@@ -121,8 +121,9 @@ class SupplierProfileAdminServiceImplTest {
      */
     @Test
     void interactiveWritesStampTheSecurityContextActorNotSystem() {
-        var authentication = org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-                .authenticated("admin.jane", "n/a", List.of());
+        var authentication =
+                org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(
+                        "admin.jane", "n/a", List.of());
         authentication.setDetails(java.util.Map.of("username", "admin.jane"));
         org.springframework.security.core.context.SecurityContextHolder.getContext()
                 .setAuthentication(authentication);
@@ -130,7 +131,8 @@ class SupplierProfileAdminServiceImplTest {
             UUID profileId =
                     adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
             adminService.updateProfile(
-                    profileId, new VendorProfileRequest("michelin-eu", "Michelin EU (v2)", true, false, null, null, null));
+                    profileId,
+                    new VendorProfileRequest("michelin-eu", "Michelin EU (v2)", true, false, null, null, null));
             profileRepository.flush();
 
             SupplierProfileEntity profile =
@@ -170,7 +172,8 @@ class SupplierProfileAdminServiceImplTest {
 
     @Test
     void authRefCompletenessIsEnforcedPerType() {
-        UUID profileId = adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
+        UUID profileId =
+                adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
 
         // BASIC_PLUS_APIKEY without apiKeyRef.
         assertValidationFailure(
@@ -219,27 +222,45 @@ class SupplierProfileAdminServiceImplTest {
                 () -> adminService.createAuthConfig(
                         profileId,
                         new AuthConfigRequest(
-                                "bearer", SupplierAuthType.BEARER, "env:U", null, null, null, null, null, null,
+                                "bearer",
+                                SupplierAuthType.BEARER,
+                                "env:U",
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
                                 "env:B")),
                 SupplierValidationException.AUTH_REFS_INCOMPLETE);
     }
 
     @Test
     void plaintextLookingSecretValueIsRejected() {
-        UUID profileId = adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
+        UUID profileId =
+                adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
 
         assertValidationFailure(
                 () -> adminService.createAuthConfig(
                         profileId,
                         new AuthConfigRequest(
-                                "bearer", SupplierAuthType.BEARER, null, null, null, null, null, null, null,
+                                "bearer",
+                                SupplierAuthType.BEARER,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
                                 "hunter2")),
                 SupplierValidationException.SECRET_REF_MALFORMED);
     }
 
     @Test
     void authViewsCarryNoReferenceValuesAndPersistRefsWriteOnly() {
-        UUID profileId = adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
+        UUID profileId =
+                adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
 
         AuthConfigView view = adminService.createAuthConfig(profileId, bearerAuthRequest("s2s-bearer"));
 
@@ -257,7 +278,8 @@ class SupplierProfileAdminServiceImplTest {
 
     @Test
     void apiKeyHeaderRoundTripsAsPlainConfigDataWhileRefsStayWriteOnly() {
-        UUID profileId = adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
+        UUID profileId =
+                adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
 
         AuthConfigView view = adminService.createAuthConfig(
                 profileId,
@@ -287,7 +309,8 @@ class SupplierProfileAdminServiceImplTest {
 
     @Test
     void duplicateAuthNameConflictsAndDeleteWhileReferencedIsRejected() {
-        UUID profileId = adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
+        UUID profileId =
+                adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
         AuthConfigView auth = adminService.createAuthConfig(profileId, bearerAuthRequest("s2s-bearer"));
 
         assertConflict(
@@ -307,8 +330,7 @@ class SupplierProfileAdminServiceImplTest {
                 SupplierConflictException.AUTH_CONFIG_IN_USE);
 
         // After the binding goes away, delete succeeds.
-        EndpointBindingView binding =
-                adminService.listBindings(profileId).getFirst();
+        EndpointBindingView binding = adminService.listBindings(profileId).getFirst();
         adminService.deleteBinding(profileId, binding.bindingId());
         adminService.deleteAuthConfig(profileId, auth.authConfigId());
         assertThat(adminService.listAuthConfigs(profileId)).isEmpty();
@@ -318,11 +340,11 @@ class SupplierProfileAdminServiceImplTest {
 
     @Test
     void accountSlotsAreEnforcedAndListedBillingFirst() {
-        UUID profileId = adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
+        UUID profileId =
+                adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
         CommercialAccountView billing = adminService.createAccount(profileId, billingRequest());
         adminService.createAccount(
-                profileId,
-                new CommercialAccountRequest(SupplierAccountRole.DELIVERY, "0000067890", "31", LOCATION_A));
+                profileId, new CommercialAccountRequest(SupplierAccountRole.DELIVERY, "0000067890", "31", LOCATION_A));
 
         assertConflict(
                 () -> adminService.createAccount(profileId, billingRequest()),
@@ -350,7 +372,8 @@ class SupplierProfileAdminServiceImplTest {
 
     @Test
     void bindingValidatesCanonicalKeysAuthNameAndSchedule() {
-        UUID profileId = adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
+        UUID profileId =
+                adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
         adminService.createAuthConfig(profileId, bearerAuthRequest("s2s-bearer"));
 
         assertValidationFailure(
@@ -405,7 +428,8 @@ class SupplierProfileAdminServiceImplTest {
 
     @Test
     void oneBindingPerCapabilityAndFullRoundTrip() {
-        UUID profileId = adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
+        UUID profileId =
+                adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
         adminService.createAuthConfig(profileId, bearerAuthRequest("s2s-bearer"));
 
         EndpointBindingView created = adminService.createBinding(

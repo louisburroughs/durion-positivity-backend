@@ -18,6 +18,9 @@ import org.jspecify.annotations.NonNull;
 public interface SupplierStockInquiryPort {
 
     /** Inquires availability (and optional quote) for the given articles. */
-    @NonNull SupplierExchange<SupplierStockInquiryResult> inquireAvailability(
-            @NonNull SupplierRef supplierRef, @NonNull PartyContext partyContext, @NonNull SupplierStockInquiry inquiry);
+    @NonNull
+    SupplierExchange<SupplierStockInquiryResult> inquireAvailability(
+            @NonNull SupplierRef supplierRef,
+            @NonNull PartyContext partyContext,
+            @NonNull SupplierStockInquiry inquiry);
 }

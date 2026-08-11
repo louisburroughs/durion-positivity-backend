@@ -13,7 +13,8 @@ import org.jspecify.annotations.NonNull;
  * @param fetchedAt when the fetch completed
  * @param articleCount number of catalog articles in the snapshot; {@code >= 0}
  */
-public record MarketingCatalogSnapshot(@NonNull UUID vendorProfileId, @NonNull Instant fetchedAt, int articleCount) {
+public record MarketingCatalogSnapshot(
+        @NonNull UUID vendorProfileId, @NonNull Instant fetchedAt, int articleCount) {
 
     public MarketingCatalogSnapshot {
         Objects.requireNonNull(vendorProfileId, "vendorProfileId must not be null");

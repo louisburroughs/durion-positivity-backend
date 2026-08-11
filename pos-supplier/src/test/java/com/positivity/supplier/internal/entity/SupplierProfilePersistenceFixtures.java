@@ -7,6 +7,7 @@ import com.positivity.supplier.internal.enums.RetryBackoff;
 import com.positivity.supplier.internal.enums.SupplierAccountRole;
 import com.positivity.supplier.internal.enums.SupplierAuthType;
 import java.util.UUID;
+
 /** Shared entity fixtures for the ADR-0050 vendor profile persistence/service tests. */
 public final class SupplierProfilePersistenceFixtures {
 

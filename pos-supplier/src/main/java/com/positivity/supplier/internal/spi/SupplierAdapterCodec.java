@@ -19,11 +19,14 @@ import org.jspecify.annotations.NonNull;
 public interface SupplierAdapterCodec {
 
     /** The business capability this codec realizes. */
-    @NonNull SupplierCapability capability();
+    @NonNull
+    SupplierCapability capability();
 
     /** The wire-format family this codec belongs to (one adapter package per family, ADR-0051 §2). */
-    @NonNull ProtocolFamily family();
+    @NonNull
+    ProtocolFamily family();
 
     /** The norm version this codec speaks. */
-    @NonNull ProtocolVersion version();
+    @NonNull
+    ProtocolVersion version();
 }

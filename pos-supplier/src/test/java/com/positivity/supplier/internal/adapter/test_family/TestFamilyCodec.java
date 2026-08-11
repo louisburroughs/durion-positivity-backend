@@ -33,17 +33,20 @@ public final class TestFamilyCodec implements SupplierAdapterCodec {
     }
 
     @Override
-    @NonNull public SupplierCapability capability() {
+    @NonNull
+    public SupplierCapability capability() {
         return capability;
     }
 
     @Override
-    @NonNull public ProtocolFamily family() {
+    @NonNull
+    public ProtocolFamily family() {
         return family;
     }
 
     @Override
-    @NonNull public ProtocolVersion version() {
+    @NonNull
+    public ProtocolVersion version() {
         return version;
     }
 }

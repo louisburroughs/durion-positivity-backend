@@ -49,7 +49,10 @@ public record SupplierPurchaseOrder(
      * @param quantity ordered quantity; {@code >= 1}
      */
     public record Line(
-            int lineNumber, @Nullable String articleEan, @Nullable String supplierArticleCode, int quantity) {
+            int lineNumber,
+            @Nullable String articleEan,
+            @Nullable String supplierArticleCode,
+            int quantity) {
 
         public Line {
             if (lineNumber < 1) {

@@ -295,8 +295,7 @@ class SupplierAdminControllersWebMvcTest {
         @Test
         void missingCorrelationHeaderGetsAGeneratedIdEchoedInHeaderAndBody() throws Exception {
             when(adminService.getProfile(PROFILE_ID))
-                    .thenThrow(new SupplierNotFoundException(
-                            SupplierNotFoundException.PROFILE_NOT_FOUND, "missing"));
+                    .thenThrow(new SupplierNotFoundException(SupplierNotFoundException.PROFILE_NOT_FOUND, "missing"));
 
             var result = mockMvc.perform(authed(get(BASE + "/{id}", PROFILE_ID), SupplierPermissions.PROFILE_READ))
                     .andExpect(status().isNotFound())
@@ -357,10 +356,10 @@ class SupplierAdminControllersWebMvcTest {
                             "SupplierProfileEntity", PROFILE_ID));
 
             mockMvc.perform(authed(
-                            put(BASE + "/{id}", PROFILE_ID)
-                                    .contentType(MediaType.APPLICATION_JSON)
-                                    .content(profileJson()),
-                            SupplierPermissions.PROFILE_WRITE)
+                                    put(BASE + "/{id}", PROFILE_ID)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(profileJson()),
+                                    SupplierPermissions.PROFILE_WRITE)
                             .header(CORRELATION_HEADER, "corr-409"))
                     .andExpect(status().isConflict())
                     .andExpect(header().string(CORRELATION_HEADER, "corr-409"))
@@ -415,8 +414,12 @@ class SupplierAdminControllersWebMvcTest {
                 Arguments.of("GET", profilePath + "/auth-configs", null, SupplierPermissions.PROFILE_READ),
                 Arguments.of("POST", profilePath + "/auth-configs", authConfig, SupplierPermissions.PROFILE_WRITE),
                 Arguments.of(
-                        "PUT", profilePath + "/auth-configs/" + CHILD_ID, authConfig, SupplierPermissions.PROFILE_WRITE),
-                Arguments.of("DELETE", profilePath + "/auth-configs/" + CHILD_ID, null, SupplierPermissions.PROFILE_WRITE),
+                        "PUT",
+                        profilePath + "/auth-configs/" + CHILD_ID,
+                        authConfig,
+                        SupplierPermissions.PROFILE_WRITE),
+                Arguments.of(
+                        "DELETE", profilePath + "/auth-configs/" + CHILD_ID, null, SupplierPermissions.PROFILE_WRITE),
                 Arguments.of("GET", profilePath + "/accounts", null, SupplierPermissions.PROFILE_READ),
                 Arguments.of("POST", profilePath + "/accounts", account, SupplierPermissions.PROFILE_WRITE),
                 Arguments.of("PUT", profilePath + "/accounts/" + CHILD_ID, account, SupplierPermissions.PROFILE_WRITE),

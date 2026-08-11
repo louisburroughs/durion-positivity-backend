@@ -36,6 +36,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+
 /**
  * Reconciliation semantics of {@link SupplierYamlBootstrap} (ADR-0050 §6): create on first
  * run, overwrite children to match YAML exactly, disable (never delete) previously-YAML
@@ -164,10 +165,8 @@ class SupplierYamlBootstrapTest {
     @Test
     void changedYamlOverwritesProfileAndChildrenExactly() {
         bootstrap.reconcile(properties(michelinSpec()));
-        UUID profileId = profileRepository
-                .findBySupplierRef("michelin-eu")
-                .orElseThrow()
-                .getVendorProfileId();
+        UUID profileId =
+                profileRepository.findBySupplierRef("michelin-eu").orElseThrow().getVendorProfileId();
 
         // Changed display name, rotated password ref, delivery moved to another location,
         // PRICAT binding dropped, stock inquiry URL changed.
@@ -177,7 +176,9 @@ class SupplierYamlBootstrapTest {
                 true,
                 new ProtocolDefaults("EDIWHEEL_A25", 7000, 30000, new Retry(3, "EXPONENTIAL")),
                 new Accounts(
-                        new Billing("0000012345", "31"), List.of(new Delivery(LOCATION_B, "0000067999", "31")), null,
+                        new Billing("0000012345", "31"),
+                        List.of(new Delivery(LOCATION_B, "0000067999", "31")),
+                        null,
                         null),
                 List.of(basicAuthSpec("env:MICHELIN_EDI_PASSWORD_V2")),
                 List.of(new BindingSpec(
@@ -223,10 +224,8 @@ class SupplierYamlBootstrapTest {
     @Test
     void profileRemovedFromYamlIsDisabledNeverDeleted() {
         bootstrap.reconcile(properties(michelinSpec()));
-        UUID profileId = profileRepository
-                .findBySupplierRef("michelin-eu")
-                .orElseThrow()
-                .getVendorProfileId();
+        UUID profileId =
+                profileRepository.findBySupplierRef("michelin-eu").orElseThrow().getVendorProfileId();
 
         bootstrap.reconcile(new SupplierProfileProperties(List.of()));
 
@@ -353,10 +352,8 @@ class SupplierYamlBootstrapTest {
         // reconcile it back to enabled on the SAME row (identity preserved), including the
         // sandbox overlay round-tripping back in.
         bootstrap.reconcile(properties(michelinSpec()));
-        UUID profileId = profileRepository
-                .findBySupplierRef("michelin-eu")
-                .orElseThrow()
-                .getVendorProfileId();
+        UUID profileId =
+                profileRepository.findBySupplierRef("michelin-eu").orElseThrow().getVendorProfileId();
         bootstrap.reconcile(new SupplierProfileProperties(List.of()));
         assertThat(profileRepository.findById(profileId).orElseThrow().isEnabled())
                 .isFalse();
@@ -383,7 +380,9 @@ class SupplierYamlBootstrapTest {
                 null,
                 null,
                 new Accounts(
-                        new Billing("0000099999", "31"), List.of(new Delivery(LOCATION_A, "0000088888", "31")), null,
+                        new Billing("0000099999", "31"),
+                        List.of(new Delivery(LOCATION_A, "0000088888", "31")),
+                        null,
                         null),
                 List.of(basicAuthSpec("env:CONTI_EDI_PASSWORD")),
                 null,
@@ -391,14 +390,10 @@ class SupplierYamlBootstrapTest {
 
         bootstrap.reconcile(properties(michelinSpec(), second));
 
-        UUID michelinId = profileRepository
-                .findBySupplierRef("michelin-eu")
-                .orElseThrow()
-                .getVendorProfileId();
-        UUID contiId = profileRepository
-                .findBySupplierRef("conti-eu")
-                .orElseThrow()
-                .getVendorProfileId();
+        UUID michelinId =
+                profileRepository.findBySupplierRef("michelin-eu").orElseThrow().getVendorProfileId();
+        UUID contiId =
+                profileRepository.findBySupplierRef("conti-eu").orElseThrow().getVendorProfileId();
         assertThat(accountRepository
                         .findByVendorProfileIdAndRoleAndDeliveryLocationId(
                                 michelinId, SupplierAccountRole.DELIVERY, LOCATION_A)
@@ -432,7 +427,8 @@ class SupplierYamlBootstrapTest {
                                 "michelin-eu", "Hijacked", false, false, 1, 1, 0)))
                 .isInstanceOf(com.positivity.supplier.internal.exception.SupplierConflictException.class)
                 .hasFieldOrPropertyWithValue(
-                        "code", com.positivity.supplier.internal.exception.SupplierConflictException.PROFILE_YAML_MANAGED);
+                        "code",
+                        com.positivity.supplier.internal.exception.SupplierConflictException.PROFILE_YAML_MANAGED);
         assertThatThrownBy(() -> adminService.deleteBinding(
                         profileId,
                         bindingRepository
@@ -440,7 +436,8 @@ class SupplierYamlBootstrapTest {
                                 .orElseThrow()
                                 .getId()))
                 .hasFieldOrPropertyWithValue(
-                        "code", com.positivity.supplier.internal.exception.SupplierConflictException.PROFILE_YAML_MANAGED);
+                        "code",
+                        com.positivity.supplier.internal.exception.SupplierConflictException.PROFILE_YAML_MANAGED);
 
         bootstrap.reconcile(properties(michelinSpec()));
 

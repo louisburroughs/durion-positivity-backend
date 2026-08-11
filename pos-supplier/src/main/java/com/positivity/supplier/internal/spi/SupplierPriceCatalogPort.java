@@ -18,6 +18,7 @@ import org.jspecify.annotations.NonNull;
 public interface SupplierPriceCatalogPort {
 
     /** Fetches the vendor's current price catalog for the profile's market. */
-    @NonNull SupplierExchange<List<SupplierPriceCatalogEntry>> fetchPriceCatalog(
+    @NonNull
+    SupplierExchange<List<SupplierPriceCatalogEntry>> fetchPriceCatalog(
             @NonNull SupplierRef supplierRef, @NonNull PartyContext partyContext);
 }

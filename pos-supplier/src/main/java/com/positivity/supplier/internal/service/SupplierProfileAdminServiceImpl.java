@@ -6,7 +6,6 @@ import com.positivity.supplier.internal.entity.SupplierAccountEntity;
 import com.positivity.supplier.internal.entity.SupplierAuthConfigEntity;
 import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
-import com.positivity.supplier.internal.enums.RetryBackoff;
 import com.positivity.supplier.internal.exception.SupplierConflictException;
 import com.positivity.supplier.internal.exception.SupplierNotFoundException;
 import com.positivity.supplier.internal.exception.SupplierValidationException;
@@ -458,8 +457,8 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     }
 
     private static void applyAccount(@NonNull SupplierAccountEntity account, @NonNull CommercialAccountRequest req) {
-        account.setRole(
-                com.positivity.supplier.internal.enums.SupplierAccountRole.valueOf(req.role().name()));
+        account.setRole(com.positivity.supplier.internal.enums.SupplierAccountRole.valueOf(
+                req.role().name()));
         account.setAccountNumber(req.accountNumber());
         account.setAgencyCode(req.agencyCode());
         account.setDeliveryLocationId(req.deliveryLocationId());

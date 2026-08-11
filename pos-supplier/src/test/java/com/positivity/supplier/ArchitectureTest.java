@@ -66,7 +66,9 @@ public class ArchitectureTest {
             .should()
             .dependOnClassesThat()
             .resideInAnyPackage(
-                    "..internal.registry..", "..internal.controller..", "..internal.repository..",
+                    "..internal.registry..",
+                    "..internal.controller..",
+                    "..internal.repository..",
                     "..internal.entity..")
             .allowEmptyShould(true)
             .because("adapter code may depend on internal.spi and internal.domain model types only (ADR-0051 §2)");

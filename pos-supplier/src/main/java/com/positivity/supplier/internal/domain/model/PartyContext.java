@@ -23,7 +23,9 @@ import org.jspecify.annotations.Nullable;
  *     (PRICAT, invoice fetch)
  */
 public record PartyContext(
-        @NonNull String billingAccountNumber, @Nullable String billingAgencyCode, @Nullable UUID deliveryLocationId) {
+        @NonNull String billingAccountNumber,
+        @Nullable String billingAgencyCode,
+        @Nullable UUID deliveryLocationId) {
 
     public PartyContext {
         Objects.requireNonNull(billingAccountNumber, "billingAccountNumber must not be null");

@@ -23,7 +23,8 @@ public interface SupplierInvoicePort {
      * Fetches the vendor invoices issued in the inclusive document-date window
      * {@code [fromDate, toDate]}.
      */
-    @NonNull SupplierExchange<List<SupplierInvoice>> fetchInvoices(
+    @NonNull
+    SupplierExchange<List<SupplierInvoice>> fetchInvoices(
             @NonNull SupplierRef supplierRef,
             @NonNull PartyContext partyContext,
             @NonNull LocalDate fromDate,
