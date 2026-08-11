@@ -542,9 +542,9 @@ public final class DownstreamPermissionCatalog {
         "PERM_people-contact:organization:view",             // 444
 
         // ── New batch (bits 445–447) ──────────────────────────────────────────
-        "PERM_supplier:audit:read",             // 445
-        "PERM_supplier:profile:read",             // 446
-        "PERM_supplier:profile:write"             // 447
+        "PERM_supplier:audit:read", // 445
+        "PERM_supplier:profile:read", // 446
+        "PERM_supplier:profile:write" // 447
     };
 
     public static String authorityForBit(int bitIndex) {
