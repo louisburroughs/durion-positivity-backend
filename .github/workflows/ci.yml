@@ -164,6 +164,13 @@ jobs:
       - name: Enforce Flyway migration hygiene
         run: ./scripts/check-flyway-hygiene.sh
 
+      - name: Enforce coverage-aggregate module coverage
+        # A reactor module absent from pos-coverage-aggregate's dependencies is
+        # excluded from both the JaCoCo aggregate report and the
+        # `-pl pos-coverage-aggregate -am` SonarCloud reactor, with no build
+        # failure to signal it. Fail fast here instead.
+        run: ./scripts/check-coverage-aggregate-drift.sh
+
       - name: Configure build cache (PR pilot)
         # Build Cache Extension pilot, PR builds only (spec §4.5). PRs skip the
         # commit-stamped revision: a version that changes every commit would poison
