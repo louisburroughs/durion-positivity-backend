@@ -17,6 +17,8 @@ import com.positivity.supplier.internal.service.SecretSchemeRegistry;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
+import java.net.http.HttpConnectTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +30,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
+import org.springframework.web.client.ResourceAccessException;
 
 /**
  * Transport behaviour of {@link SupplierBaseClient}, exercised against a real socket via
@@ -247,6 +250,89 @@ class SupplierBaseClientTest {
             SupplierHttpResponse response = client.exchange(req);
 
             assertThat(response.attempts()).isEqualTo(3);
+        }
+    }
+
+    // ── Timeout classification is type-safe, not message-based ──────────────────────
+
+    /**
+     * These tests exist because the module switched to {@code JdkClientHttpRequestFactory}
+     * specifically to make connect-vs-read a <em>type</em> distinction. With the fleet's usual
+     * {@code SimpleClientHttpRequestFactory} (HttpURLConnection) both arrive as
+     * {@link java.net.SocketTimeoutException} separable only by message text, which forced every
+     * socket timeout to be treated as ambiguous and therefore never retried.
+     *
+     * <p>A real connect timeout is not reproducible in CI here — this container answers an
+     * unroutable address with an immediate {@code ConnectException} rather than timing out — so the
+     * connect path is proven by classifying a synthesized cause. The read path is proven end to end
+     * over a real socket.
+     */
+    @Nested
+    class TimeoutClassification {
+
+        @Test
+        void connectTimeoutIsPreSendAndThereforeRetryable() {
+            ExchangeOutcome outcome = SupplierBaseClient.classifyIoFailure(new ResourceAccessException(
+                    "connect timed out", new HttpConnectTimeoutException("connect timed out")));
+
+            assertThat(outcome).isEqualTo(ExchangeOutcome.PRE_SEND_FAILURE);
+            assertThat(outcome.isPreSendRetryable()).isTrue();
+        }
+
+        /**
+         * The ordering trap. {@link HttpConnectTimeoutException} is a <em>subclass</em> of
+         * {@link HttpTimeoutException}, so testing the general type first would silently reclassify
+         * every connect timeout as ambiguous and stop it being retried — a pure throughput
+         * regression with no test to catch it unless this one exists.
+         */
+        @Test
+        void connectTimeoutIsNotSwallowedByTheGeneralTimeoutCheck() {
+            assertThat(HttpTimeoutException.class.isAssignableFrom(HttpConnectTimeoutException.class))
+                    .as("guard the premise: if this ever stops being true, the ordering comment is stale")
+                    .isTrue();
+
+            assertThat(SupplierBaseClient.classifyIoFailure(
+                            new ResourceAccessException("x", new HttpConnectTimeoutException("x"))))
+                    .isEqualTo(ExchangeOutcome.PRE_SEND_FAILURE);
+            assertThat(SupplierBaseClient.classifyIoFailure(
+                            new ResourceAccessException("x", new HttpTimeoutException("x"))))
+                    .isEqualTo(ExchangeOutcome.POST_SEND_AMBIGUOUS);
+        }
+
+        @Test
+        void readTimeoutIsAmbiguousByType() {
+            assertThat(SupplierBaseClient.classifyIoFailure(
+                            new ResourceAccessException("read timed out", new HttpTimeoutException("read timed out"))))
+                    .isEqualTo(ExchangeOutcome.POST_SEND_AMBIGUOUS);
+        }
+
+        @Test
+        void refusedUnknownHostAndNoRouteAreAllPreSend() {
+            assertThat(SupplierBaseClient.classifyIoFailure(
+                            new ResourceAccessException("x", new java.net.ConnectException("refused"))))
+                    .isEqualTo(ExchangeOutcome.PRE_SEND_FAILURE);
+            assertThat(SupplierBaseClient.classifyIoFailure(
+                            new ResourceAccessException("x", new java.net.UnknownHostException("nope"))))
+                    .isEqualTo(ExchangeOutcome.PRE_SEND_FAILURE);
+            assertThat(SupplierBaseClient.classifyIoFailure(
+                            new ResourceAccessException("x", new java.net.NoRouteToHostException("nope"))))
+                    .isEqualTo(ExchangeOutcome.PRE_SEND_FAILURE);
+        }
+
+        @Test
+        void anUnrecognisedTransportFailureDefaultsToAmbiguousNotRetryable() {
+            // Never guess pre-send for an unknown failure: that would authorize an automatic retry.
+            assertThat(SupplierBaseClient.classifyIoFailure(
+                            new ResourceAccessException("x", new java.io.IOException("something odd"))))
+                    .isEqualTo(ExchangeOutcome.POST_SEND_AMBIGUOUS);
+        }
+
+        @Test
+        void aLegacySocketTimeoutIsStillTreatedAsAmbiguous() {
+            // Defence in depth: if the factory is ever reverted, the conservative reading holds.
+            assertThat(SupplierBaseClient.classifyIoFailure(
+                            new ResourceAccessException("x", new java.net.SocketTimeoutException("Read timed out"))))
+                    .isEqualTo(ExchangeOutcome.POST_SEND_AMBIGUOUS);
         }
     }
 

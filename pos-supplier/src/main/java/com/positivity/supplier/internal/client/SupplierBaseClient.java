@@ -12,8 +12,12 @@ import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
 import java.net.ConnectException;
 import java.net.NoRouteToHostException;
+import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.UnknownHostException;
+import java.net.http.HttpClient;
+import java.net.http.HttpConnectTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -29,7 +33,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -286,15 +290,42 @@ public class SupplierBaseClient {
      * misclassifying a read timeout as pre-send risks a duplicate order.
      */
     @NonNull
-    private static ExchangeOutcome classifyIoFailure(@NonNull ResourceAccessException ex) {
+    static ExchangeOutcome classifyIoFailure(@NonNull ResourceAccessException ex) {
         for (Throwable cause = ex.getCause(); cause != null; cause = cause.getCause()) {
-            if (cause instanceof ConnectException
-                    || cause instanceof UnknownHostException
-                    || cause instanceof NoRouteToHostException) {
-                return ExchangeOutcome.PRE_SEND_FAILURE;
+            ExchangeOutcome classified = classifyCause(cause);
+            if (classified != null) {
+                return classified;
             }
         }
+        // Unknown transport failure: assume the request may have been transmitted. Never guess
+        // "pre-send" here, because that would authorize an automatic retry.
         return ExchangeOutcome.POST_SEND_AMBIGUOUS;
+    }
+
+    /**
+     * Classifies a single cause, or {@code null} to keep walking the chain.
+     *
+     * <p><strong>Order is load-bearing.</strong> {@link HttpConnectTimeoutException} is a
+     * <em>subclass</em> of {@link HttpTimeoutException}, so the specific connect case must be tested
+     * before the general timeout case; reversing these two lines would silently reclassify every
+     * connect timeout as ambiguous and stop it being retried.
+     */
+    @Nullable
+    private static ExchangeOutcome classifyCause(@NonNull Throwable cause) {
+        if (cause instanceof HttpConnectTimeoutException) {
+            // The connection itself never completed, so nothing was transmitted.
+            return ExchangeOutcome.PRE_SEND_FAILURE;
+        }
+        if (cause instanceof ConnectException
+                || cause instanceof UnknownHostException
+                || cause instanceof NoRouteToHostException) {
+            return ExchangeOutcome.PRE_SEND_FAILURE;
+        }
+        if (cause instanceof HttpTimeoutException || cause instanceof SocketTimeoutException) {
+            // A response never arrived, but the request may already be with the vendor.
+            return ExchangeOutcome.POST_SEND_AMBIGUOUS;
+        }
+        return null;
     }
 
     @NonNull
@@ -357,8 +388,23 @@ public class SupplierBaseClient {
                 profile.getConnectTimeoutMs() == null ? DEFAULT_CONNECT_TIMEOUT_MS : profile.getConnectTimeoutMs();
         int readTimeout = profile.getReadTimeoutMs() == null ? DEFAULT_READ_TIMEOUT_MS : profile.getReadTimeoutMs();
         return clientsByTimeouts.computeIfAbsent(connectTimeout + ":" + readTimeout, key -> {
-            SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-            factory.setConnectTimeout(Duration.ofMillis(connectTimeout));
+            // JdkClientHttpRequestFactory, NOT the SimpleClientHttpRequestFactory used elsewhere in
+            // the fleet. This module's correctness rests on telling a connect timeout (never
+            // transmitted, safe to retry) from a read timeout (may have been transmitted, must NOT
+            // be retried), and SimpleClientHttpRequestFactory wraps HttpURLConnection, which
+            // reports both as java.net.SocketTimeoutException separable only by message text.
+            // java.net.http.HttpClient raises HttpConnectTimeoutException as a distinct type, so
+            // the classification is type-safe. It also pools connections, which HttpURLConnection
+            // does not, and this transport makes repeated calls per vendor.
+            HttpClient httpClient = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofMillis(connectTimeout))
+                    // Explicit: never follow a vendor redirect. Silently re-sending a
+                    // state-creating POST body to another host is exactly the duplicate-submission
+                    // risk ADR-0052 exists to prevent.
+                    .followRedirects(HttpClient.Redirect.NEVER)
+                    .build();
+            JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+            // Connect timeout lives on the HttpClient; only the read timeout is per-request here.
             factory.setReadTimeout(Duration.ofMillis(readTimeout));
             return RestClient.builder().requestFactory(factory).build();
         });
