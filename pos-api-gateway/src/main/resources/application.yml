@@ -157,6 +157,12 @@ spring:
                 - Path=/warranty/**
               filters:
                 - StripPrefix=1
+            - id: supplier
+              uri: lb://SUPPLIER
+              predicates:
+                - Path=/supplier/**
+              filters:
+                - StripPrefix=1
             - id: marketing
               uri: lb://MARKETING
               predicates:
@@ -246,6 +252,8 @@ springdoc:
         url: /security-service/v3/api-docs
       - name: Shop Manager
         url: /shop-manager/v3/api-docs
+      - name: Supplier
+        url: /supplier/v3/api-docs
       - name: Vehicle Fitment
         url: /vehicle-fitment/v3/api-docs
       - name: Vehicle Inventory

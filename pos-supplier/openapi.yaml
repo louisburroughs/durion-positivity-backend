@@ -1,0 +1,888 @@
+openapi: 3.1.0
+info:
+  title: Supplier API
+  description: API for supplier vendor profile administration — profiles, auth configs, commercial accounts, and capability endpoint bindings (ADR-0050)
+  contact:
+    name: Durion Support Services
+    email: platform@durionpos.org
+  version: '1.0'
+servers:
+- url: http://localhost:8099
+  description: Generated server url
+tags:
+- name: Supplier Auth Configs
+  description: Admin CRUD over vendor auth configs — secret references only, never plaintext credentials
+- name: Supplier Commercial Accounts
+  description: Admin CRUD over vendor commercial accounts — billing and per-location delivery numbers
+- name: Supplier Endpoint Bindings
+  description: Admin CRUD over capability endpoint bindings — capability → (family, version, URL, auth)
+- name: Supplier Vendor Profiles
+  description: Admin CRUD over vendor profiles — one row per configured supplier connection
+paths:
+  /supplier/admin/profiles/{vendorProfileId}:
+    get:
+      tags:
+      - Supplier Vendor Profiles
+      summary: Get vendor profile
+      description: Retrieve one vendor profile by id
+      operationId: getProfile
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Vendor profile UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Profile returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorProfileView'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorProfileView'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:read
+    put:
+      tags:
+      - Supplier Vendor Profiles
+      summary: Update vendor profile
+      description: Full update of a vendor profile; rejected for YAML-managed profiles (ADR-0050 §6)
+      operationId: updateProfile
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Vendor profile UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorProfileRequest'
+        required: true
+      responses:
+        '200':
+          description: Profile updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorProfileView'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorProfileView'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorProfileView'
+        '409':
+          description: Profile is YAML-managed or supplierRef already in use.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorProfileView'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+    delete:
+      tags:
+      - Supplier Vendor Profiles
+      summary: Delete vendor profile
+      description: Delete a vendor profile and its child configuration; rejected for YAML-managed profiles
+      operationId: deleteProfile
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Vendor profile UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Profile deleted.
+        '404':
+          description: Profile not found.
+        '409':
+          description: Profile is YAML-managed.
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+  /supplier/admin/profiles/{vendorProfileId}/bindings/{bindingId}:
+    put:
+      tags:
+      - Supplier Endpoint Bindings
+      summary: Update endpoint binding
+      description: Replace an endpoint binding
+      operationId: updateBinding
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: bindingId
+        in: path
+        description: Binding UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointBindingRequest'
+        required: true
+      responses:
+        '200':
+          description: Binding updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndpointBindingView'
+        '400':
+          description: Invalid request — unknown capability/protocol-family key, unknown auth config name, or invalid cron schedule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndpointBindingView'
+        '404':
+          description: Profile or binding not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndpointBindingView'
+        '409':
+          description: Profile is YAML-managed or capability already bound.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndpointBindingView'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+    delete:
+      tags:
+      - Supplier Endpoint Bindings
+      summary: Delete endpoint binding
+      description: Remove a binding, disabling its capability for the profile
+      operationId: deleteBinding
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: bindingId
+        in: path
+        description: Binding UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Binding deleted.
+        '404':
+          description: Profile or binding not found.
+        '409':
+          description: Profile is YAML-managed.
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+  /supplier/admin/profiles/{vendorProfileId}/auth-configs/{authConfigId}:
+    put:
+      tags:
+      - Supplier Auth Configs
+      summary: Update auth config
+      description: Replace an auth config; renaming while endpoint bindings reference it is rejected
+      operationId: updateAuthConfig
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: authConfigId
+        in: path
+        description: Auth config UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthConfigRequest'
+        required: true
+      responses:
+        '200':
+          description: Auth config updated (without credential reference values).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthConfigView'
+        '400':
+          description: Invalid request or incomplete/malformed secret references.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthConfigView'
+        '404':
+          description: Profile or auth config not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthConfigView'
+        '409':
+          description: Profile is YAML-managed, name in use, or config referenced.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthConfigView'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+    delete:
+      tags:
+      - Supplier Auth Configs
+      summary: Delete auth config
+      description: Remove an auth config; rejected while endpoint bindings still reference it
+      operationId: deleteAuthConfig
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: authConfigId
+        in: path
+        description: Auth config UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Auth config deleted.
+        '404':
+          description: Profile or auth config not found.
+        '409':
+          description: Profile is YAML-managed or config still referenced.
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+  /supplier/admin/profiles/{vendorProfileId}/accounts/{accountId}:
+    put:
+      tags:
+      - Supplier Commercial Accounts
+      summary: Update commercial account
+      description: Replace a commercial account
+      operationId: updateAccount
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: accountId
+        in: path
+        description: Account UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommercialAccountRequest'
+        required: true
+      responses:
+        '200':
+          description: Account updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommercialAccountView'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommercialAccountView'
+        '404':
+          description: Profile or account not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommercialAccountView'
+        '409':
+          description: Profile is YAML-managed or account slot already taken.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommercialAccountView'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+    delete:
+      tags:
+      - Supplier Commercial Accounts
+      summary: Delete commercial account
+      description: Remove a commercial account
+      operationId: deleteAccount
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: accountId
+        in: path
+        description: Account UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Account deleted.
+        '404':
+          description: Profile or account not found.
+        '409':
+          description: Profile is YAML-managed.
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+  /supplier/admin/profiles:
+    get:
+      tags:
+      - Supplier Vendor Profiles
+      summary: List vendor profiles
+      description: All vendor profiles, ordered by supplierRef
+      operationId: listProfiles
+      responses:
+        '200':
+          description: Profiles returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VendorProfileView'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:read
+    post:
+      tags:
+      - Supplier Vendor Profiles
+      summary: Create vendor profile
+      description: Create an ADMIN-managed vendor profile; supplierRef must be unique
+      operationId: createProfile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorProfileRequest'
+        required: true
+      responses:
+        '201':
+          description: Profile created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorProfileView'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorProfileView'
+        '409':
+          description: supplierRef already in use.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorProfileView'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+  /supplier/admin/profiles/{vendorProfileId}/bindings:
+    get:
+      tags:
+      - Supplier Endpoint Bindings
+      summary: List endpoint bindings
+      description: Bindings of a vendor profile, ordered by capability
+      operationId: listBindings
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Bindings returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EndpointBindingView'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EndpointBindingView'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:read
+    post:
+      tags:
+      - Supplier Endpoint Bindings
+      summary: Create endpoint binding
+      description: Bind a capability to (protocolFamily, version, baseUrl, path, authConfigName)
+      operationId: createBinding
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointBindingRequest'
+        required: true
+      responses:
+        '201':
+          description: Binding created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndpointBindingView'
+        '400':
+          description: Invalid request — unknown capability/protocol-family key, unknown auth config name, or invalid cron schedule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndpointBindingView'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndpointBindingView'
+        '409':
+          description: Profile is YAML-managed or capability already bound.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndpointBindingView'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+  /supplier/admin/profiles/{vendorProfileId}/auth-configs:
+    get:
+      tags:
+      - Supplier Auth Configs
+      summary: List auth configs
+      description: Auth configs of a vendor profile, ordered by name
+      operationId: listAuthConfigs
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Auth configs returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuthConfigView'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuthConfigView'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:read
+    post:
+      tags:
+      - Supplier Auth Configs
+      summary: Create auth config
+      description: Add an auth config to a vendor profile; secret fields are references, never plaintext
+      operationId: createAuthConfig
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthConfigRequest'
+        required: true
+      responses:
+        '201':
+          description: Auth config created (without credential reference values).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthConfigView'
+        '400':
+          description: Invalid request or incomplete/malformed secret references.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthConfigView'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthConfigView'
+        '409':
+          description: Profile is YAML-managed or auth config name already in use.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthConfigView'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+  /supplier/admin/profiles/{vendorProfileId}/accounts:
+    get:
+      tags:
+      - Supplier Commercial Accounts
+      summary: List commercial accounts
+      description: Accounts of a vendor profile, billing first
+      operationId: listAccounts
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Accounts returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CommercialAccountView'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CommercialAccountView'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:read
+    post:
+      tags:
+      - Supplier Commercial Accounts
+      summary: Create commercial account
+      description: Add a billing or delivery account; delivery accounts carry the pos-location mapping
+      operationId: createAccount
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile UUID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommercialAccountRequest'
+        required: true
+      responses:
+        '201':
+          description: Account created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommercialAccountView'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommercialAccountView'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommercialAccountView'
+        '409':
+          description: Profile is YAML-managed or account slot already taken.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommercialAccountView'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+components:
+  schemas:
+    VendorProfileRequest:
+      type: object
+      properties:
+        supplierRef:
+          type: string
+        displayName:
+          type: string
+        enabled:
+          type: boolean
+        sandbox:
+          type: boolean
+        connectTimeoutMillis:
+          type: integer
+          format: int32
+        readTimeoutMillis:
+          type: integer
+          format: int32
+        maxRetries:
+          type: integer
+          format: int32
+    VendorProfileView:
+      type: object
+      properties:
+        vendorProfileId:
+          type: string
+          format: uuid
+        supplierRef:
+          type: string
+        displayName:
+          type: string
+        enabled:
+          type: boolean
+        sandbox:
+          type: boolean
+        sourceOfTruth:
+          type: string
+          enum:
+          - YAML
+          - ADMIN
+        connectTimeoutMillis:
+          type: integer
+          format: int32
+        readTimeoutMillis:
+          type: integer
+          format: int32
+        maxRetries:
+          type: integer
+          format: int32
+    EndpointBindingRequest:
+      type: object
+      properties:
+        capability:
+          type: string
+        protocolFamily:
+          type: string
+        version:
+          type: string
+        baseUrl:
+          type: string
+        path:
+          type: string
+        authConfigName:
+          type: string
+        schedule:
+          type: string
+        enabled:
+          type: boolean
+        captureLevel:
+          type: string
+          enum:
+          - FULL
+          - REDACTED
+          - METADATA_ONLY
+    EndpointBindingView:
+      type: object
+      properties:
+        bindingId:
+          type: string
+          format: uuid
+        capability:
+          type: string
+        protocolFamily:
+          type: string
+        version:
+          type: string
+        baseUrl:
+          type: string
+        path:
+          type: string
+        authConfigName:
+          type: string
+        schedule:
+          type: string
+        enabled:
+          type: boolean
+        captureLevel:
+          type: string
+          enum:
+          - FULL
+          - REDACTED
+          - METADATA_ONLY
+    AuthConfigRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum:
+          - BASIC_PLUS_APIKEY
+          - OAUTH2_CLIENT_CREDENTIALS
+          - BEARER
+        usernameRef:
+          type: string
+        passwordRef:
+          type: string
+        apiKeyRef:
+          type: string
+        apiKeyHeader:
+          type: string
+        tokenUrlRef:
+          type: string
+        clientIdRef:
+          type: string
+        clientSecretRef:
+          type: string
+        bearerTokenRef:
+          type: string
+    AuthConfigView:
+      type: object
+      properties:
+        authConfigId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum:
+          - BASIC_PLUS_APIKEY
+          - OAUTH2_CLIENT_CREDENTIALS
+          - BEARER
+        apiKeyHeader:
+          type: string
+    CommercialAccountRequest:
+      type: object
+      properties:
+        role:
+          type: string
+          enum:
+          - BILLING
+          - DELIVERY
+        accountNumber:
+          type: string
+        agencyCode:
+          type: string
+        deliveryLocationId:
+          type: string
+          format: uuid
+    CommercialAccountView:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum:
+          - BILLING
+          - DELIVERY
+        accountNumber:
+          type: string
+        agencyCode:
+          type: string
+        deliveryLocationId:
+          type: string
+          format: uuid
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

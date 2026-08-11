@@ -1262,6 +1262,41 @@ services:
       # alpha can push JVM startup well past 90s.
       start_period: 300s
 
+  pos-supplier:
+    build:
+      context: ./pos-supplier
+      dockerfile: Dockerfile
+    ports:
+      - "8096:8080"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_supplier_db
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
+      SERVER_PORT: 8080
+      MANAGEMENT_SERVER_PORT: 8080
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      pos-security-service:
+        condition: service_healthy
+    logging: *logging
+    networks:
+      - pos-network
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      # Same generous window as pos-warranty — a whole-stack recreate on alpha can
+      # push JVM startup well past 90s.
+      start_period: 300s
+
   pos-marketing:
     build:
       context: ./pos-marketing

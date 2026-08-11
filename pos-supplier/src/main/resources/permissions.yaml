@@ -1,0 +1,10 @@
+domain: supplier
+serviceName: pos-supplier
+version: "1.0"
+permissions:
+  - name: "supplier:audit:read"
+    description: "Read supplier exchange audit records"
+  - name: "supplier:profile:read"
+    description: "View vendor profiles, auth configs, commercial accounts, and endpoint bindings"
+  - name: "supplier:profile:write"
+    description: "Create and edit vendor profiles, auth configs, commercial accounts, and endpoint bindings"

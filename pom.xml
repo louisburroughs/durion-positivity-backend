@@ -252,6 +252,7 @@
 		<module>pos-people</module>
 		<module>pos-people-contact</module>
 		<module>pos-location</module>
+		<module>pos-supplier</module>
 		<module>pos-tax</module>
 		<module>pos-documents</module>
 		<module>pos-warranty</module>

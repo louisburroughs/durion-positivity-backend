@@ -131,6 +131,11 @@
         </dependency>
         <dependency>
             <groupId>com.positivity</groupId>
+            <artifactId>pos-supplier</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.positivity</groupId>
             <artifactId>pos-customer</artifactId>
             <version>${project.version}</version>
         </dependency>
