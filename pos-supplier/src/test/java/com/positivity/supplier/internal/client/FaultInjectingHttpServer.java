@@ -41,11 +41,12 @@ final class FaultInjectingHttpServer implements AutoCloseable {
     }
 
     private final HttpServer server;
+    private java.util.concurrent.ExecutorService executor;
     private final AtomicReference<Fault> fault = new AtomicReference<>(Fault.NONE);
     private final AtomicInteger status = new AtomicInteger(200);
     private final AtomicReference<String> body = new AtomicReference<>("{}");
     private final AtomicInteger receivedRequests = new AtomicInteger();
-    private final AtomicInteger hangMillis = new AtomicInteger(60_000);
+    private final AtomicInteger hangMillis = new AtomicInteger(5_000);
     private final Map<String, List<String>> lastHeaders = new ConcurrentHashMap<>();
     private final List<String> requestBodies = new CopyOnWriteArrayList<>();
 
@@ -63,8 +64,10 @@ final class FaultInjectingHttpServer implements AutoCloseable {
         HttpServer httpServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         FaultInjectingHttpServer fixture = new FaultInjectingHttpServer(httpServer);
         httpServer.createContext("/", fixture::handle);
-        // Single-threaded executor: deterministic ordering, and a HANG genuinely blocks.
-        httpServer.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(4));
+        // Small pool: deterministic ordering, and a HANG genuinely blocks a worker.
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(4);
+        fixture.executor = executor;
+        httpServer.setExecutor(executor);
         httpServer.start();
         return fixture;
     }
@@ -192,5 +195,10 @@ final class FaultInjectingHttpServer implements AutoCloseable {
     @Override
     public void close() {
         server.stop(0);
+        if (executor != null) {
+            // Without this, every test leaked 4 threads and a HANG left one sleeping for up to 60s,
+            // so a full-suite run accumulated blocked threads for no reason.
+            executor.shutdownNow();
+        }
     }
 }

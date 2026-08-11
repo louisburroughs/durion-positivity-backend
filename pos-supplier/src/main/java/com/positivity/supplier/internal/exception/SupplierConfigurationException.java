@@ -26,6 +26,20 @@ public class SupplierConfigurationException extends RuntimeException {
     public static final String MISSING_BILLING_ACCOUNT = "SUPPLIER_MISSING_BILLING_ACCOUNT";
     public static final String MISSING_DELIVERY_MAPPING = "SUPPLIER_MISSING_DELIVERY_MAPPING";
     public static final String AUTH_CONFIG_MISSING = "SUPPLIER_AUTH_CONFIG_MISSING";
+
+    /**
+     * The vendor's token endpoint refused the configured client credentials (401/403). The
+     * references resolved fine — the credentials themselves are wrong — so this must not read as a
+     * missing reference, and it must not be retried against the vendor.
+     */
+    public static final String AUTH_CREDENTIALS_REJECTED = "SUPPLIER_AUTH_CREDENTIALS_REJECTED";
+
+    /**
+     * The token endpoint answered 2xx but supplied no {@code access_token}: a vendor contract
+     * violation rather than anything the operator configured wrongly.
+     */
+    public static final String AUTH_TOKEN_RESPONSE_INVALID = "SUPPLIER_AUTH_TOKEN_RESPONSE_INVALID";
+
     public static final String SECRET_REFERENCE_INVALID = "SUPPLIER_SECRET_REFERENCE_INVALID";
     public static final String UNKNOWN_SECRET_SCHEME = "SUPPLIER_UNKNOWN_SECRET_SCHEME";
     public static final String SECRET_NOT_FOUND = "SUPPLIER_SECRET_NOT_FOUND";

@@ -5,6 +5,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.SortedMap;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.stereotype.Component;
@@ -39,6 +41,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class SupplierClientHealthIndicator implements HealthIndicator {
 
+    private static final Logger log = LoggerFactory.getLogger(SupplierClientHealthIndicator.class);
+
+    /** Made legible in the payload so nobody "fixes" this into a DOWN. */
+    static final String STATUS_POLICY = "always UP: vendor reachability is not this service's"
+            + " serviceability. Alert on the supplier.client.breaker.state gauge, not on health.";
+
     private final SupplierBreakerRegistry breakerRegistry;
 
     public SupplierClientHealthIndicator(@NonNull SupplierBreakerRegistry breakerRegistry) {
@@ -47,6 +55,26 @@ public class SupplierClientHealthIndicator implements HealthIndicator {
 
     @Override
     public Health health() {
+        // The guarantee has to be TOTAL, not just the happy path. This class implements
+        // HealthIndicator directly rather than extending AbstractHealthIndicator, so Boot does not
+        // wrap a thrown exception for us: an exception escaping here would surface as a 500 from
+        // /actuator/health, and `wget -qO- .../actuator/health` exits non-zero on a 500 exactly as it
+        // does on a DOWN body. That reopens the very restart hazard this class exists to close, and
+        // takes every other contributor's report down with it.
+        try {
+            return report();
+        } catch (RuntimeException ex) {
+            log.warn("Could not read supplier breaker states for the health endpoint; reporting UP without them", ex);
+            return Health.up()
+                    .withDetail(
+                            "detailsUnavailable",
+                            "breaker states could not be read: " + ex.getClass().getSimpleName())
+                    .withDetail("statusPolicy", STATUS_POLICY)
+                    .build();
+        }
+    }
+
+    private Health report() {
         SortedMap<String, String> states = breakerRegistry.breakerStates();
         long open = states.values().stream()
                 .filter(state -> "OPEN".equals(state) || "FORCED_OPEN".equals(state))
@@ -58,12 +86,7 @@ public class SupplierClientHealthIndicator implements HealthIndicator {
         details.put("openBreakers", open);
         details.put("halfOpenBreakers", halfOpen);
         details.put("breakers", states);
-        // Make the deliberate choice legible to whoever reads /actuator/health next, so nobody
-        // "fixes" this into a DOWN and hands vendors a restart lever over our container.
-        details.put(
-                "statusPolicy",
-                "always UP: vendor reachability is not this service's serviceability."
-                        + " Alert on the supplier.client.breaker.state gauge, not on health.");
+        details.put("statusPolicy", STATUS_POLICY);
 
         // Deliberately Health.up() unconditionally, never status(open > 0 ? DOWN : UP).
         return Health.up().withDetails(details).build();

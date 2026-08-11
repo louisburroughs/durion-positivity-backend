@@ -6,6 +6,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.positivity.supplier.internal.entity.SupplierAuthConfigEntity;
@@ -237,17 +238,47 @@ class OAuth2ClientCredentialsAuthStrategyTest {
         server.verify();
     }
 
+    /**
+     * A 5xx from the token endpoint is a TRANSPORT failure of the credential leg, not a statement
+     * that the operator's configuration is wrong. This test previously asserted
+     * {@code AUTH_CONFIG_MISSING}, which pinned the defect: nothing reached the vendor's business
+     * endpoint, so ADR-0052 §5 makes it pre-send and retryable, and reporting it as a configuration
+     * error sent operators hunting for an env var that was present and correct.
+     */
     @Test
-    void aFailingTokenEndpointFailsTypedWithoutEchoingTheClientSecret() {
+    void aFailingTokenEndpointIsATransportFailureNotAConfigurationError() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         server.expect(ExpectedCount.once(), requestTo(TOKEN_URL)).andRespond(withServerError());
 
         assertThatThrownBy(() -> strategy(builder, Clock.systemUTC(), 30).apply(new HttpHeaders(), config(CONFIG_A)))
-                .isInstanceOf(SupplierConfigurationException.class)
-                .hasFieldOrPropertyWithValue("code", SupplierConfigurationException.AUTH_CONFIG_MISSING)
+                .isInstanceOf(SupplierAuthTransportException.class)
                 .hasMessageNotContaining(CLIENT_SECRET)
                 .hasMessageNotContaining(CLIENT_ID);
+    }
+
+    @Test
+    void aRejectedClientSecretStaysAConfigurationErrorSoWeDoNotHammerTheVendor() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(ExpectedCount.once(), requestTo(TOKEN_URL))
+                .andRespond(withStatus(org.springframework.http.HttpStatus.UNAUTHORIZED));
+
+        assertThatThrownBy(() -> strategy(builder, Clock.systemUTC(), 30).apply(new HttpHeaders(), config(CONFIG_A)))
+                .isInstanceOf(SupplierConfigurationException.class)
+                .hasFieldOrPropertyWithValue("code", SupplierConfigurationException.AUTH_CREDENTIALS_REJECTED)
+                .hasMessageNotContaining(CLIENT_SECRET);
+    }
+
+    @Test
+    void aTransportFailureRetainsItsCauseSoOperatorsCanTellDnsFromTls() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(ExpectedCount.once(), requestTo(TOKEN_URL)).andRespond(withServerError());
+
+        assertThatThrownBy(() -> strategy(builder, Clock.systemUTC(), 30).apply(new HttpHeaders(), config(CONFIG_A)))
+                .isInstanceOf(SupplierAuthTransportException.class)
+                .hasCauseInstanceOf(org.springframework.web.client.RestClientException.class);
     }
 
     @Test
@@ -259,7 +290,8 @@ class OAuth2ClientCredentialsAuthStrategyTest {
 
         assertThatThrownBy(() -> strategy(builder, Clock.systemUTC(), 30).apply(new HttpHeaders(), config(CONFIG_A)))
                 .isInstanceOf(SupplierConfigurationException.class)
-                .hasMessageContaining("no access_token");
+                .hasFieldOrPropertyWithValue("code", SupplierConfigurationException.AUTH_TOKEN_RESPONSE_INVALID)
+                .hasMessageContaining("supplied no access_token");
     }
 
     @Test

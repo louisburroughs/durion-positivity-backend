@@ -91,6 +91,30 @@ class SupplierClientHealthIndicatorTest {
         assertThat(health.getDetails()).containsEntry("halfOpenBreakers", 1L).containsEntry("openBreakers", 0L);
     }
 
+    /**
+     * The guarantee must survive the indicator itself failing. Without a try/catch, an exception here
+     * becomes a 500 from /actuator/health, and the container healthcheck's `wget` exits non-zero on a
+     * 500 exactly as on a DOWN body — so the restart hazard returns by a different door, and every
+     * other health contributor is lost with it.
+     */
+    @Test
+    void aThrowingBreakerRegistryStillReportsUpWithAMarker() {
+        SupplierClientHealthIndicator failing =
+                new SupplierClientHealthIndicator(new SupplierBreakerRegistry(50f, 10, 5, 30, 3) {
+                    @Override
+                    public java.util.SortedMap<String, String> breakerStates() {
+                        throw new IllegalStateException("registry exploded");
+                    }
+                });
+
+        Health health = failing.health();
+
+        assertThat(health.getStatus()).isEqualTo(Status.UP);
+        assertThat(health.getDetails())
+                .containsKey("detailsUnavailable")
+                .containsEntry("statusPolicy", SupplierClientHealthIndicator.STATUS_POLICY);
+    }
+
     @Test
     void detailsExposeBreakerStatesKeyedByProfileAndCapability() {
         breakers.breakerFor(PROFILE_A, SupplierCapability.STOCK_INQUIRY).transitionToOpenState();

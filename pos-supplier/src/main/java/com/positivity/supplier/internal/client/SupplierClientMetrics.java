@@ -100,7 +100,7 @@ public class SupplierClientMetrics {
     }
 
     /** Numeric encoding of breaker state; ordinal is deliberately not used so it stays stable. */
-    static int stateCode(CircuitBreaker.State state) {
+    static int stateCode(CircuitBreaker.@NonNull State state) {
         return switch (state) {
             case CLOSED -> 0;
             case HALF_OPEN -> 1;

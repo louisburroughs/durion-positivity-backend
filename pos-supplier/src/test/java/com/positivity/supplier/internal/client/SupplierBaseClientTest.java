@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +51,9 @@ class SupplierBaseClientTest {
     private static final UUID BINDING_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60");
     private static final UUID AUTH_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61");
 
+    /** Token endpoint the OAuth2 fixture resolves {@code env:TOKEN_URL} to; mutable per test. */
+    private final AtomicReference<String> tokenUrl = new AtomicReference<>("http://127.0.0.1:1/oauth/token");
+
     private FaultInjectingHttpServer server;
     private RecordingObserver observer;
     private SupplierBreakerRegistry breakers;
@@ -71,8 +75,7 @@ class SupplierBaseClientTest {
     }
 
     private SupplierBaseClient newClient() {
-        SecretSchemeRegistry secrets = new SecretSchemeRegistry(List.of(new MapSecretResolver(
-                Map.of("M_USER", "vendor-user", "M_PASSWORD", "vendor-password", "M_APIKEY", "vendor-apikey"))));
+        SecretSchemeRegistry secrets = new SecretSchemeRegistry(List.of(new DynamicSecretResolver(tokenUrl)));
         SupplierAuthStrategies strategies = new SupplierAuthStrategies(List.of(
                 new BasicPlusApiKeyAuthStrategy(secrets),
                 new BearerTokenAuthStrategy(secrets),
@@ -375,6 +378,224 @@ class SupplierBaseClientTest {
         }
     }
 
+    // ── Wire contract: content type, encoding, URI safety ───────────────────────────
+
+    @Nested
+    class WireContract {
+
+        /**
+         * The declared content type must actually reach the vendor. It previously did not: the record
+         * mandated it when a body was present and the client then never read it, so every document
+         * went out as StringHttpMessageConverter's default text/plain. An EDIWheel A2.5 order POST
+         * would earn a 415 or 400, which classifies DEFINITIVE_REJECTION and is never retried — so
+         * the transport would confidently report a permanent rejection of a valid document.
+         */
+        @Test
+        void theDeclaredContentTypeIsSentOnTheWire() {
+            server.respondOk("{}");
+
+            client.exchange(request(HttpMethod.POST, "<Order/>", 0, null));
+
+            assertThat(server.header("Content-Type")).containsExactly("application/json");
+        }
+
+        @Test
+        void queryParametersAreEncodedSoAValueCannotRestructureTheRequest() {
+            server.respondOk("{}");
+            SupplierHttpRequest base = request(HttpMethod.GET, null, 0, null);
+            // A raw '&' would silently become a second parameter; '#' would truncate the request.
+            SupplierHttpRequest withHostileValue = new SupplierHttpRequest(
+                    base.binding(),
+                    HttpMethod.GET,
+                    null,
+                    new java.util.LinkedHashMap<>(Map.of("articleRef", "X&limit=99999")),
+                    null,
+                    null,
+                    null,
+                    false);
+
+            String uri = SupplierBaseClient.absoluteUri(withHostileValue);
+
+            assertThat(uri).contains("articleRef=X%26limit%3D99999");
+            assertThat(uri).doesNotContain("X&limit=99999");
+        }
+
+        @Test
+        void spacesAndNonAsciiInQueryValuesAreEncoded() {
+            SupplierHttpRequest base = request(HttpMethod.GET, null, 0, null);
+            SupplierHttpRequest withUnicode = new SupplierHttpRequest(
+                    base.binding(),
+                    HttpMethod.GET,
+                    null,
+                    new java.util.LinkedHashMap<>(Map.of("party", "Größe Reifen")),
+                    null,
+                    null,
+                    null,
+                    false);
+
+            String uri = SupplierBaseClient.absoluteUri(withUnicode);
+
+            assertThat(uri).doesNotContain(" ").contains("Gr%C3%B6%C3%9Fe");
+        }
+
+        @Test
+        void pathSuffixIsAppendedAfterTheBindingPath() {
+            SupplierHttpRequest base = request(HttpMethod.GET, null, 0, "https://vendor.test");
+            SupplierHttpRequest withSuffix = new SupplierHttpRequest(
+                    base.binding(), HttpMethod.GET, "/orders/42", Map.of(), null, null, null, false);
+
+            assertThat(SupplierBaseClient.absoluteUri(withSuffix)).isEqualTo("https://vendor.test/stock/orders/42");
+        }
+
+        @Test
+        void aTrailingSlashOnTheBaseUrlDoesNotDoubleUp() {
+            SupplierHttpRequest base = request(HttpMethod.GET, null, 0, "https://vendor.test/");
+
+            assertThat(SupplierBaseClient.absoluteUri(base)).isEqualTo("https://vendor.test/stock");
+        }
+
+        /**
+         * A malformed baseUrl previously escaped as a raw {@code IllegalArgumentException} from
+         * outside every try block, producing an ADR-0050 §3 leak AND no observer call at all — so the
+         * attempt left no audit row, breaking the totality ADR-0050 §7 depends on.
+         */
+        @Test
+        void aMalformedBaseUrlIsATypedConfigurationErrorAndIsStillObserved() {
+            SupplierHttpRequest req = request(HttpMethod.GET, null, 0, "ht!tp://  bad url");
+
+            assertThatThrownBy(() -> client.exchange(req))
+                    .isInstanceOf(SupplierConfigurationException.class)
+                    .hasFieldOrPropertyWithValue("code", SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED);
+
+            assertThat(observer.outcomes())
+                    .as("an attempt must always leave an audit row, even when its configuration is unusable")
+                    .containsExactly(ExchangeOutcome.CONFIGURATION_ERROR);
+            assertThat(server.receivedRequests()).isZero();
+        }
+    }
+
+    // ── Credential-acquisition failures ─────────────────────────────────────────────
+
+    @Nested
+    class CredentialAcquisition {
+
+        /**
+         * The worst defect of the previous review round. A transport failure of the OAuth2 TOKEN
+         * endpoint was reported as SUPPLIER_AUTH_CONFIG_MISSING -> CONFIGURATION_ERROR -> 409,
+         * blaming the operator for an env var that was present and correct, and never retried.
+         * Nothing reached the vendor's business endpoint, so ADR-0052 §5 makes it pre-send.
+         */
+        @Test
+        void aTokenEndpointTransportFailureIsRetryablePreSendNotAConfigError() throws java.io.IOException {
+            SupplierHttpRequest req = oauthRequest(FaultInjectingHttpServer.refusedBaseUrl(), 2);
+
+            SupplierHttpResponse response = client.exchange(req);
+
+            assertThat(response.outcome()).isEqualTo(ExchangeOutcome.PRE_SEND_FAILURE);
+            assertThat(response.isSafeToRedispatch())
+                    .as("a vendor's token endpoint being down must cost a retry, not a night's orders")
+                    .isTrue();
+            assertThat(response.attempts()).isEqualTo(3);
+            assertThat(response.failureDetail()).contains("Credential acquisition failed at transport level");
+        }
+
+        @Test
+        void aTokenEndpoint503IsRetryablePreSend() {
+            server.respondStatus(503, "token service unavailable");
+
+            SupplierHttpResponse response = client.exchange(oauthRequest(server.baseUrl(), 1));
+
+            assertThat(response.outcome()).isEqualTo(ExchangeOutcome.PRE_SEND_FAILURE);
+            assertThat(response.attempts()).isEqualTo(2);
+        }
+
+        /**
+         * But credentials that are actually WRONG stay a configuration error: retrying a refused
+         * client secret would just hammer the vendor's token endpoint forever.
+         */
+        @Test
+        void aTokenEndpoint401IsAConfigurationErrorWithItsOwnCode() {
+            server.respondStatus(401, "invalid_client");
+
+            assertThatThrownBy(() -> client.exchange(oauthRequest(server.baseUrl(), 2)))
+                    .isInstanceOf(SupplierConfigurationException.class)
+                    .hasFieldOrPropertyWithValue("code", SupplierConfigurationException.AUTH_CREDENTIALS_REJECTED)
+                    .hasMessageContaining("refused them");
+        }
+
+        @Test
+        void aTokenResponseWithoutATokenIsItsOwnNonBlamingCode() {
+            server.respondOk("{\"token_type\":\"Bearer\"}");
+
+            assertThatThrownBy(() -> client.exchange(oauthRequest(server.baseUrl(), 0)))
+                    .isInstanceOf(SupplierConfigurationException.class)
+                    .hasFieldOrPropertyWithValue("code", SupplierConfigurationException.AUTH_TOKEN_RESPONSE_INVALID);
+        }
+    }
+
+    // ── Redirects mean our configuration is wrong ────────────────────────────────────
+
+    @Nested
+    class Redirects {
+
+        @Test
+        void a3xxIsAConfigurationErrorNamingTheRedirectTarget() {
+            server.respondStatus(301, "moved");
+
+            SupplierHttpResponse response = client.exchange(request(HttpMethod.POST, "{}", 0, null));
+
+            assertThat(response.outcome())
+                    .as("a redirect from a configured baseUrl means the baseUrl is wrong, not that the"
+                            + " vendor refused the document")
+                    .isEqualTo(ExchangeOutcome.CONFIGURATION_ERROR);
+            assertThat(response.failureDetail()).contains("does not point at the vendor's API");
+        }
+    }
+
+    // ── Breaker accounting (what may open it) ───────────────────────────────────────
+
+    @Nested
+    class BreakerAccounting {
+
+        /**
+         * A definitive rejection must not open the breaker. If it did, five 400s from a codec bug
+         * would open it, and the next call would report PRE_SEND_FAILURE — whose
+         * isSafeToRedispatch() is true — laundering a permanent vendor rejection into a transient
+         * retryable one that an outbox would re-dispatch forever.
+         */
+        @Test
+        void definitiveRejectionsDoNotCountTowardOpeningTheBreaker() {
+            server.respondStatus(400, "bad document");
+            for (int i = 0; i < 10; i++) {
+                client.exchange(request(HttpMethod.POST, "{}", 0, null));
+            }
+
+            assertThat(breakers.breakerFor(PROFILE_ID, SupplierCapability.STOCK_INQUIRY)
+                            .getState())
+                    .isEqualTo(io.github.resilience4j.circuitbreaker.CircuitBreaker.State.CLOSED);
+        }
+
+        @Test
+        void ambiguousTransportFailuresDoCountTowardOpeningTheBreaker() {
+            server.respondStatus(503, "unavailable");
+            for (int i = 0; i < 10; i++) {
+                client.exchange(request(HttpMethod.POST, "{}", 0, null));
+            }
+
+            assertThat(breakers.breakerFor(PROFILE_ID, SupplierCapability.STOCK_INQUIRY)
+                            .getState())
+                    .as("genuine transport unhealthiness is exactly what the breaker is for")
+                    .isEqualTo(io.github.resilience4j.circuitbreaker.CircuitBreaker.State.OPEN);
+        }
+
+        @Test
+        void theClassificationPredicateIsTheSingleSourceOfTruth() {
+            assertThat(SupplierBreakerRegistry.countsAsTransportFailure(new IllegalStateException("unexpected")))
+                    .as("an unexpected exception type is genuinely unexpected and must count")
+                    .isTrue();
+        }
+    }
+
     // ── Configuration errors ────────────────────────────────────────────────────────
 
     @Nested
@@ -479,8 +700,23 @@ class SupplierBaseClientTest {
     // ── Fixtures ────────────────────────────────────────────────────────────────────
 
     private SecretSchemeRegistry secrets() {
-        return new SecretSchemeRegistry(List.of(new MapSecretResolver(
-                Map.of("M_USER", "vendor-user", "M_PASSWORD", "vendor-password", "M_APIKEY", "vendor-apikey"))));
+        return new SecretSchemeRegistry(List.of(new DynamicSecretResolver(tokenUrl)));
+    }
+
+    /** A binding whose auth is OAuth2, with the token endpoint at {@code tokenBaseUrl}. */
+    private SupplierHttpRequest oauthRequest(String tokenBaseUrl, int maxRetries) {
+        SupplierHttpRequest base = request(HttpMethod.POST, "{}", maxRetries, null);
+        SupplierAuthConfigEntity auth = base.binding().authConfig();
+        auth.setType(SupplierAuthType.OAUTH2_CLIENT_CREDENTIALS);
+        auth.setUsernameRef(null);
+        auth.setPasswordRef(null);
+        auth.setApiKeyRef(null);
+        auth.setApiKeyHeader(null);
+        auth.setTokenUrlRef("env:TOKEN_URL");
+        auth.setClientIdRef("env:CLIENT_ID");
+        auth.setClientSecretRef("env:CLIENT_SECRET");
+        tokenUrl.set(tokenBaseUrl + "/oauth/token");
+        return base;
     }
 
     private SupplierHttpRequest request(HttpMethod method, String body, int maxRetries, String baseUrlOverride) {
@@ -544,8 +780,11 @@ class SupplierBaseClientTest {
         }
     }
 
-    /** Fixed-map resolver claiming {@code env}. */
-    private record MapSecretResolver(Map<String, String> values) implements SecretReferenceResolver {
+    /**
+     * Resolver claiming {@code env}. TOKEN_URL comes from a holder so a test can point the OAuth2
+     * token endpoint at a specific server, or a refused port, without rebuilding the client.
+     */
+    private record DynamicSecretResolver(AtomicReference<String> tokenUrl) implements SecretReferenceResolver {
 
         @Override
         @NonNull
@@ -557,7 +796,16 @@ class SupplierBaseClientTest {
         @NonNull
         public String resolve(@NonNull String reference) {
             String key = reference.substring(reference.indexOf(':') + 1);
-            String value = values.get(key);
+            String value =
+                    switch (key) {
+                        case "M_USER" -> "vendor-user";
+                        case "M_PASSWORD" -> "vendor-password";
+                        case "M_APIKEY" -> "vendor-apikey";
+                        case "CLIENT_ID" -> "client-id";
+                        case "CLIENT_SECRET" -> "client-secret";
+                        case "TOKEN_URL" -> tokenUrl.get();
+                        default -> null;
+                    };
             if (value == null) {
                 throw new SupplierConfigurationException(
                         SupplierConfigurationException.SECRET_NOT_FOUND,

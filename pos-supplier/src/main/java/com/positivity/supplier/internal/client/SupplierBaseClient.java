@@ -120,12 +120,40 @@ public class SupplierBaseClient {
         Instant callStarted = Instant.now(clock);
         AttemptCounter counter = new AttemptCounter();
 
+        // Resolve the URI once, here, INSIDE the observed region. Building it lazily further down
+        // meant a malformed baseUrl/path escaped as a raw IllegalArgumentException with no observer
+        // call at all -- an ADR-0050 §3 leak AND a missing audit row, which breaks the totality
+        // ADR-0050 §7 depends on.
+        String uri;
+        try {
+            uri = absoluteUri(request);
+        } catch (RuntimeException ex) {
+            // rawTarget is plain concatenation and cannot throw, so the observation always has a
+            // usable uri field even when the configured value is unusable.
+            recordAndBuild(
+                    request,
+                    rawTarget(request),
+                    correlationId,
+                    1,
+                    ExchangeOutcome.CONFIGURATION_ERROR,
+                    null,
+                    null,
+                    "Endpoint URI could not be built from the binding's baseUrl, path and parameters",
+                    callStarted,
+                    Instant.now(clock));
+            throw new SupplierConfigurationException(
+                    SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
+                    "Binding " + binding.binding().getId() + " for capability " + binding.capability()
+                            + " does not produce a usable endpoint URI; check its baseUrl and path");
+        }
+
         // Breaker checked before any attempt: an open breaker must fast-fail without network I/O
         // and without consuming the retry budget.
         if (!breaker.tryAcquirePermission()) {
             metrics.recordBreakerState(profile.getVendorProfileId(), binding.capability(), breaker);
             return recordAndBuild(
                     request,
+                    uri,
                     correlationId,
                     1,
                     ExchangeOutcome.PRE_SEND_FAILURE,
@@ -141,7 +169,7 @@ public class SupplierBaseClient {
 
         Retry retry = retryFor(request, profile);
         Supplier<SupplierHttpResponse> decorated = Retry.decorateSupplier(
-                retry, () -> breaker.executeSupplier(() -> attempt(request, correlationId, counter, breaker)));
+                retry, () -> breaker.executeSupplier(() -> attempt(request, uri, correlationId, counter, breaker)));
 
         try {
             SupplierHttpResponse response = decorated.get();
@@ -152,6 +180,7 @@ public class SupplierBaseClient {
             metrics.recordBreakerState(profile.getVendorProfileId(), binding.capability(), breaker);
             return recordAndBuild(
                     request,
+                    uri,
                     correlationId,
                     counter.valueAtLeastOne(),
                     ExchangeOutcome.PRE_SEND_FAILURE,
@@ -172,26 +201,49 @@ public class SupplierBaseClient {
     @NonNull
     private SupplierHttpResponse attempt(
             @NonNull SupplierHttpRequest request,
+            @NonNull String uri,
             @NonNull String correlationId,
             @NonNull AttemptCounter counter,
             @NonNull CircuitBreaker breaker) {
         int attemptNumber = counter.next();
         ResolvedBinding binding = request.binding();
         Instant started = Instant.now(clock);
-        String uri = absoluteUri(request);
 
         HttpHeaders headers = new HttpHeaders();
         headers.set(SupplierCorrelationContext.CORRELATION_HEADER, correlationId);
         if (request.accept() != null) {
             headers.set(HttpHeaders.ACCEPT, request.accept());
         }
+        if (request.contentType() != null) {
+            // Without this the body went out as StringHttpMessageConverter's default (text/plain),
+            // so the first EDIWheel order POST would earn a 415/400 -- classified DEFINITIVE_REJECTION
+            // and therefore never retried, reporting a permanent rejection of a valid document.
+            headers.set(HttpHeaders.CONTENT_TYPE, request.contentType());
+        }
         try {
             // Credentials resolved at call time; the resolved values live only in these headers.
             authStrategies.apply(headers, binding.authConfig());
+        } catch (SupplierAuthTransportException ex) {
+            // The token leg failed at transport level. Nothing reached the vendor's BUSINESS
+            // endpoint, so this is pre-send and retryable (ADR-0052 §5) -- returned rather than
+            // thrown, so a caller can consult isSafeToRedispatch().
+            throw failed(recordAndBuild(
+                    request,
+                    uri,
+                    correlationId,
+                    attemptNumber,
+                    ExchangeOutcome.PRE_SEND_FAILURE,
+                    null,
+                    null,
+                    "Credential acquisition failed at transport level before the business request was sent: "
+                            + ex.getMessage(),
+                    started,
+                    Instant.now(clock)));
         } catch (SupplierConfigurationException ex) {
             // Report the attempt, then let it propagate: a deployment defect must not be absorbed.
             recordAndBuild(
                     request,
+                    uri,
                     correlationId,
                     attemptNumber,
                     ExchangeOutcome.CONFIGURATION_ERROR,
@@ -216,8 +268,30 @@ public class SupplierBaseClient {
                     .toEntity(byte[].class);
 
             int status = entity.getStatusCode().value();
+            if (entity.getStatusCode().is3xxRedirection()) {
+                // followRedirects(NEVER) means a redirect surfaces as an ordinary response here:
+                // Spring's retrieve() only raises for 4xx/5xx. A 3xx from a configured baseUrl says
+                // OUR configuration is wrong -- this is not where the API lives -- not that the
+                // vendor refused the document. Reporting it as a definitive rejection would tell an
+                // operator "the vendor permanently refused this order" when the actionable truth is
+                // "fix this profile's baseUrl".
+                String location = entity.getHeaders().getFirst(HttpHeaders.LOCATION);
+                throw failed(recordAndBuild(
+                        request,
+                        uri,
+                        correlationId,
+                        attemptNumber,
+                        ExchangeOutcome.CONFIGURATION_ERROR,
+                        status,
+                        null,
+                        "Endpoint redirected (HTTP " + status + ") to '" + (location == null ? "unknown" : location)
+                                + "'; the binding's baseUrl does not point at the vendor's API",
+                        started,
+                        Instant.now(clock)));
+            }
             SupplierHttpResponse ok = recordAndBuild(
                     request,
+                    uri,
                     correlationId,
                     attemptNumber,
                     ExchangeOutcome.OK,
@@ -233,11 +307,21 @@ public class SupplierBaseClient {
             // A response WAS received, so the body reached the vendor: 4xx is a definitive
             // rejection, 5xx is ambiguous (it acted on the request and then failed).
             int status = ex.getStatusCode().value();
-            ExchangeOutcome outcome = ex.getStatusCode().is4xxClientError()
-                    ? ExchangeOutcome.DEFINITIVE_REJECTION
-                    : ExchangeOutcome.POST_SEND_AMBIGUOUS;
+            ExchangeOutcome outcome;
+            if (ex.getStatusCode().is3xxRedirection()) {
+                // followRedirects(NEVER) means a 3xx surfaces here. It says OUR configuration is
+                // wrong -- this baseUrl is not where the API lives -- not that the vendor refused
+                // the document. Calling it a definitive rejection would report "vendor permanently
+                // refused this order" when the actionable truth is "fix this profile's baseUrl".
+                outcome = ExchangeOutcome.CONFIGURATION_ERROR;
+            } else if (ex.getStatusCode().is4xxClientError()) {
+                outcome = ExchangeOutcome.DEFINITIVE_REJECTION;
+            } else {
+                outcome = ExchangeOutcome.POST_SEND_AMBIGUOUS;
+            }
             throw failed(recordAndBuild(
                     request,
+                    uri,
                     correlationId,
                     attemptNumber,
                     outcome,
@@ -251,6 +335,7 @@ public class SupplierBaseClient {
             ExchangeOutcome outcome = classifyIoFailure(ex);
             throw failed(recordAndBuild(
                     request,
+                    uri,
                     correlationId,
                     attemptNumber,
                     outcome,
@@ -268,6 +353,7 @@ public class SupplierBaseClient {
             // conversion failure means a response WAS received, so the request was transmitted.
             throw failed(recordAndBuild(
                     request,
+                    uri,
                     correlationId,
                     attemptNumber,
                     ExchangeOutcome.POST_SEND_AMBIGUOUS,
@@ -431,7 +517,27 @@ public class SupplierBaseClient {
         for (Map.Entry<String, String> param : request.queryParams().entrySet()) {
             builder.queryParam(param.getKey(), param.getValue());
         }
-        return builder.build(false).toUriString();
+        // encode(): query values routinely carry European article and party references with
+        // spaces, non-ASCII, '&' or '='. Unencoded, a value containing '&' silently becomes a second
+        // parameter and a '#' truncates the rest of the request. Base URLs and paths are therefore
+        // expected unencoded in configuration, which is how operators write them.
+        return builder.encode().build().toUriString();
+    }
+
+    /**
+     * The target as plain string concatenation, with no parsing and no encoding, so it cannot throw.
+     * Used only to populate an observation when {@link #absoluteUri} itself failed — an attempt must
+     * always produce an audit row (ADR-0050 §7), including when its configuration is unusable.
+     *
+     * @param request the request whose binding is being described
+     * @return a best-effort description of the intended target
+     */
+    @NonNull
+    static String rawTarget(@NonNull SupplierHttpRequest request) {
+        SupplierEndpointBindingEntity endpoint = request.binding().binding();
+        return String.valueOf(endpoint.getBaseUrl())
+                + String.valueOf(endpoint.getPath())
+                + (request.pathSuffix() == null ? "" : request.pathSuffix());
     }
 
     @NonNull
@@ -449,6 +555,7 @@ public class SupplierBaseClient {
     @NonNull
     private SupplierHttpResponse recordAndBuild(
             @NonNull SupplierHttpRequest request,
+            @NonNull String uri,
             @NonNull String correlationId,
             int attemptNumber,
             @NonNull ExchangeOutcome outcome,
@@ -471,7 +578,7 @@ public class SupplierBaseClient {
                     binding.version().value(),
                     binding.binding().getId(),
                     request.method().name(),
-                    absoluteUri(request),
+                    uri,
                     attemptNumber,
                     correlationId,
                     outcome,
@@ -514,7 +621,7 @@ public class SupplierBaseClient {
      * Internal signal carrying a failed attempt's already-observed response out to the retry
      * decorator. Never escapes this class: {@link #exchange} converts it back into a response.
      */
-    static final class TransportAttemptException extends RuntimeException {
+    static final class TransportAttemptException extends RuntimeException implements ExchangeOutcomeCarrier {
 
         private final transient SupplierHttpResponse response;
 
@@ -528,6 +635,12 @@ public class SupplierBaseClient {
         @NonNull
         SupplierHttpResponse response() {
             return response;
+        }
+
+        @Override
+        @NonNull
+        public ExchangeOutcome exchangeOutcome() {
+            return response.outcome();
         }
     }
 

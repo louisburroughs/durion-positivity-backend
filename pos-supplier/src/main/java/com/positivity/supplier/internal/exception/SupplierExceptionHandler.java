@@ -1,5 +1,7 @@
 package com.positivity.supplier.internal.exception;
 
+import static java.util.Map.entry;
+
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.OptimisticLockException;
@@ -48,19 +50,21 @@ public class SupplierExceptionHandler {
      * declared on that exception must appear here; {@code SupplierConfigurationCodeMappingTest}
      * enforces that by reflection so a new code cannot silently inherit the 500 catch-all.
      */
-    static final Map<String, HttpStatus> CONFIGURATION_STATUS = Map.of(
+    static final Map<String, HttpStatus> CONFIGURATION_STATUS = Map.ofEntries(
             // Caller-actionable configuration state.
-            SupplierConfigurationException.UNKNOWN_SUPPLIER, HttpStatus.NOT_FOUND,
-            SupplierConfigurationException.PROFILE_DISABLED, HttpStatus.CONFLICT,
-            SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED, HttpStatus.CONFLICT,
-            SupplierConfigurationException.MISSING_BILLING_ACCOUNT, HttpStatus.CONFLICT,
-            SupplierConfigurationException.MISSING_DELIVERY_MAPPING, HttpStatus.CONFLICT,
-            SupplierConfigurationException.AUTH_CONFIG_MISSING, HttpStatus.CONFLICT,
+            entry(SupplierConfigurationException.UNKNOWN_SUPPLIER, HttpStatus.NOT_FOUND),
+            entry(SupplierConfigurationException.PROFILE_DISABLED, HttpStatus.CONFLICT),
+            entry(SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED, HttpStatus.CONFLICT),
+            entry(SupplierConfigurationException.MISSING_BILLING_ACCOUNT, HttpStatus.CONFLICT),
+            entry(SupplierConfigurationException.MISSING_DELIVERY_MAPPING, HttpStatus.CONFLICT),
+            entry(SupplierConfigurationException.AUTH_CONFIG_MISSING, HttpStatus.CONFLICT),
+            entry(SupplierConfigurationException.AUTH_CREDENTIALS_REJECTED, HttpStatus.CONFLICT),
             // Deployment defects: generic message, detail logged server-side only.
-            SupplierConfigurationException.SECRET_REFERENCE_INVALID, HttpStatus.INTERNAL_SERVER_ERROR,
-            SupplierConfigurationException.UNKNOWN_SECRET_SCHEME, HttpStatus.INTERNAL_SERVER_ERROR,
-            SupplierConfigurationException.SECRET_NOT_FOUND, HttpStatus.INTERNAL_SERVER_ERROR,
-            SupplierConfigurationException.YAML_BOOTSTRAP_INVALID, HttpStatus.INTERNAL_SERVER_ERROR);
+            entry(SupplierConfigurationException.SECRET_REFERENCE_INVALID, HttpStatus.INTERNAL_SERVER_ERROR),
+            entry(SupplierConfigurationException.UNKNOWN_SECRET_SCHEME, HttpStatus.INTERNAL_SERVER_ERROR),
+            entry(SupplierConfigurationException.SECRET_NOT_FOUND, HttpStatus.INTERNAL_SERVER_ERROR),
+            entry(SupplierConfigurationException.YAML_BOOTSTRAP_INVALID, HttpStatus.INTERNAL_SERVER_ERROR),
+            entry(SupplierConfigurationException.AUTH_TOKEN_RESPONSE_INVALID, HttpStatus.INTERNAL_SERVER_ERROR));
 
     private final Clock clock;
 

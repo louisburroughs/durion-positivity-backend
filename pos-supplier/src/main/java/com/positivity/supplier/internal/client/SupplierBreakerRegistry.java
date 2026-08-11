@@ -55,8 +55,37 @@ public class SupplierBreakerRegistry {
                 .minimumNumberOfCalls(minimumNumberOfCalls)
                 .waitDurationInOpenState(Duration.ofSeconds(waitDurationSeconds))
                 .permittedNumberOfCallsInHalfOpenState(halfOpenPermittedCalls)
+                // Only transport health may open the breaker (see #countsAsTransportFailure).
+                .recordException(SupplierBreakerRegistry::countsAsTransportFailure)
                 .build();
         this.registry = CircuitBreakerRegistry.of(config);
+    }
+
+    /**
+     * Whether a failure reflects <strong>transport health</strong> and may therefore open the breaker.
+     *
+     * <p>Only pre-send failures and post-send ambiguity count. A definitive 4xx rejection and a
+     * pre-network configuration error must not: counting them would launder a <em>permanent</em>
+     * condition into a <em>transient</em> one. Five 400s from a codec bug would open the breaker, and
+     * the next call would then report {@link ExchangeOutcome#PRE_SEND_FAILURE}, whose
+     * {@code isSafeToRedispatch()} is {@code true} — so an outbox would keep re-dispatching a document
+     * the vendor has already refused, forever.
+     *
+     * <p>This also preserves ADR-0052 §3's premise that a breaker rejection means the attempt never
+     * left {@code PENDING}. That premise is true for a genuine transport-driven breaker, and it is only
+     * the miscount that would make it misleading — so the fix belongs here, not in weakening the
+     * {@code isSafeToRedispatch()} signal.
+     *
+     * @param throwable the failure resilience4j is considering
+     * @return {@code true} when it should count toward opening the breaker
+     */
+    public static boolean countsAsTransportFailure(@NonNull Throwable throwable) {
+        if (!(throwable instanceof ExchangeOutcomeCarrier carrier)) {
+            // An unexpected exception type is genuinely unexpected: count it.
+            return true;
+        }
+        ExchangeOutcome outcome = carrier.exchangeOutcome();
+        return outcome == ExchangeOutcome.PRE_SEND_FAILURE || outcome == ExchangeOutcome.POST_SEND_AMBIGUOUS;
     }
 
     /**

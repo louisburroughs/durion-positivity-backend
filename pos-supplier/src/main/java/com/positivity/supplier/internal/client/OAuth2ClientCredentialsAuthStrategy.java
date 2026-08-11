@@ -27,6 +27,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 /**
  * OAuth2 {@code client_credentials} (ADR-0050 §4): exchanges a client id/secret for a short-lived
@@ -65,7 +66,7 @@ public class OAuth2ClientCredentialsAuthStrategy implements SupplierAuthStrategy
 
     public OAuth2ClientCredentialsAuthStrategy(
             @NonNull SecretSchemeRegistry secretSchemeRegistry,
-            RestClient.Builder restClientBuilder,
+            RestClient.@NonNull Builder restClientBuilder,
             @NonNull Clock clock,
             @Value("${pos.supplier.oauth2.expiry-skew-seconds:30}") long expirySkewSeconds) {
         this.secretSchemeRegistry = Objects.requireNonNull(secretSchemeRegistry, "secretSchemeRegistry");
@@ -148,20 +149,44 @@ public class OAuth2ClientCredentialsAuthStrategy implements SupplierAuthStrategy
                     .body(form)
                     .retrieve()
                     .body(TokenResponse.class);
+        } catch (RestClientResponseException ex) {
+            int status = ex.getStatusCode().value();
+            if (status == 401 || status == 403) {
+                // The vendor actively rejected our client id/secret. Retrying would hammer their
+                // token endpoint with credentials that will keep being refused, so this stays a
+                // configuration error -- but with its own code, so it is distinguishable from an
+                // absent reference and does not send an operator hunting for a missing env var.
+                throw new SupplierConfigurationException(
+                        SupplierConfigurationException.AUTH_CREDENTIALS_REJECTED,
+                        "OAuth2 token endpoint rejected the configured client credentials for auth config '"
+                                + authConfig.getName() + "' with HTTP " + status
+                                + "; the credentials resolved successfully but the vendor refused them");
+            }
+            // 429, 5xx and anything else: the vendor's token endpoint is unhealthy, not our config.
+            throw new SupplierAuthTransportException(
+                    authConfig.getName(),
+                    "OAuth2 token endpoint returned HTTP " + status + " for auth config '" + authConfig.getName() + "'",
+                    ex);
         } catch (RestClientException ex) {
-            // Message names the auth config and reference field only; never the resolved values.
-            throw new SupplierConfigurationException(
-                    SupplierConfigurationException.AUTH_CONFIG_MISSING,
-                    "OAuth2 token request failed for auth config '" + authConfig.getName()
-                            + "'; the token endpoint (tokenUrlRef) did not issue a token");
+            // Connection refused, timeout, unparseable response: transport, not configuration.
+            // Cause retained -- discarding it left operators with no way to tell a DNS failure from
+            // a TLS handshake failure.
+            throw new SupplierAuthTransportException(
+                    authConfig.getName(),
+                    "OAuth2 token request failed at transport level for auth config '" + authConfig.getName() + "' ("
+                            + ex.getClass().getSimpleName() + ")",
+                    ex);
         }
 
         if (response == null
                 || response.accessToken() == null
                 || response.accessToken().isBlank()) {
+            // A 2xx with no token is a vendor contract violation. Not retryable, and not the
+            // operator's configuration either, so it gets its own non-blaming code.
             throw new SupplierConfigurationException(
-                    SupplierConfigurationException.AUTH_CONFIG_MISSING,
-                    "OAuth2 token endpoint returned no access_token for auth config '" + authConfig.getName() + "'");
+                    SupplierConfigurationException.AUTH_TOKEN_RESPONSE_INVALID,
+                    "OAuth2 token endpoint answered successfully but supplied no access_token for auth config '"
+                            + authConfig.getName() + "'");
         }
 
         Duration lifetime = response.expiresIn() == null || response.expiresIn() <= 0
@@ -201,11 +226,29 @@ public class OAuth2ClientCredentialsAuthStrategy implements SupplierAuthStrategy
 
     /** A minted access token and the instant it stops being valid. */
     private record CachedToken(
-            @NonNull String accessToken, @NonNull Instant expiresAt) {}
+            @NonNull String accessToken, @NonNull Instant expiresAt) {
+
+        /**
+         * Overridden because a record's generated {@code toString} renders every component: any debug
+         * log, assertion message or exception that happened to include this object would print the
+         * bearer token verbatim.
+         */
+        @Override
+        public String toString() {
+            return "CachedToken[accessToken=<redacted>, expiresAt=" + expiresAt + "]";
+        }
+    }
 
     /** Token endpoint response; unknown properties are ignored by Jackson defaults. */
     record TokenResponse(
             @JsonProperty("access_token") @Nullable String accessToken,
             @JsonProperty("token_type") @Nullable String tokenType,
-            @JsonProperty("expires_in") @Nullable Long expiresIn) {}
+            @JsonProperty("expires_in") @Nullable Long expiresIn) {
+
+        /** Overridden for the same reason as {@link CachedToken}: it would render the token. */
+        @Override
+        public String toString() {
+            return "TokenResponse[accessToken=<redacted>, tokenType=" + tokenType + ", expiresIn=" + expiresIn + "]";
+        }
+    }
 }
