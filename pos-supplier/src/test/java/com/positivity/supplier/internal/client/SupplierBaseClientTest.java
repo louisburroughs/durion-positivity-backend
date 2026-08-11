@@ -83,8 +83,9 @@ class SupplierBaseClientTest {
                 new BasicPlusApiKeyAuthStrategy(secrets),
                 new BearerTokenAuthStrategy(secrets),
                 new OAuth2ClientCredentialsAuthStrategy(
-                        secrets, org.springframework.web.client.RestClient.builder(), Clock.systemUTC(), 30)));
+                        secrets, new SupplierHttpClients(), Clock.systemUTC(), 30, 5000, 15000)));
         return new SupplierBaseClient(
+                new SupplierHttpClients(),
                 strategies,
                 breakers,
                 new SupplierClientMetrics(new SimpleMeterRegistry()),
@@ -673,14 +674,12 @@ class SupplierBaseClientTest {
             // ADR-0050 §7: auditing is a side concern; it must not turn a good exchange into a bad one.
             server.respondOk("{}");
             SupplierBaseClient clientWithBadObserver = new SupplierBaseClient(
+                    new SupplierHttpClients(),
                     new SupplierAuthStrategies(List.of(
                             new BasicPlusApiKeyAuthStrategy(secrets()),
                             new BearerTokenAuthStrategy(secrets()),
                             new OAuth2ClientCredentialsAuthStrategy(
-                                    secrets(),
-                                    org.springframework.web.client.RestClient.builder(),
-                                    Clock.systemUTC(),
-                                    30))),
+                                    secrets(), new SupplierHttpClients(), Clock.systemUTC(), 30, 5000, 15000))),
                     breakers,
                     new SupplierClientMetrics(new SimpleMeterRegistry()),
                     context -> {

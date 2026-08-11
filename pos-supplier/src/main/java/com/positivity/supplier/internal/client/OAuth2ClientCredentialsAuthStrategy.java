@@ -47,6 +47,24 @@ import org.springframework.web.client.RestClientResponseException;
  * <p>The cached value is a vendor-issued, short-lived artifact — not a stored credential — which
  * is why caching it is legitimate where caching a password would not be. The client id and secret
  * themselves are resolved from references on every refresh and never held.
+ *
+ * <h2>Token-leg timeouts are the token leg's own</h2>
+ *
+ * Separate properties ({@code pos.supplier.oauth2.connect-timeout-millis} /
+ * {@code read-timeout-millis}), not the profile's, and not the platform builder's. Deliberate on both counts:
+ *
+ * <ul>
+ *   <li>Not the platform builder's, because that is 2s/5s for services on the same network and this is a
+ *       third-party endpoint across the internet. A vendor that reliably takes six seconds to mint a token
+ *       would have failed every single exchange, with the profile's own generous timeouts never consulted.
+ *   <li>Not the profile's, because {@link #apply} receives only the auth config — it has no binding and no
+ *       profile — and because a token endpoint is a different endpoint from the vendor API, frequently slower,
+ *       and reasonably budgeted on its own. Threading the profile through the strategy interface to reach a
+ *       value that should differ anyway would be the wrong trade.
+ * </ul>
+ *
+ * The defaults (5s connect, 15s read) are deliberately more generous than the platform's and less generous
+ * than a vendor API call: a token exchange is one small round trip, and the whole exchange waits on it.
  */
 @Component
 public class OAuth2ClientCredentialsAuthStrategy implements SupplierAuthStrategy {
@@ -66,12 +84,19 @@ public class OAuth2ClientCredentialsAuthStrategy implements SupplierAuthStrategy
 
     public OAuth2ClientCredentialsAuthStrategy(
             @NonNull SecretSchemeRegistry secretSchemeRegistry,
-            RestClient.@NonNull Builder restClientBuilder,
+            @NonNull SupplierHttpClients httpClients,
             @NonNull Clock clock,
-            @Value("${pos.supplier.oauth2.expiry-skew-seconds:30}") long expirySkewSeconds) {
+            @Value("${pos.supplier.oauth2.expiry-skew-seconds:30}") long expirySkewSeconds,
+            @Value("${pos.supplier.oauth2.connect-timeout-millis:5000}") int connectTimeoutMillis,
+            @Value("${pos.supplier.oauth2.read-timeout-millis:15000}") int readTimeoutMillis) {
         this.secretSchemeRegistry = Objects.requireNonNull(secretSchemeRegistry, "secretSchemeRegistry");
+        // The vendor-facing transport, NOT the platform RestClient.Builder this used to take. That builder
+        // exists for calls to pos-event-receiver and pos-security-service and carries their budgets
+        // (2s connect / 5s read) plus SimpleClientHttpRequestFactory, which cannot distinguish a connect
+        // timeout from a read timeout. Fetching a vendor credential is a third-party internet call and needs
+        // the same transport as the call that will use the credential. See SupplierHttpClients.
         this.tokenClient =
-                Objects.requireNonNull(restClientBuilder, "restClientBuilder").build();
+                Objects.requireNonNull(httpClients, "httpClients").forTimeouts(connectTimeoutMillis, readTimeoutMillis);
         this.clock = Objects.requireNonNull(clock, "clock");
         this.expirySkew = Duration.ofSeconds(expirySkewSeconds);
     }

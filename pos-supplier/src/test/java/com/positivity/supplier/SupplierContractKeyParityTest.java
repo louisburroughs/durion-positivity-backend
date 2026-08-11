@@ -130,6 +130,36 @@ class SupplierContractKeyParityTest {
         }
     }
 
+    /**
+     * The same pin for V3's two enum-valued CHECK constraints. {@code capture_level} and {@code outcome} are
+     * written from {@code PayloadCaptureLevel} and {@code ExchangeOutcome} respectively, and a constant added
+     * to either enum without the migration is not a compile error — it is a constraint violation on an audit
+     * write, discovered on the first exchange that happens to take the new branch. The exchange itself
+     * survives (the observer swallows), so the only symptom is a row missing from a commercial audit trail.
+     *
+     * <p>{@code outcome} is stored as {@code name()} rather than mapped with {@code @Enumerated}, so nothing
+     * in the type system connects the enum to the column at all.
+     */
+    @Test
+    void exchangeAuditEnumsMatchTheCheckConstraintsInTheV3Migration() throws Exception {
+        String migration = java.nio.file.Files.readString(
+                java.nio.file.Path.of("src/main/resources/db/migration/V3__supplier_exchange_audit.sql"));
+
+        for (var level : com.positivity.supplier.internal.enums.PayloadCaptureLevel.values()) {
+            assertThat(constraintBody(migration, "chk_saudit_capture_level"))
+                    .as("PayloadCaptureLevel.%s must be permitted by chk_saudit_capture_level", level)
+                    .contains("'" + level.name() + "'");
+        }
+        for (var outcome : com.positivity.supplier.internal.spi.ExchangeOutcome.values()) {
+            assertThat(constraintBody(migration, "chk_saudit_outcome"))
+                    .as(
+                            "ExchangeOutcome.%s must be permitted by chk_saudit_outcome -- the column stores"
+                                    + " name() with no @Enumerated mapping, so nothing else links the two",
+                            outcome)
+                    .contains("'" + outcome.name() + "'");
+        }
+    }
+
     /** The text of one named CHECK constraint, so a constant cannot match a value in an unrelated one. */
     private static String constraintBody(String migration, String constraintName) {
         int start = migration.indexOf("CONSTRAINT " + constraintName);

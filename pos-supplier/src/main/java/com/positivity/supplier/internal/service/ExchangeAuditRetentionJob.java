@@ -28,6 +28,24 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Implemented as a bulk {@code UPDATE} rather than load-mutate-save: loading rows would decrypt
  * every payload only to discard it, needlessly widening where plaintext exists, and would fail on any
  * row whose key is no longer configured — a rotated-out key must not be able to block the purge.
+ *
+ * <h2>No lease, deliberately: safe to run on every instance at once</h2>
+ *
+ * Every replica runs this schedule, so on a multi-instance deployment several purges overlap. That is
+ * harmless, and the reason is in the statement rather than in a comment: the {@code UPDATE} predicate
+ * requires {@code payloads_purged_at IS NULL} and at least one non-null payload column, so it is idempotent
+ * and self-limiting — the second instance to arrive matches the rows the first has not yet committed, and
+ * once committed they match nothing. Concurrent runs cannot double-purge, cannot purge the wrong window, and
+ * cannot resurrect anything. {@code ExchangeAuditRetentionJobTest} pins the idempotence rather than leaving
+ * it as an assertion in prose.
+ *
+ * <p>A lease was considered and rejected. {@code supplier_schedule_lease} is keyed by {@code binding_id} with
+ * a foreign key to {@code supplier_endpoint_binding} — it is a per-binding coordination table by
+ * construction, and a table-wide retention sweep is not a binding, so it has nowhere to put a row. Adding a
+ * general-purpose job-lease table to save a redundant indexed scan of one table per night would be
+ * infrastructure bought well ahead of a problem; the scan is bounded by
+ * {@code idx_saudit_started_at}. If a general job lease is ever introduced for other reasons, this is a
+ * natural early user of it.
  */
 @Component
 public class ExchangeAuditRetentionJob {

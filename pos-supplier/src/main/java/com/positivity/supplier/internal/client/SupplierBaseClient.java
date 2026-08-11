@@ -18,7 +18,6 @@ import java.net.NoRouteToHostException;
 import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.UnknownHostException;
-import java.net.http.HttpClient;
 import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpTimeoutException;
 import java.time.Clock;
@@ -26,8 +25,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -36,7 +33,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -88,15 +84,17 @@ public class SupplierBaseClient {
     private final long baseBackoffMillis;
 
     /** RestClients cached by timeout signature; building one per call would waste connection pools. */
-    private final ConcurrentMap<String, RestClient> clientsByTimeouts = new ConcurrentHashMap<>();
+    private final SupplierHttpClients httpClients;
 
     public SupplierBaseClient(
+            @NonNull SupplierHttpClients httpClients,
             @NonNull SupplierAuthStrategies authStrategies,
             @NonNull SupplierBreakerRegistry breakerRegistry,
             @NonNull SupplierClientMetrics metrics,
             @NonNull ExchangeObserver exchangeObserver,
             @NonNull Clock clock,
             @Value("${pos.supplier.retry.base-backoff-millis:500}") long baseBackoffMillis) {
+        this.httpClients = Objects.requireNonNull(httpClients, "httpClients");
         this.authStrategies = Objects.requireNonNull(authStrategies, "authStrategies");
         this.breakerRegistry = Objects.requireNonNull(breakerRegistry, "breakerRegistry");
         this.metrics = Objects.requireNonNull(metrics, "metrics");
@@ -477,27 +475,10 @@ public class SupplierBaseClient {
         int connectTimeout =
                 profile.getConnectTimeoutMs() == null ? DEFAULT_CONNECT_TIMEOUT_MS : profile.getConnectTimeoutMs();
         int readTimeout = profile.getReadTimeoutMs() == null ? DEFAULT_READ_TIMEOUT_MS : profile.getReadTimeoutMs();
-        return clientsByTimeouts.computeIfAbsent(connectTimeout + ":" + readTimeout, key -> {
-            // JdkClientHttpRequestFactory, NOT the SimpleClientHttpRequestFactory used elsewhere in
-            // the fleet. This module's correctness rests on telling a connect timeout (never
-            // transmitted, safe to retry) from a read timeout (may have been transmitted, must NOT
-            // be retried), and SimpleClientHttpRequestFactory wraps HttpURLConnection, which
-            // reports both as java.net.SocketTimeoutException separable only by message text.
-            // java.net.http.HttpClient raises HttpConnectTimeoutException as a distinct type, so
-            // the classification is type-safe. It also pools connections, which HttpURLConnection
-            // does not, and this transport makes repeated calls per vendor.
-            HttpClient httpClient = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofMillis(connectTimeout))
-                    // Explicit: never follow a vendor redirect. Silently re-sending a
-                    // state-creating POST body to another host is exactly the duplicate-submission
-                    // risk ADR-0052 exists to prevent.
-                    .followRedirects(HttpClient.Redirect.NEVER)
-                    .build();
-            JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
-            // Connect timeout lives on the HttpClient; only the read timeout is per-request here.
-            factory.setReadTimeout(Duration.ofMillis(readTimeout));
-            return RestClient.builder().requestFactory(factory).build();
-        });
+        // The cache lives in SupplierHttpClients so the OAuth2 token leg shares this exact transport --
+        // it previously used the platform builder, with platform timeouts and a request factory that
+        // cannot tell a connect timeout from a read timeout. See SupplierHttpClients.
+        return httpClients.forTimeouts(connectTimeout, readTimeout);
     }
 
     /**

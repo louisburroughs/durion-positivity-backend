@@ -383,15 +383,19 @@ class SupplierExchangeAuditPersistenceTest {
                     .extracting(ex -> ((PayloadUnreadableException) ex).getCode())
                     .isEqualTo(PayloadUnreadableException.UNKNOWN_KEY_ID);
 
-            AuditAccessEntity recorded = transactionTemplate.execute(
-                    status -> accessRepository.findAll().getFirst());
+            // Asserted on the LIST, not on getFirst(). If the record is missing, getFirst() throws
+            // NoSuchElementException before this test's own assertion can run -- so the failure would be an
+            // exception with no explanation instead of a message naming the guarantee that broke. The
+            // difference matters because this is the assertion the mutation check points at.
+            var recorded = transactionTemplate.execute(status -> accessRepository.findAll());
             assertThat(recorded)
-                    .as("the read HAPPENED and produced nothing usable. noRollbackFor exists so this record"
-                            + " survives the error response -- rolling it back would delete the evidence of the"
-                            + " one event most worth investigating")
-                    .isNotNull();
-            assertThat(recorded.getPayloadOutcome()).isEqualTo(AuditPayloadOutcome.UNREADABLE);
-            assertThat(recorded.getAccessedBy()).isEqualTo(READER);
+                    .as("the read HAPPENED and produced nothing usable, so noRollbackFor must keep this record"
+                            + " alive through the error response -- rolling it back would delete the evidence"
+                            + " of the one event most worth investigating")
+                    .hasSize(1);
+            AuditAccessEntity row = recorded.getFirst();
+            assertThat(row.getPayloadOutcome()).isEqualTo(AuditPayloadOutcome.UNREADABLE);
+            assertThat(row.getAccessedBy()).isEqualTo(READER);
         }
 
         @Test

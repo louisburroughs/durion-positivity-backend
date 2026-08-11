@@ -170,6 +170,28 @@
     </dependencies>
     <build>
         <plugins>
+            <!--
+              Activates the `test` Spring profile for every test in this module.
+
+              Load-bearing, not convenience: AuditPayloadCipher requires an operator-provisioned encryption
+              key unless `dev` or `test` is explicitly active (ADR-0050 §7, fail-closed), so without this
+              every @DataJpaTest slice carrying ExchangeAuditEntity would fail to build its entity manager.
+
+              Done here rather than with a src/test/resources/application.yml, which was the first attempt and
+              was worse than the problem: a test-classpath application.yml SHADOWS the main one entirely, so
+              the module's real configuration stops being loaded by any test. A duplicate-key error in the
+              main application.yml then survived a fully green 519-test run and only surfaced when the app was
+              actually started to generate the OpenAPI spec.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <spring.profiles.active>test</spring.profiles.active>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

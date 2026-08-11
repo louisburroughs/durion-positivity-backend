@@ -17,7 +17,6 @@ import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.spi.ExchangeContext;
 import com.positivity.supplier.internal.spi.ExchangeOutcome;
 import jakarta.persistence.EntityManager;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -69,12 +68,16 @@ class ExchangeAuditObserverTest {
     @Autowired
     private AuditPayloadCipher cipher;
 
-    private ExchangeAuditObserver observer;
+    private ExchangeAuditWriter observer;
     private UUID profileId;
 
     @BeforeEach
     void setUp() {
-        observer = new ExchangeAuditObserver(auditRepository, bindingRepository, Clock.systemUTC(), "REDACTED");
+        // The writer is exercised directly here. This class's assertions are about what reaches the
+        // COLUMNS -- redaction, capture levels, raw ciphertext -- which is the writer's job; the observer's
+        // only job is failure isolation and its transaction boundary, both covered by
+        // ExchangeAuditWriterTest, which is the only place a rolled-back caller is observable.
+        observer = new ExchangeAuditWriter(auditRepository, bindingRepository, "REDACTED");
         SupplierProfileEntity profile = new SupplierProfileEntity();
         profile.setSupplierRef("michelin-eu");
         profile.setDisplayName("Michelin EU");
@@ -132,7 +135,7 @@ class ExchangeAuditObserverTest {
     void writesOneRowPerAttemptWithIdentityAndSnapshot() {
         UUID bindingId = bindingWithCaptureLevel(PayloadCaptureLevel.REDACTED);
 
-        observer.onExchange(context(bindingId, ExchangeOutcome.OK, REQUEST_DOC));
+        observer.write(context(bindingId, ExchangeOutcome.OK, REQUEST_DOC));
 
         List<ExchangeAuditEntity> rows = auditRepository.findAll();
         assertThat(rows).hasSize(1);
@@ -152,7 +155,7 @@ class ExchangeAuditObserverTest {
     void storedPayloadIsEncryptedAndRedacted() {
         UUID bindingId = bindingWithCaptureLevel(PayloadCaptureLevel.REDACTED);
 
-        observer.onExchange(context(bindingId, ExchangeOutcome.OK, REQUEST_DOC));
+        observer.write(context(bindingId, ExchangeOutcome.OK, REQUEST_DOC));
         UUID auditId = auditRepository.findAll().getFirst().getExchangeAuditId();
         byte[] stored = rawRequestPayload(auditId);
 
@@ -170,7 +173,7 @@ class ExchangeAuditObserverTest {
     void metadataOnlyStoresNoPayloadAtAll() {
         UUID bindingId = bindingWithCaptureLevel(PayloadCaptureLevel.METADATA_ONLY);
 
-        observer.onExchange(context(bindingId, ExchangeOutcome.OK, REQUEST_DOC));
+        observer.write(context(bindingId, ExchangeOutcome.OK, REQUEST_DOC));
 
         ExchangeAuditEntity row = auditRepository.findAll().getFirst();
         assertThat(row.getRequestPayload()).isNull();
@@ -182,7 +185,7 @@ class ExchangeAuditObserverTest {
     void fullCaptureStoresTheDocumentAsSentButStillEncrypted() {
         UUID bindingId = bindingWithCaptureLevel(PayloadCaptureLevel.FULL);
 
-        observer.onExchange(context(bindingId, ExchangeOutcome.OK, REQUEST_DOC));
+        observer.write(context(bindingId, ExchangeOutcome.OK, REQUEST_DOC));
         UUID auditId = auditRepository.findAll().getFirst().getExchangeAuditId();
 
         assertThat(new String(rawRequestPayload(auditId), java.nio.charset.StandardCharsets.ISO_8859_1))
@@ -196,7 +199,7 @@ class ExchangeAuditObserverTest {
     void failedExchangesAreRecordedToo() {
         UUID bindingId = bindingWithCaptureLevel(PayloadCaptureLevel.REDACTED);
 
-        observer.onExchange(context(bindingId, ExchangeOutcome.PRE_SEND_FAILURE, REQUEST_DOC));
+        observer.write(context(bindingId, ExchangeOutcome.PRE_SEND_FAILURE, REQUEST_DOC));
 
         ExchangeAuditEntity row = auditRepository.findAll().getFirst();
         assertThat(row.getOutcome()).isEqualTo("PRE_SEND_FAILURE");
@@ -210,7 +213,7 @@ class ExchangeAuditObserverTest {
      */
     @Test
     void anUnknownBindingFallsBackToTheSafeDefaultNotFull() {
-        observer.onExchange(context(UUID.randomUUID(), ExchangeOutcome.OK, REQUEST_DOC));
+        observer.write(context(UUID.randomUUID(), ExchangeOutcome.OK, REQUEST_DOC));
 
         ExchangeAuditEntity row = auditRepository.findAll().getFirst();
         assertThat(row.getCaptureLevel()).isEqualTo(PayloadCaptureLevel.REDACTED);
@@ -227,7 +230,7 @@ class ExchangeAuditObserverTest {
     void everyObservedAttemptCarriesItsBinding() {
         UUID bindingId = bindingWithCaptureLevel(PayloadCaptureLevel.REDACTED);
 
-        observer.onExchange(context(bindingId, ExchangeOutcome.CONFIGURATION_ERROR, null));
+        observer.write(context(bindingId, ExchangeOutcome.CONFIGURATION_ERROR, null));
 
         ExchangeAuditEntity row = auditRepository.findAll().getFirst();
         assertThat(row.getBindingId()).isEqualTo(bindingId);
@@ -241,7 +244,7 @@ class ExchangeAuditObserverTest {
         UUID bindingId = bindingWithCaptureLevel(PayloadCaptureLevel.REDACTED);
         for (int attempt = 1; attempt <= 3; attempt++) {
             ExchangeContext base = context(bindingId, ExchangeOutcome.PRE_SEND_FAILURE, REQUEST_DOC);
-            observer.onExchange(new ExchangeContext(
+            observer.write(new ExchangeContext(
                     base.vendorProfileId(),
                     base.supplierRef(),
                     base.capability(),
@@ -271,7 +274,7 @@ class ExchangeAuditObserverTest {
     @Test
     void theRetentionPurgeNullsPayloadsButKeepsTheMetadataRow() {
         UUID bindingId = bindingWithCaptureLevel(PayloadCaptureLevel.REDACTED);
-        observer.onExchange(context(bindingId, ExchangeOutcome.OK, REQUEST_DOC));
+        observer.write(context(bindingId, ExchangeOutcome.OK, REQUEST_DOC));
         Instant purgeAt = Instant.parse("2027-01-01T00:00:00Z");
 
         int purged = auditRepository.purgePayloadsOlderThan(purgeAt, purgeAt);
@@ -293,7 +296,7 @@ class ExchangeAuditObserverTest {
     @Test
     void thePurgeLeavesRowsInsideTheRetentionWindowAlone() {
         UUID bindingId = bindingWithCaptureLevel(PayloadCaptureLevel.REDACTED);
-        observer.onExchange(context(bindingId, ExchangeOutcome.OK, REQUEST_DOC));
+        observer.write(context(bindingId, ExchangeOutcome.OK, REQUEST_DOC));
 
         int purged = auditRepository.purgePayloadsOlderThan(
                 Instant.parse("2020-01-01T00:00:00Z"), Instant.parse("2020-01-01T00:00:00Z"));
@@ -303,18 +306,26 @@ class ExchangeAuditObserverTest {
                 .isEqualTo(1);
     }
 
-    /** Auditing must never turn a good exchange into a bad one (ADR-0050 §7). */
+    /**
+     * Auditing must never turn a good exchange into a bad one (ADR-0050 §7).
+     *
+     * <p>Now expressed against the real collaboration rather than an anonymous subclass overriding the write.
+     * That override could only ever prove the try/catch compiles: it replaced the very method whose
+     * transactional boundary was the actual defect, so the test passed for years of self-invocation silently
+     * disabling {@code REQUIRES_NEW}. A stub of the writer keeps the failure-isolation assertion; the boundary
+     * itself is proven in {@code ExchangeAuditWriterTest} against real commits.
+     */
     @Test
     void anAuditWriteFailureDoesNotPropagateToTheCaller() {
-        ExchangeAuditObserver broken =
-                new ExchangeAuditObserver(auditRepository, bindingRepository, Clock.systemUTC(), "REDACTED") {
+        ExchangeAuditObserver isolating =
+                new ExchangeAuditObserver(new ExchangeAuditWriter(auditRepository, bindingRepository, "REDACTED") {
                     @Override
-                    void persist(ExchangeContext context) {
+                    public void write(ExchangeContext context) {
                         throw new IllegalStateException("audit store unavailable");
                     }
-                };
+                });
 
-        broken.onExchange(
+        isolating.onExchange(
                 context(bindingWithCaptureLevel(PayloadCaptureLevel.REDACTED), ExchangeOutcome.OK, REQUEST_DOC));
 
         assertThat(auditRepository.findAll()).isEmpty();

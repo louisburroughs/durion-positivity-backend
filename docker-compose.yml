@@ -1275,6 +1275,17 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      # Exchange-audit payload encryption (ADR-0050 §7). REQUIRED: pos-supplier refuses to start
+      # without a key unless the dev or test profile is active, and that is deliberate. Starting
+      # without one would mint a random key per JVM, seal every stored payload with it, and make all
+      # of them permanently unreadable on the next restart -- reported afterwards as an
+      # authentication failure, i.e. as possible tampering, for data the deployment destroyed itself.
+      # Generate with:  openssl rand -base64 32
+      SUPPLIER_AUDIT_ENC_KEY: ${SUPPLIER_AUDIT_ENC_KEY}
+      SUPPLIER_AUDIT_ENC_KEY_ID: ${SUPPLIER_AUDIT_ENC_KEY_ID:-k1}
+      # Retired keys, keyId:base64 comma-separated. A key removed from here before its payloads age
+      # out of the 400-day window takes them with it.
+      SUPPLIER_AUDIT_ENC_PREVIOUS_KEYS: ${SUPPLIER_AUDIT_ENC_PREVIOUS_KEYS:-}
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)

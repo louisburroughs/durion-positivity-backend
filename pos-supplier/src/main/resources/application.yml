@@ -61,6 +61,26 @@ springdoc:
   default-produces-media-type: application/json
 
 pos:
+  # ── Exchange-audit payload encryption (ADR-0050 §7) ─────────────────────────────────
+  #
+  # NOT optional plumbing. AuditPayloadCipher fails startup without a key unless the dev or test
+  # profile is active, and its failure message names SUPPLIER_AUDIT_ENC_KEY -- so that variable must
+  # actually reach the property. Without these lines relaxed binding would only have resolved
+  # POS_SUPPLIER_AUDIT_ENCRYPTION_KEY, and an operator following the message would have set a
+  # variable nothing reads.
+  supplier:
+    audit:
+      encryption:
+        # 32 bytes, base64. Provision before first deploy.
+        key: ${SUPPLIER_AUDIT_ENC_KEY:}
+        # Recorded in every envelope so rotation stays possible.
+        key-id: ${SUPPLIER_AUDIT_ENC_KEY_ID:k1}
+        # Decrypt-only keys, keyId:base64 comma-separated. A retired key MUST stay here for the whole
+        # retention window or its payloads become unreadable.
+        previous-keys: ${SUPPLIER_AUDIT_ENC_PREVIOUS_KEYS:}
+      # Payload content expires; the metadata trail is kept permanently.
+      retention: ${SUPPLIER_AUDIT_RETENTION:P400D}
+      purge-cron: ${SUPPLIER_AUDIT_PURGE_CRON:0 30 3 * * *}
   # @EmitEvent event-type registration with pos-event-receiver at startup (AGENTS.md)
   events:
     base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}

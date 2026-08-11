@@ -4,6 +4,7 @@ import com.positivity.supplier.internal.exception.PayloadUnreadableException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -45,12 +46,34 @@ import org.springframework.stereotype.Component;
  * retention window (ADR-0050 §7) outlives any sane key lifetime, so a rotation path is not optional
  * — without one, rotating a key would silently make every existing payload unreadable.
  *
- * <h2>Key policy</h2>
+ * <h2>Key policy — an allowlist of where a key is OPTIONAL, never a list of where it is required</h2>
  *
- * A real key is <strong>mandatory</strong> in {@code prod}, {@code indus} and {@code alpha}: startup
- * fails rather than quietly writing recoverable payloads or, worse, writing under an ephemeral key
- * that vanishes on restart and takes the audit trail with it. In {@code dev} and {@code test} an
- * ephemeral key is generated with a loud warning, so nobody needs secrets to run tests.
+ * A real key is <strong>mandatory unless {@code dev} or {@code test} is explicitly active</strong>.
+ * Startup fails rather than quietly writing under an ephemeral key that vanishes on restart and takes
+ * the audit trail with it.
+ *
+ * <p>The polarity is the whole control, and it was wrong once. This originally required a key only when
+ * one of {@code prod|indus|alpha} was active, which meant an <strong>empty or unrecognised</strong>
+ * profile set took the ephemeral branch — and that is the shape this repo actually ships:
+ * {@code docker-compose.yml} sets no {@code SPRING_PROFILES_ACTIVE} for pos-supplier, as it does for
+ * almost every service. The result was a deployment against real PostgreSQL that minted a random key per
+ * JVM, sealed weeks of commercial exchanges with it, emitted one WARN, and made every payload
+ * permanently unreadable on the next restart — reported afterwards as
+ * {@code SUPPLIER_AUDIT_PAYLOAD_AUTHENTICATION_FAILED}, i.e. as possible tampering, for data the
+ * deployment had destroyed itself.
+ *
+ * <p>A fail-closed control must not depend on deployment configuration being right. Enumerating where a
+ * key is <em>optional</em> means every environment nobody thought about — a new profile name, a typo, no
+ * profile at all — fails closed. Enumerating where it is <em>required</em> means all of them fail open.
+ * {@code AuditPayloadCipherTest.KeyPolicy} covers the empty and unrecognised cases explicitly, because
+ * they are the ones that bit.
+ *
+ * <p>The key is bound from {@code SUPPLIER_AUDIT_ENC_KEY} in {@code application.yml}. That indirection is
+ * deliberate and also once absent: nothing bound the property, so an operator who followed the failure
+ * message and set {@code SUPPLIER_AUDIT_ENC_KEY} still started with an ephemeral key while believing the
+ * key was provisioned. Relaxed binding would have resolved only
+ * {@code POS_SUPPLIER_AUDIT_ENCRYPTION_KEY}. If the property name here ever changes, the yaml binding and
+ * the message below must change with it.
  *
  * <p>Nonces are 96 random bits per message from {@link SecureRandom}. A nonce must never repeat under
  * one key: GCM nonce reuse leaks the XOR of plaintexts and enables forgery, so nonces are never
@@ -67,8 +90,12 @@ public class AuditPayloadCipher {
     private static final int AES_256_KEY_BYTES = 32;
     private static final String TRANSFORMATION = "AES/GCM/NoPadding";
 
-    /** Profiles where a real, operator-provisioned key is required. */
-    private static final Set<String> KEY_REQUIRED_PROFILES = Set.of("prod", "indus", "alpha");
+    /**
+     * The <strong>only</strong> profiles in which an ephemeral key is acceptable. Everything else — including
+     * an empty profile set — requires an operator-provisioned key. See the class javadoc: this is an
+     * allowlist of where the control may be relaxed, never a list of where it applies.
+     */
+    private static final Set<String> KEY_OPTIONAL_PROFILES = Set.of("dev", "test");
 
     private final SecureRandom secureRandom = new SecureRandom();
     private final Map<String, SecretKey> keysById;
@@ -85,17 +112,23 @@ public class AuditPayloadCipher {
 
         if (activeKeyBase64 == null || activeKeyBase64.isBlank()) {
             if (keyRequired) {
-                // Fail closed. Starting without a key in a real environment would either lose the
-                // audit trail on the next restart or write payloads nobody can read back.
-                throw new IllegalStateException("pos.supplier.audit.encryption.key is required in profiles "
-                        + KEY_REQUIRED_PROFILES + " but is not set. Provision SUPPLIER_AUDIT_ENC_KEY"
-                        + " (32 bytes, base64) before starting pos-supplier (ADR-0050 §7).");
+                // Fail closed. Starting without a key would either lose the audit trail on the next
+                // restart or write payloads nobody can read back.
+                throw new IllegalStateException("pos.supplier.audit.encryption.key is required unless one of"
+                        + " the profiles " + KEY_OPTIONAL_PROFILES + " is active (active: "
+                        + Arrays.toString(environment.getActiveProfiles())
+                        + "). Provision SUPPLIER_AUDIT_ENC_KEY (32 bytes, base64) before starting pos-supplier"
+                        + " (ADR-0050 §7). An empty profile set deliberately requires a key: a fail-closed"
+                        + " control must not depend on a profile having been set correctly.");
             }
             this.activeKeyId = configuredKeyId;
             keys.put(configuredKeyId, generateEphemeralKey());
-            log.warn("pos.supplier.audit.encryption.key is not set; generated an EPHEMERAL exchange-audit"
-                    + " key for this JVM only. Payloads written now become unreadable on restart."
-                    + " Acceptable in dev/test only.");
+            log.warn(
+                    "pos.supplier.audit.encryption.key is not set; generated an EPHEMERAL exchange-audit"
+                            + " key for this JVM only. Every payload written now becomes PERMANENTLY unreadable on"
+                            + " restart, and will then report as an authentication failure. Reached only because"
+                            + " profile {} is active; any other profile, or none, fails startup instead.",
+                    Arrays.toString(environment.getActiveProfiles()));
         } else {
             this.activeKeyId = requireUsableKeyId(configuredKeyId);
             keys.put(this.activeKeyId, parseKey(this.activeKeyId, activeKeyBase64));
@@ -249,13 +282,19 @@ public class AuditPayloadCipher {
 
     // ── Key plumbing ────────────────────────────────────────────────────────────────
 
+    /**
+     * Whether an operator-provisioned key is mandatory.
+     *
+     * <p>Required unless {@code dev} or {@code test} is explicitly active. Note what falls out of
+     * {@code noneMatch} on an empty array: no active profile means required, which is the case that matters
+     * most because it is the shape the shipped compose file produces.
+     *
+     * <p>Presence of an optional profile is enough — {@code dev,local} relaxes the requirement — because a
+     * real deployment never lists {@code dev} or {@code test} among its profiles, while a developer may well
+     * add others alongside them.
+     */
     private static boolean isKeyRequired(@NonNull Environment environment) {
-        for (String profile : environment.getActiveProfiles()) {
-            if (KEY_REQUIRED_PROFILES.contains(profile)) {
-                return true;
-            }
-        }
-        return false;
+        return Arrays.stream(environment.getActiveProfiles()).noneMatch(KEY_OPTIONAL_PROFILES::contains);
     }
 
     @NonNull

@@ -77,7 +77,7 @@ public class SupplierScheduleCoordinator {
      * @return {@code true} when this run may proceed, {@code false} when another instance holds it —
      *     which is the normal, expected outcome on every instance but one
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean tryClaim(@NonNull UUID bindingId, @NonNull String ownerToken) {
         boolean claimed = leaseRepository.claim(bindingId, ownerToken, leaseSeconds) == 1;
         if (claimed) {
@@ -117,7 +117,7 @@ public class SupplierScheduleCoordinator {
      * @return {@code false} when the lease was lost, in which case the run must abort before its next
      *     page rather than continue on the assumption it still owns the binding
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean heartbeat(@NonNull UUID bindingId, @NonNull String ownerToken) {
         boolean extended = leaseRepository.heartbeat(bindingId, ownerToken, leaseSeconds) == 1;
         if (!extended) {
@@ -133,7 +133,7 @@ public class SupplierScheduleCoordinator {
      * Whether this run still holds a live lease. Checked <em>between</em> pages so a run that lost its
      * lease stops cleanly instead of discovering it by failing a checkpoint.
      */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public boolean stillOwns(@NonNull UUID bindingId, @NonNull String ownerToken) {
         return leaseRepository.countLiveOwnership(bindingId, ownerToken) == 1;
     }
@@ -146,7 +146,7 @@ public class SupplierScheduleCoordinator {
      *
      * @param outcome recorded as the run's last outcome, for operator visibility
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void release(@NonNull UUID bindingId, @NonNull String ownerToken, @NonNull String outcome) {
         leaseRepository.release(bindingId, ownerToken, outcome);
     }

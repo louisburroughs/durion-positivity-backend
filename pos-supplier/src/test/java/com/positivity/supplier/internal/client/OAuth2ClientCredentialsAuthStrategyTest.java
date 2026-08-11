@@ -202,8 +202,8 @@ class OAuth2ClientCredentialsAuthStrategyTest {
                     .createResponse(request);
         });
 
-        OAuth2ClientCredentialsAuthStrategy strategy =
-                new OAuth2ClientCredentialsAuthStrategy(countingRegistry, builder, Clock.systemUTC(), 30);
+        OAuth2ClientCredentialsAuthStrategy strategy = new OAuth2ClientCredentialsAuthStrategy(
+                countingRegistry, transportOf(builder), Clock.systemUTC(), 30, 5000, 15000);
 
         CountDownLatch ready = new CountDownLatch(threads);
         CountDownLatch go = new CountDownLatch(1);
@@ -322,8 +322,26 @@ class OAuth2ClientCredentialsAuthStrategyTest {
 
     // ── Fixtures ────────────────────────────────────────────────────────────────────
 
+    /**
+     * Wraps a {@code MockRestServiceServer}-bound builder as the production transport source.
+     *
+     * <p>A stub subclass rather than a test-only constructor on the strategy: the seam already exists as a
+     * public, non-final method, and adding a second constructor purely for tests would let production code
+     * bypass the shared vendor transport by accident. Timeout arguments are ignored here because what these
+     * tests exercise is the OAuth2 protocol, not the socket.
+     */
+    private static SupplierHttpClients transportOf(RestClient.Builder builder) {
+        RestClient bound = builder.build();
+        return new SupplierHttpClients() {
+            @Override
+            public RestClient forTimeouts(int connectTimeoutMs, int readTimeoutMs) {
+                return bound;
+            }
+        };
+    }
+
     private OAuth2ClientCredentialsAuthStrategy strategy(RestClient.Builder builder, Clock clock, long skewSeconds) {
-        return new OAuth2ClientCredentialsAuthStrategy(registry, builder, clock, skewSeconds);
+        return new OAuth2ClientCredentialsAuthStrategy(registry, transportOf(builder), clock, skewSeconds, 5000, 15000);
     }
 
     private static String tokenJson(String token, long expiresIn) {

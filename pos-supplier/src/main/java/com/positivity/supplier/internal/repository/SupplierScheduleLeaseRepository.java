@@ -27,6 +27,50 @@ import org.springframework.data.repository.query.Param;
  * portability and verified against H2 in PostgreSQL mode as well as being standard PostgreSQL: a bound
  * parameter must be CAST, because H2 cannot infer the type of {@code ? * INTERVAL} and fails with
  * "UNKNOWN * INTERVAL SECOND".
+ *
+ * <h2>Why the lifecycle mutations declare REQUIRES_NEW — and why {@code now()} is still correct</h2>
+ *
+ * <strong>PostgreSQL's {@code now()} is {@code transaction_timestamp()}: it returns the moment the
+ * transaction began, and does not advance for the transaction's lifetime.</strong> That makes the
+ * transaction boundary part of the lease's correctness, not a matter of taste. {@link #heartbeat},
+ * {@link #countLiveOwnership} and {@link #release} are all called from <em>inside</em> a long-running batch
+ * page, and joining that transaction would have broken each of them in a different way:
+ *
+ * <ul>
+ *   <li><strong>{@code heartbeat}</strong> would extend the lease from the moment the page <em>started</em>,
+ *       not from now. A heartbeat five minutes into a ten-minute page would compute an expiry already in the
+ *       past — so the operation whose entire purpose is to keep a long run's lease alive would quietly fail
+ *       to extend it, and the lease would be stolen mid-run.
+ *   <li><strong>{@code countLiveOwnership}</strong> would compare {@code leased_until} against that same
+ *       frozen timestamp, so a lease that had in fact expired would still read as live.
+ *   <li><strong>{@code release}</strong> would roll back with a failed page, leaving the lease held until
+ *       natural expiry — the one case where prompt release matters most.
+ * </ul>
+ *
+ * {@code REQUIRES_NEW} makes each statement its own transaction, so {@code transaction_timestamp()} is the
+ * statement's own time and {@code release} commits regardless of the page's fate.
+ *
+ * <p><strong>The boundary is declared on {@link
+ * com.positivity.supplier.internal.service.SupplierScheduleCoordinator}, not here.</strong> That is where the
+ * coordination decision lives, and putting it on the repository would additionally make every
+ * {@code @DataJpaTest} of these queries unable to see its own uncommitted fixtures — the tests would have to
+ * be rewritten around a constraint that has nothing to do with what they prove.
+ *
+ * <p><strong>Decision: {@code now()} kept, {@code clock_timestamp()} rejected.</strong>
+ * {@code clock_timestamp()} would also give a truly current reading, but it is PostgreSQL-only — H2 does not
+ * implement it, so every test that proves lease behaviour under contention would stop running, and this
+ * module's lease correctness is established by exactly those tests. Fixing the boundary is portable and
+ * fixes the release-rollback problem too, which {@code clock_timestamp()} would not.
+ *
+ * <p><strong>{@link #advanceCheckpoint} deliberately does NOT get {@code REQUIRES_NEW}.</strong> Binding
+ * decision 4 requires the checkpoint to commit in the same transaction as the page it describes; an
+ * independently committing checkpoint would mark a window processed that had been rolled back, and silently
+ * skip it forever. Its {@code now()} being the page's start time is harmless: the value it stores is the
+ * caller-supplied window end, not a clock reading.
+ *
+ * <p>H2 cannot reproduce the underlying hazard — its {@code now()} is statement-scoped, not
+ * transaction-scoped — so no behavioural test can demonstrate it. The boundary is pinned structurally
+ * instead, by {@code SupplierScheduleCoordinatorTest.leaseLifecycleOperationsRunInTheirOwnTransaction}.
  */
 public interface SupplierScheduleLeaseRepository extends JpaRepository<SupplierScheduleLeaseEntity, UUID> {
 

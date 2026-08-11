@@ -24,6 +24,23 @@ import org.jspecify.annotations.Nullable;
  * <p>Patterns are deliberately <em>value-preserving in shape</em>: the element or field is kept and
  * only its value replaced, so a redacted document still shows an operator that the field was present —
  * which is often the diagnostic they need — without disclosing it.
+ *
+ * <h2>Two limitations, both real and both deliberately not papered over</h2>
+ *
+ * <ol>
+ *   <li><strong>The sensitive-name set is fixed, not per-binding.</strong> ADR-0050 §7 describes configurable
+ *       per-binding field redaction; this is a compiled-in list applied identically everywhere. Nothing varies
+ *       it — no property, no column, no request field. Deferred to CAP-318.
+ *   <li><strong>Only NAMED fields can be found.</strong> The four pattern families match XML elements, XML
+ *       attributes, JSON fields and form parameters, all of which pair a name with a value. A positional or
+ *       fixed-width vendor format — an EDIFACT segment, a delimited flat file — carries values with no names
+ *       at all, so nothing matches and a REDACTED capture of such a document is stored substantially intact.
+ *       This is not a bug in the patterns; it is a limit of name-based redaction, and closing it needs a
+ *       per-format field map, which is codec knowledge and therefore CAP-318's.
+ * </ol>
+ *
+ * <p>Until then, the honest operational advice is that {@code METADATA_ONLY} is the only level that
+ * <em>guarantees</em> no commercial content is retained for a positional-format binding.
  */
 public final class PayloadRedactor {
 

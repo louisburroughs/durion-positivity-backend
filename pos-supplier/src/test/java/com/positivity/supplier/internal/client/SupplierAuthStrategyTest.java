@@ -179,6 +179,14 @@ class SupplierAuthStrategyTest {
                 }
             };
             List<SupplierAuthStrategy> strategies = new java.util.ArrayList<>(allStrategies());
+            // ── semgrep string-comparison ──────────────────────────────────────────────
+            // False positive. supportedType() returns SupplierAuthType, an ENUM, and `==` is the correct
+            // comparison for enum constants -- reference identity is exactly the semantics wanted, and
+            // `.equals()` here would be strictly worse style plus NPE-prone. The rule fires because it
+            // cannot resolve the return type through the interface. Suppression is line-scoped, and bare
+            // rather than id-qualified because the local lint hook derives rule ids from its rules-clone
+            // path, so an id-qualified form matches in CI but silently misses locally.
+            // nosemgrep
             strategies.removeIf(strategy -> strategy.supportedType() == SupplierAuthType.BEARER);
             strategies.add(recording);
             SupplierAuthStrategies dispatcher = new SupplierAuthStrategies(strategies);
@@ -227,10 +235,7 @@ class SupplierAuthStrategyTest {
                 new BasicPlusApiKeyAuthStrategy(registry),
                 new BearerTokenAuthStrategy(registry),
                 new OAuth2ClientCredentialsAuthStrategy(
-                        registry,
-                        org.springframework.web.client.RestClient.builder(),
-                        java.time.Clock.systemUTC(),
-                        30));
+                        registry, new SupplierHttpClients(), java.time.Clock.systemUTC(), 30, 5000, 15000));
     }
 
     private static SupplierAuthConfigEntity basicConfig(String apiKeyHeader) {
