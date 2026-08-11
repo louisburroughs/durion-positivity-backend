@@ -76,6 +76,7 @@ class SupplierScheduleLeaseRepositoryTest {
     private DataSource dataSource;
 
     private UUID bindingId;
+    private UUID profileId;
 
     @BeforeEach
     void setUp() {
@@ -84,7 +85,7 @@ class SupplierScheduleLeaseRepositoryTest {
         profile.setDisplayName("Michelin");
         profile.setEnabled(true);
         profile.setSourceOfTruth(ProfileSourceOfTruth.ADMIN);
-        UUID profileId = profileRepository.saveAndFlush(profile).getVendorProfileId();
+        profileId = profileRepository.saveAndFlush(profile).getVendorProfileId();
 
         SupplierEndpointBindingEntity binding = new SupplierEndpointBindingEntity();
         binding.setVendorProfileId(profileId);
@@ -384,6 +385,56 @@ class SupplierScheduleLeaseRepositoryTest {
         assertThat(lease.getLeasedUntil())
                 .as("a 3600s lease must land far in the future, proving SQL interval arithmetic ran")
                 .isAfter(Instant.now().plusSeconds(3000));
+    }
+
+    /**
+     * The lease's primary key is the <em>binding's</em> id, never a minted one. It nonetheless carries
+     * {@code @UUIDv7Id}, because the fleet-wide ADR-0013 rule requires that of every UUID {@code @Id}, and
+     * that annotation attaches a real Hibernate identifier generator. This pins the only property that
+     * makes the combination safe: an assigned id survives. If a future change to
+     * {@code UUIDv7HibernateGenerator} stopped honouring {@code currentValue}, every lease would silently
+     * be keyed to a binding that does not exist -- no constraint would catch it, because the invented id
+     * is a perfectly valid UUID and the table has no foreign key to the binding.
+     *
+     * <p>It also proves the ADR-0024 auditing listener is wired: the builder leaves {@code createdAt} and
+     * {@code updatedAt} null and both columns are NOT NULL, so the insert only succeeds because
+     * {@code @CreatedDate}/{@code @LastModifiedDate} populated them.
+     */
+    @Test
+    void assignedBindingIdSurvivesTheIdentifierGenerator() {
+        SupplierEndpointBindingEntity second = new SupplierEndpointBindingEntity();
+        second.setVendorProfileId(profileId);
+        second.setCapability(SupplierCapability.STOCK_REPORT);
+        second.setProtocolFamily(ProtocolFamily.EDIWHEEL_A25);
+        second.setProtocolVersion("A2_5");
+        second.setBaseUrl("https://vendor.test");
+        second.setPath("/stock");
+        second.setAuthConfigName("auth");
+        second.setEnabled(true);
+        UUID otherBinding = bindingRepository.saveAndFlush(second).getId();
+
+        leaseRepository.saveAndFlush(SupplierScheduleLeaseEntity.builder()
+                .bindingId(otherBinding)
+                .vendorProfileId(profileId)
+                .capability(SupplierCapability.STOCK_REPORT)
+                .build());
+        entityManager.clear();
+
+        SupplierScheduleLeaseEntity stored =
+                leaseRepository.findById(otherBinding).orElseThrow();
+        assertThat(stored.getBindingId())
+                .as("the lease must be stored under the binding id it was given, not a generated one")
+                .isEqualTo(otherBinding);
+        assertThat(stored.getCreatedAt())
+                .as("@CreatedDate must have populated the NOT NULL created_at the builder left null")
+                .isNotNull();
+        assertThat(stored.getUpdatedAt())
+                .as("@LastModifiedDate must have populated the NOT NULL updated_at at insert")
+                .isNotNull();
+        assertThat(leaseRepository.findAll())
+                .extracting(SupplierScheduleLeaseEntity::getBindingId)
+                .as("exactly the two assigned binding ids, so nothing was minted behind our back")
+                .containsExactlyInAnyOrder(bindingId, otherBinding);
     }
 
     @Test

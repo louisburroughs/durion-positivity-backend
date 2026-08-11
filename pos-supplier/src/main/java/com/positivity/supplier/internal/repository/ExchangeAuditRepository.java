@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.repository;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.entity.ExchangeAuditEntity;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
@@ -17,27 +18,82 @@ import org.springframework.data.repository.query.Param;
  *
  * <p>Every query filters on {@code vendorProfileId}, never {@code supplierRef}: the ref is a
  * renameable snapshot, so filtering by it would silently miss rows written before a rename.
+ *
+ * <h2>Read queries return {@link ExchangeAuditMetadata}, never the entity</h2>
+ *
+ * The payload columns are encrypted and their converter runs at hydration time, so returning
+ * {@link ExchangeAuditEntity} from a listing would decrypt every payload on the page just to throw it
+ * away, and one unreadable row would fail the entire listing. The constructor expressions below name
+ * the selected columns explicitly, which makes "no plaintext is produced here" true by inspection
+ * rather than by trusting a projection optimisation. See {@link ExchangeAuditMetadata} for the full
+ * reasoning.
  */
 public interface ExchangeAuditRepository extends JpaRepository<ExchangeAuditEntity, UUID> {
 
-    /** One supplier's exchanges in a window, newest first. Uses {@code idx_saudit_profile_started}. */
-    @NonNull
-    Page<ExchangeAuditEntity> findByVendorProfileIdAndStartedAtBetweenOrderByStartedAtDesc(
-            @NonNull UUID vendorProfileId, @NonNull Instant from, @NonNull Instant to, @NonNull Pageable pageable);
+    /**
+     * The metadata {@code SELECT} clause, shared so the column list cannot drift between queries.
+     *
+     * <p>Payload presence is computed in SQL with a null test rather than by reading the columns: the
+     * caller learns whether content exists without any ciphertext leaving the database.
+     */
+    String SELECT_METADATA = "SELECT new com.positivity.supplier.internal.repository.ExchangeAuditMetadata("
+            + " e.exchangeAuditId, e.vendorProfileId, e.supplierRef, e.bindingId, e.capability,"
+            + " e.protocolFamily, e.protocolVersion, e.httpMethod, e.endpointUri, e.attempt,"
+            + " e.correlationId, e.outcome, e.httpStatus, e.startedAt, e.durationMs, e.failureDetail,"
+            + " e.captureLevel,"
+            + " CASE WHEN e.requestPayload IS NOT NULL THEN TRUE ELSE FALSE END,"
+            + " CASE WHEN e.responsePayload IS NOT NULL THEN TRUE ELSE FALSE END,"
+            + " e.payloadsPurgedAt, e.createdBy)"
+            + " FROM ExchangeAuditEntity e";
 
-    /** Narrowed by capability — how an operator actually investigates a specific integration. */
+    /** One supplier's exchanges in a window, newest first. Uses {@code idx_saudit_profile_started}. */
+    @Query(
+            value = SELECT_METADATA + " WHERE e.vendorProfileId = :vendorProfileId"
+                    + " AND e.startedAt >= :from AND e.startedAt < :to"
+                    + " ORDER BY e.startedAt DESC",
+            countQuery = "SELECT COUNT(e) FROM ExchangeAuditEntity e WHERE e.vendorProfileId = :vendorProfileId"
+                    + " AND e.startedAt >= :from AND e.startedAt < :to")
     @NonNull
-    Page<ExchangeAuditEntity> findByVendorProfileIdAndCapabilityAndStartedAtBetweenOrderByStartedAtDesc(
-            @NonNull UUID vendorProfileId,
-            @NonNull SupplierCapability capability,
-            @NonNull Instant from,
-            @NonNull Instant to,
+    Page<ExchangeAuditMetadata> findMetadataByProfileAndWindow(
+            @Param("vendorProfileId") @NonNull UUID vendorProfileId,
+            @Param("from") @NonNull Instant from,
+            @Param("to") @NonNull Instant to,
             @NonNull Pageable pageable);
 
-    /** Every attempt of one logical call, for tracing a retry sequence. */
+    /** Narrowed by capability — how an operator actually investigates a specific integration. */
+    @Query(
+            value = SELECT_METADATA + " WHERE e.vendorProfileId = :vendorProfileId"
+                    + " AND e.capability = :capability"
+                    + " AND e.startedAt >= :from AND e.startedAt < :to"
+                    + " ORDER BY e.startedAt DESC",
+            countQuery = "SELECT COUNT(e) FROM ExchangeAuditEntity e WHERE e.vendorProfileId = :vendorProfileId"
+                    + " AND e.capability = :capability AND e.startedAt >= :from AND e.startedAt < :to")
     @NonNull
-    Page<ExchangeAuditEntity> findByCorrelationIdOrderByStartedAtAsc(
-            @NonNull String correlationId, @NonNull Pageable pageable);
+    Page<ExchangeAuditMetadata> findMetadataByProfileCapabilityAndWindow(
+            @Param("vendorProfileId") @NonNull UUID vendorProfileId,
+            @Param("capability") @NonNull SupplierCapability capability,
+            @Param("from") @NonNull Instant from,
+            @Param("to") @NonNull Instant to,
+            @NonNull Pageable pageable);
+
+    /**
+     * Every attempt of one logical call, for tracing a retry sequence.
+     *
+     * <p>Ascending, unlike the window listings: a retry sequence only reads as a sequence in the order
+     * it happened.
+     */
+    @Query(
+            value = SELECT_METADATA + " WHERE e.correlationId = :correlationId ORDER BY e.startedAt ASC",
+            countQuery = "SELECT COUNT(e) FROM ExchangeAuditEntity e WHERE e.correlationId = :correlationId")
+    @NonNull
+    Page<ExchangeAuditMetadata> findMetadataByCorrelationId(
+            @Param("correlationId") @NonNull String correlationId, @NonNull Pageable pageable);
+
+    /** One row's metadata. The payload path loads this first, so an access can be recorded whatever
+     * the payload turns out to be. */
+    @Query(SELECT_METADATA + " WHERE e.exchangeAuditId = :exchangeAuditId")
+    @NonNull
+    Optional<ExchangeAuditMetadata> findMetadataById(@Param("exchangeAuditId") @NonNull UUID exchangeAuditId);
 
     /**
      * Nulls the payload columns of rows older than {@code cutoff}, keeping the metadata row

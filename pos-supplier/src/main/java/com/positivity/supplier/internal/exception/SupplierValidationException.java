@@ -15,6 +15,9 @@ public class SupplierValidationException extends RuntimeException {
     public static final String BINDING_AUTH_CONFIG_UNKNOWN = "SUPPLIER_BINDING_AUTH_CONFIG_UNKNOWN";
     public static final String SCHEDULE_INVALID = "SUPPLIER_SCHEDULE_INVALID";
 
+    /** An audit query window whose end is not after its start; it can never match anything. */
+    public static final String AUDIT_WINDOW_INVALID = "SUPPLIER_AUDIT_WINDOW_INVALID";
+
     private final String code;
 
     public SupplierValidationException(String code, String message) {

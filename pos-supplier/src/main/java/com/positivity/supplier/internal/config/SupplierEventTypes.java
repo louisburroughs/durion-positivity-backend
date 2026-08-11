@@ -52,6 +52,23 @@ public final class SupplierEventTypes {
                 EventTypeRegistration.write("SUPPLIER_BINDING_UPDATE", "Update a capability endpoint binding")
                         .build(),
                 EventTypeRegistration.write("SUPPLIER_BINDING_DELETE", "Delete a capability endpoint binding")
+                        .build(),
+                // Exchange audit (ADR-0050 §7)
+                EventTypeRegistration.search("SUPPLIER_AUDIT_EXCHANGE_LIST", "List supplier exchanges in a window")
+                        .build(),
+                EventTypeRegistration.search(
+                                "SUPPLIER_AUDIT_EXCHANGE_TRACE", "Trace one logical call's attempts by correlation id")
+                        .build(),
+                EventTypeRegistration.fastRead("SUPPLIER_AUDIT_EXCHANGE_GET", "Get one exchange's audit metadata")
+                        .build(),
+                // A write budget, not a read one, and not by accident: serving payload content also
+                // inserts the ADR-0050 §7 access record, so this operation's latency is a write's.
+                EventTypeRegistration.write(
+                                "SUPPLIER_AUDIT_PAYLOAD_READ",
+                                "Read one exchange's stored payload content; writes an access record")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "SUPPLIER_AUDIT_ACCESS_LIST", "List who read one exchange's payload content")
                         .build());
     }
 }

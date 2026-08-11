@@ -1,8 +1,10 @@
 package com.positivity.supplier.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
@@ -15,6 +17,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Per-binding scheduler lease and checkpoint (binding decision 4). One row per schedulable binding,
@@ -34,9 +39,16 @@ import lombok.NoArgsConstructor;
  *
  * <h2>Time authority</h2>
  *
- * {@link #leasedUntil}, {@link #lastHeartbeatAt} and {@link #updatedAt} are computed by the
+ * {@link #leasedUntil}, {@link #lastHeartbeatAt} and {@link #checkpointAt} are computed by the
  * <em>database</em> ({@code now() + N * INTERVAL '1' SECOND}), never in the JVM. Instance clocks
  * drift, and a lease whose expiry is decided by the claimant's own clock is not a lease.
+ *
+ * <p>{@link #updatedAt} is the one column with two writers, and the split is deliberate: every lease
+ * <em>transition</em> sets it to the database's {@code now()} in the same atomic {@code UPDATE} that
+ * performs the transition, while {@code @LastModifiedDate} only ever applies at JPA insert — the one
+ * moment there is no transition to attribute it to. Nothing about lease safety reads {@code updatedAt};
+ * it is operational forensics, so a JVM timestamp on the insert row costs nothing, and routing it
+ * through the auditing listener is what ADR-0024 requires of every entity in the fleet.
  */
 @Data
 @Builder
@@ -46,10 +58,28 @@ import lombok.NoArgsConstructor;
 @Table(
         name = "supplier_schedule_lease",
         indexes = {@Index(name = "idx_slease_leased_until", columnList = "leased_until")})
+@EntityListeners(AuditingEntityListener.class)
 public class SupplierScheduleLeaseEntity {
 
-    /** The binding this lease governs. Also the primary key: one lease per binding, by construction. */
+    /**
+     * The binding this lease governs. Also the primary key: one lease per binding, by construction.
+     *
+     * <h3>An assigned identifier that still carries {@code @UUIDv7Id}</h3>
+     *
+     * This id is <strong>never generated</strong> — it is the binding's own identity, so a lease row with
+     * an invented id would be a lease on nothing. {@code @UUIDv7Id} is present because the fleet-wide
+     * ADR-0013 rule ({@code EntityStandardsArchitectureTest}) requires every UUID {@code @Id} to declare
+     * it, and it is safe here only because {@code UUIDv7HibernateGenerator} returns
+     * {@code currentValue != null ? currentValue : generate()} and reports
+     * {@code allowAssignedIdentifiers() == true}: an assigned id always wins.
+     *
+     * <p>The residual hazard is worth naming. Before this annotation, saving a lease with a null
+     * {@code bindingId} failed loudly on the NOT NULL constraint; now it would silently insert a lease
+     * keyed to a binding that does not exist. {@code SupplierScheduleLeaseRepositoryTest} pins the
+     * assigned-id-wins behaviour so a regression here fails the build rather than producing orphan leases.
+     */
     @Id
+    @UUIDv7Id
     @Column(name = "binding_id", nullable = false, updatable = false)
     private UUID bindingId;
 
@@ -88,9 +118,12 @@ public class SupplierScheduleLeaseEntity {
     @Column(name = "last_run_outcome", length = 32)
     private String lastRunOutcome;
 
+    @CreatedDate
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    /** Set by the auditing listener at insert; every later transition overwrites it with database time. */
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 

@@ -33,7 +33,21 @@ import org.springframework.transaction.annotation.Transactional;
  * this wrong is unrecoverable in the sense that matters: a credential written into a 400-day store
  * cannot be un-written.
  *
- * <h2>Own transaction, and failures never propagate</h2>
+ * <h2>Own transaction, and failures never propagate — one of THREE different semantics here</h2>
+ *
+ * pos-supplier has three write-alongside-work concerns with deliberately different failure behaviour.
+ * They are easy to mistake for each other, so all three are named at all three sites:
+ *
+ * <ol>
+ *   <li><strong>This class</strong> — {@code REQUIRES_NEW}, swallows failures. Live vendor traffic must
+ *       not fail because the audit sink is down.
+ *   <li>{@link SupplierScheduleCoordinator#runPage} — {@code REQUIRED}, rolls back with its page. A
+ *       checkpoint committing independently silently skips a window.
+ *   <li>{@link AuditAccessRecorder} — {@code MANDATORY}, fails the read. ADR-0050 §7 makes the access
+ *       record a precondition of access, so an unrecordable read must return nothing.
+ * </ol>
+ *
+ * <p>Do not unify them, and do not copy this class's pattern to either of the others.
  *
  * {@code REQUIRES_NEW} so an audit write neither joins nor poisons a caller's transaction, and the
  * whole method is guarded: ADR-0050 §7 wants the trail complete, but a successful vendor exchange must

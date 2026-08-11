@@ -95,7 +95,50 @@ class SupplierContractKeyParityTest {
                         com.positivity.supplier.internal.enums.SupplierAccountRole.class),
                 Arguments.of(
                         com.positivity.supplier.service.model.ProfileSourceOfTruth.class,
-                        com.positivity.supplier.internal.enums.ProfileSourceOfTruth.class));
+                        com.positivity.supplier.internal.enums.ProfileSourceOfTruth.class),
+                Arguments.of(
+                        com.positivity.supplier.service.model.AuditAccessKind.class,
+                        com.positivity.supplier.internal.enums.AuditAccessKind.class),
+                Arguments.of(
+                        com.positivity.supplier.service.model.AuditPayloadOutcome.class,
+                        com.positivity.supplier.internal.enums.AuditPayloadOutcome.class));
+    }
+
+    /**
+     * The two audit enums additionally have a <em>third</em> copy: the {@code chk_saccess_kind} and
+     * {@code chk_saccess_payload_outcome} CHECK constraints in V4. A constant added to the enums but not
+     * to the constraint is not a compile error and not a mapping error — it is a runtime constraint
+     * violation on an audit write, which is the worst place to discover it, because ADR-0050 §7 makes
+     * that write a precondition of serving a payload. This pins the enums to the migration text.
+     */
+    @Test
+    void auditEnumsMatchTheCheckConstraintsInTheV4Migration() throws Exception {
+        String migration = new String(
+                java.nio.file.Files.readAllBytes(
+                        java.nio.file.Path.of("src/main/resources/db/migration/V4__supplier_audit_access.sql")),
+                java.nio.charset.StandardCharsets.UTF_8);
+
+        for (var kind : com.positivity.supplier.internal.enums.AuditAccessKind.values()) {
+            assertThat(constraintBody(migration, "chk_saccess_kind"))
+                    .as("AuditAccessKind.%s must be permitted by chk_saccess_kind", kind)
+                    .contains("'" + kind.name() + "'");
+        }
+        for (var outcome : com.positivity.supplier.internal.enums.AuditPayloadOutcome.values()) {
+            assertThat(constraintBody(migration, "chk_saccess_payload_outcome"))
+                    .as("AuditPayloadOutcome.%s must be permitted by chk_saccess_payload_outcome", outcome)
+                    .contains("'" + outcome.name() + "'");
+        }
+    }
+
+    /** The text of one named CHECK constraint, so a constant cannot match a value in an unrelated one. */
+    private static String constraintBody(String migration, String constraintName) {
+        int start = migration.indexOf("CONSTRAINT " + constraintName);
+        assertThat(start)
+                .as("V4 must still declare %s; a renamed constraint silently voids this pin", constraintName)
+                .isNotNegative();
+        int end = migration.indexOf("))", start);
+        assertThat(end).as("%s must be a parenthesised CHECK", constraintName).isNotNegative();
+        return migration.substring(start, end);
     }
 
     @ParameterizedTest(name = "{0} mirrors {1} constant for constant")

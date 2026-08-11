@@ -1259,6 +1259,16 @@ paths:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop~1audit
   /v1/shop/audit/{id}:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop~1audit~1{id}
+  /v1/supplier/admin/audit/exchanges:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1audit~1exchanges
+  /v1/supplier/admin/audit/exchanges/by-correlation/{correlationId}:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1audit~1exchanges~1by-correlation~1{correlationId}
+  /v1/supplier/admin/audit/exchanges/{exchangeAuditId}:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1audit~1exchanges~1{exchangeAuditId}
+  /v1/supplier/admin/audit/exchanges/{exchangeAuditId}/accesses:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1audit~1exchanges~1{exchangeAuditId}~1accesses
+  /v1/supplier/admin/audit/exchanges/{exchangeAuditId}/payload:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1audit~1exchanges~1{exchangeAuditId}~1payload
   /v1/supplier/admin/profiles:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1profiles
   /v1/supplier/admin/profiles/{vendorProfileId}:

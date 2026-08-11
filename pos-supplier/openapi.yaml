@@ -18,6 +18,8 @@ tags:
   description: Admin CRUD over capability endpoint bindings — capability → (family, version, URL, auth)
 - name: Supplier Vendor Profiles
   description: Admin CRUD over vendor profiles — one row per configured supplier connection
+- name: Supplier Exchange Audit
+  description: Read the supplier exchange-audit trail. Metadata is free to browse; reading stored payload content requires the same permission and is itself recorded.
 paths:
   /v1/supplier/admin/profiles/{vendorProfileId}:
     get:
@@ -885,6 +887,290 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - supplier:profile:write
+  /v1/supplier/admin/audit/exchanges:
+    get:
+      tags:
+      - Supplier Exchange Audit
+      summary: List supplier exchanges in a window
+      description: 'Exchange metadata for one vendor profile within a half-open time window (from inclusive, to exclusive), newest first. Payload content is NOT included and nothing is recorded: browsing the trail discloses no commercial content. Rows whose stored content cannot be decrypted still list normally, because this query never touches the encrypted columns.'
+      operationId: listExchanges
+      parameters:
+      - name: vendorProfileId
+        in: query
+        description: 'Vendor profile whose exchanges to list. A query filter rather than a path segment because audit history deliberately outlives the profile: exchanges of a deleted profile are still listed here.'
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      - name: from
+        in: query
+        description: Window start, INCLUSIVE. ISO-8601 instant.
+        required: true
+        schema:
+          type: string
+          format: date-time
+          example: 2026-08-01 00:00:00+00:00
+      - name: to
+        in: query
+        description: Window end, EXCLUSIVE, and must be after 'from'. Half-open so adjacent windows tile without listing a boundary attempt twice.
+        required: true
+        schema:
+          type: string
+          format: date-time
+          example: 2026-09-01 00:00:00+00:00
+      - name: capability
+        in: query
+        description: Canonical capability key to narrow to. Omit for all capabilities. An unrecognised key is rejected rather than silently matching nothing.
+        required: false
+        schema:
+          type: string
+          example: STOCK_INQUIRY
+      - name: page
+        in: query
+        description: Zero-based page index.
+        required: false
+        schema:
+          type: integer
+          example: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: Page size, at most 200.
+        required: false
+        schema:
+          type: integer
+          example: 50
+          maximum: 200
+          minimum: 1
+      responses:
+        '200':
+          description: A page of exchange metadata, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponseExchangeAuditSummary'
+        '400':
+          description: Invalid request — window end not after its start, unknown capability key, or a page size outside the permitted range.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks supplier:audit:read. Profile-admin permissions do not grant audit access.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:audit:read
+  /v1/supplier/admin/audit/exchanges/{exchangeAuditId}:
+    get:
+      tags:
+      - Supplier Exchange Audit
+      summary: Get one exchange's audit metadata
+      description: Metadata of a single attempt, without payload content. Use this to decide whether content exists (requestPayloadPresent / responsePayloadPresent) before making the recorded payload call.
+      operationId: getExchange
+      parameters:
+      - name: exchangeAuditId
+        in: path
+        description: Exchange-audit record identifier (UUIDv7).
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+      responses:
+        '200':
+          description: Exchange metadata returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeAuditSummary'
+        '404':
+          description: No exchange-audit record with that id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks supplier:audit:read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:audit:read
+  /v1/supplier/admin/audit/exchanges/{exchangeAuditId}/payload:
+    get:
+      tags:
+      - Supplier Exchange Audit
+      summary: Read one exchange's stored payload content
+      description: 'Returns the stored request and response documents. THIS CALL IS ITSELF RECORDED (ADR-0050 §7): an access row naming the caller is written in the same transaction, and the content is withheld if that row cannot be written. Null payload fields are a normal state, not an error — a METADATA_ONLY binding captured none, the exchange carried no body, or retention has already purged the content after 400 days. When ''redacted'' is true the documents are not the wire bytes: sensitive fields were replaced at capture time and the originals were never stored.'
+      operationId: readPayload
+      parameters:
+      - name: exchangeAuditId
+        in: path
+        description: Exchange-audit record whose stored content to read.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+      responses:
+        '200':
+          description: Stored content returned, and the read has been recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeAuditPayloadView'
+        '404':
+          description: No exchange-audit record with that id. A record that exists but holds no payload is NOT a 404 — it returns 200 with null content.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Stored content exists but could not be decrypted — a malformed envelope, a key this deployment does not hold, or a failed integrity check. The typed code distinguishes which; the detail is logged server-side and never returned. The read is still recorded, with an UNREADABLE outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks supplier:audit:read. A denied read discloses nothing and is deliberately NOT written to the access trail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:audit:read
+  /v1/supplier/admin/audit/exchanges/{exchangeAuditId}/accesses:
+    get:
+      tags:
+      - Supplier Exchange Audit
+      summary: List who read one exchange's payload content
+      description: 'The ADR-0050 §7 access trail for one exchange, newest first: who read it, when, and what the read yielded. Only payload reads appear here. Metadata browsing does not, and neither do denied attempts — a 403 disclosed nothing. Reading this trail is not itself recorded, or every inspection would generate the noise the next one has to sift.'
+      operationId: listAccesses
+      parameters:
+      - name: exchangeAuditId
+        in: path
+        description: 'Exchange-audit record whose access trail to list. An unknown id returns an empty page rather than 404: ''nobody read it'' is the honest answer, and access rows carry no foreign key to the exchange by design.'
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+      - name: page
+        in: query
+        description: Zero-based page index.
+        required: false
+        schema:
+          type: integer
+          example: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: Page size, at most 200.
+        required: false
+        schema:
+          type: integer
+          example: 50
+          maximum: 200
+          minimum: 1
+      responses:
+        '200':
+          description: A page of access records, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponseExchangeAuditAccessView'
+        '400':
+          description: Invalid request — page size outside the permitted range.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks supplier:audit:read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:audit:read
+  /v1/supplier/admin/audit/exchanges/by-correlation/{correlationId}:
+    get:
+      tags:
+      - Supplier Exchange Audit
+      summary: Trace one logical call by correlation id
+      description: Every attempt sharing a correlation id, OLDEST FIRST — the order in which a retry sequence actually happened. Metadata only; nothing is recorded.
+      operationId: traceCorrelation
+      parameters:
+      - name: correlationId
+        in: path
+        description: Correlation id shared by every attempt of one logical supplier call.
+        required: true
+        schema:
+          type: string
+          example: 018f0a1b2c3d7e4f8a9b0c1d2e3f4a71
+      - name: page
+        in: query
+        description: Zero-based page index.
+        required: false
+        schema:
+          type: integer
+          example: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: Page size, at most 200.
+        required: false
+        schema:
+          type: integer
+          example: 50
+          maximum: 200
+          minimum: 1
+      responses:
+        '200':
+          description: A page of exchange metadata, oldest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponseExchangeAuditSummary'
+        '400':
+          description: Invalid request — page size outside the permitted range.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks supplier:audit:read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:audit:read
 components:
   schemas:
     VendorProfileRequest:
@@ -1273,6 +1559,239 @@ components:
           format: uuid
           description: pos-location identifier this delivery account belongs to. Required for DELIVERY, must be absent for BILLING.
           example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+    ExchangeAuditSummary:
+      type: object
+      description: One outbound supplier attempt, without payload content. Reading the payload is a separate, individually audited call.
+      properties:
+        exchangeAuditId:
+          type: string
+          format: uuid
+          description: Identity of this exchange-audit row (UUIDv7).
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+        vendorProfileId:
+          type: string
+          format: uuid
+          description: Owning vendor profile. Still populated when that profile has since been deleted -- exchange history deliberately outlives configuration (ADR-0050 §7).
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        supplierRef:
+          type: string
+          description: 'The profile''s alias AS AT THE TIME OF THE EXCHANGE. A descriptive snapshot, never a lookup key: profiles are renameable, so this may differ from the profile''s current ref.'
+          example: michelin-eu
+        bindingId:
+          type: string
+          format: uuid
+          description: Endpoint binding used for this attempt, when one was involved.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60
+        capability:
+          type: string
+          description: Canonical supplier capability key exercised.
+          example: STOCK_INQUIRY
+        protocolFamily:
+          type: string
+          description: Canonical protocol family key of the adapter used.
+          example: EDIWHEEL_A25
+        protocolVersion:
+          type: string
+          description: Adapter version key within the protocol family.
+          example: A2_5
+        httpMethod:
+          type: string
+          description: HTTP method of the attempt.
+          example: POST
+        endpointUri:
+          type: string
+          description: Absolute request URI. Credentials travel in headers and never appear here.
+          example: https://edi.michelin.example/a25/stock/inquiry
+        attempt:
+          type: integer
+          format: int32
+          description: 1-based attempt number within one logical call. Retries are separate rows sharing a correlation id, so a sequence of 1,2,3 is one call retried twice.
+          example: 2
+        correlationId:
+          type: string
+          description: Groups every attempt of one logical call. Use it to trace a retry sequence.
+          example: 018f0a1b2c3d7e4f8a9b0c1d2e3f4a71
+        outcome:
+          type: string
+          description: Classification of the attempt (ADR-0052 §5).
+          example: TRANSPORT_TIMEOUT
+        httpStatus:
+          type: integer
+          format: int32
+          description: Response status code. Null when no response was received at all -- a connect failure, a timeout before headers, or an attempt suppressed by an open circuit breaker.
+          example: 200
+        startedAt:
+          type: string
+          format: date-time
+          description: When the attempt began.
+          example: 2026-08-11 09:14:02.117000+00:00
+        durationMs:
+          type: integer
+          format: int64
+          description: How long the attempt took, in milliseconds.
+          example: 1843
+        failureDetail:
+          type: string
+          description: Operator-facing failure summary. Null on success; never contains a credential.
+          example: Read timed out after 30000 ms
+        captureLevel:
+          type: string
+          description: 'The payload capture level actually applied to THIS row (ADR-0050 §7). Recorded rather than re-derived, because the binding''s level can change after the fact: a REDACTED row stays REDACTED even if the binding is later set to FULL.'
+          enum:
+          - FULL
+          - REDACTED
+          - METADATA_ONLY
+          example: REDACTED
+        requestPayloadPresent:
+          type: boolean
+          description: Whether a request payload is currently stored. Determined without decrypting anything.
+          example: true
+        responsePayloadPresent:
+          type: boolean
+          description: Whether a response payload is currently stored. Determined without decrypting anything.
+          example: true
+        payloadsPurgedAt:
+          type: string
+          format: date-time
+          description: 'When retention nulled this row''s payloads (ADR-0050 §7, 400 days). Distinguishes ''purged'' from ''never captured'': metadata is retained permanently, only content expires.'
+          example: 2027-09-15 03:30:00+00:00
+        createdBy:
+          type: string
+          description: Audit actor that caused the exchange (ADR-0018). The system actor for scheduler-driven exchanges, which have no security context.
+          example: system:supplier-scheduler
+    PagedResponseExchangeAuditSummary:
+      type: object
+      description: A page of results.
+      properties:
+        items:
+          type: array
+          description: Items on this page, in the order documented by the endpoint.
+          items:
+            $ref: '#/components/schemas/ExchangeAuditSummary'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based index of this page.
+          example: 0
+        size:
+          type: integer
+          format: int32
+          description: Requested page size.
+          example: 50
+        totalElements:
+          type: integer
+          format: int64
+          description: Total number of matching items across all pages.
+          example: 137
+        totalPages:
+          type: integer
+          format: int32
+          description: Total number of pages available for this page size.
+          example: 3
+    ExchangeAuditPayloadView:
+      type: object
+      description: Stored payload content of one exchange-audit row. Retrieving it writes an access record naming the caller; the content is served only if that record commits.
+      properties:
+        exchangeAuditId:
+          type: string
+          format: uuid
+          description: Identity of the exchange-audit row this content belongs to.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+        captureLevel:
+          type: string
+          description: The payload capture level applied when this row was written. METADATA_ONLY rows carry no content at all.
+          enum:
+          - FULL
+          - REDACTED
+          - METADATA_ONLY
+          example: REDACTED
+        redacted:
+          type: boolean
+          description: 'Whether the content below was altered before storage. When true these are NOT the wire documents: sensitive fields were replaced with a redaction marker at capture time and the original values were never persisted, so they cannot be recovered from anywhere.'
+          example: true
+        requestPayload:
+          type: string
+          description: Stored request document. Null is a normal state, not an error -- a METADATA_ONLY binding, a request with no body, or a row whose content retention has already purged.
+          example: <StockInquiry><Item>205/55R16</Item></StockInquiry>
+        responsePayload:
+          type: string
+          description: Stored response document. Null is a normal state, not an error -- see requestPayload.
+          example: <StockInquiryResponse><Available>4</Available></StockInquiryResponse>
+    ExchangeAuditAccessView:
+      type: object
+      description: 'One recorded read of an exchange payload: who read which exchange, when (ADR-0050 §7).'
+      properties:
+        auditAccessId:
+          type: string
+          format: uuid
+          description: Identity of this access record (UUIDv7).
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a80
+        exchangeAuditId:
+          type: string
+          format: uuid
+          description: The exchange-audit row whose content was read.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+        vendorProfileId:
+          type: string
+          format: uuid
+          description: Owning vendor profile of the exchange that was read.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        capability:
+          type: string
+          description: Canonical capability key of the exchange that was read.
+          example: STOCK_INQUIRY
+        accessedBy:
+          type: string
+          description: The authenticated subject that performed the read. Taken from the security context, never from the request body or a query parameter.
+          example: a.operator@example.com
+        accessedAt:
+          type: string
+          format: date-time
+          description: When the read happened.
+          example: 2026-08-11 14:22:07.412000+00:00
+        accessKind:
+          type: string
+          description: What the caller reached. Only payload reads are recorded.
+          enum:
+          - PAYLOAD_READ
+          example: PAYLOAD_READ
+        payloadOutcome:
+          type: string
+          description: What the read yielded, including the failed and empty cases.
+          enum:
+          - DECRYPTED
+          - UNREADABLE
+          - NOT_CAPTURED
+          example: DECRYPTED
+    PagedResponseExchangeAuditAccessView:
+      type: object
+      description: A page of results.
+      properties:
+        items:
+          type: array
+          description: Items on this page, in the order documented by the endpoint.
+          items:
+            $ref: '#/components/schemas/ExchangeAuditAccessView'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based index of this page.
+          example: 0
+        size:
+          type: integer
+          format: int32
+          description: Requested page size.
+          example: 50
+        totalElements:
+          type: integer
+          format: int64
+          description: Total number of matching items across all pages.
+          example: 137
+        totalPages:
+          type: integer
+          format: int32
+          description: Total number of pages available for this page size.
+          example: 3
   securitySchemes:
     bearerAuth:
       type: http

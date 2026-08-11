@@ -12,6 +12,12 @@ public class SupplierNotFoundException extends RuntimeException {
     public static final String ACCOUNT_NOT_FOUND = "SUPPLIER_ACCOUNT_NOT_FOUND";
     public static final String BINDING_NOT_FOUND = "SUPPLIER_BINDING_NOT_FOUND";
 
+    /**
+     * No exchange-audit row with that id. Not the same thing as a row that carries no payload, which is
+     * a normal state served as an empty payload view rather than a 404 (ADR-0050 §7).
+     */
+    public static final String EXCHANGE_AUDIT_NOT_FOUND = "SUPPLIER_EXCHANGE_AUDIT_NOT_FOUND";
+
     private final String code;
 
     public SupplierNotFoundException(String code, String message) {

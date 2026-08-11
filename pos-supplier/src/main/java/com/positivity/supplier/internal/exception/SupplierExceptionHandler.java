@@ -46,6 +46,17 @@ public class SupplierExceptionHandler {
             "Supplier connectivity is not correctly configured for this operation. Contact an administrator.";
 
     /**
+     * What a caller is told when stored audit content cannot be decrypted.
+     *
+     * <p>Says nothing about <em>why</em>. The exception's own message names the envelope's key id and, for
+     * an unconfigured key, the property that would fix it — useful in a server log, and both of them
+     * details of the encryption scheme that no API response should hand out. The typed {@code code} still
+     * distinguishes the three cases for anyone entitled to read the log.
+     */
+    public static final String PAYLOAD_UNREADABLE_MESSAGE =
+            "The stored content of this exchange could not be read. Contact an administrator.";
+
+    /**
      * Code → status table for {@link SupplierConfigurationException} (ADR-0017 §1/§2). Every code
      * declared on that exception must appear here; {@code SupplierConfigurationCodeMappingTest}
      * enforces that by reflection so a new code cannot silently inherit the 500 catch-all.
@@ -127,6 +138,44 @@ public class SupplierExceptionHandler {
             return build(status, ex.getCode(), CONFIGURATION_DEFECT_MESSAGE, request);
         }
         return build(status, ex.getCode(), ex.getMessage(), request);
+    }
+
+    /**
+     * Stored exchange-audit content that exists but cannot be decrypted (ADR-0050 §7).
+     *
+     * <p>Handled explicitly rather than left to the 500 catch-all, for three reasons:
+     *
+     * <ul>
+     *   <li>The catch-all would return {@code INTERNAL_ERROR}, losing the distinction between an
+     *       unconfigured key (an operator provisioning mistake, fixable) and a failed authentication tag
+     *       (possible tampering, an incident). Those need different responses from a human.
+     *   <li>The catch-all logs "Unhandled exception", which would frame a security-relevant integrity
+     *       failure as a bug. {@code AUTHENTICATION_FAILED} gets its own log line saying what it may mean.
+     *   <li>Once key rotation exists, this path is <em>reachable in normal operation</em> — a key retired
+     *       without being carried into {@code previous-keys} makes every pre-rotation row unreadable. It is
+     *       not an exotic branch.
+     * </ul>
+     *
+     * <p>500 rather than a 4xx: the request was valid and the caller can do nothing about the outcome.
+     * The caller-facing message is generic on purpose; see {@link #PAYLOAD_UNREADABLE_MESSAGE}.
+     *
+     * <p>This response is <strong>not</strong> evidence that the read went unrecorded. The read service
+     * declares {@code noRollbackFor} on this exception precisely so the access row survives it.
+     */
+    @ExceptionHandler(PayloadUnreadableException.class)
+    public ResponseEntity<ApiError> handlePayloadUnreadable(PayloadUnreadableException ex, HttpServletRequest request) {
+        if (PayloadUnreadableException.AUTHENTICATION_FAILED.equals(ex.getCode())) {
+            log.error(
+                    "Exchange-audit payload FAILED AUTHENTICATION [{}]. The stored bytes or their bound header"
+                            + " do not match the GCM tag: either the row was modified at rest or the key id maps"
+                            + " to the wrong key. Treat as a potential integrity incident, not a routine error."
+                            + " Detail: {}",
+                    ex.getCode(),
+                    ex.getMessage());
+        } else {
+            log.error("Exchange-audit payload is unreadable [{}]: {}", ex.getCode(), ex.getMessage());
+        }
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getCode(), PAYLOAD_UNREADABLE_MESSAGE, request);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

@@ -27,9 +27,19 @@ import org.springframework.transaction.annotation.Transactional;
  * could commit independently, a page could roll back while its checkpoint stuck, and that window would
  * never be reprocessed — a silent data gap that no error surfaces.
  *
- * <p>Note the deliberate contrast with {@code ExchangeAuditObserver}, which <em>is</em>
- * {@code REQUIRES_NEW} and swallows its failures. That is right for an audit side-effect of live vendor
- * traffic and wrong here. Do not unify them.
+ * <p>Note the deliberate contrast with the module's two other write-alongside-work concerns. All three
+ * differ on purpose:
+ *
+ * <ol>
+ *   <li>{@code ExchangeAuditObserver} — {@code REQUIRES_NEW}, swallows failures, because live vendor
+ *       traffic must not fail when the audit sink is down.
+ *   <li><strong>This class</strong> — {@code REQUIRED}, rolls back with its page, because a checkpoint
+ *       committing independently silently skips a window.
+ *   <li>{@code AuditAccessRecorder} — {@code MANDATORY}, fails the read, because ADR-0050 §7 makes the
+ *       access record a precondition of access rather than a side effect.
+ * </ol>
+ *
+ * <p>Do not unify them, and do not copy the observer's pattern here.
  *
  * <h2>Stolen leases</h2>
  *
