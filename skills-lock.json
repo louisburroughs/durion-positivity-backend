@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "java-testing": {
+      "source": "pluginagentmarketplace/custom-plugin-java",
+      "sourceType": "github",
+      "skillPath": "skills/java-testing/SKILL.md",
+      "computedHash": "ac873993487ec4d7d4da229792874d46847e2ba6bd97a68166bcf29f20998cb6"
+    },
+    "test-coverage": {
+      "source": "shiplightai/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/test-coverage/SKILL.md",
+      "computedHash": "03691e8e3a8177b1409829dade88c27267ad1f4ab4174149646a36ce4b0c7759"
+    },
+    "test-coverage-improver": {
+      "source": "openai/openai-agents-js",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/test-coverage-improver/SKILL.md",
+      "computedHash": "bb6bb4f85171f018b15c15e24915a380bb0f9cbbcafc499d502b32261675b2bb"
+    }
+  }
+}
