@@ -90,13 +90,21 @@ public class OAuth2ClientCredentialsAuthStrategy implements SupplierAuthStrategy
     }
 
     /**
-     * Drops any cached token for an auth config.
+     * Drops any cached token for an auth config — the only override of this hook, because OAuth2 is the only
+     * auth type that caches anything.
      *
-     * <p>Called by {@code SupplierBaseClient} when a vendor answers 401, through
-     * {@link SupplierAuthStrategies#invalidateCachedCredential}, so a token revoked before its stated
-     * expiry is not re-sent until it expires naturally.
+     * <p>Reached from two places, both through {@link SupplierAuthStrategies#invalidateCachedCredential}:
+     * {@code SupplierBaseClient} when a vendor answers 401, so a token revoked before its stated expiry is
+     * not re-sent until it would have expired; and an administrator changing or deleting the auth config, so
+     * a rotated client secret takes effect on the next exchange instead of within the hour.
+     *
+     * <p>Only the token is dropped, not the {@link ReentrantLock} for the key. Removing the lock would let a
+     * refresh already waiting on it acquire a <em>different</em> lock instance and defeat single-flighting at
+     * precisely the moment several callers are about to refresh at once. The locks are bounded by the number
+     * of auth configs, so retaining them costs nothing worth having.
      */
-    public void invalidate(@NonNull UUID authConfigId) {
+    @Override
+    public void invalidateCachedCredential(@NonNull UUID authConfigId) {
         tokensByAuthConfigId.remove(Objects.requireNonNull(authConfigId, "authConfigId"));
     }
 

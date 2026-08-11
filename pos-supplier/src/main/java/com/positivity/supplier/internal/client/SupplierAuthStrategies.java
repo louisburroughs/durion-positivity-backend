@@ -2,12 +2,17 @@ package com.positivity.supplier.internal.client;
 
 import com.positivity.supplier.internal.entity.SupplierAuthConfigEntity;
 import com.positivity.supplier.internal.enums.SupplierAuthType;
+import com.positivity.supplier.internal.spi.SupplierAuthConfigChanged;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +28,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class SupplierAuthStrategies {
+
+    private static final Logger log = LoggerFactory.getLogger(SupplierAuthStrategies.class);
 
     private final Map<SupplierAuthType, SupplierAuthStrategy> strategiesByType;
 
@@ -83,13 +90,64 @@ public class SupplierAuthStrategies {
      */
     public void invalidateCachedCredential(@NonNull SupplierAuthConfigEntity authConfig) {
         Objects.requireNonNull(authConfig, "authConfig must not be null");
-        if (authConfig.getType() != SupplierAuthType.OAUTH2_CLIENT_CREDENTIALS || authConfig.getId() == null) {
+        if (authConfig.getId() == null) {
             return;
         }
-        if (strategiesByType.get(SupplierAuthType.OAUTH2_CLIENT_CREDENTIALS)
-                instanceof OAuth2ClientCredentialsAuthStrategy oauth) {
-            oauth.invalidate(authConfig.getId());
+        invalidateCachedCredential(authConfig.getId());
+    }
+
+    /**
+     * Discards any cached credential for an auth config <em>id</em>, across every strategy.
+     *
+     * <p>The id-only form exists because the administrative trigger has nothing else: an auth config that
+     * was just deleted cannot be loaded to ask its type. It also removes the previous
+     * {@code instanceof OAuth2ClientCredentialsAuthStrategy} narrowing — asking every strategy is both
+     * shorter and correct by construction, since {@link SupplierAuthStrategy#invalidateCachedCredential}
+     * defaults to a no-op for the types that cache nothing. A future caching strategy is then covered
+     * without anyone remembering to extend a type check here.
+     *
+     * @param authConfigId identity of the auth config whose cached credential should be dropped
+     */
+    public void invalidateCachedCredential(@NonNull UUID authConfigId) {
+        Objects.requireNonNull(authConfigId, "authConfigId must not be null");
+        for (SupplierAuthStrategy strategy : strategiesByType.values()) {
+            strategy.invalidateCachedCredential(authConfigId);
         }
+    }
+
+    /**
+     * Drops the cached credential of an auth config an administrator has just changed or removed
+     * (ADR-0050 §4).
+     *
+     * <p>Without this, rotating a client secret is a routine operation with a <strong>silent hour-long
+     * failure window</strong>: the correct secret sits in the store while every exchange keeps presenting
+     * the cached token minted from the old one, until it expires naturally.
+     *
+     * <h2>A plain listener, not {@code @TransactionalEventListener(AFTER_COMMIT)}</h2>
+     *
+     * This runs inside the administrator's transaction, so if that transaction rolls back the cache has been
+     * cleared for a change that never happened. That direction is deliberate and costs one extra token
+     * request. Waiting for commit would invert the risk: a process that dies between commit and event
+     * delivery would keep serving the stale token, which is the failure this listener exists to prevent.
+     *
+     * <h2>Known limitation — single instance</h2>
+     *
+     * An application event does not leave the JVM, so this clears the cache only on the instance that served
+     * the admin request. Other instances keep their stale token until natural expiry. This is strictly better
+     * than before and complete for a single-instance deployment, but it is not a full fix: making it
+     * cross-instance needs a signal on the platform event bus, and is recorded as a CAP-317 follow-up rather
+     * than quietly assumed.
+     *
+     * @param event the administrative change
+     */
+    @EventListener
+    public void onAuthConfigChanged(@NonNull SupplierAuthConfigChanged event) {
+        Objects.requireNonNull(event, "event must not be null");
+        log.debug(
+                "Dropping any cached supplier credential for auth config {} after {}",
+                event.authConfigId(),
+                event.change());
+        invalidateCachedCredential(event.authConfigId());
     }
 
     /**

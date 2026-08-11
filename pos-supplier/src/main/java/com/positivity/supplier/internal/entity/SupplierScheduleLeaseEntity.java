@@ -73,10 +73,19 @@ public class SupplierScheduleLeaseEntity {
      * {@code currentValue != null ? currentValue : generate()} and reports
      * {@code allowAssignedIdentifiers() == true}: an assigned id always wins.
      *
-     * <p>The residual hazard is worth naming. Before this annotation, saving a lease with a null
-     * {@code bindingId} failed loudly on the NOT NULL constraint; now it would silently insert a lease
-     * keyed to a binding that does not exist. {@code SupplierScheduleLeaseRepositoryTest} pins the
-     * assigned-id-wins behaviour so a regression here fails the build rather than producing orphan leases.
+     * <p>What stops a <em>minted</em> id — one Hibernate generates because the caller supplied none — from
+     * becoming a lease on a binding that does not exist is {@code fk_slease_binding}: {@code binding_id} is
+     * a foreign key to {@code supplier_endpoint_binding}, so an invented UUID fails the insert. That FK is
+     * what makes the {@code @UUIDv7Id} annotation safe to carry here, not the generator's
+     * assigned-value-wins behaviour alone, and
+     * {@code SupplierScheduleLeaseRepositoryTest.aMintedBindingIdCannotBecomeAnOrphanLease} pins it. If a
+     * future migration ever drops that FK, this annotation stops being harmless and needs a guard.
+     *
+     * <p>Note for anyone tempted by a {@code @PrePersist} null-check instead: it does not work. The callback
+     * fires <em>after</em> identifier generation, so by the time it runs the field is already populated with
+     * a generated value and the check can never see null. Verified, not assumed — an earlier attempt at
+     * exactly that guard was dead code, and the test that was written to defend it is what exposed both this
+     * ordering and the existence of the FK above.
      */
     @Id
     @UUIDv7Id

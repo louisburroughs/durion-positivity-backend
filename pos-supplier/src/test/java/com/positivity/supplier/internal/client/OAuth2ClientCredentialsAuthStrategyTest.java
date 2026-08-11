@@ -303,7 +303,7 @@ class OAuth2ClientCredentialsAuthStrategyTest {
 
         OAuth2ClientCredentialsAuthStrategy strategy = strategy(builder, Clock.systemUTC(), 30);
         strategy.apply(new HttpHeaders(), config(CONFIG_A));
-        strategy.invalidate(CONFIG_A);
+        strategy.invalidateCachedCredential(CONFIG_A);
         strategy.apply(new HttpHeaders(), config(CONFIG_A));
 
         server.verify();

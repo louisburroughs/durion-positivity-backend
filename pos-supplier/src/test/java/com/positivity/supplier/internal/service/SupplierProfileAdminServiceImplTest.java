@@ -10,6 +10,7 @@ import com.positivity.supplier.internal.exception.SupplierNotFoundException;
 import com.positivity.supplier.internal.exception.SupplierValidationException;
 import com.positivity.supplier.internal.repository.SupplierAuthConfigRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.supplier.internal.spi.SupplierAuthConfigChanged;
 import com.positivity.supplier.service.model.AuthConfigRequest;
 import com.positivity.supplier.service.model.AuthConfigView;
 import com.positivity.supplier.service.model.CommercialAccountRequest;
@@ -31,6 +32,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 
 /**
  * Acceptance behavior of {@code SupplierProfileAdminServiceImpl} against the real schema:
@@ -49,6 +52,7 @@ import org.springframework.context.annotation.Import;
             "spring.jpa.hibernate.ddl-auto=validate"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@RecordApplicationEvents
 @Import({
     JpaConfig.class,
     SupplierProfileAdminServiceImpl.class,
@@ -67,6 +71,13 @@ class SupplierProfileAdminServiceImplTest {
 
     @Autowired
     private SupplierProfileRepository profileRepository;
+
+    @Autowired
+    private ApplicationEvents applicationEvents;
+
+    private List<SupplierAuthConfigChanged> credentialInvalidations() {
+        return applicationEvents.stream(SupplierAuthConfigChanged.class).toList();
+    }
 
     // ── Profiles ────────────────────────────────────────────────────────────────────
 
@@ -610,5 +621,92 @@ class SupplierProfileAdminServiceImplTest {
         assertThatThrownBy(callable)
                 .isInstanceOf(SupplierNotFoundException.class)
                 .hasFieldOrPropertyWithValue("code", expectedCode);
+    }
+
+    // ── Cached-credential invalidation (ADR-0050 §4) ────────────────────────────────
+
+    /**
+     * Rotating a client secret is a routine operation, and before this signal existed it had a silent
+     * failure window of up to an hour: the correct secret sat in the store while every exchange kept
+     * presenting the token minted from the old one.
+     *
+     * <p>Asserted on the event rather than on a cache, deliberately. The cache lives in
+     * {@code internal.client} and this service must not reach into it — that direction is a package cycle.
+     * The event IS the contract between the two, so it is the thing worth pinning here;
+     * {@code SupplierAuthStrategiesTest} covers the other half.
+     */
+    @Test
+    void updatingAnAuthConfigSignalsThatItsCachedCredentialIsStale() {
+        UUID profileId =
+                adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
+        UUID authConfigId = adminService
+                .createAuthConfig(profileId, bearerAuthRequest("s2s-bearer"))
+                .authConfigId();
+        assertThat(credentialInvalidations())
+                .as("creating a config cannot have a stale cached token, so nothing is signalled")
+                .isEmpty();
+
+        adminService.updateAuthConfig(profileId, authConfigId, bearerAuthRequest("s2s-bearer"));
+
+        assertThat(credentialInvalidations())
+                .as("an update signals staleness even when NOTHING visible changed: rotating a secret"
+                        + " changes the value behind an unchanged env: reference, which is invisible here")
+                .containsExactly(new SupplierAuthConfigChanged(authConfigId, SupplierAuthConfigChanged.Change.UPDATED));
+    }
+
+    @Test
+    void renamingAnAuthConfigAlsoSignalsIt() {
+        UUID profileId =
+                adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
+        UUID authConfigId = adminService
+                .createAuthConfig(profileId, bearerAuthRequest("s2s-bearer"))
+                .authConfigId();
+
+        adminService.updateAuthConfig(profileId, authConfigId, bearerAuthRequest("s2s-bearer-renamed"));
+
+        assertThat(credentialInvalidations())
+                .as("a rename cannot change credentials, but it is not special-cased: an update is an"
+                        + " update, and over-signalling costs one token request where under-signalling"
+                        + " costs an hour of failures")
+                .containsExactly(new SupplierAuthConfigChanged(authConfigId, SupplierAuthConfigChanged.Change.UPDATED));
+    }
+
+    @Test
+    void deletingAnAuthConfigSignalsIt() {
+        UUID profileId =
+                adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
+        UUID authConfigId = adminService
+                .createAuthConfig(profileId, bearerAuthRequest("s2s-bearer"))
+                .authConfigId();
+
+        adminService.deleteAuthConfig(profileId, authConfigId);
+
+        assertThat(credentialInvalidations())
+                .containsExactly(new SupplierAuthConfigChanged(authConfigId, SupplierAuthConfigChanged.Change.DELETED));
+    }
+
+    /**
+     * Deleting a profile bulk-deletes its auth configs, and a token cached for a config that no longer
+     * exists is the most stale state there is. The ids have to be read BEFORE the bulk delete, which is why
+     * this is asserted separately rather than assumed to follow from the single-config case.
+     */
+    @Test
+    void deletingAProfileSignalsEveryAuthConfigItRemoves() {
+        UUID profileId =
+                adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
+        UUID first = adminService
+                .createAuthConfig(profileId, bearerAuthRequest("s2s-bearer"))
+                .authConfigId();
+        UUID second = adminService
+                .createAuthConfig(profileId, bearerAuthRequest("other-bearer"))
+                .authConfigId();
+
+        adminService.deleteProfile(profileId);
+
+        assertThat(credentialInvalidations())
+                .as("every removed config must be signalled, or its token outlives it")
+                .containsExactlyInAnyOrder(
+                        new SupplierAuthConfigChanged(first, SupplierAuthConfigChanged.Change.DELETED),
+                        new SupplierAuthConfigChanged(second, SupplierAuthConfigChanged.Change.DELETED));
     }
 }

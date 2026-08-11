@@ -466,7 +466,12 @@ class SupplierYamlBootstrapTest {
                 authConfigRepository,
                 accountRepository,
                 bindingRepository,
-                new SecretSchemeRegistry(List.of(new EnvSecretReferenceResolver())));
+                new SecretSchemeRegistry(List.of(new EnvSecretReferenceResolver())),
+                // A discarding publisher: these assertions are about YAML authority rejecting the write
+                // before anything is published. If a credential-invalidation event ever escaped a rejected
+                // mutation that would be a defect, and SupplierProfileAdminServiceImplTest is where it is
+                // caught -- pinning the negative here as well would duplicate that without adding cover.
+                event -> {});
         assertThatThrownBy(() -> adminService.updateProfile(
                         profileId,
                         new com.positivity.supplier.service.model.VendorProfileRequest(

@@ -5,6 +5,7 @@ import com.positivity.supplier.internal.enums.SupplierAuthType;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.spi.ExchangeContext;
 import com.positivity.supplier.internal.spi.ExchangeOutcome;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpHeaders;
 
@@ -47,4 +48,22 @@ public interface SupplierAuthStrategy {
      *     {@link ExchangeOutcome#CONFIGURATION_ERROR}, never as a transport error
      */
     void apply(@NonNull HttpHeaders headers, @NonNull SupplierAuthConfigEntity authConfig);
+
+    /**
+     * Drops anything this strategy has cached for one auth config.
+     *
+     * <p>A no-op by default, because most auth types cache nothing: they resolve their references per
+     * exchange, so there is nothing to go stale. Only OAuth2 holds a vendor-issued access token, which is
+     * why it is the only override today — and why this is a default method rather than an abstract one that
+     * would force three empty implementations.
+     *
+     * <p>Implementations must be safe to call with an unknown id and safe to call repeatedly. Callers
+     * deliberately over-signal — an administrator changing a config, a 401 from the vendor — rather than
+     * attempt to work out whether a cached credential is genuinely stale.
+     *
+     * @param authConfigId identity of the auth config whose cached credential should be discarded
+     */
+    default void invalidateCachedCredential(@NonNull UUID authConfigId) {
+        // Nothing cached; see javadoc.
+    }
 }

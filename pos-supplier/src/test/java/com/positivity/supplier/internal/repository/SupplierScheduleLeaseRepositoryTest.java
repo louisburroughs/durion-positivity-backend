@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
@@ -435,6 +436,41 @@ class SupplierScheduleLeaseRepositoryTest {
                 .extracting(SupplierScheduleLeaseEntity::getBindingId)
                 .as("exactly the two assigned binding ids, so nothing was minted behind our back")
                 .containsExactlyInAnyOrder(bindingId, otherBinding);
+    }
+
+    /**
+     * The other half of the same concern, and the half that would actually bite: a lease saved with
+     * <em>no</em> binding id must not become a lease on a binding that does not exist.
+     *
+     * <p>{@code @UUIDv7Id} attaches a real Hibernate generator, so Hibernate mints an id here rather than
+     * failing on NOT NULL as it did before the annotation. What makes that harmless is
+     * {@code fk_slease_binding}: the minted UUID references no binding, so the insert is rejected. This test
+     * pins that FK, because it is the only thing standing between the annotation and a permanently
+     * unclaimable orphan lease -- a row that would look entirely valid and simply never be worked.
+     *
+     * <p>It also records a correction. A {@code @PrePersist} null-check was written for this first and was
+     * dead code: the callback fires AFTER identifier generation, so it never sees null. This test is what
+     * exposed both that ordering and the FK, and it is deliberately asserted at the database rather than in
+     * Java so it keeps testing the thing that is really doing the work.
+     */
+    @Test
+    void aMintedBindingIdCannotBecomeAnOrphanLease() {
+        SupplierScheduleLeaseEntity unkeyed = SupplierScheduleLeaseEntity.builder()
+                .vendorProfileId(profileId)
+                .capability(SupplierCapability.STOCK_REPORT)
+                .build();
+
+        assertThatThrownBy(() -> leaseRepository.saveAndFlush(unkeyed))
+                .as("an id Hibernate invented references no binding, so fk_slease_binding must reject it")
+                .hasRootCauseInstanceOf(java.sql.SQLIntegrityConstraintViolationException.class)
+                .rootCause()
+                .hasMessageContaining("FK_SLEASE_BINDING");
+
+        entityManager.clear();
+        assertThat(leaseRepository.findAll())
+                .extracting(SupplierScheduleLeaseEntity::getBindingId)
+                .as("and no orphan lease may be left behind")
+                .containsExactly(bindingId);
     }
 
     @Test

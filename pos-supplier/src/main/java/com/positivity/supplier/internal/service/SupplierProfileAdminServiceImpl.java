@@ -13,6 +13,7 @@ import com.positivity.supplier.internal.repository.SupplierAccountRepository;
 import com.positivity.supplier.internal.repository.SupplierAuthConfigRepository;
 import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.supplier.internal.spi.SupplierAuthConfigChanged;
 import com.positivity.supplier.service.SupplierProfileAdminService;
 import com.positivity.supplier.service.model.AuthConfigRequest;
 import com.positivity.supplier.service.model.AuthConfigView;
@@ -33,6 +34,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,6 +60,15 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
 
     /** Supplies the legal secret-reference scheme allowlist (ADR-0050 §4). */
     private final SecretSchemeRegistry secretSchemeRegistry;
+
+    /**
+     * Signals auth-config changes so the outbound transport can drop cached credentials (ADR-0050 §4).
+     *
+     * <p>An event rather than a call into {@code internal.client}: that direction is a package cycle, since
+     * the client already depends on this package for secret-scheme and binding resolution. See
+     * {@link SupplierAuthConfigChanged}.
+     */
+    private final ApplicationEventPublisher eventPublisher;
 
     // ── Vendor profiles ─────────────────────────────────────────────────────────────
 
@@ -85,10 +96,21 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     @Override
     public void deleteProfile(@NonNull UUID vendorProfileId) {
         SupplierProfileEntity profile = loadAdminManagedProfile(vendorProfileId);
+        // Collect the auth config ids BEFORE the bulk delete: deleting a profile deletes its auth configs,
+        // and a token cached for a config that no longer exists is the most stale state there is. The bulk
+        // delete leaves nothing to read afterwards, so this ordering is load-bearing, not stylistic.
+        List<UUID> deletedAuthConfigIds =
+                authConfigRepository.findByVendorProfileIdOrderByNameAsc(vendorProfileId).stream()
+                        .map(SupplierAuthConfigEntity::getId)
+                        .toList();
         bindingRepository.deleteByVendorProfileId(vendorProfileId);
         authConfigRepository.deleteByVendorProfileId(vendorProfileId);
         accountRepository.deleteByVendorProfileId(vendorProfileId);
         profileRepository.delete(profile);
+        for (UUID authConfigId : deletedAuthConfigIds) {
+            eventPublisher.publishEvent(
+                    new SupplierAuthConfigChanged(authConfigId, SupplierAuthConfigChanged.Change.DELETED));
+        }
     }
 
     @Override
@@ -152,7 +174,13 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
             }
         }
         applyAuthConfig(authConfig, request);
-        return toAuthConfigView(authConfigRepository.save(authConfig));
+        AuthConfigView updated = toAuthConfigView(authConfigRepository.save(authConfig));
+        // Published unconditionally, including for a pure rename. An operator rotating a client secret
+        // changes the value BEHIND an unchanged env: reference, which is invisible from here, so comparing
+        // the reference fields would miss the very case this exists for. See SupplierAuthConfigChanged.
+        eventPublisher.publishEvent(
+                new SupplierAuthConfigChanged(authConfigId, SupplierAuthConfigChanged.Change.UPDATED));
+        return updated;
     }
 
     @Override
@@ -166,6 +194,8 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
                             + "' cannot be deleted while endpoint bindings reference it");
         }
         authConfigRepository.delete(authConfig);
+        eventPublisher.publishEvent(
+                new SupplierAuthConfigChanged(authConfigId, SupplierAuthConfigChanged.Change.DELETED));
     }
 
     @Override

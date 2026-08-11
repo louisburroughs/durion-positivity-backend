@@ -8,6 +8,7 @@ import com.positivity.supplier.internal.enums.SupplierAuthType;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.service.SecretReferenceResolver;
 import com.positivity.supplier.internal.service.SecretSchemeRegistry;
+import com.positivity.supplier.internal.spi.SupplierAuthConfigChanged;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
@@ -146,6 +147,50 @@ class SupplierAuthStrategyTest {
             for (SupplierAuthType type : SupplierAuthType.values()) {
                 assertThat(strategies.forType(type).supportedType()).isEqualTo(type);
             }
+        }
+
+        /**
+         * The listener half of the credential-invalidation seam. {@code internal.service} publishes
+         * {@link SupplierAuthConfigChanged} rather than calling into {@code internal.client} — that direction
+         * is a package cycle — so this is where the event is proven to actually reach a cache.
+         *
+         * <p>Asserted through a recording strategy rather than through the real OAuth2 cache, because the
+         * property under test is the <em>fan-out</em>: every strategy is asked, so a future caching strategy
+         * is covered without anyone remembering to extend a type check. That the OAuth2 strategy then really
+         * evicts is {@code OAuth2ClientCredentialsAuthStrategyTest}'s job.
+         */
+        @Test
+        void anAuthConfigChangedEventReachesEveryStrategy() {
+            List<UUID> invalidated = new java.util.ArrayList<>();
+            SupplierAuthStrategy recording = new SupplierAuthStrategy() {
+                @Override
+                public SupplierAuthType supportedType() {
+                    return SupplierAuthType.BEARER;
+                }
+
+                @Override
+                public void apply(HttpHeaders headers, SupplierAuthConfigEntity authConfig) {
+                    // Not exercised here.
+                }
+
+                @Override
+                public void invalidateCachedCredential(UUID authConfigId) {
+                    invalidated.add(authConfigId);
+                }
+            };
+            List<SupplierAuthStrategy> strategies = new java.util.ArrayList<>(allStrategies());
+            strategies.removeIf(strategy -> strategy.supportedType() == SupplierAuthType.BEARER);
+            strategies.add(recording);
+            SupplierAuthStrategies dispatcher = new SupplierAuthStrategies(strategies);
+            UUID authConfigId = UUID.randomUUID();
+
+            dispatcher.onAuthConfigChanged(
+                    new SupplierAuthConfigChanged(authConfigId, SupplierAuthConfigChanged.Change.UPDATED));
+
+            assertThat(invalidated)
+                    .as("an administrator changing an auth config must reach the caches, or a rotated secret"
+                            + " keeps failing for as long as the old token stays valid")
+                    .containsExactly(authConfigId);
         }
 
         @Test
