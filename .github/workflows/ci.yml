@@ -642,12 +642,37 @@ jobs:
           pattern: jacoco-coverage-*
           path: sonar-coverage
 
+      - name: Report downloaded coverage reports
+        # This job runs `test-compile` only, so the sole source of coverage is the
+        # artifact downloaded above; if it is empty the scan silently reports 0%.
+        # Warn rather than fail: when selective testing skips every module, an empty
+        # artifact is the correct outcome and must not break the gate.
+        run: |
+          # The download step is continue-on-error and creates nothing when no artifact
+          # matches, so sonar-coverage may not exist. Without this mkdir, `find` exits 1
+          # and -eo pipefail fails the step — the opposite of the warn-only intent.
+          mkdir -p sonar-coverage
+          count=$(find sonar-coverage -name jacoco.xml | wc -l)
+          echo "Downloaded ${count} JaCoCo report(s) for coverage import."
+          if [[ "${count}" -eq 0 ]]; then
+            echo "::warning::No JaCoCo reports downloaded; SonarCloud will report no coverage for this analysis."
+          else
+            find sonar-coverage -name jacoco.xml | sed 's/^/  /'
+          fi
+
       - name: SonarCloud Scan
         # Stopgap: PR-mode analysis currently fails at PR decoration because SonarCloud cannot
         # resolve the pull request via its GitHub App / DevOps-platform binding ("Something went
         # wrong while trying to get the pullrequest with key 'N'"). Until that binding is fixed in
         # SonarCloud, do not let a PR-decoration failure fail this check. The push/main-branch scan
         # (else branch below) stays strict and remains the authoritative quality gate.
+        #
+        # xmlReportPaths must be absolute: the scanner resolves a relative value against each
+        # Maven module's own base directory, so `sonar-coverage/**` only ever matched from the
+        # root module and every other module imported nothing. The per-module
+        # `**/target/site/jacoco/jacoco.xml` entry that used to follow it was dead weight here —
+        # this job runs `test-compile` with -DskipTests, so no module produces a local report and
+        # the downloaded artifact is the only coverage that exists.
         continue-on-error: ${{ github.event_name == 'pull_request' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -664,7 +689,7 @@ jobs:
             -Dsonar.projectKey=louisburroughs_durion-positivity-backend \
             -Dsonar.organization=louisburroughs \
             -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.coverage.jacoco.xmlReportPaths=sonar-coverage/**/jacoco.xml,**/target/site/jacoco/jacoco.xml"
+            -Dsonar.coverage.jacoco.xmlReportPaths=${{ github.workspace }}/sonar-coverage/**/jacoco.xml"
 
           if [[ "${EVENT_NAME}" == "pull_request" ]]; then
             # Force PR-scoped analysis explicitly to avoid branch-level quality-gate
@@ -728,13 +753,21 @@ jobs:
         # pos-archunit's tests here (-Darchunit.skipTests=true): it has no production code so it
         # adds no coverage, and its rules are enforced at the `test` phase in the per-module
         # unit/integration jobs.
+        #
+        # Coverage import uses `aggregateXmlReportPaths`, not `xmlReportPaths`: the latter is the
+        # per-module property, and the scanner resolves a *relative* value against each Maven
+        # module's own base directory. Every non-root module therefore looked for
+        # `<module>/pos-coverage-aggregate/target/site/jacoco-aggregate/jacoco.xml`, found nothing,
+        # and fell back to its own `target/site/jacoco/jacoco.xml` — losing exactly the
+        # cross-module coverage the aggregate report exists to capture. The path is absolute
+        # (github.workspace) so it resolves identically from every module.
         run: |
           ./mvnw -pl ${{ env.COVERAGE_AGGREGATE_MODULE }} -am -DskipITs -Darchunit.skipTests=true verify -T 1C -B \
             org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
             -Dsonar.projectKey=louisburroughs_durion-positivity-backend \
             -Dsonar.organization=louisburroughs \
             -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.coverage.jacoco.xmlReportPaths=${{ env.COVERAGE_AGGREGATE_XML_PATH }}
+            -Dsonar.coverage.jacoco.aggregateXmlReportPaths=${{ github.workspace }}/${{ env.COVERAGE_AGGREGATE_XML_PATH }}
 
       - name: Upload aggregate JaCoCo coverage report
         if: always()
