@@ -171,8 +171,12 @@ public class PriceBookController {
             scopes = {"catalog:price_book:read"})
     @PostMapping("/resolve-price")
     @Operation(
-            summary = "Resolve effective product price",
-            description = "Calculates the effective price for a product using applicable price books and rules.")
+            summary = "Resolve reference/list product price",
+            description = "Resolves the reference/list price for a product using applicable price books and"
+                    + " rules. Candidate book precedence: explicit priceBookId, then active LOCATION book,"
+                    + " then active CUSTOMER_TIER book (customerTierId), then COMPANY_DEFAULT. The result is"
+                    + " catalog reference data (ADR-0054) — transactional sell prices are resolved by"
+                    + " pos-price, never by this endpoint.")
     @ApiResponse(
             responseCode = "200",
             description = "Resolved price returned",

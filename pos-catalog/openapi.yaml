@@ -49,6 +49,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Successfully retrieved product
@@ -79,6 +80,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -128,12 +130,14 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       - name: uomId
         in: path
         description: Product UoM ID
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -176,12 +180,14 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       - name: uomId
         in: path
         description: Product UoM ID
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '204':
           description: Product UoM deleted
@@ -205,6 +211,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -247,11 +254,13 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       - name: msrpId
         in: path
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -308,6 +317,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Successfully retrieved lifecycle state
@@ -341,6 +351,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -399,6 +410,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Conversion found
@@ -429,6 +441,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -471,6 +484,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '204':
           description: Conversion deactivated
@@ -493,6 +507,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Found
@@ -523,6 +538,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -559,6 +575,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '204':
           description: Deleted
@@ -582,6 +599,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Price book returned
@@ -612,6 +630,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -649,11 +668,13 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       - name: ruleId
         in: path
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -690,11 +711,13 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       - name: ruleId
         in: path
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '204':
           description: Rule deactivated
@@ -716,6 +739,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -756,6 +780,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Successfully retrieved catalog
@@ -786,6 +811,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         description: Updated catalog object
         content:
@@ -829,6 +855,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '204':
           description: Catalog deleted successfully
@@ -858,6 +885,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -906,6 +934,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '204':
           description: Catalog item deleted successfully
@@ -967,6 +996,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Product UoMs listed
@@ -1001,6 +1031,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -1050,6 +1081,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Replacements listed
@@ -1079,6 +1111,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -1124,6 +1157,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: MSRP records returned
@@ -1148,6 +1182,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -1333,6 +1368,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -1418,6 +1454,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -1469,6 +1506,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -1580,6 +1618,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Rule list returned
@@ -1604,6 +1643,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -1632,8 +1672,8 @@ paths:
     post:
       tags:
       - Price Book API
-      summary: Resolve effective product price
-      description: Calculates the effective price for a product using applicable price books and rules.
+      summary: Resolve reference/list product price
+      description: 'Resolves the reference/list price for a product using applicable price books and rules. Candidate book precedence: explicit priceBookId, then active LOCATION book, then active CUSTOMER_TIER book (customerTierId), then COMPANY_DEFAULT. The result is catalog reference data (ADR-0054) — transactional sell prices are resolved by pos-price, never by this endpoint.'
       operationId: resolvePrice
       requestBody:
         content:
@@ -1766,6 +1806,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Substitute parts returned
@@ -1798,6 +1839,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       - name: asOf
         in: query
         required: false
@@ -1836,12 +1878,14 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       - name: location_id
         in: query
         description: Location/store ID for location-specific data
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Successfully retrieved product details (may be partial if some services unavailable)
@@ -1885,6 +1929,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Substitution group found
@@ -1915,6 +1960,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '204':
           description: Substitution group deleted
@@ -1938,6 +1984,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Successfully retrieved service
@@ -2099,12 +2146,14 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       - name: productId
         in: path
         description: Product ID
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Effective price returned
@@ -2136,6 +2185,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Successfully retrieved non-inventory product
@@ -2216,6 +2266,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Found
@@ -2241,6 +2292,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Found
@@ -2292,12 +2344,14 @@ paths:
         required: false
         schema:
           type: string
+          format: uuid
       - name: supplierId
         in: query
         description: Filter by supplier ID
         required: false
         schema:
           type: string
+          format: uuid
       - name: pageable
         in: query
         required: true
@@ -2353,12 +2407,14 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       - name: productId
         in: path
         description: Product ID to remove
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Member removed
@@ -2988,6 +3044,7 @@ components:
           type: number
           description: Multiplier to convert one unit of the source UOM into the target UOM
           example: 12
+          minimum: 0
       required:
       - conversionFactor
     UomConversionDto:
@@ -3013,7 +3070,6 @@ components:
           example: 12
         active:
           type: boolean
-          default: false
           description: Whether this conversion is currently active
           example: true
         createdAt:
@@ -3058,6 +3114,7 @@ components:
           type: number
           description: Per-unit cost for this quantity range
           example: 5.0
+          minimum: 0
       required:
       - minQuantity
       - unitCost
@@ -3150,7 +3207,6 @@ components:
           example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a535
         isDefault:
           type: boolean
-          default: false
           description: Whether this is the default price book for the scope
           example: false
         status:
@@ -3386,6 +3442,7 @@ components:
         newCost:
           type: number
           description: New standard cost
+          minimum: 0
         reasonCode:
           type: string
           description: Reason code for manual change
@@ -3728,6 +3785,7 @@ components:
           type: number
           description: Multiplier to convert one unit of the source UOM into the target UOM
           example: 12
+          minimum: 0
         createdBy:
           type: string
           description: Identifier of the user creating the conversion
@@ -4058,9 +4116,14 @@ components:
           format: uuid
           description: Identifier of the location used to scope price book selection
           example: 01960003-0000-7000-8000-000000000001
+        customerTierId:
+          type: string
+          format: uuid
+          description: Identifier of the customer tier used to select a CUSTOMER_TIER reference price book (matches the book's scopeId). Selects tier list/reference prices only — transactional customer-tier discounting is owned by pos-price (ADR-0054)
+          example: 0196cf6f-c8dd-7ee0-93e7-f48a5698a536
         customerTier:
           type: string
-          description: Customer tier used to scope price book selection
+          description: Customer tier label matched against rule-level CUSTOMER_TIER conditions within the selected price book
           example: GOLD
         currency:
           type: string
@@ -4075,7 +4138,7 @@ components:
       - productId
     ResolvePriceResponseDto:
       type: object
-      description: Resolved price result for a product in a given context
+      description: Resolved reference/list price for a product in a given context. This is catalog reference data (list/MSRP role per ADR-0054), never a transactional sell price — transactional quoting is owned by pos-price
       properties:
         resolvedAmount:
           type: string
@@ -4222,7 +4285,6 @@ components:
           example: 01960003-0000-7000-8000-000000000001
         success:
           type: boolean
-          default: false
           description: Whether this record was ingested successfully
           example: true
         errorCode:
@@ -4685,12 +4747,12 @@ components:
     Page:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -4703,13 +4765,13 @@ components:
           $ref: '#/components/schemas/SortObject'
         pageable:
           $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     PageableObject:
@@ -4722,10 +4784,10 @@ components:
           $ref: '#/components/schemas/SortObject'
         paged:
           type: boolean
-        pageSize:
+        pageNumber:
           type: integer
           format: int32
-        pageNumber:
+        pageSize:
           type: integer
           format: int32
         unpaged:
@@ -4742,12 +4804,12 @@ components:
     PageSupplierItemCostDto:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -4762,13 +4824,13 @@ components:
           $ref: '#/components/schemas/SortObject'
         pageable:
           $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
   securitySchemes:

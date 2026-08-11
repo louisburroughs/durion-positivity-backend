@@ -305,6 +305,106 @@ class PriceBookContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.resolvedAmount").value("88.8800"));
     }
 
+    @Test
+    @DisplayName("ADR-0054-010: Resolve reference price from CUSTOMER_TIER book when customerTierId supplied")
+    void resolveFromCustomerTierBook() throws Exception {
+        UUID productId = createProductAndReturnId("ADR0054 Tier Product A");
+        UUID tierId = UUID.randomUUID();
+        String tierBookId = createPriceBook("ADR0054 Tier Book A", "CUSTOMER_TIER", tierId.toString(), false);
+        addGlobalRule(tierBookId, "77.7700", 10);
+
+        mockMvc.perform(withAuth(post("/v1/products/price-books/resolve-price")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "productId", productId.toString(),
+                                "customerTierId", tierId.toString(),
+                                "asOf", LocalDate.now(TEST_CLOCK).toString())))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.source").value("PRICE_BOOK_RULE"))
+                .andExpect(jsonPath("$.resolvedAmount").value("77.7700"));
+    }
+
+    @Test
+    @DisplayName("ADR-0054-011: Active LOCATION book takes precedence over CUSTOMER_TIER book")
+    void locationBookBeatsCustomerTierBook() throws Exception {
+        UUID productId = createProductAndReturnId("ADR0054 Tier Product B");
+        UUID tierId = UUID.randomUUID();
+        UUID locationId = UUID.randomUUID();
+        String tierBookId = createPriceBook("ADR0054 Tier Book B", "CUSTOMER_TIER", tierId.toString(), false);
+        addGlobalRule(tierBookId, "66.6600", 10);
+        String locationBookId = createPriceBook("ADR0054 Location Book B", "LOCATION", locationId.toString(), false);
+        addGlobalRule(locationBookId, "55.5500", 10);
+
+        mockMvc.perform(withAuth(post("/v1/products/price-books/resolve-price")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "productId", productId.toString(),
+                                "locationId", locationId.toString(),
+                                "customerTierId", tierId.toString(),
+                                "asOf", LocalDate.now(TEST_CLOCK).toString())))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.source").value("PRICE_BOOK_RULE"))
+                .andExpect(jsonPath("$.resolvedAmount").value("55.5500"));
+    }
+
+    @Test
+    @DisplayName("ADR-0054-012: Missing CUSTOMER_TIER book falls through to company default")
+    void missingTierBookFallsThroughToCompanyDefault() throws Exception {
+        UUID productId = createProductAndReturnId("ADR0054 Tier Product C");
+        String defaultBookId = createPriceBook("ADR0054 Default Book C", "COMPANY_DEFAULT", null, true);
+        addGlobalRule(defaultBookId, "44.4400", 10);
+
+        mockMvc.perform(withAuth(post("/v1/products/price-books/resolve-price")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "productId", productId.toString(),
+                                "customerTierId", UUID.randomUUID().toString(),
+                                "asOf", LocalDate.now(TEST_CLOCK).toString())))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.source").value("PRICE_BOOK_RULE"))
+                .andExpect(jsonPath("$.resolvedAmount").value("44.4400"));
+    }
+
+    @Test
+    @DisplayName("ADR-0054-013: Without customerTierId an active CUSTOMER_TIER book is never selected")
+    void absentTierContextIgnoresTierBooks() throws Exception {
+        UUID productId = createProductAndReturnId("ADR0054 Tier Product D");
+        UUID tierId = UUID.randomUUID();
+        String tierBookId = createPriceBook("ADR0054 Tier Book D", "CUSTOMER_TIER", tierId.toString(), false);
+        addGlobalRule(tierBookId, "33.3300", 10);
+        String defaultBookId = createPriceBook("ADR0054 Default Book D", "COMPANY_DEFAULT", null, true);
+        addGlobalRule(defaultBookId, "22.2200", 10);
+
+        mockMvc.perform(withAuth(post("/v1/products/price-books/resolve-price")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "productId", productId.toString(),
+                                "asOf", LocalDate.now(TEST_CLOCK).toString())))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.source").value("PRICE_BOOK_RULE"))
+                .andExpect(jsonPath("$.resolvedAmount").value("22.2200"));
+    }
+
+    private void addGlobalRule(String priceBookId, String usdAmount, int priority) throws Exception {
+        mockMvc.perform(withAuth(post("/v1/products/price-books/{priceBookId}/rules", priceBookId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "targetType",
+                                "GLOBAL",
+                                "pricingLogic",
+                                "{\"amounts\":{\"USD\":\"" + usdAmount + "\"},\"defaultCurrency\":\"USD\"}",
+                                "conditionType",
+                                "NONE",
+                                "priority",
+                                priority,
+                                "effectiveStartAt",
+                                OffsetDateTime.now(ZoneOffset.UTC).minusDays(1).toString(),
+                                "createdByUserId",
+                                UUID.fromString("00000000-0000-0000-0000-000000000001")
+                                        .toString()))))
+                .andExpect(status().isCreated());
+    }
+
     private String createPriceBook(String name, String scope, String scopeId, boolean isDefault) throws Exception {
         var payload = new java.util.HashMap<String, Object>();
         payload.put("name", name);

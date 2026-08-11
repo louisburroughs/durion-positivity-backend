@@ -33,7 +33,16 @@ public class ResolvePriceRequestDto {
     private UUID locationId;
 
     @Schema(
-            description = "Customer tier used to scope price book selection",
+            description = "Identifier of the customer tier used to select a CUSTOMER_TIER reference price book"
+                    + " (matches the book's scopeId). Selects tier list/reference prices only — transactional"
+                    + " customer-tier discounting is owned by pos-price (ADR-0054)",
+            example = "0196cf6f-c8dd-7ee0-93e7-f48a5698a536",
+            requiredMode = NOT_REQUIRED)
+    private UUID customerTierId;
+
+    @Schema(
+            description = "Customer tier label matched against rule-level CUSTOMER_TIER conditions"
+                    + " within the selected price book",
             example = "GOLD",
             requiredMode = NOT_REQUIRED)
     private String customerTier;
