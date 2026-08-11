@@ -101,8 +101,7 @@ class FileUploadProcessEndToEndTest {
 
         when(restClientBuilder.baseUrl(nullable(String.class))).thenReturn(restClientBuilder);
         when(restClientBuilder.build()).thenReturn(mockRestClient);
-        when(loadBalancedRestClientBuilder.baseUrl(nullable(String.class)))
-                .thenReturn(loadBalancedRestClientBuilder);
+        when(loadBalancedRestClientBuilder.baseUrl(nullable(String.class))).thenReturn(loadBalancedRestClientBuilder);
         when(loadBalancedRestClientBuilder.build()).thenReturn(mockRestClient);
         when(mockRestClient.post()).thenReturn(requestBodyUriSpec);
         when(requestBodyUriSpec.uri(anyString())).thenReturn(requestBodySpec);

@@ -1,4 +1,4 @@
-package com.positivity.customer.internal.config;
+package com.positivity.workorder.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -10,7 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Contract tests for the customer {@link EventTypes} registry.
+ * Contract tests for the {@link EventTypes} event-type registry.
  *
  * <p>
  * Every module that emits events via {@code @EmitEvent} must publish a registry
@@ -58,7 +58,7 @@ class EventTypesTest {
     }
 
     private static List<EventTypeRegistration> registrations() {
-        return EventTypes.all();
+        return EventTypes.ALL_EVENT_TYPES;
     }
 
     @Test
@@ -107,10 +107,24 @@ class EventTypesTest {
         });
     }
 
+    /**
+     * Event types that deliberately carry hand-tuned thresholds instead of a
+     * preset. Each entry is a decision, not an oversight: the dispatch-board
+     * dashboard aggregates across every open workorder for a location, so it is
+     * budgeted above the presets at p50 while staying under the approval preset
+     * at p99.
+     *
+     * <p>
+     * Keep this list short. A new entry means someone opted an event out of the
+     * shared latency vocabulary, which should be a conscious call.
+     */
+    private static final Set<String> CUSTOM_THRESHOLD_EXEMPTIONS = Set.of("WORKEXEC_DASHBOARD_TODAY_GET");
+
     @Test
-    @DisplayName("every registration uses one of the four declared threshold presets")
+    @DisplayName("every registration uses a declared threshold preset, unless documented as an exemption")
     void thresholds_matchADeclaredPreset() {
         assertThat(registrations())
+                .filteredOn(registration -> !CUSTOM_THRESHOLD_EXEMPTIONS.contains(registration.getTypeCode()))
                 .allSatisfy(registration -> assertThat(triple(
                                 registration.getP50Micros(), registration.getP95Micros(), registration.getP99Micros()))
                         .as("threshold preset for %s", registration.getTypeCode())
@@ -118,27 +132,10 @@ class EventTypesTest {
     }
 
     @Test
-    @DisplayName("browse and search are distinct registrations, browse on the fastRead preset")
-    void all_includesBrowseEventAsDistinctFastReadRegistration() {
-        List<EventTypeRegistration> registrations = registrations();
-        assertThat(registrations)
+    @DisplayName("every documented threshold exemption still refers to a registered event type")
+    void thresholdExemptions_areNotStale() {
+        assertThat(registrations())
                 .extracting(EventTypeRegistration::getTypeCode)
-                .contains("CUSTOMER_PARTY_BROWSE", "CUSTOMER_PARTY_SEARCH");
-
-        EventTypeRegistration browseRegistration = registrations.stream()
-                .filter(registration -> "CUSTOMER_PARTY_BROWSE".equals(registration.getTypeCode()))
-                .findFirst()
-                .orElseThrow();
-
-        EventTypeRegistration searchRegistration = registrations.stream()
-                .filter(registration -> "CUSTOMER_PARTY_SEARCH".equals(registration.getTypeCode()))
-                .findFirst()
-                .orElseThrow();
-
-        assertThat(browseRegistration.getDescription()).isEqualTo("Browse parties with paging and sorting");
-        assertThat(browseRegistration.getP50Micros()).isEqualTo(EventTypeRegistration.FAST_READ_P50);
-        assertThat(browseRegistration.getP95Micros()).isEqualTo(EventTypeRegistration.FAST_READ_P95);
-        assertThat(browseRegistration.getP99Micros()).isEqualTo(EventTypeRegistration.FAST_READ_P99);
-        assertThat(browseRegistration).isNotEqualTo(searchRegistration);
+                .containsAll(CUSTOM_THRESHOLD_EXEMPTIONS);
     }
 }
