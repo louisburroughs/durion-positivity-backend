@@ -1,6 +1,6 @@
 # pos-catalog
 
-Product catalog service for the Durion Positivity ETSMS platform. Manages the product master, price books, unit-of-measure conversions, supplier item costs, MSRP records, location-level price overrides, and product lifecycle transitions.
+Product catalog service for the Durion Positivity ETSMS platform. Manages the product master, unit-of-measure conversions, supplier item costs, product lifecycle transitions, and the platform's **reference pricing data**: price books, MSRP records, and location-level reference price overrides (see the sell-price boundary below — transactional pricing is pos-price's).
 
 ## Sell-Price Boundary (ADR-0054)
 
@@ -37,10 +37,10 @@ Routing rule for new stories: computing **what a customer pays** → pos-price; 
 
 - Maintain product master data (inventory and non-inventory products)
 - Own product stock-attribute contract data for pos-inventory (#1023): per-product UoM conversion sets (purchase/pack UoM → base UoM factor + precision scale), stock tracking level (`NONE`/`LOT`/`SERIAL`), and substitution groups of interchangeable products
-- Manage price books and associated pricing rules
+- Manage price books and associated pricing rules (reference/list role, ADR-0054)
 - Handle unit-of-measure conversions between stocking and selling units
 - Track supplier item costs and MSRP records per product
-- Apply and resolve location-level price overrides
+- Apply and resolve location-level **reference** price overrides (list-price display; never a transactional price source)
 - Control product lifecycle (active, discontinued, archived)
 - Search and filter products with Caffeine-backed caching
 - Support bulk product import via `POST /v1/catalog/bulk-ingest`
@@ -62,7 +62,7 @@ Routing rule for new stories: computing **what a customer pays** → pos-price; 
 - `DELETE /v1/catalog/{catalogId}` — archive a product
 - `GET /v1/catalog/{itemId}/costs` — list item costs
 - `GET /v1/catalog/{itemId}/costs/audit` — cost audit trail
-- `GET /v1/catalog/pricing/effective-price/{locationId}/{productId}` — effective price at a location
+- `GET /v1/catalog/pricing/effective-price/{locationId}/{productId}` — reference price at a location (list/MSRP role, ADR-0054; not a transactional quote)
 - `GET /v1/catalog/{priceBookId}` — retrieve a price book
 - `POST /v1/catalog/bulk-ingest` — bulk import products (auth: `catalog:product:create`)
 - `PUT /v1/products/{productId}/tracking-level` — set stock tracking level (`NONE`/`LOT`/`SERIAL`)
