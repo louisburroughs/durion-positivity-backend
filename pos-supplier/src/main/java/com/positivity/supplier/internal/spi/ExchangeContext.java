@@ -1,4 +1,4 @@
-package com.positivity.supplier.internal.client;
+package com.positivity.supplier.internal.spi;
 
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;

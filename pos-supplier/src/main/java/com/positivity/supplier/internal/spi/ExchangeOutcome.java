@@ -1,4 +1,4 @@
-package com.positivity.supplier.internal.client;
+package com.positivity.supplier.internal.spi;
 
 /**
  * Classification of one outbound attempt (ADR-0052 §5). The distinction that matters is not

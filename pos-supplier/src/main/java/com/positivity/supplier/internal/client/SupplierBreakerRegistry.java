@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.client;
 
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
+import com.positivity.supplier.internal.spi.ExchangeOutcome;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;

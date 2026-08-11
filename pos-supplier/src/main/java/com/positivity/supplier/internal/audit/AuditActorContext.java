@@ -1,11 +1,17 @@
-package com.positivity.supplier.internal.config;
+package com.positivity.supplier.internal.audit;
 
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.NonNull;
 
 /**
- * Thread-scoped audit-actor override for system-initiated writes (ADR-0018). Interactive
+ * Thread-scoped audit-actor override for system-initiated writes (ADR-0018).
+ *
+ * <p>Lives in {@code internal.audit} rather than {@code internal.config} because it is not Spring
+ * configuration — it is a cross-cutting context holder read by JPA auditing and written by every
+ * system-initiated path. Keeping it in {@code config} made {@code service} depend on {@code config}
+ * while {@code config} already depended on {@code service}, which the module's package-cycle rule
+ * correctly rejected. Interactive
  * writes take their actor from the security context ({@code JpaConfig}); startup YAML
  * reconciliation runs as {@code system:yaml-bootstrap} (ADR-0050 §6) by wrapping its writes —
  * including the flush — in {@link #withActor(String, Runnable)}.

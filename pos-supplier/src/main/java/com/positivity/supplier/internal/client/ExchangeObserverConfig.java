@@ -1,5 +1,7 @@
 package com.positivity.supplier.internal.client;
 
+import com.positivity.supplier.internal.spi.ExchangeContext;
+import com.positivity.supplier.internal.spi.ExchangeObserver;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;

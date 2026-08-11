@@ -15,6 +15,9 @@ import com.positivity.supplier.internal.exception.SupplierConfigurationException
 import com.positivity.supplier.internal.service.SecretReferenceResolver;
 import com.positivity.supplier.internal.service.SecretSchemeRegistry;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
+import com.positivity.supplier.internal.spi.ExchangeContext;
+import com.positivity.supplier.internal.spi.ExchangeObserver;
+import com.positivity.supplier.internal.spi.ExchangeOutcome;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.net.http.HttpConnectTimeoutException;

@@ -1,4 +1,4 @@
-package com.positivity.supplier.internal.client;
+package com.positivity.supplier.internal.spi;
 
 import org.jspecify.annotations.NonNull;
 

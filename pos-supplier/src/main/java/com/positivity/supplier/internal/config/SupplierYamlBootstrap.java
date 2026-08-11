@@ -1,5 +1,6 @@
 package com.positivity.supplier.internal.config;
 
+import com.positivity.supplier.internal.audit.AuditActorContext;
 import com.positivity.supplier.internal.config.SupplierProfileProperties.AuthSpec;
 import com.positivity.supplier.internal.config.SupplierProfileProperties.BindingSpec;
 import com.positivity.supplier.internal.config.SupplierProfileProperties.Delivery;

@@ -128,15 +128,23 @@ public class AuditPayloadCipher {
 
         byte[] ciphertext;
         try {
-            // Semgrep's gcm-detection is an AUDIT rule: it asks a human to confirm the nonce is
-            // not reused. It is not. `nonce` is 12 fresh bytes from SecureRandom on every call
-            // (just above), never derived from a counter, timestamp or row identity, and
-            // AuditPayloadCipherTest.neverReusesANonceForTheSameKeyAndPayload encrypts the same
-            // plaintext 500 times asserting 500 distinct nonces AND 500 distinct ciphertexts.
-            // Bare form because the local hook derives rule ids from the rules-clone path, so a
-            // canonical-id suppression matches in CI but not locally.
+            // ── semgrep java.lang.security.audit.crypto.gcm-detection ──────────────────
+            // AUDIT-category rule: it does not assert a defect, it asks a human to confirm the GCM
+            // nonce is never reused. Evidence that it is not:
+            //   1. `secureRandom.nextBytes(nonce)` fourteen lines above draws NONCE_LENGTH (12)
+            //      fresh bytes from SecureRandom on every single call to encrypt().
+            //   2. The nonce is never derived from a counter, a timestamp, the key id, or anything
+            //      about the row -- there is no code path that reuses or re-seeds it.
+            //   3. AuditPayloadCipherTest.NonceDiscipline
+            //      .neverReusesANonceForTheSameKeyAndPayload encrypts one identical plaintext 500
+            //      times under one key and asserts 500 distinct nonces AND 500 distinct
+            //      ciphertexts, so a regression to a fixed or derived nonce fails the build.
+            // Scope: the bare form suppresses only the single following line. Bare rather than
+            // canonical-id because the local lint hook derives rule ids from its rules-clone path,
+            // so an id-qualified suppression matches in CI but silently misses locally.
             // nosemgrep
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+            // Same finding, second match location; same evidence as directly above.
             // nosemgrep
             cipher.init(Cipher.ENCRYPT_MODE, keysById.get(activeKeyId), new GCMParameterSpec(GCM_TAG_BITS, nonce));
             // Bind the header so version and key id cannot be rewritten without failing the tag.
@@ -198,10 +206,14 @@ public class AuditPayloadCipher {
         int cipherOffset = headerLength + NONCE_LENGTH;
 
         try {
-            // Decrypt path: the nonce is read back out of the stored envelope, so there is no
-            // nonce generation here to get wrong. See the encrypt path for the full rationale.
+            // ── semgrep gcm-detection, decrypt path ────────────────────────────────────
+            // Nothing here generates a nonce: it is read back out of the stored envelope at
+            // `System.arraycopy(envelope, headerLength, nonce, 0, NONCE_LENGTH)` above, so the
+            // rule's concern (nonce reuse at encryption time) cannot arise on this path. See the
+            // encrypt path for the generation evidence. Bare form scopes this to the next line only.
             // nosemgrep
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+            // Same finding, second match location; same reasoning as directly above.
             // nosemgrep
             cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(GCM_TAG_BITS, nonce));
             cipher.updateAAD(header);

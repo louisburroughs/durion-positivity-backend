@@ -3,6 +3,8 @@ package com.positivity.supplier.internal.client;
 import com.positivity.supplier.internal.entity.SupplierAuthConfigEntity;
 import com.positivity.supplier.internal.enums.SupplierAuthType;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
+import com.positivity.supplier.internal.spi.ExchangeContext;
+import com.positivity.supplier.internal.spi.ExchangeOutcome;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpHeaders;
 

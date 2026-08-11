@@ -1,5 +1,6 @@
 package com.positivity.supplier.internal.client;
 
+import com.positivity.supplier.internal.spi.ExchangeOutcome;
 import org.jspecify.annotations.NonNull;
 
 /**
