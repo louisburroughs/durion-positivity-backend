@@ -648,7 +648,11 @@ jobs:
         # Warn rather than fail: when selective testing skips every module, an empty
         # artifact is the correct outcome and must not break the gate.
         run: |
-          count=$(find sonar-coverage -name jacoco.xml 2>/dev/null | wc -l)
+          # The download step is continue-on-error and creates nothing when no artifact
+          # matches, so sonar-coverage may not exist. Without this mkdir, `find` exits 1
+          # and -eo pipefail fails the step — the opposite of the warn-only intent.
+          mkdir -p sonar-coverage
+          count=$(find sonar-coverage -name jacoco.xml | wc -l)
           echo "Downloaded ${count} JaCoCo report(s) for coverage import."
           if [[ "${count}" -eq 0 ]]; then
             echo "::warning::No JaCoCo reports downloaded; SonarCloud will report no coverage for this analysis."
