@@ -12,7 +12,17 @@ public class SupplierConfigurationException extends RuntimeException {
 
     public static final String UNKNOWN_SUPPLIER = "SUPPLIER_UNKNOWN";
     public static final String PROFILE_DISABLED = "SUPPLIER_PROFILE_DISABLED";
-    public static final String CAPABILITY_NOT_CONFIGURED = "CAPABILITY_NOT_CONFIGURED";
+
+    /**
+     * Prefixed {@code SUPPLIER_} like every other code here, so the wire code names its owning
+     * domain. Deliberately distinct from the unprefixed {@code CAPABILITY_NOT_CONFIGURED}
+     * constant on the {@code service.model} outcome enums: that one is a
+     * <em>successful-response status</em> of a capability call, this one is an
+     * {@code ApiError.code}. Renaming the enum constant would break the published contract;
+     * renaming this code does not, because nothing had mapped it to HTTP yet.
+     */
+    public static final String CAPABILITY_NOT_CONFIGURED = "SUPPLIER_CAPABILITY_NOT_CONFIGURED";
+
     public static final String MISSING_BILLING_ACCOUNT = "SUPPLIER_MISSING_BILLING_ACCOUNT";
     public static final String MISSING_DELIVERY_MAPPING = "SUPPLIER_MISSING_DELIVERY_MAPPING";
     public static final String AUTH_CONFIG_MISSING = "SUPPLIER_AUTH_CONFIG_MISSING";

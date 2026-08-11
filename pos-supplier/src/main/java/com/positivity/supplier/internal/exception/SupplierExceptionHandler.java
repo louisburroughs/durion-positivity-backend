@@ -8,6 +8,7 @@ import jakarta.validation.ConstraintViolationException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -35,6 +36,32 @@ public class SupplierExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(SupplierExceptionHandler.class);
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
 
+    /**
+     * What a caller is told when the failure is a deployment defect rather than anything about
+     * their request. The specific reference stays in the server log (ADR-0050 §3).
+     */
+    public static final String CONFIGURATION_DEFECT_MESSAGE =
+            "Supplier connectivity is not correctly configured for this operation. Contact an administrator.";
+
+    /**
+     * Code → status table for {@link SupplierConfigurationException} (ADR-0017 §1/§2). Every code
+     * declared on that exception must appear here; {@code SupplierConfigurationCodeMappingTest}
+     * enforces that by reflection so a new code cannot silently inherit the 500 catch-all.
+     */
+    static final Map<String, HttpStatus> CONFIGURATION_STATUS = Map.of(
+            // Caller-actionable configuration state.
+            SupplierConfigurationException.UNKNOWN_SUPPLIER, HttpStatus.NOT_FOUND,
+            SupplierConfigurationException.PROFILE_DISABLED, HttpStatus.CONFLICT,
+            SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED, HttpStatus.CONFLICT,
+            SupplierConfigurationException.MISSING_BILLING_ACCOUNT, HttpStatus.CONFLICT,
+            SupplierConfigurationException.MISSING_DELIVERY_MAPPING, HttpStatus.CONFLICT,
+            SupplierConfigurationException.AUTH_CONFIG_MISSING, HttpStatus.CONFLICT,
+            // Deployment defects: generic message, detail logged server-side only.
+            SupplierConfigurationException.SECRET_REFERENCE_INVALID, HttpStatus.INTERNAL_SERVER_ERROR,
+            SupplierConfigurationException.UNKNOWN_SECRET_SCHEME, HttpStatus.INTERNAL_SERVER_ERROR,
+            SupplierConfigurationException.SECRET_NOT_FOUND, HttpStatus.INTERNAL_SERVER_ERROR,
+            SupplierConfigurationException.YAML_BOOTSTRAP_INVALID, HttpStatus.INTERNAL_SERVER_ERROR);
+
     private final Clock clock;
 
     public SupplierExceptionHandler(Clock clock) {
@@ -56,6 +83,46 @@ public class SupplierExceptionHandler {
     @ExceptionHandler(SupplierConflictException.class)
     public ResponseEntity<ApiError> handleConflict(SupplierConflictException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, ex.getCode(), ex.getMessage(), request);
+    }
+
+    /**
+     * Typed pre-flight configuration failures (ADR-0050 §3/§4/§5), mapped by code — never the 500
+     * catch-all, which is the error leak ADR-0050 §3 forbids and which is exactly how
+     * {@code SUPPLIER_CAPABILITY_NOT_CONFIGURED} would otherwise surface once slice 3 exposes the
+     * resolver over HTTP.
+     *
+     * <p>Two families, split by who can act on the failure:
+     *
+     * <ul>
+     *   <li><strong>Caller-actionable configuration state → 4xx carrying the domain message.</strong>
+     *       An unknown supplier alias is 404; a disabled profile, an unbound capability and a
+     *       missing account/auth mapping are 409, because the request cannot be applied in the
+     *       current configuration state (ADR-0017 §2 prefers 409 to 422 for state collisions).
+     *   <li><strong>Deployment defect → 500 with a generic message.</strong> A malformed,
+     *       unsupported-scheme or unset secret reference means the deployment is misconfigured.
+     *       The caller can do nothing about it, and the exception message names the reference (an
+     *       environment variable NAME), so the detail is logged server-side and kept out of the
+     *       response envelope.
+     * </ul>
+     */
+    @ExceptionHandler(SupplierConfigurationException.class)
+    public ResponseEntity<ApiError> handleConfiguration(SupplierConfigurationException ex, HttpServletRequest request) {
+        HttpStatus status = CONFIGURATION_STATUS.get(ex.getCode());
+        if (status == null) {
+            // A new code was added without deciding its HTTP meaning. Fail closed and loudly;
+            // SupplierConfigurationCodeMappingTest exists so this cannot reach production.
+            log.error(
+                    "Unmapped SupplierConfigurationException code '{}'; defaulting to 500. Add it to"
+                            + " SupplierExceptionHandler.CONFIGURATION_STATUS.",
+                    ex.getCode(),
+                    ex);
+            return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getCode(), CONFIGURATION_DEFECT_MESSAGE, request);
+        }
+        if (status.is5xxServerError()) {
+            log.error("Supplier deployment misconfiguration [{}]: {}", ex.getCode(), ex.getMessage());
+            return build(status, ex.getCode(), CONFIGURATION_DEFECT_MESSAGE, request);
+        }
+        return build(status, ex.getCode(), ex.getMessage(), request);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

@@ -1,6 +1,8 @@
 package com.positivity.supplier.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -14,7 +16,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.supplier.internal.config.SecurityConfig;
+import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.exception.SupplierConflictException;
+import com.positivity.supplier.internal.exception.SupplierExceptionHandler;
 import com.positivity.supplier.internal.exception.SupplierNotFoundException;
 import com.positivity.supplier.internal.exception.SupplierValidationException;
 import com.positivity.supplier.internal.security.SupplierPermissions;
@@ -343,6 +347,62 @@ class SupplierAdminControllersWebMvcTest {
                     .andExpect(jsonPath("$.code").value("SUPPLIER_UNKNOWN_CAPABILITY"))
                     .andExpect(jsonPath("$.message")
                             .value("'NOT_A_CAPABILITY' is not a canonical supplier capability key"));
+        }
+
+        /**
+         * A typed pre-flight configuration state must reach the caller as a 409 carrying its
+         * domain code. Before the {@code SupplierConfigurationException} handler existed this fell
+         * into the generic 500 catch-all (ADR-0050 §3 forbids that leak) — which is what would
+         * have happened to every slice-3 capability call against an unbound capability.
+         */
+        @Test
+        void capabilityNotConfiguredIs409WithTheDomainCodeNotA500() throws Exception {
+            when(adminService.getProfile(PROFILE_ID))
+                    .thenThrow(new SupplierConfigurationException(
+                            SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
+                            "Supplier 'michelin-eu' has no enabled binding for capability STOCK_INQUIRY"));
+
+            mockMvc.perform(authed(get(BASE + "/{id}", PROFILE_ID), SupplierPermissions.PROFILE_READ)
+                            .header(CORRELATION_HEADER, "corr-cap"))
+                    .andExpect(status().isConflict())
+                    .andExpect(header().string(CORRELATION_HEADER, "corr-cap"))
+                    .andExpect(jsonPath("$.code").value("SUPPLIER_CAPABILITY_NOT_CONFIGURED"))
+                    .andExpect(jsonPath("$.status").value(409))
+                    .andExpect(jsonPath("$.message")
+                            .value("Supplier 'michelin-eu' has no enabled binding for capability STOCK_INQUIRY"))
+                    .andExpect(jsonPath("$.correlationId").value("corr-cap"));
+        }
+
+        @Test
+        void unknownSupplierConfigurationStateIs404WithTheDomainCode() throws Exception {
+            when(adminService.getProfile(PROFILE_ID))
+                    .thenThrow(new SupplierConfigurationException(
+                            SupplierConfigurationException.UNKNOWN_SUPPLIER, "Supplier 'nope' is not configured"));
+
+            mockMvc.perform(authed(get(BASE + "/{id}", PROFILE_ID), SupplierPermissions.PROFILE_READ))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("SUPPLIER_UNKNOWN"))
+                    .andExpect(jsonPath("$.status").value(404));
+        }
+
+        /**
+         * A secret reference the deployment cannot resolve is a server-side defect: 500 with the
+         * machine-readable code retained, but the message must not carry the reference, because the
+         * reference names an environment variable of the deployment (ADR-0050 §3/§4).
+         */
+        @Test
+        void unresolvableSecretReferenceIs500WithGenericMessageAndNoReferenceLeak() throws Exception {
+            when(adminService.getProfile(PROFILE_ID))
+                    .thenThrow(new SupplierConfigurationException(
+                            SupplierConfigurationException.SECRET_NOT_FOUND,
+                            "Secret reference 'env:MICHELIN_EDI_PASSWORD' resolves to no value"));
+
+            mockMvc.perform(authed(get(BASE + "/{id}", PROFILE_ID), SupplierPermissions.PROFILE_READ))
+                    .andExpect(status().isInternalServerError())
+                    .andExpect(jsonPath("$.code").value("SUPPLIER_SECRET_NOT_FOUND"))
+                    .andExpect(jsonPath("$.status").value(500))
+                    .andExpect(jsonPath("$.message").value(SupplierExceptionHandler.CONFIGURATION_DEFECT_MESSAGE))
+                    .andExpect(jsonPath("$.message").value(not(containsString("MICHELIN_EDI_PASSWORD"))));
         }
 
         /**
