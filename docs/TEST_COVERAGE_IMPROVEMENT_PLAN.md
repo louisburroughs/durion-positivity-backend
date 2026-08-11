@@ -1,6 +1,7 @@
 # Test Coverage Improvement Plan
 
-Status: Phase 0 complete, Phase 1 complete. Phases 2–4 outstanding.
+Status: Phase 0 complete, Phase 1 complete. Phase 2 in progress (pos-event-receiver and
+pos-marketing done; pos-customer partial). Phases 3–4 outstanding.
 Date: 2026-08-11
 
 Method: `.agents/skills/test-coverage-improver` workflow, adapted from its pnpm/JS
@@ -285,10 +286,10 @@ exists now that every module is measured. The merged priority order is:
 
 | # | Module | Line% | Missed | Why here |
 | ---: | --- | ---: | ---: | --- |
-| 1 | pos-event-receiver | 3.0 | 424 | Every service registers against it; lowest coverage in the reactor |
-| 2 | pos-customer | 61.5 | 2,067 | Largest absolute gap |
+| 1 | ~~pos-event-receiver~~ | 3.0 | 424 | **Done** — every service registers against it; was lowest in the reactor |
+| 2 | pos-customer | 61.5 | 2,067 | Largest absolute gap; several waves landed, not yet re-measured |
 | 3 | pos-order | 53.4 | 1,510 | Second-lowest coverage among large modules |
-| 4 | pos-marketing | 28.1 | 889 | Second-lowest coverage overall, 0 ITs |
+| 4 | ~~pos-marketing~~ | 28.1 | 889 | **Done — now 87.9% line / 82.9% branch, 150 missed** (see §4.1) |
 | 5 | pos-people | 61.5 | 1,101 | Large gap, thin suite |
 | 6 | pos-invoice | 63.4 | 1,210 | Large gap, **0 ITs** |
 | 7 | pos-workorder | 73.0 | 2,012 | Large absolute gap despite decent ratio |
@@ -306,6 +307,28 @@ Deliberately **not** prioritized: `pos-accounting` (85.7%), `pos-inventory`
 The four small modules at 0% — `pos-vehicle-reference-nhtsa` (189),
 `pos-vehicle-reference-carapi` (69), `pos-image` (61), `pos-inquiry` (16) — total
 335 missed lines and are cheap; treat them as filler work rather than a priority.
+
+### 4.1 pos-marketing outcome (delivered 2026-08-11)
+
+**28.1% → 87.9% line, 29.8% → 82.9% branch** (889 → 150 missed lines), 183 unit
+tests, no ITs added. Every service-layer class is now covered:
+
+| Class | Was | Notes |
+| --- | ---: | --- |
+| `CampaignServiceImpl` | 0% | Lifecycle, readiness aggregation, audience-type immutability |
+| `CampaignSendServiceImpl` | 0% | Dispatch matrix, collision tolerance, page-size clamp |
+| `CampaignStatsServiceImpl` | 0% | Cumulative funnel arithmetic, null-SUM handling |
+| `MessageTemplateServiceImpl` | 0% | Channel/audience immutability, in-use delete guard |
+| `CustomerEventsListener` | 0% | Replay guard, redemption idempotency, mid-send audience protection |
+| `MarketingFactPublisher` | 0% | Kafka-disabled no-op, party-keyed send facts |
+| `OutboxEventWriter` | 4.5% | Aggregate-keyed row, fatal serialization failure |
+| `SegmentResolveRequester` | 5.0% | Correlated resolve command, segment-keyed ordering |
+| `MarketingExceptionHandler` | 0% | ADR-0017 status/code pairing, correlation-id passthrough |
+
+Remaining 150 missed lines are controllers (30), Spring config (`OpenApiConfig`,
+`RestClientConfig`, `FlywayConfig`, `KafkaErrorHandlingConfig`, 40), and
+`LoggingMessageChannel`. Controllers want `@WebMvcTest` slices, which is a
+different shape of work; the module's business logic is done.
 
 The per-module detail below predates the measurement and is kept for the specific
 class-level targets it names.
