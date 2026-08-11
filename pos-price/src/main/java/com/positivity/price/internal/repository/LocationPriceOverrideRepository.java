@@ -25,6 +25,7 @@ public interface LocationPriceOverrideRepository extends JpaRepository<LocationP
             SELECT l FROM LocationPriceOverride l
             WHERE l.productId = :productId
             AND l.locationId = :locationId
+            AND l.currency = :currency
             AND l.effectiveFrom <= :effectiveAt
             AND (l.effectiveTo IS NULL OR l.effectiveTo > :effectiveAt)
             ORDER BY l.effectiveFrom DESC
@@ -32,11 +33,13 @@ public interface LocationPriceOverrideRepository extends JpaRepository<LocationP
     List<LocationPriceOverride> findActiveAt(
             @Param("productId") UUID productId,
             @Param("locationId") UUID locationId,
+            @Param("currency") String currency,
             @Param("effectiveAt") Instant effectiveAt,
             Pageable pageable);
 
-    default Optional<LocationPriceOverride> findActiveAt(UUID productId, UUID locationId, Instant effectiveAt) {
-        return findActiveAt(productId, locationId, effectiveAt, PageRequest.of(0, 1)).stream()
+    default Optional<LocationPriceOverride> findActiveAt(
+            UUID productId, UUID locationId, String currency, Instant effectiveAt) {
+        return findActiveAt(productId, locationId, currency, effectiveAt, PageRequest.of(0, 1)).stream()
                 .findFirst();
     }
 

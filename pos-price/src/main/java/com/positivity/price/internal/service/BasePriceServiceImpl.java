@@ -68,8 +68,9 @@ public class BasePriceServiceImpl implements BasePriceService {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<BasePriceView> getBasePriceAt(@NonNull UUID productId, @NonNull Instant at) {
-        return repository.findActiveAt(productId, at).map(BasePriceServiceImpl::toView);
+    public Optional<BasePriceView> getBasePriceAt(
+            @NonNull UUID productId, @NonNull String currency, @NonNull Instant at) {
+        return repository.findActiveAt(productId, currency, at).map(BasePriceServiceImpl::toView);
     }
 
     private static BasePriceView toView(ProductBasePrice entity) {

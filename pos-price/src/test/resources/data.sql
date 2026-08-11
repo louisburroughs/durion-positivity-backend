@@ -9,3 +9,6 @@ VALUES ('33333333-3333-3333-3333-333333333000', '11111111-1111-1111-1111-1111111
 
 INSERT INTO product_base_price (id, product_id, msrp, currency, effective_from, effective_to, created_at, updated_at)
 VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa00', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 50.0000, 'USD', TIMESTAMP '2020-01-01 00:00:00', NULL, TIMESTAMP '2020-01-01 00:00:00', TIMESTAMP '2020-01-01 00:00:00');
+
+INSERT INTO product_base_price (id, product_id, msrp, currency, effective_from, effective_to, created_at, updated_at)
+VALUES ('11111111-1111-1111-1111-111111111101', '11111111-1111-1111-1111-111111111111', 130.0000, 'CAD', TIMESTAMP '2020-01-01 00:00:00', NULL, TIMESTAMP '2020-01-01 00:00:00', TIMESTAMP '2020-01-01 00:00:00');

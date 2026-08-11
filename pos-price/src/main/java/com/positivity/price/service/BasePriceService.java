@@ -50,11 +50,12 @@ public interface BasePriceService {
     List<BasePriceView> getBasePriceHistory(@NonNull UUID productId);
 
     /**
-     * Returns the base-price window covering the given instant, if any.
+     * Returns the base-price window covering the given instant for a currency, if any.
      *
      * @param productId product identifier
+     * @param currency  currency code of the window to select
      * @param at        pricing instant
-     * @return the covering window, or empty when no window covers {@code at}
+     * @return the covering window, or empty when no window covers {@code at} in {@code currency}
      */
-    Optional<BasePriceView> getBasePriceAt(@NonNull UUID productId, @NonNull Instant at);
+    Optional<BasePriceView> getBasePriceAt(@NonNull UUID productId, @NonNull String currency, @NonNull Instant at);
 }

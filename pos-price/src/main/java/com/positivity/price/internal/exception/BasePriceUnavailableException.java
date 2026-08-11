@@ -10,7 +10,7 @@ import java.util.UUID;
  */
 public class BasePriceUnavailableException extends RuntimeException {
 
-    public BasePriceUnavailableException(UUID productId, Instant at) {
-        super("No base price effective for product " + productId + " at " + at);
+    public BasePriceUnavailableException(UUID productId, String currency, Instant at) {
+        super("No base price effective for product " + productId + " (" + currency + ") at " + at);
     }
 }
