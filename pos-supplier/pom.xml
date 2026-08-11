@@ -75,6 +75,30 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+
+        <!-- Resilience for vendor-facing outbound calls (CAP-317 slice 3: retry pre-send-only,
+             circuit breaker per (vendorProfileId, capability)). GAVs mirror pos-document-helper
+             and pos-tax exactly, deliberately unversioned.
+
+             KNOWN version split, NOT introduced here and NOT to be repaired in this wave:
+             spring-cloud-circuitbreaker-dependencies imports resilience4j-bom 2.3.0, while the
+             root pom overrides only -retry and -spring-boot4 to 2.4.0. The family therefore
+             resolves split (2.4.0 autoconfig + retry over a 2.3.0 core/circuitbreaker/spring6/
+             micrometer stack). Consequence for this module: do not depend on any
+             resilience4j auto-configured behaviour that differs across 2.3/2.4, notably
+             registerHealthIndicator, which is left off. See WAVE_PAUSE_STATE.md. -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot4</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-retry</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-circuitbreaker</artifactId>
+        </dependency>
         <!-- Prometheus scrape endpoint: /actuator/prometheus (ADR observability) -->
         <dependency>
             <groupId>io.micrometer</groupId>
