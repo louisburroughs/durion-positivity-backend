@@ -7,25 +7,35 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Masks contact details and long digit runs in free-text interaction bodies before they
+ * Masks contact details and long digit runs in free-text interaction bodies
+ * before they
  * leave the service (Story #1141, DECISION-INVENTORY-006).
  *
- * <p>Interaction bodies are typed by humans, so they accumulate the things a CRM timeline
- * should not hand back verbatim: a customer's email dictated over the phone, a card number
- * jotted into a call note. Redaction happens on read rather than on write so the original
+ * <p>
+ * Interaction bodies are typed by humans, so they accumulate the things a CRM
+ * timeline
+ * should not hand back verbatim: a customer's email dictated over the phone, a
+ * card number
+ * jotted into a call note. Redaction happens on read rather than on write so
+ * the original
  * text stays available to a compliance export that is entitled to it.
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class InteractionBodyRedactor {
 
-    private static final Pattern EMAIL = Pattern.compile("[\\w.+-]+@[\\w-]+\\.[\\w.-]+");
+    private static final Pattern EMAIL = Pattern.compile("(?<![\\w.+-])[\\w.+-]{1,64}@[\\w-]{1,63}\\.[\\w.-]{1,251}");
 
     /**
-     * Minimum digits in a run (single {@code space}/{@code .}/{@code -} separators allowed between
-     * digits) before it is masked. Shorter runs are left alone because they are far more often a
-     * mileage, a part number, or a price than a phone or card number. Matches the retired
-     * {@code (?<!\d)(?:\d[ .-]?){7,}\d(?!\d)} regex, whose repeated group could overflow the stack
-     * on large bodies (java:S5998) — digit runs are now found with a linear scan instead.
+     * Minimum digits in a run (single {@code space}/{@code .}/{@code -} separators
+     * allowed between
+     * digits) before it is masked. Shorter runs are left alone because they are far
+     * more often a
+     * mileage, a part number, or a price than a phone or card number. Matches the
+     * retired
+     * {@code (?<!\d)(?:\d[ .-]?){7,}\d(?!\d)} regex, whose repeated group could
+     * overflow the stack
+     * on large bodies (java:S5998) — digit runs are now found with a linear scan
+     * instead.
      */
     private static final int MIN_MASKED_DIGITS = 8;
 
@@ -39,7 +49,10 @@ public final class InteractionBodyRedactor {
         return maskLongDigitRuns(masked);
     }
 
-    /** Whether redaction would change the text — used to flag partially masked bodies in UIs. */
+    /**
+     * Whether redaction would change the text — used to flag partially masked
+     * bodies in UIs.
+     */
     public static boolean containsRedactableContent(@NonNull String body) {
         return EMAIL.matcher(body).find() || containsLongDigitRun(body);
     }
@@ -82,8 +95,10 @@ public final class InteractionBodyRedactor {
     }
 
     /**
-     * End (exclusive) of the digit run starting at {@code start}: digits joined by at most one
-     * {@code space}/{@code .}/{@code -} each. Always ends on a digit, so trailing separators are
+     * End (exclusive) of the digit run starting at {@code start}: digits joined by
+     * at most one
+     * {@code space}/{@code .}/{@code -} each. Always ends on a digit, so trailing
+     * separators are
      * left outside the run — exactly the span the retired regex matched.
      */
     private static int endOfDigitRun(@NonNull String text, int start) {
