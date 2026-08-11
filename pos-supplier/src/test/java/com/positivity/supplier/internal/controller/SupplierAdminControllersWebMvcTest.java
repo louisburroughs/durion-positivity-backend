@@ -29,6 +29,7 @@ import com.positivity.supplier.service.model.CommercialAccountView;
 import com.positivity.supplier.service.model.EndpointBindingRequest;
 import com.positivity.supplier.service.model.EndpointBindingView;
 import com.positivity.supplier.service.model.ProfileSourceOfTruth;
+import com.positivity.supplier.service.model.RetryBackoff;
 import com.positivity.supplier.service.model.SupplierAccountRole;
 import com.positivity.supplier.service.model.SupplierAuthType;
 import com.positivity.supplier.service.model.VendorProfileRequest;
@@ -123,7 +124,17 @@ class SupplierAdminControllersWebMvcTest {
 
     private static VendorProfileView profileView() {
         return new VendorProfileView(
-                PROFILE_ID, "michelin-eu", "Michelin EU", true, false, ProfileSourceOfTruth.ADMIN, 5000, 30000, 3);
+                PROFILE_ID,
+                "michelin-eu",
+                "Michelin EU",
+                true,
+                false,
+                ProfileSourceOfTruth.ADMIN,
+                5000,
+                30000,
+                3,
+                "https://sandbox.michelin.example/a25",
+                RetryBackoff.EXPONENTIAL);
     }
 
     private static String profileJson() {

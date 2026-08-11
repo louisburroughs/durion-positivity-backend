@@ -1,5 +1,6 @@
 package com.positivity.supplier.service.model;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -15,12 +16,38 @@ import org.jspecify.annotations.Nullable;
  * @param deliveryLocationId pos-location UUID of the receiving location; present exactly for
  *     {@link SupplierAccountRole#DELIVERY} rows
  */
+@Schema(description = "Read model of a vendor commercial account.")
 public record CommercialAccountView(
-        @NonNull UUID accountId,
-        @NonNull SupplierAccountRole role,
-        @NonNull String accountNumber,
-        @Nullable String agencyCode,
-        @Nullable UUID deliveryLocationId) {
+        @Schema(
+                description = "Identity of the commercial account (UUIDv7).",
+                example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a62")
+        @NonNull
+        UUID accountId,
+
+        @Schema(
+                description =
+                        "Canonical account role. BILLING is the invoicing account; DELIVERY maps a pos-location to its vendor account number.",
+                example = "DELIVERY")
+        @NonNull
+        SupplierAccountRole role,
+
+        @Schema(
+                description =
+                        "Vendor-assigned account number. Never blank. Ordinary configuration data, not a credential.",
+                example = "FR-0042871")
+        @NonNull
+        String accountNumber,
+
+        @Schema(description = "Vendor-assigned agency/branch code, when the vendor issues one.", example = "PAR01")
+        @Nullable
+        String agencyCode,
+
+        @Schema(
+                description =
+                        "pos-location identifier this delivery account belongs to. Required for DELIVERY, must be absent for BILLING.",
+                example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70")
+        @Nullable
+        UUID deliveryLocationId) {
 
     public CommercialAccountView {
         Objects.requireNonNull(accountId, "accountId must not be null");

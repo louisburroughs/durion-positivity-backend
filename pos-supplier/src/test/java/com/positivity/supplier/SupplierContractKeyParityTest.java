@@ -7,7 +7,11 @@ import com.positivity.supplier.service.model.AuthConfigView;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * Pins the contract-legal canonical string keys of the admin API
@@ -66,6 +70,49 @@ class SupplierContractKeyParityTest {
         assertThat(Arrays.stream(ProtocolFamily.values()).map(Enum::name))
                 .as("the TEST family stays enum-only: present for registry fixtures, never contract-legal")
                 .contains("TEST");
+    }
+
+    /**
+     * The {@code service.model} enums that mirror an internal enum of the same name. ADR-0026
+     * forbids an internal type crossing the service boundary, so the contract carries its own
+     * copy — and nothing in the type system keeps the two in step. The admin service converts
+     * between them with {@code valueOf(name())}, so a constant added on one side only becomes an
+     * {@code IllegalArgumentException} at runtime. This pins them instead.
+     */
+    static Stream<Arguments> mirroredEnums() {
+        return Stream.of(
+                Arguments.of(
+                        com.positivity.supplier.service.model.PayloadCaptureLevel.class,
+                        com.positivity.supplier.internal.enums.PayloadCaptureLevel.class),
+                Arguments.of(
+                        com.positivity.supplier.service.model.RetryBackoff.class,
+                        com.positivity.supplier.internal.enums.RetryBackoff.class),
+                Arguments.of(
+                        com.positivity.supplier.service.model.SupplierAuthType.class,
+                        com.positivity.supplier.internal.enums.SupplierAuthType.class),
+                Arguments.of(
+                        com.positivity.supplier.service.model.SupplierAccountRole.class,
+                        com.positivity.supplier.internal.enums.SupplierAccountRole.class),
+                Arguments.of(
+                        com.positivity.supplier.service.model.ProfileSourceOfTruth.class,
+                        com.positivity.supplier.internal.enums.ProfileSourceOfTruth.class));
+    }
+
+    @ParameterizedTest(name = "{0} mirrors {1} constant for constant")
+    @MethodSource("mirroredEnums")
+    void contractEnumMirrorsItsInternalEnumExactly(
+            Class<? extends Enum<?>> contractEnum, Class<? extends Enum<?>> internalEnum) {
+        Set<String> contractNames =
+                Arrays.stream(contractEnum.getEnumConstants()).map(Enum::name).collect(Collectors.toSet());
+        Set<String> internalNames =
+                Arrays.stream(internalEnum.getEnumConstants()).map(Enum::name).collect(Collectors.toSet());
+
+        assertThat(contractNames)
+                .as(
+                        "%s and %s are converted with valueOf(name()); a constant on one side only is a"
+                                + " runtime IllegalArgumentException, so they must match exactly",
+                        contractEnum, internalEnum)
+                .containsExactlyInAnyOrderElementsOf(internalNames);
     }
 
     /**

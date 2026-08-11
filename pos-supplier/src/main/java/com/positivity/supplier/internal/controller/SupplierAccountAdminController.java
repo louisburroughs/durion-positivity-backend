@@ -1,12 +1,15 @@
 package com.positivity.supplier.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.supplier.internal.security.SupplierPermissions;
 import com.positivity.supplier.service.SupplierProfileAdminService;
 import com.positivity.supplier.service.model.CommercialAccountRequest;
 import com.positivity.supplier.service.model.CommercialAccountView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -47,12 +50,33 @@ public class SupplierAccountAdminController {
 
     @Operation(summary = "List commercial accounts", description = "Accounts of a vendor profile, billing first")
     @ApiResponse(responseCode = "200", description = "Accounts returned.")
-    @ApiResponse(responseCode = "404", description = "Profile not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Profile not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication is missing or the bearer token is invalid.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Authenticated caller lacks the required supplier permission.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PROFILE_READ + "')")
     @EmitEvent(id = "SUPPLIER_ACCOUNT_LIST", apiVersion = "1")
     @GetMapping
     public ResponseEntity<List<CommercialAccountView>> listAccounts(
-            @Parameter(description = "Owning vendor profile UUID", required = true) @PathVariable @NotNull
+            @Parameter(
+                            description =
+                                    "Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @PathVariable
+                    @NotNull
                     UUID vendorProfileId) {
         return ResponseEntity.ok(adminService.listAccounts(vendorProfileId));
     }
@@ -61,14 +85,41 @@ public class SupplierAccountAdminController {
             summary = "Create commercial account",
             description = "Add a billing or delivery account; delivery accounts carry the pos-location mapping")
     @ApiResponse(responseCode = "201", description = "Account created.")
-    @ApiResponse(responseCode = "400", description = "Invalid request.")
-    @ApiResponse(responseCode = "404", description = "Profile not found.")
-    @ApiResponse(responseCode = "409", description = "Profile is YAML-managed or account slot already taken.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Profile not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Profile is YAML-managed or account slot already taken.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication is missing or the bearer token is invalid.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Authenticated caller lacks the required supplier permission.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PROFILE_WRITE + "')")
     @EmitEvent(id = "SUPPLIER_ACCOUNT_CREATE", apiVersion = "1")
     @PostMapping
     public ResponseEntity<CommercialAccountView> createAccount(
-            @Parameter(description = "Owning vendor profile UUID", required = true) @PathVariable @NotNull
+            @Parameter(
+                            description =
+                                    "Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @PathVariable
+                    @NotNull
                     UUID vendorProfileId,
             @Valid @NotNull @RequestBody CommercialAccountRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(adminService.createAccount(vendorProfileId, request));
@@ -76,31 +127,104 @@ public class SupplierAccountAdminController {
 
     @Operation(summary = "Update commercial account", description = "Replace a commercial account")
     @ApiResponse(responseCode = "200", description = "Account updated.")
-    @ApiResponse(responseCode = "400", description = "Invalid request.")
-    @ApiResponse(responseCode = "404", description = "Profile or account not found.")
-    @ApiResponse(responseCode = "409", description = "Profile is YAML-managed or account slot already taken.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Profile or account not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Profile is YAML-managed or account slot already taken.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication is missing or the bearer token is invalid.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Authenticated caller lacks the required supplier permission.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PROFILE_WRITE + "')")
     @EmitEvent(id = "SUPPLIER_ACCOUNT_UPDATE", apiVersion = "1")
     @PutMapping("/{accountId}")
     public ResponseEntity<CommercialAccountView> updateAccount(
-            @Parameter(description = "Owning vendor profile UUID", required = true) @PathVariable @NotNull
+            @Parameter(
+                            description =
+                                    "Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @PathVariable
+                    @NotNull
                     UUID vendorProfileId,
-            @Parameter(description = "Account UUID", required = true) @PathVariable @NotNull UUID accountId,
+            @Parameter(
+                            description =
+                                    "Commercial account identifier (UUIDv7). Must belong to the vendor profile in the path.",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a62"))
+                    @PathVariable
+                    @NotNull
+                    UUID accountId,
             @Valid @NotNull @RequestBody CommercialAccountRequest request) {
         return ResponseEntity.ok(adminService.updateAccount(vendorProfileId, accountId, request));
     }
 
     @Operation(summary = "Delete commercial account", description = "Remove a commercial account")
     @ApiResponse(responseCode = "204", description = "Account deleted.")
-    @ApiResponse(responseCode = "404", description = "Profile or account not found.")
-    @ApiResponse(responseCode = "409", description = "Profile is YAML-managed.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Profile or account not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Profile is YAML-managed.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication is missing or the bearer token is invalid.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Authenticated caller lacks the required supplier permission.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PROFILE_WRITE + "')")
     @EmitEvent(id = "SUPPLIER_ACCOUNT_DELETE", apiVersion = "1")
     @DeleteMapping("/{accountId}")
     public ResponseEntity<Void> deleteAccount(
-            @Parameter(description = "Owning vendor profile UUID", required = true) @PathVariable @NotNull
+            @Parameter(
+                            description =
+                                    "Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @PathVariable
+                    @NotNull
                     UUID vendorProfileId,
-            @Parameter(description = "Account UUID", required = true) @PathVariable @NotNull UUID accountId) {
+            @Parameter(
+                            description =
+                                    "Commercial account identifier (UUIDv7). Must belong to the vendor profile in the path.",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a62"))
+                    @PathVariable
+                    @NotNull
+                    UUID accountId) {
         adminService.deleteAccount(vendorProfileId, accountId);
         return ResponseEntity.noContent().build();
     }

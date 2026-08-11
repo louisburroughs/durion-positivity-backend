@@ -18,6 +18,7 @@ import com.positivity.supplier.service.model.EndpointBindingRequest;
 import com.positivity.supplier.service.model.EndpointBindingView;
 import com.positivity.supplier.service.model.PayloadCaptureLevel;
 import com.positivity.supplier.service.model.ProfileSourceOfTruth;
+import com.positivity.supplier.service.model.RetryBackoff;
 import com.positivity.supplier.service.model.SupplierAccountRole;
 import com.positivity.supplier.service.model.SupplierAuthType;
 import com.positivity.supplier.service.model.VendorProfileRequest;
@@ -97,11 +98,29 @@ class SupplierProfileAdminServiceImplTest {
 
         VendorProfileView updated = adminService.updateProfile(
                 created.vendorProfileId(),
-                new VendorProfileRequest("michelin-eu", "Michelin EU (renamed)", false, true, null, null, null));
+                new VendorProfileRequest(
+                        "michelin-eu",
+                        "Michelin EU (renamed)",
+                        false,
+                        true,
+                        null,
+                        null,
+                        null,
+                        "https://sandbox.michelin.example/a25",
+                        RetryBackoff.EXPONENTIAL));
         assertThat(updated.displayName()).isEqualTo("Michelin EU (renamed)");
         assertThat(updated.enabled()).isFalse();
         assertThat(updated.sandbox()).isTrue();
         assertThat(updated.connectTimeoutMillis()).isNull();
+        // The ADR-0050 §2 sandbox overlay must be expressible through the admin API, not only
+        // through YAML: before these fields existed an ADMIN profile could set sandbox=true with
+        // no way to supply the URL, so slice-3 adapters would read null.
+        assertThat(updated.sandboxBaseUrlOverride()).isEqualTo("https://sandbox.michelin.example/a25");
+        assertThat(updated.retryBackoff()).isEqualTo(RetryBackoff.EXPONENTIAL);
+        assertThat(adminService.getProfile(created.vendorProfileId()))
+                .as("the overlay must survive a reload, i.e. actually be persisted")
+                .extracting(VendorProfileView::sandboxBaseUrlOverride, VendorProfileView::retryBackoff)
+                .containsExactly("https://sandbox.michelin.example/a25", RetryBackoff.EXPONENTIAL);
 
         adminService.deleteProfile(created.vendorProfileId());
         assertNotFound(
@@ -137,7 +156,8 @@ class SupplierProfileAdminServiceImplTest {
                     adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
             adminService.updateProfile(
                     profileId,
-                    new VendorProfileRequest("michelin-eu", "Michelin EU (v2)", true, false, null, null, null));
+                    new VendorProfileRequest(
+                            "michelin-eu", "Michelin EU (v2)", true, false, null, null, null, null, null));
             profileRepository.flush();
 
             SupplierProfileEntity profile =
@@ -501,7 +521,7 @@ class SupplierProfileAdminServiceImplTest {
     }
 
     private static VendorProfileRequest profileRequest(String supplierRef) {
-        return new VendorProfileRequest(supplierRef, "Display " + supplierRef, true, false, 5000, 30000, 3);
+        return new VendorProfileRequest(supplierRef, "Display " + supplierRef, true, false, 5000, 30000, 3, null, null);
     }
 
     private static AuthConfigRequest bearerAuthRequest(String name) {

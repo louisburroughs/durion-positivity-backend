@@ -1,5 +1,6 @@
 package com.positivity.supplier.service.model;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -30,17 +31,79 @@ import org.jspecify.annotations.Nullable;
  * @param clientSecretRef secret reference of the OAuth2 client secret
  * @param bearerTokenRef secret reference of the static bearer token
  */
+@Schema(
+        description =
+                "Create/update payload for a vendor auth config (ADR-0050 §4). Every secret field is a scheme-prefixed REFERENCE (e.g. env:VAR_NAME) resolved at call time — plaintext credentials are rejected, and references are write-only: they never appear in any response.")
 public record AuthConfigRequest(
-        @NonNull String name,
-        @NonNull SupplierAuthType type,
-        @Nullable String usernameRef,
-        @Nullable String passwordRef,
-        @Nullable String apiKeyRef,
-        @Nullable String apiKeyHeader,
-        @Nullable String tokenUrlRef,
-        @Nullable String clientIdRef,
-        @Nullable String clientSecretRef,
-        @Nullable String bearerTokenRef) {
+        @Schema(
+                description =
+                        "Auth config name, unique within the vendor profile. Endpoint bindings reference it by this name.",
+                example = "ediwheel-basic")
+        @NonNull
+        String name,
+
+        @Schema(
+                description =
+                        "Credential scheme this config describes. Determines exactly which secret reference fields are required and which must be absent (ADR-0050 §4).",
+                example = "BASIC_PLUS_APIKEY")
+        @NonNull
+        SupplierAuthType type,
+
+        @Schema(
+                description =
+                        "Secret reference to the username. Required for BASIC_PLUS_APIKEY, must be absent otherwise. Write-only.",
+                example = "env:MICHELIN_EDI_USER")
+        @Nullable
+        String usernameRef,
+
+        @Schema(
+                description =
+                        "Secret reference to the password. Required for BASIC_PLUS_APIKEY, must be absent otherwise. Write-only.",
+                example = "env:MICHELIN_EDI_PASSWORD")
+        @Nullable
+        String passwordRef,
+
+        @Schema(
+                description =
+                        "Secret reference to the API key. Required for BASIC_PLUS_APIKEY, must be absent otherwise. Write-only.",
+                example = "env:MICHELIN_EDI_APIKEY")
+        @Nullable
+        String apiKeyRef,
+
+        @Schema(
+                description =
+                        "Header NAME the API key is sent in — configuration data, not a secret reference. Omit to use the adapter default.",
+                example = "apikey")
+        @Nullable
+        String apiKeyHeader,
+
+        @Schema(
+                description =
+                        "Secret reference to the OAuth2 token endpoint URL. Required for OAUTH2_CLIENT_CREDENTIALS, must be absent otherwise. Write-only.",
+                example = "env:MICHELIN_TOKEN_URL")
+        @Nullable
+        String tokenUrlRef,
+
+        @Schema(
+                description =
+                        "Secret reference to the OAuth2 client id. Required for OAUTH2_CLIENT_CREDENTIALS, must be absent otherwise. Write-only.",
+                example = "env:MICHELIN_CLIENT_ID")
+        @Nullable
+        String clientIdRef,
+
+        @Schema(
+                description =
+                        "Secret reference to the OAuth2 client secret. Required for OAUTH2_CLIENT_CREDENTIALS, must be absent otherwise. Write-only.",
+                example = "env:MICHELIN_CLIENT_SECRET")
+        @Nullable
+        String clientSecretRef,
+
+        @Schema(
+                description =
+                        "Secret reference to the static bearer token. Required for BEARER, must be absent otherwise. Write-only.",
+                example = "env:MICHELIN_BEARER_TOKEN")
+        @Nullable
+        String bearerTokenRef) {
 
     public AuthConfigRequest {
         Objects.requireNonNull(name, "name must not be null");

@@ -1,5 +1,6 @@
 package com.positivity.supplier.service.model;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -30,16 +31,66 @@ import org.jspecify.annotations.Nullable;
  * @param captureLevel exchange-audit payload capture level (ADR-0050 §7); {@code null} means
  *     the deployment default
  */
+@Schema(
+        description =
+                "Create/update payload for a capability endpoint binding (ADR-0050 §3): at most one binding per capability per profile. An absent binding means the capability is disabled for the supplier and resolves to the typed SUPPLIER_CAPABILITY_NOT_CONFIGURED outcome.")
 public record EndpointBindingRequest(
-        @NonNull String capability,
-        @NonNull String protocolFamily,
-        @NonNull String version,
-        @NonNull String baseUrl,
-        @NonNull String path,
-        @NonNull String authConfigName,
-        @Nullable String schedule,
+        @Schema(
+                description =
+                        "Canonical supplier capability key this binding serves. Unknown keys are rejected with SUPPLIER_UNKNOWN_CAPABILITY.",
+                example = "STOCK_INQUIRY")
+        @NonNull
+        String capability,
+
+        @Schema(
+                description =
+                        "Canonical protocol family key of the adapter to use. Unknown keys are rejected with SUPPLIER_UNKNOWN_PROTOCOL_FAMILY.",
+                example = "EDIWHEEL_A25")
+        @NonNull
+        String protocolFamily,
+
+        @Schema(
+                description =
+                        "Adapter version within the protocol family. Free-form data, deliberately not an enum (ADR-0051 §3).",
+                example = "2.5")
+        @NonNull
+        String version,
+
+        @Schema(
+                description = "Base URL of the vendor endpoint for this capability.",
+                example = "https://edi.michelin.example/a25")
+        @NonNull
+        String baseUrl,
+
+        @Schema(description = "Path appended to the base URL for this capability.", example = "/stock/inquiry") @NonNull
+        String path,
+
+        @Schema(
+                description =
+                        "Name of the auth config on the same profile that this binding authenticates with. Must already exist.",
+                example = "ediwheel-basic")
+        @NonNull
+        String authConfigName,
+
+        @Schema(
+                description =
+                        "Cron expression driving scheduled runs of this binding. Omit for request-driven capabilities.",
+                example = "0 0 3 * * *")
+        @Nullable
+        String schedule,
+
+        @Schema(
+                description =
+                        "Whether the profile's bindings resolve at all. A disabled profile resolves every capability to a typed not-configured outcome.",
+                example = "true")
         boolean enabled,
-        @Nullable PayloadCaptureLevel captureLevel) {
+
+        @Schema(
+                description =
+                        "Exchange-audit payload capture level for this binding (ADR-0050 §7). Exchange metadata is always retained regardless. Omit to use the deployment default.",
+                example = "REDACTED")
+        @Nullable
+        PayloadCaptureLevel captureLevel) {
 
     public EndpointBindingRequest {
         requireNonBlank(capability, "capability");

@@ -27,6 +27,8 @@ modules:
     mode: STRICT
   pos-warranty:
     mode: STRICT
+  pos-supplier:
+    mode: STRICT
   pos-event-receiver:
     mode: STRICT
   pos-vehicle-fitment:

@@ -468,7 +468,7 @@ class SupplierYamlBootstrapTest {
         assertThatThrownBy(() -> adminService.updateProfile(
                         profileId,
                         new com.positivity.supplier.service.model.VendorProfileRequest(
-                                "michelin-eu", "Hijacked", false, false, 1, 1, 0)))
+                                "michelin-eu", "Hijacked", false, false, 1, 1, 0, null, null)))
                 .isInstanceOf(com.positivity.supplier.internal.exception.SupplierConflictException.class)
                 .hasFieldOrPropertyWithValue(
                         "code",

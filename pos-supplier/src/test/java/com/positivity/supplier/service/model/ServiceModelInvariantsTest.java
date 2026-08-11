@@ -152,25 +152,44 @@ class ServiceModelInvariantsTest {
         @Test
         void nullProtocolDefaultsMeanDeploymentDefault() {
             VendorProfileRequest request =
-                    new VendorProfileRequest("michelin-eu", "Michelin EU", true, false, null, null, null);
+                    new VendorProfileRequest("michelin-eu", "Michelin EU", true, false, null, null, null, null, null);
 
             assertThat(request.connectTimeoutMillis()).isNull();
             assertThat(request.maxRetries()).isNull();
+            assertThat(request.sandboxBaseUrlOverride()).isNull();
+            assertThat(request.retryBackoff()).isNull();
+        }
+
+        @Test
+        void rejectsBlankSandboxBaseUrlOverride() {
+            // A blank override is not "absent": it would resolve to no host at call time.
+            assertThatThrownBy(() -> new VendorProfileRequest("m", "M", true, true, null, null, null, "  ", null))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("sandboxBaseUrlOverride");
+        }
+
+        @Test
+        void acceptsSandboxOverlayFields() {
+            VendorProfileRequest request = new VendorProfileRequest(
+                    "m", "M", true, true, null, null, null, "https://sandbox.example/api", RetryBackoff.FIXED);
+
+            assertThat(request.sandboxBaseUrlOverride()).isEqualTo("https://sandbox.example/api");
+            assertThat(request.retryBackoff()).isEqualTo(RetryBackoff.FIXED);
         }
 
         @Test
         void rejectsNonPositiveTimeoutsAndNegativeRetries() {
-            assertThatThrownBy(() -> new VendorProfileRequest("m", "M", true, false, 0, null, null))
+            assertThatThrownBy(() -> new VendorProfileRequest("m", "M", true, false, 0, null, null, null, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("connectTimeoutMillis");
-            assertThatThrownBy(() -> new VendorProfileRequest("m", "M", true, false, null, -1, null))
+            assertThatThrownBy(() -> new VendorProfileRequest("m", "M", true, false, null, -1, null, null, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("readTimeoutMillis");
-            assertThatThrownBy(() -> new VendorProfileRequest("m", "M", true, false, null, null, -1))
+            assertThatThrownBy(() -> new VendorProfileRequest("m", "M", true, false, null, null, -1, null, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("maxRetries");
             // Zero retries is a legal budget (no pre-send retries), unlike zero timeouts.
-            assertThat(new VendorProfileRequest("m", "M", true, false, null, null, 0).maxRetries())
+            assertThat(new VendorProfileRequest("m", "M", true, false, null, null, 0, null, null).maxRetries())
                     .isZero();
         }
     }

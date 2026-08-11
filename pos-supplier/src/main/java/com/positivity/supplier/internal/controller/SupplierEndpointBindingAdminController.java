@@ -1,12 +1,15 @@
 package com.positivity.supplier.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.supplier.internal.security.SupplierPermissions;
 import com.positivity.supplier.service.SupplierProfileAdminService;
 import com.positivity.supplier.service.model.EndpointBindingRequest;
 import com.positivity.supplier.service.model.EndpointBindingView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -49,12 +52,33 @@ public class SupplierEndpointBindingAdminController {
 
     @Operation(summary = "List endpoint bindings", description = "Bindings of a vendor profile, ordered by capability")
     @ApiResponse(responseCode = "200", description = "Bindings returned.")
-    @ApiResponse(responseCode = "404", description = "Profile not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Profile not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication is missing or the bearer token is invalid.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Authenticated caller lacks the required supplier permission.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PROFILE_READ + "')")
     @EmitEvent(id = "SUPPLIER_BINDING_LIST", apiVersion = "1")
     @GetMapping
     public ResponseEntity<List<EndpointBindingView>> listBindings(
-            @Parameter(description = "Owning vendor profile UUID", required = true) @PathVariable @NotNull
+            @Parameter(
+                            description =
+                                    "Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @PathVariable
+                    @NotNull
                     UUID vendorProfileId) {
         return ResponseEntity.ok(adminService.listBindings(vendorProfileId));
     }
@@ -66,14 +90,39 @@ public class SupplierEndpointBindingAdminController {
     @ApiResponse(
             responseCode = "400",
             description = "Invalid request — unknown capability/protocol-family key, unknown auth config name,"
-                    + " or invalid cron schedule.")
-    @ApiResponse(responseCode = "404", description = "Profile not found.")
-    @ApiResponse(responseCode = "409", description = "Profile is YAML-managed or capability already bound.")
+                    + " or invalid cron schedule.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Profile not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Profile is YAML-managed or capability already bound.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication is missing or the bearer token is invalid.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Authenticated caller lacks the required supplier permission.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PROFILE_WRITE + "')")
     @EmitEvent(id = "SUPPLIER_BINDING_CREATE", apiVersion = "1")
     @PostMapping
     public ResponseEntity<EndpointBindingView> createBinding(
-            @Parameter(description = "Owning vendor profile UUID", required = true) @PathVariable @NotNull
+            @Parameter(
+                            description =
+                                    "Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @PathVariable
+                    @NotNull
                     UUID vendorProfileId,
             @Valid @NotNull @RequestBody EndpointBindingRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(adminService.createBinding(vendorProfileId, request));
@@ -84,16 +133,52 @@ public class SupplierEndpointBindingAdminController {
     @ApiResponse(
             responseCode = "400",
             description = "Invalid request — unknown capability/protocol-family key, unknown auth config name,"
-                    + " or invalid cron schedule.")
-    @ApiResponse(responseCode = "404", description = "Profile or binding not found.")
-    @ApiResponse(responseCode = "409", description = "Profile is YAML-managed or capability already bound.")
+                    + " or invalid cron schedule.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Profile or binding not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Profile is YAML-managed or capability already bound.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication is missing or the bearer token is invalid.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Authenticated caller lacks the required supplier permission.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PROFILE_WRITE + "')")
     @EmitEvent(id = "SUPPLIER_BINDING_UPDATE", apiVersion = "1")
     @PutMapping("/{bindingId}")
     public ResponseEntity<EndpointBindingView> updateBinding(
-            @Parameter(description = "Owning vendor profile UUID", required = true) @PathVariable @NotNull
+            @Parameter(
+                            description =
+                                    "Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @PathVariable
+                    @NotNull
                     UUID vendorProfileId,
-            @Parameter(description = "Binding UUID", required = true) @PathVariable @NotNull UUID bindingId,
+            @Parameter(
+                            description =
+                                    "Endpoint binding identifier (UUIDv7). Must belong to the vendor profile in the path.",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60"))
+                    @PathVariable
+                    @NotNull
+                    UUID bindingId,
             @Valid @NotNull @RequestBody EndpointBindingRequest request) {
         return ResponseEntity.ok(adminService.updateBinding(vendorProfileId, bindingId, request));
     }
@@ -102,15 +187,50 @@ public class SupplierEndpointBindingAdminController {
             summary = "Delete endpoint binding",
             description = "Remove a binding, disabling its capability for the profile")
     @ApiResponse(responseCode = "204", description = "Binding deleted.")
-    @ApiResponse(responseCode = "404", description = "Profile or binding not found.")
-    @ApiResponse(responseCode = "409", description = "Profile is YAML-managed.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Profile or binding not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Profile is YAML-managed.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication is missing or the bearer token is invalid.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Authenticated caller lacks the required supplier permission.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PROFILE_WRITE + "')")
     @EmitEvent(id = "SUPPLIER_BINDING_DELETE", apiVersion = "1")
     @DeleteMapping("/{bindingId}")
     public ResponseEntity<Void> deleteBinding(
-            @Parameter(description = "Owning vendor profile UUID", required = true) @PathVariable @NotNull
+            @Parameter(
+                            description =
+                                    "Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @PathVariable
+                    @NotNull
                     UUID vendorProfileId,
-            @Parameter(description = "Binding UUID", required = true) @PathVariable @NotNull UUID bindingId) {
+            @Parameter(
+                            description =
+                                    "Endpoint binding identifier (UUIDv7). Must belong to the vendor profile in the path.",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60"))
+                    @PathVariable
+                    @NotNull
+                    UUID bindingId) {
         adminService.deleteBinding(vendorProfileId, bindingId);
         return ResponseEntity.noContent().build();
     }

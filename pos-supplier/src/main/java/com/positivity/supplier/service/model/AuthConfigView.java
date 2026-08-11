@@ -1,5 +1,6 @@
 package com.positivity.supplier.service.model;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -18,11 +19,34 @@ import org.jspecify.annotations.Nullable;
  *     {@code apikey}) — configuration data, not a secret, hence readable here while every
  *     {@code *Ref} field stays write-only; {@code null} means the adapter default
  */
+@Schema(
+        description =
+                "Read model of a vendor auth config. Carries no secret reference fields at all, by shape — credential references never serialize into responses (ADR-0050 §4).")
 public record AuthConfigView(
-        @NonNull UUID authConfigId,
-        @NonNull String name,
-        @NonNull SupplierAuthType type,
-        @Nullable String apiKeyHeader) {
+        @Schema(description = "Identity of the auth config (UUIDv7).", example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61")
+        @NonNull
+        UUID authConfigId,
+
+        @Schema(
+                description =
+                        "Auth config name, unique within the vendor profile. Endpoint bindings reference it by this name.",
+                example = "ediwheel-basic")
+        @NonNull
+        String name,
+
+        @Schema(
+                description =
+                        "Credential scheme this config describes. Determines exactly which secret reference fields are required and which must be absent (ADR-0050 §4).",
+                example = "BASIC_PLUS_APIKEY")
+        @NonNull
+        SupplierAuthType type,
+
+        @Schema(
+                description =
+                        "Header NAME the API key is sent in — configuration data, not a secret reference. Omit to use the adapter default.",
+                example = "apikey")
+        @Nullable
+        String apiKeyHeader) {
 
     public AuthConfigView {
         Objects.requireNonNull(authConfigId, "authConfigId must not be null");

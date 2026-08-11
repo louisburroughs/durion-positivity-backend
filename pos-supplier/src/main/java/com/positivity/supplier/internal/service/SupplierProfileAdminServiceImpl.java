@@ -22,6 +22,7 @@ import com.positivity.supplier.service.model.EndpointBindingRequest;
 import com.positivity.supplier.service.model.EndpointBindingView;
 import com.positivity.supplier.service.model.PayloadCaptureLevel;
 import com.positivity.supplier.service.model.ProfileSourceOfTruth;
+import com.positivity.supplier.service.model.RetryBackoff;
 import com.positivity.supplier.service.model.SupplierAccountRole;
 import com.positivity.supplier.service.model.SupplierAuthType;
 import com.positivity.supplier.service.model.VendorProfileRequest;
@@ -443,6 +444,12 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
         profile.setConnectTimeoutMs(request.connectTimeoutMillis());
         profile.setReadTimeoutMs(request.readTimeoutMillis());
         profile.setRetryMaxAttempts(request.maxRetries());
+        profile.setSandboxBaseUrlOverride(request.sandboxBaseUrlOverride());
+        profile.setRetryBackoff(
+                request.retryBackoff() == null
+                        ? null
+                        : com.positivity.supplier.internal.enums.RetryBackoff.valueOf(
+                                request.retryBackoff().name()));
     }
 
     private static void applyAuthConfig(@NonNull SupplierAuthConfigEntity authConfig, @NonNull AuthConfigRequest req) {
@@ -498,7 +505,11 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
                 ProfileSourceOfTruth.valueOf(profile.getSourceOfTruth().name()),
                 profile.getConnectTimeoutMs(),
                 profile.getReadTimeoutMs(),
-                profile.getRetryMaxAttempts());
+                profile.getRetryMaxAttempts(),
+                profile.getSandboxBaseUrlOverride(),
+                profile.getRetryBackoff() == null
+                        ? null
+                        : RetryBackoff.valueOf(profile.getRetryBackoff().name()));
     }
 
     @NonNull

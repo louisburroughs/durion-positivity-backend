@@ -1,12 +1,15 @@
 package com.positivity.supplier.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.supplier.internal.security.SupplierPermissions;
 import com.positivity.supplier.service.SupplierProfileAdminService;
 import com.positivity.supplier.service.model.VendorProfileRequest;
 import com.positivity.supplier.service.model.VendorProfileView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -47,6 +50,14 @@ public class SupplierProfileAdminController {
 
     @Operation(summary = "List vendor profiles", description = "All vendor profiles, ordered by supplierRef")
     @ApiResponse(responseCode = "200", description = "Profiles returned.")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication is missing or the bearer token is invalid.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Authenticated caller lacks the required supplier permission.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PROFILE_READ + "')")
     @EmitEvent(id = "SUPPLIER_PROFILE_LIST", apiVersion = "1")
     @GetMapping
@@ -56,12 +67,33 @@ public class SupplierProfileAdminController {
 
     @Operation(summary = "Get vendor profile", description = "Retrieve one vendor profile by id")
     @ApiResponse(responseCode = "200", description = "Profile returned.")
-    @ApiResponse(responseCode = "404", description = "Profile not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Profile not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication is missing or the bearer token is invalid.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Authenticated caller lacks the required supplier permission.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PROFILE_READ + "')")
     @EmitEvent(id = "SUPPLIER_PROFILE_GET", apiVersion = "1")
     @GetMapping("/{vendorProfileId}")
     public ResponseEntity<VendorProfileView> getProfile(
-            @Parameter(description = "Vendor profile UUID", required = true) @PathVariable @NotNull
+            @Parameter(
+                            description =
+                                    "Vendor profile identifier (UUIDv7). Must reference an existing vendor profile.",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @PathVariable
+                    @NotNull
                     UUID vendorProfileId) {
         return ResponseEntity.ok(adminService.getProfile(vendorProfileId));
     }
@@ -70,8 +102,22 @@ public class SupplierProfileAdminController {
             summary = "Create vendor profile",
             description = "Create an ADMIN-managed vendor profile; supplierRef must be unique")
     @ApiResponse(responseCode = "201", description = "Profile created.")
-    @ApiResponse(responseCode = "400", description = "Invalid request.")
-    @ApiResponse(responseCode = "409", description = "supplierRef already in use.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "supplierRef already in use.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication is missing or the bearer token is invalid.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Authenticated caller lacks the required supplier permission.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PROFILE_WRITE + "')")
     @EmitEvent(id = "SUPPLIER_PROFILE_CREATE", apiVersion = "1")
     @PostMapping
@@ -83,14 +129,41 @@ public class SupplierProfileAdminController {
             summary = "Update vendor profile",
             description = "Full update of a vendor profile; rejected for YAML-managed profiles (ADR-0050 §6)")
     @ApiResponse(responseCode = "200", description = "Profile updated.")
-    @ApiResponse(responseCode = "400", description = "Invalid request.")
-    @ApiResponse(responseCode = "404", description = "Profile not found.")
-    @ApiResponse(responseCode = "409", description = "Profile is YAML-managed or supplierRef already in use.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Profile not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Profile is YAML-managed or supplierRef already in use.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication is missing or the bearer token is invalid.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Authenticated caller lacks the required supplier permission.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PROFILE_WRITE + "')")
     @EmitEvent(id = "SUPPLIER_PROFILE_UPDATE", apiVersion = "1")
     @PutMapping("/{vendorProfileId}")
     public ResponseEntity<VendorProfileView> updateProfile(
-            @Parameter(description = "Vendor profile UUID", required = true) @PathVariable @NotNull
+            @Parameter(
+                            description =
+                                    "Vendor profile identifier (UUIDv7). Must reference an existing vendor profile.",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @PathVariable
+                    @NotNull
                     UUID vendorProfileId,
             @Valid @NotNull @RequestBody VendorProfileRequest request) {
         return ResponseEntity.ok(adminService.updateProfile(vendorProfileId, request));
@@ -100,13 +173,37 @@ public class SupplierProfileAdminController {
             summary = "Delete vendor profile",
             description = "Delete a vendor profile and its child configuration; rejected for YAML-managed profiles")
     @ApiResponse(responseCode = "204", description = "Profile deleted.")
-    @ApiResponse(responseCode = "404", description = "Profile not found.")
-    @ApiResponse(responseCode = "409", description = "Profile is YAML-managed.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Profile not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Profile is YAML-managed.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Authentication is missing or the bearer token is invalid.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Authenticated caller lacks the required supplier permission.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PROFILE_WRITE + "')")
     @EmitEvent(id = "SUPPLIER_PROFILE_DELETE", apiVersion = "1")
     @DeleteMapping("/{vendorProfileId}")
     public ResponseEntity<Void> deleteProfile(
-            @Parameter(description = "Vendor profile UUID", required = true) @PathVariable @NotNull
+            @Parameter(
+                            description =
+                                    "Vendor profile identifier (UUIDv7). Must reference an existing vendor profile.",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @PathVariable
+                    @NotNull
                     UUID vendorProfileId) {
         adminService.deleteProfile(vendorProfileId);
         return ResponseEntity.noContent().build();
