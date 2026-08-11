@@ -369,6 +369,15 @@ public class PriceBookServiceImpl implements PriceBookService {
         return taxonomyNodeIds.contains(targetId);
     }
 
+    /**
+     * Candidate price book resolution selects exactly one book in precedence order: explicit
+     * priceBookId → active LOCATION book (locationId) → active CUSTOMER_TIER book (customerTierId)
+     * → COMPANY_DEFAULT (isDefault=true). A supplied context whose book is missing or inactive
+     * falls through to the next step. CUSTOMER_TIER books define reference/list prices for a tier
+     * and are never a discount mechanism — transactional customer-tier discounting is owned
+     * exclusively by pos-price and is applied on top of, never in competition with, the catalog
+     * reference price (ADR-0054 §3).
+     */
     private List<UUID> resolveCandidatePriceBookIds(ResolvePriceRequestDto request) {
         if (request.getPriceBookId() != null) {
             return List.of(requirePriceBook(request.getPriceBookId()).getPriceBookId());
@@ -379,6 +388,14 @@ public class PriceBookServiceImpl implements PriceBookService {
                     PriceBookScope.LOCATION, request.getLocationId(), PriceBookStatus.ACTIVE);
             if (locationBook.isPresent()) {
                 return List.of(locationBook.get().getPriceBookId());
+            }
+        }
+
+        if (request.getCustomerTierId() != null) {
+            var tierBook = priceBookRepository.findByScopeAndScopeIdAndStatus(
+                    PriceBookScope.CUSTOMER_TIER, request.getCustomerTierId(), PriceBookStatus.ACTIVE);
+            if (tierBook.isPresent()) {
+                return List.of(tierBook.get().getPriceBookId());
             }
         }
 
