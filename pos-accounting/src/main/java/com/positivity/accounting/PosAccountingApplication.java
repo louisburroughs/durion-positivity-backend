@@ -1,5 +1,6 @@
 package com.positivity.accounting;
 
+import com.positivity.shared.annotation.CoverageGenerated;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
@@ -14,6 +15,7 @@ import org.springframework.retry.annotation.EnableRetry;
 @ComponentScan(basePackages = {"com.positivity.accounting", "com.positivity.events", "com.positivity.security.common"})
 public class PosAccountingApplication {
 
+    @CoverageGenerated
     public static void main(String[] args) {
         SpringApplication.run(PosAccountingApplication.class, args);
     }
