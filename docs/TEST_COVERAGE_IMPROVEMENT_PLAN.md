@@ -1,7 +1,8 @@
 # Test Coverage Improvement Plan
 
-Status: Phase 0 complete, Phase 1 complete. Phase 2 in progress (pos-event-receiver and
-pos-marketing done; pos-customer partial). Phases 3–4 outstanding.
+Status: Phase 0 complete, Phase 1 complete. Phase 2 in progress (pos-event-receiver
+and pos-marketing done; pos-order and pos-customer partial). Phases 3–4
+outstanding.
 Date: 2026-08-11
 
 Method: `.agents/skills/test-coverage-improver` workflow, adapted from its pnpm/JS
@@ -270,7 +271,9 @@ startup registration delegates to them: `pos-events`
   define a registry class (`pos-inventory`, `pos-customer`, `pos-marketing`); the
   shared `PermissionRegistrationSupport` they extend is now covered, so the
   remaining value here is small.
-- **Wave 1e (Kafka `*EventsListener`)** — not started, and it is the largest
+- **Wave 1e (Kafka `*EventsListener`)** — closed for `pos-customer`,
+  `pos-marketing`, and `pos-order` (see §4.1 and §4.2); open elsewhere. It was
+  originally recorded as not started, and it is the largest
   remaining archetype: **78 listener classes** across the reactor, many at 0%
   (`CustomerEventsListener` 145 missed lines, `VehicleEventsListener` 119,
   `InventoryEventsListener` 72, `InventoryManifestListener` 49). Unlike the other
@@ -288,7 +291,7 @@ exists now that every module is measured. The merged priority order is:
 | ---: | --- | ---: | ---: | --- |
 | 1 | ~~pos-event-receiver~~ | 3.0 | 424 | **Done** — every service registers against it; was lowest in the reactor |
 | 2 | pos-customer | 61.5 | 2,067 | Largest absolute gap; several waves landed, not yet re-measured |
-| 3 | pos-order | 53.4 | 1,510 | Second-lowest coverage among large modules |
+| 3 | pos-order | 53.4 | 1,510 | **In progress — 77.9% line / 60.8% branch unit-only** (see §4.2) |
 | 4 | ~~pos-marketing~~ | 28.1 | 889 | **Done — now 87.9% line / 82.9% branch, 150 missed** (see §4.1) |
 | 5 | pos-people | 61.5 | 1,101 | Large gap, thin suite |
 | 6 | pos-invoice | 63.4 | 1,210 | Large gap, **0 ITs** |
@@ -329,6 +332,40 @@ Remaining 150 missed lines are controllers (30), Spring config (`OpenApiConfig`,
 `RestClientConfig`, `FlywayConfig`, `KafkaErrorHandlingConfig`, 40), and
 `LoggingMessageChannel`. Controllers want `@WebMvcTest` slices, which is a
 different shape of work; the module's business logic is done.
+
+### 4.2 pos-order progress (2026-08-11)
+
+Measured **unit-only** (`-DskipITs`), so these are not comparable to the §1.5
+figure, which included ITs. Unit-only baseline at the start of this pass was
+57.5% line / 44.0% branch, 1,377 missed.
+
+| | Unit-only baseline | Now |
+|---|---:|---:|
+| Line | 57.5% | **77.9%** |
+| Branch | 44.0% | **60.8%** |
+| Missed lines | 1,377 | **715** |
+
+Delivered:
+
+- **All five `ext_*` replica listeners** (customer, vehicle, product, location,
+  workorder — 339 missed lines at 0%). Their shared consumer contract is pinned
+  once, parameterized across all five, in `ReplicaListenerContractTest`; the
+  per-listener tests cover mapping, the aggregate-version guard, and the
+  snapshot-is-a-replacement rule for workorder lines. **This closes wave 1e for
+  `pos-order`.**
+- **`OrderDomainEventPublisher`** (148 missed at 2.6%) — the module's whole
+  outbound contract, including the R7.5 rule that a WORKORDER-sourced line is
+  not fulfillable.
+- **The four exception advices** (169 missed) — status/code pairings per endpoint
+  family, per-line over-cap field errors, correlation-id passthrough.
+
+Remaining in `pos-order`, largest first: `SalesOrderServiceImpl` (133 missed,
+72.4%), `ReturnOrderServiceImpl` (61, 77.4%), `RestInvoicingPortAdapter` (56,
+6.7%), `OrderTaxService` (53, 1.9%), `RegisterSessionServiceImpl` (39, 78.0%),
+`CatalogPricePricingAdapter` (34, 19.0%), `RegisterSessionController` (27),
+`ReturnOrderResponse`/`SessionReportResponse`/`RegisterSessionResponse` DTOs
+(60 combined at 0%), `OrderNumberService` (19), `ReplicaCustomerPortAdapter`
+(16).
 
 The per-module detail below predates the measurement and is kept for the specific
 class-level targets it names.
