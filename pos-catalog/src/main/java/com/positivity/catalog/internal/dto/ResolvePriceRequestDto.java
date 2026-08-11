@@ -10,7 +10,9 @@ import java.util.UUID;
 import lombok.Data;
 
 @Data
-@Schema(description = "Request to resolve the effective price for a product in a given context")
+@Schema(
+        description = "Request to resolve the reference/list price for a product in a given context"
+                + " (catalog reference role per ADR-0054; transactional sell prices are resolved by pos-price)")
 public class ResolvePriceRequestDto {
 
     @NotNull
@@ -34,7 +36,7 @@ public class ResolvePriceRequestDto {
 
     @Schema(
             description = "Identifier of the customer tier used to select a CUSTOMER_TIER reference price book"
-                    + " (matches the book's scopeId). Selects tier list/reference prices only — transactional"
+                    + " (matches the scopeId of the book). Selects tier list/reference prices only — transactional"
                     + " customer-tier discounting is owned by pos-price (ADR-0054)",
             example = "0196cf6f-c8dd-7ee0-93e7-f48a5698a536",
             requiredMode = NOT_REQUIRED)
