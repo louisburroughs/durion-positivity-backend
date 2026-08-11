@@ -29,7 +29,9 @@ public class StockSummaryDriftVerifier {
         this.driftCounter = meterRegistry.counter("inventory.stock_summary.drift.total");
     }
 
-    @Scheduled(fixedDelayString = "${pos.inventory.stock-summary.verify-interval-ms:3600000}", initialDelayString = "${pos.inventory.stock-summary.verify-initial-delay-ms:600000}")
+    @Scheduled(
+            fixedDelayString = "${pos.inventory.stock-summary.verify-interval-ms:3600000}",
+            initialDelayString = "${pos.inventory.stock-summary.verify-initial-delay-ms:600000}")
     @Transactional(readOnly = true)
     public void verifyScheduled() {
         try {
@@ -59,7 +61,8 @@ public class StockSummaryDriftVerifier {
         List<String> onHandTypes = InventoryLedgerEventType.onHandAffectingTypes().stream()
                 .map(Enum::name)
                 .toList();
-        List<String> summaryTypes = StockSummaryEventSets.SUMMARY_TYPES.stream().map(Enum::name).toList();
+        List<String> summaryTypes =
+                StockSummaryEventSets.SUMMARY_TYPES.stream().map(Enum::name).toList();
 
         List<InventoryStockSummaryRepository.DriftRow> drifted = summaryRepository.findDriftRows(
                 onHandTypes,

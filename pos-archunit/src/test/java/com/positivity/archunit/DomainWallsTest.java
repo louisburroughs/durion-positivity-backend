@@ -104,8 +104,8 @@ class DomainWallsTest {
      * Startup-infra classes exempt per ADR-0044 R2 (registration calls, best-effort
      * at boot).
      */
-    private static final Pattern EXEMPT_FILES = Pattern
-            .compile(".*(EventTypeInitializer|PermissionRegistration|PermissionInitializer|PermissionRegistry"
+    private static final Pattern EXEMPT_FILES =
+            Pattern.compile(".*(EventTypeInitializer|PermissionRegistration|PermissionInitializer|PermissionRegistry"
                     + "|TemplateInitializer|PermissionVersionStartupCheck)\\.java$");
 
     private static final Pattern POS_SERVICE_TOKEN = Pattern.compile("pos-[a-z][a-z0-9-]*");
