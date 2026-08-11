@@ -19,8 +19,11 @@ public interface BasePriceService {
     /**
      * Appends a base-price change for a product. If an open window exists for the same
      * (productId, currency) it is closed at {@code effectiveFrom} and a new open window is
-     * appended; a call matching the current open window's MSRP is an idempotent no-op.
-     * A {@code effectiveFrom} that does not start strictly after the latest existing window's
+     * appended; a call matching the current open window's MSRP is an idempotent no-op
+     * regardless of {@code effectiveFrom} (nothing is written — replayed bulk feeds may repeat
+     * or even predate the original instant, and the no-op check deliberately takes precedence
+     * over window-ordering validation so re-ingest stays idempotent). A price-changing
+     * {@code effectiveFrom} that does not start strictly after the latest existing window's
      * start is rejected.
      *
      * @param productId     product identifier
