@@ -80,8 +80,8 @@ class PriceQuoteContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("givenNonExistentProduct_whenPriceQuoteRequested_thenReturns404")
-    void givenNonExistentProduct_whenPriceQuoteRequested_thenReturns404() throws Exception {
+    @DisplayName("givenNoApplicableBasePriceWindow_whenPriceQuoteRequested_thenReturns404")
+    void givenNoApplicableBasePriceWindow_whenPriceQuoteRequested_thenReturns404() throws Exception {
         ObjectNode request = baseValidRequest();
         request.put(
                 "productId",
@@ -91,7 +91,7 @@ class PriceQuoteContractBehaviorIT extends BaseContractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+                .andExpect(jsonPath("$.code").value("PRICE_BASE_UNAVAILABLE"));
     }
 
     @Test

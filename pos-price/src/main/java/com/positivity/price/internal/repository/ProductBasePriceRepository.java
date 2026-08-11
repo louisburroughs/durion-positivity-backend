@@ -18,7 +18,9 @@ import org.springframework.data.repository.query.Param;
  */
 public interface ProductBasePriceRepository extends JpaRepository<ProductBasePrice, UUID> {
 
-    Optional<ProductBasePrice> findByProductIdAndEffectiveToIsNull(UUID productId);
+    Optional<ProductBasePrice> findFirstByProductIdAndCurrencyOrderByEffectiveFromDesc(UUID productId, String currency);
+
+    List<ProductBasePrice> findByProductIdOrderByEffectiveFromDesc(UUID productId);
 
     @Query("""
             SELECT p FROM ProductBasePrice p

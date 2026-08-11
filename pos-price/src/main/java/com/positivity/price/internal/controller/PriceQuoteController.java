@@ -4,7 +4,10 @@ import com.positivity.events.EmitEvent;
 import com.positivity.price.internal.dto.PriceQuoteRequest;
 import com.positivity.price.internal.dto.PriceQuoteResponse;
 import com.positivity.price.service.PriceQuoteService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -46,8 +49,18 @@ public class PriceQuoteController {
             description =
                     "Calculates a contextual price quote using request inputs such as product, location, customer tier, and pricing context.")
     @ApiResponse(responseCode = "200", description = "Price quote calculated successfully.")
-    @ApiResponse(responseCode = "400", description = "Invalid quote request.")
-    @ApiResponse(responseCode = "403", description = "Forbidden.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid quote request.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "No base price effective for the product at the pricing instant (PRICE_BASE_UNAVAILABLE).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PriceQuoteResponse> calculatePriceQuote(@Valid @RequestBody PriceQuoteRequest request) {
         return ResponseEntity.ok(priceQuoteService.calculatePrice(request));
     }

@@ -7,7 +7,7 @@ import com.positivity.price.internal.dto.PricingBreakdownEntry;
 import com.positivity.price.internal.entity.CustomerTierPricingRule;
 import com.positivity.price.internal.entity.LocationPriceOverride;
 import com.positivity.price.internal.entity.ProductBasePrice;
-import com.positivity.price.internal.exception.ProductNotFoundException;
+import com.positivity.price.internal.exception.BasePriceUnavailableException;
 import com.positivity.price.internal.repository.CustomerTierPricingRuleRepository;
 import com.positivity.price.internal.repository.LocationPriceOverrideRepository;
 import com.positivity.price.internal.repository.ProductBasePriceRepository;
@@ -56,7 +56,7 @@ public class PriceQuoteServiceImpl implements PriceQuoteService {
 
         ProductBasePrice basePrice = productPriceRepository
                 .findActiveAt(request.getProductId(), effectiveAt)
-                .orElseThrow(() -> new ProductNotFoundException(request.getProductId()));
+                .orElseThrow(() -> new BasePriceUnavailableException(request.getProductId(), effectiveAt));
 
         List<PricingBreakdownEntry> breakdownEntries = new ArrayList<>();
         String currency = basePrice.getCurrency();
