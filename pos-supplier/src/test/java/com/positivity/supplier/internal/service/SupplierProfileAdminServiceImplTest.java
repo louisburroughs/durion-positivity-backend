@@ -48,7 +48,12 @@ import org.springframework.context.annotation.Import;
             "spring.jpa.hibernate.ddl-auto=validate"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({JpaConfig.class, SupplierProfileAdminServiceImpl.class})
+@Import({
+    JpaConfig.class,
+    SupplierProfileAdminServiceImpl.class,
+    SecretSchemeRegistry.class,
+    EnvSecretReferenceResolver.class
+})
 class SupplierProfileAdminServiceImplTest {
 
     private static final UUID LOCATION_A = UUID.fromString("018f0000-0000-7000-8000-0000000000a1");

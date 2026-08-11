@@ -28,6 +28,8 @@ import com.positivity.supplier.internal.repository.SupplierAccountRepository;
 import com.positivity.supplier.internal.repository.SupplierAuthConfigRepository;
 import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.supplier.internal.service.EnvSecretReferenceResolver;
+import com.positivity.supplier.internal.service.SecretSchemeRegistry;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -81,7 +83,8 @@ class SupplierYamlBootstrapTest {
                 profileRepository,
                 authConfigRepository,
                 accountRepository,
-                bindingRepository);
+                bindingRepository,
+                new SecretSchemeRegistry(List.of(new EnvSecretReferenceResolver())));
     }
 
     @Test
@@ -293,6 +296,43 @@ class SupplierYamlBootstrapTest {
         assertThat(profileRepository.findBySupplierRef("michelin-eu")).isEmpty();
     }
 
+    /**
+     * The YAML path must enforce the same scheme allowlist as the admin API. {@code user:hunter2}
+     * is shape-legal ({@code scheme:key}) and a plaintext password, so before the allowlist it
+     * reconciled successfully and failed only on the first outbound call — the deferred credential
+     * leak ADR-0050 §4/§6 forbids.
+     */
+    @Test
+    void wellFormedSecretRefInUnsupportedSchemeFailsStartup() {
+        ProfileSpec spec = new ProfileSpec(
+                "michelin-eu",
+                "Michelin Europe",
+                null,
+                null,
+                null,
+                List.of(new AuthSpec(
+                        "ediwheel-basic",
+                        "BASIC_PLUS_APIKEY",
+                        "env:USER",
+                        "user:hunter2",
+                        "apikey",
+                        "env:APIKEY",
+                        null,
+                        null,
+                        null,
+                        null)),
+                null,
+                null);
+
+        assertThatThrownBy(() -> bootstrap.reconcile(properties(spec)))
+                .isInstanceOf(SupplierConfigurationException.class)
+                .hasFieldOrPropertyWithValue("code", SupplierConfigurationException.YAML_BOOTSTRAP_INVALID)
+                .hasMessageContaining("user:")
+                .hasMessageContaining("env:")
+                .hasMessageNotContaining("hunter2");
+        assertThat(profileRepository.findBySupplierRef("michelin-eu")).isEmpty();
+    }
+
     @Test
     void danglingBindingAuthNameFailsStartup() {
         ProfileSpec spec = new ProfileSpec(
@@ -420,7 +460,11 @@ class SupplierYamlBootstrapTest {
         Long profileVersion = profile.getVersion();
 
         var adminService = new com.positivity.supplier.internal.service.SupplierProfileAdminServiceImpl(
-                profileRepository, authConfigRepository, accountRepository, bindingRepository);
+                profileRepository,
+                authConfigRepository,
+                accountRepository,
+                bindingRepository,
+                new SecretSchemeRegistry(List.of(new EnvSecretReferenceResolver())));
         assertThatThrownBy(() -> adminService.updateProfile(
                         profileId,
                         new com.positivity.supplier.service.model.VendorProfileRequest(

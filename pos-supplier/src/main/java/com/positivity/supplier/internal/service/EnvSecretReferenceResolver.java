@@ -12,6 +12,10 @@ import org.springframework.stereotype.Component;
  * {@code env:VAR_NAME} against process environment variables at call time. Deliberately
  * log-free — resolved values exist only on the call stack, and every failure message carries
  * the reference, never a value.
+ *
+ * <p>Currently the only registered resolver, so {@code env} is the whole legal scheme allowlist
+ * (see {@link SecretSchemeRegistry}). It keeps its own scheme guard as defence in depth for
+ * direct callers, even though {@link SecretSchemeRegistry} never routes a foreign scheme here.
  */
 @Component
 public class EnvSecretReferenceResolver implements SecretReferenceResolver {
@@ -33,6 +37,12 @@ public class EnvSecretReferenceResolver implements SecretReferenceResolver {
      */
     EnvSecretReferenceResolver(@NonNull UnaryOperator<String> environmentLookup) {
         this.environmentLookup = Objects.requireNonNull(environmentLookup, "environmentLookup must not be null");
+    }
+
+    @Override
+    @NonNull
+    public String scheme() {
+        return ENV_SCHEME;
     }
 
     @Override

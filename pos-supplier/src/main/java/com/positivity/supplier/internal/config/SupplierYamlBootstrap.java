@@ -21,6 +21,7 @@ import com.positivity.supplier.internal.repository.SupplierAuthConfigRepository;
 import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.service.AuthReferenceRules;
+import com.positivity.supplier.internal.service.SecretSchemeRegistry;
 import com.positivity.supplier.service.model.AuthConfigRequest;
 import com.positivity.supplier.service.model.SupplierAuthType;
 import java.util.HashMap;
@@ -68,6 +69,9 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     private final SupplierAuthConfigRepository authConfigRepository;
     private final SupplierAccountRepository accountRepository;
     private final SupplierEndpointBindingRepository bindingRepository;
+
+    /** Supplies the legal secret-reference scheme allowlist (ADR-0050 §4). */
+    private final SecretSchemeRegistry secretSchemeRegistry;
 
     @Override
     @Transactional
@@ -307,19 +311,23 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
                     "profile '" + spec.key() + "', auth '" + authSpec.name() + "': type '" + authSpec.type()
                             + "' is not a canonical auth type");
             try {
-                // Reuses the admin-side rules: required refs present, scheme:key shape (no
-                // plaintext-looking values), non-applicable refs absent (ADR-0050 §4).
-                AuthReferenceRules.validate(new AuthConfigRequest(
-                        authSpec.name(),
-                        type,
-                        authSpec.usernameRef(),
-                        authSpec.passwordRef(),
-                        authSpec.apiKeyRef(),
-                        authSpec.apiKeyHeader(),
-                        authSpec.tokenUrlRef(),
-                        authSpec.clientIdRef(),
-                        authSpec.clientSecretRef(),
-                        authSpec.bearerTokenRef()));
+                // Reuses the admin-side rules: required refs present, scheme:key shape in a
+                // resolvable scheme (no plaintext-looking values), non-applicable refs absent
+                // (ADR-0050 §4). The YAML path enforces the same scheme allowlist as the admin
+                // API, so a bad ref fails startup instead of the first outbound call.
+                AuthReferenceRules.validate(
+                        new AuthConfigRequest(
+                                authSpec.name(),
+                                type,
+                                authSpec.usernameRef(),
+                                authSpec.passwordRef(),
+                                authSpec.apiKeyRef(),
+                                authSpec.apiKeyHeader(),
+                                authSpec.tokenUrlRef(),
+                                authSpec.clientIdRef(),
+                                authSpec.clientSecretRef(),
+                                authSpec.bearerTokenRef()),
+                        secretSchemeRegistry.supportedSchemes());
             } catch (SupplierValidationException ex) {
                 throw invalid("profile '" + spec.key() + "', auth '" + authSpec.name() + "': " + ex.getMessage());
             }

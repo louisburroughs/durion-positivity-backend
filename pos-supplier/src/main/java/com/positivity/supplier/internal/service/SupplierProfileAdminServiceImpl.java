@@ -55,6 +55,9 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     private final SupplierAccountRepository accountRepository;
     private final SupplierEndpointBindingRepository bindingRepository;
 
+    /** Supplies the legal secret-reference scheme allowlist (ADR-0050 §4). */
+    private final SecretSchemeRegistry secretSchemeRegistry;
+
     // ── Vendor profiles ─────────────────────────────────────────────────────────────
 
     @Override
@@ -110,7 +113,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
     public AuthConfigView createAuthConfig(@NonNull UUID vendorProfileId, @NonNull AuthConfigRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         loadAdminManagedProfile(vendorProfileId);
-        AuthReferenceRules.validate(request);
+        AuthReferenceRules.validate(request, secretSchemeRegistry.supportedSchemes());
         if (authConfigRepository
                 .findByVendorProfileIdAndName(vendorProfileId, request.name())
                 .isPresent()) {
@@ -130,7 +133,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
             @NonNull UUID vendorProfileId, @NonNull UUID authConfigId, @NonNull AuthConfigRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         loadAdminManagedProfile(vendorProfileId);
-        AuthReferenceRules.validate(request);
+        AuthReferenceRules.validate(request, secretSchemeRegistry.supportedSchemes());
         SupplierAuthConfigEntity authConfig = loadAuthConfig(vendorProfileId, authConfigId);
         if (!authConfig.getName().equals(request.name())) {
             if (bindingRepository.existsByVendorProfileIdAndAuthConfigName(vendorProfileId, authConfig.getName())) {
