@@ -129,6 +129,21 @@ public interface SupplierScheduleLeaseRepository extends JpaRepository<SupplierS
      * (decision 4). A checkpoint that commits independently of its page is how a window gets silently
      * skipped: the page rolls back, the checkpoint does not, and nothing ever reprocesses it.
      *
+     * <p>That has a consequence for the {@code leased_until > now()} predicate, and it is the one place in this
+     * interface where the frozen-clock behaviour is <em>load-bearing rather than harmless</em>. Because this
+     * runs in the page's transaction, PostgreSQL's {@code now()} is the moment the page STARTED — so the guard
+     * asks "was the lease live when this page began?", not "is it live now?". A run whose lease expired
+     * mid-page can therefore still advance its checkpoint.
+     *
+     * <p>That is the correct answer, not a defect: the owner-token half of the predicate still fails if another
+     * run has actually <em>taken</em> the lease, and if nobody took it then the work in this page really was
+     * done and the window really is complete. Refusing the checkpoint on a technically-expired-but-unstolen
+     * lease would reprocess a window that succeeded. The {@code updated_at = now()} in the SET clause is
+     * cosmetic by the same mechanism.
+     *
+     * <p>The stolen case is what must be caught, and it is: {@code SupplierScheduleCoordinator.runPage} treats
+     * zero affected rows as a lost lease and rolls the page back with it.
+     *
      * @return 1 when advanced, 0 when this run's lease was stolen — the caller must then abort
      */
     @Modifying
@@ -147,8 +162,15 @@ public interface SupplierScheduleLeaseRepository extends JpaRepository<SupplierS
      * Releases the lease by expiring it now and clearing the owner, owner-guarded so a run that lost
      * its lease cannot release the new holder's claim.
      *
-     * <p>Sets {@code leased_until = now()} rather than a null, and clears {@code owner_token}, keeping
-     * the row consistent with {@code chk_slease_claim_consistent}.
+     * <p>Sets <strong>both</strong> {@code owner_token} and {@code leased_until} to {@code NULL}. That is what
+     * keeps the row consistent with {@code chk_slease_claim_consistent}, which requires the two to be either
+     * both null or both populated — and it is why a released lease is immediately claimable, since the claim
+     * predicate treats a null expiry as unheld.
+     *
+     * <p>An earlier version of this javadoc said it set {@code leased_until = now()} rather than a null, which
+     * the query directly contradicts. It also would not have worked: {@code now()} with a null owner token
+     * violates the CHECK constraint, and the same mistake in a test's {@code expireLease} helper is what made
+     * that constraint fire during this wave.
      *
      * @return 1 when released, 0 when this run did not hold it
      */

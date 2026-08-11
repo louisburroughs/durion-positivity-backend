@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.supplier.internal.enums.PayloadCaptureLevel;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -209,6 +210,74 @@ class PayloadRedactorTest {
                             .as("capture level %s must not retain the credential", level)
                             .isTrue();
                 }
+            }
+        }
+    }
+
+    // ── URI redaction (ADR-0050 §4/§7) ──────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("request URIs are redacted before permanent storage")
+    class UriRedaction {
+
+        /**
+         * The reason this matters more than for any payload: {@code endpoint_uri} is stored in plaintext at
+         * EVERY capture level and is exempt from the 400-day purge, so anything left in it is kept forever and
+         * is readable through the metadata listing.
+         */
+        @Test
+        void redactsCredentialQueryParametersAtFullCapture() {
+            String uri = PayloadRedactor.redactUri(
+                    "https://edi.example/stock?apikey=live-secret-value&article=225%2F45R17", PayloadCaptureLevel.FULL);
+
+            assertThat(uri).doesNotContain("live-secret-value").contains(PayloadRedactor.REDACTED);
+            assertThat(uri)
+                    .as("non-sensitive parameters survive at FULL -- they are the commercial content this"
+                            + " level exists to retain")
+                    .contains("article=225%2F45R17");
+        }
+
+        @Test
+        void keepsThePathIntactSoTheTrailStillSaysWhichEndpointWasCalled() {
+            assertThat(PayloadRedactor.redactUri("https://edi.example/a25/stock/inquiry", PayloadCaptureLevel.FULL))
+                    .isEqualTo("https://edi.example/a25/stock/inquiry");
+        }
+
+        @Test
+        void dropsTheWholeQueryStringAtMetadataOnly() {
+            String uri = PayloadRedactor.redactUri(
+                    "https://edi.example/stock?orderNumber=SO-99123&account=0000012345&from=2026-08-01",
+                    PayloadCaptureLevel.METADATA_ONLY);
+
+            assertThat(uri)
+                    .as("METADATA_ONLY promises to retain NO content, and order numbers, account references"
+                            + " and date ranges are content -- redacting only the sensitive-name list would"
+                            + " leave commercial data in the one column that is never purged")
+                    .isEqualTo("https://edi.example/stock");
+        }
+
+        @Test
+        void redactsButKeepsTheQueryStringAtRedacted() {
+            String uri = PayloadRedactor.redactUri(
+                    "https://edi.example/stock?password=hunter2&article=205", PayloadCaptureLevel.REDACTED);
+
+            assertThat(uri).doesNotContain("hunter2").contains("article=205");
+        }
+
+        @Test
+        void nullInNullOut() {
+            assertThat(PayloadRedactor.redactUri(null, PayloadCaptureLevel.FULL))
+                    .isNull();
+            assertThat(PayloadRedactor.redactUri(null, PayloadCaptureLevel.METADATA_ONLY))
+                    .isNull();
+        }
+
+        @Test
+        void aUriWithNoQueryStringIsUnchangedAtEveryLevel() {
+            for (PayloadCaptureLevel level : PayloadCaptureLevel.values()) {
+                assertThat(PayloadRedactor.redactUri("https://edi.example/a25/stock", level))
+                        .as("level %s must not mangle a query-less URI", level)
+                        .isEqualTo("https://edi.example/a25/stock");
             }
         }
     }

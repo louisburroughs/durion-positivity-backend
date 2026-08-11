@@ -11,13 +11,25 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 /**
- * Persists one row per outbound attempt (ADR-0050 §7). Replaces the no-op observer by being the only
- * {@link ExchangeObserver} bean in the context.
+ * The {@link ExchangeObserver} that records outbound attempts (ADR-0050 §7). Delegates the write itself to
+ * {@link ExchangeAuditWriter} and owns exactly one thing: making sure an audit failure cannot reach the caller.
  *
- * <h2>Redaction is this class's obligation</h2>
+ * <p>Two corrections to what this header used to claim, both introduced by changes made after it was written:
+ *
+ * <ul>
+ *   <li>It said this class "persists one row per outbound attempt". It no longer persists anything — the write
+ *       moved to {@link ExchangeAuditWriter} because a self-invocation was silently disabling its
+ *       {@code REQUIRES_NEW}.
+ *   <li>It said this class replaces the no-op observer "by being the only {@code ExchangeObserver} bean in the
+ *       context". It is not: {@code ExchangeObserverConfig} registers the no-op unconditionally, and this class
+ *       wins by being {@code @Primary}. The previous arrangement relied on {@code @ConditionalOnMissingBean},
+ *       which for two component-scanned classes resolves by scan order.
+ * </ul>
+ *
+ * <h2>Redaction is the writer's obligation, and the reason it exists at all</h2>
  *
  * {@link ExchangeContext} carries <strong>raw wire documents</strong> — the base client is
- * format-agnostic and cannot know which element is sensitive. This observer applies the binding's
+ * format-agnostic and cannot know which element is sensitive. {@link ExchangeAuditWriter} applies the binding's
  * {@link PayloadCaptureLevel} through {@link PayloadRedactor} before anything is persisted. Getting
  * this wrong is unrecoverable in the sense that matters: a credential written into a 400-day store
  * cannot be un-written.

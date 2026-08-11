@@ -102,14 +102,36 @@ public class ExchangeAuditEntity {
     @Column(name = "protocol_family", nullable = false, updatable = false, length = 64)
     private ProtocolFamily protocolFamily;
 
-    /** Version key is data, not an enum (ADR-0051 §3). */
-    @Column(name = "protocol_version", nullable = false, updatable = false, length = 32)
+    /**
+     * Version key is data, not an enum (ADR-0051 §3).
+     *
+     * <p>64 to match {@code SupplierEndpointBindingEntity.protocolVersion}, the column this is copied from,
+     * and widened by V5 from 32 after that mismatch was found. It is deliberately NOT truncated by the
+     * writer, unlike the descriptive fields: this value selects a codec, so a shortened one would make the
+     * row misreport which vendor norm actually built the document — present and wrong is worse than absent
+     * and logged.
+     */
+    @Column(name = "protocol_version", nullable = false, updatable = false, length = 64)
     private String protocolVersion;
 
     @Column(name = "http_method", nullable = false, updatable = false, length = 16)
     private String httpMethod;
 
-    /** Absolute request URI. Never carries credentials — they travel in headers, never the URI. */
+    /**
+     * Absolute request URI, credential-redacted before storage.
+     *
+     * <p>This used to say "never carries credentials — they travel in headers, never the URI". That was true
+     * of the three shipped auth strategies and enforced by nothing: vendors legitimately take query
+     * parameters, and a binding path or a fourth strategy carrying {@code ?apikey=...} would have put a live
+     * credential here. The distinction matters more for this column than any other, because it is the only
+     * one stored in plaintext at <strong>every</strong> capture level and exempt from the 400-day payload
+     * purge — so it is retained permanently and returned by the metadata listing.
+     *
+     * <p>So the statement is now a fact about a control rather than a hope about callers:
+     * {@code PayloadRedactor.redactUri} applies the form-field patterns to the query string, and
+     * {@code METADATA_ONLY} drops the query string entirely, since that level promises to retain no content
+     * and query parameters are content. The path is always kept — which endpoint was called is metadata.
+     */
     @Column(name = "endpoint_uri", nullable = false, updatable = false, length = 2048)
     private String endpointUri;
 

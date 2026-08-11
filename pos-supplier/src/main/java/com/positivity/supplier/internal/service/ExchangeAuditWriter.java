@@ -74,6 +74,10 @@ public class ExchangeAuditWriter {
     public void write(@NonNull ExchangeContext context) {
         Objects.requireNonNull(context, "context must not be null");
         PayloadCaptureLevel captureLevel = resolveCaptureLevel(context.bindingId());
+        // Redacted before truncation, and kept in a local so the truncate bound stays a simple, greppable
+        // pair -- ExchangeAuditColumnWidthParityTest parses these bounds out of this file and compares them
+        // against the migrations, and a nested call hid one of them the first time.
+        String storedUri = PayloadRedactor.redactUri(context.uri(), captureLevel);
 
         ExchangeAuditEntity row = ExchangeAuditEntity.builder()
                 .vendorProfileId(context.vendorProfileId())
@@ -83,7 +87,11 @@ public class ExchangeAuditWriter {
                 .protocolFamily(context.protocolFamily())
                 .protocolVersion(context.protocolVersion())
                 .httpMethod(context.method())
-                .endpointUri(truncate(context.uri(), 2048))
+                // The URI is the one audit column kept in plaintext at EVERY capture level and exempt from
+                // the payload purge, so anything left in it is retained permanently; METADATA_ONLY drops the
+                // query string outright, since that level promises to retain no content and query parameters
+                // are content. See PayloadRedactor.redactUri.
+                .endpointUri(truncate(storedUri, 2048))
                 .attempt(context.attempt())
                 // Truncated because this is the one field a REMOTE party influences: it is reused from the
                 // inbound X-Correlation-Id header. An oversized header would otherwise fail the insert and

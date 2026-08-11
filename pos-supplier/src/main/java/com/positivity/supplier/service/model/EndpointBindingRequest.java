@@ -1,6 +1,7 @@
 package com.positivity.supplier.service.model;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -58,9 +59,12 @@ public record EndpointBindingRequest(
                         + " (ADR-0051 §3) so a vendor's new norm needs no code change. NOT validated on write:"
                         + " a key with no registered codec is accepted here and then resolves to"
                         + " CAPABILITY_NOT_CONFIGURED on every call, so it must match a codec exactly."
-                        + " Keys shipped today: A2_5, B2_1, B3_3, B4_0, C1_0, C1_1, C1_2, S2S_V1.",
+                        + " Keys shipped today: A2_5, B2_1, B3_3, B4_0, C1_0, C1_1, C1_2, S2S_V1."
+                        + " At most 64 characters: the exchange-audit trail stores this key at that width, and"
+                        + " a longer one would make every audit write for the binding fail.",
                 example = "A2_5")
         @NonNull
+        @Size(max = 64)
         String version,
 
         @Schema(

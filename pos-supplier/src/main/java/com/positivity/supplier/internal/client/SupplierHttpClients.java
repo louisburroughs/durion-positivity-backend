@@ -26,11 +26,21 @@ import org.springframework.web.client.RestClient;
  *       a token would fail every exchange, and the profile's own generous timeouts would not apply.
  *   <li><strong>{@code SimpleClientHttpRequestFactory}.</strong> That wraps {@code HttpURLConnection}, which
  *       reports connect and read timeouts as the same {@link java.net.SocketTimeoutException} separable only
- *       by message text. The main leg was deliberately moved off it so that distinction could be type-safe;
- *       the token leg silently kept the defect the move existed to fix, and it matters just as much there —
- *       a connect timeout was never transmitted and is safe to retry, a read timeout may have minted a token
- *       server-side and must not be.
+ *       by message text. {@code java.net.http.HttpClient} raises {@code HttpConnectTimeoutException} as a
+ *       distinct type. One transport for both legs also means redirects are refused on the token leg, which
+ *       {@code SimpleClientHttpRequestFactory} followed by default — a redirected token request would have
+ *       replayed client credentials to whatever host the {@code Location} header named.
  * </ul>
+ *
+ * <p><strong>What the token leg does NOT need from this, contrary to an earlier version of this javadoc:</strong>
+ * retry classification. That version claimed the distinction mattered because a read timeout on the token
+ * request may have minted a token server-side and must therefore not be retried. It does not, and the code
+ * never behaved that way: {@code OAuth2ClientCredentialsAuthStrategy} maps every {@code RestClientException}
+ * to a {@code SupplierAuthTransportException}, which the base client classifies as
+ * {@code PRE_SEND_FAILURE} — retryable — regardless of which timeout occurred. That is the right behaviour and
+ * is the call already accepted: a token leg failure means nothing reached the vendor's <em>business</em>
+ * endpoint, so no order was placed and no stock was reserved. A wasted token is not a duplicate submission.
+ * The doc was wrong, not the code.
  *
  * <p>Both legs now share this factory, so a transport decision made once holds for both.
  *

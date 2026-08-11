@@ -294,13 +294,65 @@ class AuditPayloadCipherTest {
             }
         }
 
+        /**
+         * The hole the first inversion left, and the reason presence-based relaxation was reversed.
+         *
+         * <p>{@code SPRING_PROFILES_ACTIVE=prod,dev} is not hypothetical — nor is a deployment profile that
+         * sets {@code spring.profiles.include=dev} to pick up developer conveniences. Under "no active profile
+         * is optional" both produced a PRODUCTION JVM with an ephemeral key: the exact outcome the inversion
+         * existed to prevent, reached by a different route.
+         */
         @Test
-        void anOptionalProfileAlongsideOthersStillRelaxesTheRequirement() {
-            // A developer may run 'dev,local'; a real deployment never lists dev or test at all. Presence of
-            // an optional profile is therefore the signal, not exclusivity.
-            AuditPayloadCipher ephemeral = cipher("", "k1", "", "dev", "local");
+        void failsStartupWhenADeploymentProfileIsCombinedWithAnOptionalOne() {
+            for (String[] profiles :
+                    new String[][] {{"prod", "dev"}, {"dev", "prod"}, {"alpha", "test"}, {"dev", "docker"}}) {
+                assertThatThrownBy(() -> cipher("", "k1", "", profiles))
+                        .as(
+                                "%s must fail closed: a deployment profile always wins over an optional one",
+                                java.util.Arrays.toString(profiles))
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("SUPPLIER_AUDIT_ENC_KEY");
+            }
+        }
 
-            assertThat(ephemeral.decrypt(ephemeral.encrypt(PAYLOAD))).isEqualTo(PAYLOAD);
+        @Test
+        void relaxesOnlyWhenEVERYActiveProfileIsOptional() {
+            // dev, test, or both -- and nothing else. An unrecognised profile alongside them means a key is
+            // required, deliberately: a developer running 'dev,local' either drops the extra profile or
+            // provides a key, which is the right side to err on for the only control standing between a real
+            // deployment and permanently unreadable commercial history.
+            for (String[] profiles : new String[][] {{"dev"}, {"test"}, {"dev", "test"}}) {
+                AuditPayloadCipher ephemeral = cipher("", "k1", "", profiles);
+                assertThat(ephemeral.decrypt(ephemeral.encrypt(PAYLOAD))).isEqualTo(PAYLOAD);
+            }
+            assertThatThrownBy(() -> cipher("", "k1", "", "dev", "local"))
+                    .as("an unrecognised profile alongside dev requires a key -- this is a REVERSAL of the"
+                            + " earlier presence-based behaviour, made deliberately")
+                    .isInstanceOf(IllegalStateException.class);
+        }
+
+        /**
+         * The deployment artifacts must carry the variable too, or the fail-closed guard turns into a
+         * fail-to-start for every operator who follows the documented compose flow without knowing why.
+         *
+         * <p>Pinned because this is a three-file agreement — the failure message, the yaml binding, and the
+         * deployment env — and nothing in the type system connects any two of them. The gap this closes is the
+         * one where the guard is correct, the binding is correct, and the container still cannot start because
+         * nobody passed the variable through.
+         */
+        @Test
+        void theDeploymentArtifactsPassTheKeyThrough() throws Exception {
+            String compose = java.nio.file.Files.readString(java.nio.file.Path.of("../docker-compose.yml"));
+            String envExample = java.nio.file.Files.readString(java.nio.file.Path.of("../.env.example"));
+
+            assertThat(compose)
+                    .as("docker-compose.yml must pass SUPPLIER_AUDIT_ENC_KEY into pos-supplier, or the service"
+                            + " cannot start -- which is correct behaviour but needs to be reachable")
+                    .contains("SUPPLIER_AUDIT_ENC_KEY: ${SUPPLIER_AUDIT_ENC_KEY}");
+            assertThat(envExample)
+                    .as(".env.example must document it, including that it is REQUIRED, so the first person to"
+                            + " hit the startup failure finds the answer where they look first")
+                    .contains("SUPPLIER_AUDIT_ENC_KEY=");
         }
 
         @Test

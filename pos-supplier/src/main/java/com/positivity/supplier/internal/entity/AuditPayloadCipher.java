@@ -68,6 +68,11 @@ import org.springframework.stereotype.Component;
  * {@code AuditPayloadCipherTest.KeyPolicy} covers the empty and unrecognised cases explicitly, because
  * they are the ones that bit.
  *
+ * <p><strong>Every</strong> active profile must be optional, not merely one of them. The first inversion used
+ * "no active profile is optional", which still failed open for {@code SPRING_PROFILES_ACTIVE=prod,dev} and for
+ * any deployment profile setting {@code spring.profiles.include=dev} — a production JVM with an ephemeral key,
+ * which is the exact outcome the inversion was for. A deployment profile always wins.
+ *
  * <p>The key is bound from {@code SUPPLIER_AUDIT_ENC_KEY} in {@code application.yml}. That indirection is
  * deliberate and also once absent: nothing bound the property, so an operator who followed the failure
  * message and set {@code SUPPLIER_AUDIT_ENC_KEY} still started with an ephemeral key while believing the
@@ -294,7 +299,17 @@ public class AuditPayloadCipher {
      * add others alongside them.
      */
     private static boolean isKeyRequired(@NonNull Environment environment) {
-        return Arrays.stream(environment.getActiveProfiles()).noneMatch(KEY_OPTIONAL_PROFILES::contains);
+        String[] active = environment.getActiveProfiles();
+        // EVERY active profile must be in the optional set, not merely one of them. `noneMatch` was the first
+        // attempt and left the hole the inversion existed to close: SPRING_PROFILES_ACTIVE=prod,dev -- or a
+        // prod profile that sets spring.profiles.include=dev -- made it false, so a PRODUCTION JVM minted an
+        // ephemeral key. A deployment profile now always wins over an optional one.
+        //
+        // The cost is that a developer running `dev,local` must either drop the extra profile or provide a
+        // key. That is the right side to err on: this is the only control standing between a real deployment
+        // and permanently unreadable commercial history, and every relaxation of it has to be one somebody
+        // typed deliberately. An empty array makes allMatch true, so it is checked separately.
+        return active.length == 0 || !Arrays.stream(active).allMatch(KEY_OPTIONAL_PROFILES::contains);
     }
 
     @NonNull

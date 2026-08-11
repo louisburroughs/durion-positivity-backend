@@ -2,6 +2,7 @@ package com.positivity.supplier.internal.service;
 
 import com.positivity.supplier.internal.enums.PayloadCaptureLevel;
 import java.util.List;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
@@ -109,6 +110,59 @@ public final class PayloadRedactor {
 
     private PayloadRedactor() {
         // static rules
+    }
+
+    /**
+     * Redacts credential values out of a request URI before it is stored (ADR-0050 §4/§7).
+     *
+     * <h2>Why the URI needs this at all</h2>
+     *
+     * {@code endpoint_uri} is the one audit column stored in <strong>plaintext at every capture level,
+     * including {@code METADATA_ONLY}, and exempt from the 400-day payload purge</strong> — so it is retained
+     * forever, and the metadata listing returns it to anyone holding {@code supplier:audit:read}. A binding
+     * configured to retain nothing would still retain the full URI permanently.
+     *
+     * <p>{@code ExchangeAuditEntity} used to assert that credentials never travel in the URI. That is true of
+     * the three shipped auth strategies and <em>enforced by nothing</em>: vendors legitimately take query
+     * parameters, a fourth strategy or a binding path carrying {@code ?apikey=...} would put a live credential
+     * into permanent unpurged storage, and the reason it has not happened is convention. This function is the
+     * control that makes the statement true rather than hopeful.
+     *
+     * <p>The form-field patterns are exactly right for a query string — {@code name=value} pairs separated by
+     * {@code &} — so this reuses them rather than inventing a URI-specific rule set.
+     *
+     * <h2>METADATA_ONLY drops the query string entirely</h2>
+     *
+     * Not just its sensitive parameters. That level's whole meaning is that no content is retained, and query
+     * parameters carry content: order numbers, part numbers, account references, date ranges. Redacting only
+     * the names on the sensitive list would leave commercial data behind at the one level that promises to
+     * keep none. The path is kept, because knowing WHICH endpoint was called is metadata and is the point of
+     * the trail.
+     *
+     * @param uri the absolute request URI, or {@code null}
+     * @param captureLevel the level governing this row
+     * @return the URI safe to persist; {@code null} in, {@code null} out
+     */
+    @Nullable
+    public static String redactUri(@Nullable String uri, @NonNull PayloadCaptureLevel captureLevel) {
+        Objects.requireNonNull(captureLevel, "captureLevel must not be null");
+        if (uri == null) {
+            return null;
+        }
+        int queryStart = uri.indexOf('?');
+        if (captureLevel == PayloadCaptureLevel.METADATA_ONLY) {
+            return queryStart < 0 ? uri : uri.substring(0, queryStart);
+        }
+        if (queryStart < 0) {
+            // No query string: nothing a name=value pattern could match, and the path itself is metadata.
+            return uri;
+        }
+        String query = uri.substring(queryStart + 1);
+        for (Pattern pattern : FORM_FIELD_PATTERNS) {
+            query = pattern.matcher(query)
+                    .replaceAll(matchResult -> Matcher.quoteReplacement(matchResult.group(1) + REDACTED));
+        }
+        return uri.substring(0, queryStart + 1) + query;
     }
 
     /**

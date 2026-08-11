@@ -81,6 +81,16 @@ pos:
       # Payload content expires; the metadata trail is kept permanently.
       retention: ${SUPPLIER_AUDIT_RETENTION:P400D}
       purge-cron: ${SUPPLIER_AUDIT_PURGE_CRON:0 30 3 * * *}
+    # ── OAuth2 token leg (ADR-0050 §4) ──────────────────────────────────────────────────
+    #
+    # The token endpoint gets its OWN budgets, not the profile's and not the platform builder's 2s/5s
+    # in-cluster defaults -- it is a third-party internet call, frequently slower than the vendor API,
+    # and the whole exchange waits on it. Declared here rather than left to the @Value defaults so a
+    # typo in either key is visible in configuration instead of silently falling back.
+    oauth2:
+      expiry-skew-seconds: ${SUPPLIER_OAUTH2_EXPIRY_SKEW_SECONDS:30}
+      connect-timeout-millis: ${SUPPLIER_OAUTH2_CONNECT_TIMEOUT_MILLIS:5000}
+      read-timeout-millis: ${SUPPLIER_OAUTH2_READ_TIMEOUT_MILLIS:15000}
   # @EmitEvent event-type registration with pos-event-receiver at startup (AGENTS.md)
   events:
     base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}
