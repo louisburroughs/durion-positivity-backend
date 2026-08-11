@@ -92,6 +92,21 @@ class BasePriceHistoryRepositoryTest {
     }
 
     @Test
+    @DisplayName("currency is normalized on write and read: lowercase ingest stores and resolves uppercase")
+    void currencyNormalizedOnWriteAndRead() {
+        UUID productId = UUID.randomUUID();
+        UUID rowId = basePriceService.saveBasePrice(productId, new BigDecimal("100.0000"), "usd", T1);
+
+        BasePriceView stored =
+                basePriceService.getBasePriceAt(productId, "Usd", T2).orElseThrow();
+        assertEquals("USD", stored.currency());
+        assertEquals(rowId, stored.id());
+
+        UUID replayedRowId = basePriceService.saveBasePrice(productId, new BigDecimal("100.0000"), "USD", T1);
+        assertEquals(rowId, replayedRowId);
+    }
+
+    @Test
     @DisplayName("backdated write is rejected and identical re-ingest is an idempotent no-op")
     void backdatedWriteRejectedAndReIngestIsNoOp() {
         UUID productId = UUID.randomUUID();

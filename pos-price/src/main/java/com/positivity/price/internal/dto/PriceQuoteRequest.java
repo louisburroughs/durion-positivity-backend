@@ -53,7 +53,7 @@ public class PriceQuoteRequest {
                     + " selection are filtered to this currency",
             example = "USD",
             nullable = true)
-    @Pattern(regexp = "[A-Za-z]{3}", message = "currency must be a 3-letter ISO code")
+    @Pattern(regexp = "^[A-Za-z]{3}$", message = "currency must be a 3-letter ISO code")
     private String currency;
 
     public UUID getProductId() {

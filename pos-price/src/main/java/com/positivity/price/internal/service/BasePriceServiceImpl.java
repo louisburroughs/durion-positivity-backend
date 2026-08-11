@@ -8,6 +8,7 @@ import com.positivity.price.service.model.BasePriceView;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -28,8 +29,9 @@ public class BasePriceServiceImpl implements BasePriceService {
             @NonNull BigDecimal msrp,
             @NonNull String currency,
             @NonNull Instant effectiveFrom) {
+        String normalizedCurrency = currency.toUpperCase(Locale.ROOT);
         Optional<ProductBasePrice> latest =
-                repository.findFirstByProductIdAndCurrencyOrderByEffectiveFromDesc(productId, currency);
+                repository.findFirstByProductIdAndCurrencyOrderByEffectiveFromDesc(productId, normalizedCurrency);
 
         if (latest.isPresent()) {
             ProductBasePrice current = latest.get();
@@ -41,7 +43,7 @@ public class BasePriceServiceImpl implements BasePriceService {
             }
             if (!effectiveFrom.isAfter(current.getEffectiveFrom())
                     || (currentEnd != null && effectiveFrom.isBefore(currentEnd))) {
-                throw new BasePriceWindowConflictException(productId, currency, effectiveFrom);
+                throw new BasePriceWindowConflictException(productId, normalizedCurrency, effectiveFrom);
             }
             if (openWindow) {
                 current.setEffectiveTo(effectiveFrom);
@@ -52,7 +54,7 @@ public class BasePriceServiceImpl implements BasePriceService {
         ProductBasePrice appended = new ProductBasePrice();
         appended.setProductId(productId);
         appended.setMsrp(msrp);
-        appended.setCurrency(currency);
+        appended.setCurrency(normalizedCurrency);
         appended.setEffectiveFrom(effectiveFrom);
         appended.setEffectiveTo(null);
         return repository.save(appended).getId();
@@ -70,7 +72,9 @@ public class BasePriceServiceImpl implements BasePriceService {
     @Transactional(readOnly = true)
     public Optional<BasePriceView> getBasePriceAt(
             @NonNull UUID productId, @NonNull String currency, @NonNull Instant at) {
-        return repository.findActiveAt(productId, currency, at).map(BasePriceServiceImpl::toView);
+        return repository
+                .findActiveAt(productId, currency.toUpperCase(Locale.ROOT), at)
+                .map(BasePriceServiceImpl::toView);
     }
 
     private static BasePriceView toView(ProductBasePrice entity) {

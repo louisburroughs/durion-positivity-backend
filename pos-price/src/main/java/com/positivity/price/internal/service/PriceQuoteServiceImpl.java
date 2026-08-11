@@ -59,9 +59,7 @@ public class PriceQuoteServiceImpl implements PriceQuoteService {
         Instant effectiveAt =
                 request.getEffectiveTimestamp() != null ? request.getEffectiveTimestamp() : Instant.now(clock);
         String quoteCurrency =
-                request.getCurrency() != null && !request.getCurrency().isBlank()
-                        ? request.getCurrency().toUpperCase(Locale.ROOT)
-                        : defaultCurrency;
+                request.getCurrency() != null ? request.getCurrency().toUpperCase(Locale.ROOT) : defaultCurrency;
 
         ProductBasePrice basePrice = productPriceRepository
                 .findActiveAt(request.getProductId(), quoteCurrency, effectiveAt)

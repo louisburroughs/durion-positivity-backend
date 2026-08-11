@@ -1602,7 +1602,7 @@ components:
           - 'null'
           description: Optional ISO 4217 currency code for the quote; defaults to the company default currency (pos.price.default-currency) when omitted. Base price and location override selection are filtered to this currency
           example: USD
-          pattern: '[A-Za-z]{3}'
+          pattern: ^[A-Za-z]{3}$
       required:
       - customerTierId
       - locationId
