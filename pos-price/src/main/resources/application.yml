@@ -62,3 +62,7 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
   default-produces-media-type: application/json
+pos:
+  price:
+    # Company default currency used when a quote request omits `currency` (ADR-0054 / #1239)
+    default-currency: ${POS_PRICE_DEFAULT_CURRENCY:USD}

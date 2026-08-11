@@ -5,6 +5,8 @@ import java.util.Collections;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -12,8 +14,6 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Tier 3: Session summarization and cross-session semantic context retrieval.
@@ -52,8 +52,8 @@ public class SessionSummary {
 
     private final @NonNull ChatModel chatModel;
     private final @NonNull EmbeddingModel embeddingModel;
-        private final @Nullable PgVectorStore embeddingStore;
-        private final @Nullable QueryDocumentRetriever summaryRetriever;
+    private final @Nullable PgVectorStore embeddingStore;
+    private final @Nullable QueryDocumentRetriever summaryRetriever;
 
     public SessionSummary(
             @NonNull ChatModel chatModel,
@@ -113,8 +113,7 @@ public class SessionSummary {
      * @param summary   Summary text
      * @param messages  Original conversation messages
      */
-    public void archiveSession(
-            @NonNull String sessionId, @NonNull String summary, @NonNull List<Message> messages) {
+    public void archiveSession(@NonNull String sessionId, @NonNull String summary, @NonNull List<Message> messages) {
         try {
             LOGGER.info(
                     "Archiving session sessionId={} summaryLength={} messageCount={}",

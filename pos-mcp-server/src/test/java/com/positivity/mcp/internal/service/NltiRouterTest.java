@@ -2,7 +2,6 @@ package com.positivity.mcp.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -58,8 +57,9 @@ class NltiRouterTest {
     @DisplayName("route: simple read -> T2_SIMPLE; garbage model output -> T2_COMPLEX (safe)")
     void routeSelectsTier() {
         when(chatModel.call(any(Prompt.class)))
-                .thenReturn(chatResponse(
-                        "{\"intentType\":\"QUERY\",\"riskLevel\":\"LOW\",\"complexity\":\"single-lookup\",\"domain\":\"customer\"}"));
+                .thenReturn(
+                        chatResponse(
+                                "{\"intentType\":\"QUERY\",\"riskLevel\":\"LOW\",\"complexity\":\"single-lookup\",\"domain\":\"customer\"}"));
         assertThat(router.route("look up customer ACME")).isEqualTo(ModelTier.T2_SIMPLE);
 
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("garbage"));

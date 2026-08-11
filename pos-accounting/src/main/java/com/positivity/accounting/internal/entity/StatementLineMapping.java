@@ -119,6 +119,14 @@ public class StatementLineMapping {
     @Column(name = "operation", length = 50, nullable = false)
     private OperationType operation;
 
+    /**
+     * Optional location scope (accounting {@code locationId} dimension value). {@code null} rows are
+     * the global default for a statement line; rows carrying a location override the global rows for
+     * that line at that location (per-location-overridable master data, issue #731).
+     */
+    @Column(name = "location_id", length = 100)
+    private String locationId;
+
     @Transient
     public UUID getGlAccountId() {
         return glAccount != null ? glAccount.getGlAccountId() : null;

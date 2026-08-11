@@ -37,6 +37,8 @@ public class ScreenEmbeddingInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        // The vector column is the single validated value from RagEmbeddingSettings (V33, #1207),
+        // written literally so the SQL stays a constant (java:S2077).
         List<ScreenDescriptionRow> rows = jdbcTemplate.query(
                 "SELECT id, screen_key, description FROM mcp_screen_registry WHERE embedding IS NULL",
                 (resultSet, rowNum) -> new ScreenDescriptionRow(

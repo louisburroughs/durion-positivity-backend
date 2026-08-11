@@ -20,6 +20,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.validation.constraints.NotBlank;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -84,15 +85,37 @@ public class CommercialParty extends AbstractParty {
     @Schema(description = "External identifiers keyed by source system")
     private Map<String, String> externalIdentifiers = new HashMap<>();
 
+    /**
+     * Legacy free-text address, superseded by the structured postal address owned by
+     * pos-people-contact (FI-4, #1135) — replicated here via ext_organization_postal_address
+     * keyed by this party's id. Retained for display compatibility only.
+     */
     @Schema(
-            description = "Primary address label or identifier for the organization",
-            example = "123 Main St, Springfield")
+            description = "Legacy free-text address label. Superseded by the structured postal address"
+                    + " in pos-people-contact (FI-4); retained for display compatibility.",
+            example = "123 Main St, Springfield",
+            deprecated = true)
     private String primaryAddress;
 
     @Embedded
     @Nullable
     @Schema(description = "Embedded billing rules for this commercial party")
     private BillingRulesEmbeddable billingRules;
+
+    /**
+     * Account-level hard gate on marketing (Story #1138, decision O-2). When set, no
+     * marketing may reach this account on any channel regardless of what any individual
+     * contact has consented to — a fleet manager can silence the whole account with one
+     * instruction, which is the behaviour commercial customers expect.
+     */
+    @Column(name = "account_marketing_opt_out", nullable = false)
+    @Schema(description = "Account-level hard gate suppressing all marketing to this account", example = "false")
+    private boolean accountMarketingOptOut = false;
+
+    @Column(name = "account_marketing_opt_out_at")
+    @Nullable
+    @Schema(description = "When the account-level marketing gate was last set")
+    private Instant accountMarketingOptOutAt;
 
     @PreUpdate
     @PrePersist

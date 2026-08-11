@@ -61,6 +61,14 @@ public class PromotionRedemption {
     @Column(name = "promotion_code", nullable = false)
     private String promotionCode;
 
+    /**
+     * Campaign that drove this redemption, when the offer was reached through one
+     * (Story #1142). Distinct from {@code promotionCode}: the same promotion can run in
+     * several campaigns, and attribution has to tell them apart.
+     */
+    @Column(name = "campaign_code", length = 100)
+    private String campaignCode;
+
     @Column(name = "recorded_by", length = 255)
     private String recordedBy;
 

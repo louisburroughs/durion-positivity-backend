@@ -83,10 +83,11 @@ public class PeopleContactEventsListener {
                 case PersonDeletedV1.EVENT_TYPE -> applyPersonDeleted(envelope);
                 case UserPersonLinkUpdatedV1.EVENT_TYPE -> applyLinkUpdated(envelope);
                 case UserPersonLinkRemovedV1.EVENT_TYPE -> applyLinkRemoved(envelope);
-                default -> {
+                default ->
+                    // Ignored types still fall through to the processed_events insert below: the
+                    // owner's manifest counts every fact in the window, so skipping the insert
+                    // would register as replica drift and trigger a pointless replay.
                     log.debug("Ignoring people-contact event type={}", eventType);
-                    return;
-                }
             }
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).

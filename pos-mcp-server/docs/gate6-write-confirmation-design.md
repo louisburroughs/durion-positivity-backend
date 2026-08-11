@@ -1,6 +1,12 @@
 # Gate 6 — Write-Action Confirmation Gate (design)
 
-> **Status:** DESIGN. Highest-risk gate: enables gated writes via preview → explicit confirmation →
+> **Status:** IMPLEMENTED (PR #1199, 2026-08-08 — #1193 CLOSED): `NltiWritePlanService`
+> preview→confirm→execute flow with dual permission check, TTL expiry, idempotent re-confirm
+> (`execution_result`, V30 pg / V22 h2), stale-data cancel at risk≥MEDIUM, single-pending
+> supersede, `/cancel`, full PLAN→…→EXECUTION audit chain, WRITE-GATE prompt layer; 29 write-gate
+> tests. Live full-flow + DB verification still open — runbook §B.9 and the Gate 6 sign-off in
+> `implementation_checklist.md`. Design retained below as the implementation record.
+> Highest-risk gate: enables gated writes via preview → explicit confirmation →
 > exact persisted execution. Verification is live (full flow + DB) — runbook §B.9. Sits on the
 > **NLTI-session path** (`/v1/nlt/requests`, `NltiRequest`/`NltiSession`), NOT the session-less
 > `/v1/mcp/chat`.

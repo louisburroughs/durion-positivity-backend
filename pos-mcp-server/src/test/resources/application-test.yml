@@ -30,6 +30,11 @@ mcp:
               api-key: ""
 
 pos:
+    # Point the event-type initializer at an unroutable loopback port: the test profile has no
+    # pos-event-receiver, and the docker-internal default hostname adds DNS/connect delays to every
+    # @SpringBootTest boot. Loopback refuses instantly and the initializer swallows the failure.
+    events:
+        base-url: http://127.0.0.1:1
     nlti:
         session:
             ttl-hours: 24

@@ -3,16 +3,19 @@ package com.positivity.mcp.internal.service;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalCause;
+import com.positivity.mcp.internal.dto.IntentV1;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
 import com.positivity.mcp.internal.entity.NltiRequest;
 import com.positivity.mcp.internal.entity.NltiSession;
+import com.positivity.mcp.internal.enums.NltiIntentType;
 import com.positivity.mcp.internal.enums.NltiRequestStatus;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.exception.SessionOwnershipViolationException;
 import com.positivity.mcp.internal.observability.NltiSpanAttributes;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
+import com.positivity.mcp.service.IntentParserService;
 import com.positivity.mcp.service.NltiRequestService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -30,6 +33,7 @@ import java.time.OffsetDateTime;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -43,6 +47,8 @@ public class NltiRequestServiceImpl implements NltiRequestService {
 
     private final NltiSessionRepository sessionRepository;
     private final NltiRequestRepository requestRepository;
+    private final IntentParserService intentParserService;
+    private final NltiWritePlanService writePlanService;
     private final Clock clock;
     private final MeterRegistry meterRegistry;
     private final Counter requestCount;
@@ -65,10 +71,14 @@ public class NltiRequestServiceImpl implements NltiRequestService {
     public NltiRequestServiceImpl(
             @NonNull NltiSessionRepository sessionRepository,
             @NonNull NltiRequestRepository requestRepository,
+            @NonNull IntentParserService intentParserService,
+            @NonNull NltiWritePlanService writePlanService,
             @NonNull Clock clock,
             @NonNull MeterRegistry meterRegistry) {
         this.sessionRepository = Objects.requireNonNull(sessionRepository, "sessionRepository must not be null");
         this.requestRepository = Objects.requireNonNull(requestRepository, "requestRepository must not be null");
+        this.intentParserService = Objects.requireNonNull(intentParserService, "intentParserService must not be null");
+        this.writePlanService = Objects.requireNonNull(writePlanService, "writePlanService must not be null");
         this.clock = clock;
         this.meterRegistry = meterRegistry;
         this.requestCount = meterRegistry.counter("nlt.request.count");
@@ -123,6 +133,14 @@ public class NltiRequestServiceImpl implements NltiRequestService {
             @NonNull String sessionIdValue = resolvedSessionId.toString();
             setNonNullSpanAttribute(currentSpan, requestIdKey, requestIdValue);
             setNonNullSpanAttribute(currentSpan, sessionIdKey, sessionIdValue);
+
+            // Gate 6 (#1193): an ACTION-classified request yields a persisted write-plan preview —
+            // never a direct execution. QUERY/UNKNOWN requests keep the plain ACCEPTED envelope.
+            IntentV1 intent = intentParserService.parse(request.prompt(), resolvedSessionId, effectiveCorrelationId);
+            if (NltiIntentType.ACTION.name().equals(intent.intentType())) {
+                Set<String> callerPermissionCodes = PermissionCodes.extract(SecurityContextHelper.getAuthorities());
+                return writePlanService.previewAction(nltiRequest, request, intent, callerPermissionCodes);
+            }
 
             return new NltiResponseV1(newRequestId, effectiveCorrelationId, resolvedSessionId, "ACCEPTED", null, null);
         } catch (Exception exception) {

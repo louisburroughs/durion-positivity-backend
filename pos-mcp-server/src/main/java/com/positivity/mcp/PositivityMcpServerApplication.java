@@ -1,6 +1,7 @@
 package com.positivity.mcp;
 
 import com.positivity.mcp.internal.config.StaticRagPreloadProperties;
+import com.positivity.shared.annotation.CoverageGenerated;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -16,6 +17,7 @@ import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoCon
 @EnableConfigurationProperties(StaticRagPreloadProperties.class)
 public class PositivityMcpServerApplication {
 
+    @CoverageGenerated
     public static void main(String[] args) {
         SpringApplication.run(PositivityMcpServerApplication.class, args);
     }

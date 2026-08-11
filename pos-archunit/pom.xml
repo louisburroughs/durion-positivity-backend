@@ -198,13 +198,12 @@
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <skip>false</skip>
-                </configuration>
-            </plugin>
+            <!-- No spring-boot-maven-plugin here: repackaging this test-only module
+                 embedded the ~22 sibling fat JARs it depends on into a 2.4 GB
+                 pos-archunit.jar that nothing consumes. It bloated the CI reactor
+                 cache on every save and crashed the Maven Build Cache Extension,
+                 whose output hashing cannot read a file above the 2 GiB array
+                 limit (OutOfMemoryError: Required array size too large). -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>

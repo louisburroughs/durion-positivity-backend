@@ -256,6 +256,10 @@
                                         <argument>--spring.jpa.database-platform=org.hibernate.dialect.H2Dialect</argument>
                                         <argument>--spring.flyway.enabled=false</argument>
                                         <argument>--eureka.client.enabled=false</argument>
+                                        <!-- Story #1154: the public inquiry endpoint is disabled by
+                                             default at runtime, but the generated spec must still
+                                             describe it or the SDK silently loses the operation. -->
+                                        <argument>--pos.customer.inquiry.public.enabled=true</argument>
                                         <argument>--spring.boot.admin.client.enabled=false</argument>
                                         <argument>--logging.level.root=WARN</argument>
                                         <argument>--logging.level.org.hibernate.SQL=ERROR</argument>

@@ -1,0 +1,114 @@
+spring:
+  application:
+    name: marketing
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+server:
+  port: 0
+  tomcat:
+    max-http-header-size: 65536
+
+management:
+  server:
+    port: 0
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:}
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+logging:
+  level:
+    root: INFO
+    org:
+      springframework: INFO
+    com:
+      positivity:
+        marketing: INFO
+
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+  default-produces-media-type: application/json
+
+pos:
+  marketing:
+    kafka:
+      # Domain-event publishing (ADR-0044 §4) plus the customer-events consumer that keeps
+      # the local suppression replica current. Off until the broker is provisioned; flip
+      # POS_MARKETING_KAFKA_ENABLED per environment.
+      enabled: ${POS_MARKETING_KAFKA_ENABLED:false}
+      # This module's own fact topic.
+      events-topic: ${POS_MARKETING_EVENTS_TOPIC:marketing.events.v1}
+      # Suppression, consent decisions, segment definitions, resolved membership, and
+      # redemption facts — all owned by pos-customer (ADR-0044 R3).
+      customer-events-topic: ${POS_MARKETING_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
+      customer-events-consumer-group: ${POS_MARKETING_CUSTOMER_EVENTS_CONSUMER_GROUP:pos-marketing-customer-events}
+      # Delivery/bounce/complaint/open/click reports from the shared platform sender
+      # (FI-2, docs/PLATFORM_SENDER_CONTRACT.md).
+      sender-outcomes-topic: ${POS_MARKETING_SENDER_OUTCOMES_TOPIC:sender.outcomes.v1}
+      sender-outcomes-consumer-group: ${POS_MARKETING_SENDER_OUTCOMES_CONSUMER_GROUP:pos-marketing-sender-outcomes}
+      # Outbound commands to pos-customer: asynchronous segment-membership resolution
+      # (Story #1137) and bounce/complaint suppression feedback (Story #1150, spec §4.3).
+      customer-commands-topic: ${POS_MARKETING_CUSTOMER_COMMANDS_TOPIC:customer.commands.v1}
+    sender:
+      # Shared platform sender endpoint + shared secret; only read when transport=platform-sender.
+      base-url: ${POS_MARKETING_SENDER_BASE_URL:http://localhost:8085}
+      api-secret: ${POS_MARKETING_SENDER_API_SECRET:}
+    send:
+      # Send-worker pacing (Story #1149). The batch size bounds how many recipients one
+      # drain locks; the delay paces the provider so a large campaign does not burst.
+      enabled: ${POS_MARKETING_SEND_ENABLED:true}
+      # Transport selection: 'stub' logs what would be sent and contacts nobody;
+      # 'platform-sender' activates the FI-2 adapter (PlatformSenderClient, Story #1150).
+      # The two are mutually exclusive by construction.
+      transport: ${POS_MARKETING_SEND_TRANSPORT:stub}
+      batch-size: ${POS_MARKETING_SEND_BATCH_SIZE:100}
+      poll-delay-ms: ${POS_MARKETING_SEND_POLL_DELAY_MS:5000}
+      max-attempts: ${POS_MARKETING_SEND_MAX_ATTEMPTS:3}
+      # Fail-closed staleness bound on the replicated consent decision. A party whose decision
+      # is older than this is refused rather than trusted: a delayed send is recoverable, an
+      # unwanted one is not. Lower it if the CRM feed is reliably fast; never disable it.
+      max-consent-age: ${POS_MARKETING_MAX_CONSENT_AGE:PT24H}
+  events:
+    base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}
+    api-secret: ${POS_EVENTS_API_SECRET:}
+  security:
+    base-url: ${POS_SECURITY_BASE_URL:http://pos-security-service:8080}
+  # No outbound sibling-service clients: integration with pos-customer is entirely
+  # customer.events.v1 replicas plus one asynchronous command (ADR-0044 R3). pos-price and
+  # pos-catalog validation returns with FI-1 (#1134), which adds the events to replicate.

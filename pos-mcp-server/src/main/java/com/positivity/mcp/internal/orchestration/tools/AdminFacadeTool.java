@@ -1,10 +1,10 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
 import com.positivity.security.common.SecurityContextHelper;
-import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -35,9 +35,10 @@ public class AdminFacadeTool {
         return "pos-mcp-server status: UP";
     }
 
-        @Tool(
-            description = "List all users registered in the platform. Returns each user's ID, username, and assigned roles. "
-                + "Use this to answer questions about the total number of users, look up users by name, or audit who has platform access.")
+    @Tool(
+            description =
+                    "List all users registered in the platform. Returns each user's ID, username, and assigned roles. "
+                            + "Use this to answer questions about the total number of users, look up users by name, or audit who has platform access.")
     public String listUsers() {
         return usersRestClient.get().retrieve().body(String.class);
     }
@@ -51,7 +52,9 @@ public class AdminFacadeTool {
                 .body(String.class);
     }
 
-    @Tool(description = "Get effective permissions for the currently authenticated user. Use this when the user asks what permissions they have or what access they currently hold.")
+    @Tool(
+            description =
+                    "Get effective permissions for the currently authenticated user. Use this when the user asks what permissions they have or what access they currently hold.")
     public String getMyPermissions() {
         return getUserPermissions(SecurityContextHelper.getCurrentUserIdAsUuidOrThrowIllegalStateException()
                 .toString());

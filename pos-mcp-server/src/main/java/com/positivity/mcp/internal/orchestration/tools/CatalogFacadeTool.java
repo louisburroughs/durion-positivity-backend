@@ -1,9 +1,9 @@
 package com.positivity.mcp.internal.orchestration.tools;
 
-import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.ai.tool.annotation.Tool;
 import java.util.Map;
 import org.jspecify.annotations.NonNull;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -48,7 +48,8 @@ public class CatalogFacadeTool {
     }
 
     @Tool(description = "Get catalog products filtered by category")
-    public String getCatalogByCategory(@ToolParam(description = "Catalog category name or code") @NonNull String category) {
+    public String getCatalogByCategory(
+            @ToolParam(description = "Catalog category name or code") @NonNull String category) {
         return restClient
                 .get()
                 .uri(categoryUriTemplate, Map.of("category", category))

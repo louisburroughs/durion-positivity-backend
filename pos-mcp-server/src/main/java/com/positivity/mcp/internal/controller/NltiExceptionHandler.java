@@ -2,6 +2,11 @@ package com.positivity.mcp.internal.controller;
 
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
 import com.positivity.mcp.internal.exception.SessionOwnershipViolationException;
+import com.positivity.mcp.internal.exception.WritePlanConflictException;
+import com.positivity.mcp.internal.exception.WritePlanExecutionException;
+import com.positivity.mcp.internal.exception.WritePlanExpiredException;
+import com.positivity.mcp.internal.exception.WritePlanNotFoundException;
+import com.positivity.mcp.internal.exception.WritePlanStaleException;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -93,6 +98,43 @@ class NltiExceptionHandler {
                         HttpStatus.FORBIDDEN.value(),
                         Instant.now(clock).toString(),
                         correlationId.toString()));
+    }
+
+    // ─── Gate 6 (#1193): write-plan confirmation gate ─────────────────────────
+
+    @ExceptionHandler(WritePlanNotFoundException.class)
+    ResponseEntity<ApiError> handleWritePlanNotFound(WritePlanNotFoundException ex, HttpServletRequest request) {
+        return writePlanError("WRITE_PLAN_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND, request);
+    }
+
+    @ExceptionHandler(WritePlanConflictException.class)
+    ResponseEntity<ApiError> handleWritePlanConflict(WritePlanConflictException ex, HttpServletRequest request) {
+        return writePlanError("WRITE_PLAN_CONFLICT", ex.getMessage(), HttpStatus.CONFLICT, request);
+    }
+
+    @ExceptionHandler(WritePlanExpiredException.class)
+    ResponseEntity<ApiError> handleWritePlanExpired(WritePlanExpiredException ex, HttpServletRequest request) {
+        return writePlanError("WRITE_PLAN_EXPIRED", ex.getMessage(), HttpStatus.GONE, request);
+    }
+
+    @ExceptionHandler(WritePlanStaleException.class)
+    ResponseEntity<ApiError> handleWritePlanStale(WritePlanStaleException ex, HttpServletRequest request) {
+        return writePlanError("WRITE_PLAN_STALE", ex.getMessage(), HttpStatus.CONFLICT, request);
+    }
+
+    @ExceptionHandler(WritePlanExecutionException.class)
+    ResponseEntity<ApiError> handleWritePlanExecution(WritePlanExecutionException ex, HttpServletRequest request) {
+        logger.error("Write-plan execution failed", ex);
+        return writePlanError("WRITE_PLAN_EXECUTION_FAILED", ex.getMessage(), HttpStatus.BAD_GATEWAY, request);
+    }
+
+    private ResponseEntity<ApiError> writePlanError(
+            String code, String message, HttpStatus status, HttpServletRequest request) {
+        UUID correlationId = NltiCorrelationIdSupport.resolveFromRequest(request);
+        return ResponseEntity.status(status)
+                .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
+                .body(ApiError.of(
+                        code, message, status.value(), Instant.now(clock).toString(), correlationId.toString()));
     }
 
     @ExceptionHandler(UnsupportedOperationException.class)

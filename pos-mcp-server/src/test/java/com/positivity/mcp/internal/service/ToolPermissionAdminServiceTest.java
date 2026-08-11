@@ -3,8 +3,10 @@ package com.positivity.mcp.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -14,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class ToolPermissionAdminServiceTest {
@@ -24,30 +27,60 @@ class ToolPermissionAdminServiceTest {
     @Mock
     private ToolMetadataRepository repository;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private ToolPermissionAdminService service() {
-        return new ToolPermissionAdminService(repository);
+        return new ToolPermissionAdminService(repository, eventPublisher);
     }
 
     @Test
     void grant_addsPermissionAndReturnsFullSet() {
         when(repository.findDiscoveredToolIdByName(TOOL)).thenReturn(Optional.of(TOOL_ID));
+        when(repository.addToolPermission(TOOL_ID, "event-receiver:event_type:view"))
+                .thenReturn(true);
         when(repository.listToolPermissions(TOOL_ID))
                 .thenReturn(List.of("AUTHENTICATED", "event-receiver:event_type:view"));
 
         var response = service().grantPermission(TOOL, "event-receiver:event_type:view");
 
         verify(repository).addToolPermission(TOOL_ID, "event-receiver:event_type:view");
+        verify(eventPublisher).publishEvent(AgentCacheInvalidationEvent.toolPermissionChanged(TOOL));
         assertThat(response.toolName()).isEqualTo(TOOL);
         assertThat(response.permissionCodes()).containsExactly("AUTHENTICATED", "event-receiver:event_type:view");
     }
 
     @Test
+    void grant_whenAlreadyGranted_publishesNoInvalidationEvent() {
+        when(repository.findDiscoveredToolIdByName(TOOL)).thenReturn(Optional.of(TOOL_ID));
+        when(repository.addToolPermission(TOOL_ID, "AUTHENTICATED")).thenReturn(false);
+        when(repository.listToolPermissions(TOOL_ID)).thenReturn(List.of("AUTHENTICATED"));
+
+        var response = service().grantPermission(TOOL, "AUTHENTICATED");
+
+        assertThat(response.permissionCodes()).containsExactly("AUTHENTICATED");
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
     void revoke_removesPermission() {
         when(repository.findDiscoveredToolIdByName(TOOL)).thenReturn(Optional.of(TOOL_ID));
+        when(repository.removeToolPermission(TOOL_ID, "AUTHENTICATED")).thenReturn(true);
 
         service().revokePermission(TOOL, "AUTHENTICATED");
 
         verify(repository).removeToolPermission(TOOL_ID, "AUTHENTICATED");
+        verify(eventPublisher).publishEvent(AgentCacheInvalidationEvent.toolPermissionChanged(TOOL));
+    }
+
+    @Test
+    void revoke_whenAlreadyAbsent_publishesNoInvalidationEvent() {
+        when(repository.findDiscoveredToolIdByName(TOOL)).thenReturn(Optional.of(TOOL_ID));
+        when(repository.removeToolPermission(TOOL_ID, "AUTHENTICATED")).thenReturn(false);
+
+        service().revokePermission(TOOL, "AUTHENTICATED");
+
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test

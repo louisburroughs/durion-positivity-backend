@@ -26,7 +26,7 @@ spring:
       embedding:
         base-url: ${OLLAMA_EMBEDDING_BASE_URL:http://ollama:11434}
         options:
-          model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+          model: ${OLLAMA_EMBEDDING_MODEL:bge-m3}
         timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
 
 eureka:
@@ -47,16 +47,51 @@ mcp:
       - /internal/
   rag:
     table-name: mcp_document_embedding
-    dimension: 768
+    # G5.4 #1194 cutover complete + #1207 (V33): single embedding column, 1024-dim bge-m3 —
+    # mirrors the base application.yml defaults; see docs/gate5-rag-hybrid-design.md.
+    embedding-column: ${MCP_RAG_EMBEDDING_COLUMN:embedding}
+    dimension: ${MCP_RAG_DIMENSION:1024}
     index-type: ivfflat
     preload:
       docs:
         - id: "accounting.de-bookkeeping"
           source-path: "classpath:rag/de-bookkeeping-rag.md"
           rag-scope: "accounting"
+        - id: "accounting.journal-entries"
+          source-path: "classpath:rag/accounting-journal-entries-rag.md"
+          rag-scope: "accounting"
+          required-permissions: ["accounting:je:view"]
+        - id: "accounting.financial-statements"
+          source-path: "classpath:rag/accounting-financial-statements-rag.md"
+          rag-scope: "accounting"
+          required-permissions: ["reporting:view:financial-statements"]
+        - id: "accounting.report-export"
+          source-path: "classpath:rag/accounting-report-export-rag.md"
+          rag-scope: "accounting"
+          required-permissions: ["accounting:report:export"]
+        - id: "accounting.codes"
+          source-path: "classpath:rag/accounting-codes-rag.md"
+          rag-scope: "accounting"
+          required-permissions: ["accounting:je:view"]
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
           rag-scope: "inventory"
+        - id: "inventory.purchase-orders"
+          source-path: "classpath:rag/inventory-purchase-orders-rag.md"
+          rag-scope: "inventory"
+          required-permissions: ["inventory:purchase_order:view"]
+        - id: "inventory.receiving"
+          source-path: "classpath:rag/inventory-receiving-rag.md"
+          rag-scope: "inventory"
+          required-permissions: ["inventory:receiving:view"]
+        - id: "inventory.transfers-adjustments"
+          source-path: "classpath:rag/inventory-transfers-adjustments-rag.md"
+          rag-scope: "inventory"
+          required-permissions: ["inventory:transfer:view"]
+        - id: "inventory.codes"
+          source-path: "classpath:rag/inventory-codes-rag.md"
+          rag-scope: "inventory"
+          required-permissions: ["inventory:purchase_order:view"]
         - id: "people.human-resources"
           source-path: "classpath:rag/hr-functions-guide.md"
           rag-scope: "hr"
@@ -89,10 +124,42 @@ mcp:
           source-path: "classpath:rag/order-guide.md"
           rag-scope: "order"
           required-permissions: ["order:order:view"]
+        - id: "order.lifecycle"
+          source-path: "classpath:rag/order-lifecycle-rag.md"
+          rag-scope: "order"
+          required-permissions: ["order:order:view"]
+        - id: "order.price-override"
+          source-path: "classpath:rag/order-price-override-rag.md"
+          rag-scope: "order"
+          required-permissions: ["order:price_override:view"]
+        - id: "order.codes"
+          source-path: "classpath:rag/order-codes-rag.md"
+          rag-scope: "order"
+          required-permissions: ["order:order:view"]
+        - id: "order.returns-refunds"
+          source-path: "classpath:rag/returns-refunds-rag.md"
+          rag-scope: "order"
+          required-permissions: ["order:order:view"]
         - id: "pricing.guide"
           source-path: "classpath:rag/pricing-guide.md"
           rag-scope: "pricing"
           required-permissions: ["pricing:price_book:view", "pricing:rule:view"]
+        - id: "pricing.promotions"
+          source-path: "classpath:rag/pricing-promotions-rag.md"
+          rag-scope: "pricing"
+          required-permissions: ["pricing:promotion:view"]
+        - id: "pricing.restrictions"
+          source-path: "classpath:rag/pricing-restrictions-rag.md"
+          rag-scope: "pricing"
+          required-permissions: ["AUTHENTICATED"]
+        - id: "pricing.codes"
+          source-path: "classpath:rag/pricing-codes-rag.md"
+          rag-scope: "pricing"
+          required-permissions: ["pricing:promotion:view"]
+        - id: "warranty.guide"
+          source-path: "classpath:rag/warranty-guide.md"
+          rag-scope: "warranty"
+          required-permissions: ["warranty:claim:view"]
         - id: "tax.guide"
           source-path: "classpath:rag/tax-guide.md"
           rag-scope: "tax"
@@ -101,6 +168,14 @@ mcp:
           source-path: "classpath:rag/customer-vehicle-guide.md"
           rag-scope: "customer"
           required-permissions: ["crm:party:view", "crm:party:search", "crm:vehicle:view", "crm:vehicle:search", "crm:contact:view"]
+        - id: "crm.party-account-model"
+          source-path: "classpath:rag/crm-party-account-model-rag.md"
+          rag-scope: "customer"
+          required-permissions: ["crm:party:view"]
+        - id: "crm.codes"
+          source-path: "classpath:rag/crm-codes-rag.md"
+          rag-scope: "customer"
+          required-permissions: ["crm:party:view"]
         - id: "reporting.metrics"
           source-path: "classpath:rag/reporting-metrics.md"
           rag-scope: "reporting"
@@ -117,6 +192,22 @@ mcp:
           source-path: "classpath:rag/role-permission-matrix.md"
           rag-scope: "security"
           required-permissions: ["security:role:view", "security:permission:view"]
+        - id: "workorder.estimate-promotion"
+          source-path: "classpath:rag/workorder-estimate-promotion-rag.md"
+          rag-scope: "workorder"
+          required-permissions: ["workorder:estimate:view"]
+        - id: "workorder.status-lifecycle"
+          source-path: "classpath:rag/workorder-status-lifecycle-rag.md"
+          rag-scope: "workorder"
+          required-permissions: ["workorder:workorder:view"]
+        - id: "workorder.approval-config"
+          source-path: "classpath:rag/workorder-approval-config-rag.md"
+          rag-scope: "workorder"
+          required-permissions: ["workorder:approval_config:view"]
+        - id: "workorder.codes"
+          source-path: "classpath:rag/workorder-codes-rag.md"
+          rag-scope: "workorder"
+          required-permissions: ["workorder:estimate:view"]
   agent:
     cache-ttl-minutes: 30
     max-cached-agents: 500
@@ -161,8 +252,8 @@ pos:
   shopmanager:
     base-url: ${POS_SHOPMANAGER_BASE_URL:http://pos-api-gateway}
   tax:
-    # ADR-0021: pos-tax internal-only exemption
-    base-url: ${POS_TAX_BASE_URL:http://pos-tax/v1/tax}
+    # ADR-0021: pos-tax internal-only exemption; pos-tax listens on 8091 (#641)
+    base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091/v1/tax}
   vehicle:
     base-url: ${POS_VEHICLE_BASE_URL:http://pos-api-gateway}
   workorder:

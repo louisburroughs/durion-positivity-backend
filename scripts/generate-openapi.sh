@@ -261,6 +261,18 @@ fi
 echo "Validation mode: $VALIDATION_MODE"
 echo
 
+module_list=$(IFS=,; echo "${MODULES[*]}")
+bootstrap_cmd=("$MVNW" "-pl" "$module_list" "-am" -DskipTests -DskipITs install)
+echo "Installing reactor artifacts in the local Maven repository..."
+echo "${bootstrap_cmd[*]}"
+if [[ "$DRY_RUN" == false ]]; then
+  if ! "${bootstrap_cmd[@]}"; then
+    echo "ERROR: Failed to install reactor artifacts required for OpenAPI generation." >&2
+    exit 1
+  fi
+fi
+echo
+
 JMX_PORT=9119
 CURRENT_MODULE=""
 
@@ -312,7 +324,7 @@ for module in "${MODULES[@]}"; do
   kill_port_if_held "$JMX_PORT"
   CURRENT_MODULE="$module"
 
-  cmd=("$MVNW" "-pl" "$module" "-am" "-P$PROFILE" "${SKIP_FLAGS[@]}" "$PHASE")
+  cmd=("$MVNW" "-pl" "$module" "-P$PROFILE" "${SKIP_FLAGS[@]}" "$PHASE")
   echo "==> $module"
   echo "${cmd[*]}"
   if [[ "$DRY_RUN" == false ]]; then
@@ -415,6 +427,17 @@ if [[ "$GENERATE_PERMISSIONS" == true ]]; then
     if command -v python3 >/dev/null 2>&1; then
       python3 "$SCRIPT_DIR/generate-permissions.py" "$ROOT_DIR" || {
         echo "WARN: permissions.yaml regeneration reported errors; continuing." >&2
+      }
+      # The per-module manifests above are only half the job: the aggregate report comes from
+      # a separate script, and calling generate-permissions.py directly skipped it. That left
+      # docs/permissions-report.yaml stale on every run — it still described 20 modules and
+      # 387 permissions after a 21st module and 25 more permissions had landed. Both scripts
+      # discover modules dynamically, so a new pos-* module is picked up as soon as it has a
+      # permissions.yaml; the report just has to actually be regenerated.
+      python3 "$SCRIPT_DIR/export-permission-registrations-yaml.py" \
+        --root "$ROOT_DIR" \
+        --output "docs/permissions-report.yaml" || {
+        echo "WARN: permissions report regeneration reported errors; continuing." >&2
       }
     else
       echo "WARN: python3 not found; skipping permissions.yaml regeneration." >&2

@@ -695,6 +695,13 @@ components:
           example:
             preferredOil: 5W-30
             tireRotationInterval: 5000
+        serviceIntervalMonths:
+          type: integer
+          format: int32
+          description: Structured service interval in whole months; null clears the per-vehicle override so CRM falls back to its default (#1175)
+          example: 6
+          maximum: 120
+          minimum: 1
         serviceNotes:
           type: string
           description: Optional free-text service notes
@@ -731,6 +738,11 @@ components:
           example:
             oilType: synthetic
             washPreference: hand
+        serviceIntervalMonths:
+          type: integer
+          format: int32
+          description: Structured service interval in whole months; null means use the CRM default (#1175)
+          example: 6
         serviceNotes:
           type: string
           description: Service notes for technicians
@@ -1309,6 +1321,13 @@ components:
           description: Subset of preference fields to merge into existing preferences
           example:
             tireRotationInterval: 7500
+        serviceIntervalMonths:
+          type: integer
+          format: int32
+          description: Structured service interval in whole months; null leaves the current value unchanged (#1175)
+          example: 6
+          maximum: 120
+          minimum: 1
         updatedByUserId:
           type: string
           format: uuid

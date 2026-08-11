@@ -34,6 +34,8 @@ import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
+import com.positivity.customer.service.CustomerInteractionService;
+import com.positivity.customer.service.MarketingConsentService;
 import com.positivity.customer.service.PartyService;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.customer.BillingRulesUpdatedV1;
@@ -88,6 +90,8 @@ public class PartyServiceImpl implements PartyService {
     private final org.springframework.beans.factory.ObjectProvider<OutboxEventWriter> outboxEventWriter;
 
     private final CustomerFactPublisher customerFactPublisher;
+    private final MarketingConsentService marketingConsentService;
+    private final CustomerInteractionService customerInteractionService;
 
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_INSTANT.withLocale(Locale.US);
 
@@ -937,15 +941,31 @@ public class PartyServiceImpl implements PartyService {
         List<CrmSnapshotDTO.VehicleSummary> vehicles = buildVehicleSummaries(party);
         CrmSnapshotDTO.BillingPreferences prefs = buildBillingPreferences();
 
-        return new CrmSnapshotDTO(meta, acct, contacts, vehicles, prefs, BillingRuleRef.defaults());
+        CrmSnapshotDTO snapshot = new CrmSnapshotDTO(meta, acct, contacts, vehicles, prefs, BillingRuleRef.defaults());
+        attachContactabilitySummary(snapshot, party.getPartyId());
+        return snapshot;
     }
 
     private CrmSnapshotDTO assembleSnapshotForPersonParty(@NonNull PersonParty personParty) {
         SnapshotMetadata meta = createMetadata();
         AccountSummary acct = buildAccountSummary(personParty);
         List<CrmSnapshotDTO.VehicleSummary> vehicles = buildVehicleSummaries(personParty);
-        return new CrmSnapshotDTO(
+        CrmSnapshotDTO snapshot = new CrmSnapshotDTO(
                 meta, acct, Collections.emptyList(), vehicles, buildBillingPreferences(), BillingRuleRef.defaults());
+        attachContactabilitySummary(snapshot, personParty.getPartyId());
+        return snapshot;
+    }
+
+    /**
+     * Adds the consent and recent-touch summary (Story #1143).
+     *
+     * <p>Both blocks are additive and nullable, so existing snapshot consumers are unaffected.
+     * The interaction summary is deliberately the redacted read — the snapshot is a wide-audience
+     * read model, and free-text call notes are the last thing it should hand out verbatim.
+     */
+    private void attachContactabilitySummary(CrmSnapshotDTO snapshot, UUID partyId) {
+        snapshot.setMarketingConsent(marketingConsentService.getConsent(partyId));
+        snapshot.setRecentInteractions(customerInteractionService.recentForParty(partyId));
     }
 
     private SnapshotMetadata createMetadata() {

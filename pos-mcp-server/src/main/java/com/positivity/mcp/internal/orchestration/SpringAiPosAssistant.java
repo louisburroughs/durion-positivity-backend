@@ -23,9 +23,11 @@ import org.springframework.ai.tool.ToolCallback;
 
 final class SpringAiPosAssistant implements PosAssistant {
 
-    private static final String RAG_CONTEXT_PREFIX = "Relevant retrieved context:";
-    private static final int MAX_CONTEXT_DOCS = 5;
-    private static final int MAX_CONTEXT_CHARS = 4_000;
+    /**
+     * Shared grounding instruction ({@link RagGroundingInstruction}) prepended to
+     * the RAG snippets.
+     */
+    private static final String RAG_CONTEXT_PREFIX = RagGroundingInstruction.CONTEXT_PREFIX;
 
     private final ChatModel chatModel;
     private final Supplier<String> systemPromptSupplier;
@@ -55,18 +57,22 @@ final class SpringAiPosAssistant implements PosAssistant {
     @Override
     public @NonNull String chat(@NonNull String memoryId, @NonNull String userMessage, @NonNull String userContext) {
         ChatMemory chatMemory = chatMemoryProvider.apply(memoryId);
+        // Tools are resolved BEFORE the system prompt so the per-request WRITE-GATE
+        // signal
+        // (recorded by OpenApiToolProvider in the request-scoped holder, #1193) is
+        // visible to the
+        // prompt supplier when it assembles the layered prompt.
+        List<ToolCallback> toolCallbacks = new ArrayList<>(staticToolCallbacks);
+        if (openApiToolProvider != null) {
+            toolCallbacks.addAll(openApiToolProvider.resolveToolCallbacks(userMessage));
+        }
         String systemPrompt = buildSystemPrompt(userMessage, userContext);
         List<Message> promptMessages = new ArrayList<>(chatMemory.get(memoryId));
         promptMessages.add(new SystemMessage(systemPrompt));
         promptMessages.add(new UserMessage(userMessage));
 
-        List<ToolCallback> toolCallbacks = new ArrayList<>(staticToolCallbacks);
-        if (openApiToolProvider != null) {
-            toolCallbacks.addAll(openApiToolProvider.resolveToolCallbacks(userMessage));
-        }
-
         AssistantMessage output = chatModel
-                .call(new Prompt(promptMessages, toolCallingOptions(chatModel.getDefaultOptions(), toolCallbacks)))
+                .call(new Prompt(promptMessages, toolCallingOptions(chatModel.getOptions(), toolCallbacks)))
                 .getResult()
                 .getOutput();
         ChatResponseText.Extracted extracted = ChatResponseText.extractDetailed(output);
@@ -76,9 +82,12 @@ final class SpringAiPosAssistant implements PosAssistant {
     }
 
     /**
-     * Returns the model's direct answer when it produced one. When it did not (blank {@code content},
-     * so the text would otherwise be recovered thinking or the blank fallback) and a ladder is wired,
-     * hand off to the ladder rather than surface the reasoning channel. With no ladder, behaviour is
+     * Returns the model's direct answer when it produced one. When it did not
+     * (blank {@code content},
+     * so the text would otherwise be recovered thinking or the blank fallback) and
+     * a ladder is wired,
+     * hand off to the ladder rather than surface the reasoning channel. With no
+     * ladder, behaviour is
      * unchanged — the extracted text (including thinking recovery) is returned.
      */
     private @NonNull String resolveResponse(
@@ -106,35 +115,24 @@ final class SpringAiPosAssistant implements PosAssistant {
     }
 
     private @NonNull String ragContext(@NonNull String userMessage) {
-        StringBuilder builder = new StringBuilder();
-        List<org.springframework.ai.document.Document> documents = ragRetriever.retrieve(userMessage);
-        int maxDocs = Math.min(MAX_CONTEXT_DOCS, documents.size());
-        for (int index = 0; index < maxDocs; index++) {
-            String text = documents.get(index).getText();
-            if (text == null || text.isBlank()) {
-                continue;
-            }
-            if (builder.length() > 0) {
-                builder.append(System.lineSeparator()).append(System.lineSeparator());
-            }
-            builder.append("[").append(index + 1).append("] ").append(text.trim());
-            if (builder.length() >= MAX_CONTEXT_CHARS) {
-                builder.setLength(MAX_CONTEXT_CHARS);
-                break;
-            }
-        }
-        return builder.toString();
+        return RagContextBuilder.build(ragRetriever.retrieve(userMessage));
     }
 
     /**
-     * Builds the per-request tool-calling options by copying the chat model's configured default
+     * Builds the per-request tool-calling options by copying the chat model's
+     * configured default
      * options and attaching the resolved tool callbacks.
      *
-     * <p>The copy must retain the provider-specific options type: {@code OllamaChatModel} casts the
+     * <p>
+     * The copy must retain the provider-specific options type:
+     * {@code OllamaChatModel} casts the
      * prompt's runtime options directly to {@code OllamaChatOptions}, so a generic
-     * {@link DefaultToolCallingChatOptions} would fail with {@code ClassCastException}. Copying the
-     * default options via {@code mutate()} also preserves the configured model, avoiding the
-     * "model cannot be null or empty" failure that a fresh options object (with a null model) would
+     * {@link DefaultToolCallingChatOptions} would fail with
+     * {@code ClassCastException}. Copying the
+     * default options via {@code mutate()} also preserves the configured model,
+     * avoiding the
+     * "model cannot be null or empty" failure that a fresh options object (with a
+     * null model) would
      * trigger through Ollama's option merge.
      */
     static @NonNull ChatOptions toolCallingOptions(

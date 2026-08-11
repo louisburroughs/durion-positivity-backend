@@ -18,12 +18,14 @@ public class RagConfiguration {
     public PgVectorStore embeddingStore(
             @NonNull DataSource dataSource,
             @NonNull EmbeddingModel embeddingModel,
+            @NonNull RagEmbeddingSettings embeddingSettings,
             @Value("${mcp.rag.table-name:mcp_document_embedding}") String tableName,
-            @Value("${mcp.rag.dimension:768}") int dimension,
             @Value("${mcp.rag.create-table:false}") boolean createTable) {
+        // #1207 (V33): the base table's embedding column is 1024-dim and PgVectorStore targets it
+        // directly — the V31 view indirection is gone. RagEmbeddingSettings validates the config.
         return PgVectorStore.builder(new JdbcTemplate(dataSource), embeddingModel)
-                .vectorTableName(tableName)
-                .dimensions(dimension)
+                .vectorTableName(embeddingSettings.vectorTableFor(tableName))
+                .dimensions(embeddingSettings.dimension())
                 .initializeSchema(createTable)
                 .build();
     }

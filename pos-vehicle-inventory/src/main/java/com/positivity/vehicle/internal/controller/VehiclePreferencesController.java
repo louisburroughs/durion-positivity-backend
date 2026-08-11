@@ -12,7 +12,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -91,6 +94,7 @@ public class VehiclePreferencesController {
         var serviceRequest = new UpsertPreferencesRequest(
                 vehicleId,
                 request.preferences(),
+                request.serviceIntervalMonths(),
                 request.serviceNotes(),
                 request.createdByUserId(),
                 request.updatedByUserId());
@@ -112,15 +116,15 @@ public class VehiclePreferencesController {
     @EmitEvent(id = "VEHICLE_PREFERENCES_MERGE", apiVersion = "1")
     public ResponseEntity<VehicleCarePreferenceResponse> mergePreferences(
             @Parameter(description = "Vehicle ID") @PathVariable UUID vehicleId,
-            @RequestBody PreferencesMergeDto request) {
+            @Valid @RequestBody PreferencesMergeDto request) {
 
-        log.info(
-                "PATCH /v1/vehicles/{}/preferences - merging keys={}",
-                vehicleId,
-                request.partialPreferences().keySet());
+        // partialPreferences is optional: a PATCH may update only serviceIntervalMonths.
+        Map<String, Object> partialPreferences =
+                request.partialPreferences() != null ? request.partialPreferences() : new HashMap<>();
+        log.info("PATCH /v1/vehicles/{}/preferences - merging keys={}", vehicleId, partialPreferences.keySet());
 
-        var preference =
-                preferencesService.mergePreferences(vehicleId, request.partialPreferences(), request.updatedByUserId());
+        var preference = preferencesService.mergePreferences(
+                vehicleId, partialPreferences, request.serviceIntervalMonths(), request.updatedByUserId());
         return ResponseEntity.ok(VehicleCarePreferenceMapper.toResponse(preference));
     }
 
@@ -147,6 +151,15 @@ public class VehiclePreferencesController {
                     example = "{\"preferredOil\":\"5W-30\",\"tireRotationInterval\":5000}",
                     requiredMode = Schema.RequiredMode.REQUIRED)
             Map<String, Object> preferences,
+
+            @Min(1)
+            @Max(120)
+            @Schema(
+                    description =
+                            "Structured service interval in whole months; null clears the per-vehicle override so CRM falls back to its default (#1175)",
+                    example = "6",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            Integer serviceIntervalMonths,
 
             @Schema(
                     description = "Optional free-text service notes",
@@ -176,6 +189,15 @@ public class VehiclePreferencesController {
                     example = "{\"tireRotationInterval\":7500}",
                     requiredMode = Schema.RequiredMode.NOT_REQUIRED)
             Map<String, Object> partialPreferences,
+
+            @Min(1)
+            @Max(120)
+            @Schema(
+                    description =
+                            "Structured service interval in whole months; null leaves the current value unchanged (#1175)",
+                    example = "6",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            Integer serviceIntervalMonths,
 
             @Schema(
                     description = "Identifier of the user updating the preferences",

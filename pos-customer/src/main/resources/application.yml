@@ -73,12 +73,43 @@ springdoc:
   default-produces-media-type: application/json
 pos:
   customer:
+    crm:
+      # Service-due segment attribute (#1144): a party is `service.due` once its last completed
+      # service is at least this many whole months old. Fallback interval only (#1175): a
+      # vehicle's care-preference interval replicated from pos-vehicle-inventory
+      # (ext_vehicle_care_preference) takes precedence; this default covers vehicles without an
+      # override and vehicle-less service history.
+      service-due-months: ${POS_CUSTOMER_SERVICE_DUE_MONTHS:6}
+      # Service-due reminder feed (#1153): raises one SERVICE_DUE_REMINDER follow-up task per
+      # party/vehicle service cycle once its latest completion is service-due-months old.
+      # Idempotent via a deterministic source_event_id, so reruns and concurrent instances
+      # cannot duplicate a task.
+      service-due-reminders-enabled: ${POS_CUSTOMER_SERVICE_DUE_REMINDERS_ENABLED:true}
+      service-due-reminder-cron: ${POS_CUSTOMER_SERVICE_DUE_REMINDER_CRON:0 0 5 * * *}
+      service-due-reminder-batch-size: ${POS_CUSTOMER_SERVICE_DUE_REMINDER_BATCH_SIZE:500}
+    inquiry:
+      public:
+        # Story #1154: the only unauthenticated write surface in pos-customer. OFF by default.
+        # Before enabling: a captcha/bot check must be applied at the edge, the gateway must be
+        # configured to route this path without a JWT (it currently has exactly one auth bypass,
+        # the login endpoint), and edge rate limiting must be in place. The per-source ceiling
+        # below is a correctness backstop, not a defence against volume.
+        enabled: ${POS_CUSTOMER_PUBLIC_INQUIRY_ENABLED:false}
+        max-submissions-per-hour: ${POS_CUSTOMER_PUBLIC_INQUIRY_MAX_PER_HOUR:5}
     kafka:
       workorder-events-topic: workorder-events
+      # Service-history fact feed (FI-3, #1133): service-completion + declined-service facts
+      # projected into the CRM service-history read model and declined-service follow-ups.
+      workorder-facts-topic: ${POS_CUSTOMER_WORKORDER_FACTS_TOPIC:workorder.events.v1}
+      workorder-facts-consumer-group: ${POS_CUSTOMER_WORKORDER_FACTS_CONSUMER_GROUP:pos-customer-workorder-facts}
       # Reconciliation manifests + drift-repair commands (ADR-0044)
       workorder-manifest-topic: ${POS_CUSTOMER_WORKORDER_MANIFEST_TOPIC:workorder.manifest.v1}
       workorder-commands-topic: ${POS_CUSTOMER_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
       manifest-consumer-group: ${POS_CUSTOMER_MANIFEST_CONSUMER_GROUP:pos-customer-workorder-manifests}
+      # Campaign-send facts logged onto the party interaction timeline (Story #1151)
+      # (see pos.customer.inquiry below for the public capture form)
+      marketing-events-topic: ${POS_CUSTOMER_MARKETING_EVENTS_TOPIC:marketing.events.v1}
+      marketing-events-consumer-group: ${POS_CUSTOMER_MARKETING_EVENTS_CONSUMER_GROUP:pos-customer-marketing-events}
       # Vehicle replica feed + reconciliation (ADR-0044 §6, #843)
       vehicle-events-topic: ${POS_CUSTOMER_VEHICLE_EVENTS_TOPIC:vehicle.events.v1}
       vehicle-events-consumer-group: ${POS_CUSTOMER_VEHICLE_EVENTS_CONSUMER_GROUP:pos-customer-vehicle-events}

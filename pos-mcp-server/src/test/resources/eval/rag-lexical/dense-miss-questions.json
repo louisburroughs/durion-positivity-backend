@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "_comment": "#1178 dense-miss regression fixtures. Natural-language identifier questions — the exact class that failed live on alpha (#1170): dense similarity for glossary.identifiers lands below the production 0.60 floor, and only the OR-semantics lexical FTS path (#1170) recovers the doc. Unlike the original bare-token fixtures (where dense = hybrid = 1.0 and a lexical breakage stays invisible), these queries make eval_live.py's rag_lexical_hybrid_784 block report hybrid_recall_at_k > dense_recall_at_k, so breaking the lexical path (flag off, tsquery construction, content_tsv loss on re-embed, RRF wiring) turns the suite red. The VIN and invoice-number queries are live-verified dense misses (#1170 alpha diagnosis); the rest are the same query class pending live confirmation per the #1124 runbook. Query texts mirror the gap-harness questions.json entries so harness runs and eval runs stay comparable.",
+  "fixtures": [
+    {
+      "fixture_id": "rag-lexical-densemiss-vin-question",
+      "query": "what is the exact format of a VIN and which characters are not allowed",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
+      "rag_scope": "master",
+      "tags": ["positive", "lexical", "dense-miss", "nl-question"],
+      "notes": "LIVE-VERIFIED dense miss (#1170): glossary.identifiers dense similarity 0.58 < 0.60 floor; with OR-semantics FTS the doc is the top-ranked lexical hit. Mirrors gap-harness question gap-vin-format."
+    },
+    {
+      "fixture_id": "rag-lexical-densemiss-invoice-number-question",
+      "query": "what does an invoice number look like and what permission is needed to read an invoice",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
+      "rag_scope": "master",
+      "tags": ["positive", "lexical", "dense-miss", "nl-question"],
+      "notes": "LIVE-VERIFIED dense miss (#1170): dense does not surface glossary.identifiers; lexical ranks it top-2 on alpha. Mirrors gap-harness question gap-invoice-number-format."
+    },
+    {
+      "fixture_id": "rag-lexical-densemiss-po-number-question",
+      "query": "which service owns purchase order numbers and what do they look like",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
+      "rag_scope": "master",
+      "tags": ["positive", "lexical", "dense-miss-candidate", "nl-question"],
+      "notes": "Same class as the verified VIN/invoice misses (NL question wrapping an identifier topic, answered only by glossary.identifiers). Dense-miss status to be confirmed on alpha per the #1124 runbook. Mirrors gap-harness question gap-po-number-owner."
+    },
+    {
+      "fixture_id": "rag-lexical-densemiss-workorder-number-question",
+      "query": "what is the format of a workorder number and how does it relate to the estimate number",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
+      "rag_scope": "master",
+      "tags": ["positive", "lexical", "dense-miss-candidate", "nl-question"],
+      "notes": "WO-YYYY-NNNN / EST-YYYY-NNNN prefix-swap question. Dense-miss status to be confirmed on alpha. Mirrors gap-harness question gap-workorder-number-format."
+    },
+    {
+      "fixture_id": "rag-lexical-densemiss-gl-code-question",
+      "query": "what is the format of a GL chart-of-accounts code",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "expected": { "doc_ids": ["glossary.identifiers"], "k": 5 },
+      "rag_scope": "master",
+      "tags": ["positive", "lexical", "dense-miss-candidate", "nl-question"],
+      "notes": "GL code ^\\d{4}(-\\d{3})?$ question. Dense-miss status to be confirmed on alpha. Mirrors gap-harness question gap-gl-account-code."
+    }
+  ]
+}

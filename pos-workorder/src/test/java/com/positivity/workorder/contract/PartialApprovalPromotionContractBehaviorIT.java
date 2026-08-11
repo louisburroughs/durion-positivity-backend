@@ -110,10 +110,16 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
 
         List<WorkorderPart> partItems = workorderPartRepository.findByWorkorderId(workorderId);
 
-        int totalWorkorderItems = laborItems.size() + partItems.size();
-        assertThat(totalWorkorderItems).isEqualTo(2); // Only 2 APPROVED items should be copied
+        // Only the 2 APPROVED items become billable workorder items; the declined
+        // LABOR item is also promoted, but as a non-billable declined service line
+        // (FI-3, #1133) carrying declined=true and status CANCELLED.
+        List<com.positivity.workorder.internal.entity.WorkorderServiceLine> billableLabor = laborItems.stream()
+                .filter(ws -> !Boolean.TRUE.equals(ws.getDeclined()))
+                .toList();
 
-        // Verify declined and pending items were NOT copied
+        int totalBillableItems = billableLabor.size() + partItems.size();
+        assertThat(totalBillableItems).isEqualTo(2);
+
         List<EstimateItem> declinedItems = allItems.stream()
                 .filter(item -> item.getApprovalStatus() == ApprovalStatus.DECLINED)
                 .toList();
@@ -122,13 +128,21 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
                 .filter(item -> item.getApprovalStatus() == ApprovalStatus.PENDING_APPROVAL)
                 .toList();
 
+        // Verify the declined LABOR item was promoted as a declined service line,
+        // never as a billable item
         for (EstimateItem declinedItem : declinedItems) {
-            boolean foundInWorkorder = laborItems.stream()
+            boolean foundAsBillable = billableLabor.stream()
                             .anyMatch(ws -> ws.getOriginEstimateItemId().equals(declinedItem.getId()))
                     || partItems.stream()
                             .anyMatch(wp -> wp.getOriginEstimateItemId().equals(declinedItem.getId()));
+            assertThat(foundAsBillable).isFalse();
 
-            assertThat(foundInWorkorder).isFalse();
+            com.positivity.workorder.internal.entity.WorkorderServiceLine declinedLine = laborItems.stream()
+                    .filter(ws -> ws.getOriginEstimateItemId().equals(declinedItem.getId()))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(declinedLine.getDeclined()).isTrue();
+            assertThat(declinedLine.getStatus()).isEqualTo(WorkorderItemStatus.CANCELLED);
         }
 
         for (EstimateItem pendingItem : pendingItems) {
@@ -222,15 +236,18 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
 
         UUID workorderId = UUID.fromString(workorderIdStr);
 
-        // Then: Verify financial snapshot matches approved items only
+        // Then: Verify financial snapshot matches approved items only. Declined
+        // LABOR items are promoted separately as non-billable declined service
+        // lines (FI-3, #1133), so they are excluded from this billable check.
         List<com.positivity.workorder.internal.entity.WorkorderServiceLine> laborItems =
                 workorderServiceRepository.findAll().stream()
                         .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
+                        .filter(ws -> !Boolean.TRUE.equals(ws.getDeclined()))
                         .toList();
 
         List<WorkorderPart> partItems = workorderPartRepository.findByWorkorderId(workorderId);
 
-        // Verify each workorder item corresponds to an approved estimate item
+        // Verify each billable workorder item corresponds to an approved estimate item
         for (com.positivity.workorder.internal.entity.WorkorderServiceLine laborItem : laborItems) {
             EstimateItem sourceItem = approvedItems.stream()
                     .filter(ei -> ei.getId().equals(laborItem.getOriginEstimateItemId()))
@@ -282,7 +299,15 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
 
         UUID workorderId = UUID.fromString(workorderIdStr);
 
-        // Then: Verify all workorder items trace back to approved estimate items only
+        // Then: billable workorder items trace back to approved estimate items;
+        // declined service lines (FI-3, #1133) trace back to declined LABOR items
+        List<UUID> declinedItemIds =
+                estimateItemRepository
+                        .findByEstimate_IdAndApprovalStatusAndDeletedFalse(estimateId, ApprovalStatus.DECLINED)
+                        .stream()
+                        .map(EstimateItem::getId)
+                        .toList();
+
         List<com.positivity.workorder.internal.entity.WorkorderServiceLine> laborItems =
                 workorderServiceRepository.findAll().stream()
                         .filter(ws -> ws.getWorkOrder().getId().equals(workorderId))
@@ -291,7 +316,11 @@ class PartialApprovalPromotionContractBehaviorIT extends BaseContractIntegration
         List<WorkorderPart> partItems = workorderPartRepository.findByWorkorderId(workorderId);
 
         for (com.positivity.workorder.internal.entity.WorkorderServiceLine laborItem : laborItems) {
-            assertThat(approvedItemIds).contains(laborItem.getOriginEstimateItemId());
+            if (Boolean.TRUE.equals(laborItem.getDeclined())) {
+                assertThat(declinedItemIds).contains(laborItem.getOriginEstimateItemId());
+            } else {
+                assertThat(approvedItemIds).contains(laborItem.getOriginEstimateItemId());
+            }
         }
 
         for (WorkorderPart partItem : partItems) {

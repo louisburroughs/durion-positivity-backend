@@ -1,0 +1,319 @@
+{
+  "schema_version": 1,
+  "_comment": "Gap-harness synthetic breadth question set (#1125 §7). SME-authored ground truth: expected_facts are verbatim from the corpus _Verified: ...  citations so the grounded judge (§4) is anchored to module source of truth, never its own priors. Tags: 'exact-code' feeds the hybrid-lexical flip-threshold (§8); 'gated' exercises permission gating (#4); 'known-gap' has an expected_doc_id that is intentionally NOT in the corpus, to demonstrate corpus-gap discovery + the phase-5 round-trip. Keep expected_facts source-verified; do not add facts not backed by module source.",
+  "questions": [
+    {
+      "id": "gap-vin-format",
+      "query": "what is the exact format of a VIN and which characters are not allowed",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "master",
+      "expected_doc_ids": ["glossary.identifiers"],
+      "expected_facts": [
+        "A VIN is exactly 17 characters matching ^[A-HJ-NPR-Z0-9]{17}$: uppercase letters and digits with I, O, Q excluded.",
+        "The VIN system of record is pos-vehicle-inventory; it is stored raw (vin) and normalized (vin_normalized, globally unique)."
+      ],
+      "topic": "VIN identifier format",
+      "tags": ["exact-code", "identifier"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-sku-immutable",
+      "query": "can a SKU be changed after a product is created and is there a required format",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "master",
+      "expected_doc_ids": ["glossary.identifiers"],
+      "expected_facts": [
+        "In pos-catalog the SKU is a client-supplied string, unique, required at create, and immutable thereafter.",
+        "There is no system-enforced length or regex pattern and no auto-generation for SKU; example values like SKU-12345 are illustrative only."
+      ],
+      "topic": "SKU rules",
+      "tags": ["exact-code", "identifier"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-po-number-owner",
+      "query": "which service owns purchase order numbers and what do they look like",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "master",
+      "expected_doc_ids": ["glossary.identifiers"],
+      "expected_facts": [
+        "Purchase orders are owned by pos-inventory (not pos-order).",
+        "A PO number is an 8-character, zero-padded, uppercase base-36 code from a Postgres sequence (e.g. 0000000A); there is no PO-/year prefix."
+      ],
+      "topic": "PO number format and ownership",
+      "tags": ["exact-code", "identifier"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-invoice-number-format",
+      "query": "what does an invoice number look like and what permission is needed to read an invoice",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "master",
+      "expected_doc_ids": ["glossary.identifiers"],
+      "expected_facts": [
+        "An invoice number is INV-<epochMillis>-<first 8 chars of the invoice UUID>, assigned once at draft creation.",
+        "Reading an invoice is gated by invoice:manage; there is no invoice:read permission."
+      ],
+      "topic": "invoice number format and gating",
+      "tags": ["exact-code", "identifier"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-workorder-number-format",
+      "query": "what is the format of a workorder number and how does it relate to the estimate number",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "master",
+      "expected_doc_ids": ["glossary.identifiers"],
+      "expected_facts": [
+        "A workorder number is WO-YYYY-NNNN with the sequence starting at 1000 (e.g. WO-2026-1001).",
+        "On promotion from an estimate it reuses the estimate's number with the prefix swapped (EST-YYYY-NNNN to WO-YYYY-NNNN) when free; estimate numbers are EST-YYYY-NNNN, unique per location."
+      ],
+      "topic": "workorder number format",
+      "tags": ["exact-code", "identifier"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-gl-account-code",
+      "query": "what is the format of a GL chart-of-accounts code",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "master",
+      "expected_doc_ids": ["glossary.identifiers"],
+      "expected_facts": [
+        "A GL / chart-of-accounts code (pos-accounting) matches ^\\d{4}(-\\d{3})?$: four digits, optionally a dash plus three digits (e.g. 1000, 4000-100).",
+        "The customer account number (pos-customer) is the party customerNumber, not a GL code."
+      ],
+      "topic": "account code format",
+      "tags": ["exact-code", "identifier"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-order-view",
+      "query": "how do I look up the status of an order",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
+      "rag_scope": "order",
+      "expected_doc_ids": ["order.guide"],
+      "expected_facts": [
+        "Sales-order statuses (pos-order SalesOrderStatus) include DRAFT, QUOTED, COMPLETED, VOIDED, CANCEL_REQUESTED, and CANCELLED; read access is gated by order:order:view.",
+        "Purchase orders are NOT in pos-order — they are owned by pos-inventory (inventory:purchase_order:{create,view,approve,receive}) with PurchaseOrderStatus DRAFT, APPROVED, PARTIALLY_RECEIVED, FULLY_RECEIVED, CLOSED, CANCELLED."
+      ],
+      "topic": "order lookup",
+      "tags": ["scope-coverage", "positive"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-pricing-rules",
+      "query": "how are pricing rules and price books structured",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["pricing:price_book:view", "pricing:rule:view"] },
+      "rag_scope": "pricing",
+      "expected_doc_ids": ["pricing.guide"],
+      "expected_facts": [
+        "There is no PriceBook entity, table, or class anywhere in pos-price; price_book is only a permission-code label (pricing:price_book:{create,edit,delete,view}) with no backing entity, repository, or endpoint.",
+        "The real verified price-source entities are ProductBasePrice (product_base_price: productId, msrp, currency, effectiveFrom, effectiveTo), LocationPriceOverride (location_price_override: productId, locationId, overridePrice, currency, effectiveFrom, effectiveTo), and CustomerTierPricingRule (customer_tier_pricing_rule: productId, customerTierId, discountRate, effectiveFrom, effectiveTo).",
+        "Rule scoping is limited to product+location (LocationPriceOverride) or product+customer tier (CustomerTierPricingRule) only; there is no customer/account-level rule, service-type field, quantity-break field, or contract-pricing entity.",
+        "Price precedence is a fixed sequential pipeline (PriceQuoteServiceImpl.calculatePrice): BASE_PRICE (MSRP, required) then LOCATION_OVERRIDE (absolute replacement) then CUSTOMER_TIER_DISCOUNT (multiplicative), with final rounding HALF_EVEN at scale 2.",
+        "effectiveFrom is inclusive and effectiveTo exclusive (NULL = open-ended/active); within one rule type the most-recently-effective active record wins. Read-level pricing permissions are pricing:price_book:view and pricing:rule:view."
+      ],
+      "topic": "pricing rules",
+      "tags": ["scope-coverage", "positive"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-tax-mode",
+      "query": "how is tax mode configured",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["tax:mode:view"] },
+      "rag_scope": "tax",
+      "expected_doc_ids": ["tax.guide"],
+      "expected_facts": [
+        "Tax mode is controlled by the boolean Spring config property pos.tax.test-mode.enabled (TaxProperties.TestMode.enabled), overridable via the TAX_TEST_MODE environment variable; it defaults to true (test mode on) until a real external provider is wired.",
+        "A separate property, pos.tax.provider (TaxProperties.provider, env var TAX_PROVIDER), selects the concrete external adapter used only when test mode is disabled: TEST_MODE (default/unset, legacy external stub), AVALARA (real Avalara AvaTax REST v2 adapter), or EXTERNAL (legacy generic HTTP stub). test-mode.enabled always wins over provider.",
+        "Tax mode is global/service-level, not per-request, per-location, or per-tenant: TaxCalculationServiceImpl.isTestMode() returns properties.getTestMode().isEnabled() directly from the injected TaxProperties bean, with no location, tenant, or request-scoped override.",
+        "Tax mode can be read (not changed) at runtime via GET /v1/tax/mode on TaxController, gated by tax:mode:view. The response is {\"mode\": \"test\" | \"production\", \"testMode\": <boolean>} (TaxController.ModeResponse); it does not expose the pos.tax.provider selection.",
+        "There is no API or UI to change tax mode — pos.tax.test-mode.enabled and pos.tax.provider are deploy-time/ops-only properties (environment variables TAX_TEST_MODE / TAX_PROVIDER, set at deployment). No pos-tax endpoint accepts a mode-change request; tax:mode:view only gates the read-only GET /v1/tax/mode endpoint."
+      ],
+      "topic": "tax configuration",
+      "tags": ["scope-coverage", "positive"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-admin-governance-gated",
+      "query": "who can approve a permission change and what are the admin approval gates",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "admin",
+      "expected_doc_ids": ["admin.governance"],
+      "expected_facts": [],
+      "topic": "admin governance approvals",
+      "tags": ["gated", "negative"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-events-audit-gated",
+      "query": "how do I read the NLTI audit trail for a request",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "events",
+      "expected_doc_ids": ["events.observability"],
+      "expected_facts": [],
+      "topic": "NLTI audit trail",
+      "tags": ["gated", "negative"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-returns-refunds",
+      "query": "what is the policy for processing a customer return and issuing a refund on a paid invoice",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
+      "rag_scope": "order",
+      "expected_doc_ids": ["order.returns-refunds"],
+      "expected_facts": [
+        "Returns are line-by-line against one COMPLETED sales order, per-line capped at the un-refunded remainder; creation parks in PENDING_APPROVAL when the total refund exceeds the approval threshold (default $250.00), otherwise RETURN_REQUESTED.",
+        "Refund methods are ORIGINAL_TENDER, STORE_CREDIT, and ON_ACCOUNT_CREDIT; ORIGINAL_TENDER reverses the original settled tender and a failure parks the return at REFUND_FAILED before any stock movement."
+      ],
+      "topic": "returns and refunds policy",
+      "tags": ["scope-coverage", "positive", "gap-harness-roundtrip"],
+      "source": "synthetic"
+    },
+    {
+      "id": "order-core-charge-not-modeled",
+      "query": "how are core charges handled when a customer returns a rebuildable part",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
+      "rag_scope": "order",
+      "expected_doc_ids": ["order.returns-refunds"],
+      "expected_facts": ["Core charges are NOT modeled in pos-order — no core-charge entity, permission, or calculation exists."],
+      "topic": "core charge handling (not modeled)",
+      "tags": ["not-modeled", "hallucination-guard"],
+      "source": "synthetic"
+    },
+    {
+      "id": "order-loyalty-points-not-modeled",
+      "query": "how do loyalty reward points accrue and redeem at checkout",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
+      "rag_scope": "order",
+      "expected_doc_ids": ["order.lifecycle"],
+      "expected_facts": ["Loyalty reward points are NOT modeled in the platform — no accrual, balance, or redemption entity, permission, or calculation exists; the only loyalty-related token is the manual price-override reason code CUSTOMER_LOYALTY."],
+      "topic": "loyalty reward points (not modeled)",
+      "tags": ["not-modeled", "hallucination-guard"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-gift-cards-KNOWNGAP",
+      "query": "how do I sell a gift card at the register and redeem its balance on a later order",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
+      "rag_scope": "order",
+      "expected_doc_ids": ["order.gift-cards"],
+      "expected_facts": [],
+      "topic": "gift card sale and redemption",
+      "tags": ["known-gap", "corpus-gap"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-warranty-claim-code-format",
+      "query": "what is the format of a warranty claim code and how is it allocated",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["warranty:claim:view"] },
+      "rag_scope": "warranty",
+      "expected_doc_ids": ["warranty.guide"],
+      "expected_facts": [
+        "Claim code format is WC-{yyyy}-{seq}, zero-padded to 6 digits, resetting each calendar year, allocated atomically via a locked per-year sequence row.",
+        "Verified: pos-warranty ClaimCodeServiceImpl.nextClaimCode (String.format(\"WC-%d-%06d\", year, allocated)), ClaimCodeSequence."
+      ],
+      "topic": "warranty claim code format",
+      "tags": ["exact-code", "identifier"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-warranty-settle-customer-first",
+      "query": "can a warranty claim be settled while the vendor reimbursement or part return is still open",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["warranty:claim:view"] },
+      "rag_scope": "warranty",
+      "expected_doc_ids": ["warranty.guide"],
+      "expected_facts": [
+        "Settle-customer-first invariant: vendor reimbursement and part-return child lifecycles never block APPROVED\u2192SETTLED; they block only SETTLED\u2192CLOSED, requiring every reimbursement terminal (CREDIT_RECEIVED, WRITTEN_OFF, NOT_APPLICABLE, DENIED) and every part return terminal (RECEIVED_BY_VENDOR, SCRAPPED, CLOSED).",
+        "Claim status machine is DRAFT, SUBMITTED, IN_REVIEW, INFO_NEEDED, APPROVED, DENIED, SETTLED, CLOSED, CANCELLED; a claim is editable only in DRAFT/INFO_NEEDED."
+      ],
+      "topic": "warranty settle-customer-first invariant",
+      "tags": ["scope-coverage", "positive"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-order-cancel-failed-workexec",
+      "query": "what does CANCEL_FAILED_WORKEXEC mean on a sales order and where can it go next",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["order:order:view"] },
+      "rag_scope": "order",
+      "expected_doc_ids": ["order.lifecycle"],
+      "expected_facts": [
+        "CANCEL_FAILED_WORKEXEC is a SalesOrderStatus in the pos-order cancel saga; it transitions only to CANCEL_REQUESTED or CANCEL_REQUIRES_MANUAL_REVIEW.",
+        "CANCEL_REQUESTED can move to WORKORDER_CANCELLED, PAYMENT_REVERSED, CANCELLED, CANCEL_FAILED_WORKEXEC, or CANCEL_FAILED_BILLING; COMPLETED, VOIDED, and CANCELLED are terminal."
+      ],
+      "topic": "sales-order cancel-saga status",
+      "tags": ["exact-code", "bare-enum"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-inventory-received-short",
+      "query": "what does receiving line status RECEIVED_SHORT mean and what variance type is created",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["inventory:receiving:view"] },
+      "rag_scope": "inventory",
+      "expected_doc_ids": ["inventory.receiving"],
+      "expected_facts": [
+        "A receiving line with received quantity lower than expected becomes RECEIVED_SHORT and creates a SHORTAGE variance; higher becomes RECEIVED_OVER with an OVERAGE variance; equal becomes RECEIVED.",
+        "Receipt posting writes GOODS_RECEIPT ledger entries, and a receiving session is set COMPLETED only when all lines are in terminal receiving states."
+      ],
+      "topic": "receiving line status and variance",
+      "tags": ["exact-code", "bare-enum"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-pricing-allow-with-override",
+      "query": "when does a price restriction evaluation return ALLOW_WITH_OVERRIDE instead of BLOCK",
+      "actor": { "role": "ROLE_USER", "permission_codes": [] },
+      "rag_scope": "pricing",
+      "expected_doc_ids": ["pricing.restrictions"],
+      "expected_facts": [
+        "Per evaluated item: no matching rules returns ALLOW; any matching non-overrideable rule returns BLOCK; matching rules that are all overrideable return ALLOW_WITH_OVERRIDE.",
+        "On timeout or exception, the commit contexts CHECKOUT, INVOICE_FINALIZE, and COMMIT_SALE throw RestrictionServiceUnavailableException while non-commit contexts return RESTRICTION_UNKNOWN."
+      ],
+      "topic": "restriction decision semantics",
+      "tags": ["exact-code", "bare-enum"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-accounting-je-error-tokens",
+      "query": "which error code is returned when reversing a journal entry that was already reversed or posting into a hard locked period",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["accounting:je:view"] },
+      "rag_scope": "accounting",
+      "expected_doc_ids": ["accounting.journal-entries"],
+      "expected_facts": [
+        "Reversing an already-reversed journal entry fails with JE_ALREADY_REVERSED; period locks surface PERIOD_CLOSED or PERIOD_HARD_LOCKED; the other error tokens are UNBALANCED_ENTRY, ENTRY_ALREADY_POSTED, and JE_NOT_POSTED.",
+        "Only DRAFT entries can be posted and only POSTED entries reversed; entries must balance within BALANCE_TOLERANCE 0.0001 and are numbered JE-{YYYYMM}-{seq} during post/reverse."
+      ],
+      "topic": "journal-entry error tokens",
+      "tags": ["exact-code", "gated"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-workorder-promote-event",
+      "query": "which event id and permission gate promoting an estimate to a workorder and what error is returned when the approval has expired",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["workorder:estimate:view"] },
+      "rag_scope": "workorder",
+      "expected_doc_ids": ["workorder.estimate-promotion"],
+      "expected_facts": [
+        "POST /v1/workorders/estimates/{estimateId}/promote is gated by workorder:estimate:promote and emits WORKORDER_ESTIMATE_PROMOTE.",
+        "PromotionValidationServiceImpl gates in order: ESTIMATE_NOT_FOUND, ALREADY_PROMOTED, APPROVAL_INVALID (status must be APPROVED), APPROVAL_EXPIRED, NO_APPROVED_ITEMS; the created workorder lands in DRAFT and an EST- estimate number is swapped to WO- when free."
+      ],
+      "topic": "estimate promotion event and gates",
+      "tags": ["exact-code", "event-id"],
+      "source": "synthetic"
+    },
+    {
+      "id": "gap-order-price-override-approve-perm",
+      "query": "which permission code lets someone approve a price override and is there a dollar limit above their authority",
+      "actor": { "role": "ROLE_USER", "permission_codes": ["order:price_override:view"] },
+      "rag_scope": "order",
+      "expected_doc_ids": ["order.price-override"],
+      "expected_facts": [
+        "Approving a price override is gated by order:price_override:approve (POST /v1/orders/price-overrides/{overrideId}/approve, event ORDER_PRICE_OVERRIDE_APPROVE); approval is required when discountAmount >= 50.0 or discountPercentage > 10.0.",
+        "The threshold is flat, not tiered: any order:price_override:approve holder can approve any amount. Approve allows only PENDING_APPROVAL -> APPROVED and reject only PENDING_APPROVAL -> REJECTED."
+      ],
+      "topic": "price-override approval permission",
+      "tags": ["exact-code", "permission-code"],
+      "source": "synthetic"
+    }
+  ]
+}

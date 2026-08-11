@@ -10,8 +10,10 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.ExtVehicle;
+import com.positivity.customer.internal.entity.ExtVehicleCarePreference;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
+import com.positivity.customer.internal.repository.ExtVehicleCarePreferenceRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessedEventRepository;
@@ -42,6 +44,8 @@ class VehicleEventsListenerTest {
 
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final ExtVehicleRepository replica = mock(ExtVehicleRepository.class);
+    private final ExtVehicleCarePreferenceRepository carePreferenceReplica =
+            mock(ExtVehicleCarePreferenceRepository.class);
     private final PersonPartyRepository personParties = mock(PersonPartyRepository.class);
     private final CommercialPartyRepository commercialParties = mock(CommercialPartyRepository.class);
 
@@ -50,7 +54,22 @@ class VehicleEventsListenerTest {
     @BeforeEach
     void setUp() {
         listener = new VehicleEventsListener(
-                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, personParties, commercialParties);
+                TEST_CLOCK,
+                new ObjectMapper(),
+                processedEvents,
+                replica,
+                carePreferenceReplica,
+                personParties,
+                commercialParties);
+    }
+
+    private String carePreferenceEvent(String eventId, long version, Integer intervalMonths, boolean deleted) {
+        return """
+                {"eventId":"%s","eventType":"vehicle.care-preference.updated","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":%d,
+                 "payload":{"vehicleId":"%s","serviceIntervalMonths":%s,"deleted":%b,
+                            "updatedAt":"2026-07-12T11:00:00Z"}}
+                """.formatted(eventId, VEHICLE_ID, version, VEHICLE_ID, intervalMonths, deleted);
     }
 
     private String event(String eventId, long version, UUID accountId, boolean active) {
@@ -183,14 +202,96 @@ class VehicleEventsListenerTest {
     }
 
     @Test
-    @DisplayName("Ignores other event types")
+    @DisplayName("Ignores other event types but still records their eventId for manifest reconciliation (#1175)")
     void ignoresOtherEventTypes() {
+        when(processedEvents.existsById("e-x")).thenReturn(false);
+
         listener.onVehicleEvent("""
-                {"eventId":"e-x","eventType":"vehicle.manifest.published","payload":{}}
+                {"eventId":"e-x","eventType":"vehicle.future.event","payload":{}}
                 """);
 
         verify(replica, never()).save(any());
-        verify(processedEvents, never()).save(any());
+        verify(carePreferenceReplica, never()).save(any());
+        // The owner's manifest counts every event on the topic; an unrecorded eventId would
+        // read as drift every window.
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("Materializes care-preference event into the interval replica and records the eventId (#1175)")
+    void upsertsCarePreferenceReplica() {
+        when(processedEvents.existsById("cp-1")).thenReturn(false);
+        when(carePreferenceReplica.findById(VEHICLE_ID)).thenReturn(Optional.empty());
+
+        listener.onVehicleEvent(carePreferenceEvent("cp-1", 1000L, 4, false));
+
+        ArgumentCaptor<ExtVehicleCarePreference> saved = ArgumentCaptor.forClass(ExtVehicleCarePreference.class);
+        verify(carePreferenceReplica).save(saved.capture());
+        assertThat(saved.getValue().getVehicleId()).isEqualTo(VEHICLE_ID);
+        assertThat(saved.getValue().getServiceIntervalMonths()).isEqualTo(4);
+        assertThat(saved.getValue().getAggregateVersion()).isEqualTo(1000L);
+        assertThat(saved.getValue().getPreferenceUpdatedAt()).isEqualTo(Instant.parse("2026-07-12T11:00:00Z"));
+        verify(replica, never()).save(any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("Care-preference delete lands as a versioned tombstone, not a hard delete (#1175)")
+    void carePreferenceDeleteWritesTombstone() {
+        when(processedEvents.existsById("cp-del")).thenReturn(false);
+        when(carePreferenceReplica.findById(VEHICLE_ID))
+                .thenReturn(Optional.of(ExtVehicleCarePreference.builder()
+                        .vehicleId(VEHICLE_ID)
+                        .serviceIntervalMonths(4)
+                        .aggregateVersion(1000L)
+                        .updatedAt(Instant.now(TEST_CLOCK))
+                        .build()));
+
+        listener.onVehicleEvent(carePreferenceEvent("cp-del", 2000L, null, true));
+
+        ArgumentCaptor<ExtVehicleCarePreference> saved = ArgumentCaptor.forClass(ExtVehicleCarePreference.class);
+        verify(carePreferenceReplica).save(saved.capture());
+        assertThat(saved.getValue().getServiceIntervalMonths()).isNull();
+        assertThat(saved.getValue().getAggregateVersion()).isEqualTo(2000L);
+        verify(carePreferenceReplica, never()).delete(any());
+        verify(carePreferenceReplica, never()).deleteById(any());
+    }
+
+    @Test
+    @DisplayName("Skips stale care-preference events by the last-writer-wins guard, but records them (#1175)")
+    void skipsStaleCarePreferenceVersions() {
+        when(processedEvents.existsById("cp-old")).thenReturn(false);
+        when(carePreferenceReplica.findById(VEHICLE_ID))
+                .thenReturn(Optional.of(ExtVehicleCarePreference.builder()
+                        .vehicleId(VEHICLE_ID)
+                        .serviceIntervalMonths(4)
+                        .aggregateVersion(3000L)
+                        .updatedAt(Instant.now(TEST_CLOCK))
+                        .build()));
+
+        listener.onVehicleEvent(carePreferenceEvent("cp-old", 2000L, 9, false));
+
+        verify(carePreferenceReplica, never()).save(any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("Applies a care-preference event with an equal version stamp (LWW '>' guard, re-created row)")
+    void appliesEqualCarePreferenceVersion() {
+        when(processedEvents.existsById("cp-eq")).thenReturn(false);
+        when(carePreferenceReplica.findById(VEHICLE_ID))
+                .thenReturn(Optional.of(ExtVehicleCarePreference.builder()
+                        .vehicleId(VEHICLE_ID)
+                        .serviceIntervalMonths(4)
+                        .aggregateVersion(2000L)
+                        .updatedAt(Instant.now(TEST_CLOCK))
+                        .build()));
+
+        listener.onVehicleEvent(carePreferenceEvent("cp-eq", 2000L, 9, false));
+
+        ArgumentCaptor<ExtVehicleCarePreference> saved = ArgumentCaptor.forClass(ExtVehicleCarePreference.class);
+        verify(carePreferenceReplica).save(saved.capture());
+        assertThat(saved.getValue().getServiceIntervalMonths()).isEqualTo(9);
     }
 
     @Test

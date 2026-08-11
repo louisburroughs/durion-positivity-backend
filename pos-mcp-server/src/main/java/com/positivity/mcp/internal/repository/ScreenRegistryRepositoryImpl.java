@@ -26,20 +26,28 @@ public class ScreenRegistryRepositoryImpl implements ScreenRegistryRepository {
     @Override
     public @NonNull List<ScreenCandidate> findNearest(
             float @NonNull [] queryEmbedding, @Nullable String domain, int limit) {
-        StringBuilder sql = new StringBuilder("""
+        // The vector column is the single validated value from RagEmbeddingSettings (V33, #1207),
+        // written literally so both statement variants are constants (java:S2077).
+        String sql = domain != null ? """
                 SELECT screen_key, title, url_template, domain, required_perm,
                        1 - (embedding <=> ?::vector) AS score
                 FROM mcp_screen_registry
                 WHERE embedding IS NOT NULL
-                """);
-        if (domain != null) {
-            sql.append("  AND domain = ?\n");
-        }
-        sql.append("ORDER BY embedding <=> ?::vector\nLIMIT ?\n");
+                  AND domain = ?
+                ORDER BY embedding <=> ?::vector
+                LIMIT ?
+                """ : """
+                SELECT screen_key, title, url_template, domain, required_perm,
+                       1 - (embedding <=> ?::vector) AS score
+                FROM mcp_screen_registry
+                WHERE embedding IS NOT NULL
+                ORDER BY embedding <=> ?::vector
+                LIMIT ?
+                """;
 
         PGobject vector = toVectorPGobject(queryEmbedding);
         return jdbcTemplate.query(
-                sql.toString(),
+                sql,
                 ps -> {
                     int i = 1;
                     ps.setObject(i++, vector);

@@ -8,14 +8,19 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.domainevents.peoplecontact.OrganizationAddressRemovedV1;
+import com.positivity.domainevents.peoplecontact.OrganizationAddressUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonDeletedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpdatedV1;
+import com.positivity.domainevents.peoplecontact.PostalAddressV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkRemovedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkUpdatedV1;
+import com.positivity.peoplecontact.internal.entity.PartyPostalAddress;
 import com.positivity.peoplecontact.internal.entity.Person;
 import com.positivity.peoplecontact.internal.entity.PersonContactPoint;
 import com.positivity.peoplecontact.internal.entity.UserPersonLink;
 import com.positivity.peoplecontact.internal.enums.ContactPointType;
+import com.positivity.peoplecontact.internal.enums.PartyType;
 import com.positivity.peoplecontact.internal.enums.UserLinkStatus;
 import java.time.Clock;
 import java.time.Instant;
@@ -36,6 +41,7 @@ class PeopleContactEventPublisherTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-07-12T12:00:00Z"), ZoneOffset.UTC);
     private static final UUID PERSON_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID LINK_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final UUID ORG_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
 
     private final OutboxEventWriter writer = mock(OutboxEventWriter.class);
 
@@ -54,6 +60,18 @@ class PeopleContactEventPublisherTest {
                 .id(PERSON_ID)
                 .firstName("Jane")
                 .lastName("Smith")
+                .build();
+    }
+
+    private PartyPostalAddress address(PartyType partyType, UUID partyId) {
+        return PartyPostalAddress.builder()
+                .partyType(partyType)
+                .partyId(partyId)
+                .line1("1-2-3 Ginza")
+                .city("Tokyo")
+                .region("Tokyo")
+                .postalCode("104-0061")
+                .countryCode("JP")
                 .build();
     }
 
@@ -87,7 +105,7 @@ class PeopleContactEventPublisherTest {
                 .isPrimary(true)
                 .build();
 
-        publisher.publishPersonUpdated(person(), List.of(email));
+        publisher.publishPersonUpdated(person(), List.of(email), address(PartyType.PERSON, PERSON_ID));
 
         DomainEventEnvelope<?> envelope = capturePublished("people-contact.events.v1");
         assertThat(envelope.eventType()).isEqualTo(PersonUpdatedV1.EVENT_TYPE);
@@ -99,6 +117,49 @@ class PeopleContactEventPublisherTest {
         assertThat(payload.firstName()).isEqualTo("Jane");
         assertThat(payload.contactPoints())
                 .containsExactly(new PersonUpdatedV1.ContactPointV1("EMAIL", "jane@example.com", true));
+        assertThat(payload.postalAddress())
+                .isEqualTo(new PostalAddressV1("1-2-3 Ginza", null, "Tokyo", "Tokyo", "104-0061", "JP"));
+    }
+
+    @Test
+    @DisplayName("A person without a stored address publishes a null postalAddress (FI-4, #1135)")
+    void queuesPersonUpdatedWithoutAddress() {
+        when(writerProvider.getIfAvailable()).thenReturn(writer);
+
+        publisher.publishPersonUpdated(person(), List.of(), null);
+
+        DomainEventEnvelope<?> envelope = capturePublished("people-contact.events.v1");
+        assertThat(((PersonUpdatedV1) envelope.payload()).postalAddress()).isNull();
+    }
+
+    @Test
+    @DisplayName("Queues an organization-address.updated envelope keyed by the organization id (FI-4, #1135)")
+    void queuesOrganizationAddressUpdated() {
+        when(writerProvider.getIfAvailable()).thenReturn(writer);
+
+        publisher.publishOrganizationAddressUpdated(address(PartyType.ORGANIZATION, ORG_ID));
+
+        DomainEventEnvelope<?> envelope = capturePublished("people-contact.events.v1");
+        assertThat(envelope.eventType()).isEqualTo(OrganizationAddressUpdatedV1.EVENT_TYPE);
+        assertThat(envelope.aggregateId()).isEqualTo(ORG_ID);
+        OrganizationAddressUpdatedV1 payload = (OrganizationAddressUpdatedV1) envelope.payload();
+        assertThat(payload.organizationId()).isEqualTo(ORG_ID);
+        assertThat(payload.postalAddress())
+                .isEqualTo(new PostalAddressV1("1-2-3 Ginza", null, "Tokyo", "Tokyo", "104-0061", "JP"));
+    }
+
+    @Test
+    @DisplayName("Queues an organization-address.removed envelope keyed by the organization id (FI-4, #1135)")
+    void queuesOrganizationAddressRemoved() {
+        when(writerProvider.getIfAvailable()).thenReturn(writer);
+
+        publisher.publishOrganizationAddressRemoved(ORG_ID);
+
+        DomainEventEnvelope<?> envelope = capturePublished("people-contact.events.v1");
+        assertThat(envelope.eventType()).isEqualTo(OrganizationAddressRemovedV1.EVENT_TYPE);
+        assertThat(envelope.aggregateId()).isEqualTo(ORG_ID);
+        assertThat(((OrganizationAddressRemovedV1) envelope.payload()).organizationId())
+                .isEqualTo(ORG_ID);
     }
 
     @Test
@@ -150,8 +211,10 @@ class PeopleContactEventPublisherTest {
     void noopWithoutWriter() {
         when(writerProvider.getIfAvailable()).thenReturn(null);
 
-        publisher.publishPersonUpdated(person(), List.of());
+        publisher.publishPersonUpdated(person(), List.of(), null);
         publisher.publishPersonDeleted(PERSON_ID);
+        publisher.publishOrganizationAddressUpdated(address(PartyType.ORGANIZATION, ORG_ID));
+        publisher.publishOrganizationAddressRemoved(ORG_ID);
         publisher.publishLinkUpdated(link());
         publisher.publishLinkRemoved(link());
 

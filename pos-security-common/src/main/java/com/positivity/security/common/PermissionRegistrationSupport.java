@@ -28,7 +28,7 @@ import org.springframework.web.client.RestClientException;
  *     public class CatalogPermissionRegistration extends PermissionRegistrationSupport {
  *
  *         public CatalogPermissionRegistration(RestClient.Builder builder,
- *                 &#64;Value("${pos.security.base-url:http://pos-security-service:8086}") String securityServiceUrl,
+ *                 &#64;Value("${pos.security.base-url:http://pos-security-service:8080}") String securityServiceUrl,
  *                 &#64;Value("${pos.security.permission-registration.enabled:true}") boolean enabled) {
  *             super(builder, securityServiceUrl, enabled, "permissions.yaml");
  *         }
@@ -67,7 +67,7 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
      *
      * @param restClientBuilder  RestClient builder for HTTP requests
      * @param securityServiceUrl Base URL of pos-security-service (e.g.,
-     *                           http://pos-security-service:8086)
+     *                           http://pos-security-service:8080)
      * @param domain             Domain name for permissions (e.g., "catalog",
      *                           "crm")
      * @param serviceName        Name of the registering service (e.g.,
@@ -86,7 +86,7 @@ public abstract class PermissionRegistrationSupport implements ApplicationRunner
      *
      * @param restClientBuilder  RestClient builder for HTTP requests
      * @param securityServiceUrl Base URL of pos-security-service (e.g.,
-     *                           http://pos-security-service:8086)
+     *                           http://pos-security-service:8080)
      * @param domain             Domain name for permissions (e.g., "catalog",
      *                           "crm")
      * @param serviceName        Name of the registering service (e.g.,

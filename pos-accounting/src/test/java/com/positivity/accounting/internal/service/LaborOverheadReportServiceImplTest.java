@@ -2,23 +2,30 @@ package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.LaborOverheadCostReport;
 import com.positivity.accounting.internal.dto.LaborOverheadReportLine;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
+import com.positivity.accounting.internal.entity.LocationFxRate;
+import com.positivity.accounting.internal.entity.LocationProfile;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
 import com.positivity.accounting.internal.enums.StatementType;
 import com.positivity.accounting.internal.report.LaborOverheadTaxonomy;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
+import com.positivity.accounting.internal.repository.LocationFxRateRepository;
+import com.positivity.accounting.internal.repository.LocationProfileRepository;
 import com.positivity.accounting.internal.repository.StatementLineMappingRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,11 +57,25 @@ class LaborOverheadReportServiceImplTest {
     @Mock
     private JournalEntryLineRepository journalEntryLineRepository;
 
+    @Mock
+    private LocationProfileRepository locationProfileRepository;
+
+    @Mock
+    private LocationFxRateRepository locationFxRateRepository;
+
     private LaborOverheadReportServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new LaborOverheadReportServiceImpl(statementLineMappingRepository, journalEntryLineRepository);
+        service = new LaborOverheadReportServiceImpl(
+                statementLineMappingRepository,
+                journalEntryLineRepository,
+                locationProfileRepository,
+                locationFxRateRepository);
+        lenient().when(locationProfileRepository.findByLocationCode(any())).thenReturn(Optional.empty());
+        lenient()
+                .when(locationFxRateRepository.findByLocationCodeAndFiscalYear(any(), anyInt()))
+                .thenReturn(Optional.empty());
     }
 
     private void mappings(StatementLineMapping... mappings) {
@@ -300,6 +321,132 @@ class LaborOverheadReportServiceImplTest {
         LaborOverheadReportLine wages = find(service.generate(LOCATION, FISCAL_YEAR, 12), "1.1.1");
 
         assertThat(wages.getMonthly().get(0)).isEqualByComparingTo("5"); // only the matching-location line counts
+    }
+
+    private static StatementLineMapping mapping(String lineCode, UUID accountId, String locationId) {
+        StatementLineMapping mapping = mapping(lineCode, accountId);
+        mapping.setLocationId(locationId);
+        return mapping;
+    }
+
+    @Test
+    void generate_locationOverrideReplacesGlobalMappingForLine() {
+        mappings(mapping("1.1.1", ACCT_WAGES), mapping("1.1.1", ACCT_WAGES_2, LOCATION));
+        postedLines(
+                line(ACCT_WAGES, 1, LOCATION, money("1000"), BigDecimal.ZERO),
+                line(ACCT_WAGES_2, 1, LOCATION, money("400"), BigDecimal.ZERO));
+
+        LaborOverheadReportLine wages = find(service.generate(LOCATION, FISCAL_YEAR, 12), "1.1.1");
+
+        assertThat(wages.getMonthly().get(0)).isEqualByComparingTo("400"); // override replaces global
+    }
+
+    @Test
+    void generate_ignoresOverridesScopedToOtherLocations() {
+        mappings(mapping("1.1.1", ACCT_WAGES), mapping("1.1.1", ACCT_WAGES_2, OTHER_LOCATION));
+        postedLines(
+                line(ACCT_WAGES, 1, LOCATION, money("1000"), BigDecimal.ZERO),
+                line(ACCT_WAGES_2, 1, LOCATION, money("400"), BigDecimal.ZERO));
+
+        LaborOverheadReportLine wages = find(service.generate(LOCATION, FISCAL_YEAR, 12), "1.1.1");
+
+        assertThat(wages.getMonthly().get(0)).isEqualByComparingTo("1000"); // global mapping still in force
+    }
+
+    @Test
+    void generate_enrichesHeaderFromProfileAndFxRate() {
+        when(statementLineMappingRepository.findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(any()))
+                .thenReturn(List.of());
+        LocationProfile profile = new LocationProfile();
+        profile.setLocationCode(LOCATION);
+        profile.setLocationLabel("Planta Monterrey");
+        profile.setCurrencyCode("MXN");
+        when(locationProfileRepository.findByLocationCode(eq(LOCATION))).thenReturn(Optional.of(profile));
+        LocationFxRate fxRate = new LocationFxRate();
+        fxRate.setLocationCode(LOCATION);
+        fxRate.setFiscalYear(FISCAL_YEAR);
+        fxRate.setLocalCurrencyPerUsd(money("17.500000"));
+        fxRate.setAverageRate(money("17.000000"));
+        when(locationFxRateRepository.findByLocationCodeAndFiscalYear(eq(LOCATION), eq(FISCAL_YEAR)))
+                .thenReturn(Optional.of(fxRate));
+
+        LaborOverheadCostReport report = service.generate(LOCATION, FISCAL_YEAR, 12);
+
+        assertThat(report.getLocationLabel()).isEqualTo("Planta Monterrey");
+        assertThat(report.getCurrency()).isEqualTo("MXN");
+        assertThat(report.getLocalCurrencyPerUsd()).isEqualByComparingTo("17.5");
+        assertThat(report.getAverageRate()).isEqualByComparingTo("17");
+    }
+
+    private void localCurrencyPlant(String currency, String perUsd, String averageRate) {
+        LocationProfile profile = new LocationProfile();
+        profile.setLocationCode(LOCATION);
+        profile.setLocationLabel("Local Plant");
+        profile.setCurrencyCode(currency);
+        when(locationProfileRepository.findByLocationCode(eq(LOCATION))).thenReturn(Optional.of(profile));
+        LocationFxRate fxRate = new LocationFxRate();
+        fxRate.setLocationCode(LOCATION);
+        fxRate.setFiscalYear(FISCAL_YEAR);
+        fxRate.setLocalCurrencyPerUsd(money(perUsd));
+        fxRate.setAverageRate(money(averageRate));
+        lenient()
+                .when(locationFxRateRepository.findByLocationCodeAndFiscalYear(eq(LOCATION), eq(FISCAL_YEAR)))
+                .thenReturn(Optional.of(fxRate));
+    }
+
+    @Test
+    void generate_convertsUsdOnlyLineUsingAverageRateOnLocalCurrencyPlant() {
+        mappings(mapping("2.11.4", ACCT_INV), mapping("2.11.1", ACCT_UTIL));
+        postedLines(
+                line(ACCT_INV, 1, LOCATION, money("100"), BigDecimal.ZERO),
+                line(ACCT_UTIL, 1, LOCATION, money("34"), BigDecimal.ZERO));
+        localCurrencyPlant("MXN", "2.000000", "2.000000");
+
+        LaborOverheadCostReport report = service.generate(LOCATION, FISCAL_YEAR, 12);
+
+        LaborOverheadReportLine mrtDepreciation = find(report, "2.11.4");
+        assertThat(mrtDepreciation.getMonthly().get(0)).isEqualByComparingTo("50.00"); // 100 MXN / 2.0 -> USD
+        assertThat(mrtDepreciation.getYtd()).isEqualByComparingTo("50.00");
+        // Other lines and the 2.11 subtotal stay in local currency (subtotal uses unconverted child).
+        assertThat(find(report, "2.11.1").getMonthly().get(0)).isEqualByComparingTo("34");
+        assertThat(find(report, "2.11").getMonthly().get(0)).isEqualByComparingTo("134");
+    }
+
+    @Test
+    void generate_ignoresFxConfigWithoutLocationProfile() {
+        mappings(mapping("2.11.4", ACCT_INV));
+        postedLines(line(ACCT_INV, 1, LOCATION, money("100"), BigDecimal.ZERO));
+        LocationFxRate fxRate = new LocationFxRate();
+        fxRate.setLocationCode(LOCATION);
+        fxRate.setFiscalYear(FISCAL_YEAR);
+        fxRate.setLocalCurrencyPerUsd(money("2.000000"));
+        fxRate.setAverageRate(money("2.000000"));
+        lenient()
+                .when(locationFxRateRepository.findByLocationCodeAndFiscalYear(eq(LOCATION), eq(FISCAL_YEAR)))
+                .thenReturn(Optional.of(fxRate));
+
+        LaborOverheadCostReport report = service.generate(LOCATION, FISCAL_YEAR, 12);
+
+        // No profile -> US plant defaults; the orphaned FX row must not skew rates or convert.
+        assertThat(report.getCurrency()).isEqualTo("USD");
+        assertThat(report.getLocalCurrencyPerUsd()).isEqualByComparingTo("1.00");
+        assertThat(report.getAverageRate()).isEqualByComparingTo("1.00");
+        assertThat(find(report, "2.11.4").getMonthly().get(0)).isEqualByComparingTo("100");
+    }
+
+    @Test
+    void generate_usdProfilePlantIgnoresFxConfig() {
+        mappings(mapping("2.11.4", ACCT_INV));
+        postedLines(line(ACCT_INV, 1, LOCATION, money("100"), BigDecimal.ZERO));
+        localCurrencyPlant("USD", "2.000000", "2.000000");
+
+        LaborOverheadCostReport report = service.generate(LOCATION, FISCAL_YEAR, 12);
+
+        // USD plant: FX config (even if present) is inactive; no conversion, rates stay 1.00.
+        assertThat(report.getCurrency()).isEqualTo("USD");
+        assertThat(report.getLocalCurrencyPerUsd()).isEqualByComparingTo("1.00");
+        assertThat(report.getAverageRate()).isEqualByComparingTo("1.00");
+        assertThat(find(report, "2.11.4").getMonthly().get(0)).isEqualByComparingTo("100");
     }
 
     @Test

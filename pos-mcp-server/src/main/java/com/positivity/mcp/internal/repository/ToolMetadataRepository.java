@@ -50,8 +50,11 @@ public interface ToolMetadataRepository {
     /** Gate 3 (G3.1): maps a tool to a workflow state (by name) so it is selectable there. Idempotent. */
     void linkToolToWorkflow(@NonNull UUID toolId, @NonNull String workflowState);
 
-    /** Gate 3 (G3.1): grants a tool a required permission code (fail-closed gating input). Idempotent. */
-    void addToolPermission(@NonNull UUID toolId, @NonNull String permissionCode);
+    /**
+     * Gate 3 (G3.1): grants a tool a required permission code (fail-closed gating input). Idempotent.
+     * Returns {@code true} when a row was inserted, {@code false} when the grant already existed.
+     */
+    boolean addToolPermission(@NonNull UUID toolId, @NonNull String permissionCode);
 
     /**
      * Gate 3 (#785): resolves a discovered ({@code source='openapi'}) tool id by its unique name.
@@ -64,8 +67,19 @@ public interface ToolMetadataRepository {
     @NonNull
     List<String> listToolPermissions(@NonNull UUID toolId);
 
-    /** Gate 3 (#785): revokes a permission code from a tool. Idempotent (no-op if absent). */
-    void removeToolPermission(@NonNull UUID toolId, @NonNull String permissionCode);
+    /**
+     * Gate 6 (#1193): resolves a discovered ({@code source='openapi'}) operation's execution
+     * coordinates by its unique name, for confirmed write-plan execution. Empty when no such
+     * openapi tool exists — facade rows are never returned.
+     */
+    @NonNull
+    Optional<DiscoveredOperation> findDiscoveredOperationByName(@NonNull String name);
+
+    /**
+     * Gate 3 (#785): revokes a permission code from a tool. Idempotent (no-op if absent).
+     * Returns {@code true} when a row was deleted, {@code false} when the grant was already absent.
+     */
+    boolean removeToolPermission(@NonNull UUID toolId, @NonNull String permissionCode);
 
     /**
      * Returns enabled tools authorized for {@code workflowState} where the caller holds at

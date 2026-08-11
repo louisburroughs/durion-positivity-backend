@@ -1,7 +1,12 @@
 # Gate 7 — Admin Tooling, Dashboards, Tuning Controls (design)
 
-> **Status:** DESIGN. Makes the system operable, auditable, and tunable without uncontrolled drift.
-> Verification is live (admin flows, dashboards, shadow→live tuning) — runbook §B.10. Final gate.
+> **Status:** LARGELY IMPLEMENTED — admin `mcp_tool_permission` endpoints shipped (#785 CLOSED,
+> `ToolPermissionController`); adaptive tuning shipped in PR #1199 (2026-08-08 — #1195 CLOSED):
+> `mcp.tuning.mode=off|shadow|live` (shadow logs proposals without writing; live gated on a fresh
+> passing eval result file, degrades to shadow otherwise; legacy `enabled=true` → live +
+> deprecation WARN); 18 tuning tests. Live verification (admin flows, dashboards, shadow→live
+> tuning) still open — runbook §B.10 and the Gate 7 sign-off in `implementation_checklist.md`.
+> Makes the system operable, auditable, and tunable without uncontrolled drift. Final gate.
 
 ## Grounded building blocks
 - `NltiObservabilityMetricsConfig` — Micrometer `Timer`s (`nlt.request/planning/execution.latency`,

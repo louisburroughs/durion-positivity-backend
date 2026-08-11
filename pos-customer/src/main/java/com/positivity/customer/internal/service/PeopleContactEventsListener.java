@@ -1,11 +1,16 @@
 package com.positivity.customer.internal.service;
 
+import com.positivity.customer.internal.entity.ExtOrganizationPostalAddress;
 import com.positivity.customer.internal.entity.ExtPersonReplica;
 import com.positivity.customer.internal.entity.ProcessedEvent;
+import com.positivity.customer.internal.repository.ExtOrganizationPostalAddressRepository;
 import com.positivity.customer.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.customer.internal.repository.ProcessedEventRepository;
+import com.positivity.domainevents.peoplecontact.OrganizationAddressRemovedV1;
+import com.positivity.domainevents.peoplecontact.OrganizationAddressUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonDeletedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpdatedV1;
+import com.positivity.domainevents.peoplecontact.PostalAddressV1;
 import java.time.Clock;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +43,7 @@ public class PeopleContactEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
+    private final ExtOrganizationPostalAddressRepository extOrganizationPostalAddressRepository;
     private final CustomerFactPublisher customerFactPublisher;
 
     @KafkaListener(
@@ -66,10 +72,13 @@ public class PeopleContactEventsListener {
             switch (eventType == null ? "" : eventType) {
                 case PersonUpdatedV1.EVENT_TYPE -> applyPersonUpdated(envelope);
                 case PersonDeletedV1.EVENT_TYPE -> applyPersonDeleted(envelope);
-                default -> {
+                case OrganizationAddressUpdatedV1.EVENT_TYPE -> applyOrganizationAddressUpdated(envelope);
+                case OrganizationAddressRemovedV1.EVENT_TYPE -> applyOrganizationAddressRemoved(envelope);
+                default ->
+                    // Ignored types still fall through to the processed_events insert below: the
+                    // owner's manifest counts every fact in the window, so skipping the insert
+                    // would register as replica drift and trigger a pointless replay.
                     log.debug("Ignoring people-contact event type={}", eventType);
-                    return;
-                }
             }
         } catch (TransientDataAccessException e) {
             throw e;
@@ -102,6 +111,7 @@ public class PeopleContactEventsListener {
         } catch (Exception e) {
             contactJson = null;
         }
+        PostalAddressV1 address = payload.postalAddress();
         extPersonReplicaRepository.save(ExtPersonReplica.builder()
                 .personId(payload.personId())
                 .firstName(payload.firstName())
@@ -109,6 +119,12 @@ public class PeopleContactEventsListener {
                 .preferredName(payload.preferredName())
                 .primaryEmail(primaryEmail)
                 .contactPoints(contactJson)
+                .addressLine1(address == null ? null : address.line1())
+                .addressLine2(address == null ? null : address.line2())
+                .addressCity(address == null ? null : address.city())
+                .addressRegion(address == null ? null : address.region())
+                .addressPostalCode(address == null ? null : address.postalCode())
+                .addressCountryCode(address == null ? null : address.countryCode())
                 .personCreatedAt(payload.createdAt())
                 .personUpdatedAt(payload.updatedAt())
                 .aggregateVersion(aggregateVersion)
@@ -125,5 +141,61 @@ public class PeopleContactEventsListener {
         PersonDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), PersonDeletedV1.class);
         extPersonReplicaRepository.deleteById(payload.personId());
         log.info("Deleted ext_people_contact_person personId={}", payload.personId());
+    }
+
+    private void applyOrganizationAddressUpdated(JsonNode envelope) {
+        OrganizationAddressUpdatedV1 payload =
+                objectMapper.treeToValue(envelope.path("payload"), OrganizationAddressUpdatedV1.class);
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        ExtOrganizationPostalAddress existing = extOrganizationPostalAddressRepository
+                .findById(payload.organizationId())
+                .orElse(null);
+        if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
+            return;
+        }
+        PostalAddressV1 address = payload.postalAddress();
+        extOrganizationPostalAddressRepository.save(ExtOrganizationPostalAddress.builder()
+                .organizationId(payload.organizationId())
+                .line1(address.line1())
+                .line2(address.line2())
+                .city(address.city())
+                .region(address.region())
+                .postalCode(address.postalCode())
+                .countryCode(address.countryCode())
+                .addressUpdatedAt(payload.updatedAt())
+                .aggregateVersion(aggregateVersion)
+                .updatedAt(Instant.now(clock))
+                .build());
+        log.info(
+                "Updated ext_organization_postal_address organizationId={} version={}",
+                payload.organizationId(),
+                aggregateVersion);
+    }
+
+    /**
+     * Removal is a versioned tombstone, not a hard delete: a delete would discard the version
+     * watermark, letting a replayed older update resurrect stale data and letting a stale
+     * removal (replayed after a newer update) wipe a current address. All-null address fields
+     * read as "no address on file" everywhere the replica is consumed.
+     */
+    private void applyOrganizationAddressRemoved(JsonNode envelope) {
+        OrganizationAddressRemovedV1 payload =
+                objectMapper.treeToValue(envelope.path("payload"), OrganizationAddressRemovedV1.class);
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        ExtOrganizationPostalAddress existing = extOrganizationPostalAddressRepository
+                .findById(payload.organizationId())
+                .orElse(null);
+        if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
+            return;
+        }
+        extOrganizationPostalAddressRepository.save(ExtOrganizationPostalAddress.builder()
+                .organizationId(payload.organizationId())
+                .aggregateVersion(aggregateVersion)
+                .updatedAt(Instant.now(clock))
+                .build());
+        log.info(
+                "Tombstoned ext_organization_postal_address organizationId={} version={}",
+                payload.organizationId(),
+                aggregateVersion);
     }
 }

@@ -68,6 +68,12 @@ public class PromotionRedemptionResponse {
     private String promotionCode;
 
     @Schema(
+            description = "Campaign code the redemption is attributed to, if any",
+            example = "SPRING-FLEET-2026",
+            requiredMode = NOT_REQUIRED)
+    private String campaignCode;
+
+    @Schema(
             description = "Identifier of the actor who recorded the redemption",
             example = "01960003-0000-7000-8000-000000000006",
             requiredMode = NOT_REQUIRED)

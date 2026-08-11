@@ -19,7 +19,7 @@ spring:
       embedding:
         base-url: ${OLLAMA_EMBEDDING_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}
         options:
-          model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+          model: ${OLLAMA_EMBEDDING_MODEL:bge-m3}
         timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
 mcp:
   server:
@@ -33,20 +33,84 @@ mcp:
       - /admin/
       - /actuator/
       - /internal/
+  sitemap:
+    # Origin of the frontend SSR server (NOT the API gateway). The SSR server defaults to port 4000.
+    base-url: ${FRONTEND_BASE_URL:http://localhost:4000}
+    cache-ttl: ${SITEMAP_CACHE_TTL:600s}
+    fetch-timeout: ${SITEMAP_FETCH_TIMEOUT:5s}
+    expected-version: ${SITEMAP_EXPECTED_VERSION:1}
   security:
     permit-all-transport: false
+  write-plan:
+    # Gate 6 (#1193): minutes a previewed write plan stays confirmable before it expires.
+    ttl-minutes: ${MCP_WRITE_PLAN_TTL_MINUTES:10}
   rag:
     table-name: mcp_document_embedding
-    dimension: 768
+    # G5.4 #1194 cutover complete + #1207 (V33): the embedding column is 1024-dim bge-m3; the 768
+    # nomic columns and the dual-column selector were retired. The knobs remain for a future
+    # embedding-model migration — see docs/gate5-rag-hybrid-design.md.
+    embedding-column: ${MCP_RAG_EMBEDDING_COLUMN:embedding}
+    dimension: ${MCP_RAG_DIMENSION:1024}
+    # #1194: dense-retrieval cosine-similarity floors (primary retriever / tier-2 wide
+    # retriever), calibrated per embedding model. Defaults fit bge-m3 (the alpha floor sweep chose
+    # 0.45/0.40; nomic-embed-text needed 0.6/0.55 — its similarities sit ~0.10-0.15 higher). Flip
+    # together with the embedding model — see docs/gate5-rag-hybrid-design.md G5.4.
+    min-score: ${MCP_RAG_MIN_SCORE:0.45}
+    tier2-min-score: ${MCP_RAG_TIER2_MIN_SCORE:0.40}
     index-type: ivfflat
+    hybrid:
+      # Exact identifiers (VINs, SKUs, permission/event codes) routinely score below the dense
+      # tier-1 floor. Keep the literal FTS source in the live candidate set; operators can disable
+      # it immediately if the retrieval-quality gate detects a regression.
+      lexical-enabled: ${MCP_RAG_LEXICAL_ENABLED:true}
+    rerank:
+      # #1180: compound questions (two information needs in one query) reserve a slot in the final
+      # top-K for each sub-query's best chunk, so chunks serving one need cannot crowd the other
+      # need's best chunk out of the context window. Single-need queries are unaffected; operators
+      # can disable instantly if the retrieval-quality gate detects a regression.
+      compound-slots-enabled: ${MCP_RAG_RERANK_COMPOUND_SLOTS_ENABLED:true}
+      # Cap on detected sub-queries eligible for a reserved slot.
+      max-sub-queries: 3
     preload:
       docs:
         - id: "accounting.de-bookkeeping"
           source-path: "classpath:rag/de-bookkeeping-rag.md"
           rag-scope: "accounting"
+        - id: "accounting.journal-entries"
+          source-path: "classpath:rag/accounting-journal-entries-rag.md"
+          rag-scope: "accounting"
+          required-permissions: ["accounting:je:view"]
+        - id: "accounting.financial-statements"
+          source-path: "classpath:rag/accounting-financial-statements-rag.md"
+          rag-scope: "accounting"
+          required-permissions: ["reporting:view:financial-statements"]
+        - id: "accounting.report-export"
+          source-path: "classpath:rag/accounting-report-export-rag.md"
+          rag-scope: "accounting"
+          required-permissions: ["accounting:report:export"]
+        - id: "accounting.codes"
+          source-path: "classpath:rag/accounting-codes-rag.md"
+          rag-scope: "accounting"
+          required-permissions: ["accounting:je:view"]
         - id: "inventory.inv-cntrl"
           source-path: "classpath:rag/inv-cntrl-rag.md"
           rag-scope: "inventory"
+        - id: "inventory.purchase-orders"
+          source-path: "classpath:rag/inventory-purchase-orders-rag.md"
+          rag-scope: "inventory"
+          required-permissions: ["inventory:purchase_order:view"]
+        - id: "inventory.receiving"
+          source-path: "classpath:rag/inventory-receiving-rag.md"
+          rag-scope: "inventory"
+          required-permissions: ["inventory:receiving:view"]
+        - id: "inventory.transfers-adjustments"
+          source-path: "classpath:rag/inventory-transfers-adjustments-rag.md"
+          rag-scope: "inventory"
+          required-permissions: ["inventory:transfer:view"]
+        - id: "inventory.codes"
+          source-path: "classpath:rag/inventory-codes-rag.md"
+          rag-scope: "inventory"
+          required-permissions: ["inventory:purchase_order:view"]
         - id: "people.human-resources"
           source-path: "classpath:rag/hr-functions-guide.md"
           rag-scope: "hr"
@@ -79,10 +143,42 @@ mcp:
           source-path: "classpath:rag/order-guide.md"
           rag-scope: "order"
           required-permissions: ["order:order:view"]
+        - id: "order.lifecycle"
+          source-path: "classpath:rag/order-lifecycle-rag.md"
+          rag-scope: "order"
+          required-permissions: ["order:order:view"]
+        - id: "order.price-override"
+          source-path: "classpath:rag/order-price-override-rag.md"
+          rag-scope: "order"
+          required-permissions: ["order:price_override:view"]
+        - id: "order.codes"
+          source-path: "classpath:rag/order-codes-rag.md"
+          rag-scope: "order"
+          required-permissions: ["order:order:view"]
+        - id: "order.returns-refunds"
+          source-path: "classpath:rag/returns-refunds-rag.md"
+          rag-scope: "order"
+          required-permissions: ["order:order:view"]
         - id: "pricing.guide"
           source-path: "classpath:rag/pricing-guide.md"
           rag-scope: "pricing"
           required-permissions: ["pricing:price_book:view", "pricing:rule:view"]
+        - id: "pricing.promotions"
+          source-path: "classpath:rag/pricing-promotions-rag.md"
+          rag-scope: "pricing"
+          required-permissions: ["pricing:promotion:view"]
+        - id: "pricing.restrictions"
+          source-path: "classpath:rag/pricing-restrictions-rag.md"
+          rag-scope: "pricing"
+          required-permissions: ["AUTHENTICATED"]
+        - id: "pricing.codes"
+          source-path: "classpath:rag/pricing-codes-rag.md"
+          rag-scope: "pricing"
+          required-permissions: ["pricing:promotion:view"]
+        - id: "warranty.guide"
+          source-path: "classpath:rag/warranty-guide.md"
+          rag-scope: "warranty"
+          required-permissions: ["warranty:claim:view"]
         - id: "tax.guide"
           source-path: "classpath:rag/tax-guide.md"
           rag-scope: "tax"
@@ -91,6 +187,14 @@ mcp:
           source-path: "classpath:rag/customer-vehicle-guide.md"
           rag-scope: "customer"
           required-permissions: ["crm:party:view", "crm:party:search", "crm:vehicle:view", "crm:vehicle:search", "crm:contact:view"]
+        - id: "crm.party-account-model"
+          source-path: "classpath:rag/crm-party-account-model-rag.md"
+          rag-scope: "customer"
+          required-permissions: ["crm:party:view"]
+        - id: "crm.codes"
+          source-path: "classpath:rag/crm-codes-rag.md"
+          rag-scope: "customer"
+          required-permissions: ["crm:party:view"]
         - id: "reporting.metrics"
           source-path: "classpath:rag/reporting-metrics.md"
           rag-scope: "reporting"
@@ -107,6 +211,22 @@ mcp:
           source-path: "classpath:rag/role-permission-matrix.md"
           rag-scope: "security"
           required-permissions: ["security:role:view", "security:permission:view"]
+        - id: "workorder.estimate-promotion"
+          source-path: "classpath:rag/workorder-estimate-promotion-rag.md"
+          rag-scope: "workorder"
+          required-permissions: ["workorder:estimate:view"]
+        - id: "workorder.status-lifecycle"
+          source-path: "classpath:rag/workorder-status-lifecycle-rag.md"
+          rag-scope: "workorder"
+          required-permissions: ["workorder:workorder:view"]
+        - id: "workorder.approval-config"
+          source-path: "classpath:rag/workorder-approval-config-rag.md"
+          rag-scope: "workorder"
+          required-permissions: ["workorder:approval_config:view"]
+        - id: "workorder.codes"
+          source-path: "classpath:rag/workorder-codes-rag.md"
+          rag-scope: "workorder"
+          required-permissions: ["workorder:estimate:view"]
     chunking:
       enabled: ${MCP_RAG_CHUNKING_ENABLED:true}
       max-segment-size: ${MCP_RAG_MAX_SEGMENT_SIZE:2000}
@@ -123,11 +243,34 @@ mcp:
     # Minimum cosine similarity for a screen to be offered as a deep link.
     min-score: ${MCP_SCREEN_MIN_SCORE:0.6}
   tuning:
-    # Gate 0 (NL-interface plan): adaptive tuning disabled until the retrieval-quality
-    # regression harness exists. Re-enable only via shadow→controlled-live promotion (Gate 7).
-    enabled: ${MCP_TUNING_ENABLED:false}
+    # Gate 7 (#1195): adaptive tool-priority tuning mode — off | shadow | live.
+    # shadow computes proposals and emits them (logger mcp.tuning.shadow, counter
+    # mcp.tuning.proposals) without persisting; live writes only when the newest eval baseline
+    # (eval-result-path, produced by scripts/eval_live.py) reports thresholds.passed=true and is
+    # younger than eval-freshness-hours — otherwise the run downgrades to shadow with a WARN.
+    # Legacy mcp.tuning.enabled=true (deprecated, kept for operators still setting
+    # MCP_TUNING_ENABLED) is treated as mode=live when mode is unset.
+    mode: ${MCP_TUNING_MODE:off}
+    enabled: ${MCP_TUNING_ENABLED:}
+    eval-result-path: ${MCP_TUNING_EVAL_RESULT_PATH:target/eval/baseline-live-python.json}
+    eval-freshness-hours: ${MCP_TUNING_EVAL_FRESHNESS_HOURS:48}
     cron: "0 0 2 * * ?"
   model:
+    # Gate 4 (#1192) tiered model router. Feature flag / rollback: set
+    # MCP_MODEL_TIERING_ENABLED=false and every request uses the single default executor model
+    # (spring.ai.ollama.chat.options.model) with the historical cache keys.
+    tiering-enabled: ${MCP_MODEL_TIERING_ENABLED:true}
+    # T1 router/classifier model (strict JSON, always temperature 0). Deliberately small. If the
+    # model is not pulled on the Ollama host the router call fails fast and the request safely
+    # defaults to T2-complex — never silently to a smaller model.
+    router: ${MCP_MODEL_ROUTER:qwen3:4b}
+    # T2-simple executor (single-tool lookups). Blank = use the default executor model; set to a
+    # smaller pulled model (e.g. qwen3:8b) to realize the latency/cost win.
+    simple: ${MCP_MODEL_SIMPLE:}
+    # T2-complex executor (multi-tool, writes, accounting/tax/admin/security). Blank = use the
+    # default executor model (gpt-oss:120b), which is already the complex-class model.
+    complex: ${MCP_MODEL_COMPLEX:}
+    # Failover (primary -> secondary within a tier) — orthogonal to tier routing above.
     fallback:
       enabled: ${MCP_MODEL_FALLBACK_ENABLED:false}
       secondary-model-name: ${OLLAMA_FALLBACK_MODEL:gpt-oss:20b}
@@ -256,8 +399,9 @@ pos:
     queue-uri-template: ${POS_SHOPMANAGER_QUEUE_URI_TEMPLATE:/shop-manager/v1/shop/{shopId}/queue}
     search-uri-template: ${POS_SHOPMANAGER_SEARCH_URI_TEMPLATE:/shop-manager/v1/shop/search?q={query}}
   tax:
-    # ADR-0021: pos-tax is internal-only and excluded from Eureka/gateway migration
-    base-url: ${POS_TAX_BASE_URL:http://pos-tax/v1/tax}
+    # ADR-0021: pos-tax is internal-only and excluded from Eureka/gateway migration.
+    # pos-tax listens on 8091 (no port-80 mapping), so the port is required (#641).
+    base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091/v1/tax}
     tax-rate-uri-template: ${POS_TAX_RATE_URI_TEMPLATE:/rates/{locationId}}
     tax-calculate-uri-template: ${POS_TAX_CALCULATE_URI_TEMPLATE:/calculate?amount={amount}&locationId={locationId}}
     tax-summary-uri-template: ${POS_TAX_SUMMARY_URI_TEMPLATE:/summary/{period}}

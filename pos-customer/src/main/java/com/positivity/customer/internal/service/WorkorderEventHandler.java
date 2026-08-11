@@ -1,8 +1,11 @@
 package com.positivity.customer.internal.service;
 
 import com.positivity.customer.internal.entity.CommunicationPreference;
+import com.positivity.customer.internal.entity.CustomerInteraction;
 import com.positivity.customer.internal.entity.PartyNote;
 import com.positivity.customer.internal.entity.ProcessingLog;
+import com.positivity.customer.internal.enums.InteractionDirection;
+import com.positivity.customer.internal.enums.InteractionType;
 import com.positivity.customer.internal.enums.ProcessingStatus;
 import com.positivity.customer.internal.event.ContactPreferenceUpdatedPayload;
 import com.positivity.customer.internal.event.EventEnvelope;
@@ -64,6 +67,7 @@ public class WorkorderEventHandler {
     private final CommunicationPreferenceRepository communicationPreferenceRepository;
     private final PersonPartyRepository personPartyRepository;
     private final PartyNoteRepository partyNoteRepository;
+    private final CustomerInteractionServiceImpl customerInteractionService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -254,6 +258,20 @@ public class WorkorderEventHandler {
                     .sourceWorkorderId(normalizeOptionalText(payload.getSourceWorkorderId()))
                     .sourceEventId(envelope.getEventId())
                     .createdAt(Instant.now(clock))
+                    .build());
+
+            // Story #1141: the same note also lands on the unified interaction timeline, so a
+            // CSR sees workorder notes and campaign touches in one history. party_note stays
+            // the raw projection — its existing consumers are untouched.
+            customerInteractionService.ingest(CustomerInteraction.builder()
+                    .partyId(partyId)
+                    .type(InteractionType.WORKORDER_NOTE)
+                    .direction(InteractionDirection.INBOUND)
+                    .summary(normalizeOptionalText(payload.getNoteType()))
+                    .body(normalizeOptionalText(payload.getNoteText()))
+                    .sourceWorkorderId(normalizeOptionalText(payload.getSourceWorkorderId()))
+                    .sourceEventId(envelope.getEventId())
+                    .occurredAt(Instant.now(clock))
                     .build());
 
             log.info(

@@ -1,0 +1,22 @@
+domain: marketing
+serviceName: pos-marketing
+version: "1.0"
+permissions:
+  - name: "marketing:campaign:create"
+    description: "Create a marketing campaign"
+  - name: "marketing:campaign:edit"
+    description: "Edit a draft campaign's definition, segment binding, and templates"
+  - name: "marketing:campaign:manage"
+    description: "Pause, resume, cancel, or delete a campaign"
+  - name: "marketing:campaign:schedule"
+    description: "Schedule a campaign for delivery"
+  - name: "marketing:campaign:send"
+    description: "Dispatch a campaign to its resolved audience"
+  - name: "marketing:campaign:view"
+    description: "View campaigns and audience previews"
+  - name: "marketing:stats:view"
+    description: "View campaign reach, delivery, and attribution analytics"
+  - name: "marketing:template:manage"
+    description: "Create, edit, or delete message templates"
+  - name: "marketing:template:view"
+    description: "View message templates"

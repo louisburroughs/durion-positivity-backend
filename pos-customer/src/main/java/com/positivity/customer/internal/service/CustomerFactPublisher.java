@@ -7,9 +7,17 @@ import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.domainevents.customer.CustomerConsentDecisionChangedV1;
 import com.positivity.domainevents.customer.CustomerPartyDeletedV1;
+import com.positivity.domainevents.customer.CustomerPartyTagChangedV1;
 import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
 import com.positivity.domainevents.customer.CustomerPersonIdentityUpdatedV1;
+import com.positivity.domainevents.customer.CustomerRedemptionRecordedV1;
+import com.positivity.domainevents.customer.CustomerSegmentChangedV1;
+import com.positivity.domainevents.customer.CustomerSegmentResolvedV1;
+import com.positivity.domainevents.customer.CustomerSuppressionChangedV1;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -134,6 +142,131 @@ public class CustomerFactPublisher {
             return;
         }
         personPartyRepository.findByPersonId(personId).ifPresent(person -> publishPartyUpdated(writer, person));
+    }
+
+    /**
+     * Emit {@code customer.party.tag-changed} for a tag attach or removal (Story #1136), so
+     * marketing audience replicas track CRM classification without reading the CRM tables.
+     */
+    public void partyTagChanged(
+            @NonNull UUID partyId,
+            @NonNull UUID tagId,
+            @NonNull String tagName,
+            boolean assigned,
+            @Nullable String source) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        CustomerPartyTagChangedV1 payload = new CustomerPartyTagChangedV1(partyId, tagId, tagName, assigned, source);
+        publish(writer, CustomerPartyTagChangedV1.EVENT_TYPE, partyId, payload);
+    }
+
+    /**
+     * Emit {@code customer.suppression.changed} so pos-marketing can keep a local suppression
+     * replica and check it per recipient without a synchronous CRM call (Story #1140).
+     *
+     * <p>Suppression has no UUID aggregate of its own — the subject is an address. The
+     * aggregate id is therefore derived deterministically from {@code channel:addressHash},
+     * which keeps per-address ordering intact and lets the topic compact.
+     */
+    public void suppressionChanged(
+            @NonNull String channel,
+            @NonNull String addressHash,
+            @Nullable UUID partyId,
+            boolean suppressed,
+            @Nullable String reason) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        UUID aggregateId = UUID.nameUUIDFromBytes((channel + ":" + addressHash).getBytes(StandardCharsets.UTF_8));
+        CustomerSuppressionChangedV1 payload =
+                new CustomerSuppressionChangedV1(channel, addressHash, partyId, suppressed, reason);
+        publish(writer, CustomerSuppressionChangedV1.EVENT_TYPE, aggregateId, payload);
+    }
+
+    /**
+     * Emit {@code customer.redemption.recorded} so pos-marketing can attribute conversions
+     * back to a campaign (Story #1142). Emitted for every redemption, including those with no
+     * {@code campaignCode} — marketing needs the non-attributed baseline for a campaign's lift
+     * to mean anything.
+     */
+    public void redemptionRecorded(
+            @NonNull UUID redemptionId,
+            @NonNull UUID promotionId,
+            @NonNull UUID customerId,
+            @NonNull UUID workorderId,
+            @NonNull String promotionCode,
+            @Nullable String campaignCode,
+            @Nullable BigDecimal discountAmount) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        CustomerRedemptionRecordedV1 payload = new CustomerRedemptionRecordedV1(
+                redemptionId, promotionId, customerId, workorderId, promotionCode, campaignCode, discountAmount);
+        publish(writer, CustomerRedemptionRecordedV1.EVENT_TYPE, customerId, payload);
+    }
+
+    /**
+     * Emit {@code customer.consent.decision-changed} for one party and channel (Story #1138).
+     *
+     * <p>Publishes the <em>resolved</em> decision rather than the raw consent fields: the
+     * commercial rule (decision O-2) belongs to this module, and re-deriving it in every
+     * consumer would guarantee the copies drift.
+     */
+    public void consentDecisionChanged(
+            @NonNull UUID partyId,
+            @NonNull String channel,
+            boolean allowed,
+            @NonNull String reason,
+            @Nullable UUID governingPartyId) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        CustomerConsentDecisionChangedV1 payload =
+                new CustomerConsentDecisionChangedV1(partyId, channel, allowed, reason, governingPartyId);
+        publish(writer, CustomerConsentDecisionChangedV1.EVENT_TYPE, partyId, payload);
+    }
+
+    /** Emit {@code customer.segment.changed} — metadata only, never membership (Story #1137). */
+    public void segmentChanged(
+            @NonNull UUID segmentId,
+            @Nullable String name,
+            @Nullable String audienceType,
+            @Nullable String type,
+            boolean active,
+            boolean deleted) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        CustomerSegmentChangedV1 payload =
+                new CustomerSegmentChangedV1(segmentId, name, audienceType, type, active, deleted);
+        publish(writer, CustomerSegmentChangedV1.EVENT_TYPE, segmentId, payload);
+    }
+
+    /**
+     * Emit {@code customer.segment.resolved} in reply to a resolve command (Story #1137).
+     *
+     * <p>Dynamic membership is derived from party data and has no event boundary, so it cannot
+     * be replicated continuously — a requester asks and this module answers.
+     */
+    public void segmentResolved(
+            @NonNull UUID requestId,
+            @NonNull UUID segmentId,
+            @NonNull String audienceType,
+            @NonNull List<UUID> partyIds,
+            boolean truncated) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        CustomerSegmentResolvedV1 payload =
+                new CustomerSegmentResolvedV1(requestId, segmentId, audienceType, partyIds, truncated);
+        publish(writer, CustomerSegmentResolvedV1.EVENT_TYPE, segmentId, payload);
     }
 
     private void publishPartyUpdated(@NonNull OutboxEventWriter writer, @NonNull AbstractParty party) {

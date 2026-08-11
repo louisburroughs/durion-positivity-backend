@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.orchestration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -21,6 +22,7 @@ import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.domain.WorkflowState;
+import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.orchestration.agent.MasterAgentRegistry;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.orchestration.rag.ScopedContentRetrieverFactory;
@@ -123,6 +125,7 @@ class SessionAgentManagerTest {
     private InventoryFacadeTool inventoryFacadeTool;
     private OrderFacadeTool orderFacadeTool;
     private SimpleChatClassifier simpleChatClassifier;
+    private SimpleChatFastPath simpleChatFastPath;
     private SharedOrchestrationSupport sharedOrchestrationSupport;
 
     private SessionAgentManager manager;
@@ -144,7 +147,7 @@ class SessionAgentManagerTest {
         lenient().when(workflowStateService.resolveActiveState(anyString())).thenReturn(Optional.empty());
         lenient().when(rolePromptResolver.resolvePrompt(anyString())).thenReturn("Default role prompt");
         lenient()
-                .when(rolePromptResolver.assemble(anyString(), anyString()))
+                .when(rolePromptResolver.assemble(anyString(), anyString(), anyBoolean()))
                 .thenReturn(new RolePromptResolver.AssembledPrompt("prompt", List.of("BASE", "ROLE")));
         lenient().when(embeddingModel.embed(anyString())).thenReturn(new float[] {0.1f});
         exaWebSearchTool = new ExaWebSearchTool(RestClient.builder(), "https://api.exa.ai", "", "auto", 5);
@@ -161,6 +164,8 @@ class SessionAgentManagerTest {
                 "/order/v1/orders/search?q={query}");
         simpleChatClassifier = new SimpleChatClassifier(SimpleChatRuleDefaults.defaultCatalog());
         sharedOrchestrationSupport = new SharedOrchestrationSupport();
+        simpleChatFastPath =
+                new SimpleChatFastPath(simpleChatClassifier, rolePromptResolver, sharedOrchestrationSupport);
         QueryDocumentRetriever scopedRetriever = mock(QueryDocumentRetriever.class);
         lenient().when(toolRegistry.sharedTools()).thenReturn(List.of());
         lenient()
@@ -183,18 +188,23 @@ class SessionAgentManagerTest {
                 null,
                 null, // sessionSummary
                 rolePromptResolver,
-                simpleChatClassifier,
+                simpleChatFastPath,
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // answerResolutionLadder
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
                 workflowStateService,
+                null, // nltiRouter
+                null, // tieredChatModelResolver
+                true, // tieringEnabled (no-op without a router)
                 FIXED_CLOCK,
                 30,
                 500,
                 50,
-                100);
+                100,
+                0.6,
+                0.55);
         clearInvocations(toolRegistry);
         clearInvocations(toolRegistryService);
         clearInvocations(toolSelectionEngine);
@@ -388,24 +398,53 @@ class SessionAgentManagerTest {
                 null,
                 null, // sessionSummary
                 rolePromptResolver,
-                simpleChatClassifier,
+                simpleChatFastPath,
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // answerResolutionLadder
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
                 workflowStateService,
+                null, // nltiRouter
+                null, // tieredChatModelResolver
+                true, // tieringEnabled (no-op without a router)
                 FIXED_CLOCK,
                 0,
                 500,
                 50,
-                100);
+                100,
+                0.6,
+                0.55);
         clearInvocations(toolRegistry);
 
         expiringManager.getOrCreateAgent("user-1", "ROLE_CASHIER");
         expiringManager.getOrCreateAgent("user-1", "ROLE_CASHIER");
 
         verify(toolRegistry, times(2)).resolveDomainTools("ROLE_CASHIER");
+    }
+
+    @Test
+    @DisplayName("onAgentConfigurationChanged evicts prebuilt role agents so the next request rebuilds")
+    void onAgentConfigurationChanged_evictsCachedRoleAgents() {
+        // Prebuilt at construction time — a warm request is served from cache without a rebuild.
+        manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
+        verify(toolRegistry, never()).resolveDomainTools("ROLE_CASHIER");
+
+        manager.onAgentConfigurationChanged(AgentCacheInvalidationEvent.systemPromptChanged("ROLE_CASHIER"));
+        manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
+
+        verify(toolRegistry, times(1)).resolveDomainTools("ROLE_CASHIER");
+    }
+
+    @Test
+    @DisplayName("onAgentConfigurationChanged also rebuilds after a tool-permission change")
+    void onAgentConfigurationChanged_toolPermissionChange_evictsCachedRoleAgents() {
+        manager.getOrCreateAgent("user-1", "ROLE_TECHNICIAN");
+
+        manager.onAgentConfigurationChanged(AgentCacheInvalidationEvent.toolPermissionChanged("inventory_stockcheck"));
+        manager.getOrCreateAgent("user-1", "ROLE_TECHNICIAN");
+
+        verify(toolRegistry, times(2)).resolveDomainTools("ROLE_TECHNICIAN");
     }
 
     private static CurrentUserContext userContext(String username, UUID userId, String primaryRole) {
@@ -430,18 +469,23 @@ class SessionAgentManagerTest {
                 null,
                 null,
                 rolePromptResolver,
-                simpleChatClassifier,
+                simpleChatFastPath,
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // answerResolutionLadder
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
                 workflowStateService,
+                null, // nltiRouter
+                null, // tieredChatModelResolver
+                true, // tieringEnabled (no-op without a router)
                 FIXED_CLOCK,
                 30,
                 500,
                 50,
-                100);
+                100,
+                0.6,
+                0.55);
     }
 
     private ToolSelectionEngine realToolSelectionEngine() {

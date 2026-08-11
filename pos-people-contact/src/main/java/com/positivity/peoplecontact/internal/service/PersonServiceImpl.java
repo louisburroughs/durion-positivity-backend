@@ -4,7 +4,9 @@ import com.positivity.peoplecontact.internal.dto.Person;
 import com.positivity.peoplecontact.internal.dto.ResolvePersonRequest;
 import com.positivity.peoplecontact.internal.dto.ResolvePersonResponse;
 import com.positivity.peoplecontact.internal.entity.PersonContactPoint;
+import com.positivity.peoplecontact.internal.enums.PartyType;
 import com.positivity.peoplecontact.internal.exception.PersonHasLinkedUsersException;
+import com.positivity.peoplecontact.internal.repository.PartyPostalAddressRepository;
 import com.positivity.peoplecontact.internal.repository.PersonContactPointRepository;
 import com.positivity.peoplecontact.internal.repository.PersonRepository;
 import com.positivity.peoplecontact.internal.repository.PersonSpecifications;
@@ -46,6 +48,8 @@ public class PersonServiceImpl implements PersonService {
     private final PersonRepository personRepository;
 
     private final PersonContactPointRepository personContactPointRepository;
+
+    private final PartyPostalAddressRepository partyPostalAddressRepository;
 
     private final UserPersonLinkRepository userPersonLinkRepository;
 
@@ -246,6 +250,8 @@ public class PersonServiceImpl implements PersonService {
         // #881: contact points have no FK to person — remove them in the same transaction so
         // the person.deleted fact and the authority's own tables cannot drift apart.
         personContactPointRepository.deleteByPersonId(id);
+        // Same reasoning for the postal address (FI-4, #1135): no FK, so clean up here.
+        partyPostalAddressRepository.deleteByPartyTypeAndPartyId(PartyType.PERSON, id);
         try {
             personRepository.deleteById(id);
             // Force the DELETE to execute here so a link created concurrently (between the
@@ -263,7 +269,11 @@ public class PersonServiceImpl implements PersonService {
         personRepository
                 .findById(personId)
                 .ifPresent(entity -> eventPublisher.publishPersonUpdated(
-                        entity, personContactPointRepository.findByPersonId(personId)));
+                        entity,
+                        personContactPointRepository.findByPersonId(personId),
+                        partyPostalAddressRepository
+                                .findByPartyTypeAndPartyId(PartyType.PERSON, personId)
+                                .orElse(null)));
     }
 
     private int resolveThreshold(Integer thresholdOverride) {

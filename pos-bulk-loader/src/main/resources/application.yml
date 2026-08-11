@@ -58,17 +58,17 @@ pos:
     base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}
     api-secret: ${POS_EVENTS_API_SECRET:}
   catalog:
-    base-url: ${POS_CATALOG_BASE_URL:http://localhost:8082}
+    service-id: ${POS_CATALOG_SERVICE_ID:catalog}
   customer:
-    base-url: ${POS_CUSTOMER_BASE_URL:http://localhost:8086}
+    service-id: ${POS_CUSTOMER_SERVICE_ID:customer}
   people:
-    base-url: ${POS_PEOPLE_BASE_URL:http://localhost:8087}
+    service-id: ${POS_PEOPLE_SERVICE_ID:people}
   price:
-    base-url: ${POS_PRICE_BASE_URL:http://localhost:8088}
+    service-id: ${POS_PRICE_SERVICE_ID:price}
   vehicle-inventory:
-    base-url: ${POS_VEHICLE_INVENTORY_BASE_URL:http://localhost:8091}
+    service-id: ${POS_VEHICLE_INVENTORY_SERVICE_ID:vehicle-inventory}
   vehicle-fitment:
-    base-url: ${POS_VEHICLE_FITMENT_BASE_URL:http://localhost:8092}
+    service-id: ${POS_VEHICLE_FITMENT_SERVICE_ID:vehicle-fitment}
 
 bulk-loader:
   storage:

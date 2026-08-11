@@ -90,6 +90,12 @@ public class WorkorderServiceLine {
     @Builder.Default
     private Boolean declined = false;
 
+    // Reason the customer declined the recommendation (FI-3, #1133). Snapshotted from the source
+    // EstimateItem's rejectionReason when a declined recommendation is promoted onto the workorder.
+    @Column(name = "decline_reason", length = 500)
+    @Nullable
+    private String declineReason;
+
     // Status of the work order item
     @Enumerated(EnumType.STRING)
     @Builder.Default

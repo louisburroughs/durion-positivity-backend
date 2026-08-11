@@ -252,6 +252,166 @@ class EligibilityEvaluationServiceImplTest {
         assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.EVALUATION_ERROR);
     }
 
+    /**
+     * Audience-type predicate matches case-insensitively (rule stores enum-like
+     * names such as COMMERCIAL).
+     *
+     * <p>
+     * Issue: #1134
+     */
+    @Test
+    void givenAudienceTypeRule_andMatchingAudience_whenEvaluate_thenEligible() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        PromotionEligibilityRule rule = rule(ConditionType.AUDIENCE_TYPE, RuleOperator.EQUALS, "COMMERCIAL");
+
+        when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
+
+        EligibilityEvaluationServiceImpl service =
+                new EligibilityEvaluationServiceImpl(ruleRepo, promotionRepo, accountProvider, vehicleProvider);
+
+        EligibilityDecision decision = service.evaluateEligibility(promotionId, null, null, "commercial", null);
+
+        assertThat(decision.isEligible()).isTrue();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.ELIGIBLE);
+    }
+
+    @Test
+    void givenAudienceTypeRule_andDifferentAudience_whenEvaluate_thenNotMatched() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        PromotionEligibilityRule rule = rule(ConditionType.AUDIENCE_TYPE, RuleOperator.EQUALS, "COMMERCIAL");
+
+        when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
+
+        EligibilityEvaluationServiceImpl service =
+                new EligibilityEvaluationServiceImpl(ruleRepo, promotionRepo, accountProvider, vehicleProvider);
+
+        EligibilityDecision decision = service.evaluateEligibility(promotionId, null, null, "INDIVIDUAL", null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.AUDIENCE_TYPE_NOT_MATCHED);
+    }
+
+    @Test
+    void givenAudienceTypeExclusionRule_andMatchingAudience_whenEvaluate_thenExcluded() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        PromotionEligibilityRule rule = rule(ConditionType.AUDIENCE_TYPE, RuleOperator.NOT_IN, "INDIVIDUAL");
+
+        when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
+
+        EligibilityEvaluationServiceImpl service =
+                new EligibilityEvaluationServiceImpl(ruleRepo, promotionRepo, accountProvider, vehicleProvider);
+
+        EligibilityDecision decision = service.evaluateEligibility(promotionId, null, null, "INDIVIDUAL", null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.AUDIENCE_TYPE_EXCLUDED);
+    }
+
+    /**
+     * Backward compatibility: legacy three-argument overload carries no audience
+     * context, so an audience-gated rule fails with a missing-context reason.
+     *
+     * <p>
+     * Issue: #1134
+     */
+    @Test
+    void givenAudienceTypeRule_andNoAudienceContext_whenEvaluate_thenMissingAudienceContext() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        PromotionEligibilityRule rule = rule(ConditionType.AUDIENCE_TYPE, RuleOperator.EQUALS, "COMMERCIAL");
+
+        when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
+
+        EligibilityEvaluationServiceImpl service =
+                new EligibilityEvaluationServiceImpl(ruleRepo, promotionRepo, accountProvider, vehicleProvider);
+
+        EligibilityDecision decision = service.evaluateEligibility(promotionId, null, null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.MISSING_AUDIENCE_CONTEXT);
+    }
+
+    @Test
+    void givenAudienceTypeRule_withUnsupportedOperator_whenEvaluate_thenEvaluationError() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        PromotionEligibilityRule rule =
+                rule(ConditionType.AUDIENCE_TYPE, RuleOperator.GREATER_THAN_OR_EQUAL_TO, "COMMERCIAL");
+
+        when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
+
+        EligibilityEvaluationServiceImpl service =
+                new EligibilityEvaluationServiceImpl(ruleRepo, promotionRepo, accountProvider, vehicleProvider);
+
+        EligibilityDecision decision = service.evaluateEligibility(promotionId, null, null, "COMMERCIAL", null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.EVALUATION_ERROR);
+    }
+
+    @Test
+    void givenCampaignCodeListRule_andMatchingCode_whenEvaluate_thenEligible() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        PromotionEligibilityRule rule =
+                rule(ConditionType.CAMPAIGN_CODE, RuleOperator.IN, "SPRING-FLEET-2026, SUMMER-2026");
+
+        when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
+
+        EligibilityEvaluationServiceImpl service =
+                new EligibilityEvaluationServiceImpl(ruleRepo, promotionRepo, accountProvider, vehicleProvider);
+
+        EligibilityDecision decision = service.evaluateEligibility(promotionId, null, null, null, "SUMMER-2026");
+
+        assertThat(decision.isEligible()).isTrue();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.ELIGIBLE);
+    }
+
+    @Test
+    void givenCampaignCodeRule_andDifferentCode_whenEvaluate_thenNotMatched() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        PromotionEligibilityRule rule = rule(ConditionType.CAMPAIGN_CODE, RuleOperator.EQUALS, "SPRING-FLEET-2026");
+
+        when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
+
+        EligibilityEvaluationServiceImpl service =
+                new EligibilityEvaluationServiceImpl(ruleRepo, promotionRepo, accountProvider, vehicleProvider);
+
+        EligibilityDecision decision = service.evaluateEligibility(promotionId, null, null, null, "WINTER-2026");
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.CAMPAIGN_CODE_NOT_MATCHED);
+    }
+
+    @Test
+    void givenCampaignCodeExclusionRule_andMatchingCode_whenEvaluate_thenExcluded() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        PromotionEligibilityRule rule = rule(ConditionType.CAMPAIGN_CODE, RuleOperator.NOT_IN, "SPRING-FLEET-2026");
+
+        when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
+
+        EligibilityEvaluationServiceImpl service =
+                new EligibilityEvaluationServiceImpl(ruleRepo, promotionRepo, accountProvider, vehicleProvider);
+
+        EligibilityDecision decision = service.evaluateEligibility(promotionId, null, null, null, "SPRING-FLEET-2026");
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.CAMPAIGN_CODE_EXCLUDED);
+    }
+
+    @Test
+    void givenCampaignCodeRule_andNoCampaignContext_whenEvaluate_thenMissingCampaignContext() {
+        UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        PromotionEligibilityRule rule = rule(ConditionType.CAMPAIGN_CODE, RuleOperator.EQUALS, "SPRING-FLEET-2026");
+
+        when(ruleRepo.findByPromotion_PromotionOfferId(any())).thenReturn(List.of(rule));
+
+        EligibilityEvaluationServiceImpl service =
+                new EligibilityEvaluationServiceImpl(ruleRepo, promotionRepo, accountProvider, vehicleProvider);
+
+        EligibilityDecision decision = service.evaluateEligibility(promotionId, null, null, null, null);
+
+        assertThat(decision.isEligible()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo(EligibilityReasonCode.MISSING_CAMPAIGN_CONTEXT);
+    }
+
     @Test
     void givenMatchingPromotionAndRule_whenDeleteRule_thenDeletesScopedRule() {
         UUID promotionId = UUID.fromString("00000000-0000-0000-0000-000000000001");

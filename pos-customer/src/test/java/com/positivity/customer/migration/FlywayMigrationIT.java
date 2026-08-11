@@ -62,5 +62,18 @@ class FlywayMigrationIT {
         // Seed still loads the person_party rows (FK targets for party_relationship).
         Integer persons = jdbc.queryForObject("SELECT count(*) FROM person_party", Integer.class);
         assertThat(persons).isGreaterThanOrEqualTo(70);
+
+        // FI-4 (#1135): structured-address replica columns and the org-address replica table.
+        Integer addressColumns = jdbc.queryForObject(
+                "SELECT count(*) FROM information_schema.columns "
+                        + "WHERE table_schema = 'public' AND table_name = 'ext_people_contact_person' "
+                        + "AND column_name IN ('address_line1', 'address_region', 'address_country_code')",
+                Integer.class);
+        assertThat(addressColumns).isEqualTo(3);
+        Integer orgAddressTables = jdbc.queryForObject(
+                "SELECT count(*) FROM information_schema.tables "
+                        + "WHERE table_schema = 'public' AND table_name = 'ext_organization_postal_address'",
+                Integer.class);
+        assertThat(orgAddressTables).isEqualTo(1);
     }
 }

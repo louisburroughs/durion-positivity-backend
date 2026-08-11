@@ -384,6 +384,68 @@ paths:
         - nlti:request:submit
       x-required-permissions:
       - nlti:request:submit
+  /v1/nlt/requests/{requestId}/confirm:
+    post:
+      tags:
+      - NLTI
+      summary: Confirm a previewed write plan
+      description: Executes the exact persisted arguments of the write plan attached to the request. Rejects expired plans, re-checks the caller's permission at execution time, and returns the prior outcome for an already-executed idempotency key instead of re-executing.
+      operationId: confirmWritePlan
+      parameters:
+      - name: requestId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Authorization
+        in: header
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmWritePlanRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WritePlanResponseV1'
+      security:
+      - bearerAuth:
+        - nlti:request:submit
+      x-required-permissions:
+      - nlti:request:submit
+  /v1/nlt/requests/{requestId}/cancel:
+    post:
+      tags:
+      - NLTI
+      summary: Cancel a previewed write plan
+      description: Cancels the pending write plan attached to the request without executing it.
+      operationId: cancelWritePlan
+      parameters:
+      - name: requestId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WritePlanResponseV1'
+      security:
+      - bearerAuth:
+        - nlti:request:submit
+      x-required-permissions:
+      - nlti:request:submit
   /v1/mcp/documents:
     post:
       tags:
@@ -454,11 +516,8 @@ paths:
             text/event-stream:
               schema:
                 type: array
-                additionalProperties: {}
-                contains: {}
                 items:
                   $ref: '#/components/schemas/ServerSentEventString'
-                unevaluatedItems: {}
       security:
       - bearerAuth:
         - mcp:chat:stream
@@ -562,12 +621,10 @@ paths:
         required: false
         schema:
           type: array
-          contains: {}
           default:
           - timestamp,ASC
           items:
             type: string
-          unevaluatedItems: {}
       responses:
         '200':
           description: OK
@@ -860,6 +917,78 @@ components:
       - correlationId
       - requestId
       - status
+    ConfirmWritePlanRequest:
+      type: object
+      description: Optional confirmation payload
+      properties:
+        idempotencyKey:
+          type: string
+          description: Idempotency key from the plan preview; when present it must match the plan
+    WritePlanResponseV1:
+      type: object
+      description: Write-action plan preview / confirmation outcome (version 1)
+      properties:
+        planId:
+          type: string
+          format: uuid
+          description: Write plan identifier
+        requestId:
+          type: string
+          format: uuid
+          description: Originating NLTI request identifier
+        sessionId:
+          type: string
+          format: uuid
+          description: Conversation session identifier
+        status:
+          type: string
+          description: Plan lifecycle status
+          example: PENDING_CONFIRMATION
+        targetTool:
+          type: string
+          description: Tool the plan will invoke on confirmation
+        args:
+          type: object
+          description: Exact arguments that will be executed on confirmation
+        inferredDefaultArgs:
+          type: array
+          description: Argument names filled by an inferred default (disclosed per Gate 6)
+          items:
+            type: string
+          uniqueItems: true
+        riskLevel:
+          type: string
+          description: Assessed risk level
+          example: MEDIUM
+        summary:
+          type: string
+          description: Human-readable summary of the planned action
+        idempotencyKey:
+          type: string
+          description: Idempotency key; re-sending confirm with this key never double-executes
+        expiresAt:
+          type: string
+          format: date-time
+          description: Instant after which the plan can no longer be confirmed
+        executedAt:
+          type: string
+          format: date-time
+          description: Instant the plan was executed, when complete
+        executionResult:
+          type: string
+          description: Execution outcome returned by the tool, when complete
+      required:
+      - args
+      - expiresAt
+      - idempotencyKey
+      - inferredDefaultArgs
+      - planId
+      - requestId
+      - riskLevel
+      - sessionId
+      - status
+      - summary
+      - targetTool
     DocumentIngestionRequest:
       type: object
       description: Document ingestion payload

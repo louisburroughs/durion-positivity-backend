@@ -1,5 +1,6 @@
 package com.positivity.order.internal.config;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,8 +17,8 @@ public class InvoiceClientConfig {
 
     @Bean
     public RestClient invoiceServiceRestClient(
-            RestClient.Builder restClientBuilder,
-            @Value("${pos.invoice.base-url:http://pos-invoice:8080}") String invoiceServiceBaseUrl) {
-        return restClientBuilder.baseUrl(invoiceServiceBaseUrl).build();
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("${pos.invoice.service-id:invoice}") String serviceId) {
+        return restClientBuilder.baseUrl("http://" + serviceId).build();
     }
 }

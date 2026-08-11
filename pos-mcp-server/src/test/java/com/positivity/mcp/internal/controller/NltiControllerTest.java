@@ -71,6 +71,9 @@ class NltiControllerTest {
     @MockitoBean
     private NltiWorkflowStateService workflowStateService;
 
+    @MockitoBean
+    private com.positivity.mcp.internal.service.NltiWritePlanService writePlanService;
+
     // ─── AC-1: POST with valid prompt → 202 with required envelope fields ─────
 
     /**

@@ -93,12 +93,22 @@ pos:
       # close requires the order:session:approve_variance authority (parity story G2, spec R6.4).
       authorized-difference-limit: ${POS_ORDER_SESSION_AUTHORIZED_DIFFERENCE_LIMIT:5.00}
   price:
-    base-url: ${POS_PRICE_BASE_URL:http://pos-price:8080}
+    service-id: ${POS_PRICE_SERVICE_ID:price}
   tax:
+    # Direct-call exception (#641): pos-tax is internal-only, register-with-eureka: false
     base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}
   invoice:
     # Scoped ADR-0044 exception (checkout invoice creation + saga payment reversal)
-    base-url: ${POS_INVOICE_BASE_URL:http://pos-invoice:8080}
+    service-id: ${POS_INVOICE_SERVICE_ID:invoice}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:}
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
 
 springdoc:
   api-docs:

@@ -1,5 +1,7 @@
 package com.positivity.customer.internal.dto.snapshot;
 
+import com.positivity.customer.internal.dto.CustomerInteractionResponse;
+import com.positivity.customer.internal.dto.MarketingConsentSummaryResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
@@ -34,6 +36,23 @@ public class CrmSnapshotDTO {
     @Schema(description = "Read-only billing rule reference", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     @Nullable
     private BillingRuleRef billingRules;
+
+    /**
+     * Contactability at a glance (Story #1143). {@code preferences.marketingOptOut} above is the
+     * coarse legacy flag; this carries the per-channel consent, the account master gate, and the
+     * suppression-aware eligibility a CSR actually needs before promising a customer a follow-up.
+     */
+    @Schema(
+            description = "Per-channel marketing consent and effective send eligibility",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Nullable
+    private MarketingConsentSummaryResponse marketingConsent;
+
+    @Schema(
+            description = "Most recent touches on the party's interaction timeline",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Nullable
+    private List<CustomerInteractionResponse> recentInteractions;
 
     /**
      * Vehicle summary within CRM snapshot context.
@@ -252,5 +271,23 @@ public class CrmSnapshotDTO {
 
     public void setBillingRules(@Nullable BillingRuleRef billingRules) {
         this.billingRules = billingRules;
+    }
+
+    @Nullable
+    public MarketingConsentSummaryResponse getMarketingConsent() {
+        return marketingConsent;
+    }
+
+    public void setMarketingConsent(@Nullable MarketingConsentSummaryResponse marketingConsent) {
+        this.marketingConsent = marketingConsent;
+    }
+
+    @Nullable
+    public List<CustomerInteractionResponse> getRecentInteractions() {
+        return recentInteractions;
+    }
+
+    public void setRecentInteractions(@Nullable List<CustomerInteractionResponse> recentInteractions) {
+        this.recentInteractions = recentInteractions;
     }
 }

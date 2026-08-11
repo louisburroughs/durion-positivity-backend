@@ -286,8 +286,8 @@
     {
       "name": "pos.tax.base-url",
       "type": "java.lang.String",
-      "description": "Facade base URL for tax tools.",
-      "defaultValue": "http://pos-tax/v1/tax"
+      "description": "Facade base URL for tax tools (direct Docker DNS; pos-tax is internal-only per ADR-0021 and listens on 8091).",
+      "defaultValue": "http://pos-tax:8091/v1/tax"
     },
     {
       "name": "pos.vehicle.base-url",

@@ -26,7 +26,6 @@ These entries should not be migrated using the default gateway-routed policy wit
 | EventTypeInitializer (pos-workorder)                                          | startup-infra    | Currently goes through gateway URL; startup policy prefers direct bootstrap path to avoid gateway/discovery ordering risk.                               | Direct Docker DNS event receiver endpoint (not localhost, avoid gateway dependency).     |
 | ExternalAvailabilityClientImpl                                                | direct-exception | Calls non-gateway internal availability endpoint contract (`/positivity/v1/availability/external`) not represented in gateway route inventory.           | Keep direct URL to owning internal provider until explicit gateway contract is added.    |
 | ProductSubstituteClientImpl                                                   | direct-exception | Calls non-gateway substitute resolution contract (`/product/v1/substitutes:resolve`) not represented in gateway route inventory.                         | Keep direct URL to owning internal provider until explicit gateway contract is added.    |
-| VehicleReferenceService (pos-workorder -> pos-vehicle internal service)       | direct-exception | No `/vehicle/**` gateway route exists in the gateway route catalog. Internal pos-vehicle service direct call preserved until gateway route is added.     | Direct Docker DNS hostname (`http://pos-vehicle:8088`) until gateway route is available. |
 | SourceDocumentStubClient                                                      | direct-exception | Stub-only source document lookup path is an internal testing/stub utility boundary.                                                                      | Keep direct configurable stub base URL/path.                                             |
 | McpServerConfiguration                                                        | direct-exception | MCP SSE server/client transport base URL is protocol transport wiring, not downstream business-service authorization traffic.                            | Keep explicit transport URL configuration.                                               |
 | TaxServiceClient (pos-invoice)                                                | tax-exemption    | ADR-0021: pos-tax is internal-only and exempt from gateway/Eureka migration. ADR-0014 also keeps tax out of gateway route whitelist.                     | Direct Docker DNS to pos-tax (for example `http://pos-tax:<port>/v1/tax`).               |
@@ -40,6 +39,13 @@ These entries should not be migrated using the default gateway-routed policy wit
 | TaxConfiguration + ExternalTaxServiceClient (pos-tax)                         | external         | pos-tax consumes external provider API by design. ADR-0021 constrains inbound access, not outbound external tax usage.                                   | Keep configured external base URL from tax properties.                                   |
 
 ## Notes
+
+- 2026-08-07: the former `VehicleReferenceService (pos-workorder -> pos-vehicle)` row was removed.
+  `pos-workorder`'s `VehicleReferenceService` resolves vehicle display data from `pos-customer` via
+  the `customer` Eureka service id; there is no `pos-vehicle` service, and the dead
+  `pos.vehicle.base-url` config (`http://pos-vehicle:8088`) was deleted from `pos-workorder`.
+- 2026-08-07: `TaxFacadeTool` / `TaxServiceClient` defaults corrected to `http://pos-tax:8091/...` —
+  pos-tax listens on 8091 and has no port-80 mapping, so port-less Docker DNS defaults were broken.
 
 - ADR-0040 confirms downstream services should rely on trusted `X-Authorities` produced at the gateway boundary for standard internal API authorization flows.
 - direct-exception entries above are limited to cases where the current endpoint shape is not represented in the gateway route catalog or where the traffic is not a standard business-service call.

@@ -339,7 +339,7 @@ services:
     entrypoint: [ "/bin/sh", "-c" ]
     command: >
       OLLAMA_HOST=http://ollama:11434 ollama pull
-      ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      ${OLLAMA_EMBEDDING_MODEL:-bge-m3}
     restart: "no"
     volumes:
       - ollama-data:/root/.ollama
@@ -430,12 +430,8 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      POS_CATALOG_BASE_URL: http://pos-catalog:8080
-      POS_CUSTOMER_BASE_URL: http://pos-customer:8080
-      POS_PEOPLE_BASE_URL: http://pos-people:8080
-      POS_PRICE_BASE_URL: http://pos-price:8080
-      POS_VEHICLE_INVENTORY_BASE_URL: http://pos-vehicle-inventory:8080
-      POS_VEHICLE_FITMENT_BASE_URL: http://pos-vehicle-fitment:8080
+      # Sibling-service targets resolve via Eureka service ids (#641); the
+      # POS_*_SERVICE_ID env vars exist for override but the yml defaults are correct.
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
@@ -837,15 +833,33 @@ services:
       OLLAMA_CHAT_BASE_URL: ${OLLAMA_CHAT_BASE_URL:-https://ollama.com}
       OLLAMA_EMBEDDING_BASE_URL: ${OLLAMA_EMBEDDING_BASE_URL:-http://ollama:11434}
       OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-gpt-oss:120b}
-      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-bge-m3}
       OLLAMA_FALLBACK_MODEL: ${OLLAMA_FALLBACK_MODEL:-gpt-oss:20b}
       OLLAMA_CHAT_TIMEOUT: ${OLLAMA_CHAT_TIMEOUT:-180s}
       OLLAMA_STREAMING_CHAT_TIMEOUT: ${OLLAMA_STREAMING_CHAT_TIMEOUT:-180s}
+      OLLAMA_CHAT_THINK: ${OLLAMA_CHAT_THINK:-}
       OLLAMA_EMBEDDING_TIMEOUT: ${OLLAMA_EMBEDDING_TIMEOUT:-30s}
       OLLAMA_FALLBACK_TIMEOUT: ${OLLAMA_FALLBACK_TIMEOUT:-180s}
       MCP_RAG_CHUNKING_ENABLED: ${MCP_RAG_CHUNKING_ENABLED:-true}
       MCP_RAG_MAX_SEGMENT_SIZE: ${MCP_RAG_MAX_SEGMENT_SIZE:-2000}
       MCP_RAG_MAX_OVERLAP_SIZE: ${MCP_RAG_MAX_OVERLAP_SIZE:-200}
+      MCP_RAG_LEXICAL_ENABLED: ${MCP_RAG_LEXICAL_ENABLED:-true}
+      MCP_RAG_EMBEDDING_COLUMN: ${MCP_RAG_EMBEDDING_COLUMN:-embedding}
+      MCP_RAG_DIMENSION: ${MCP_RAG_DIMENSION:-1024}
+      MCP_RAG_MIN_SCORE: ${MCP_RAG_MIN_SCORE:-0.45}
+      MCP_RAG_TIER2_MIN_SCORE: ${MCP_RAG_TIER2_MIN_SCORE:-0.40}
+      MCP_MODEL_TIERING_ENABLED: ${MCP_MODEL_TIERING_ENABLED:-true}
+      MCP_MODEL_ROUTER: ${MCP_MODEL_ROUTER-qwen3:4b}
+      MCP_MODEL_SIMPLE: ${MCP_MODEL_SIMPLE:-}
+      MCP_MODEL_COMPLEX: ${MCP_MODEL_COMPLEX:-}
+      MCP_MODEL_FALLBACK_ENABLED: ${MCP_MODEL_FALLBACK_ENABLED:-false}
+      # Origin of the frontend SSR server that serves /sitemap.json (NOT the API gateway).
+      # Must be listed here to be passed into the container; values come from the
+      # docker compose process environment and/or the .env file during ${...} substitution.
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://pos-frontend:4000}
+      SITEMAP_CACHE_TTL: ${SITEMAP_CACHE_TTL:-600s}
+      SITEMAP_FETCH_TIMEOUT: ${SITEMAP_FETCH_TIMEOUT:-5s}
+      SITEMAP_EXPECTED_VERSION: ${SITEMAP_EXPECTED_VERSION:-1}
       EXA_API_KEY: ${EXA_API_KEY:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
@@ -1264,6 +1278,43 @@ services:
       retries: 12
       # Same generous window as pos-vehicle-inventory — a whole-stack recreate on
       # alpha can push JVM startup well past 90s.
+      start_period: 300s
+
+  pos-marketing:
+    build:
+      context: ./pos-marketing
+      dockerfile: Dockerfile
+    ports:
+      - "8099:8080"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GATEWAY_URL: http://pos-api-gateway:8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_marketing_db
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
+      SERVER_PORT: 8080
+      MANAGEMENT_SERVER_PORT: 8080
+      # Domain events (ADR-0044): publishes marketing.events.v1 and consumes
+      # customer.events.v1 for the suppression replica and redemption attribution.
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      POS_MARKETING_KAFKA_ENABLED: ${POS_MARKETING_KAFKA_ENABLED:-true}
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      pos-security-service:
+        condition: service_healthy
+    logging: *logging
+    networks:
+      - pos-network
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
       start_period: 300s
 
   pos-workorder:

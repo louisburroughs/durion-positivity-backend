@@ -159,13 +159,13 @@ class ToolMetadataRepositoryImplTest {
     @DisplayName("pruneDiscoveredOperationsExcept returns 0 and issues no deletes when no orphans exist")
     @SuppressWarnings("unchecked")
     void pruneDiscoveredOperationsExcept_noOrphans_returnsZero() {
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+        when(jdbcTemplate.query(anyString(), any(PreparedStatementSetter.class), any(RowMapper.class)))
                 .thenReturn(List.of());
 
         int pruned = repository.pruneDiscoveredOperationsExcept(Set.of("customer_getall"));
 
         assertThat(pruned).isZero();
-        verify(jdbcTemplate, never()).update(anyString(), any(Object[].class));
+        verify(jdbcTemplate, never()).update(anyString(), any(PreparedStatementSetter.class));
     }
 
     @Test
@@ -174,22 +174,44 @@ class ToolMetadataRepositoryImplTest {
     void pruneDiscoveredOperationsExcept_deletesOrphansAndClearsChildrenInOrder() {
         UUID orphanA = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
         UUID orphanB = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+        when(jdbcTemplate.query(anyString(), any(PreparedStatementSetter.class), any(RowMapper.class)))
                 .thenReturn(List.of(orphanA, orphanB));
         // parent DELETE (the value prune returns); child clears also return via this stub — value unused.
-        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(2);
+        when(jdbcTemplate.update(anyString(), any(PreparedStatementSetter.class)))
+                .thenReturn(2);
 
         int pruned = repository.pruneDiscoveredOperationsExcept(Set.of("customer_getall", "order_list"));
 
         assertThat(pruned).isEqualTo(2);
         // The orphan lookup is scoped to source='openapi' and excludes the kept names.
         verify(jdbcTemplate)
-                .query(contains("source = 'openapi' AND name NOT IN"), any(RowMapper.class), any(Object[].class));
+                .query(
+                        contains("source = 'openapi' AND name <> ALL"),
+                        any(PreparedStatementSetter.class),
+                        any(RowMapper.class));
         // Children must be cleared before the parent rows are deleted (FK-safe order).
         InOrder inOrder = inOrder(jdbcTemplate);
-        inOrder.verify(jdbcTemplate).update(contains("DELETE FROM mcp_tool_permission"), any(Object[].class));
-        inOrder.verify(jdbcTemplate).update(contains("DELETE FROM mcp_tool_workflow"), any(Object[].class));
-        inOrder.verify(jdbcTemplate).update(contains("UPDATE mcp_tool_invocation_log"), any(Object[].class));
-        inOrder.verify(jdbcTemplate).update(contains("DELETE FROM mcp_tool WHERE id IN"), any(Object[].class));
+        inOrder.verify(jdbcTemplate)
+                .update(contains("DELETE FROM mcp_tool_permission"), any(PreparedStatementSetter.class));
+        inOrder.verify(jdbcTemplate)
+                .update(contains("DELETE FROM mcp_tool_workflow"), any(PreparedStatementSetter.class));
+        inOrder.verify(jdbcTemplate)
+                .update(contains("UPDATE mcp_tool_invocation_log"), any(PreparedStatementSetter.class));
+        inOrder.verify(jdbcTemplate)
+                .update(contains("DELETE FROM mcp_tool WHERE id = ANY"), any(PreparedStatementSetter.class));
+    }
+
+    @Test
+    @DisplayName("findDiscoveredOperationByName only matches enabled openapi tools (execution fails closed)")
+    @SuppressWarnings("unchecked")
+    void findDiscoveredOperationByName_filtersOnEnabled() {
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("customer_getall")))
+                .thenReturn(List.of());
+
+        assertThat(repository.findDiscoveredOperationByName("customer_getall")).isEmpty();
+
+        // A tool disabled after plan creation (e.g. emergency kill switch) must not resolve for execution.
+        verify(jdbcTemplate)
+                .query(contains("source = 'openapi' AND enabled = true"), any(RowMapper.class), eq("customer_getall"));
     }
 }

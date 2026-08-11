@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +13,7 @@ import java.sql.ResultSet;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.ai.document.Document;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -28,6 +30,26 @@ class LexicalDocumentRetrieverTest {
 
         assertThat(retriever.retrieve("   ")).isEmpty();
         verifyNoInteractions(jdbcTemplate);
+    }
+
+    @Test
+    @DisplayName("#1180: a domain scope also matches master-scope docs and binds (query, scope, query, limit)")
+    @SuppressWarnings("unchecked")
+    void domainScope_includesMasterScopeDocs() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of());
+
+        new LexicalDocumentRetriever(jdbcTemplate, objectMapper, "admin", 9).retrieve("invoice number format");
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> argsCaptor = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), argsCaptor.capture());
+        // Master-scope docs (glossary/identifier formats) are the global tier and must stay
+        // reachable from every domain-scoped agent — a strict equality filter reproduced the
+        // compound-invoice failure (#1180) whenever tool selection resolved a narrow scope.
+        assertThat(sqlCaptor.getValue()).contains("IN (?, 'master')");
+        assertThat(argsCaptor.getValue()).containsExactly("invoice number format", "admin", "invoice number format", 9);
     }
 
     @Test

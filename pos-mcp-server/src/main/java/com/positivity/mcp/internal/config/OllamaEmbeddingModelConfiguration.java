@@ -25,22 +25,21 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration
-@Profile("!test")
+@Profile({"!test", "openapi"})
 public class OllamaEmbeddingModelConfiguration {
 
     @Bean
     @Primary
     public @NonNull EmbeddingModel embeddingModel(
             RestClient.Builder restClientBuilder,
-            @Value("${spring.ai.ollama.embedding.base-url:${OLLAMA_EMBEDDING_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}}")
+            @Value(
+                            "${spring.ai.ollama.embedding.base-url:${OLLAMA_EMBEDDING_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}}")
                     @NonNull
                     String baseUrl,
-            @Value("${spring.ai.ollama.embedding.options.model:${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}}")
-                    @NonNull
+            @Value("${spring.ai.ollama.embedding.options.model:${OLLAMA_EMBEDDING_MODEL:bge-m3}}") @NonNull
                     String modelName,
-            @Value("${mcp.rag.dimension:768}") int dimensions,
-            @Value("${spring.ai.ollama.embedding.timeout:${OLLAMA_EMBEDDING_TIMEOUT:30s}}") @NonNull
-                    Duration timeout,
+            @Value("${mcp.rag.dimension:1024}") int dimensions,
+            @Value("${spring.ai.ollama.embedding.timeout:${OLLAMA_EMBEDDING_TIMEOUT:30s}}") @NonNull Duration timeout,
             @Value("${OLLAMA_API_KEY:}") @NonNull String apiKey) {
         return new HostedOllamaEmbeddingModel(restClientBuilder, baseUrl, modelName, dimensions, timeout, apiKey);
     }
@@ -65,9 +64,8 @@ public class OllamaEmbeddingModelConfiguration {
             requestFactory.setConnectTimeout(timeoutMillis);
             requestFactory.setReadTimeout(timeoutMillis);
 
-            RestClient.Builder builder = restClientBuilder.clone()
-                    .baseUrl(baseUrl)
-                    .requestFactory(requestFactory);
+            RestClient.Builder builder =
+                    restClientBuilder.clone().baseUrl(baseUrl).requestFactory(requestFactory);
             if (!apiKey.isBlank()) {
                 builder.defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey);
             }
@@ -135,17 +133,18 @@ public class OllamaEmbeddingModelConfiguration {
 
         @Override
         public float @NonNull [] embed(@NonNull Document document) {
-            return call(new EmbeddingRequest(
-                            List.of(getEmbeddingContent(document)),
-                            null))
+            return call(new EmbeddingRequest(List.of(getEmbeddingContent(document)), null))
                     .getResult()
                     .getOutput();
         }
     }
 
-    // nomic-embed-text has a ~2048-token context; a long chat message (tool-selection embeds the raw
-    // user text) otherwise makes the embed endpoint reject the request with 400 "the input length
-    // exceeds the context length", surfacing as a 500 on /v1/mcp/chat. Cap conservatively (~4 chars per
+    // nomic-embed-text has a ~2048-token context; a long chat message
+    // (tool-selection embeds the raw
+    // user text) otherwise makes the embed endpoint reject the request with 400
+    // "the input length
+    // exceeds the context length", surfacing as a 500 on /v1/mcp/chat. Cap
+    // conservatively (~4 chars per
     // token) and also ask Ollama to truncate server-side.
     static final int MAX_INPUT_CHARS = 8000;
 

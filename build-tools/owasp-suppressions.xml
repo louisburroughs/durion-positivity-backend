@@ -17,25 +17,50 @@
     </suppress>
 
     <!--
-        swagger-ui-5.32.2 — DOMPurify 3.3.2 — CVE-2026-41240, CVE-2026-41238, CVE-2026-41239,
-                                                GHSA-39q2-94rc-95cp
-        DOMPurify 3.3.2 is bundled inside the swagger-ui webjar pulled by springdoc-openapi 3.0.3.
-        springdoc-openapi 3.0.3 is the only available 3.x release (Spring Boot 4 compatible) and no
-        newer version ships a fixed DOMPurify version.  The Swagger UI endpoint (/swagger-ui.html)
-        is only enabled in dev/local profiles and is not reachable in production deployments.
-        Revisit when springdoc-openapi 3.x ships with DOMPurify >= 3.4.0.
+        kotlin-stdlib / kotlin-reflect — CVE-2026-53914
+        The fix is Kotlin 2.4.20, which has no stable release on Maven Central yet (only
+        2.4.20-Beta2).  Kotlin is a runtime-only transitive dependency here (pulled by
+        springdoc-openapi for reflection); no Kotlin code in this codebase processes
+        untrusted input.  Revisit when Kotlin 2.4.20 goes GA or a Spring Boot 4.1.x
+        patch release manages it.
     -->
     <suppress>
-        <notes>DOMPurify bundled in swagger-ui; Swagger UI disabled in production; no springdoc 3.x fix available yet.</notes>
-        <packageUrl regex="true">^pkg:javascript/DOMPurify@.*$</packageUrl>
-        <cve>CVE-2026-41240</cve>
-        <cve>CVE-2026-41238</cve>
-        <cve>CVE-2026-41239</cve>
+        <notes>Fix (Kotlin 2.4.20) not GA yet; runtime-only transitive via springdoc; no Kotlin code paths process untrusted input.</notes>
+        <gav regex="true">^org\.jetbrains\.kotlin:kotlin-(stdlib|reflect).*$</gav>
+        <cve>CVE-2026-53914</cve>
     </suppress>
+
+    <!--
+        Same CVE, second match path: the GAV rule above only applies when Dependency-Check has
+        Maven coordinates for the artifact.  In pos-coverage-aggregate the Archive Analyzer scans
+        the repackaged Spring Boot jars of sibling modules and finds kotlin-stdlib/kotlin-reflect
+        nested under BOOT-INF/lib without GAV evidence (CPE match only), so the same finding
+        resurfaces there.  Match those occurrences by file name.  Remove together with the rule
+        above once Kotlin 2.4.20 goes GA.
+    -->
     <suppress>
-        <notes>DOMPurify bundled in swagger-ui; Swagger UI disabled in production; no springdoc 3.x fix available yet.</notes>
-        <packageUrl regex="true">^pkg:javascript/DOMPurify@.*$</packageUrl>
-        <ghsa>GHSA-39q2-94rc-95cp</ghsa>
+        <notes>Nested-jar duplicate of the kotlin CVE-2026-53914 suppression above (no GAV evidence inside boot jars).</notes>
+        <filePath regex="true">.*[\\/]kotlin-(stdlib|reflect)[^\\/]*\.jar$</filePath>
+        <cve>CVE-2026-53914</cve>
+    </suppress>
+
+    <!--
+        tomcat-embed-core-11.0.24 — CVE-2026-66299
+        DoS via uncontrolled resource consumption in the WebSocket chat example of Tomcat's
+        examples web application.  Embedded Tomcat as used by Spring Boot never ships the
+        examples webapp, so the vulnerable code is not deployed.  The fix release (11.0.25)
+        is announced but not yet published to Maven Central (latest is 11.0.24).  Remove this
+        suppression and bump tomcat.version once 11.0.25 is available.
+
+        Pinned to version 11.0.24 (the artifact wildcard stays because CPE matching flags the
+        sibling embed artifacts — websocket, el — which version-lock with core) so that any
+        tomcat.version bump forces this suppression to be re-evaluated rather than silently
+        carrying over.
+    -->
+    <suppress>
+        <notes>Examples-webapp-only CVE; examples are never shipped with embedded Tomcat; fix release 11.0.25 not on Maven Central yet.</notes>
+        <gav regex="true">^org\.apache\.tomcat\.embed:tomcat-embed-[^:]+:11\.0\.24$</gav>
+        <cve>CVE-2026-66299</cve>
     </suppress>
 
 </suppressions>

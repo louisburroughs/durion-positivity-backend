@@ -28,6 +28,7 @@ public class PromotionRedemptionServiceImpl implements PromotionRedemptionServic
 
     private final PromotionRedemptionRepository promotionRedemptionRepository;
     private final PromotionCounterRepository promotionCounterRepository;
+    private final CustomerFactPublisher factPublisher;
 
     @Override
     @Transactional
@@ -45,6 +46,7 @@ public class PromotionRedemptionServiceImpl implements PromotionRedemptionServic
         redemption.setDiscountAmount(request.getDiscountAmount());
         redemption.setDiscountType(request.getDiscountType());
         redemption.setPromotionCode(request.getPromotionCode());
+        redemption.setCampaignCode(request.getCampaignCode());
         redemption.setRecordedBy(SecurityContextHelper.getCurrentUsernameOrDefault("system"));
         redemption.setRecordedOverLimit(
                 request.getRecordedOverLimit() != null ? request.getRecordedOverLimit() : false);
@@ -63,6 +65,16 @@ public class PromotionRedemptionServiceImpl implements PromotionRedemptionServic
         }
 
         incrementPromotionCounter(request.getPromotionId());
+        // Emitted for every redemption, not only campaign-tied ones: marketing needs the
+        // non-attributed baseline to make a campaign's lift meaningful.
+        factPublisher.redemptionRecorded(
+                saved.getPromotionRedemptionId(),
+                saved.getPromotionId(),
+                saved.getCustomerId(),
+                saved.getWorkorderId(),
+                saved.getPromotionCode(),
+                saved.getCampaignCode(),
+                saved.getDiscountAmount());
 
         return PromotionRedemptionMapper.toResponse(saved);
     }

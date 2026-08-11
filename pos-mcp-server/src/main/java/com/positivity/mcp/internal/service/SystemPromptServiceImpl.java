@@ -3,12 +3,14 @@ package com.positivity.mcp.internal.service;
 import com.positivity.mcp.internal.dto.SystemPromptRequest;
 import com.positivity.mcp.internal.dto.SystemPromptResponse;
 import com.positivity.mcp.internal.entity.SystemPrompt;
+import com.positivity.mcp.internal.event.AgentCacheInvalidationEvent;
 import com.positivity.mcp.internal.repository.SystemPromptRepository;
 import com.positivity.mcp.service.SystemPromptService;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,9 +18,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class SystemPromptServiceImpl implements SystemPromptService {
 
     private final SystemPromptRepository repository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public SystemPromptServiceImpl(@NonNull SystemPromptRepository repository) {
+    public SystemPromptServiceImpl(
+            @NonNull SystemPromptRepository repository, @NonNull ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -30,7 +35,9 @@ public class SystemPromptServiceImpl implements SystemPromptService {
         var prompt = new SystemPrompt();
         prompt.setName(request.name());
         prompt.setContent(request.content());
-        return SystemPromptResponse.from(repository.save(prompt));
+        SystemPromptResponse response = SystemPromptResponse.from(repository.save(prompt));
+        eventPublisher.publishEvent(AgentCacheInvalidationEvent.systemPromptChanged(request.name()));
+        return response;
     }
 
     @Override
@@ -57,12 +64,18 @@ public class SystemPromptServiceImpl implements SystemPromptService {
         }
         prompt.setName(request.name());
         prompt.setContent(request.content());
-        return SystemPromptResponse.from(repository.save(prompt));
+        SystemPromptResponse response = SystemPromptResponse.from(repository.save(prompt));
+        eventPublisher.publishEvent(AgentCacheInvalidationEvent.systemPromptChanged(request.name()));
+        return response;
     }
 
     @Override
     @Transactional
     public void delete(@NonNull UUID id) {
+        String promptName = repository.findById(id).map(SystemPrompt::getName).orElse(null);
         repository.deleteById(id);
+        if (promptName != null) {
+            eventPublisher.publishEvent(AgentCacheInvalidationEvent.systemPromptChanged(promptName));
+        }
     }
 }

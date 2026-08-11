@@ -138,10 +138,11 @@ class BaselineCaptureIT {
                 .as("forbidden (permission-negative) tools must never be selected")
                 .isEmpty();
 
-        // AC4 (#783) quality floors — calibrated from the live baseline (hit@5 0.84 / MRR 0.77),
-        // set with margin below observed. Override with -Dmcp.eval.min-hit5 / -Dmcp.eval.min-mrr.
-        double minHit5 = Double.parseDouble(System.getProperty("mcp.eval.min-hit5", "0.75"));
-        double minMrr = Double.parseDouble(System.getProperty("mcp.eval.min-mrr", "0.65"));
+        // AC4 (#783) quality floors — re-baselined 2026-07-29 (#1124) off the grown 39-doc corpus.
+        // ~11% below the live-observed alpha baseline (hit@5 0.76, MRR 0.7222), matching eval_live.py.
+        // Set with margin below observed. Override with -Dmcp.eval.min-hit5 / -Dmcp.eval.min-mrr.
+        double minHit5 = Double.parseDouble(System.getProperty("mcp.eval.min-hit5", "0.68"));
+        double minMrr = Double.parseDouble(System.getProperty("mcp.eval.min-mrr", "0.64"));
         assertThat(hitAt5).as("tool-selection hit@5 floor").isGreaterThanOrEqualTo(minHit5);
         assertThat(mrr).as("tool-selection MRR floor").isGreaterThanOrEqualTo(minMrr);
     }
@@ -211,10 +212,12 @@ class BaselineCaptureIT {
                 .as("forbidden (permission-negative) RAG docs must never be visible")
                 .isEmpty();
 
-        // AC3 (#783) recall floor — 0.85, ~11% below the live baseline recall@k 0.9574. Confirmed at
-        // the production similarity floor (0.55, above) on the preload-repopulated corpus: identical to
-        // the 0.0-threshold run, so the floor holds. Override with -Dmcp.eval.min-recall.
-        double minRecall = Double.parseDouble(System.getProperty("mcp.eval.min-recall", "0.85"));
+        // AC3 (#783) recall floor — re-baselined 2026-07-29 (#1124) to 0.76, ~11% below the 39-doc
+        // corpus baseline recall@k 0.8571 (was 0.85 off the old 17-doc 0.9574 baseline; the corpus
+        // doubling in #1163 dropped observed recall to within ~0.001 of that old floor). Confirmed at
+        // the production similarity floor (0.55, above) on the preload-repopulated corpus. Deterministic
+        // across three re-embed cycles. Override with -Dmcp.eval.min-recall.
+        double minRecall = Double.parseDouble(System.getProperty("mcp.eval.min-recall", "0.76"));
         assertThat(recallAtK).as("RAG recall@k floor").isGreaterThanOrEqualTo(minRecall);
     }
 

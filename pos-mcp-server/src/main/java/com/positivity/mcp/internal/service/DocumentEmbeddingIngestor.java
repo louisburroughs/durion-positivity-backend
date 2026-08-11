@@ -49,7 +49,8 @@ public class DocumentEmbeddingIngestor {
         this.embeddingModel = embeddingModel;
         this.chunkingEnabled = chunkingEnabled;
         this.maxSegmentSize = Math.max(1, maxSegmentSize);
-        int overlapCap = Math.max(0, Math.min(this.maxSegmentSize - 1, (int) (this.maxSegmentSize * MAX_OVERLAP_RATIO)));
+        int overlapCap =
+                Math.max(0, Math.min(this.maxSegmentSize - 1, (int) (this.maxSegmentSize * MAX_OVERLAP_RATIO)));
         this.maxOverlapSize = Math.clamp(maxOverlapSize, 0, overlapCap);
         this.segmentStepSize = Math.max(1, this.maxSegmentSize - this.maxOverlapSize);
         this.maxChunksPerDocument = Math.max(1, maxChunksPerDocument);
@@ -82,7 +83,8 @@ public class DocumentEmbeddingIngestor {
         try {
             List<Document> segments = segments(content, normalizedMetadata, documentId);
             long embeddingStartNanos = System.nanoTime();
-            List<float[]> embeddings = embeddingModel.embed(segments.stream().map(Document::getText).toList());
+            List<float[]> embeddings = embeddingModel.embed(
+                    segments.stream().map(Document::getText).toList());
             LOGGER.info(
                     "Embedded RAG document {} with {} segments in {} ms",
                     documentId,
@@ -155,7 +157,81 @@ public class DocumentEmbeddingIngestor {
         return enrichedSegments;
     }
 
+    /**
+     * Splits document content into embeddable segments.
+     *
+     * <p>Markdown documents (glossary/reference docs under {@code src/main/resources/rag/}) are
+     * structured as many independent {@code ##} sub-sections, each describing a single concept or
+     * identifier format. Splitting purely by a fixed character window (the previous behavior) ignores
+     * those boundaries and can cut a section's defining fact in half or bury it in the middle of a
+     * chunk dominated by an unrelated neighboring section — diluting the embedding so a query about
+     * that one fact no longer retrieves the chunk that actually contains it, or retrieves it without
+     * enough surrounding context for the model to ground on. See issue #1124/#1125: dense retrieval
+     * surfaced the right document (`glossary.identifiers`) but the specific PO/GL/invoice fact wasn't
+     * reliably present in the chunk actually returned.
+     *
+     * <p>To keep each fact-bearing section intact and independently retrievable, content is first
+     * split at top-level markdown headings ({@code ## }); each resulting section becomes its own
+     * chunk when it fits within {@code maxSegmentSize}. A section that is still too large (or content
+     * with no {@code ##} headings at all, e.g. prose documents) falls back to the original
+     * fixed-size sliding-window split so behavior for non-markdown content is unchanged.
+     */
     private @NonNull List<String> split(@NonNull String content) {
+        List<String> sections = splitByMarkdownHeadings(content);
+        if (sections.size() <= 1) {
+            return slidingWindowSplit(content);
+        }
+        List<String> segments = new ArrayList<>();
+        for (String section : sections) {
+            if (section.isBlank()) {
+                continue;
+            }
+            if (section.length() <= maxSegmentSize) {
+                segments.add(section.trim());
+            } else {
+                segments.addAll(slidingWindowSplit(section));
+            }
+            if (segments.size() > maxChunksPerDocument) {
+                throw new IllegalArgumentException(
+                        "Document exceeds configured chunk limit: maxChunks=%d, segmentSize=%d, overlap=%d, contentLength=%d"
+                                .formatted(maxChunksPerDocument, maxSegmentSize, maxOverlapSize, content.length()));
+            }
+        }
+        if (segments.isEmpty()) {
+            segments.add(content);
+        }
+        return segments;
+    }
+
+    /**
+     * Splits {@code content} at top-level markdown headings ({@code ## Heading}), keeping each
+     * heading with its following body text as one section. Any preamble before the first {@code ## }
+     * heading (e.g. a document title or purpose blurb) becomes its own leading section. Returns a
+     * single-element list containing the original content unchanged when no {@code ## } heading is
+     * present, so plain-prose documents are unaffected.
+     */
+    private static @NonNull List<String> splitByMarkdownHeadings(@NonNull String content) {
+        List<String> sections = new ArrayList<>();
+        java.util.regex.Matcher headingMatcher =
+                java.util.regex.Pattern.compile("(?m)^## .*$").matcher(content);
+        int previousStart = 0;
+        boolean foundHeading = false;
+        while (headingMatcher.find()) {
+            foundHeading = true;
+            int headingStart = headingMatcher.start();
+            if (headingStart > previousStart) {
+                sections.add(content.substring(previousStart, headingStart));
+            }
+            previousStart = headingStart;
+        }
+        if (!foundHeading) {
+            return List.of(content);
+        }
+        sections.add(content.substring(previousStart));
+        return sections;
+    }
+
+    private @NonNull List<String> slidingWindowSplit(@NonNull String content) {
         List<String> segments = new ArrayList<>();
         int start = 0;
         int length = content.length();

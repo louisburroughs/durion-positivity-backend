@@ -41,7 +41,7 @@ class SpringAiPosAssistantTest {
         QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
         OpenApiToolProvider openApiToolProvider = mock(OpenApiToolProvider.class);
-        when(chatModel.getDefaultOptions())
+        when(chatModel.getOptions())
                 .thenReturn(OllamaChatOptions.builder().model("qwen3.5:cloud").build());
         when(openApiToolProvider.resolveToolCallbacks(any())).thenReturn(List.of());
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("resolved answer"));
@@ -65,8 +65,10 @@ class SpringAiPosAssistantTest {
 
         ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(promptCaptor.capture());
-        // Runtime options must be the provider-specific OllamaChatOptions: OllamaChatModel casts the
-        // prompt options directly to OllamaChatOptions, so a generic DefaultToolCallingChatOptions
+        // Runtime options must be the provider-specific OllamaChatOptions:
+        // OllamaChatModel casts the
+        // prompt options directly to OllamaChatOptions, so a generic
+        // DefaultToolCallingChatOptions
         // would throw ClassCastException at request time.
         assertThat(promptCaptor.getValue().getOptions()).isInstanceOf(OllamaChatOptions.class);
         assertThat(promptCaptor.getValue().getOptions().getModel()).isEqualTo("qwen3.5:cloud");
@@ -92,12 +94,80 @@ class SpringAiPosAssistantTest {
     }
 
     @Test
+    void chat_ragContextInstructsGroundingAndForbidsContradictingInventedFacts() {
+        // #1124/#1125: gap-harness alpha showed the model contradicting or ignoring a
+        // correctly
+        // retrieved glossary.identifiers snippet (invented PO/GL formats, or a flat
+        // refusal despite
+        // the answer being present). The injected RAG block must explicitly instruct
+        // the model to
+        // ground its answer in the numbered snippets and refuse to state a fact that
+        // isn't supported
+        // by them, rather than silently falling back to trained knowledge.
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        OpenApiToolProvider openApiToolProvider = mock(OpenApiToolProvider.class);
+        when(chatModel.getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("qwen3.5:cloud").build());
+        when(openApiToolProvider.resolveToolCallbacks(any())).thenReturn(List.of());
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("resolved answer"));
+        when(ragRetriever.retrieve("PO number format"))
+                .thenReturn(List.of(new Document("PO numbers are owned by pos-inventory")));
+        when(chatMemory.get("user-1::ROLE_TECH")).thenReturn(List.of());
+
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel,
+                () -> "base prompt",
+                List.of(new PingTool()),
+                ragRetriever,
+                ignored -> chatMemory,
+                openApiToolProvider,
+                null);
+
+        assistant.chat("user-1::ROLE_TECH", "PO number format", "ctx:role=TECH");
+
+        ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(promptCaptor.capture());
+        List<Message> promptMessages = promptCaptor.getValue().getInstructions();
+        String systemMessageText = promptMessages.get(promptMessages.size() - 2).getText();
+        assertThat(systemMessageText)
+                .contains("Relevant retrieved context:")
+                .contains("Ground your answer in the numbered snippets")
+                .containsIgnoringCase("do not state")
+                .containsIgnoringCase("say what you don't know instead of inventing")
+                .contains("PO numbers are owned by pos-inventory")
+                // The instruction must guard more than identifier/format facts — a fabricated
+                // workflow
+                // (the core-charge case) slipped through the original identifier-only wording.
+                .containsIgnoringCase("workflow")
+                .containsIgnoringCase("capability")
+                // A documented non-existence must be binding: say it's not modeled, don't
+                // invent it,
+                // and don't offer to perform an unsupported action.
+                .containsIgnoringCase("not modeled")
+                .containsIgnoringCase("does not model it")
+                .containsIgnoringCase("offer to perform an action")
+                // #1124 item 4: the positive obligation must be explicit so the model answers
+                // from a
+                // covering snippet instead of over-refusing ("I don't have a reference"). It
+                // must also
+                // forbid deferring to a UI link / another system and constrain answers to
+                // snippet names.
+                .containsIgnoringCase("answer directly and completely")
+                .containsIgnoringCase("do not claim you lack a reference")
+                .containsIgnoringCase("do not ask the user for more detail")
+                .containsIgnoringCase("UI link")
+                .containsIgnoringCase("use only the entities, fields, names, and values");
+    }
+
+    @Test
     void chat_handsOffToLadderWhenContentBlank() {
         ChatModel chatModel = mock(ChatModel.class);
         QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
         AnswerResolutionLadder ladder = mock(AnswerResolutionLadder.class);
-        when(chatModel.getDefaultOptions())
+        when(chatModel.getOptions())
                 .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
         when(ragRetriever.retrieve(any())).thenReturn(List.of());
         when(chatMemory.get(any())).thenReturn(List.of());
@@ -112,7 +182,8 @@ class SpringAiPosAssistantTest {
 
         String response = assistant.chat("user-1::ROLE_ADMIN", "how many workorders are open", "ctx");
 
-        // The reasoning monologue is never surfaced; the ladder result is returned and persisted.
+        // The reasoning monologue is never surfaced; the ladder result is returned and
+        // persisted.
         assertThat(response).isEqualTo("View them here — Work Orders: /workorders");
         ArgumentCaptor<List<Message>> persisted = messageListCaptor();
         verify(chatMemory).add(eq("user-1::ROLE_ADMIN"), persisted.capture());
@@ -125,7 +196,7 @@ class SpringAiPosAssistantTest {
         QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
         AnswerResolutionLadder ladder = mock(AnswerResolutionLadder.class);
-        when(chatModel.getDefaultOptions())
+        when(chatModel.getOptions())
                 .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
         when(ragRetriever.retrieve(any())).thenReturn(List.of());
         when(chatMemory.get(any())).thenReturn(List.of());

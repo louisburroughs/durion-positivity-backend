@@ -3,6 +3,8 @@ package com.positivity.peoplecontact.internal.service;
 import com.positivity.domainevents.peoplecontact.PersonUpsertRequestedV1;
 import com.positivity.peoplecontact.internal.entity.Person;
 import com.positivity.peoplecontact.internal.entity.ProcessedEvent;
+import com.positivity.peoplecontact.internal.enums.PartyType;
+import com.positivity.peoplecontact.internal.repository.PartyPostalAddressRepository;
 import com.positivity.peoplecontact.internal.repository.PersonContactPointRepository;
 import com.positivity.peoplecontact.internal.repository.PersonRepository;
 import com.positivity.peoplecontact.internal.repository.ProcessedEventRepository;
@@ -33,6 +35,7 @@ public class PersonUpsertCommandHandler {
     private final PersonRepository personRepository;
     private final ProcessedEventRepository processedEventRepository;
     private final PersonContactPointRepository personContactPointRepository;
+    private final PartyPostalAddressRepository partyPostalAddressRepository;
     private final PersonWorkPhoneService workPhoneService;
     private final PersonEmailService emailService;
     private final PeopleContactEventPublisher eventPublisher;
@@ -51,7 +54,14 @@ public class PersonUpsertCommandHandler {
         emailService.replaceEmails(
                 saved.getId(), normalize(command.primaryEmail()), normalize(command.secondaryEmail()));
 
-        eventPublisher.publishPersonUpdated(saved, personContactPointRepository.findByPersonId(saved.getId()));
+        // The HR upsert command carries no postal address; the stored one (FI-4, #1135) is
+        // untouched by design and re-attached to the confirming fact so replicas keep it.
+        eventPublisher.publishPersonUpdated(
+                saved,
+                personContactPointRepository.findByPersonId(saved.getId()),
+                partyPostalAddressRepository
+                        .findByPartyTypeAndPartyId(PartyType.PERSON, saved.getId())
+                        .orElse(null));
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(commandEventId)
                 .owner("people")

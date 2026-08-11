@@ -3,7 +3,7 @@ package com.positivity.gateway.config;
 public final class GatewayPermissionCatalog {
     private GatewayPermissionCatalog() {}
 
-    public static final int CATALOG_VERSION = 37;
+    public static final int CATALOG_VERSION = 41;
 
     protected static final String[] AUTHORITY_BY_BIT = {
         "PERM_accounting:je:view",
@@ -478,7 +478,42 @@ public final class GatewayPermissionCatalog {
         "PERM_inventory:valuation:view", // 416
 
         // ── New batch (bits 417–417) ──────────────────────────────────────────
-        "PERM_inventory:valuation:adjust" // 417
+        "PERM_inventory:valuation:adjust", // 417
+
+        // ── New batch (bits 418–437) ──────────────────────────────────────────
+        "PERM_crm:consent:manage", // 418
+        "PERM_crm:consent:view", // 419
+        "PERM_crm:interaction:view", // 420
+        "PERM_crm:segment:manage", // 421
+        "PERM_crm:segment:resolve", // 422
+        "PERM_crm:segment:view", // 423
+        "PERM_crm:suppression:manage", // 424
+        "PERM_crm:suppression:view", // 425
+        "PERM_crm:tag:assign", // 426
+        "PERM_crm:tag:manage", // 427
+        "PERM_crm:tag:view", // 428
+        "PERM_marketing:campaign:create", // 429
+        "PERM_marketing:campaign:edit", // 430
+        "PERM_marketing:campaign:manage", // 431
+        "PERM_marketing:campaign:schedule", // 432
+        "PERM_marketing:campaign:send", // 433
+        "PERM_marketing:campaign:view", // 434
+        "PERM_marketing:stats:view", // 435
+        "PERM_marketing:template:manage", // 436
+        "PERM_marketing:template:view", // 437
+
+        // ── New batch (bits 438–441) ──────────────────────────────────────────
+        "PERM_crm:followup:manage", // 438
+        "PERM_crm:followup:view", // 439
+        "PERM_crm:inquiry:manage", // 440
+        "PERM_crm:inquiry:view", // 441
+
+        // ── New batch (bits 442–442) ──────────────────────────────────────────
+        "PERM_crm:interaction:manage", // 442
+
+        // ── New batch (bits 443–444) ──────────────────────────────────────────
+        "PERM_people-contact:organization:edit", // 443
+        "PERM_people-contact:organization:view" // 444
     };
 
     public static String authorityForBit(int bitIndex) {

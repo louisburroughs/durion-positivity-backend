@@ -92,8 +92,10 @@ class SpringAiStreamingPosAssistantTest {
 
     @Test
     void chat_buildsProviderSpecificToolCallingOptionsCarryingModel() {
-        // The concrete Ollama bean implements both StreamingChatModel and ChatModel; the runtime
-        // options must copy its OllamaChatOptions default so OllamaChatModel's direct cast to
+        // The concrete Ollama bean implements both StreamingChatModel and ChatModel;
+        // the runtime
+        // options must copy its OllamaChatOptions default so OllamaChatModel's direct
+        // cast to
         // OllamaChatOptions succeeds and the configured model is preserved.
         StreamingChatModel streamingChatModel =
                 mock(StreamingChatModel.class, withSettings().extraInterfaces(ChatModel.class));
@@ -101,7 +103,7 @@ class SpringAiStreamingPosAssistantTest {
         ChatMemory chatMemory = mock(ChatMemory.class);
         OpenApiToolProvider openApiToolProvider = mock(OpenApiToolProvider.class);
 
-        when(((ChatModel) streamingChatModel).getDefaultOptions())
+        when(((ChatModel) streamingChatModel).getOptions())
                 .thenReturn(OllamaChatOptions.builder().model("qwen3.5:cloud").build());
         when(openApiToolProvider.resolveToolCallbacks(any())).thenReturn(List.of());
         when(ragRetriever.retrieve(any())).thenReturn(List.of());

@@ -5,9 +5,9 @@ import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.postgresql.util.PGobject;
-import org.springframework.ai.embedding.EmbeddingModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
@@ -35,6 +35,8 @@ public class ToolEmbeddingInitializer implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         long totalStartNanos = System.nanoTime();
+        // The vector column is the single validated value from RagEmbeddingSettings (V33, #1207),
+        // written literally so the SQL stays a constant (java:S2077).
         String query = "SELECT id, name, description FROM mcp_tool WHERE embedding IS NULL";
         List<ToolDescriptionRow> rows = jdbcTemplate.query(
                 query,

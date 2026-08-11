@@ -14,9 +14,8 @@ import org.springframework.ai.document.Document;
 class PermissionAwareMetadataFilterTest {
 
     private static Document doc(String text, String requiredPermissionsCsv) {
-        Map<String, Object> metadata = requiredPermissionsCsv == null
-                ? Map.of()
-                : Map.of("required_permissions", requiredPermissionsCsv);
+        Map<String, Object> metadata =
+                requiredPermissionsCsv == null ? Map.of() : Map.of("required_permissions", requiredPermissionsCsv);
         return new Document(text, metadata);
     }
 

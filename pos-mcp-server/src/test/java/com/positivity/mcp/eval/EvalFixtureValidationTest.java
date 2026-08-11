@@ -46,6 +46,8 @@ class EvalFixtureValidationTest {
             Set.of("IDLE", "CREATING_PO", "RECEIVING_ASN", "INVENTORY_RECON", "PROCESSING_RETURN");
     private static final Set<String> INTENT_TYPES = Set.of("QUERY", "ACTION", "UNKNOWN");
     private static final Set<String> RISK_LEVELS = Set.of("LOW", "MEDIUM", "HIGH");
+    private static final Set<String> TOOL_RESPONSE_OUTCOMES = Set.of("realistic-response", "no-tool-available");
+    private static final Set<String> GAP_HYPOTHESES = Set.of("new-tool", "description-gap", "n/a");
 
     // Gate 0 completeness minimums (docs/implementation_phase_gates.md).
     private static final int MIN_TOOL_SELECTION = 100;
@@ -89,6 +91,27 @@ class EvalFixtureValidationTest {
     }
 
     @Test
+    @DisplayName("rag-lexical fixtures are structurally valid")
+    void ragLexicalFixturesValid() throws IOException {
+        // #1178: same shape as rag-retrieval (query + actor + expected.doc_ids). This suite feeds the
+        // dense-vs-hybrid diagnostic in eval_live.py (rag_lexical_hybrid_784), so a malformed fixture
+        // would silently drop out of the dense-miss denominator instead of failing loudly.
+        for (Path file : suiteFiles("rag-lexical")) {
+            JsonNode root = parseSuite(file);
+            Set<String> ids = new HashSet<>();
+            for (JsonNode fx : root.get("fixtures")) {
+                String id = requireId(fx, file, ids);
+                requireText(fx, "query", file, id);
+                validateActor(fx.get("actor"), file, id, false);
+                JsonNode expected = required(fx, "expected", file, id);
+                assertThat(expected.has("doc_ids"))
+                        .as("%s[%s]: expected.doc_ids required", file, id)
+                        .isTrue();
+            }
+        }
+    }
+
+    @Test
     @DisplayName("write-safety fixtures are structurally valid")
     void writeSafetyFixturesValid() throws IOException {
         for (Path file : suiteFiles("write-safety")) {
@@ -115,6 +138,42 @@ class EvalFixtureValidationTest {
                         .isTrue();
             }
         }
+    }
+
+    @Test
+    @DisplayName("tool-response coverage fixtures are structurally valid")
+    void toolResponseFixturesValid() throws IOException {
+        for (Path file : suiteFiles("tool-response")) {
+            JsonNode root = parseSuite(file);
+            Set<String> ids = new HashSet<>();
+            for (JsonNode fx : root.get("fixtures")) {
+                String id = requireId(fx, file, ids);
+                requireText(fx, "utterance", file, id);
+                validateActor(fx.get("actor"), file, id, true);
+                JsonNode expected = required(fx, "expected", file, id);
+                String outcome = expected.path("outcome").asText();
+                assertThat(TOOL_RESPONSE_OUTCOMES)
+                        .as("%s[%s]: expected.outcome must be realistic-response or no-tool-available", file, id)
+                        .contains(outcome);
+                String hypothesis = required(fx, "gap_hypothesis", file, id).asText();
+                assertThat(GAP_HYPOTHESES)
+                        .as("%s[%s]: gap_hypothesis must be new-tool, description-gap, or n/a", file, id)
+                        .contains(hypothesis);
+                // The hypothesis is the author's prior about the gap: it only makes sense on
+                // no-tool-available fixtures, and those must always carry one for triage grouping.
+                if ("realistic-response".equals(outcome)) {
+                    assertThat(hypothesis)
+                            .as("%s[%s]: realistic-response fixtures use gap_hypothesis n/a", file, id)
+                            .isEqualTo("n/a");
+                } else {
+                    assertThat(hypothesis)
+                            .as("%s[%s]: no-tool-available fixtures need a new-tool/description-gap prior", file, id)
+                            .isNotEqualTo("n/a");
+                }
+            }
+        }
+        // #1164 AC: seed derived from the ~100 role-authored questions. Not a Gate 0 gate.
+        assertThat(countFixtures("tool-response")).isGreaterThanOrEqualTo(100);
     }
 
     @Test

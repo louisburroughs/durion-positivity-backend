@@ -285,9 +285,62 @@ public class WorkorderServiceImpl implements WorkorderService {
                     savedWorkorder.getEstimateId(),
                     savedWorkorder.getId());
             copyEstimateItemsToWorkorder(savedWorkorder);
+            // FI-3 (#1133): retain declined recommendations on the workorder so the decline has a
+            // source workorder and its reason survives to the service-completion fact feed.
+            copyDeclinedEstimateServicesToWorkorder(savedWorkorder);
         }
 
         return savedWorkorder;
+    }
+
+    /**
+     * Promote DECLINED estimate LABOR items onto the workorder as declined service lines (FI-3,
+     * #1133). These are not billable work — they carry {@code declined = true} and the customer's
+     * rejection reason so pos-workorder can emit a {@code WorkorderServiceLineDeclinedV1} fact at
+     * completion, which CRM turns into a declined-service follow-up. Only LABOR items are
+     * promoted; a declined part is not a declined "recommended service".
+     *
+     * @param workorder the workorder promoted from an estimate
+     */
+    private void copyDeclinedEstimateServicesToWorkorder(Workorder workorder) {
+        UUID estimateId = workorder.getEstimateId();
+        if (estimateId == null) {
+            return;
+        }
+
+        List<EstimateItem> declinedItems = estimateItemRepository.findByEstimate_IdAndApprovalStatusAndDeletedFalse(
+                estimateId, ApprovalStatus.DECLINED);
+        if (declinedItems.isEmpty()) {
+            return;
+        }
+
+        List<com.positivity.workorder.internal.entity.WorkorderServiceLine> declinedLines = declinedItems.stream()
+                .filter(item -> item.getItemType() == EstimateItemType.LABOR)
+                .map(item -> com.positivity.workorder.internal.entity.WorkorderServiceLine.builder()
+                        .workOrder(workorder)
+                        .description(item.getDescription())
+                        .quantity(item.getQuantity())
+                        .unitPrice(item.getUnitPrice())
+                        .lineTotal(item.getLineTotal())
+                        .taxCode(item.getTaxCode())
+                        .originEstimateItem(item)
+                        .serviceEntityId(item.getServiceId())
+                        .status(WorkorderItemStatus.CANCELLED)
+                        .declined(true)
+                        .declineReason(item.getRejectionReason())
+                        .isEmergencySafety(false)
+                        .photoNotPossible(false)
+                        .build())
+                .toList();
+
+        if (!declinedLines.isEmpty()) {
+            workorderServiceRepository.saveAll(declinedLines);
+            workorderFactPublisher.markChanged(workorder.getId());
+            log.info(
+                    "Promoted {} declined estimate service items onto workorder {}",
+                    declinedLines.size(),
+                    workorder.getId());
+        }
     }
 
     /**

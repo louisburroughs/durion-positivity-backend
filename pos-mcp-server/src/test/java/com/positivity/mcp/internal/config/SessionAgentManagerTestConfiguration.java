@@ -100,12 +100,18 @@ public class SessionAgentManagerTestConfiguration {
             }
 
             @Override
-            public void addToolPermission(java.util.UUID toolId, String permissionCode) {
-                // no-op stub
+            public boolean addToolPermission(java.util.UUID toolId, String permissionCode) {
+                return false; // no-op stub
             }
 
             @Override
             public java.util.Optional<java.util.UUID> findDiscoveredToolIdByName(String name) {
+                return java.util.Optional.empty();
+            }
+
+            @Override
+            public java.util.Optional<com.positivity.mcp.internal.domain.DiscoveredOperation>
+                    findDiscoveredOperationByName(String name) {
                 return java.util.Optional.empty();
             }
 
@@ -115,8 +121,8 @@ public class SessionAgentManagerTestConfiguration {
             }
 
             @Override
-            public void removeToolPermission(java.util.UUID toolId, String permissionCode) {
-                // no-op stub
+            public boolean removeToolPermission(java.util.UUID toolId, String permissionCode) {
+                return false; // no-op stub
             }
         };
     }

@@ -30,12 +30,6 @@
       "defaultValue": "customer"
     },
     {
-      "name": "pos.vehicle.base-url",
-      "type": "java.lang.String",
-      "description": "Base URL for vehicle service integration.",
-      "defaultValue": "http://pos-vehicle:8088"
-    },
-    {
       "name": "pos.tax.base-url",
       "type": "java.lang.String",
       "description": "Base URL for tax service integration.",
