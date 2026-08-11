@@ -264,6 +264,83 @@ class PayloadRedactorTest {
             assertThat(uri).doesNotContain("hunter2").contains("article=205");
         }
 
+        /**
+         * The conventions that matter in a URL and are too ambiguous to redact in a body. A URI-only name set
+         * exists precisely so that widening these does not start destroying {@code <Key>} elements inside
+         * vendor documents at {@code REDACTED}.
+         */
+        @ParameterizedTest(name = "query parameter {0} is redacted")
+        @ValueSource(
+                strings = {
+                    "key",
+                    "token",
+                    "api-key",
+                    "sig",
+                    "signature",
+                    "subscription-key",
+                    "auth",
+                    "code",
+                    "access-token",
+                    "x-amz-signature",
+                    "awsAccessKeyId"
+                })
+        void redactsTheUriOnlySensitiveParameterNames(String parameter) {
+            String uri = PayloadRedactor.redactUri(
+                    "https://edi.example/stock?" + parameter + "=SeCretValue123&article=205", PayloadCaptureLevel.FULL);
+
+            assertThat(uri).doesNotContain("SeCretValue123");
+            assertThat(uri).contains("article=205");
+        }
+
+        @Test
+        void doesNotRedactThoseNamesInsideABodyAtRedactedLevel() {
+            // The other half of the URI-only decision: a vendor document's <Key> is commercial content, and
+            // redacting it would silently destroy data in a store that keeps it for 400 days.
+            String body = PayloadRedactor.applyCaptureLevel(
+                    "<Item><Key>ART-205-45-17</Key><Token>SEQ-99</Token></Item>", PayloadCaptureLevel.REDACTED);
+
+            assertThat(body)
+                    .as("URI parameter names must NOT leak into body redaction -- that is why the sets are"
+                            + " separate")
+                    .contains("ART-205-45-17")
+                    .contains("SEQ-99");
+        }
+
+        @Test
+        void stripsUserinfoAtEveryCaptureLevelIncludingMetadataOnly() {
+            for (PayloadCaptureLevel level : PayloadCaptureLevel.values()) {
+                String uri = PayloadRedactor.redactUri("https://apiuser:hunter2@edi.example/a25/stock", level);
+
+                assertThat(uri)
+                        .as(
+                                "userinfo is a plaintext credential (ADR-0050 §4) and sits OUTSIDE the query"
+                                        + " string, so dropping the query at %s would not remove it",
+                                level)
+                        .doesNotContain("hunter2");
+                assertThat(uri).contains("edi.example/a25/stock");
+            }
+        }
+
+        @Test
+        void redactsCredentialsInAUrlEmbeddedInFreeText() {
+            String detail = PayloadRedactor.redactEmbeddedUris(
+                    "Vendor redirected to https://cdn.example/doc?sig=AbC123&exp=99 (302); retry advised");
+
+            assertThat(detail).doesNotContain("AbC123");
+            assertThat(detail)
+                    .as("the operator-facing diagnostic must survive the redaction that protects it")
+                    .contains("Vendor redirected to")
+                    .contains("(302); retry advised");
+        }
+
+        @Test
+        void leavesFreeTextWithNoUrlUntouched() {
+            String detail = "Read timed out after 30000 ms";
+
+            assertThat(PayloadRedactor.redactEmbeddedUris(detail)).isEqualTo(detail);
+            assertThat(PayloadRedactor.redactEmbeddedUris(null)).isNull();
+        }
+
         @Test
         void nullInNullOut() {
             assertThat(PayloadRedactor.redactUri(null, PayloadCaptureLevel.FULL))

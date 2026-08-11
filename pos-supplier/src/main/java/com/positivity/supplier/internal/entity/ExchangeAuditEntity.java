@@ -123,9 +123,10 @@ public class ExchangeAuditEntity {
      * <p>This used to say "never carries credentials — they travel in headers, never the URI". That was true
      * of the three shipped auth strategies and enforced by nothing: vendors legitimately take query
      * parameters, and a binding path or a fourth strategy carrying {@code ?apikey=...} would have put a live
-     * credential here. The distinction matters more for this column than any other, because it is the only
-     * one stored in plaintext at <strong>every</strong> capture level and exempt from the 400-day payload
-     * purge — so it is retained permanently and returned by the metadata listing.
+     * credential here. It matters because this column, like every metadata column, is stored unencrypted, is
+     * retained after the 400-day purge has nulled the payloads (§7 keeps the metadata row), and is returned by
+     * the metadata listing — so anything left in it is kept indefinitely and is readable by any
+     * {@code supplier:audit:read} holder.
      *
      * <p>So the statement is now a fact about a control rather than a hope about callers:
      * {@code PayloadRedactor.redactUri} applies the form-field patterns to the query string, and

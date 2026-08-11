@@ -92,6 +92,10 @@ class ExchangeAuditWriterTest {
     }
 
     private static ExchangeContext context(String correlationId) {
+        return context(correlationId, "https://edi.michelin.example/a25/stock/inquiry", null);
+    }
+
+    private static ExchangeContext context(String correlationId, String uri, String failureDetail) {
         return new ExchangeContext(
                 PROFILE_ID,
                 "michelin-eu",
@@ -100,7 +104,7 @@ class ExchangeAuditWriterTest {
                 "A2_5",
                 BINDING_ID,
                 "POST",
-                "https://edi.michelin.example/a25/stock/inquiry",
+                uri,
                 1,
                 correlationId,
                 ExchangeOutcome.OK,
@@ -109,7 +113,7 @@ class ExchangeAuditWriterTest {
                 Duration.ofMillis(184),
                 "<StockInquiry/>",
                 "<StockInquiryResponse/>",
-                null);
+                failureDetail);
     }
 
     /**
@@ -186,5 +190,62 @@ class ExchangeAuditWriterTest {
                 .as("a client-controlled value must never be able to suppress an audit row")
                 .hasSize(1)
                 .allSatisfy(row -> assertThat(row.getCorrelationId()).hasSize(100));
+    }
+
+    // ── Credential redaction of the metadata columns (ADR-0050 §4/§7) ────────────────
+
+    /**
+     * Asserted on the PERSISTED ROW, not on {@code PayloadRedactor} in isolation.
+     *
+     * <p>The redactor had unit coverage and the wiring did not: reverting the writer to
+     * {@code truncate(context.uri(), 2048)} left the whole suite green, and the width-parity test still passed
+     * because it only reads the numeric bound. Same unproven-seam shape as the {@code @EventListener} finding.
+     * These tests fail if the call is removed.
+     */
+    @Test
+    void aStoredUriHasItsCredentialQueryParametersRedacted() {
+        observer.onExchange(
+                context("redact-uri", "https://edi.example/stock?apikey=live-secret-value&article=205", null));
+
+        assertThat(auditRepository.findAll()).singleElement().satisfies(row -> {
+            assertThat(row.getEndpointUri())
+                    .as("a credential in a query parameter must never reach a column that is"
+                            + " unencrypted, survives the purge, and is returned by the listing")
+                    .doesNotContain("live-secret-value");
+            assertThat(row.getEndpointUri()).contains("article=205");
+        });
+    }
+
+    @Test
+    void aStoredUriHasItsUserinfoStrippedEvenAtMetadataOnly() {
+        // No binding row exists for BINDING_ID, so the writer falls back to its configured default (REDACTED).
+        observer.onExchange(context("redact-userinfo", "https://apiuser:hunter2@edi.example/a25/stock", null));
+
+        assertThat(auditRepository.findAll())
+                .singleElement()
+                .satisfies(row -> assertThat(row.getEndpointUri())
+                        .as("userinfo is a plaintext credential (ADR-0050 §4) and is not part of the query"
+                                + " string, so dropping the query alone would leave it intact")
+                        .doesNotContain("hunter2"));
+    }
+
+    @Test
+    void aStoredFailureDetailHasEmbeddedUrlCredentialsRedacted() {
+        observer.onExchange(context(
+                "redact-failure",
+                "https://edi.example/a25/stock",
+                "Vendor redirected to https://cdn.example/doc?sig=AbC123SignatureValue&exp=99 (302)"));
+
+        assertThat(auditRepository.findAll()).singleElement().satisfies(row -> {
+            assertThat(row.getFailureDetail())
+                    .as("a redirect Location routinely carries a signed URL whose token is a live"
+                            + " bearer credential, and this column asserted it never held one")
+                    .doesNotContain("AbC123SignatureValue");
+            assertThat(row.getFailureDetail())
+                    .as("the rest of the operator-facing message must survive, or the redaction has"
+                            + " destroyed the diagnostic it exists to carry")
+                    .contains("Vendor redirected to")
+                    .contains("(302)");
+        });
     }
 }

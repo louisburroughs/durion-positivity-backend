@@ -18,6 +18,13 @@ public class SupplierValidationException extends RuntimeException {
     /** An audit query window whose end is not after its start; it can never match anything. */
     public static final String AUDIT_WINDOW_INVALID = "SUPPLIER_AUDIT_WINDOW_INVALID";
 
+    /**
+     * A URL carrying userinfo ({@code https://user:secret@host}). Rejected rather than accepted because
+     * userinfo <em>is</em> a plaintext credential, and ADR-0050 §4 is that plaintext credentials never persist —
+     * a base URL is configuration, which is exactly where one would live forever.
+     */
+    public static final String URL_CONTAINS_CREDENTIALS = "SUPPLIER_URL_CONTAINS_CREDENTIALS";
+
     private final String code;
 
     public SupplierValidationException(String code, String message) {

@@ -103,6 +103,57 @@ public final class PayloadRedactor {
                     Pattern.CASE_INSENSITIVE))
             .toList();
 
+    /**
+     * Names redacted in a <strong>query string only</strong>, on top of {@link #SENSITIVE_NAMES}.
+     *
+     * <p>Deliberately a separate set rather than widening {@code SENSITIVE_NAMES}. These are short, generic
+     * words that are unambiguous as URL parameters and dangerously ambiguous in a document body: widening the
+     * shared set would newly redact {@code <Key>} and {@code "key"} inside vendor payloads at
+     * {@code REDACTED}, silently destroying legitimate commercial content — part keys, sort keys, price keys —
+     * in a store that keeps it for 400 days. The blast radius of a false positive differs by position, so the
+     * rule does too.
+     *
+     * <p>Chosen from the conventions actually in use: {@code key} is Google's, {@code token} and
+     * {@code api-key} are near-universal, {@code sig}/{@code signature} appear in every pre-signed URL scheme
+     * (S3, Azure SAS), and {@code subscription-key} is Azure API Management's. A signed URL's token is a
+     * bearer credential for as long as it is valid, and a redirect {@code Location} routinely carries one.
+     */
+    private static final List<String> URI_ONLY_SENSITIVE_NAMES = List.of(
+            "key",
+            "token",
+            "api-key",
+            "apikey",
+            "access-token",
+            "refresh-token",
+            "id-token",
+            "sig",
+            "signature",
+            "subscription-key",
+            "auth",
+            "sas",
+            "x-amz-security-token",
+            "x-amz-signature",
+            "x-amz-credential",
+            "awsaccesskeyid",
+            "code",
+            "id_token_hint");
+
+    /** Query-parameter patterns: the shared names plus the URI-only ones. */
+    private static final List<Pattern> QUERY_PARAM_PATTERNS = java.util.stream.Stream.concat(
+                    SENSITIVE_NAMES.stream(), URI_ONLY_SENSITIVE_NAMES.stream())
+            .distinct()
+            .map(name -> Pattern.compile("(^|[?&])(" + Pattern.quote(name) + ")=([^&]*)", Pattern.CASE_INSENSITIVE))
+            .toList();
+
+    /**
+     * A URL embedded in free text, e.g. a vendor {@code Location} header quoted in a failure message. Stops at
+     * whitespace and at the characters that conventionally close a URL in prose.
+     */
+    private static final Pattern EMBEDDED_URL = Pattern.compile("https?://[^\\s<>\"']+", Pattern.CASE_INSENSITIVE);
+
+    /** {@code //user:password@host} — userinfo, which is a plaintext credential in a URL (ADR-0050 §4). */
+    private static final Pattern URL_USERINFO = Pattern.compile("(//)([^/@\\s]+)(@)");
+
     /** {@code client_secret=value&...} in form-encoded bodies. */
     private static final List<Pattern> FORM_FIELD_PATTERNS = SENSITIVE_NAMES.stream()
             .map(name -> Pattern.compile("(\\b" + Pattern.quote(name) + "=)([^&\\s]*)", Pattern.CASE_INSENSITIVE))
@@ -117,10 +168,12 @@ public final class PayloadRedactor {
      *
      * <h2>Why the URI needs this at all</h2>
      *
-     * {@code endpoint_uri} is the one audit column stored in <strong>plaintext at every capture level,
-     * including {@code METADATA_ONLY}, and exempt from the 400-day payload purge</strong> — so it is retained
-     * forever, and the metadata listing returns it to anyone holding {@code supplier:audit:read}. A binding
-     * configured to retain nothing would still retain the full URI permanently.
+     * {@code endpoint_uri} is a <em>metadata</em> column, and metadata is the part §7 keeps: it is stored
+     * unencrypted, it survives the 400-day purge that nulls the payload columns, and the metadata listing
+     * returns it to anyone holding {@code supplier:audit:read}. It is also populated at every capture level,
+     * so a binding set to {@code METADATA_ONLY} — configured to retain no content — would still have retained
+     * the full URI indefinitely. The same is true of {@code failure_detail}, which is why that is redacted
+     * too.
      *
      * <p>{@code ExchangeAuditEntity} used to assert that credentials never travel in the URI. That is true of
      * the three shipped auth strategies and <em>enforced by nothing</em>: vendors legitimately take query
@@ -149,20 +202,62 @@ public final class PayloadRedactor {
         if (uri == null) {
             return null;
         }
-        int queryStart = uri.indexOf('?');
+        // Userinfo first, and at every capture level including METADATA_ONLY. A password in
+        // //user:pass@host is a plaintext credential (ADR-0050 §4) and is not part of the query string, so
+        // dropping the query alone would leave it intact.
+        String result = stripUserinfo(uri);
+        int queryStart = result.indexOf('?');
         if (captureLevel == PayloadCaptureLevel.METADATA_ONLY) {
-            return queryStart < 0 ? uri : uri.substring(0, queryStart);
+            return queryStart < 0 ? result : result.substring(0, queryStart);
         }
         if (queryStart < 0) {
-            // No query string: nothing a name=value pattern could match, and the path itself is metadata.
-            return uri;
+            return result;
         }
-        String query = uri.substring(queryStart + 1);
-        for (Pattern pattern : FORM_FIELD_PATTERNS) {
-            query = pattern.matcher(query)
-                    .replaceAll(matchResult -> Matcher.quoteReplacement(matchResult.group(1) + REDACTED));
+        return result.substring(0, queryStart + 1) + redactQuery(result.substring(queryStart + 1));
+    }
+
+    /**
+     * Redacts credential-bearing query parameters and userinfo out of any URL embedded in free text.
+     *
+     * <p>For {@code failure_detail}, which quotes vendor responses. A redirect {@code Location} routinely
+     * carries a signed URL whose token is a bearer credential for as long as it is valid, and this column is
+     * stored unencrypted, is not covered by the payload purge, and is returned by the metadata listing — under
+     * a schema that until now asserted it never contains a credential. That claim is now a control.
+     *
+     * <p>Applied at every capture level: an operator-facing failure message has no legitimate need for the
+     * token inside a signed URL, so unlike the payload columns there is no level at which keeping it is the
+     * point.
+     *
+     * @param text free text that may embed one or more URLs, or {@code null}
+     * @return the text with any embedded URL credentials redacted
+     */
+    @Nullable
+    public static String redactEmbeddedUris(@Nullable String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
         }
-        return uri.substring(0, queryStart + 1) + query;
+        return EMBEDDED_URL
+                .matcher(text)
+                .replaceAll(match -> Matcher.quoteReplacement(redactUri(match.group(), PayloadCaptureLevel.FULL)));
+    }
+
+    /** Replaces {@code //user:secret@} with {@code //REDACTED@}, keeping the URL parseable. */
+    @NonNull
+    private static String stripUserinfo(@NonNull String uri) {
+        return URL_USERINFO
+                .matcher(uri)
+                .replaceAll(match -> Matcher.quoteReplacement(match.group(1) + REDACTED + match.group(3)));
+    }
+
+    /** Redacts sensitive parameters in a bare query string, preserving parameter names and order. */
+    @NonNull
+    private static String redactQuery(@NonNull String query) {
+        String result = query;
+        for (Pattern pattern : QUERY_PARAM_PATTERNS) {
+            result = pattern.matcher(result)
+                    .replaceAll(match -> Matcher.quoteReplacement(match.group(1) + match.group(2) + "=" + REDACTED));
+        }
+        return result;
     }
 
     /**

@@ -35,8 +35,10 @@ import org.springframework.web.client.RestClient;
  * <p><strong>What the token leg does NOT need from this, contrary to an earlier version of this javadoc:</strong>
  * retry classification. That version claimed the distinction mattered because a read timeout on the token
  * request may have minted a token server-side and must therefore not be retried. It does not, and the code
- * never behaved that way: {@code OAuth2ClientCredentialsAuthStrategy} maps every {@code RestClientException}
- * to a {@code SupplierAuthTransportException}, which the base client classifies as
+ * never behaved that way: {@code OAuth2ClientCredentialsAuthStrategy} maps a <em>transport</em>
+ * {@code RestClientException} to a {@code SupplierAuthTransportException} — a 401 or 403 from the token
+ * endpoint is instead a {@code SupplierConfigurationException}, because the vendor actively refused the
+ * credentials — and the base client classifies the transport case as
  * {@code PRE_SEND_FAILURE} — retryable — regardless of which timeout occurred. That is the right behaviour and
  * is the call already accepted: a token leg failure means nothing reached the vendor's <em>business</em>
  * endpoint, so no order was placed and no stock was reserved. A wasted token is not a duplicate submission.

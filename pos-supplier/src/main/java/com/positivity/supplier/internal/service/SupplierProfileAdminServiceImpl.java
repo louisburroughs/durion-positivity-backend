@@ -70,6 +70,13 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
      */
     private final ApplicationEventPublisher eventPublisher;
 
+    /**
+     * {@code scheme://userinfo@host} — the userinfo component, which RFC 3986 permits and which is a plaintext
+     * credential whenever it carries a password.
+     */
+    private static final java.util.regex.Pattern URL_WITH_USERINFO =
+            java.util.regex.Pattern.compile("^[a-zA-Z][a-zA-Z0-9+.-]*://[^/?#@]+@");
+
     // ── Vendor profiles ─────────────────────────────────────────────────────────────
 
     @Override
@@ -418,6 +425,34 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
 
     // ── Validation ──────────────────────────────────────────────────────────────────
 
+    /**
+     * Rejects a URL carrying userinfo, e.g. {@code https://apiuser:hunter2@edi.example/a25}.
+     *
+     * <p>ADR-0050 §4: plaintext credentials never persist. Userinfo in a URL is a plaintext credential, and a
+     * base URL is <em>configuration</em> — precisely the place a password would live indefinitely, and from
+     * there it would be copied into the permanently retained {@code endpoint_uri} of every audit row. A 400 at
+     * the boundary is the fail-closed answer, and pre-production policy prefers the correct rejection to
+     * tolerating the value.
+     *
+     * <p>Storage-side stripping in {@code PayloadRedactor.redactUri} is defence in depth, not a substitute:
+     * YAML-managed profiles bypass this validation entirely, so both layers are needed.
+     *
+     * <p>The message names the field and says userinfo was present. It deliberately does not echo the value,
+     * which is the credential.
+     */
+    @NonNull
+    private static String requireNoUrlCredentials(@NonNull String field, @NonNull String url) {
+        if (URL_WITH_USERINFO.matcher(url).find()) {
+            throw new SupplierValidationException(
+                    SupplierValidationException.URL_CONTAINS_CREDENTIALS,
+                    "'" + field + "' must not embed credentials. Remove the user:password@ portion of the URL"
+                            + " and configure the credential as an auth config secret reference instead"
+                            + " (ADR-0050 §4): a URL is stored in configuration and copied into every audit"
+                            + " row, so a password there persists indefinitely.");
+        }
+        return url;
+    }
+
     @NonNull
     private static SupplierCapability parseCapability(@NonNull String capability) {
         try {
@@ -512,7 +547,7 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
         binding.setCapability(capability);
         binding.setProtocolFamily(family);
         binding.setProtocolVersion(request.version());
-        binding.setBaseUrl(request.baseUrl());
+        binding.setBaseUrl(requireNoUrlCredentials("baseUrl", request.baseUrl()));
         binding.setPath(request.path());
         binding.setAuthConfigName(request.authConfigName());
         binding.setScheduleCron(request.schedule());

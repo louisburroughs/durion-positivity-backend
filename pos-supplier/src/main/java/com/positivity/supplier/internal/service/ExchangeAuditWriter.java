@@ -78,6 +78,9 @@ public class ExchangeAuditWriter {
         // pair -- ExchangeAuditColumnWidthParityTest parses these bounds out of this file and compares them
         // against the migrations, and a nested call hid one of them the first time.
         String storedUri = PayloadRedactor.redactUri(context.uri(), captureLevel);
+        // Same reason for the local as storedUri: the parity test parses these truncate bounds out of this
+        // file, and it has now twice reported a column as unprotected because a nested call hid its bound.
+        String storedFailureDetail = PayloadRedactor.redactEmbeddedUris(context.failureDetail());
 
         ExchangeAuditEntity row = ExchangeAuditEntity.builder()
                 .vendorProfileId(context.vendorProfileId())
@@ -87,10 +90,10 @@ public class ExchangeAuditWriter {
                 .protocolFamily(context.protocolFamily())
                 .protocolVersion(context.protocolVersion())
                 .httpMethod(context.method())
-                // The URI is the one audit column kept in plaintext at EVERY capture level and exempt from
-                // the payload purge, so anything left in it is retained permanently; METADATA_ONLY drops the
-                // query string outright, since that level promises to retain no content and query parameters
-                // are content. See PayloadRedactor.redactUri.
+                // A metadata column: unencrypted, retained after the purge nulls the payloads, and returned
+                // by the listing -- so anything left in it is kept indefinitely. Populated at every capture
+                // level, so METADATA_ONLY additionally drops the query string outright: that level promises to
+                // retain no content and query parameters are content. See PayloadRedactor.redactUri.
                 .endpointUri(truncate(storedUri, 2048))
                 .attempt(context.attempt())
                 // Truncated because this is the one field a REMOTE party influences: it is reused from the
@@ -102,7 +105,11 @@ public class ExchangeAuditWriter {
                 .httpStatus(context.httpStatus())
                 .startedAt(context.startedAt())
                 .durationMs(context.duration().toMillis())
-                .failureDetail(truncate(context.failureDetail(), 2048))
+                // Redacted for the same reason as the URI, and it is the same kind of value: this column
+                // quotes vendor responses, and a redirect Location routinely carries a signed URL whose token
+                // is a live bearer credential. Unencrypted, not covered by the payload purge, and returned by
+                // the metadata listing.
+                .failureDetail(truncate(storedFailureDetail, 2048))
                 .captureLevel(captureLevel)
                 // The load-bearing line: raw bodies are never persisted unredacted.
                 .requestPayload(PayloadRedactor.applyCaptureLevel(context.requestBody(), captureLevel))

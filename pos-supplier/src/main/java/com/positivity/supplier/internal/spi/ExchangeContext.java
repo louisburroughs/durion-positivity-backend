@@ -41,7 +41,9 @@ import org.jspecify.annotations.Nullable;
  * @param protocolVersion adapter version within the family; data, not an enum (ADR-0051 §3)
  * @param bindingId identity of the endpoint binding used
  * @param method HTTP method
- * @param uri absolute request URI, query included; never carries credentials
+ * @param uri absolute request URI, query included, exactly as sent. This is the RAW value and it may well
+ *     carry credentials -- a vendor taking an api key as a query parameter, or userinfo in a configured base
+ *     URL. Redaction is the audit writer's job, not the caller's; observers must not persist this verbatim
  * @param attempt 1-based attempt number within one logical call
  * @param correlationId correlation id sent as {@code X-Correlation-Id}; never blank
  * @param outcome classification of this attempt (ADR-0052 §5)
@@ -51,7 +53,8 @@ import org.jspecify.annotations.Nullable;
  * @param duration wall-clock duration of the attempt
  * @param requestBody the raw request payload as sent; NOT redacted — see the class javadoc
  * @param responseBody the raw response payload as received; NOT redacted — see the class javadoc
- * @param failureDetail operator-facing failure summary; never a credential or secret value
+ * @param failureDetail operator-facing failure summary, raw. May quote a vendor response, including a
+ *     redirect {@code Location} carrying a signed URL; the audit writer redacts embedded URL credentials
  */
 public record ExchangeContext(
         @NonNull UUID vendorProfileId,

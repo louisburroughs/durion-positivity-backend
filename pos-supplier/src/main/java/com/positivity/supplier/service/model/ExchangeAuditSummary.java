@@ -29,14 +29,17 @@ import org.jspecify.annotations.Nullable;
  * @param protocolFamily canonical protocol family key of the adapter used
  * @param protocolVersion norm-version key within the family (ADR-0051 §3)
  * @param httpMethod request method
- * @param endpointUri absolute request URI. Credentials travel in headers, never in the URI
+ * @param endpointUri absolute request URI, credential-redacted at capture time. Sensitive query
+ *     parameters and URL userinfo are replaced with a marker, and at {@code METADATA_ONLY} the query string
+ *     is removed entirely
  * @param attempt 1-based attempt number within one logical call, so retries are individually visible
  * @param correlationId groups every attempt of one logical call; use it to trace a retry sequence
  * @param outcome ADR-0052 §5 classification of this attempt
  * @param httpStatus response status; {@code null} when no response was received at all
  * @param startedAt when the attempt began
  * @param durationMs how long the attempt took
- * @param failureDetail operator-facing failure summary; {@code null} on success, never a credential
+ * @param failureDetail operator-facing failure summary; {@code null} on success. Credential-bearing query
+ *     parameters and userinfo in any URL it embeds are redacted at capture time
  * @param captureLevel the capture level actually applied to this row — recorded rather than re-derived,
  *     because the binding's level can change afterwards
  * @param requestPayloadPresent whether a request payload is currently stored for this row
@@ -88,7 +91,12 @@ public record ExchangeAuditSummary(
         String httpMethod,
 
         @Schema(
-                description = "Absolute request URI. Credentials travel in headers and never appear here.",
+                description = "Absolute request URI, credential-redacted before storage. Sensitive query parameters"
+                        + " (api keys, tokens, signatures) and any userinfo in the URL are replaced with a"
+                        + " redaction marker. AT METADATA_ONLY THE QUERY STRING IS REMOVED ENTIRELY: that level"
+                        + " retains no content, and query parameters are content, so the value you receive is"
+                        + " the path only. Redaction is a control applied at capture time -- the original was"
+                        + " never stored and cannot be recovered.",
                 example = "https://edi.michelin.example/a25/stock/inquiry")
         @NonNull
         String endpointUri,
@@ -122,7 +130,9 @@ public record ExchangeAuditSummary(
         long durationMs,
 
         @Schema(
-                description = "Operator-facing failure summary. Null on success; never contains a credential.",
+                description = "Operator-facing failure summary. Null on success. Quotes vendor responses, so any URL it"
+                        + " embeds has its credential-bearing query parameters and userinfo redacted at capture"
+                        + " time -- a redirect Location can carry a signed URL whose token is a live credential.",
                 example = "Read timed out after 30000 ms")
         @Nullable
         String failureDetail,

@@ -42,14 +42,15 @@ import org.jspecify.annotations.Nullable;
  * @param protocolFamily adapter family used
  * @param protocolVersion norm-version key within the family (ADR-0051 §3)
  * @param httpMethod request method
- * @param endpointUri absolute request URI; credentials travel in headers, never here
+ * @param endpointUri absolute request URI, credential-redacted at capture time; at {@code METADATA_ONLY}
+ *     the query string is absent entirely
  * @param attempt 1-based attempt number within one logical call
  * @param correlationId groups the attempts of one logical call
  * @param outcome ADR-0052 §5 classification name
  * @param httpStatus response status; {@code null} when no response was received
  * @param startedAt when the attempt began
  * @param durationMs attempt duration
- * @param failureDetail operator-facing failure summary; never a credential
+ * @param failureDetail operator-facing failure summary; embedded URL credentials redacted at capture time
  * @param captureLevel the capture level actually applied to this row
  * @param requestPayloadPresent whether a request payload is stored — computed in SQL, so knowing it
  *     costs no decryption

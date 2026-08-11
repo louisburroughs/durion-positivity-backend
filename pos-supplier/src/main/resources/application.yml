@@ -78,6 +78,9 @@ pos:
         # Decrypt-only keys, keyId:base64 comma-separated. A retired key MUST stay here for the whole
         # retention window or its payloads become unreadable.
         previous-keys: ${SUPPLIER_AUDIT_ENC_PREVIOUS_KEYS:}
+      # Applied when a binding sets no level of its own. REDACTED, not FULL: an unconfigured binding must
+      # not capture credentials that happen to sit inside a vendor document.
+      default-capture-level: ${SUPPLIER_AUDIT_DEFAULT_CAPTURE_LEVEL:REDACTED}
       # Payload content expires; the metadata trail is kept permanently.
       retention: ${SUPPLIER_AUDIT_RETENTION:P400D}
       purge-cron: ${SUPPLIER_AUDIT_PURGE_CRON:0 30 3 * * *}
@@ -85,12 +88,26 @@ pos:
     #
     # The token endpoint gets its OWN budgets, not the profile's and not the platform builder's 2s/5s
     # in-cluster defaults -- it is a third-party internet call, frequently slower than the vendor API,
-    # and the whole exchange waits on it. Declared here rather than left to the @Value defaults so a
-    # typo in either key is visible in configuration instead of silently falling back.
+    # and the whole exchange waits on it.
     oauth2:
       expiry-skew-seconds: ${SUPPLIER_OAUTH2_EXPIRY_SKEW_SECONDS:30}
       connect-timeout-millis: ${SUPPLIER_OAUTH2_CONNECT_TIMEOUT_MILLIS:5000}
       read-timeout-millis: ${SUPPLIER_OAUTH2_READ_TIMEOUT_MILLIS:15000}
+    # ── Retry and circuit breaker (ADR-0052 §5) ─────────────────────────────────────────
+    #
+    # Only PRE_SEND_FAILURE is retried; a post-send ambiguity is never retried, whatever these say.
+    retry:
+      base-backoff-millis: ${SUPPLIER_RETRY_BASE_BACKOFF_MILLIS:500}
+    breaker:
+      failure-rate-threshold: ${SUPPLIER_BREAKER_FAILURE_RATE_THRESHOLD:50}
+      sliding-window-size: ${SUPPLIER_BREAKER_SLIDING_WINDOW_SIZE:20}
+      # Below this many calls the breaker stays closed, so one early failure cannot open it.
+      minimum-number-of-calls: ${SUPPLIER_BREAKER_MINIMUM_NUMBER_OF_CALLS:10}
+      wait-duration-seconds: ${SUPPLIER_BREAKER_WAIT_DURATION_SECONDS:30}
+      half-open-permitted-calls: ${SUPPLIER_BREAKER_HALF_OPEN_PERMITTED_CALLS:3}
+    # ── Scheduler lease (binding decision 4) ────────────────────────────────────────────
+    schedule:
+      lease-duration-seconds: ${SUPPLIER_SCHEDULE_LEASE_DURATION_SECONDS:600}
   # @EmitEvent event-type registration with pos-event-receiver at startup (AGENTS.md)
   events:
     base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}

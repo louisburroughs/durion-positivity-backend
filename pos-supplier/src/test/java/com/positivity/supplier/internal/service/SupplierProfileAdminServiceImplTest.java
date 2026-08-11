@@ -594,8 +594,12 @@ class SupplierProfileAdminServiceImplTest {
     }
 
     private static EndpointBindingRequest bindingRequest(String capability, String authName) {
+        return bindingRequest(capability, authName, "https://api.example");
+    }
+
+    private static EndpointBindingRequest bindingRequest(String capability, String authName, String baseUrl) {
         return new EndpointBindingRequest(
-                capability, "EDIWHEEL_A25", "A2_5", "https://api.example", "/inquiry", authName, null, true, null);
+                capability, "EDIWHEEL_A25", "A2_5", baseUrl, "/inquiry", authName, null, true, null);
     }
 
     private static void assertYamlRejected(ThrowingCallable callable) {
@@ -708,5 +712,104 @@ class SupplierProfileAdminServiceImplTest {
                 .containsExactlyInAnyOrder(
                         new SupplierAuthConfigChanged(first, SupplierAuthConfigChanged.Change.DELETED),
                         new SupplierAuthConfigChanged(second, SupplierAuthConfigChanged.Change.DELETED));
+    }
+
+    // ── URL credentials and bounded keys (ADR-0050 §4, ADR-0051 §3) ──────────────────
+
+    /**
+     * Userinfo in a base URL is a plaintext credential, and ADR-0050 §4 is that those never persist. A base URL
+     * is configuration — precisely where a password would live indefinitely — and it is then copied into the
+     * permanently retained {@code endpoint_uri} of every audit row for that binding.
+     */
+    @Test
+    void rejectsABaseUrlThatEmbedsCredentials() {
+        UUID profileId = profileWithAuthConfig();
+
+        assertThatThrownBy(() -> adminService.createBinding(
+                        profileId,
+                        bindingRequest("STOCK_INQUIRY", "s2s-bearer", "https://apiuser:hunter2@edi.example/a25")))
+                .isInstanceOf(SupplierValidationException.class)
+                .extracting(ex -> ((SupplierValidationException) ex).getCode())
+                .isEqualTo(SupplierValidationException.URL_CONTAINS_CREDENTIALS);
+    }
+
+    @Test
+    void theRejectionMessageDoesNotEchoTheEmbeddedPassword() {
+        UUID profileId = profileWithAuthConfig();
+
+        assertThatThrownBy(() -> adminService.createBinding(
+                        profileId,
+                        bindingRequest("STOCK_INQUIRY", "s2s-bearer", "https://apiuser:hunter2@edi.example/a25")))
+                .as("the rejected value IS the credential -- naming the field is enough")
+                .hasMessageNotContaining("hunter2");
+    }
+
+    @Test
+    void acceptsAnOrdinaryBaseUrlWithNoUserinfo() {
+        UUID profileId = profileWithAuthConfig();
+
+        assertThat(adminService
+                        .createBinding(profileId, bindingRequest("STOCK_INQUIRY", "s2s-bearer"))
+                        .baseUrl())
+                .isEqualTo("https://api.example");
+    }
+
+    /**
+     * The bound exists because the audit trail stores this key at 64 characters (V5). Without it an operator
+     * could persist a longer key and silently lose every audit row for the binding.
+     */
+    @Test
+    void aVersionKeyLongerThanTheAuditColumnIsRejectedByTheDtoBound() {
+        java.util.Set<jakarta.validation.ConstraintViolation<EndpointBindingRequest>> violations;
+        try (jakarta.validation.ValidatorFactory factory =
+                jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            violations = factory.getValidator()
+                    .validate(new EndpointBindingRequest(
+                            "STOCK_INQUIRY",
+                            "EDIWHEEL_A25",
+                            "V".repeat(65),
+                            "https://api.example",
+                            "/inquiry",
+                            "s2s-bearer",
+                            null,
+                            true,
+                            null));
+        }
+
+        assertThat(violations)
+                .as("65 characters must be rejected: the audit column is 64, and an over-long key makes every"
+                        + " audit write for the binding fail with 22001, swallowed by the observer")
+                .isNotEmpty();
+    }
+
+    @Test
+    void aVersionKeyAtExactlyTheAuditColumnWidthIsAccepted() {
+        java.util.Set<jakarta.validation.ConstraintViolation<EndpointBindingRequest>> violations;
+        try (jakarta.validation.ValidatorFactory factory =
+                jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            violations = factory.getValidator()
+                    .validate(new EndpointBindingRequest(
+                            "STOCK_INQUIRY",
+                            "EDIWHEEL_A25",
+                            "V".repeat(64),
+                            "https://api.example",
+                            "/inquiry",
+                            "s2s-bearer",
+                            null,
+                            true,
+                            null));
+        }
+
+        assertThat(violations)
+                .as("64 is the boundary and must be allowed, or the bound is narrower than the column it"
+                        + " defends and rejects keys the trail could have stored")
+                .isEmpty();
+    }
+
+    private UUID profileWithAuthConfig() {
+        UUID profileId =
+                adminService.createProfile(profileRequest("michelin-eu")).vendorProfileId();
+        adminService.createAuthConfig(profileId, bearerAuthRequest("s2s-bearer"));
+        return profileId;
     }
 }

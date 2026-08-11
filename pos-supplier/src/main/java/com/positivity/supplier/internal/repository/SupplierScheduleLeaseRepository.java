@@ -159,7 +159,7 @@ public interface SupplierScheduleLeaseRepository extends JpaRepository<SupplierS
             @Param("checkpointAt") @NonNull Instant checkpointAt);
 
     /**
-     * Releases the lease by expiring it now and clearing the owner, owner-guarded so a run that lost
+     * Releases the lease by clearing both the owner and the expiry, owner-guarded so a run that lost
      * its lease cannot release the new holder's claim.
      *
      * <p>Sets <strong>both</strong> {@code owner_token} and {@code leased_until} to {@code NULL}. That is what

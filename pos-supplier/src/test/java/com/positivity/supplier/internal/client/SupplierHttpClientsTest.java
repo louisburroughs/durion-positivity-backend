@@ -123,6 +123,44 @@ class SupplierHttpClientsTest {
          * for "RestClient.Builder" and failed on the comment that explains why the builder is no longer used --
          * a test that breaks when you document the fix is testing the prose, not the code.
          */
+        /**
+         * Every {@code pos.supplier.*} key the module reads must be declared in {@code application.yml}.
+         *
+         * <p>Generalised from the three OAuth2 keys, because the stated principle — "a typo in a {@code @Value}
+         * key falls back to the annotation default with the suite green" — applied to all sixteen, and covering
+         * three of them while asserting the principle was the weaker half of a good idea. This scans the source
+         * for the keys rather than listing them, so a new {@code @Value} is caught rather than forgotten.
+         */
+        @Test
+        void everyPosSupplierValueKeyIsDeclaredInApplicationYml() throws Exception {
+            java.util.Set<String> used = new java.util.TreeSet<>();
+            java.util.regex.Pattern valueKey = java.util.regex.Pattern.compile("\\$\\{(pos\\.supplier\\.[a-z0-9.-]+)");
+            try (var sources = Files.walk(Path.of("src/main/java"))) {
+                for (Path source : sources.filter(path -> path.toString().endsWith(".java"))
+                        .toList()) {
+                    java.util.regex.Matcher matcher = valueKey.matcher(Files.readString(source));
+                    while (matcher.find()) {
+                        used.add(matcher.group(1));
+                    }
+                }
+            }
+            String yaml = Files.readString(APPLICATION_YML);
+
+            assertThat(used)
+                    .as("the scan must find the module's @Value keys, or this test checks nothing")
+                    .isNotEmpty();
+            for (String key : used) {
+                String leaf = key.substring(key.lastIndexOf('.') + 1);
+                assertThat(yaml)
+                        .as(
+                                "%s is read by the module but not declared in application.yml -- a typo in the"
+                                        + " @Value key would silently take the annotation default with the whole suite"
+                                        + " green, which is how the encryption key came to be bound by nothing",
+                                key)
+                        .contains(leaf + ": ${");
+            }
+        }
+
         @Test
         void theTokenLegTakesTheVendorTransportNotThePlatformBuilder() {
             Class<?>[] parameters =

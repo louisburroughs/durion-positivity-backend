@@ -1602,7 +1602,7 @@ components:
           example: POST
         endpointUri:
           type: string
-          description: Absolute request URI. Credentials travel in headers and never appear here.
+          description: 'Absolute request URI, credential-redacted before storage. Sensitive query parameters (api keys, tokens, signatures) and any userinfo in the URL are replaced with a redaction marker. AT METADATA_ONLY THE QUERY STRING IS REMOVED ENTIRELY: that level retains no content, and query parameters are content, so the value you receive is the path only. Redaction is a control applied at capture time -- the original was never stored and cannot be recovered.'
           example: https://edi.michelin.example/a25/stock/inquiry
         attempt:
           type: integer
@@ -1634,7 +1634,7 @@ components:
           example: 1843
         failureDetail:
           type: string
-          description: Operator-facing failure summary. Null on success; never contains a credential.
+          description: Operator-facing failure summary. Null on success. Quotes vendor responses, so any URL it embeds has its credential-bearing query parameters and userinfo redacted at capture time -- a redirect Location can carry a signed URL whose token is a live credential.
           example: Read timed out after 30000 ms
         captureLevel:
           type: string

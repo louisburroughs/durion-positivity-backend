@@ -45,8 +45,8 @@ class ExchangeAuditColumnWidthParityTest {
 
     private static final Path WRITER =
             Path.of("src/main/java/com/positivity/supplier/internal/service/ExchangeAuditWriter.java");
-    private static final Path V3 = Path.of("src/main/resources/db/migration/V3__supplier_exchange_audit.sql");
-    private static final Path V5 = Path.of("src/main/resources/db/migration/V5__widen_audit_protocol_version.sql");
+    private static final Path MIGRATIONS = Path.of("src/main/resources/db/migration");
+    private static final String AUDITED_TABLE = "supplier_exchange_audit";
 
     /**
      * Entity property to column, for the fields the writer truncates. Kept explicit rather than derived from
@@ -59,14 +59,26 @@ class ExchangeAuditColumnWidthParityTest {
             "failureDetail", "failure_detail");
 
     /**
-     * {@code .property(truncate(<anything>, 123))} — the bound the writer actually applies.
-     *
-     * <p>The first argument is matched allowing one level of nested parentheses, because it is not always a
-     * bare accessor: {@code endpointUri} truncates the result of a redaction call. The earlier pattern stopped
-     * at the first comma and silently lost that bound the moment redaction was added — which this test then
-     * reported as an unprotected column, correctly, rather than passing quietly. That is the behaviour wanted,
-     * but the pattern should track the code it parses.
+     * Bounded columns the writer deliberately does NOT truncate, with the reason. Anything bounded in the DDL
+     * that is neither truncated nor listed here fails the build — which is the point: the list of columns is
+     * derived from the schema, so a new one cannot be invisible.
      */
+    private static final Map<String, String> UNTRUNCATED_WITH_REASON = Map.of(
+            "protocol_version",
+                    "selects a codec, so truncation would misreport the norm used; bounded at the API by"
+                            + " @Size(max = 64) on EndpointBindingRequest.version and widened to 64 by V5",
+            "capability", "enum name; cannot exceed the column without a code change",
+            "protocol_family", "enum name; cannot exceed the column without a code change",
+            "http_method", "set by this service, not by a caller or vendor",
+            "outcome", "ExchangeOutcome name, pinned to the CHECK constraint by SupplierContractKeyParityTest",
+            "capture_level",
+                    "PayloadCaptureLevel name, pinned to the CHECK constraint by SupplierContractKeyParityTest",
+            "created_by", "audit actor from the security context or the system actor constant",
+            "unmapped_fields",
+                    "reserved by ADR-0051 §4 and written by nothing yet; CAP-318 must truncate it"
+                            + " when codecs start populating it");
+
+    /** {@code .property(truncate(..., 123))} — the bound the writer actually applies. */
     private static final Pattern TRUNCATE_CALL =
             Pattern.compile("\\.(\\w+)\\(\\s*truncate\\((?:[^()]|\\([^()]*\\))*,\\s*(\\d+)\\)\\)", Pattern.DOTALL);
 
@@ -84,7 +96,7 @@ class ExchangeAuditColumnWidthParityTest {
         bounds.forEach((property, bound) -> {
             String column = TRUNCATED_PROPERTY_TO_COLUMN.get(property);
             assertThat(widths)
-                    .as("%s must be a declared column in the migrations", column)
+                    .as("%s must be a declared column of %s", column, AUDITED_TABLE)
                     .containsKey(column);
             assertThat(bound)
                     .as(
@@ -99,44 +111,37 @@ class ExchangeAuditColumnWidthParityTest {
     }
 
     /**
-     * The other half, and the half that produced the HIGH finding: a bounded column the writer does
-     * <em>not</em> truncate must be a deliberate decision, not an omission.
+     * The other half, and the half that produced the HIGH finding: every bounded column of the audited table
+     * must be either truncated or a <em>recorded</em> exception with its reason.
      *
-     * <p>{@code protocol_version} is the standing exception and is listed by name with its reason — it selects
-     * a codec, so a truncated value would make the row misreport which vendor norm built the document, and
-     * present-and-wrong is worse than absent-and-logged. It is instead bounded at the API by
-     * {@code @Size(max = 64)} on {@code EndpointBindingRequest.version} and widened to match its source column
-     * by V5. Any OTHER unprotected bounded column fails here.
+     * <p>The column list is <strong>derived from the DDL</strong>, not hardcoded. An earlier version listed five
+     * names, which meant {@code unmapped_fields varchar(4000)} — already in V3 and reserved for CAP-318 vendor
+     * fields — was invisible to it, and any new bounded column would have left both tests green. A parity test
+     * whose inputs are a hand-maintained list has the same failure mode as the thing it guards.
      */
     @Test
-    @DisplayName("no bounded column is written unprotected without a recorded exception")
+    @DisplayName("every bounded column is either truncated or a recorded exception")
     void everyBoundedColumnIsEitherTruncatedOrAnExplicitException() throws IOException {
-        // Bounded columns written from caller- or operator-influenced values. capability/protocol_family are
-        // enum names, http_method and outcome are ours, created_by is the system actor -- none can be
-        // oversized without a code change, which a compiler or a CHECK constraint catches.
-        Map<String, String> exceptionsWithReasons = Map.of(
-                "protocol_version",
-                "selects a codec, so truncation would misreport the norm used; bounded by @Size(max = 64) on"
-                        + " EndpointBindingRequest.version and widened to 64 by V5 to match its source column");
-
         Map<String, Integer> widths = declaredWidths();
-        Map<String, Integer> bounds = truncateBounds();
-        java.util.Set<String> truncatedColumns = bounds.keySet().stream()
+        java.util.Set<String> truncatedColumns = truncateBounds().keySet().stream()
                 .map(TRUNCATED_PROPERTY_TO_COLUMN::get)
                 .collect(java.util.stream.Collectors.toSet());
 
-        for (String column :
-                new String[] {"supplier_ref", "endpoint_uri", "correlation_id", "failure_detail", "protocol_version"}) {
-            assertThat(widths).containsKey(column);
-            boolean protectedByTruncation = truncatedColumns.contains(column);
-            boolean recordedException = exceptionsWithReasons.containsKey(column);
-            assertThat(protectedByTruncation || recordedException)
+        assertThat(widths)
+                .as("the DDL parse must find the bounded columns of %s, or this test checks nothing", AUDITED_TABLE)
+                .isNotEmpty();
+
+        for (Map.Entry<String, Integer> column : widths.entrySet()) {
+            boolean handled =
+                    truncatedColumns.contains(column.getKey()) || UNTRUNCATED_WITH_REASON.containsKey(column.getKey());
+            assertThat(handled)
                     .as(
-                            "%s is varchar(%d) and is written from a value this service does not control the"
-                                    + " length of. Either truncate it in ExchangeAuditWriter or record here why not"
-                                    + " -- an unprotected bounded column loses audit rows silently, which is how"
-                                    + " protocol_version was found",
-                            column, widths.get(column))
+                            "%s is varchar(%d) on %s and is neither truncated by ExchangeAuditWriter nor listed in"
+                                    + " UNTRUNCATED_WITH_REASON. An unprotected bounded column loses audit rows"
+                                    + " SILENTLY -- the observer swallows the 22001, the exchange succeeds, and"
+                                    + " ddl-auto=validate does not compare widths. That is how protocol_version was"
+                                    + " found. Truncate it, or record why it cannot exceed its column.",
+                            column.getKey(), column.getValue(), AUDITED_TABLE)
                     .isTrue();
         }
     }
@@ -158,27 +163,94 @@ class ExchangeAuditColumnWidthParityTest {
     }
 
     /**
-     * Column widths as the database will actually have them: V3's {@code CREATE TABLE} declarations, with
-     * V5's {@code ALTER COLUMN ... TYPE} applied over the top. Later migrations must be folded in the same
-     * way, or this test would compare against a width that no longer exists.
+     * Bounded column widths of {@link #AUDITED_TABLE} as the database will actually have them.
+     *
+     * <p>Three things this deliberately gets right, each of which an earlier version got wrong:
+     *
+     * <ul>
+     *   <li>Migrations are <strong>globbed and applied in version order</strong>, so a future V6 that narrows a
+     *       width is seen. Hardcoding V3 and V5 made any later change invisible.
+     *   <li>The {@code CREATE TABLE} parse is <strong>scoped to the audited table</strong>. V3 also creates
+     *       {@code supplier_schedule_lease}, which has its own {@code capability varchar(64)} and
+     *       {@code last_run_outcome varchar(32)}; a whole-file parse with {@code putIfAbsent} silently mixed the
+     *       two tables' columns together.
+     *   <li>{@code ALTER COLUMN ... TYPE} is applied over the top, in order, so the last word wins.
+     * </ul>
      */
     private static Map<String, Integer> declaredWidths() throws IOException {
         Map<String, Integer> widths = new LinkedHashMap<>();
-        Matcher declared = Pattern.compile("^\\s{4}(\\w+) character varying\\((\\d+)\\)", Pattern.MULTILINE)
-                .matcher(Files.readString(V3));
-        while (declared.find()) {
-            widths.putIfAbsent(declared.group(1), Integer.valueOf(declared.group(2)));
+        Pattern columnDeclaration = Pattern.compile("^\\s+(\\w+) character varying\\((\\d+)\\)", Pattern.MULTILINE);
+        Pattern alterColumn = Pattern.compile(
+                "ALTER TABLE\\s+(\\w+)\\s+ALTER COLUMN\\s+(\\w+) TYPE character varying\\((\\d+)\\)",
+                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+        for (Path migration : migrationsInVersionOrder()) {
+            String sql = Files.readString(migration);
+            String createBody = createTableBody(sql, AUDITED_TABLE);
+            if (createBody != null) {
+                Matcher declared = columnDeclaration.matcher(createBody);
+                while (declared.find()) {
+                    widths.put(declared.group(1), Integer.valueOf(declared.group(2)));
+                }
+            }
+            Matcher altered = alterColumn.matcher(sql);
+            while (altered.find()) {
+                if (AUDITED_TABLE.equalsIgnoreCase(altered.group(1))) {
+                    widths.put(altered.group(2), Integer.valueOf(altered.group(3)));
+                }
+            }
         }
-        Matcher altered = Pattern.compile(
-                        "ALTER COLUMN (\\w+) TYPE character varying\\((\\d+)\\)", Pattern.CASE_INSENSITIVE)
-                .matcher(Files.readString(V5));
-        while (altered.find()) {
-            widths.put(altered.group(1), Integer.valueOf(altered.group(2)));
-        }
+
         assertThat(widths.get("protocol_version"))
-                .as("V5 must widen protocol_version to 64; if that ALTER is gone the parse is wrong and the"
-                        + " comparison below would be meaningless")
+                .as("protocol_version must resolve to 64 (V3 declares 32, V5 widens it). Anything else means"
+                        + " the migration parse is wrong and every comparison here is meaningless")
                 .isEqualTo(64);
         return widths;
+    }
+
+    /** {@code V<n>__*.sql} in ascending version order, so later migrations override earlier ones. */
+    private static java.util.List<Path> migrationsInVersionOrder() throws IOException {
+        try (var files = Files.list(MIGRATIONS)) {
+            java.util.List<Path> ordered = files.filter(
+                            path -> path.getFileName().toString().endsWith(".sql"))
+                    .sorted(java.util.Comparator.comparingInt(ExchangeAuditColumnWidthParityTest::versionOf))
+                    .toList();
+            assertThat(ordered)
+                    .as("no migrations found under %s -- the glob is wrong and this test checks nothing", MIGRATIONS)
+                    .isNotEmpty();
+            return ordered;
+        }
+    }
+
+    private static int versionOf(Path migration) {
+        Matcher matcher =
+                Pattern.compile("^V(\\d+)__").matcher(migration.getFileName().toString());
+        if (!matcher.find()) {
+            throw new AssertionError("migration does not follow V<n>__name.sql: " + migration);
+        }
+        return Integer.parseInt(matcher.group(1));
+    }
+
+    /** The body of one {@code CREATE TABLE}, or {@code null} when this file does not create it. */
+    @org.jspecify.annotations.Nullable
+    private static String createTableBody(String sql, String table) {
+        Matcher create = Pattern.compile(
+                        "CREATE TABLE\\s+" + Pattern.quote(table) + "\\s*\\(", Pattern.CASE_INSENSITIVE)
+                .matcher(sql);
+        if (!create.find()) {
+            return null;
+        }
+        int depth = 1;
+        int index = create.end();
+        while (index < sql.length() && depth > 0) {
+            char character = sql.charAt(index);
+            if (character == '(') {
+                depth++;
+            } else if (character == ')') {
+                depth--;
+            }
+            index++;
+        }
+        return sql.substring(create.end(), index);
     }
 }

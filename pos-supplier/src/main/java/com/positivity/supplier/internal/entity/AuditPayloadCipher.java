@@ -290,13 +290,15 @@ public class AuditPayloadCipher {
     /**
      * Whether an operator-provisioned key is mandatory.
      *
-     * <p>Required unless {@code dev} or {@code test} is explicitly active. Note what falls out of
-     * {@code noneMatch} on an empty array: no active profile means required, which is the case that matters
-     * most because it is the shape the shipped compose file produces.
+     * <p><strong>Required unless EVERY active profile is optional</strong> ({@code dev} or {@code test}), and
+     * required when no profile is active at all — which is checked separately, because {@code allMatch} on an
+     * empty array is vacuously true and the empty case is the one that matters most: it is the shape the
+     * shipped compose file produces.
      *
-     * <p>Presence of an optional profile is enough — {@code dev,local} relaxes the requirement — because a
-     * real deployment never lists {@code dev} or {@code test} among its profiles, while a developer may well
-     * add others alongside them.
+     * <p>{@code dev,local} therefore REQUIRES a key. This javadoc previously said the opposite — that presence
+     * of an optional profile was enough — which was the behaviour before the polarity was tightened, and which
+     * left {@code SPRING_PROFILES_ACTIVE=prod,dev} minting an ephemeral key in production. A deployment
+     * profile always wins. {@code AuditPayloadCipherTest.KeyPolicy} pins both halves.
      */
     private static boolean isKeyRequired(@NonNull Environment environment) {
         String[] active = environment.getActiveProfiles();
