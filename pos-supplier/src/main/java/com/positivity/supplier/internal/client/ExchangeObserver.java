@@ -12,6 +12,12 @@ import org.jspecify.annotations.NonNull;
  * ADR-0050 §7 requires failed exchanges to be recorded, so an observer that only saw successes
  * would defeat the audit trail's purpose.
  *
+ * <p><strong>Implementations own redaction.</strong> {@link ExchangeContext#requestBody()} and
+ * {@link ExchangeContext#responseBody()} are raw wire documents; the base client does not redact
+ * them and cannot, being format-agnostic. An observer must apply the binding's
+ * {@code captureLevel} and any body-field redaction before persisting or logging either
+ * (ADR-0050 §7).
+ *
  * <p>Implementations must be non-throwing and reasonably fast: the base client treats observer
  * failure as an observability problem, never as a transport failure, and will not fail a
  * successful vendor exchange because auditing had a bad day. They must also tolerate being

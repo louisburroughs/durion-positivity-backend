@@ -18,10 +18,21 @@ import org.jspecify.annotations.Nullable;
  * {@code supplierRef} is a renameable configuration alias, so it is carried alongside as a
  * descriptive snapshot only and must never be used as a join or filter key.
  *
- * <p>This record carries <strong>no credential material</strong>. {@code requestBody} and
- * {@code responseBody} arrive already redacted by the base client (credential headers are never
- * populated here at all), and payload capture level is applied downstream by the audit writer —
- * an observer must be able to log any field of this record without leaking a secret.
+ * <p><strong>Credential headers are never populated here at all</strong> — no {@code Authorization},
+ * no API key, no resolved secret reaches this record, so every <em>scalar</em> field is safe to log.
+ *
+ * <p><strong>But {@code requestBody} and {@code responseBody} are RAW wire documents, exactly as
+ * sent and received, with no redaction whatsoever.</strong> The base client does not redact and
+ * makes no attempt to: it is format-agnostic and cannot know which element of an EDIWheel document
+ * is sensitive. Applying the binding's {@code captureLevel}
+ * ({@code FULL} / {@code REDACTED} / {@code METADATA_ONLY}) and any body-field redaction is
+ * therefore the <strong>observer's obligation</strong>, before it persists or logs anything
+ * (ADR-0050 §7).
+ *
+ * <p>An observer that logs {@code requestBody} verbatim, or persists it without consulting
+ * {@code captureLevel}, leaks commercial payload. If a vendor ever carries a credential inside a
+ * body element, this is where it would surface — so treat these two fields as untrusted content,
+ * not as pre-sanitized text.
  *
  * @param vendorProfileId platform identity of the profile that owns the binding
  * @param supplierRef configuration alias at the time of the exchange; descriptive only
@@ -38,8 +49,8 @@ import org.jspecify.annotations.Nullable;
  *     never got one (pre-send failure, configuration error)
  * @param startedAt when the attempt began
  * @param duration wall-clock duration of the attempt
- * @param requestBody redacted request payload, when captured
- * @param responseBody redacted response payload, when captured
+ * @param requestBody the raw request payload as sent; NOT redacted — see the class javadoc
+ * @param responseBody the raw response payload as received; NOT redacted — see the class javadoc
  * @param failureDetail operator-facing failure summary; never a credential or secret value
  */
 public record ExchangeContext(
