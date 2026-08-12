@@ -290,7 +290,7 @@ exists now that every module is measured. The merged priority order is:
 | # | Module | Line% | Missed | Why here |
 | ---: | --- | ---: | ---: | --- |
 | 1 | ~~pos-event-receiver~~ | 3.0 | 424 | **Done** — every service registers against it; was lowest in the reactor |
-| 2 | pos-customer | 61.5 | 2,067 | Largest absolute gap; several waves landed, not yet re-measured |
+| 2 | pos-customer | 61.5 | 2,067 | **In progress — 85.9% line / 70.6% branch unit-only** (see §4.3) |
 | 3 | pos-order | 53.4 | 1,510 | **In progress — 83.6% line / 67.7% branch unit-only** (see §4.2) |
 | 4 | ~~pos-marketing~~ | 28.1 | 889 | **Done — now 87.9% line / 82.9% branch, 150 missed** (see §4.1) |
 | 5 | pos-people | 61.5 | 1,101 | Large gap, thin suite |
@@ -373,6 +373,61 @@ Remaining in `pos-order`, largest first: `SalesOrderServiceImpl` (133 missed,
 DTOs (60 combined at 0%, all static `from(...)` mappers), `PaymentEventsListener`
 (19, 83.9%), `PriceOverrideServiceImpl` (16, 93.2%). The two controllers want
 `@WebMvcTest` slices; the rest are ordinary unit work.
+
+### 4.3 pos-customer progress (2026-08-11)
+
+Measured **unit-only** (`-DskipITs`), so not comparable to the §1.5 61.5%, which
+included ITs. The earlier waves (segment/party-tag services, suppression register,
+replica listeners, consent resolution, account tier, permission registry, manifest
+publisher) had never been re-measured; they had already taken the module to 80.7%
+line / 65.9% branch before this pass began.
+
+| | Start of this pass | Now |
+|---|---:|---:|
+| Line | 80.7% | **85.9%** |
+| Branch | 65.9% | **70.6%** |
+| Missed lines | 1,034 | **757** |
+
+Delivered this pass:
+
+- **`PersonPartyServiceImpl`** (74 missed at 30.2%) — sort sanitization, directory
+  delegation for name/email search, the deliberate non-application of name edits.
+- **`CommercialPartyServiceImpl`** (70 at 24.7%) — organization CRUD and the
+  email-only search short-circuit.
+- **`CrmExceptionHandler`** (38 at 53.1%) — ADR-0017 status/code pairings, the
+  422-vs-400 distinction, correlation-id passthrough, null-request tolerance.
+- **`OutboxEventWriter`** (21 at 4.5%) — aggregate-keyed row, fatal serialization
+  failure.
+- **`PartyServiceImpl`** billing rules and duplicate check (~86 of its 99 missed).
+
+**Two defects found and documented, not fixed** (both API-visible, so changing
+them is a separate decision):
+
+1. **A partial update wipes a party's VIN list.** `CustomerDTO` declares
+   `vehicleVins` `@Builder.Default` with an empty `ArrayList` and initializes it in
+   the no-args constructor Jackson uses, so the `vehicleVins != null` guard in
+   `updateEntityFromDTO` can never be false. A PUT that simply omits `vehicleVins`
+   reaches the `clear()`/`addAll()` branch with an empty list and drops every VIN
+   association. Both `PersonPartyServiceImpl` and `CommercialPartyServiceImpl` are
+   affected.
+2. **`CommercialPartyServiceImpl` transposes its two name fields on a round
+   trip.** `toEntity` maps `firstName -> legalName` and `lastName -> displayName`;
+   `toDTO` maps `legalName -> lastName` and `displayName -> firstName`. A client
+   that POSTs a commercial party and reads it back gets the two names swapped.
+   `updateEntityFromDTO` follows the write direction, so updates transpose too.
+
+Both are pinned by tests carrying an explicit "documents current behaviour, not
+desired behaviour" comment, so a future fix will fail a test rather than pass
+silently.
+
+Remaining in `pos-customer`, largest first: `SegmentResolutionService` (64 missed,
+73.1% — almost all of it in the `loadCommercialCandidates` projection lambda),
+`CustomerFactPublisher` (42, 68.7% — six publish methods), `InquiryServiceImpl`
+(38, 65.8%), `CustomerCommandListener` (31, 64.8%), `SegmentPredicateEvaluator`
+(30, 61.5%), `CrmAccountsController` (29, 45.3%), `FollowUpTaskServiceImpl` (27,
+58.5%), `SegmentPredicateValidator` (26, 71.4%), and the CRM controllers
+(`CustomerController` 26, `CrmPartyRelationshipController` 24, `CrmPersonController`
+21 — all want `@WebMvcTest` slices).
 
 The per-module detail below predates the measurement and is kept for the specific
 class-level targets it names.
