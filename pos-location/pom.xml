@@ -6,9 +6,18 @@
         <artifactId>positivity</artifactId>
         <version>${revision}</version>
     </parent>
+
+    
     <artifactId>pos-location</artifactId>
     <name>pos-location</name>
     <description>Module to manage locations and hierarchy</description>
+
+    <properties>
+        <!-- Coverage ratchet (plan Phase 4): measured 81.4% line / 70.1% branch.
+             Floors sit ~5 points under to catch regression without failing on noise. -->
+        <jacoco.line.min>0.76</jacoco.line.min>
+        <jacoco.branch.min>0.65</jacoco.branch.min>
+    </properties>
     <packaging>jar</packaging>
 
     <pluginRepositories>

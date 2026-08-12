@@ -1,17 +1,16 @@
 # Test Coverage Improvement Plan
 
-Status: Phase 0 complete. Phase 1 complete except wave 1c (see §3.3); wave 1e is
-now closed in every module that had Kafka listeners at 0% (§4.5). Phases 2–3
-substantially complete — every module in the §4 priority table has been worked
-(§4.1–§4.5) except the two structural §5 gaps: the Failsafe IT layers for
-`pos-invoice` and `pos-warranty` remain unbuilt, and controller-layer
-`@WebMvcTest` coverage across several modules remains open. Phase 4 outstanding.
+Status: Phases 0–3 complete. Phase 4 (ratchet) landed — per-module JaCoCo
+`check` floors are enforced at `verify`; see §6. Both §5 structural gaps are
+closed: `pos-invoice` and `pos-warranty` have Failsafe IT layers, and
+`pos-tax-common` has its first suite. Wave 1c (§3.3) and controller-layer
+`@WebMvcTest` coverage remain the known open work (§7).
 Date: 2026-08-11 (last updated 2026-08-12)
 
-**Before Phase 4, re-run the Phase 0 full-reactor command.** Every figure in
-§4.1–§4.3 is unit-only (`-DskipITs`) and therefore not comparable to the §1.5
-baseline, which included Failsafe ITs. No threshold should be set from the
-numbers in those sections.
+**That re-measure has now been done — see §6 for the authoritative baseline.**
+Every figure in §4.1–§4.5 is unit-only (`-DskipITs`) and is therefore *not*
+comparable to §1.5 or §6; those sections record per-module progress, not
+thresholds. Phase 4's floors come from §6 only.
 
 Method: `.agents/skills/test-coverage-improver` workflow, adapted from its pnpm/JS
 assumptions to this Maven reactor; test authoring follows `.agents/skills/java-testing`.
@@ -638,3 +637,135 @@ Per `.agents/skills/java-testing` and repo conventions:
    modules, or depth-first on `pos-customer` + `pos-marketing`?
    (Recommendation: Phase 1 first; it is cheaper per line and the tests encode a
    documented contract.) --> Phase 1 first
+
+
+## 6. Phase 4 — the ratchet (delivered 2026-08-12)
+
+### 6.1 Authoritative baseline
+
+Full-reactor `verify` including Failsafe ITs, per the Phase 0 command, on `main`
+at `683cc6381`. **These are each module's own report** — the figure a per-module
+JaCoCo `check` actually reads — not the aggregate, which credits shared
+libraries with their consumers' coverage (§1.5).
+
+Repo-wide, summing all 38 per-module reports: **81.1% line, 66.6% branch**
+(14,295 missed of 75,661 lines). Against the §1.5 baseline of 72.6% / 59.5% /
+20,265 missed, that is **+8.5 points line and ~6,000 fewer missed lines**.
+
+| Module | Lines | Line% | Branch% | `jacoco.line.min` | `jacoco.branch.min` |
+|---|---:|---:|---:|---:|---:|
+| `pos-accounting` | 10516 | 85.8 | 72.5 | 0.80 | 0.67 |
+| `pos-inventory` | 10056 | 84.6 | 68.3 | 0.79 | 0.63 |
+| `pos-workorder` | 7465 | 76.6 | 56.7 | 0.71 | 0.51 |
+| `pos-mcp-server` | 6153 | 80.2 | 68.5 | 0.75 | 0.63 |
+| `pos-customer` | 5362 | 85.9 | 70.6 | 0.80 | 0.65 |
+| `pos-security-service` | 3504 | 81.8 | 71.1 | 0.76 | 0.66 |
+| `pos-invoice` | 3308 | 78.9 | 65.3 | 0.73 | 0.60 |
+| `pos-order` | 3237 | 83.6 | 67.7 | 0.78 | 0.62 |
+| `pos-people` | 2859 | 79.4 | 63.6 | 0.74 | 0.58 |
+| `pos-catalog` | 2807 | 77.4 | 53.5 | 0.72 | 0.48 |
+| `pos-warranty` | 2562 | 90.4 | 80.7 | 0.85 | 0.75 |
+| `pos-supplier` | 2351 | 88.0 | 75.3 | 0.82 | 0.70 |
+| `pos-location` | 2167 | 81.4 | 70.1 | 0.76 | 0.65 |
+| `pos-shop-manager` | 1933 | 83.2 | 67.1 | 0.78 | 0.62 |
+| `pos-bulk-loader` | 1770 | 76.8 | 65.3 | 0.71 | 0.60 |
+| `pos-people-contact` | 1477 | 65.2 | 52.3 | 0.60 | 0.47 |
+| `pos-marketing` | 1236 | 87.9 | 82.9 | 0.82 | 0.77 |
+| `pos-price` | 1053 | 94.9 | 81.7 | 0.89 | 0.76 |
+| `pos-tax` | 984 | 78.5 | 66.8 | 0.73 | 0.61 |
+| `pos-vehicle-inventory` | 977 | 66.4 | 71.0 | 0.61 | 0.66 |
+| `pos-vehicle-fitment` | 542 | 78.4 | 63.6 | 0.73 | 0.58 |
+| `pos-domain-events` | 511 | 39.3 | 37.2 | 0.34 | 0.32 |
+| `pos-event-receiver` | 437 | 77.3 | 87.0 | 0.72 | 0.81 |
+| `pos-api-gateway` | 435 | 85.5 | 72.2 | 0.80 | 0.67 |
+| `pos-security-common` | 406 | 46.8 | 36.5 | 0.41 | 0.31 |
+| `pos-documents` | 383 | 75.2 | 52.9 | 0.70 | 0.47 |
+| `pos-document-helper` | 346 | 74.0 | 35.2 | 0.68 | 0.30 |
+| `pos-vehicle-reference-nhtsa` | 189 | 0.0 | 0.0 | — *(unguarded)* | — |
+| `pos-events` | 174 | 59.8 | 57.1 | 0.54 | 0.52 |
+| `pos-openapi-validation` | 171 | 93.6 | 82.3 | 0.88 | 0.77 |
+| `pos-tax-common` | 100 | 34.0 | 46.4 | 0.29 | 0.41 |
+| `pos-vehicle-reference-carapi` | 69 | 0.0 | 0.0 | — *(unguarded)* | — |
+| `pos-image` | 61 | 0.0 | 0.0 | — *(unguarded)* | — |
+| `pos-shared-dtos` | 34 | 0.0 | 0.0 | — *(unguarded)* | — |
+| `pos-inquiry` | 16 | 0.0 | — | — *(unguarded)* | — |
+
+`pos-archunit`, `pos-bulk-ingest-lib`, `pos-service-discovery`, and `pos-inquiry`
+are omitted — 3–16 lines each, nothing to guard.
+
+**Caveat on the aggregate figure.** The run also produced
+`jacoco-aggregate/jacoco.xml` reading 81.7% line / 67.6% branch, but over **32 of
+38 groups**: recovering from a mid-run failure required `mvn install -DskipTests`
+on the shared libraries, which wiped their `jacoco.exec` and dropped them from
+the merge. A subsequent isolated re-run of the aggregate goal then overwrote that
+XML with an empty one. The aggregate is therefore **not** currently trustworthy on
+disk; CI regenerates it on every merge to `main`, and that is the copy to wire
+into SonarCloud (§6.3). Nothing in §6.1's per-module table depends on it.
+
+### 6.2 How the ratchet works
+
+Root `pom.xml` gains a `check-ratchet` execution on the `verify` phase asserting
+`LINE` and `BRANCH` `COVEREDRATIO` against two properties, defaulted to `0.00`:
+
+```xml
+<jacoco.line.min>0.00</jacoco.line.min>
+<jacoco.branch.min>0.00</jacoco.branch.min>
+```
+
+Each module overrides them in its own `pom.xml`, set **~5 points below its
+measured baseline** — enough to catch a real regression, loose enough not to fail
+on the noise of a refactor moving a few lines. `haltOnFailure` is true, so a
+breach fails the build:
+
+```
+Rule violated for bundle pos-tax-common: lines covered ratio is 0.34,
+but expected minimum is 0.95
+```
+
+**Working rules.**
+
+- Raise a module's floor when its coverage rises — that is what makes it a
+  ratchet rather than a fixed bar.
+- Never lower a floor without saying why in the commit message.
+- The four all-zero modules (`pos-image`, `pos-inquiry`,
+  `pos-vehicle-reference-carapi`, `pos-vehicle-reference-nhtsa`) carry **no**
+  floor. A `0.00` floor is not a gate, and pretending otherwise would misrepresent
+  them as guarded. They need first tests, not thresholds — see §7.
+- Deliberately **not** a single repo-wide bar. At 81.1% a uniform 85% would fail
+  a third of the reactor on day one, and a uniform 70% would let the best modules
+  rot 15 points before anyone noticed.
+
+### 6.3 SonarCloud
+
+Not yet wired. The existing Sonar step should consume
+`pos-coverage-aggregate/target/site/jacoco-aggregate/jacoco.xml` from a CI run
+(see the §6.1 caveat about the local copy). That is the remaining Phase 4 task.
+
+## 7. What is still open
+
+1. **Wave 1c** (`{Module}PermissionRegistry`, §3.3) — three modules, small.
+2. **Controller `@WebMvcTest` slices** — `pos-vehicle-inventory` (~114 missed
+   across four controllers), `pos-customer` CRM controllers (~71),
+   `pos-marketing` (~30), `pos-people-contact`.
+3. **The four all-zero modules** — `pos-vehicle-reference-nhtsa` (189 lines),
+   `pos-vehicle-reference-carapi` (69), `pos-image` (61), `pos-inquiry` (16).
+   335 lines total; they are unguarded until they have tests.
+4. **Branch-coverage tails** — `pos-catalog` (53.5% branch against 77.4% line),
+   `pos-workorder` (56.7%), `pos-document-helper` (35.2%). Parameterized tests
+   over the uncovered branches, not more happy paths.
+5. **Low-coverage shared libraries** — `pos-tax-common` 34.0%,
+   `pos-domain-events` 39.3%, `pos-security-common` 46.8% on their own tests.
+   They read far higher in the aggregate because consumers exercise them; their
+   own floors are set from the honest per-module number.
+6. **SonarCloud wiring** (§6.3).
+
+### Defects found by this work, still open
+
+- louisburroughs/durion-positivity-backend#1245 — a partial customer update
+  silently deletes every VIN on the party.
+- louisburroughs/durion-positivity-backend#1246 — `CommercialPartyServiceImpl`
+  transposes `legalName` and `displayName` between read and write.
+- louisburroughs/durion-positivity-backend#1254 — `SubdivisionForCountryValidator`
+  rejects every real Canadian province.
+- louisburroughs/durion-positivity-backend#1255 — replica listeners silently drop
+  events whose payload omits a primitive field (Jackson 3).

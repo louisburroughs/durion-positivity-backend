@@ -9,9 +9,18 @@
         <version>${revision}</version>
     </parent>
 
+    
+
     <artifactId>pos-documents</artifactId>
     <name>pos-documents</name>
     <description>PDF rendering service with multi-format support</description>
+
+    <properties>
+        <!-- Coverage ratchet (plan Phase 4): measured 75.2% line / 52.9% branch.
+             Floors sit ~5 points under to catch regression without failing on noise. -->
+        <jacoco.line.min>0.70</jacoco.line.min>
+        <jacoco.branch.min>0.47</jacoco.branch.min>
+    </properties>
 
     <dependencies>
         <dependency>

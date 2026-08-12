@@ -9,9 +9,18 @@
         <version>${revision}</version>
     </parent>
 
+    
+
     <artifactId>pos-document-helper</artifactId>
     <name>pos-document-helper</name>
     <description>Helper library for document template registration and rendering requests</description>
+
+    <properties>
+        <!-- Coverage ratchet (plan Phase 4): measured 74.0% line / 35.2% branch.
+             Floors sit ~5 points under to catch regression without failing on noise. -->
+        <jacoco.line.min>0.68</jacoco.line.min>
+        <jacoco.branch.min>0.30</jacoco.branch.min>
+    </properties>
 
     <dependencies>
 

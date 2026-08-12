@@ -7,9 +7,18 @@
         <artifactId>positivity</artifactId>
         <version>${revision}</version>
     </parent>
+
+    
     <artifactId>pos-catalog</artifactId>
     <name>pos-catalog</name>
     <description>POS Catalog module</description>
+
+    <properties>
+        <!-- Coverage ratchet (plan Phase 4): measured 77.4% line / 53.5% branch.
+             Floors sit ~5 points under to catch regression without failing on noise. -->
+        <jacoco.line.min>0.72</jacoco.line.min>
+        <jacoco.branch.min>0.48</jacoco.branch.min>
+    </properties>
     <packaging>jar</packaging>
     <dependencies>
         <!-- Spring Data JPA -->

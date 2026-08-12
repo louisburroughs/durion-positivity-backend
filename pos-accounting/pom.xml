@@ -7,9 +7,18 @@
         <artifactId>positivity</artifactId>
         <version>${revision}</version>
     </parent>
+
+    
     <artifactId>pos-accounting</artifactId>
     <name>pos-accounting</name>
     <description>POS Accounting module</description>
+
+    <properties>
+        <!-- Coverage ratchet (plan Phase 4): measured 85.8% line / 72.5% branch.
+             Floors sit ~5 points under to catch regression without failing on noise. -->
+        <jacoco.line.min>0.80</jacoco.line.min>
+        <jacoco.branch.min>0.67</jacoco.branch.min>
+    </properties>
     <packaging>jar</packaging>
 
     <pluginRepositories>

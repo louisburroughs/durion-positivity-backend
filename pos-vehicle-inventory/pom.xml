@@ -7,9 +7,18 @@
         <artifactId>positivity</artifactId>
         <version>${revision}</version>
     </parent>
+
+    
     <artifactId>pos-vehicle-inventory</artifactId>
     <name>pos-vehicle-inventory</name>
     <description>POS Vehicle module</description>
+
+    <properties>
+        <!-- Coverage ratchet (plan Phase 4): measured 66.4% line / 71.0% branch.
+             Floors sit ~5 points under to catch regression without failing on noise. -->
+        <jacoco.line.min>0.61</jacoco.line.min>
+        <jacoco.branch.min>0.66</jacoco.branch.min>
+    </properties>
     <packaging>jar</packaging>
     <dependencies>
         <!-- Lombok for annotation processing -->

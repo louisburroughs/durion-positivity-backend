@@ -6,9 +6,18 @@
         <artifactId>positivity</artifactId>
         <version>${revision}</version>
     </parent>
+
+    
     <artifactId>pos-people-contact</artifactId>
     <name>pos-people-contact</name>
     <description>Identity/contact/user-link authority module (ADR-0044 Phase 3)</description>
+
+    <properties>
+        <!-- Coverage ratchet (plan Phase 4): measured 65.2% line / 52.3% branch.
+             Floors sit ~5 points under to catch regression without failing on noise. -->
+        <jacoco.line.min>0.60</jacoco.line.min>
+        <jacoco.branch.min>0.47</jacoco.branch.min>
+    </properties>
     <packaging>jar</packaging>
 
     <pluginRepositories>

@@ -6,9 +6,18 @@
         <artifactId>positivity</artifactId>
         <version>${revision}</version>
     </parent>
+
+    
     <artifactId>pos-people</artifactId>
     <name>pos-people</name>
     <description>Module to manage people</description>
+
+    <properties>
+        <!-- Coverage ratchet (plan Phase 4): measured 79.4% line / 63.6% branch.
+             Floors sit ~5 points under to catch regression without failing on noise. -->
+        <jacoco.line.min>0.74</jacoco.line.min>
+        <jacoco.branch.min>0.58</jacoco.branch.min>
+    </properties>
     <packaging>jar</packaging>
 
     <pluginRepositories>

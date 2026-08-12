@@ -7,9 +7,18 @@
         <artifactId>positivity</artifactId>
         <version>${revision}</version>
     </parent>
+
+    
     <artifactId>pos-supplier</artifactId>
     <name>pos-supplier</name>
     <description>POS Supplier integration module (outbound supplier connectivity, ADR-0049..0052)</description>
+
+    <properties>
+        <!-- Coverage ratchet (plan Phase 4): measured 88.0% line / 75.3% branch.
+             Floors sit ~5 points under to catch regression without failing on noise. -->
+        <jacoco.line.min>0.82</jacoco.line.min>
+        <jacoco.branch.min>0.70</jacoco.branch.min>
+    </properties>
     <packaging>jar</packaging>
     <dependencies>
         <!-- Lombok for entity boilerplate (warranty entity convention) -->
