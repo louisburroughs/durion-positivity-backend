@@ -1,120 +1,88 @@
 package com.positivity.documents;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for DocumentTemplateInitializerSupport.
+ * Unit tests for {@link DocumentTemplateInitializerSupport} (ADR-0020).
  *
- * Issue: ADR-0020
+ * <p>
+ * This runs inside {@code ApplicationRunner}s at service startup, so its one
+ * hard obligation is the startup-safety contract the repo applies to every
+ * registrar: a failing registration is counted and logged, and the loop moves
+ * on. One bad template — or pos-documents being down entirely — must not stop
+ * the remaining templates from registering, and must never block startup.
  */
+@DisplayName("DocumentTemplateInitializerSupport — startup template registration")
 class DocumentTemplateInitializerSupportTest {
 
-    @Test
-    void registerTemplates_AllSucceed() {
-        // Arrange
-        DocumentTemplateInitializerSupport support = new DocumentTemplateInitializerSupport("test-service");
-        AtomicInteger callCount = new AtomicInteger(0);
-
-        List<TemplateRegistration> templates = List.of(
-                TemplateRegistration.builder()
-                        .templateId("T1")
-                        .description("Template 1")
-                        .content("test1")
-                        .build(),
-                TemplateRegistration.builder()
-                        .templateId("T2")
-                        .description("Template 2")
-                        .content("test2")
-                        .build(),
-                TemplateRegistration.builder()
-                        .templateId("T3")
-                        .description("Template 3")
-                        .content("test3")
-                        .build());
-
-        // Act
-        int successCount = support.registerTemplates(templates, reg -> callCount.incrementAndGet());
-
-        // Assert
-        assertEquals(3, successCount);
-        assertEquals(3, callCount.get());
+    private static TemplateRegistration template(String id) {
+        return TemplateRegistration.htmlTemplate(id, "d", "<html/>").build();
     }
 
     @Test
-    void registerTemplates_SomeFailures() {
-        // Arrange
-        DocumentTemplateInitializerSupport support = new DocumentTemplateInitializerSupport("test-service");
-        AtomicInteger callCount = new AtomicInteger(0);
+    @DisplayName("registers every template and reports the count")
+    void registersAll() {
+        List<String> registered = new ArrayList<>();
 
-        List<TemplateRegistration> templates = List.of(
-                TemplateRegistration.builder()
-                        .templateId("T1")
-                        .description("Template 1")
-                        .content("test1")
-                        .build(),
-                TemplateRegistration.builder()
-                        .templateId("T2")
-                        .description("Template 2")
-                        .content("test2")
-                        .build(),
-                TemplateRegistration.builder()
-                        .templateId("T3")
-                        .description("Template 3")
-                        .content("test3")
-                        .build());
+        int count = new DocumentTemplateInitializerSupport("pos-test")
+                .registerTemplates(
+                        List.of(template("A"), template("B"), template("C")),
+                        registration -> registered.add(registration.getTemplateId()));
 
-        // Fail on second template
-        // Act
-        int successCount = support.registerTemplates(templates, reg -> {
-            callCount.incrementAndGet();
-            if (reg.getTemplateId().equals("T2")) {
-                throw new RuntimeException("Simulated failure");
-            }
-        });
-
-        // Assert
-        assertEquals(2, successCount); // T1 and T3 succeed
-        assertEquals(3, callCount.get()); // All 3 attempted
+        assertThat(count).isEqualTo(3);
+        assertThat(registered).containsExactly("A", "B", "C");
     }
 
     @Test
-    void registerTemplates_EmptyList() {
-        // Arrange
-        DocumentTemplateInitializerSupport support = new DocumentTemplateInitializerSupport("test-service");
-        AtomicInteger callCount = new AtomicInteger(0);
+    @DisplayName("keeps registering after a failure and counts only the successes")
+    void oneFailureDoesNotStopTheRest() {
+        List<String> registered = new ArrayList<>();
 
-        // Act
-        int successCount = support.registerTemplates(List.of(), reg -> callCount.incrementAndGet());
+        int count = new DocumentTemplateInitializerSupport("pos-test")
+                .registerTemplates(List.of(template("A"), template("BROKEN"), template("C")), registration -> {
+                    if ("BROKEN".equals(registration.getTemplateId())) {
+                        throw new IllegalStateException("boom");
+                    }
+                    registered.add(registration.getTemplateId());
+                });
 
-        // Assert
-        assertEquals(0, successCount);
-        assertEquals(0, callCount.get());
+        // The startup-safety contract: one bad template must not take the others down with it,
+        // and the exception must not escape into the ApplicationRunner.
+        assertThat(count).isEqualTo(2);
+        assertThat(registered).containsExactly("A", "C");
     }
 
     @Test
-    void registerTemplates_NullTemplates_ThrowsNPE() {
-        // Arrange
-        DocumentTemplateInitializerSupport support = new DocumentTemplateInitializerSupport("test-service");
+    @DisplayName("survives every registration failing, as when pos-documents is down at startup")
+    void totalOutageIsSurvivable() {
+        int count = new DocumentTemplateInitializerSupport("pos-test")
+                .registerTemplates(List.of(template("A"), template("B")), registration -> {
+                    throw new IllegalStateException("connection refused");
+                });
 
-        // Act & Assert
-        assertThrows(NullPointerException.class, () -> support.registerTemplates(null, reg -> {}));
+        assertThat(count).isZero();
     }
 
     @Test
-    void registerTemplates_NullFunction_ThrowsNPE() {
-        // Arrange
-        DocumentTemplateInitializerSupport support = new DocumentTemplateInitializerSupport("test-service");
-        List<TemplateRegistration> templates = List.of(TemplateRegistration.builder()
-                .templateId("T1")
-                .description("test")
-                .content("test")
-                .build());
+    @DisplayName("reports zero for an empty template collection")
+    void emptyCollection() {
+        assertThat(new DocumentTemplateInitializerSupport("pos-test").registerTemplates(List.of(), registration -> {}))
+                .isZero();
+    }
 
-        // Act & Assert
-        assertThrows(NullPointerException.class, () -> support.registerTemplates(templates, null));
+    @Test
+    @DisplayName("rejects null inputs outright — a misconfigured caller is a bug, not an outage")
+    void nullInputsAreRejected() {
+        DocumentTemplateInitializerSupport support = new DocumentTemplateInitializerSupport("pos-test");
+
+        assertThatThrownBy(() -> support.registerTemplates(null, registration -> {}))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> support.registerTemplates(List.of(), null)).isInstanceOf(NullPointerException.class);
     }
 }
