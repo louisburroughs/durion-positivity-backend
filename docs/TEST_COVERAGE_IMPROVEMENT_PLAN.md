@@ -690,8 +690,9 @@ Repo-wide, summing all 38 per-module reports: **81.1% line, 66.6% branch**
 | `pos-shared-dtos` | 34 | 0.0 | 0.0 | — *(unguarded)* | — |
 | `pos-inquiry` | 16 | 0.0 | — | — *(unguarded)* | — |
 
-`pos-archunit`, `pos-bulk-ingest-lib`, `pos-service-discovery`, and `pos-inquiry`
-are omitted — 3–16 lines each, nothing to guard.
+`pos-archunit`, `pos-bulk-ingest-lib`, and `pos-service-discovery` are omitted
+from the table — 3–4 lines each, nothing to guard. `pos-inquiry` (16 lines, 0%)
+is listed but unguarded, with the other all-zero modules.
 
 **Caveat on the aggregate figure.** The run also produced
 `jacoco-aggregate/jacoco.xml` reading 81.7% line / 67.6% branch, but over **32 of
@@ -721,6 +722,17 @@ breach fails the build:
 Rule violated for bundle pos-tax-common: lines covered ratio is 0.34,
 but expected minimum is 0.95
 ```
+
+**`-DskipTests` is safe, and no `skip` guard is wired.** JaCoCo's `check` goal
+no-ops when there is no execution data — `Skipping JaCoCo execution due to
+missing execution data file` — so `clean install -DskipTests` passes, and an
+`install -DskipTests` over a stale `jacoco.exec` evaluates that prior data and
+also passes. Both were verified on this tree. A `<skip>${skipTests}</skip>` guard
+was considered and rejected: it would buy nothing over the goal's own behaviour
+while turning `-DskipTests` into a documented switch for bypassing the ratchet.
+The one narrow edge is a *partial* `jacoco.exec` left by an interrupted test run,
+where a later `install -DskipTests` would judge incomplete data — `clean` fixes
+that, and CI always runs tests.
 
 **Working rules.**
 
