@@ -576,13 +576,18 @@ public enum PermissionCode {
     CRM__INTERACTION__MANAGE(442, "crm:interaction:manage"),
     // ── People Contact (new) ───────────────────────────────────────────────────
     PEOPLE_CONTACT__ORGANIZATION__EDIT(443, "people-contact:organization:edit"),
-    PEOPLE_CONTACT__ORGANIZATION__VIEW(444, "people-contact:organization:view");
+    PEOPLE_CONTACT__ORGANIZATION__VIEW(444, "people-contact:organization:view"),
+
+    // ── Supplier (new) ─────────────────────────────────────────────────────────
+    SUPPLIER__AUDIT__READ(445, "supplier:audit:read"),
+    SUPPLIER__PROFILE__READ(446, "supplier:profile:read"),
+    SUPPLIER__PROFILE__WRITE(447, "supplier:profile:write");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 41;
+    public static final int CATALOG_VERSION = 42;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

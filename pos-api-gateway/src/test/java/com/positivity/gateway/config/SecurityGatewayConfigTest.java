@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 40")
+    @DisplayName("CATALOG_VERSION is 42")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(41);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(42);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 401")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 447")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1265,8 +1265,14 @@ class SecurityGatewayConfigTest {
         // catalog v41 (FI-4, #1135): organization postal-address authorities appended (443-444)
         assertThat(GatewayPermissionCatalog.authorityForBit(443)).isEqualTo("PERM_people-contact:organization:edit");
         assertThat(GatewayPermissionCatalog.authorityForBit(444)).isEqualTo("PERM_people-contact:organization:view");
+        // catalog v42 (CAP-317, #1222): supplier vendor-profile admin + audit-read authorities (445-447);
+        // supplier:audit:read is declared ahead of the slice-3 audit read API so the CAP-317
+        // wave carries exactly one catalog bump
+        assertThat(GatewayPermissionCatalog.authorityForBit(445)).isEqualTo("PERM_supplier:audit:read");
+        assertThat(GatewayPermissionCatalog.authorityForBit(446)).isEqualTo("PERM_supplier:profile:read");
+        assertThat(GatewayPermissionCatalog.authorityForBit(447)).isEqualTo("PERM_supplier:profile:write");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(445)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(448)).isNull();
     }
 
     @Test

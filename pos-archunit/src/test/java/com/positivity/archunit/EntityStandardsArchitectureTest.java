@@ -39,6 +39,7 @@ class EntityStandardsArchitectureTest {
         "com.positivity.order.internal.entity..",
         "com.positivity.people.internal.entity..",
         "com.positivity.peoplecontact.internal.entity..",
+        "com.positivity.supplier.internal.entity..",
         "com.positivity.warranty.internal.entity.."
     };
 

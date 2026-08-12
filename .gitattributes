@@ -1,2 +1,15 @@
 /mvnw text eol=lf
 *.cmd text eol=crlf
+
+# Generated API artifacts. These are produced by the springdoc Maven plugin (module specs), by
+# scripts/generate-openapi.sh (the gateway aggregate) and by scripts/generate-permissions.sh
+# (the permissions report) — never hand-edited. Marking them generated collapses them in diffs and
+# keeps them out of language statistics, so review attention goes to the annotations and code that
+# produce them. Correctness of these files is established by regenerating and diffing, not by reading
+# them line by line.
+#
+# Scoped to the artifacts this branch regenerates. The other modules' openapi.yaml / openapi.json are
+# equally generated and would benefit from the same treatment in a separate, fleet-wide change.
+pos-supplier/openapi.yaml linguist-generated=true
+pos-api-gateway/docs/openapi-aggregate.yaml linguist-generated=true
+docs/permissions-report.yaml linguist-generated=true

@@ -1,0 +1,117 @@
+spring:
+  application:
+    name: supplier
+  datasource:
+    # Deployment wiring points at the per-service pos_supplier_db (docker-compose / env).
+    url: ${SPRING_DATASOURCE_URL:}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+server:
+  port: 0
+  tomcat:
+    max-http-header-size: 65536
+
+management:
+  server:
+    port: 0
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:}
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+logging:
+  level:
+    root: INFO
+    org:
+      springframework: INFO
+    com:
+      positivity:
+        supplier: INFO
+
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+  default-produces-media-type: application/json
+
+pos:
+  # ── Exchange-audit payload encryption (ADR-0050 §7) ─────────────────────────────────
+  #
+  # NOT optional plumbing. AuditPayloadCipher fails startup without a key unless the dev or test
+  # profile is active, and its failure message names SUPPLIER_AUDIT_ENC_KEY -- so that variable must
+  # actually reach the property. Without these lines relaxed binding would only have resolved
+  # POS_SUPPLIER_AUDIT_ENCRYPTION_KEY, and an operator following the message would have set a
+  # variable nothing reads.
+  supplier:
+    audit:
+      encryption:
+        # 32 bytes, base64. Provision before first deploy.
+        key: ${SUPPLIER_AUDIT_ENC_KEY:}
+        # Recorded in every envelope so rotation stays possible.
+        key-id: ${SUPPLIER_AUDIT_ENC_KEY_ID:k1}
+        # Decrypt-only keys, keyId:base64 comma-separated. A retired key MUST stay here for the whole
+        # retention window or its payloads become unreadable.
+        previous-keys: ${SUPPLIER_AUDIT_ENC_PREVIOUS_KEYS:}
+      # Applied when a binding sets no level of its own. REDACTED, not FULL: an unconfigured binding must
+      # not capture credentials that happen to sit inside a vendor document.
+      default-capture-level: ${SUPPLIER_AUDIT_DEFAULT_CAPTURE_LEVEL:REDACTED}
+      # Payload content expires; the metadata trail is kept permanently.
+      retention: ${SUPPLIER_AUDIT_RETENTION:P400D}
+      purge-cron: ${SUPPLIER_AUDIT_PURGE_CRON:0 30 3 * * *}
+    # ── OAuth2 token leg (ADR-0050 §4) ──────────────────────────────────────────────────
+    #
+    # The token endpoint gets its OWN budgets, not the profile's and not the platform builder's 2s/5s
+    # in-cluster defaults -- it is a third-party internet call, frequently slower than the vendor API,
+    # and the whole exchange waits on it.
+    oauth2:
+      expiry-skew-seconds: ${SUPPLIER_OAUTH2_EXPIRY_SKEW_SECONDS:30}
+      connect-timeout-millis: ${SUPPLIER_OAUTH2_CONNECT_TIMEOUT_MILLIS:5000}
+      read-timeout-millis: ${SUPPLIER_OAUTH2_READ_TIMEOUT_MILLIS:15000}
+    # ── Retry and circuit breaker (ADR-0052 §5) ─────────────────────────────────────────
+    #
+    # Only PRE_SEND_FAILURE is retried; a post-send ambiguity is never retried, whatever these say.
+    retry:
+      base-backoff-millis: ${SUPPLIER_RETRY_BASE_BACKOFF_MILLIS:500}
+    breaker:
+      failure-rate-threshold: ${SUPPLIER_BREAKER_FAILURE_RATE_THRESHOLD:50}
+      sliding-window-size: ${SUPPLIER_BREAKER_SLIDING_WINDOW_SIZE:20}
+      # Below this many calls the breaker stays closed, so one early failure cannot open it.
+      minimum-number-of-calls: ${SUPPLIER_BREAKER_MINIMUM_NUMBER_OF_CALLS:10}
+      wait-duration-seconds: ${SUPPLIER_BREAKER_WAIT_DURATION_SECONDS:30}
+      half-open-permitted-calls: ${SUPPLIER_BREAKER_HALF_OPEN_PERMITTED_CALLS:3}
+    # ── Scheduler lease (binding decision 4) ────────────────────────────────────────────
+    schedule:
+      lease-duration-seconds: ${SUPPLIER_SCHEDULE_LEASE_DURATION_SECONDS:600}
+  # @EmitEvent event-type registration with pos-event-receiver at startup (AGENTS.md)
+  events:
+    base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}
+    api-secret: ${POS_EVENTS_API_SECRET:}
+  # permissions.yaml registration with pos-security-service at startup (ADR-0025)
+  security:
+    base-url: ${POS_SECURITY_BASE_URL:http://pos-security-service:8080}

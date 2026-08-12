@@ -1,0 +1,37 @@
+-- Widens supplier_exchange_audit.protocol_version from 32 to 64 characters, to match the column it
+-- is copied FROM.
+--
+-- THE DEFECT THIS CLOSES
+--
+-- supplier_endpoint_binding.protocol_version is varchar(64). The audit column was varchar(32).
+-- EndpointBindingRequest.version carried no @Size, is documented as free-form and deliberately not
+-- validated on write (ADR-0051 §3 makes the version key data, not an enum), and the profile resolver
+-- does not gate it against AdapterRegistry either. So an operator could PUT a 33..64 character
+-- version through the documented admin API, have it persist happily in the binding, and from that
+-- moment EVERY audit insert for that binding failed with 22001 value too long.
+--
+-- The failure was silent by construction: ExchangeAuditObserver swallows audit write failures so a
+-- broken audit sink cannot fail live vendor traffic, so the exchange succeeded and only an ERROR log
+-- marked the loss. Every exchange for that binding would be permanently missing from the ADR-0050 §7
+-- trail. `spring.jpa.hibernate.ddl-auto: validate` does not compare column widths, so nothing caught
+-- it at startup either.
+--
+-- WHY WIDEN RATHER THAN TRUNCATE
+--
+-- The writer truncates supplier_ref, endpoint_uri and correlation_id, and truncation is right for
+-- those: they are descriptive. protocol_version is not descriptive -- it SELECTS A CODEC. A truncated
+-- value would make the audit row misreport which vendor norm was actually used to build the
+-- document, which is worse than a wide column: the trail would be present and wrong rather than
+-- absent and logged. Matching the source width is the only answer that keeps the record accurate.
+--
+-- EndpointBindingRequest.version gains @Size(max = 64) in the same change, so the API rejects an
+-- overlong key at the boundary instead of accepting a value that cannot be audited. That is the
+-- caller-facing half; this migration is the storage half, and both are needed -- the DTO bound stops
+-- new bad data, the widened column keeps existing bindings auditable.
+--
+-- ExchangeAuditColumnWidthParityTest now asserts every truncate(...) bound in the writer against the
+-- declared width here, so a third divergence of this kind fails the build rather than a night's audit
+-- trail. This is the second time a writer bound silently drifted from a DDL width.
+
+ALTER TABLE supplier_exchange_audit
+    ALTER COLUMN protocol_version TYPE character varying(64);

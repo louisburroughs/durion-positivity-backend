@@ -1,0 +1,1801 @@
+openapi: 3.1.0
+info:
+  title: Supplier API
+  description: API for supplier vendor profile administration — profiles, auth configs, commercial accounts, and capability endpoint bindings (ADR-0050)
+  contact:
+    name: Durion Support Services
+    email: platform@durionpos.org
+  version: '1.0'
+servers:
+- url: http://localhost:8099
+  description: Generated server url
+tags:
+- name: Supplier Auth Configs
+  description: Admin CRUD over vendor auth configs — secret references only, never plaintext credentials
+- name: Supplier Commercial Accounts
+  description: Admin CRUD over vendor commercial accounts — billing and per-location delivery numbers
+- name: Supplier Endpoint Bindings
+  description: Admin CRUD over capability endpoint bindings — capability → (family, version, URL, auth)
+- name: Supplier Vendor Profiles
+  description: Admin CRUD over vendor profiles — one row per configured supplier connection
+- name: Supplier Exchange Audit
+  description: Read the supplier exchange-audit trail. Metadata is free to browse; reading stored payload content requires the same permission and is itself recorded.
+paths:
+  /v1/supplier/admin/profiles/{vendorProfileId}:
+    get:
+      tags:
+      - Supplier Vendor Profiles
+      summary: Get vendor profile
+      description: Retrieve one vendor profile by id
+      operationId: getProfile
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Vendor profile identifier (UUIDv7). Must reference an existing vendor profile.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      responses:
+        '200':
+          description: Profile returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorProfileView'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:read
+    put:
+      tags:
+      - Supplier Vendor Profiles
+      summary: Update vendor profile
+      description: Full update of a vendor profile; rejected for YAML-managed profiles (ADR-0050 §6)
+      operationId: updateProfile
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Vendor profile identifier (UUIDv7). Must reference an existing vendor profile.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorProfileRequest'
+        required: true
+      responses:
+        '200':
+          description: Profile updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorProfileView'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Profile is YAML-managed or supplierRef already in use.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+    delete:
+      tags:
+      - Supplier Vendor Profiles
+      summary: Delete vendor profile
+      description: Delete a vendor profile and its child configuration; rejected for YAML-managed profiles
+      operationId: deleteProfile
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Vendor profile identifier (UUIDv7). Must reference an existing vendor profile.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      responses:
+        '204':
+          description: Profile deleted.
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Profile is YAML-managed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+  /v1/supplier/admin/profiles/{vendorProfileId}/bindings/{bindingId}:
+    put:
+      tags:
+      - Supplier Endpoint Bindings
+      summary: Update endpoint binding
+      description: Replace an endpoint binding
+      operationId: updateBinding
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      - name: bindingId
+        in: path
+        description: Endpoint binding identifier (UUIDv7). Must belong to the vendor profile in the path.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointBindingRequest'
+        required: true
+      responses:
+        '200':
+          description: Binding updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndpointBindingView'
+        '400':
+          description: Invalid request — unknown capability/protocol-family key, unknown auth config name, or invalid cron schedule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Profile or binding not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Profile is YAML-managed or capability already bound.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+    delete:
+      tags:
+      - Supplier Endpoint Bindings
+      summary: Delete endpoint binding
+      description: Remove a binding, disabling its capability for the profile
+      operationId: deleteBinding
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      - name: bindingId
+        in: path
+        description: Endpoint binding identifier (UUIDv7). Must belong to the vendor profile in the path.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60
+      responses:
+        '204':
+          description: Binding deleted.
+        '404':
+          description: Profile or binding not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Profile is YAML-managed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+  /v1/supplier/admin/profiles/{vendorProfileId}/auth-configs/{authConfigId}:
+    put:
+      tags:
+      - Supplier Auth Configs
+      summary: Update auth config
+      description: Replace an auth config; renaming while endpoint bindings reference it is rejected
+      operationId: updateAuthConfig
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      - name: authConfigId
+        in: path
+        description: Auth config identifier (UUIDv7). Must belong to the vendor profile in the path.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthConfigRequest'
+        required: true
+      responses:
+        '200':
+          description: Auth config updated (without credential reference values).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthConfigView'
+        '400':
+          description: Invalid request or incomplete/malformed secret references.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Profile or auth config not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Profile is YAML-managed, name in use, or config referenced.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+    delete:
+      tags:
+      - Supplier Auth Configs
+      summary: Delete auth config
+      description: Remove an auth config; rejected while endpoint bindings still reference it
+      operationId: deleteAuthConfig
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      - name: authConfigId
+        in: path
+        description: Auth config identifier (UUIDv7). Must belong to the vendor profile in the path.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61
+      responses:
+        '204':
+          description: Auth config deleted.
+        '404':
+          description: Profile or auth config not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Profile is YAML-managed or config still referenced.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+  /v1/supplier/admin/profiles/{vendorProfileId}/accounts/{accountId}:
+    put:
+      tags:
+      - Supplier Commercial Accounts
+      summary: Update commercial account
+      description: Replace a commercial account
+      operationId: updateAccount
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      - name: accountId
+        in: path
+        description: Commercial account identifier (UUIDv7). Must belong to the vendor profile in the path.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a62
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommercialAccountRequest'
+        required: true
+      responses:
+        '200':
+          description: Account updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommercialAccountView'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Profile or account not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Profile is YAML-managed or account slot already taken.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+    delete:
+      tags:
+      - Supplier Commercial Accounts
+      summary: Delete commercial account
+      description: Remove a commercial account
+      operationId: deleteAccount
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      - name: accountId
+        in: path
+        description: Commercial account identifier (UUIDv7). Must belong to the vendor profile in the path.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a62
+      responses:
+        '204':
+          description: Account deleted.
+        '404':
+          description: Profile or account not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Profile is YAML-managed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+  /v1/supplier/admin/profiles:
+    get:
+      tags:
+      - Supplier Vendor Profiles
+      summary: List vendor profiles
+      description: All vendor profiles, ordered by supplierRef
+      operationId: listProfiles
+      responses:
+        '200':
+          description: Profiles returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VendorProfileView'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:read
+    post:
+      tags:
+      - Supplier Vendor Profiles
+      summary: Create vendor profile
+      description: Create an ADMIN-managed vendor profile; supplierRef must be unique
+      operationId: createProfile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorProfileRequest'
+        required: true
+      responses:
+        '201':
+          description: Profile created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorProfileView'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: supplierRef already in use.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+  /v1/supplier/admin/profiles/{vendorProfileId}/bindings:
+    get:
+      tags:
+      - Supplier Endpoint Bindings
+      summary: List endpoint bindings
+      description: Bindings of a vendor profile, ordered by capability
+      operationId: listBindings
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      responses:
+        '200':
+          description: Bindings returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EndpointBindingView'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:read
+    post:
+      tags:
+      - Supplier Endpoint Bindings
+      summary: Create endpoint binding
+      description: Bind a capability to (protocolFamily, version, baseUrl, path, authConfigName)
+      operationId: createBinding
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointBindingRequest'
+        required: true
+      responses:
+        '201':
+          description: Binding created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndpointBindingView'
+        '400':
+          description: Invalid request — unknown capability/protocol-family key, unknown auth config name, or invalid cron schedule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Profile is YAML-managed or capability already bound.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+  /v1/supplier/admin/profiles/{vendorProfileId}/auth-configs:
+    get:
+      tags:
+      - Supplier Auth Configs
+      summary: List auth configs
+      description: Auth configs of a vendor profile, ordered by name
+      operationId: listAuthConfigs
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      responses:
+        '200':
+          description: Auth configs returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuthConfigView'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:read
+    post:
+      tags:
+      - Supplier Auth Configs
+      summary: Create auth config
+      description: Add an auth config to a vendor profile; secret fields are references, never plaintext
+      operationId: createAuthConfig
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthConfigRequest'
+        required: true
+      responses:
+        '201':
+          description: Auth config created (without credential reference values).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthConfigView'
+        '400':
+          description: Invalid request or incomplete/malformed secret references.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Profile is YAML-managed or auth config name already in use.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+  /v1/supplier/admin/profiles/{vendorProfileId}/accounts:
+    get:
+      tags:
+      - Supplier Commercial Accounts
+      summary: List commercial accounts
+      description: Accounts of a vendor profile, billing first
+      operationId: listAccounts
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      responses:
+        '200':
+          description: Accounts returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CommercialAccountView'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:read
+    post:
+      tags:
+      - Supplier Commercial Accounts
+      summary: Create commercial account
+      description: Add a billing or delivery account; delivery accounts carry the pos-location mapping
+      operationId: createAccount
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Owning vendor profile identifier (UUIDv7). Must reference an existing vendor profile.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommercialAccountRequest'
+        required: true
+      responses:
+        '201':
+          description: Account created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommercialAccountView'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Profile not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Profile is YAML-managed or account slot already taken.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks the required supplier permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:profile:write
+  /v1/supplier/admin/audit/exchanges:
+    get:
+      tags:
+      - Supplier Exchange Audit
+      summary: List supplier exchanges in a window
+      description: 'Exchange metadata for one vendor profile within a half-open time window (from inclusive, to exclusive), newest first. Payload content is NOT included and nothing is recorded: browsing the trail discloses no commercial content. Rows whose stored content cannot be decrypted still list normally, because this query never touches the encrypted columns.'
+      operationId: listExchanges
+      parameters:
+      - name: vendorProfileId
+        in: query
+        description: 'Vendor profile whose exchanges to list. A query filter rather than a path segment because audit history deliberately outlives the profile: exchanges of a deleted profile are still listed here.'
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      - name: from
+        in: query
+        description: Window start, INCLUSIVE. ISO-8601 instant.
+        required: true
+        schema:
+          type: string
+          format: date-time
+          example: 2026-08-01 00:00:00+00:00
+      - name: to
+        in: query
+        description: Window end, EXCLUSIVE, and must be after 'from'. Half-open so adjacent windows tile without listing a boundary attempt twice.
+        required: true
+        schema:
+          type: string
+          format: date-time
+          example: 2026-09-01 00:00:00+00:00
+      - name: capability
+        in: query
+        description: Canonical capability key to narrow to. Omit for all capabilities. An unrecognised key is rejected rather than silently matching nothing.
+        required: false
+        schema:
+          type: string
+          example: STOCK_INQUIRY
+      - name: page
+        in: query
+        description: Zero-based page index.
+        required: false
+        schema:
+          type: integer
+          example: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: Page size, at most 200.
+        required: false
+        schema:
+          type: integer
+          example: 50
+          maximum: 200
+          minimum: 1
+      responses:
+        '200':
+          description: A page of exchange metadata, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponseExchangeAuditSummary'
+        '400':
+          description: Invalid request — window end not after its start, unknown capability key, or a page size outside the permitted range.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks supplier:audit:read. Profile-admin permissions do not grant audit access.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:audit:read
+  /v1/supplier/admin/audit/exchanges/{exchangeAuditId}:
+    get:
+      tags:
+      - Supplier Exchange Audit
+      summary: Get one exchange's audit metadata
+      description: Metadata of a single attempt, without payload content. Use this to decide whether content exists (requestPayloadPresent / responsePayloadPresent) before making the recorded payload call.
+      operationId: getExchange
+      parameters:
+      - name: exchangeAuditId
+        in: path
+        description: Exchange-audit record identifier (UUIDv7).
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+      responses:
+        '200':
+          description: Exchange metadata returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeAuditSummary'
+        '404':
+          description: No exchange-audit record with that id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks supplier:audit:read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:audit:read
+  /v1/supplier/admin/audit/exchanges/{exchangeAuditId}/payload:
+    get:
+      tags:
+      - Supplier Exchange Audit
+      summary: Read one exchange's stored payload content
+      description: 'Returns the stored request and response documents. THIS CALL IS ITSELF RECORDED (ADR-0050 §7): an access row naming the caller is written in the same transaction, and the content is withheld if that row cannot be written. Null payload fields are a normal state, not an error — a METADATA_ONLY binding captured none, the exchange carried no body, or retention has already purged the content after 400 days. When ''redacted'' is true the documents are not the wire bytes: sensitive fields were replaced at capture time and the originals were never stored.'
+      operationId: readPayload
+      parameters:
+      - name: exchangeAuditId
+        in: path
+        description: Exchange-audit record whose stored content to read.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+      responses:
+        '200':
+          description: Stored content returned, and the read has been recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeAuditPayloadView'
+        '404':
+          description: No exchange-audit record with that id. A record that exists but holds no payload is NOT a 404 — it returns 200 with null content.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Stored content exists but could not be decrypted — a malformed envelope, a key this deployment does not hold, or a failed integrity check. The typed code distinguishes which; the detail is logged server-side and never returned. The read is still recorded, with an UNREADABLE outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks supplier:audit:read. A denied read discloses nothing and is deliberately NOT written to the access trail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:audit:read
+  /v1/supplier/admin/audit/exchanges/{exchangeAuditId}/accesses:
+    get:
+      tags:
+      - Supplier Exchange Audit
+      summary: List who read one exchange's payload content
+      description: 'The ADR-0050 §7 access trail for one exchange, newest first: who read it, when, and what the read yielded. Only payload reads appear here. Metadata browsing does not, and neither do denied attempts — a 403 disclosed nothing. Reading this trail is not itself recorded, or every inspection would generate the noise the next one has to sift.'
+      operationId: listAccesses
+      parameters:
+      - name: exchangeAuditId
+        in: path
+        description: 'Exchange-audit record whose access trail to list. An unknown id returns an empty page rather than 404: ''nobody read it'' is the honest answer, and access rows carry no foreign key to the exchange by design.'
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+      - name: page
+        in: query
+        description: Zero-based page index.
+        required: false
+        schema:
+          type: integer
+          example: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: Page size, at most 200.
+        required: false
+        schema:
+          type: integer
+          example: 50
+          maximum: 200
+          minimum: 1
+      responses:
+        '200':
+          description: A page of access records, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponseExchangeAuditAccessView'
+        '400':
+          description: Invalid request — page size outside the permitted range.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks supplier:audit:read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:audit:read
+  /v1/supplier/admin/audit/exchanges/by-correlation/{correlationId}:
+    get:
+      tags:
+      - Supplier Exchange Audit
+      summary: Trace one logical call by correlation id
+      description: Every attempt sharing a correlation id, OLDEST FIRST — the order in which a retry sequence actually happened. Metadata only; nothing is recorded.
+      operationId: traceCorrelation
+      parameters:
+      - name: correlationId
+        in: path
+        description: Correlation id shared by every attempt of one logical supplier call.
+        required: true
+        schema:
+          type: string
+          example: 018f0a1b2c3d7e4f8a9b0c1d2e3f4a71
+      - name: page
+        in: query
+        description: Zero-based page index.
+        required: false
+        schema:
+          type: integer
+          example: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: Page size, at most 200.
+        required: false
+        schema:
+          type: integer
+          example: 50
+          maximum: 200
+          minimum: 1
+      responses:
+        '200':
+          description: A page of exchange metadata, oldest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponseExchangeAuditSummary'
+        '400':
+          description: Invalid request — page size outside the permitted range.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks supplier:audit:read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:audit:read
+components:
+  schemas:
+    VendorProfileRequest:
+      type: object
+      description: 'Create/update payload for a vendor profile — one configured supplier connection (ADR-0050 §1/§2). The configuration source is never client-settable: profiles created here are ADMIN-managed.'
+      properties:
+        supplierRef:
+          type: string
+          description: Unique human-readable profile alias (ADR-0050 §1). Never blank. Identifies the configuration, and is never used as an identifier across a contract boundary.
+          example: michelin-eu
+        displayName:
+          type: string
+          description: Admin-screen display name. Never blank.
+          example: Michelin Europe
+        enabled:
+          type: boolean
+          description: Whether the profile's bindings resolve at all. A disabled profile resolves every capability to a typed not-configured outcome.
+          example: true
+        sandbox:
+          type: boolean
+          description: Whether the profile runs against the vendor's sandbox environment (ADR-0050 §2 sandbox overlay).
+          example: false
+        connectTimeoutMillis:
+          type: integer
+          format: int32
+          description: Default connect timeout for the profile's bindings, in milliseconds. Must be > 0 when present; omit to use the deployment default.
+          example: 5000
+        readTimeoutMillis:
+          type: integer
+          format: int32
+          description: Default read timeout for the profile's bindings, in milliseconds. Must be > 0 when present; omit to use the deployment default.
+          example: 30000
+        maxRetries:
+          type: integer
+          format: int32
+          description: Default pre-send retry budget for the profile's bindings. Must be >= 0 when present; omit to use the deployment default. Only pre-send failures are retried.
+          example: 2
+        sandboxBaseUrlOverride:
+          type: string
+          description: Base URL the profile's bindings use while sandbox is set (ADR-0050 §2). Omit to leave the bindings' own base URLs unchanged; never blank when present.
+          example: https://sandbox.ediwheel.example/api
+        retryBackoff:
+          type: string
+          description: Default retry backoff strategy. Omit to use the deployment default.
+          enum:
+          - FIXED
+          - EXPONENTIAL
+          example: EXPONENTIAL
+    ApiError:
+      type: object
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code
+          example: 404
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+        correlationId:
+          type: string
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fieldErrors:
+          type: array
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          items:
+            $ref: '#/components/schemas/FieldError'
+        referenceId:
+          type: string
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+        nextAction:
+          type: string
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+        supportAction:
+          type: string
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+    FieldError:
+      type: object
+      description: Validation error for a specific request field
+      properties:
+        field:
+          type: string
+          description: Field name
+          example: quantity
+        message:
+          type: string
+          description: Validation failure message
+          example: must be greater than 0
+      required:
+      - field
+      - message
+    VendorProfileView:
+      type: object
+      description: Read model of a vendor profile. Child collections (auth configs, commercial accounts, endpoint bindings) are read through their own list operations.
+      properties:
+        vendorProfileId:
+          type: string
+          format: uuid
+          description: Platform identity of the profile (UUIDv7, ADR-0050 §1).
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        supplierRef:
+          type: string
+          description: Unique human-readable profile alias (ADR-0050 §1). Never blank. Identifies the configuration, and is never used as an identifier across a contract boundary.
+          example: michelin-eu
+        displayName:
+          type: string
+          description: Admin-screen display name. Never blank.
+          example: Michelin Europe
+        enabled:
+          type: boolean
+          description: Whether the profile's bindings resolve at all. A disabled profile resolves every capability to a typed not-configured outcome.
+          example: true
+        sandbox:
+          type: boolean
+          description: Whether the profile runs against the vendor's sandbox environment (ADR-0050 §2 sandbox overlay).
+          example: false
+        sourceOfTruth:
+          type: string
+          description: Authoritative configuration source (ADR-0050 §6). Every mutation is rejected with 409 while this is YAML.
+          enum:
+          - YAML
+          - ADMIN
+          example: ADMIN
+        connectTimeoutMillis:
+          type: integer
+          format: int32
+          description: Default connect timeout for the profile's bindings, in milliseconds. Must be > 0 when present; omit to use the deployment default.
+          example: 5000
+        readTimeoutMillis:
+          type: integer
+          format: int32
+          description: Default read timeout for the profile's bindings, in milliseconds. Must be > 0 when present; omit to use the deployment default.
+          example: 30000
+        maxRetries:
+          type: integer
+          format: int32
+          description: Default pre-send retry budget for the profile's bindings. Must be >= 0 when present; omit to use the deployment default. Only pre-send failures are retried.
+          example: 2
+        sandboxBaseUrlOverride:
+          type: string
+          description: Base URL the profile's bindings use while sandbox is set (ADR-0050 §2). Omit to leave the bindings' own base URLs unchanged; never blank when present.
+          example: https://sandbox.ediwheel.example/api
+        retryBackoff:
+          type: string
+          description: Default retry backoff strategy. Omit to use the deployment default.
+          enum:
+          - FIXED
+          - EXPONENTIAL
+          example: EXPONENTIAL
+    EndpointBindingRequest:
+      type: object
+      description: 'Create/update payload for a capability endpoint binding (ADR-0050 §3): at most one binding per capability per profile. An absent or disabled binding means the capability is disabled for the supplier and resolves to the typed CAPABILITY_NOT_CONFIGURED status -- a value of the capability response''s own status enum, returned with HTTP 200, not an error. Do not confuse it with the ApiError code SUPPLIER_CAPABILITY_NOT_CONFIGURED, which is the same condition escaping as a 4xx and indicates a defect, not a normal outcome.'
+      properties:
+        capability:
+          type: string
+          description: Canonical supplier capability key this binding serves. Unknown keys are rejected with SUPPLIER_UNKNOWN_CAPABILITY.
+          example: STOCK_INQUIRY
+        protocolFamily:
+          type: string
+          description: Canonical protocol family key of the adapter to use. Unknown keys are rejected with SUPPLIER_UNKNOWN_PROTOCOL_FAMILY.
+          example: EDIWHEEL_A25
+        version:
+          type: string
+          description: 'Adapter version key within the protocol family. Free-form data, deliberately not an enum (ADR-0051 §3) so a vendor''s new norm needs no code change. NOT validated on write: a key with no registered codec is accepted here and then resolves to CAPABILITY_NOT_CONFIGURED on every call, so it must match a codec exactly. Keys shipped today: A2_5, B2_1, B3_3, B4_0, C1_0, C1_1, C1_2, S2S_V1. At most 64 characters: the exchange-audit trail stores this key at that width, and a longer one would make every audit write for the binding fail.'
+          example: A2_5
+          maxLength: 64
+          minLength: 0
+        baseUrl:
+          type: string
+          description: Base URL of the vendor endpoint for this capability.
+          example: https://edi.michelin.example/a25
+        path:
+          type: string
+          description: Path appended to the base URL for this capability.
+          example: /stock/inquiry
+        authConfigName:
+          type: string
+          description: Name of the auth config on the same profile that this binding authenticates with. Must already exist.
+          example: ediwheel-basic
+        schedule:
+          type: string
+          description: Cron expression driving scheduled runs of this binding. Omit for request-driven capabilities.
+          example: 0 0 3 * * *
+        enabled:
+          type: boolean
+          description: 'Whether THIS binding resolves. A disabled binding behaves exactly as an absent one: only this capability stops resolving for this supplier, and it reports the typed CAPABILITY_NOT_CONFIGURED outcome. This is a per-capability toggle, NOT a supplier-wide kill switch -- for that, disable the vendor profile itself.'
+          example: true
+        captureLevel:
+          type: string
+          description: Exchange-audit payload capture level for this binding (ADR-0050 §7). Exchange metadata is always retained regardless. Omit to use the deployment default.
+          enum:
+          - FULL
+          - REDACTED
+          - METADATA_ONLY
+          example: REDACTED
+    EndpointBindingView:
+      type: object
+      description: Read model of a capability endpoint binding.
+      properties:
+        bindingId:
+          type: string
+          format: uuid
+          description: Identity of the endpoint binding (UUIDv7).
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60
+        capability:
+          type: string
+          description: Canonical supplier capability key this binding serves. Unknown keys are rejected with SUPPLIER_UNKNOWN_CAPABILITY.
+          example: STOCK_INQUIRY
+        protocolFamily:
+          type: string
+          description: Canonical protocol family key of the adapter to use. Unknown keys are rejected with SUPPLIER_UNKNOWN_PROTOCOL_FAMILY.
+          example: EDIWHEEL_A25
+        version:
+          type: string
+          description: 'Adapter version key within the protocol family. Free-form data, deliberately not an enum (ADR-0051 §3) so a vendor''s new norm needs no code change. NOT validated on write: a key with no registered codec is accepted here and then resolves to CAPABILITY_NOT_CONFIGURED on every call, so it must match a codec exactly. Keys shipped today: A2_5, B2_1, B3_3, B4_0, C1_0, C1_1, C1_2, S2S_V1.'
+          example: A2_5
+        baseUrl:
+          type: string
+          description: Base URL of the vendor endpoint for this capability.
+          example: https://edi.michelin.example/a25
+        path:
+          type: string
+          description: Path appended to the base URL for this capability.
+          example: /stock/inquiry
+        authConfigName:
+          type: string
+          description: Name of the auth config on the same profile that this binding authenticates with. Must already exist.
+          example: ediwheel-basic
+        schedule:
+          type: string
+          description: Cron expression driving scheduled runs of this binding. Omit for request-driven capabilities.
+          example: 0 0 3 * * *
+        enabled:
+          type: boolean
+          description: 'Whether THIS binding resolves. A disabled binding behaves exactly as an absent one: only this capability stops resolving for this supplier, and it reports the typed CAPABILITY_NOT_CONFIGURED outcome. This is a per-capability toggle, NOT a supplier-wide kill switch -- for that, disable the vendor profile itself.'
+          example: true
+        captureLevel:
+          type: string
+          description: Exchange-audit payload capture level for this binding (ADR-0050 §7). Exchange metadata is always retained regardless. Omit to use the deployment default.
+          enum:
+          - FULL
+          - REDACTED
+          - METADATA_ONLY
+          example: REDACTED
+    AuthConfigRequest:
+      type: object
+      description: 'Create/update payload for a vendor auth config (ADR-0050 §4). Every secret field is a scheme-prefixed REFERENCE (e.g. env:VAR_NAME) resolved at call time — plaintext credentials are rejected, and references are write-only: they never appear in any response.'
+      properties:
+        name:
+          type: string
+          description: Auth config name, unique within the vendor profile. Endpoint bindings reference it by this name.
+          example: ediwheel-basic
+        type:
+          type: string
+          description: Credential scheme this config describes. Determines exactly which secret reference fields are required and which must be absent (ADR-0050 §4).
+          enum:
+          - BASIC_PLUS_APIKEY
+          - OAUTH2_CLIENT_CREDENTIALS
+          - BEARER
+          example: BASIC_PLUS_APIKEY
+        usernameRef:
+          type: string
+          description: Secret reference to the username. Required for BASIC_PLUS_APIKEY, must be absent otherwise. Write-only.
+          example: env:MICHELIN_EDI_USER
+        passwordRef:
+          type: string
+          description: Secret reference to the password. Required for BASIC_PLUS_APIKEY, must be absent otherwise. Write-only.
+          example: env:MICHELIN_EDI_PASSWORD
+        apiKeyRef:
+          type: string
+          description: Secret reference to the API key. Required for BASIC_PLUS_APIKEY, must be absent otherwise. Write-only.
+          example: env:MICHELIN_EDI_APIKEY
+        apiKeyHeader:
+          type: string
+          description: Header NAME the API key is sent in — configuration data, not a secret reference. Omit to use the adapter default.
+          example: apikey
+        tokenUrlRef:
+          type: string
+          description: Secret reference to the OAuth2 token endpoint URL. Required for OAUTH2_CLIENT_CREDENTIALS, must be absent otherwise. Write-only.
+          example: env:MICHELIN_TOKEN_URL
+        clientIdRef:
+          type: string
+          description: Secret reference to the OAuth2 client id. Required for OAUTH2_CLIENT_CREDENTIALS, must be absent otherwise. Write-only.
+          example: env:MICHELIN_CLIENT_ID
+        clientSecretRef:
+          type: string
+          description: Secret reference to the OAuth2 client secret. Required for OAUTH2_CLIENT_CREDENTIALS, must be absent otherwise. Write-only.
+          example: env:MICHELIN_CLIENT_SECRET
+        bearerTokenRef:
+          type: string
+          description: Secret reference to the static bearer token. Required for BEARER, must be absent otherwise. Write-only.
+          example: env:MICHELIN_BEARER_TOKEN
+    AuthConfigView:
+      type: object
+      description: Read model of a vendor auth config. Carries no secret reference fields at all, by shape — credential references never serialize into responses (ADR-0050 §4).
+      properties:
+        authConfigId:
+          type: string
+          format: uuid
+          description: Identity of the auth config (UUIDv7).
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61
+        name:
+          type: string
+          description: Auth config name, unique within the vendor profile. Endpoint bindings reference it by this name.
+          example: ediwheel-basic
+        type:
+          type: string
+          description: Credential scheme this config describes. Determines exactly which secret reference fields are required and which must be absent (ADR-0050 §4).
+          enum:
+          - BASIC_PLUS_APIKEY
+          - OAUTH2_CLIENT_CREDENTIALS
+          - BEARER
+          example: BASIC_PLUS_APIKEY
+        apiKeyHeader:
+          type: string
+          description: Header NAME the API key is sent in — configuration data, not a secret reference. Omit to use the adapter default.
+          example: apikey
+    CommercialAccountRequest:
+      type: object
+      description: 'Create/update payload for a vendor commercial account (ADR-0050 §5): one BILLING account per profile, one DELIVERY account per (profile, pos-location). Account numbers are ordinary profile data, not credentials.'
+      properties:
+        role:
+          type: string
+          description: Canonical account role. BILLING is the invoicing account; DELIVERY maps a pos-location to its vendor account number.
+          enum:
+          - BILLING
+          - DELIVERY
+          example: DELIVERY
+        accountNumber:
+          type: string
+          description: Vendor-assigned account number. Never blank. Ordinary configuration data, not a credential.
+          example: FR-0042871
+        agencyCode:
+          type: string
+          description: Vendor-assigned agency/branch code, when the vendor issues one.
+          example: PAR01
+        deliveryLocationId:
+          type: string
+          format: uuid
+          description: pos-location identifier this delivery account belongs to. Required for DELIVERY, must be absent for BILLING.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+    CommercialAccountView:
+      type: object
+      description: Read model of a vendor commercial account.
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          description: Identity of the commercial account (UUIDv7).
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a62
+        role:
+          type: string
+          description: Canonical account role. BILLING is the invoicing account; DELIVERY maps a pos-location to its vendor account number.
+          enum:
+          - BILLING
+          - DELIVERY
+          example: DELIVERY
+        accountNumber:
+          type: string
+          description: Vendor-assigned account number. Never blank. Ordinary configuration data, not a credential.
+          example: FR-0042871
+        agencyCode:
+          type: string
+          description: Vendor-assigned agency/branch code, when the vendor issues one.
+          example: PAR01
+        deliveryLocationId:
+          type: string
+          format: uuid
+          description: pos-location identifier this delivery account belongs to. Required for DELIVERY, must be absent for BILLING.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+    ExchangeAuditSummary:
+      type: object
+      description: One outbound supplier attempt, without payload content. Reading the payload is a separate, individually audited call.
+      properties:
+        exchangeAuditId:
+          type: string
+          format: uuid
+          description: Identity of this exchange-audit row (UUIDv7).
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+        vendorProfileId:
+          type: string
+          format: uuid
+          description: Owning vendor profile. Still populated when that profile has since been deleted -- exchange history deliberately outlives configuration (ADR-0050 §7).
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        supplierRef:
+          type: string
+          description: 'The profile''s alias AS AT THE TIME OF THE EXCHANGE. A descriptive snapshot, never a lookup key: profiles are renameable, so this may differ from the profile''s current ref.'
+          example: michelin-eu
+        bindingId:
+          type: string
+          format: uuid
+          description: Endpoint binding used for this attempt, when one was involved.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60
+        capability:
+          type: string
+          description: Canonical supplier capability key exercised.
+          example: STOCK_INQUIRY
+        protocolFamily:
+          type: string
+          description: Canonical protocol family key of the adapter used.
+          example: EDIWHEEL_A25
+        protocolVersion:
+          type: string
+          description: Adapter version key within the protocol family.
+          example: A2_5
+        httpMethod:
+          type: string
+          description: HTTP method of the attempt.
+          example: POST
+        endpointUri:
+          type: string
+          description: 'Absolute request URI, credential-redacted before storage. Sensitive query parameters (api keys, tokens, signatures) and any userinfo in the URL are replaced with a redaction marker. AT METADATA_ONLY THE QUERY STRING IS REMOVED ENTIRELY: that level retains no content, and query parameters are content, so the value you receive is the path only. Redaction is a control applied at capture time -- the original was never stored and cannot be recovered.'
+          example: https://edi.michelin.example/a25/stock/inquiry
+        attempt:
+          type: integer
+          format: int32
+          description: 1-based attempt number within one logical call. Retries are separate rows sharing a correlation id, so a sequence of 1,2,3 is one call retried twice.
+          example: 2
+        correlationId:
+          type: string
+          description: Groups every attempt of one logical call. Use it to trace a retry sequence.
+          example: 018f0a1b2c3d7e4f8a9b0c1d2e3f4a71
+        outcome:
+          type: string
+          description: Classification of the attempt (ADR-0052 §5).
+          example: TRANSPORT_TIMEOUT
+        httpStatus:
+          type: integer
+          format: int32
+          description: Response status code. Null when no response was received at all -- a connect failure, a timeout before headers, or an attempt suppressed by an open circuit breaker.
+          example: 200
+        startedAt:
+          type: string
+          format: date-time
+          description: When the attempt began.
+          example: 2026-08-11 09:14:02.117000+00:00
+        durationMs:
+          type: integer
+          format: int64
+          description: How long the attempt took, in milliseconds.
+          example: 1843
+        failureDetail:
+          type: string
+          description: Operator-facing failure summary. Null on success. Quotes vendor responses, so any URL it embeds has its credential-bearing query parameters and userinfo redacted at capture time -- a redirect Location can carry a signed URL whose token is a live credential.
+          example: Read timed out after 30000 ms
+        captureLevel:
+          type: string
+          description: 'The payload capture level actually applied to THIS row (ADR-0050 §7). Recorded rather than re-derived, because the binding''s level can change after the fact: a REDACTED row stays REDACTED even if the binding is later set to FULL.'
+          enum:
+          - FULL
+          - REDACTED
+          - METADATA_ONLY
+          example: REDACTED
+        requestPayloadPresent:
+          type: boolean
+          description: Whether a request payload is currently stored. Determined without decrypting anything.
+          example: true
+        responsePayloadPresent:
+          type: boolean
+          description: Whether a response payload is currently stored. Determined without decrypting anything.
+          example: true
+        payloadsPurgedAt:
+          type: string
+          format: date-time
+          description: 'When retention nulled this row''s payloads (ADR-0050 §7, 400 days). Distinguishes ''purged'' from ''never captured'': metadata is retained permanently, only content expires.'
+          example: 2027-09-15 03:30:00+00:00
+        createdBy:
+          type: string
+          description: Audit actor that caused the exchange (ADR-0018). The system actor for scheduler-driven exchanges, which have no security context.
+          example: system:supplier-scheduler
+    PagedResponseExchangeAuditSummary:
+      type: object
+      description: A page of results.
+      properties:
+        items:
+          type: array
+          description: Items on this page, in the order documented by the endpoint.
+          items:
+            $ref: '#/components/schemas/ExchangeAuditSummary'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based index of this page.
+          example: 0
+        size:
+          type: integer
+          format: int32
+          description: Requested page size.
+          example: 50
+        totalElements:
+          type: integer
+          format: int64
+          description: Total number of matching items across all pages.
+          example: 137
+        totalPages:
+          type: integer
+          format: int32
+          description: Total number of pages available for this page size.
+          example: 3
+    ExchangeAuditPayloadView:
+      type: object
+      description: Stored payload content of one exchange-audit row. Retrieving it writes an access record naming the caller; the content is served only if that record commits.
+      properties:
+        exchangeAuditId:
+          type: string
+          format: uuid
+          description: Identity of the exchange-audit row this content belongs to.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+        captureLevel:
+          type: string
+          description: The payload capture level applied when this row was written. METADATA_ONLY rows carry no content at all.
+          enum:
+          - FULL
+          - REDACTED
+          - METADATA_ONLY
+          example: REDACTED
+        redacted:
+          type: boolean
+          description: 'Whether the content below was altered before storage. When true these are NOT the wire documents: sensitive fields were replaced with a redaction marker at capture time and the original values were never persisted, so they cannot be recovered from anywhere.'
+          example: true
+        requestPayload:
+          type: string
+          description: Stored request document. Null is a normal state, not an error -- a METADATA_ONLY binding, a request with no body, or a row whose content retention has already purged.
+          example: <StockInquiry><Item>205/55R16</Item></StockInquiry>
+        responsePayload:
+          type: string
+          description: Stored response document. Null is a normal state, not an error -- see requestPayload.
+          example: <StockInquiryResponse><Available>4</Available></StockInquiryResponse>
+    ExchangeAuditAccessView:
+      type: object
+      description: 'One recorded read of an exchange payload: who read which exchange, when (ADR-0050 §7).'
+      properties:
+        auditAccessId:
+          type: string
+          format: uuid
+          description: Identity of this access record (UUIDv7).
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a80
+        exchangeAuditId:
+          type: string
+          format: uuid
+          description: The exchange-audit row whose content was read.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+        vendorProfileId:
+          type: string
+          format: uuid
+          description: Owning vendor profile of the exchange that was read.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        capability:
+          type: string
+          description: Canonical capability key of the exchange that was read.
+          example: STOCK_INQUIRY
+        accessedBy:
+          type: string
+          description: The authenticated subject that performed the read. Taken from the security context, never from the request body or a query parameter.
+          example: a.operator@example.com
+        accessedAt:
+          type: string
+          format: date-time
+          description: When the read happened.
+          example: 2026-08-11 14:22:07.412000+00:00
+        accessKind:
+          type: string
+          description: What the caller reached. Only payload reads are recorded.
+          enum:
+          - PAYLOAD_READ
+          example: PAYLOAD_READ
+        payloadOutcome:
+          type: string
+          description: What the read yielded, including the failed and empty cases.
+          enum:
+          - DECRYPTED
+          - UNREADABLE
+          - NOT_CAPTURED
+          example: DECRYPTED
+    PagedResponseExchangeAuditAccessView:
+      type: object
+      description: A page of results.
+      properties:
+        items:
+          type: array
+          description: Items on this page, in the order documented by the endpoint.
+          items:
+            $ref: '#/components/schemas/ExchangeAuditAccessView'
+        page:
+          type: integer
+          format: int32
+          description: Zero-based index of this page.
+          example: 0
+        size:
+          type: integer
+          format: int32
+          description: Requested page size.
+          example: 50
+        totalElements:
+          type: integer
+          format: int64
+          description: Total number of matching items across all pages.
+          example: 137
+        totalPages:
+          type: integer
+          format: int32
+          description: Total number of pages available for this page size.
+          example: 3
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

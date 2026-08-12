@@ -1259,6 +1259,32 @@ paths:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop~1audit
   /v1/shop/audit/{id}:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop~1audit~1{id}
+  /v1/supplier/admin/audit/exchanges:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1audit~1exchanges
+  /v1/supplier/admin/audit/exchanges/by-correlation/{correlationId}:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1audit~1exchanges~1by-correlation~1{correlationId}
+  /v1/supplier/admin/audit/exchanges/{exchangeAuditId}:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1audit~1exchanges~1{exchangeAuditId}
+  /v1/supplier/admin/audit/exchanges/{exchangeAuditId}/accesses:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1audit~1exchanges~1{exchangeAuditId}~1accesses
+  /v1/supplier/admin/audit/exchanges/{exchangeAuditId}/payload:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1audit~1exchanges~1{exchangeAuditId}~1payload
+  /v1/supplier/admin/profiles:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1profiles
+  /v1/supplier/admin/profiles/{vendorProfileId}:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1profiles~1{vendorProfileId}
+  /v1/supplier/admin/profiles/{vendorProfileId}/accounts:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1profiles~1{vendorProfileId}~1accounts
+  /v1/supplier/admin/profiles/{vendorProfileId}/accounts/{accountId}:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1profiles~1{vendorProfileId}~1accounts~1{accountId}
+  /v1/supplier/admin/profiles/{vendorProfileId}/auth-configs:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1profiles~1{vendorProfileId}~1auth-configs
+  /v1/supplier/admin/profiles/{vendorProfileId}/auth-configs/{authConfigId}:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1profiles~1{vendorProfileId}~1auth-configs~1{authConfigId}
+  /v1/supplier/admin/profiles/{vendorProfileId}/bindings:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1profiles~1{vendorProfileId}~1bindings
+  /v1/supplier/admin/profiles/{vendorProfileId}/bindings/{bindingId}:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1profiles~1{vendorProfileId}~1bindings~1{bindingId}
   /v1/tax/calculate:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1calculate
   /v1/tax/exemption-certificates:
@@ -1576,6 +1602,8 @@ tags:
   description: Operations served by pos-security-service
 - name: pos-shop-manager
   description: Operations served by pos-shop-manager
+- name: pos-supplier
+  description: Operations served by pos-supplier
 - name: pos-tax
   description: Operations served by pos-tax
 - name: pos-vehicle-fitment
@@ -1607,6 +1635,7 @@ x-aggregated-modules:
 - pos-price
 - pos-security-service
 - pos-shop-manager
+- pos-supplier
 - pos-tax
 - pos-vehicle-fitment
 - pos-vehicle-inventory
