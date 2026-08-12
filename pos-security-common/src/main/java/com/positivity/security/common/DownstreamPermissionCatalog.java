@@ -538,8 +538,8 @@ public final class DownstreamPermissionCatalog {
         "PERM_crm:interaction:manage", // 442
 
         // ── New batch (bits 443–444) ──────────────────────────────────────────
-        "PERM_people-contact:organization:edit",             // 443
-        "PERM_people-contact:organization:view",             // 444
+        "PERM_people-contact:organization:edit", // 443
+        "PERM_people-contact:organization:view", // 444
 
         // ── New batch (bits 445–447) ──────────────────────────────────────────
         "PERM_supplier:audit:read", // 445
