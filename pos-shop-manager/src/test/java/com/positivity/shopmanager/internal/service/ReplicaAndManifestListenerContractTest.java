@@ -169,7 +169,7 @@ class ReplicaAndManifestListenerContractTest {
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(assignmentRepository)
                                 .findById(any()));
-            default ->
+            case "people-contact" ->
                 new Replica(
                         PeopleContactEventsListener.OWNER,
                         PersonUpdatedV1.EVENT_TYPE,
@@ -182,6 +182,7 @@ class ReplicaAndManifestListenerContractTest {
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(personRepository)
                                 .findById(any()));
+            default -> throw new IllegalArgumentException("Unknown replica owner in test fixture: " + owner);
         };
     }
 
@@ -340,13 +341,14 @@ class ReplicaAndManifestListenerContractTest {
                 ReflectionTestUtils.setField(listener, "vehicleCommandsTopic", "vehicle.commands.v1");
                 return new Manifest(VehicleEventsListener.OWNER, "vehicle.commands.v1", listener::onManifest);
             }
-            default -> {
+            case "people-contact" -> {
                 PeopleContactManifestListener listener = new PeopleContactManifestListener(
                         processedEventRepository, kafkaTemplate, objectMapper, meterRegistryProvider);
                 ReflectionTestUtils.setField(listener, "peopleContactCommandsTopic", "people-contact.commands.v1");
                 return new Manifest(
                         PeopleContactEventsListener.OWNER, "people-contact.commands.v1", listener::onManifest);
             }
+            default -> throw new IllegalArgumentException("Unknown manifest owner in test fixture: " + owner);
         }
     }
 
