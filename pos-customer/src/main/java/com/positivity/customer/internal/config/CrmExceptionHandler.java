@@ -39,173 +39,171 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 @Slf4j
 @RequiredArgsConstructor
 public class CrmExceptionHandler {
-        private static final String X_CORRELATION_ID = "X-Correlation-Id";
-        private final Clock clock;
+    private static final String X_CORRELATION_ID = "X-Correlation-Id";
+    private final Clock clock;
 
-        @ExceptionHandler(AccessDeniedException.class)
-        public ResponseEntity<ApiError> handleAccessDenied(
-                        AccessDeniedException ex, HttpServletRequest request, HttpServletResponse response) {
-                String path = request != null ? request.getRequestURI() : "";
-                log.warn("Access denied on {}: {}", path, ex.getMessage());
-                String correlationId = resolveCorrelationId(request);
-                response.setHeader(X_CORRELATION_ID, correlationId);
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiError> handleAccessDenied(
+            AccessDeniedException ex, HttpServletRequest request, HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.warn("Access denied on {}: {}", path, ex.getMessage());
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
 
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                                .body(ApiError.of(
-                                                "PERMISSION_DENIED",
-                                                "You do not have permission to perform this action",
-                                                HttpStatus.FORBIDDEN.value(),
-                                                Instant.now(clock).toString(),
-                                                correlationId));
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiError.of(
+                        "PERMISSION_DENIED",
+                        "You do not have permission to perform this action",
+                        HttpStatus.FORBIDDEN.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    @ExceptionHandler(DuplicateRedemptionException.class)
+    public ResponseEntity<ApiError> handleDuplicateRedemption(
+            DuplicateRedemptionException ex, HttpServletRequest request, HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.warn("Duplicate redemption on {}: {}", path, ex.getMessage());
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiError.of(
+                        "DUPLICATE_REDEMPTION",
+                        ex.getMessage(),
+                        HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    @ExceptionHandler(CrmResourceNotFoundException.class)
+    public ResponseEntity<ApiError> handleNotFound(
+            CrmResourceNotFoundException ex, HttpServletRequest request, HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.warn("Resource not found on {}: {}", path, ex.getMessage());
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiError.of(
+                        "RESOURCE_NOT_FOUND",
+                        ex.getMessage(),
+                        HttpStatus.NOT_FOUND.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    @ExceptionHandler(CrmDuplicateResourceException.class)
+    public ResponseEntity<ApiError> handleDuplicateResource(
+            CrmDuplicateResourceException ex, HttpServletRequest request, HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.warn("Duplicate resource on {}: {}", path, ex.getMessage());
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiError.of(
+                        "DUPLICATE_RESOURCE",
+                        ex.getMessage(),
+                        HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * A structurally valid request whose content the domain refuses — currently the
+     * segment predicate validator (Story #1137). ADR-0017 maps this to {@code 422}
+     * so callers can distinguish it from a malformed body ({@code 400}).
+     */
+    @ExceptionHandler(CrmUnprocessableEntityException.class)
+    public ResponseEntity<ApiError> handleUnprocessable(
+            CrmUnprocessableEntityException ex, HttpServletRequest request, HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.warn("Unprocessable entity on {}: {}", path, ex.getMessage());
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .body(ApiError.of(
+                        "UNPROCESSABLE_CONTENT",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * Rate limit exceeded on the public inquiry form. The message is deliberately
+     * generic — a
+     * response that revealed the exact limit or remaining quota would just tell an
+     * abuser how
+     * to pace themselves.
+     */
+    @ExceptionHandler(CrmTooManyRequestsException.class)
+    public ResponseEntity<ApiError> handleTooManyRequests(
+            CrmTooManyRequestsException ex, HttpServletRequest request, HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.warn("Rate limit exceeded on {}", path);
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(ApiError.of(
+                        "TOO_MANY_REQUESTS",
+                        ex.getMessage(),
+                        HttpStatus.TOO_MANY_REQUESTS.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiError> handleMethodArgumentNotValid(
+            MethodArgumentNotValidException ex, HttpServletRequest request, HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.warn("Validation failed on {}: {}", path, ex.getMessage());
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+
+        List<ApiError.FieldError> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
+                .map(fe -> new ApiError.FieldError(
+                        fe.getField(), fe.getDefaultMessage() != null ? fe.getDefaultMessage() : "Invalid value"))
+                .toList();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiError.withFieldErrors(
+                        "VALIDATION_FAILED",
+                        "Request validation failed",
+                        HttpStatus.BAD_REQUEST.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        fieldErrors));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiError> handleIllegalArgument(
+            IllegalArgumentException ex, HttpServletRequest request, HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.warn("Invalid argument on {}: {}", path, ex.getMessage());
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiError.of(
+                        "VALIDATION_ERROR",
+                        ex.getMessage(),
+                        HttpStatus.BAD_REQUEST.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    private String resolveCorrelationId(HttpServletRequest request) {
+        if (request == null) {
+            return UUIDv7Generator.generate().toString();
         }
-
-        @ExceptionHandler(DuplicateRedemptionException.class)
-        public ResponseEntity<ApiError> handleDuplicateRedemption(
-                        DuplicateRedemptionException ex, HttpServletRequest request, HttpServletResponse response) {
-                String path = request != null ? request.getRequestURI() : "";
-                log.warn("Duplicate redemption on {}: {}", path, ex.getMessage());
-                String correlationId = resolveCorrelationId(request);
-                response.setHeader(X_CORRELATION_ID, correlationId);
-
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                                .body(ApiError.of(
-                                                "DUPLICATE_REDEMPTION",
-                                                ex.getMessage(),
-                                                HttpStatus.CONFLICT.value(),
-                                                Instant.now(clock).toString(),
-                                                correlationId));
+        String correlationId = request.getHeader(X_CORRELATION_ID);
+        if (correlationId == null || correlationId.isBlank()) {
+            return UUIDv7Generator.generate().toString();
         }
-
-        @ExceptionHandler(CrmResourceNotFoundException.class)
-        public ResponseEntity<ApiError> handleNotFound(
-                        CrmResourceNotFoundException ex, HttpServletRequest request, HttpServletResponse response) {
-                String path = request != null ? request.getRequestURI() : "";
-                log.warn("Resource not found on {}: {}", path, ex.getMessage());
-                String correlationId = resolveCorrelationId(request);
-                response.setHeader(X_CORRELATION_ID, correlationId);
-
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                                .body(ApiError.of(
-                                                "RESOURCE_NOT_FOUND",
-                                                ex.getMessage(),
-                                                HttpStatus.NOT_FOUND.value(),
-                                                Instant.now(clock).toString(),
-                                                correlationId));
-        }
-
-        @ExceptionHandler(CrmDuplicateResourceException.class)
-        public ResponseEntity<ApiError> handleDuplicateResource(
-                        CrmDuplicateResourceException ex, HttpServletRequest request, HttpServletResponse response) {
-                String path = request != null ? request.getRequestURI() : "";
-                log.warn("Duplicate resource on {}: {}", path, ex.getMessage());
-                String correlationId = resolveCorrelationId(request);
-                response.setHeader(X_CORRELATION_ID, correlationId);
-
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                                .body(ApiError.of(
-                                                "DUPLICATE_RESOURCE",
-                                                ex.getMessage(),
-                                                HttpStatus.CONFLICT.value(),
-                                                Instant.now(clock).toString(),
-                                                correlationId));
-        }
-
-        /**
-         * A structurally valid request whose content the domain refuses — currently the
-         * segment predicate validator (Story #1137). ADR-0017 maps this to {@code 422}
-         * so callers can distinguish it from a malformed body ({@code 400}).
-         */
-        @ExceptionHandler(CrmUnprocessableEntityException.class)
-        public ResponseEntity<ApiError> handleUnprocessable(
-                        CrmUnprocessableEntityException ex, HttpServletRequest request, HttpServletResponse response) {
-                String path = request != null ? request.getRequestURI() : "";
-                log.warn("Unprocessable entity on {}: {}", path, ex.getMessage());
-                String correlationId = resolveCorrelationId(request);
-                response.setHeader(X_CORRELATION_ID, correlationId);
-
-                return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
-                                .body(ApiError.of(
-                                                "UNPROCESSABLE_CONTENT",
-                                                ex.getMessage(),
-                                                HttpStatus.UNPROCESSABLE_CONTENT.value(),
-                                                Instant.now(clock).toString(),
-                                                correlationId));
-        }
-
-        /**
-         * Rate limit exceeded on the public inquiry form. The message is deliberately
-         * generic — a
-         * response that revealed the exact limit or remaining quota would just tell an
-         * abuser how
-         * to pace themselves.
-         */
-        @ExceptionHandler(CrmTooManyRequestsException.class)
-        public ResponseEntity<ApiError> handleTooManyRequests(
-                        CrmTooManyRequestsException ex, HttpServletRequest request, HttpServletResponse response) {
-                String path = request != null ? request.getRequestURI() : "";
-                log.warn("Rate limit exceeded on {}", path);
-                String correlationId = resolveCorrelationId(request);
-                response.setHeader(X_CORRELATION_ID, correlationId);
-
-                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                                .body(ApiError.of(
-                                                "TOO_MANY_REQUESTS",
-                                                ex.getMessage(),
-                                                HttpStatus.TOO_MANY_REQUESTS.value(),
-                                                Instant.now(clock).toString(),
-                                                correlationId));
-        }
-
-        @ExceptionHandler(MethodArgumentNotValidException.class)
-        public ResponseEntity<ApiError> handleMethodArgumentNotValid(
-                        MethodArgumentNotValidException ex, HttpServletRequest request, HttpServletResponse response) {
-                String path = request != null ? request.getRequestURI() : "";
-                log.warn("Validation failed on {}: {}", path, ex.getMessage());
-                String correlationId = resolveCorrelationId(request);
-                response.setHeader(X_CORRELATION_ID, correlationId);
-
-                List<ApiError.FieldError> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
-                                .map(fe -> new ApiError.FieldError(
-                                                fe.getField(),
-                                                fe.getDefaultMessage() != null ? fe.getDefaultMessage()
-                                                                : "Invalid value"))
-                                .toList();
-
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                                .body(ApiError.withFieldErrors(
-                                                "VALIDATION_FAILED",
-                                                "Request validation failed",
-                                                HttpStatus.BAD_REQUEST.value(),
-                                                Instant.now(clock).toString(),
-                                                correlationId,
-                                                fieldErrors));
-        }
-
-        @ExceptionHandler(IllegalArgumentException.class)
-        public ResponseEntity<ApiError> handleIllegalArgument(
-                        IllegalArgumentException ex, HttpServletRequest request, HttpServletResponse response) {
-                String path = request != null ? request.getRequestURI() : "";
-                log.warn("Invalid argument on {}: {}", path, ex.getMessage());
-                String correlationId = resolveCorrelationId(request);
-                response.setHeader(X_CORRELATION_ID, correlationId);
-
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                                .body(ApiError.of(
-                                                "VALIDATION_ERROR",
-                                                ex.getMessage(),
-                                                HttpStatus.BAD_REQUEST.value(),
-                                                Instant.now(clock).toString(),
-                                                correlationId));
-        }
-
-        private String resolveCorrelationId(HttpServletRequest request) {
-                if (request == null) {
-                        return UUIDv7Generator.generate().toString();
-                }
-                String correlationId = request.getHeader(X_CORRELATION_ID);
-                if (correlationId == null || correlationId.isBlank()) {
-                        return UUIDv7Generator.generate().toString();
-                }
-                return correlationId;
-        }
+        return correlationId;
+    }
 }

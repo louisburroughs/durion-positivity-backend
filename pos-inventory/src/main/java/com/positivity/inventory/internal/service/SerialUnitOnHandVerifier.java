@@ -45,7 +45,9 @@ public class SerialUnitOnHandVerifier {
         this.driftCounter = meterRegistry.counter("inventory.serial_unit.drift.total");
     }
 
-    @Scheduled(fixedDelayString = "${pos.inventory.serial-unit.verify-interval-ms:3600000}", initialDelayString = "${pos.inventory.serial-unit.verify-initial-delay-ms:600000}")
+    @Scheduled(
+            fixedDelayString = "${pos.inventory.serial-unit.verify-interval-ms:3600000}",
+            initialDelayString = "${pos.inventory.serial-unit.verify-initial-delay-ms:600000}")
     @Transactional(readOnly = true)
     public void verifyScheduled() {
         try {
@@ -72,8 +74,8 @@ public class SerialUnitOnHandVerifier {
      * @return number of drifted keys
      */
     public int verify() {
-        List<InventorySerialUnitRepository.SerialOnHandRow> rows = serialRepository
-                .serialOnHandByStockItemAndLocation(InventorySerialStatus.IN_STOCK);
+        List<InventorySerialUnitRepository.SerialOnHandRow> rows =
+                serialRepository.serialOnHandByStockItemAndLocation(InventorySerialStatus.IN_STOCK);
 
         int driftedKeys = 0;
         for (InventorySerialUnitRepository.SerialOnHandRow row : rows) {

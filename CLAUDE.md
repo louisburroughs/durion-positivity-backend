@@ -36,7 +36,11 @@ Each service owns its own database schema; there are no cross-service foreign ke
 # Cross-module ArchUnit architecture tests (run after touching package layout)
 ./mvnw -pl pos-archunit -am -Dtest=ArchitectureTests test
 
-# Format code (Palantir Java Format via Spotless) — run before committing
+# Format code (Palantir Java Format via Spotless) — run before committing.
+# `spotless:check` is bound to the `validate` phase, so an unformatted file
+# fails the build up front. Bypass with -Dspotless.check.skip=true while iterating.
+# Note: spotless:apply formats main *and* test sources in the modules you pass,
+# so check `git status` before staging if you only meant to touch tests.
 ./mvnw spotless:apply
 
 # Run a single service locally (random port, registers with Eureka)

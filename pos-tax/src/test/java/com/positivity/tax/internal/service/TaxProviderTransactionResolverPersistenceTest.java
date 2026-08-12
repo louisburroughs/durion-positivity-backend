@@ -15,9 +15,9 @@ import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
@@ -53,18 +53,19 @@ import org.springframework.test.context.ActiveProfiles;
  * "Unit Tests (pos-tax)" CI job whose multi-minute hang motivated the resolver
  * rework.
  */
-@DataJpaTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:pos_tax_resolver;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-        "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-        "spring.jpa.hibernate.ddl-auto=validate",
-        "spring.flyway.enabled=true",
-        "spring.flyway.locations=classpath:db/migration"
-})
+@DataJpaTest(
+        properties = {
+            "spring.datasource.url=jdbc:h2:mem:pos_tax_resolver;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
+            "spring.datasource.driver-class-name=org.h2.Driver",
+            "spring.datasource.username=sa",
+            "spring.datasource.password=",
+            "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
+            "spring.jpa.hibernate.ddl-auto=validate",
+            "spring.flyway.enabled=true",
+            "spring.flyway.locations=classpath:db/migration"
+        })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({ TaxProviderTransactionResolver.class, TaxProviderTransactionResolverPersistenceTest.TestClockConfig.class })
+@Import({TaxProviderTransactionResolver.class, TaxProviderTransactionResolverPersistenceTest.TestClockConfig.class})
 @ActiveProfiles("test")
 class TaxProviderTransactionResolverPersistenceTest {
 
