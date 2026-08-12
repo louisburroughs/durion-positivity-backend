@@ -299,10 +299,10 @@ exists now that every module is measured. The merged priority order is:
 | 2 | pos-customer | 61.5 | 2,067 | **In progress — 85.9% line / 70.6% branch unit-only** (see §4.3) |
 | 3 | pos-order | 53.4 | 1,510 | **In progress — 83.6% line / 67.7% branch unit-only** (see §4.2) |
 | 4 | ~~pos-marketing~~ | 28.1 | 889 | **Done — now 87.9% line / 82.9% branch, 150 missed** (see §4.1) |
-| 5 | pos-people | 61.5 | 1,101 | Large gap, thin suite |
-| 6 | pos-invoice | 63.4 | 1,210 | Large gap, **0 ITs** |
+| 5 | pos-people | 61.5 | 1,101 | **In progress — 79.4% line / 63.6% branch unit-only** (§4.4) |
+| 6 | pos-invoice | 63.4 | 1,210 | **In progress — 77.7% line / 64.0% branch unit-only**; still **0 ITs** (§4.4) |
 | 7 | pos-workorder | 73.0 | 2,012 | Large absolute gap despite decent ratio |
-| 8 | pos-people-contact | 45.6 | 803 | Low ratio and low branch coverage (26.9%) |
+| 8 | pos-people-contact | 45.6 | 803 | **In progress — 65.2% line / 52.3% branch unit-only** (§4.4) |
 | 9 | pos-vehicle-inventory | 28.8 | 695 | Third-lowest coverage overall |
 | 10 | pos-catalog | 68.3 | 891 | Branch coverage (46.3%) is the real weakness |
 | 11 | pos-document-helper | 44.4 | 208 | Shared library; `DocumentServiceClient` 80 missed at 0% |
@@ -436,6 +436,54 @@ Remaining in `pos-customer`, largest first: `SegmentResolutionService` (64 misse
 58.5%), `SegmentPredicateValidator` (26, 71.4%), and the CRM controllers
 (`CustomerController` 26, `CrmPartyRelationshipController` 24, `CrmPersonController`
 21 — all want `@WebMvcTest` slices).
+
+### 4.4 pos-people, pos-invoice, pos-people-contact progress (2026-08-11)
+
+All figures **unit-only** (`-DskipITs`). As with `pos-customer`, the §1.5
+baselines were stale: measured starting points were `pos-people` 66.2% (not
+61.5%), `pos-invoice` 67.5% (not 63.4%), `pos-people-contact` 54.8% (not 45.6%).
+
+| Module | Line | Branch | Missed lines |
+|---|---|---|---|
+| pos-people | 66.2% → **79.4%** | 53.3% → **63.6%** | 965 → 588 |
+| pos-invoice | 67.5% → **77.7%** | 58.2% → **64.0%** | 1,075 → 739 |
+| pos-people-contact | 54.8% → **65.2%** | 38.3% → **52.3%** | 667 → 514 |
+
+The dominant find was that **wave 1e is far from closed repo-wide**: every Kafka
+listener in `pos-people` (5 classes) and `pos-invoice` (7) was at 0%. Both
+modules' listeners fall into two internally-identical families — replica
+listeners and reconciliation manifest listeners — so each family's shared
+contract is now pinned once in a parameterized contract test, with only per-owner
+field mapping covered separately. That pattern (first used for `pos-order`) is
+the cheapest way to close the remaining wave-1e surface elsewhere.
+
+One cross-module inconsistency is now pinned rather than "fixed": whether a
+replica listener records a `processed_events` row for an event type it ignores
+depends on **whether that owner has a manifest listener in the same module**.
+`pos-order`'s listeners skip the row; `pos-people`'s and `pos-invoice`'s record
+it, because their manifest listeners compare against the owner's count of every
+fact in the window. `pos-people`'s workorder listener skips it, correctly, since
+that module runs no workorder manifest listener. Aligning these without moving
+the manifest listeners would break one side or the other.
+
+**A recurring Jackson 3 hazard, worth a decision.** `FAIL_ON_NULL_FOR_PRIMITIVES`
+is on by default, so a payload that simply **omits** a primitive field
+(`boolean`, `int`) fails deserialization. In a replica listener that failure
+lands in the malformed-payload branch: the fact is **silently dropped and still
+marked processed**, so reconciliation will not flag it either. It bit three
+event records during this work (`OrderInvoiceResponse.existing`,
+`CustomerPartyUpdatedV1.requirementsMet`, `LocationUpdatedV1.active`). Producers
+in this repo always send the field, so nothing is broken today — but a producer
+that ever omits one gets silent data loss with no signal. Worth deciding whether
+to box these fields, or relax the setting on consumer mappers.
+
+Remaining in these three: `pos-people-contact` `PersonServiceImpl` (127 missed),
+`PeopleContactCommandListener` (61), `PeopleExceptionHandler` (58),
+`LinkCommandHandler` (31); `pos-invoice` `InvoiceArtifactService` (65),
+`PaymentEventPublisher` (54), `InvoiceEventPublisher` (47),
+`InvoiceExceptionHandler` (40), `TaxServiceClient` (32); `pos-people`
+`EmployeeServiceImpl` (38), `PeopleExceptionHandler` (27), and two DTO classes
+(66 combined).
 
 The per-module detail below predates the measurement and is kept for the specific
 class-level targets it names.
