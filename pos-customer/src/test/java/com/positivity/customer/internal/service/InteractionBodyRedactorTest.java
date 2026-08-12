@@ -5,7 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** Story #1141: interaction bodies are human-typed, so they accumulate contact details. */
+/**
+ * Story #1141: interaction bodies are human-typed, so they accumulate contact
+ * details.
+ */
 class InteractionBodyRedactorTest {
 
     @Test
@@ -13,6 +16,14 @@ class InteractionBodyRedactorTest {
     void masksEmail() {
         assertThat(InteractionBodyRedactor.redact("Customer asked us to use jane@example.com instead"))
                 .isEqualTo("Customer asked us to use [redacted-email] instead");
+    }
+
+    @Test
+    @DisplayName("does not partially mask an email-like token with an overlong local part")
+    void leavesOverlongEmailLikeTokenAlone() {
+        String overlongAddress = "a".repeat(65) + "@example.com";
+
+        assertThat(InteractionBodyRedactor.redact(overlongAddress)).isEqualTo(overlongAddress);
     }
 
     @Test

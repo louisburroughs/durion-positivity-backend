@@ -3,6 +3,7 @@ package com.positivity.price.internal.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -46,6 +47,15 @@ public class PriceQuoteRequest {
             nullable = true)
     private Instant effectiveTimestamp;
 
+    @Schema(
+            description = "Optional ISO 4217 currency code for the quote; defaults to the company default"
+                    + " currency (pos.price.default-currency) when omitted. Base price and location override"
+                    + " selection are filtered to this currency",
+            example = "USD",
+            nullable = true)
+    @Pattern(regexp = "^[A-Za-z]{3}$", message = "currency must be a 3-letter ISO code")
+    private String currency;
+
     public UUID getProductId() {
         return productId;
     }
@@ -84,5 +94,13 @@ public class PriceQuoteRequest {
 
     public void setEffectiveTimestamp(Instant effectiveTimestamp) {
         this.effectiveTimestamp = effectiveTimestamp;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
     }
 }

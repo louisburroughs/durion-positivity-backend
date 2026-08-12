@@ -80,8 +80,8 @@ class PriceQuoteContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     @Test
-    @DisplayName("givenNonExistentProduct_whenPriceQuoteRequested_thenReturns404")
-    void givenNonExistentProduct_whenPriceQuoteRequested_thenReturns404() throws Exception {
+    @DisplayName("givenNoApplicableBasePriceWindow_whenPriceQuoteRequested_thenReturns404")
+    void givenNoApplicableBasePriceWindow_whenPriceQuoteRequested_thenReturns404() throws Exception {
         ObjectNode request = baseValidRequest();
         request.put(
                 "productId",
@@ -91,7 +91,7 @@ class PriceQuoteContractBehaviorIT extends BaseContractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+                .andExpect(jsonPath("$.code").value("PRICE_BASE_UNAVAILABLE"));
     }
 
     @Test
@@ -118,6 +118,60 @@ class PriceQuoteContractBehaviorIT extends BaseContractIntegrationTest {
                         .content(objectMapper.writeValueAsString(request))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("givenExplicitUsdCurrency_whenPriceQuoteRequested_thenMatchesDefaultCurrencyResolution")
+    void givenExplicitUsdCurrency_whenPriceQuoteRequested_thenMatchesDefaultCurrencyResolution() throws Exception {
+        ObjectNode request = baseValidRequest();
+        request.put("currency", "usd");
+
+        mockMvc.perform(withGatewayAuth(post("/v1/price/quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.unitPrice.currency").value("USD"))
+                .andExpect(jsonPath("$.unitPrice.amount").value(85.50));
+    }
+
+    @Test
+    @DisplayName("givenCadCurrency_whenPriceQuoteRequested_thenResolvesCadWindowWithoutUsdOverride")
+    void givenCadCurrency_whenPriceQuoteRequested_thenResolvesCadWindowWithoutUsdOverride() throws Exception {
+        ObjectNode request = baseValidRequest();
+        request.put("currency", "CAD");
+
+        mockMvc.perform(withGatewayAuth(post("/v1/price/quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.unitPrice.currency").value("CAD"))
+                .andExpect(jsonPath("$.msrp.amount").value(130.0000))
+                .andExpect(jsonPath("$.unitPrice.amount").value(117.00));
+    }
+
+    @Test
+    @DisplayName("givenCurrencyWithoutWindow_whenPriceQuoteRequested_thenReturns404PriceBaseUnavailable")
+    void givenCurrencyWithoutWindow_whenPriceQuoteRequested_thenReturns404PriceBaseUnavailable() throws Exception {
+        ObjectNode request = baseValidRequest();
+        request.put("currency", "EUR");
+
+        mockMvc.perform(withGatewayAuth(post("/v1/price/quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PRICE_BASE_UNAVAILABLE"));
+    }
+
+    @Test
+    @DisplayName("givenMalformedCurrency_whenPriceQuoteRequested_thenReturns400")
+    void givenMalformedCurrency_whenPriceQuoteRequested_thenReturns400() throws Exception {
+        ObjectNode request = baseValidRequest();
+        request.put("currency", "DOLLARS");
+
+        mockMvc.perform(withGatewayAuth(post("/v1/price/quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))))
+                .andExpect(status().isBadRequest());
     }
 
     private ObjectNode baseValidRequest() {
