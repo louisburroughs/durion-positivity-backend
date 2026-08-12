@@ -853,3 +853,8 @@ louisburroughs/durion-positivity-backend#1265 and listed below.
   The same helper is copied into `pos-vehicle-reference-carapi`, where both call
   sites happen to cancel out — correct by accident, and a trap for anyone who
   fixes the name alone.
+- louisburroughs/durion-positivity-backend#1267 — `pos-vehicle-reference-carapi`
+  conflates its own primary key with CarAPI's make id inside one method, so no
+  argument to `GET /models/{makeId}` is correct for all three of its uses; the
+  `CarApiModelResponse.makeId` field also contradicts its own schema. Raised by
+  Copilot on PR #1266, which spotted the DTO half.

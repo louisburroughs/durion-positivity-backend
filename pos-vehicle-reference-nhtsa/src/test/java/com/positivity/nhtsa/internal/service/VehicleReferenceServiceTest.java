@@ -159,13 +159,17 @@ class VehicleReferenceServiceTest {
     @DisplayName("refetches manufacturers once the cache falls outside the 24h window")
     void staleManufacturersRefetched() {
         when(manufacturerRepository.findAll()).thenReturn(List.of(manufacturer(stale())));
+        // Mfr_CommonName, not Mfr_Name: the parser reads the former, so a stub using the
+        // latter would assert a save happened while silently persisting an empty name.
         server.expect(requestTo(BASE + "/getallmanufacturers?format=json"))
                 .andRespond(withSuccess("""
-                        {"Results":[{"Mfr_ID":988,"Mfr_Name":"HONDA MOTOR CO"}]}""", MediaType.APPLICATION_JSON));
+                        {"Results":[{"Mfr_ID":988,"Mfr_CommonName":"HONDA"}]}""", MediaType.APPLICATION_JSON));
 
         service.getManufacturers();
 
-        verify(manufacturerRepository).save(any());
+        org.mockito.ArgumentCaptor<Manufacturer> captor = org.mockito.ArgumentCaptor.forClass(Manufacturer.class);
+        verify(manufacturerRepository).save(captor.capture());
+        assertThat(captor.getValue().getName()).isEqualTo("HONDA");
         server.verify();
     }
 
@@ -187,6 +191,9 @@ class VehicleReferenceServiceTest {
         assertThat(captor.getValue().getId()).isEqualTo(UUID.nameUUIDFromBytes("make-440".getBytes()));
         assertThat(captor.getValue().getName()).isEqualTo("TOYOTA");
         assertThat(captor.getValue().getCacheTimestamp()).isEqualTo(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
+        // Confirms the expectation above was actually consumed — without this the test would
+        // still pass if the service returned early on some other cache path.
+        server.verify();
     }
 
     @Test
@@ -230,6 +237,8 @@ class VehicleReferenceServiceTest {
         // vPIC changing its response shape must not surface as a raw NPE from walking a
         // missing node.
         assertThatThrownBy(() -> service.getManufacturers()).isInstanceOf(RuntimeException.class);
+        // The throw must come from parsing the response, not from failing to make the call.
+        server.verify();
     }
 
     @Test
