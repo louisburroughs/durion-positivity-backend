@@ -16,10 +16,12 @@ import org.springframework.ai.document.Document;
  */
 class RerankedContentRetrieverTest {
 
-    private static final String COMPOUND_QUERY = "what does an invoice number look like and what permission is needed to read an invoice";
+    private static final String COMPOUND_QUERY =
+            "what does an invoice number look like and what permission is needed to read an invoice";
     private static final String SINGLE_NEED_QUERY = "what permission is needed to read an invoice";
 
-    private static final String GLOSSARY_TEXT = "an invoice number will look like INV-2025-000123 with the INV prefix then year then sequence";
+    private static final String GLOSSARY_TEXT =
+            "an invoice number will look like INV-2025-000123 with the INV prefix then year then sequence";
 
     private static Document doc(String id, String text) {
         return new Document(id, text, Map.of("rag_scope", "master"));
@@ -129,7 +131,7 @@ class RerankedContentRetrieverTest {
         assertThat(RerankedContentRetriever.splitSubQueries("what is a VIN? how do I decode the check digit", 3))
                 .containsExactly("what is a VIN?", "how do I decode the check digit");
         assertThat(RerankedContentRetriever.splitSubQueries(
-                "where is the invoice PLUS ALSO what permission is required", 3))
+                        "where is the invoice PLUS ALSO what permission is required", 3))
                 .containsExactly("where is the invoice", "ALSO what permission is required");
         assertThat(RerankedContentRetriever.splitSubQueries("where is the VIN; how do I decode it", 3))
                 .containsExactly("where is the VIN;", "how do I decode it");

@@ -16,6 +16,5 @@ public interface LocationFxRateRepository extends JpaRepository<LocationFxRate, 
      * @param fiscalYear the fiscal year the rate applies to
      * @return the configured rate, or empty when the location defaults to a US plant (1.00)
      */
-    Optional<LocationFxRate> findByLocationCodeAndFiscalYear(@NonNull String locationCode,
-            int fiscalYear);
+    Optional<LocationFxRate> findByLocationCodeAndFiscalYear(@NonNull String locationCode, int fiscalYear);
 }

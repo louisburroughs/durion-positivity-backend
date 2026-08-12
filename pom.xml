@@ -537,6 +537,22 @@
 						</palantirJavaFormat>
 					</java>
 				</configuration>
+				<executions>
+					<!-- Gate formatting in the build rather than relying on contributors to
+					     remember `spotless:apply`. Without a lifecycle binding Spotless only
+					     ran when invoked by hand, and 24 files had drifted out of Palantir
+					     format on main before this binding was added.
+
+					     Bound to validate so it fails in seconds, before compilation, and
+					     skippable with -Dspotless.check.skip=true for a fast local loop. -->
+					<execution>
+						<id>spotless-check</id>
+						<phase>validate</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 			<plugin>
 				<groupId>com.github.spotbugs</groupId>

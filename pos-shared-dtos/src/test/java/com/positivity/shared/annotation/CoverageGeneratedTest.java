@@ -21,101 +21,100 @@ import org.junit.jupiter.api.Test;
 
 class CoverageGeneratedTest {
 
-  @Test
-  void exposesBytecodeVisibleCoverageMarkerForGeneratedCodeElements() throws ClassNotFoundException {
-    Class<?> annotationType = Class.forName("com.positivity.shared.annotation.CoverageGenerated");
+    @Test
+    void exposesBytecodeVisibleCoverageMarkerForGeneratedCodeElements() throws ClassNotFoundException {
+        Class<?> annotationType = Class.forName("com.positivity.shared.annotation.CoverageGenerated");
 
-    Retention retention = annotationType.getAnnotation(Retention.class);
-    Target target = annotationType.getAnnotation(Target.class);
+        Retention retention = annotationType.getAnnotation(Retention.class);
+        Target target = annotationType.getAnnotation(Target.class);
 
-    assertThat(annotationType.isAnnotation()).isTrue();
-    assertThat(retention.value()).isEqualTo(RetentionPolicy.CLASS);
-    assertThat(target.value())
-        .containsExactlyInAnyOrder(ElementType.TYPE, ElementType.METHOD, ElementType.CONSTRUCTOR);
-  }
-
-  @Test
-  void filtersAnnotatedClassCodeFromJacocoAnalysis() throws IOException {
-    CoverageBuilder coverage = analyze(TypeLevelGeneratedFixture.class);
-    IClassCoverage classCoverage = coverage.getClasses().iterator().next();
-
-    assertThat(classCoverage.getMethods()).isEmpty();
-    assertThat(classCoverage.getInstructionCounter().getTotalCount()).isZero();
-  }
-
-  @Test
-  void filtersOnlyAnnotatedMembersFromJacocoAnalysis() throws IOException {
-    CoverageBuilder coverage = analyze(MemberLevelGeneratedFixture.class);
-    IClassCoverage classCoverage = coverage.getClasses().iterator().next();
-
-    Set<String> methodNames = methodNames(classCoverage);
-
-    assertEquals(Set.of("handwrittenMethod"), methodNames);
-  }
-
-  @Test
-  void filtersLombokGeneratedMembersFromJacocoAnalysis() throws IOException {
-    CoverageBuilder coverage = analyze(LombokGeneratedFixture.class);
-    IClassCoverage classCoverage = coverage.getClasses().iterator().next();
-
-    Set<String> methodNames = methodNames(classCoverage);
-
-    assertEquals(Set.of("<init>", "handwrittenMethod"), methodNames);
-  }
-
-  private static CoverageBuilder analyze(Class<?> fixtureType) throws IOException {
-    String resourceName = fixtureType.getName().replace('.', '/') + ".class";
-    CoverageBuilder coverage = new CoverageBuilder();
-    Analyzer analyzer = new Analyzer(new ExecutionDataStore(), coverage);
-
-    try (InputStream classBytes = fixtureType.getClassLoader().getResourceAsStream(resourceName)) {
-      assertThat(classBytes).isNotNull();
-      analyzer.analyzeClass(classBytes, resourceName);
+        assertThat(annotationType.isAnnotation()).isTrue();
+        assertThat(retention.value()).isEqualTo(RetentionPolicy.CLASS);
+        assertThat(target.value())
+                .containsExactlyInAnyOrder(ElementType.TYPE, ElementType.METHOD, ElementType.CONSTRUCTOR);
     }
 
-    return coverage;
-  }
+    @Test
+    void filtersAnnotatedClassCodeFromJacocoAnalysis() throws IOException {
+        CoverageBuilder coverage = analyze(TypeLevelGeneratedFixture.class);
+        IClassCoverage classCoverage = coverage.getClasses().iterator().next();
 
-  private static Set<String> methodNames(IClassCoverage classCoverage) {
-    Set<String> methodNames = new HashSet<>();
-    classCoverage.getMethods().forEach(method -> methodNames.add(Objects.requireNonNull(method.getName())));
-    return Set.copyOf(methodNames);
-  }
-
-  @SuppressWarnings("unused")
-  @CoverageGenerated
-  private static final class TypeLevelGeneratedFixture {
-
-    String generatedMethod() {
-      return "generated";
+        assertThat(classCoverage.getMethods()).isEmpty();
+        assertThat(classCoverage.getInstructionCounter().getTotalCount()).isZero();
     }
-  }
 
-  @SuppressWarnings("unused")
-  private static final class MemberLevelGeneratedFixture {
+    @Test
+    void filtersOnlyAnnotatedMembersFromJacocoAnalysis() throws IOException {
+        CoverageBuilder coverage = analyze(MemberLevelGeneratedFixture.class);
+        IClassCoverage classCoverage = coverage.getClasses().iterator().next();
 
+        Set<String> methodNames = methodNames(classCoverage);
+
+        assertEquals(Set.of("handwrittenMethod"), methodNames);
+    }
+
+    @Test
+    void filtersLombokGeneratedMembersFromJacocoAnalysis() throws IOException {
+        CoverageBuilder coverage = analyze(LombokGeneratedFixture.class);
+        IClassCoverage classCoverage = coverage.getClasses().iterator().next();
+
+        Set<String> methodNames = methodNames(classCoverage);
+
+        assertEquals(Set.of("<init>", "handwrittenMethod"), methodNames);
+    }
+
+    private static CoverageBuilder analyze(Class<?> fixtureType) throws IOException {
+        String resourceName = fixtureType.getName().replace('.', '/') + ".class";
+        CoverageBuilder coverage = new CoverageBuilder();
+        Analyzer analyzer = new Analyzer(new ExecutionDataStore(), coverage);
+
+        try (InputStream classBytes = fixtureType.getClassLoader().getResourceAsStream(resourceName)) {
+            assertThat(classBytes).isNotNull();
+            analyzer.analyzeClass(classBytes, resourceName);
+        }
+
+        return coverage;
+    }
+
+    private static Set<String> methodNames(IClassCoverage classCoverage) {
+        Set<String> methodNames = new HashSet<>();
+        classCoverage.getMethods().forEach(method -> methodNames.add(Objects.requireNonNull(method.getName())));
+        return Set.copyOf(methodNames);
+    }
+
+    @SuppressWarnings("unused")
     @CoverageGenerated
-    MemberLevelGeneratedFixture() {
+    private static final class TypeLevelGeneratedFixture {
+
+        String generatedMethod() {
+            return "generated";
+        }
     }
 
-    @CoverageGenerated
-    String generatedMethod() {
-      return "generated";
+    @SuppressWarnings("unused")
+    private static final class MemberLevelGeneratedFixture {
+
+        @CoverageGenerated
+        MemberLevelGeneratedFixture() {}
+
+        @CoverageGenerated
+        String generatedMethod() {
+            return "generated";
+        }
+
+        String handwrittenMethod() {
+            return "handwritten";
+        }
     }
 
-    String handwrittenMethod() {
-      return "handwritten";
+    @SuppressWarnings("unused")
+    private static final class LombokGeneratedFixture {
+
+        @Getter
+        private final String generatedValue = "generated";
+
+        String handwrittenMethod() {
+            return "handwritten";
+        }
     }
-  }
-
-  @SuppressWarnings("unused")
-  private static final class LombokGeneratedFixture {
-
-    @Getter
-    private final String generatedValue = "generated";
-
-    String handwrittenMethod() {
-      return "handwritten";
-    }
-  }
 }

@@ -93,7 +93,8 @@ public class EligibilityServiceImpl implements EligibilityService {
         if (saleDate == null) {
             reasons.add(reason("originSaleDate", "known original sale date", null, null));
         } else {
-            CoverageType coverageType = CoverageType.valueOf(claim.getClaimType().name());
+            CoverageType coverageType =
+                    CoverageType.valueOf(claim.getClaimType().name());
             List<WarrantyPolicy> effective = policyRepository.findEffectiveOn(saleDate).stream()
                     .filter(p -> p.getCoverageType() == coverageType)
                     .toList();
@@ -402,8 +403,8 @@ public class EligibilityServiceImpl implements EligibilityService {
             // in the replica leaves manufacturer/category facts incomplete — the
             // eligibility scope
             // matcher treats that as it did a failed CatalogClient read.
-            Optional<ExtCatalogReplica> product = cache.computeIfAbsent(productEntityId,
-                    extCatalogReplicaRepository::findById);
+            Optional<ExtCatalogReplica> product =
+                    cache.computeIfAbsent(productEntityId, extCatalogReplicaRepository::findById);
             if (product.isPresent()) {
                 if (product.get().getManufacturerId() != null) {
                     manufacturerIds.add(product.get().getManufacturerId());
@@ -475,6 +476,5 @@ public class EligibilityServiceImpl implements EligibilityService {
      * lookup failed.
      */
     private record ProductFacts(
-            Set<UUID> productIds, Set<UUID> manufacturerIds, Set<UUID> categoryIds, boolean incomplete) {
-    }
+            Set<UUID> productIds, Set<UUID> manufacturerIds, Set<UUID> categoryIds, boolean incomplete) {}
 }

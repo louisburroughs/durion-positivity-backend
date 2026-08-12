@@ -39,54 +39,61 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasAuthority('invoice:manage')")
 public class DepositCreditController {
 
-        private final DepositCreditService depositCreditService;
+    private final DepositCreditService depositCreditService;
 
-        @Operation(summary = "Register a deposit credit taken by a sales order", description = "Creates a deposit credit record tied to the provided source transaction.", tags = {
-                        "Deposit Credits" })
-        @PostMapping
-        @EmitEvent(id = "INVOICE_DEPOSIT_CREATE", apiVersion = "1")
-        @SecurityRequirement(name = "bearerAuth")
-        public ResponseEntity<DepositCreditResponse> createDeposit(@Valid @RequestBody CreateDepositRequest request) {
-                DepositCreditResponse response = DepositCreditResponse
-                                .from(depositCreditService.createDeposit(new CreateDepositCommand(
-                                                request.getOrderId(),
-                                                request.getSourceType(),
-                                                request.getSourceId(),
-                                                request.getPartyId(),
-                                                request.getAmount(),
-                                                request.getCurrencyCode())));
-                return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        }
+    @Operation(
+            summary = "Register a deposit credit taken by a sales order",
+            description = "Creates a deposit credit record tied to the provided source transaction.",
+            tags = {"Deposit Credits"})
+    @PostMapping
+    @EmitEvent(id = "INVOICE_DEPOSIT_CREATE", apiVersion = "1")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<DepositCreditResponse> createDeposit(@Valid @RequestBody CreateDepositRequest request) {
+        DepositCreditResponse response =
+                DepositCreditResponse.from(depositCreditService.createDeposit(new CreateDepositCommand(
+                        request.getOrderId(),
+                        request.getSourceType(),
+                        request.getSourceId(),
+                        request.getPartyId(),
+                        request.getAmount(),
+                        request.getCurrencyCode())));
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
 
-        @Operation(summary = "Get a deposit credit by id", description = "Retrieves a single deposit credit by its identifier.", tags = {
-                        "Deposit Credits" })
-        @GetMapping("/{depositCreditId}")
-        @SecurityRequirement(name = "bearerAuth")
-        public ResponseEntity<DepositCreditResponse> getDeposit(@PathVariable UUID depositCreditId) {
-                return ResponseEntity.ok(DepositCreditResponse.from(depositCreditService.getDeposit(depositCreditId)));
-        }
+    @Operation(
+            summary = "Get a deposit credit by id",
+            description = "Retrieves a single deposit credit by its identifier.",
+            tags = {"Deposit Credits"})
+    @GetMapping("/{depositCreditId}")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<DepositCreditResponse> getDeposit(@PathVariable UUID depositCreditId) {
+        return ResponseEntity.ok(DepositCreditResponse.from(depositCreditService.getDeposit(depositCreditId)));
+    }
 
-        @Operation(summary = "List deposit credits held against a source document", description = "Lists all deposit credits associated with the given source type and source id.", tags = {
-                        "Deposit Credits" })
-        @GetMapping
-        @SecurityRequirement(name = "bearerAuth")
-        public ResponseEntity<List<DepositCreditResponse>> listBySource(
-                        @RequestParam String sourceType, @RequestParam UUID sourceId) {
-                DepositSourceType type = DepositSourceType.valueOf(sourceType.trim().toUpperCase(Locale.ROOT));
-                return ResponseEntity.ok(depositCreditService.listBySource(type, sourceId).stream()
-                                .map(DepositCreditResponse::from)
-                                .toList());
-        }
+    @Operation(
+            summary = "List deposit credits held against a source document",
+            description = "Lists all deposit credits associated with the given source type and source id.",
+            tags = {"Deposit Credits"})
+    @GetMapping
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<List<DepositCreditResponse>> listBySource(
+            @RequestParam String sourceType, @RequestParam UUID sourceId) {
+        DepositSourceType type = DepositSourceType.valueOf(sourceType.trim().toUpperCase(Locale.ROOT));
+        return ResponseEntity.ok(depositCreditService.listBySource(type, sourceId).stream()
+                .map(DepositCreditResponse::from)
+                .toList());
+    }
 
-        @Operation(summary = "Refund a deposit credit's remaining balance", description = "Used when the deposit's source is cancelled after the deposit was taken (spec R7.4).", tags = {
-                        "Deposit Credits" })
-        @PostMapping("/{depositCreditId}/refund")
-        @EmitEvent(id = "INVOICE_DEPOSIT_REFUND", apiVersion = "1")
-        @SecurityRequirement(name = "bearerAuth")
-        public ResponseEntity<DepositCreditResponse> refundDeposit(
-                        @PathVariable UUID depositCreditId,
-                        @RequestParam(name = "reason", required = false) String reason) {
-                depositCreditService.refundDeposit(depositCreditId, reason == null ? "source cancelled" : reason);
-                return ResponseEntity.ok(DepositCreditResponse.from(depositCreditService.getDeposit(depositCreditId)));
-        }
+    @Operation(
+            summary = "Refund a deposit credit's remaining balance",
+            description = "Used when the deposit's source is cancelled after the deposit was taken (spec R7.4).",
+            tags = {"Deposit Credits"})
+    @PostMapping("/{depositCreditId}/refund")
+    @EmitEvent(id = "INVOICE_DEPOSIT_REFUND", apiVersion = "1")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<DepositCreditResponse> refundDeposit(
+            @PathVariable UUID depositCreditId, @RequestParam(name = "reason", required = false) String reason) {
+        depositCreditService.refundDeposit(depositCreditId, reason == null ? "source cancelled" : reason);
+        return ResponseEntity.ok(DepositCreditResponse.from(depositCreditService.getDeposit(depositCreditId)));
+    }
 }
