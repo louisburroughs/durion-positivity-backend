@@ -291,7 +291,7 @@ exists now that every module is measured. The merged priority order is:
 | ---: | --- | ---: | ---: | --- |
 | 1 | ~~pos-event-receiver~~ | 3.0 | 424 | **Done** — every service registers against it; was lowest in the reactor |
 | 2 | pos-customer | 61.5 | 2,067 | Largest absolute gap; several waves landed, not yet re-measured |
-| 3 | pos-order | 53.4 | 1,510 | **In progress — 77.9% line / 60.8% branch unit-only** (see §4.2) |
+| 3 | pos-order | 53.4 | 1,510 | **In progress — 83.6% line / 67.7% branch unit-only** (see §4.2) |
 | 4 | ~~pos-marketing~~ | 28.1 | 889 | **Done — now 87.9% line / 82.9% branch, 150 missed** (see §4.1) |
 | 5 | pos-people | 61.5 | 1,101 | Large gap, thin suite |
 | 6 | pos-invoice | 63.4 | 1,210 | Large gap, **0 ITs** |
@@ -341,9 +341,9 @@ figure, which included ITs. Unit-only baseline at the start of this pass was
 
 | | Unit-only baseline | Now |
 |---|---:|---:|
-| Line | 57.5% | **77.9%** |
-| Branch | 44.0% | **60.8%** |
-| Missed lines | 1,377 | **715** |
+| Line | 57.5% | **83.6%** |
+| Branch | 44.0% | **67.7%** |
+| Missed lines | 1,377 | **530** |
 
 Delivered:
 
@@ -358,14 +358,21 @@ Delivered:
   not fulfillable.
 - **The four exception advices** (169 missed) — status/code pairings per endpoint
   family, per-line over-cap field errors, correlation-id passthrough.
+- **`OrderTaxService`** (53 at 1.9%) — every jurisdiction/tax failure raises
+  `TaxUnavailableException` instead of defaulting to zero.
+- **`RestInvoicingPortAdapter`** (56 at 6.7%) and **`CatalogPricePricingAdapter`**
+  (34 at 19.0%) — the module's two synchronous outbound calls, via
+  `MockRestServiceServer`.
+- **`ReplicaCustomerPortAdapter`** (16 at 5.9%) and **`OrderNumberService`**
+  (19 at 5.0%).
 
 Remaining in `pos-order`, largest first: `SalesOrderServiceImpl` (133 missed,
-72.4%), `ReturnOrderServiceImpl` (61, 77.4%), `RestInvoicingPortAdapter` (56,
-6.7%), `OrderTaxService` (53, 1.9%), `RegisterSessionServiceImpl` (39, 78.0%),
-`CatalogPricePricingAdapter` (34, 19.0%), `RegisterSessionController` (27),
-`ReturnOrderResponse`/`SessionReportResponse`/`RegisterSessionResponse` DTOs
-(60 combined at 0%), `OrderNumberService` (19), `ReplicaCustomerPortAdapter`
-(16).
+72.4%), `ReturnOrderServiceImpl` (61, 77.4%), `RegisterSessionServiceImpl` (39,
+78.0%), `RegisterSessionController` (27, 3.6%), `ReturnOrderController` (22,
+4.3%), the `ReturnOrderResponse`/`SessionReportResponse`/`RegisterSessionResponse`
+DTOs (60 combined at 0%, all static `from(...)` mappers), `PaymentEventsListener`
+(19, 83.9%), `PriceOverrideServiceImpl` (16, 93.2%). The two controllers want
+`@WebMvcTest` slices; the rest are ordinary unit work.
 
 The per-module detail below predates the measurement and is kept for the specific
 class-level targets it names.
