@@ -171,6 +171,13 @@ jobs:
         # failure to signal it. Fail fast here instead.
         run: ./scripts/check-coverage-aggregate-drift.sh
 
+      - name: Enforce OpenAPI inventory coverage
+        # pos-openapi-validation only walks modules registered in
+        # module-inventory.yaml, so a spec-producing module absent from it is
+        # validated by nothing — it can ship an unparseable openapi.yaml with a
+        # green build. Fail fast here instead (#1262).
+        run: ./scripts/check-openapi-inventory-drift.sh
+
       - name: Configure build cache (PR pilot)
         # Build Cache Extension pilot, PR builds only (spec §4.5). PRs skip the
         # commit-stamped revision: a version that changes every commit would poison

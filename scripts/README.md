@@ -23,6 +23,7 @@ Utility scripts for development, operations, testing, and deployment.
 | [`build-pos-accounting-baseline-from-dump.py`](#build-pos-accounting-baseline-from-dumpy) | Database | Convert `pg_dump` output to a Flyway baseline SQL file |
 | [`verify-observability.sh`](#verify-observabilitysh) | Observability | Check Jaeger, Prometheus, Grafana, and OTEL Collector health |
 | [`generate-openapi.sh`](#generate-openapish) | API | Generate per-module and aggregate OpenAPI specs |
+| [`check-openapi-inventory-drift.sh`](#check-openapi-inventory-driftsh) | API | Verify every spec-producing module is registered in `module-inventory.yaml` |
 | [`generate-permissions.sh`](#generate-permissionssh) | Permissions | Regenerate `permissions.yaml` files from `@PreAuthorize` annotations |
 | [`export-permission-registrations-yaml.py`](#export-permission-registrations-yamlpy) | Permissions | Aggregate all `permissions.yaml` manifests into one report |
 | [`redeploy-backend-tag.sh`](#redeploy-backend-tagsh) | Deployment | Update `BACKEND_TAG` and redeploy services on the alpha EC2 host |
@@ -320,6 +321,29 @@ Generates `openapi.yaml` for every configured module and creates an aggregate in
 **Notes:**
 - Requires `python3` and `PyYAML` for aggregate generation.
 - Module generation still works with `--no-aggregate`.
+
+---
+
+### `check-openapi-inventory-drift.sh`
+
+Verifies that every module with a committed `openapi.yaml` is registered in
+`pos-openapi-validation/src/test/resources/openapi/module-inventory.yaml`.
+
+`OpenApiRepositoryValidator` only walks registered modules, so an unregistered module's spec is validated by nothing — it can go missing, stop parsing, or ship operations with no `summary`/`description` while the build stays green. Four modules had drifted out this way before this check existed (#1243, #1262).
+
+**Usage:**
+```bash
+./scripts/check-openapi-inventory-drift.sh
+```
+
+**Checks:**
+- Modules with a generated `openapi.yaml` that have no inventory entry
+- Inventory entries that are not reactor modules of the root `pom.xml` (stale after a rename or removal)
+
+**Notes:**
+- Exits non-zero on either kind of drift; runs in CI alongside the other drift guards.
+- Registration mode is not checked — only presence. A module that cannot be made `STRICT`-clean should be registered `REPORT_ONLY` or `EXCEPTION` rather than left out.
+- `EXEMPT_MODULES` in the script exists for specs the validator cannot load at all; prefer an `EXCEPTION` entry with a reason in the inventory itself.
 
 ---
 
