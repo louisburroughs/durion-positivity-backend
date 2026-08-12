@@ -116,13 +116,25 @@ class ClaimContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("still creates the claim when the vehicle replica is empty (walk-in resilience)")
     void emptyReplicaStillCreates() throws Exception {
         // No replica row for this vehicle — the event feed has not caught up, or never will.
-        mockMvc.perform(withClaimAuth(post("/v1/warranty/claims")
+        MvcResult result = mockMvc.perform(withClaimAuth(post("/v1/warranty/claims")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(claimBody(UUID.randomUUID()))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("DRAFT"))
-                // The snapshot stays null rather than the intake being rejected.
-                .andExpect(jsonPath("$.vin").doesNotExist());
+                .andReturn();
+
+        // The snapshot stays null rather than the intake being rejected. Asserted on the
+        // persisted row, not the JSON: jsonPath's doesNotExist() passes for both an absent
+        // property and an explicit "vin": null, so it cannot distinguish the two — the
+        // database column can (review feedback on #1256).
+        UUID claimId = UUID.fromString(objectMapper
+                .readTree(result.getResponse().getContentAsString())
+                .path("id")
+                .asString());
+        assertThat(claimRepository.findById(claimId)).isPresent().hasValueSatisfying(claim -> {
+            assertThat(claim.getVin()).isNull();
+            assertThat(claim.getOdometerAtClaim()).isNull();
+        });
     }
 
     @Test
