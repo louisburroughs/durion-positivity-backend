@@ -99,6 +99,7 @@ class SecurityServiceClientTest {
                     .get()
                     .extracting(u -> u.getId())
                     .isEqualTo(USER_ID);
+            server.verify();
         }
 
         @Test
@@ -108,6 +109,7 @@ class SecurityServiceClientTest {
                     .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
 
             assertThat(client.getUserByUsername("nobody")).isEmpty();
+            server.verify();
         }
 
         @Test
@@ -124,6 +126,7 @@ class SecurityServiceClientTest {
             setUp();
             server.expect(requestTo("http://security/v1/users")).andRespond(withServerError());
             assertThatThrownBy(() -> client.getUserByUsername("ada")).isInstanceOf(SecurityServiceException.class);
+            server.verify();
         }
 
         @Test
@@ -134,6 +137,7 @@ class SecurityServiceClientTest {
 
             // Returning empty here would read as "this user genuinely does not exist".
             assertThatThrownBy(() -> client.getUserByUsername("ada")).isInstanceOf(IllegalStateException.class);
+            server.verify();
         }
     }
 
@@ -153,6 +157,7 @@ class SecurityServiceClientTest {
                     .singleElement()
                     .extracting(r -> r.getCode())
                     .isEqualTo("TECH");
+            server.verify();
         }
 
         @Test
@@ -165,6 +170,7 @@ class SecurityServiceClientTest {
             server.expect(requestTo("http://security/v1/roles?scopeType=LOCATION"))
                     .andRespond(withResourceNotFound());
             assertThatThrownBy(() -> client.getAvailableRoles("LOCATION")).isInstanceOf(EntityNotFoundException.class);
+            server.verify();
         }
 
         @Test
@@ -188,6 +194,7 @@ class SecurityServiceClientTest {
 
             assertThatThrownBy(() -> client.getUserRoleAssignments(USER_ID, false, null))
                     .isInstanceOf(IllegalStateException.class);
+            server.verify();
         }
     }
 
@@ -257,6 +264,7 @@ class SecurityServiceClientTest {
                                     .build())
                             .getActive())
                     .isFalse();
+            server.verify();
         }
 
         @Test
@@ -273,6 +281,7 @@ class SecurityServiceClientTest {
                                     .build())
                             .getActive())
                     .isFalse();
+            server.verify();
         }
 
         @Test
@@ -285,6 +294,7 @@ class SecurityServiceClientTest {
                             .roleCode("GHOST")
                             .build()))
                     .isInstanceOf(EntityNotFoundException.class);
+            server.verify();
         }
 
         @Test
@@ -298,6 +308,7 @@ class SecurityServiceClientTest {
                             .roleCode("TECH")
                             .build()))
                     .isInstanceOf(SecurityServiceException.class);
+            server.verify();
         }
     }
 
@@ -372,6 +383,7 @@ class SecurityServiceClientTest {
 
             assertThatThrownBy(() -> client.revokeRole(USER_ID, "TECH", null))
                     .isInstanceOf(EntityNotFoundException.class);
+            server.verify();
         }
     }
 
