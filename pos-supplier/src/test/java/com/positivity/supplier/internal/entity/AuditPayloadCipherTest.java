@@ -246,6 +246,25 @@ class AuditPayloadCipherTest {
                     .hasFieldOrPropertyWithValue("code", PayloadUnreadableException.UNKNOWN_KEY_ID)
                     .hasMessageContaining("previous-keys");
         }
+
+        /**
+         * A key id containing a colon is refused structurally, naming the id as the problem.
+         *
+         * <p>Without this the first colon is taken as the separator, the remainder fails base-64 decoding,
+         * and the operator is told the KEY is malformed when the real fault is its ID — during a
+         * fail-closed startup, which is the worst moment for a message that points at the wrong thing.
+         */
+        @Test
+        void aKeyIdContainingAColonIsRefusedAsAnIdProblemNotABase64Problem() {
+            assertThatThrownBy(() -> cipher(KEY_A, "k1", "k9:2024:" + KEY_B, "test"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("key ids must not")
+                    .hasMessageContaining("':'")
+                    // The old failure mode: the remainder was handed to the base-64 parser, which reported
+                    // the KEY as invalid. The message must not say that, and must never echo key material.
+                    .hasMessageNotContaining("not valid base64")
+                    .hasMessageNotContaining(KEY_B);
+        }
     }
 
     // ── Key policy ──────────────────────────────────────────────────────────────────

@@ -22,6 +22,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpTimeoutException;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
@@ -112,6 +113,41 @@ class SupplierBaseClientTest {
             assertThat(server.header(SupplierCorrelationContext.CORRELATION_HEADER))
                     .as("every exchange must be traceable")
                     .hasSize(1);
+        }
+
+        /**
+         * A vendor's declared charset is honoured, so the audit trail records what the vendor actually
+         * said rather than a UTF-8 misreading of it.
+         *
+         * <p>EDIFACT is Latin-1 by convention. Decoding it as UTF-8 turns every byte in
+         * {@code 0x80-0xFF} into {@code U+FFFD}: the exchange still succeeds, so nothing surfaces, and the
+         * mangled text is what gets encrypted into the exchange audit as the commercial record. The loss is
+         * silent and unrecoverable, which is why it is pinned before any codec ships.
+         */
+        @Test
+        void aDeclaredCharsetIsHonouredSoTheAuditRecordsWhatTheVendorActuallySent() {
+            // Accented characters only: in Latin-1 each is a single byte >= 0x80 that is not valid UTF-8,
+            // so a UTF-8 read substitutes U+FFFD instead of failing loudly.
+            String vendorText = "Pneus Michelin - Ø205 côté gauche";
+            server.respondOkRaw("text/plain; charset=ISO-8859-1", vendorText.getBytes(StandardCharsets.ISO_8859_1));
+
+            SupplierHttpResponse response = client.exchange(request(HttpMethod.GET, null, 0, null));
+
+            assertThat(response.outcome()).isEqualTo(ExchangeOutcome.OK);
+            assertThat(response.body())
+                    .as("the vendor declared ISO-8859-1; reading it as UTF-8 would corrupt the stored record")
+                    .isEqualTo(vendorText)
+                    .doesNotContain("�");
+        }
+
+        @Test
+        void anUndeclaredCharsetFallsBackToUtf8NotThePlatformDefault() {
+            String utf8Text = "{\"name\":\"Michelin Ø205\"}";
+            server.respondOkRaw("application/json", utf8Text.getBytes(StandardCharsets.UTF_8));
+
+            SupplierHttpResponse response = client.exchange(request(HttpMethod.GET, null, 0, null));
+
+            assertThat(response.body()).isEqualTo(utf8Text);
         }
 
         @Test

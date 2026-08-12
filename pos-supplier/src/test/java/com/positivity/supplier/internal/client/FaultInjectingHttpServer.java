@@ -45,6 +45,10 @@ final class FaultInjectingHttpServer implements AutoCloseable {
     private final AtomicReference<Fault> fault = new AtomicReference<>(Fault.NONE);
     private final AtomicInteger status = new AtomicInteger(200);
     private final AtomicReference<String> body = new AtomicReference<>("{}");
+    // Response shape, so a test can serve a vendor's declared charset and the exact bytes on the wire.
+    // Response-side only: this fixture deliberately grows no request-verification features.
+    private final AtomicReference<String> responseContentType = new AtomicReference<>("application/json");
+    private final AtomicReference<byte[]> rawBody = new AtomicReference<>();
     private final AtomicInteger receivedRequests = new AtomicInteger();
     private final AtomicInteger hangMillis = new AtomicInteger(5_000);
     private final Map<String, List<String>> lastHeaders = new ConcurrentHashMap<>();
@@ -111,6 +115,18 @@ final class FaultInjectingHttpServer implements AutoCloseable {
         return this;
     }
 
+    /**
+     * Answer 200 with exact bytes under an exact {@code Content-Type}, so a test can reproduce a vendor
+     * that serves a non-UTF-8 charset. Passing the bytes rather than a String is the point: encoding them
+     * here would presume the charset under test.
+     */
+    FaultInjectingHttpServer respondOkRaw(String contentType, byte[] responseBytes) {
+        fault.set(Fault.NONE);
+        responseContentType.set(contentType);
+        rawBody.set(responseBytes);
+        return this;
+    }
+
     /** Accept the request and never answer, so the client hits its read timeout. */
     FaultInjectingHttpServer hang() {
         fault.set(Fault.HANG);
@@ -173,8 +189,8 @@ final class FaultInjectingHttpServer implements AutoCloseable {
                     }
                 }
                 case RESET -> exchange.close();
-                case STATUS -> respond(exchange, status.get(), body.get());
-                case NONE -> respond(exchange, 200, body.get());
+                case STATUS -> respond(exchange, status.get(), body.get(), responseContentType.get(), null);
+                case NONE -> respond(exchange, 200, body.get(), responseContentType.get(), rawBody.get());
             }
         } finally {
             if (current != Fault.RESET) {
@@ -183,9 +199,16 @@ final class FaultInjectingHttpServer implements AutoCloseable {
         }
     }
 
-    private static void respond(HttpExchange exchange, int statusCode, String payload) throws IOException {
-        byte[] bytes = payload == null ? new byte[0] : payload.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
+    private static void respond(
+            HttpExchange exchange, int statusCode, String payload, String contentType, byte[] preEncoded)
+            throws IOException {
+        byte[] bytes;
+        if (preEncoded != null) {
+            bytes = preEncoded;
+        } else {
+            bytes = payload == null ? new byte[0] : payload.getBytes(StandardCharsets.UTF_8);
+        }
+        exchange.getResponseHeaders().add("Content-Type", contentType);
         exchange.sendResponseHeaders(statusCode, bytes.length);
         try (OutputStream out = exchange.getResponseBody()) {
             out.write(bytes);

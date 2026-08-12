@@ -104,6 +104,22 @@ class AuthReferenceRulesTest {
         assertRule(withRef(valid(type), field, "env:EXTRA"), SupplierValidationException.AUTH_REFS_INCOMPLETE);
     }
 
+    /**
+     * A blank value on a non-applicable field is rejected at write time, rather than being read as
+     * "absent" and left to fail when the reference is resolved mid-exchange.
+     *
+     * <p>Pinned because the asymmetry invites the opposite reading: {@code requireRef} rejects
+     * null-or-blank while {@code forbidRef} rejects any non-null, so it looks as though a blank slips
+     * through the forbidden case. It does not — and the distinction is the whole point of this class,
+     * which exists to move credential-shape failures from call time to write time.
+     */
+    @ParameterizedTest(name = "{0} with a blank {1} is rejected at write time, not at call time")
+    @MethodSource("forbiddenRefs")
+    void blankNonApplicableRefIsRejectedAtWriteTime(String type, String field) {
+        assertRule(withRef(valid(type), field, ""), SupplierValidationException.AUTH_REFS_INCOMPLETE);
+        assertRule(withRef(valid(type), field, "   "), SupplierValidationException.AUTH_REFS_INCOMPLETE);
+    }
+
     // ── Scheme allowlist: well-formed but unresolvable schemes are plaintext ────────
 
     /**

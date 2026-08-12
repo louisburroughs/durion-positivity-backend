@@ -20,6 +20,8 @@ import java.net.URI;
 import java.net.UnknownHostException;
 import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpTimeoutException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -32,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
@@ -297,7 +300,7 @@ public class SupplierBaseClient {
                     attemptNumber,
                     ExchangeOutcome.OK,
                     status,
-                    decode(entity.getBody()),
+                    decode(entity.getBody(), entity.getHeaders().getContentType()),
                     null,
                     started,
                     Instant.now(clock));
@@ -367,9 +370,26 @@ public class SupplierBaseClient {
         }
     }
 
+    /**
+     * Decodes a response body using the charset the vendor declared, falling back to UTF-8 when the
+     * {@code Content-Type} carries none.
+     *
+     * <p>Decoding unconditionally as UTF-8 would be wrong for the formats this transport exists to
+     * carry: EDIFACT is Latin-1 by convention, so every byte in {@code 0x80-0xFF} would become
+     * {@code U+FFFD}. That loss is not recoverable and not visible — the exchange succeeds, and the
+     * garbled text is what gets encrypted into the audit trail as the commercial record of what the
+     * vendor actually said. A declared charset is therefore honoured even though no codec ships yet.
+     *
+     * <p>UTF-8 remains the fallback rather than the platform default, which would make stored payloads
+     * depend on the JVM's locale.
+     */
     @Nullable
-    private static String decode(byte @Nullable [] body) {
-        return body == null ? null : new String(body, java.nio.charset.StandardCharsets.UTF_8);
+    private static String decode(byte @Nullable [] body, @Nullable MediaType contentType) {
+        if (body == null) {
+            return null;
+        }
+        Charset charset = contentType == null ? null : contentType.getCharset();
+        return new String(body, charset == null ? StandardCharsets.UTF_8 : charset);
     }
 
     /**

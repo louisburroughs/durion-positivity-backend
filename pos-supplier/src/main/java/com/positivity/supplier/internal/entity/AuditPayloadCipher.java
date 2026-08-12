@@ -359,7 +359,17 @@ public class AuditPayloadCipher {
                 throw new IllegalStateException(
                         "pos.supplier.audit.encryption.previous-keys entries must be 'keyId:base64'");
             }
-            parsed.put(trimmed.substring(0, separator), trimmed.substring(separator + 1));
+            String candidateValue = trimmed.substring(separator + 1);
+            // A base-64 value cannot contain ':', so a second colon means the KEY ID contains one and the
+            // split landed inside it. Caught structurally: otherwise the remainder fails base-64 decoding
+            // and the operator is told their key is malformed when the real problem is the id, during a
+            // fail-closed startup where a misleading message costs the most.
+            if (candidateValue.indexOf(':') >= 0) {
+                throw new IllegalStateException("pos.supplier.audit.encryption.previous-keys key ids must not"
+                        + " contain ':' — it separates the key id from its base64 value, so an id containing"
+                        + " one cannot be parsed unambiguously");
+            }
+            parsed.put(trimmed.substring(0, separator), candidateValue);
         }
         return parsed;
     }

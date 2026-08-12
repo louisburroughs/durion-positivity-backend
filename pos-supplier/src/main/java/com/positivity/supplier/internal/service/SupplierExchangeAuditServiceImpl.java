@@ -145,6 +145,15 @@ public class SupplierExchangeAuditServiceImpl implements SupplierExchangeAuditSe
      * read that happened and produced nothing usable, and it is the case ADR-0050 §7 most wants recorded.
      * Letting it roll back would delete the evidence of the very event worth investigating.
      * {@link AuditAccessRecorder} documents the other side of this.
+     *
+     * <p><strong>Why that is the only entry.</strong> The reasonable worry is that some other persistence
+     * failure on the access insert — a duplicate key, say — would roll this transaction back and lose the
+     * record. It cannot today: {@code supplier_audit_access} has no uniqueness constraint beyond its
+     * surrogate primary key (V4 declares {@code supplier_audit_access_pkey} plus three deliberately
+     * non-unique indexes) and the id is generated per insert, so no duplicate-key path exists. Adding a
+     * unique constraint on {@code (exchange_audit_id, accessed_by, accessed_at)} would change that: two
+     * reads by one actor within a single timestamp tick would collide, and the second would roll the outer
+     * transaction back instead of being recorded. Anyone adding such a constraint must revisit this list.
      */
     @Override
     @Transactional(noRollbackFor = PayloadUnreadableException.class)
