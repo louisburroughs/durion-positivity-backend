@@ -1,9 +1,15 @@
 # Test Coverage Improvement Plan
 
-Status: Phase 0 complete, Phase 1 complete. Phase 2 in progress (pos-event-receiver
-and pos-marketing done; pos-order and pos-customer partial). Phases 3–4
-outstanding.
-Date: 2026-08-11
+Status: Phase 0 complete. Phase 1 complete except wave 1c (see §3.3). Phase 2 in
+progress — `pos-event-receiver` and `pos-marketing` done, `pos-order` and
+`pos-customer` substantially done (§4.1–§4.3); the remaining nine modules in the
+§4 table are untouched. Phases 3–4 outstanding.
+Date: 2026-08-11 (last updated 2026-08-11)
+
+**Before Phase 4, re-run the Phase 0 full-reactor command.** Every figure in
+§4.1–§4.3 is unit-only (`-DskipITs`) and therefore not comparable to the §1.5
+baseline, which included Failsafe ITs. No threshold should be set from the
+numbers in those sections.
 
 Method: `.agents/skills/test-coverage-improver` workflow, adapted from its pnpm/JS
 assumptions to this Maven reactor; test authoring follows `.agents/skills/java-testing`.
@@ -418,7 +424,9 @@ them is a separate decision):
 
 Both are pinned by tests carrying an explicit "documents current behaviour, not
 desired behaviour" comment, so a future fix will fail a test rather than pass
-silently.
+silently. Filed as louisburroughs/durion-positivity-backend#1245 (VIN loss) and
+louisburroughs/durion-positivity-backend#1246 (name transposition); both issues
+name the pinning tests that must be updated alongside the fix.
 
 Remaining in `pos-customer`, largest first: `SegmentResolutionService` (64 missed,
 73.1% — almost all of it in the `loadCommercialCandidates` projection lambda),
