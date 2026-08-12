@@ -104,8 +104,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
      * for the Aged Payables report: everything except settled ({@code PAID}),
      * voided ({@code VOIDED}), and rejected ({@code REJECTED}) bills.
      */
-    private static final Set<VendorBillStatus> OPEN_PAYABLE_STATUSES = Set.of(VendorBillStatus.PENDING_RECEIPT_MATCH,
-            VendorBillStatus.MATCH_EXCEPTION, VendorBillStatus.APPROVED);
+    private static final Set<VendorBillStatus> OPEN_PAYABLE_STATUSES =
+            Set.of(VendorBillStatus.PENDING_RECEIPT_MATCH, VendorBillStatus.MATCH_EXCEPTION, VendorBillStatus.APPROVED);
 
     /**
      * Chart-of-accounts code of the single Sales-Tax Payable account (D-4: one GL
@@ -171,8 +171,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
         // Load all income statement mappings (ordered by display order)
-        List<StatementLineMapping> mappings = statementLineMappingRepository
-                .findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(
+        List<StatementLineMapping> mappings =
+                statementLineMappingRepository.findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(
                         StatementType.INCOME_STATEMENT);
 
         if (mappings.isEmpty()) {
@@ -252,8 +252,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         LocalDateTime asOfDateTime = asOfDate.atTime(LocalTime.MAX);
 
         // Load all balance sheet mappings (ordered by display order)
-        List<StatementLineMapping> mappings = statementLineMappingRepository
-                .findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(
+        List<StatementLineMapping> mappings =
+                statementLineMappingRepository.findByStatementTypeOrderByDisplayOrderAscStatementLineCodeAsc(
                         StatementType.BALANCE_SHEET);
 
         if (mappings.isEmpty()) {
@@ -310,7 +310,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         // Validate balance sheet equation: Assets = Liabilities + Equity (within
         // tolerance)
-        BigDecimal difference = totalAssets.subtract(totalLiabilities.add(totalEquity)).abs();
+        BigDecimal difference =
+                totalAssets.subtract(totalLiabilities.add(totalEquity)).abs();
         boolean balanced = difference.compareTo(BALANCE_TOLERANCE) <= 0;
 
         if (!balanced) {
@@ -349,8 +350,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         // Per-account aggregation happens in the database (grouped JPQL over
         // POSTED lines, ordered by account code) — the line set is never
         // materialized in memory.
-        List<TrialBalanceAccountTotal> accountTotals = journalEntryRepository
-                .sumPostedDebitsCreditsByAccountAsOf(asOfDateTime);
+        List<TrialBalanceAccountTotal> accountTotals =
+                journalEntryRepository.sumPostedDebitsCreditsByAccountAsOf(asOfDateTime);
 
         List<TrialBalanceRow> rows = accountTotals.stream()
                 .map(total -> TrialBalanceRow.builder()
@@ -363,10 +364,10 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                         .build())
                 .toList();
 
-        BigDecimal totalDebit = rows.stream().map(TrialBalanceRow::getTotalDebit).reduce(BigDecimal.ZERO,
-                BigDecimal::add);
-        BigDecimal totalCredit = rows.stream().map(TrialBalanceRow::getTotalCredit).reduce(BigDecimal.ZERO,
-                BigDecimal::add);
+        BigDecimal totalDebit =
+                rows.stream().map(TrialBalanceRow::getTotalDebit).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalCredit =
+                rows.stream().map(TrialBalanceRow::getTotalCredit).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Computed, never assumed: an unbalanced ledger (A1 constraint
         // violation) must surface operationally as balanced = false.
@@ -414,13 +415,13 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
      * chronological cut. A clean ledger yields an empty footnote.
      */
     private List<EntryNumberGapCheck> checkEntryNumberGaps(LocalDate asOf) {
-        String asOfScopeBoundary = String.format("%s%04d%02d", ENTRY_NUMBER_SCOPE_PREFIX, asOf.getYear(),
-                asOf.getMonthValue());
+        String asOfScopeBoundary =
+                String.format("%s%04d%02d", ENTRY_NUMBER_SCOPE_PREFIX, asOf.getYear(), asOf.getMonthValue());
 
         return accountingSequenceRepository.findAllByOrderByScopeKeyAsc().stream()
                 .map(AccountingSequence::getScopeKey)
-                .filter(scopeKey -> scopeKey.startsWith(ENTRY_NUMBER_SCOPE_PREFIX)
-                        && scopeKey.compareTo(asOfScopeBoundary) <= 0)
+                .filter(scopeKey ->
+                        scopeKey.startsWith(ENTRY_NUMBER_SCOPE_PREFIX) && scopeKey.compareTo(asOfScopeBoundary) <= 0)
                 .map(scopeKey -> EntryNumberGapCheck.builder()
                         .scopeKey(scopeKey)
                         .missingNumbers(accountingSequenceRepository.findMissingEntryNumbers(scopeKey))
@@ -496,8 +497,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
         // Find all posted journal entries affecting this account
-        List<JournalEntry> entries = journalEntryRepository.findPostedEntriesForAccount(glAccountId, startDateTime,
-                endDateTime);
+        List<JournalEntry> entries =
+                journalEntryRepository.findPostedEntriesForAccount(glAccountId, startDateTime, endDateTime);
 
         // Extract journal lines for this account
         return entries.stream()
@@ -538,8 +539,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         if (accountId != null) {
             UUID glAccountId = parseAccountId(accountId);
             log.info("Generating general ledger for account {} for period {} to {}", glAccountId, startDate, endDate);
-            List<JournalEntry> entries = journalEntryRepository.findPostedEntriesForAccount(glAccountId, startDateTime,
-                    endDateTime);
+            List<JournalEntry> entries =
+                    journalEntryRepository.findPostedEntriesForAccount(glAccountId, startDateTime, endDateTime);
             collectAccountLines(entries, glAccountId, linesByAccount);
         } else {
             log.info("Generating general ledger for all accounts for period {} to {}", startDate, endDate);
@@ -711,8 +712,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             if (daysPastDue < 0) {
                 continue; // future-dated as of asOfDate — not yet an outstanding item (finding 10)
             }
-            VendorAging aging = byVendor.computeIfAbsent(bill.getVendorId(),
-                    key -> new VendorAging(bill.getVendorName()));
+            VendorAging aging =
+                    byVendor.computeIfAbsent(bill.getVendorId(), key -> new VendorAging(bill.getVendorName()));
             aging.buckets.add(daysPastDue, openBalance);
         }
 
@@ -730,7 +731,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                             .build();
                 })
                 .sorted(Comparator.comparing(
-                        AgedPayablesRow::getVendorName, Comparator.nullsLast(Comparator.naturalOrder()))
+                                AgedPayablesRow::getVendorName, Comparator.nullsLast(Comparator.naturalOrder()))
                         .thenComparing(AgedPayablesRow::getVendorId))
                 .toList();
 
@@ -774,9 +775,10 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         // --- Invoice side (accrual): tax bucketed by the invoice's finalization period
         // ---
         List<ExtInvoice> invoices = extInvoiceRepository.findByFinalizedAtBetween(startInstant, endInstant);
-        List<UUID> invoiceIds = invoices.stream().map(ExtInvoice::getInvoiceId).distinct().toList();
-        List<ExtInvoiceTax> invoiceTaxRows = invoiceIds.isEmpty() ? List.of()
-                : extInvoiceTaxRepository.findByInvoiceIdIn(invoiceIds);
+        List<UUID> invoiceIds =
+                invoices.stream().map(ExtInvoice::getInvoiceId).distinct().toList();
+        List<ExtInvoiceTax> invoiceTaxRows =
+                invoiceIds.isEmpty() ? List.of() : extInvoiceTaxRepository.findByInvoiceIdIn(invoiceIds);
 
         for (ExtInvoiceTax row : invoiceTaxRows) {
             JurisdictionAccumulator acc = accumulatorFor(byJurisdiction, row);
@@ -807,14 +809,15 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                     .map(CreditMemo::getOriginalInvoiceId)
                     .distinct()
                     .toList();
-            Map<UUID, List<ExtInvoiceTax>> taxByOriginalInvoice = extInvoiceTaxRepository
-                    .findByInvoiceIdIn(originalInvoiceIds).stream()
-                    .collect(Collectors.groupingBy(ExtInvoiceTax::getInvoiceId));
+            Map<UUID, List<ExtInvoiceTax>> taxByOriginalInvoice =
+                    extInvoiceTaxRepository.findByInvoiceIdIn(originalInvoiceIds).stream()
+                            .collect(Collectors.groupingBy(ExtInvoiceTax::getInvoiceId));
 
-            List<UUID> creditMemoIds = credits.stream().map(CreditMemo::getCreditMemoId).toList();
-            Map<UUID, List<CreditMemoTax>> attributionByCredit = creditMemoTaxRepository
-                    .findByCreditMemoIdIn(creditMemoIds).stream()
-                    .collect(Collectors.groupingBy(CreditMemoTax::getCreditMemoId));
+            List<UUID> creditMemoIds =
+                    credits.stream().map(CreditMemo::getCreditMemoId).toList();
+            Map<UUID, List<CreditMemoTax>> attributionByCredit =
+                    creditMemoTaxRepository.findByCreditMemoIdIn(creditMemoIds).stream()
+                            .collect(Collectors.groupingBy(CreditMemoTax::getCreditMemoId));
 
             for (CreditMemo credit : credits) {
                 unattributedCredits = unattributedCredits.add(netCreditAcrossJurisdictions(
@@ -838,15 +841,16 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                     .map(CreditMemo::getOriginalInvoiceId)
                     .distinct()
                     .toList();
-            Map<UUID, List<ExtInvoiceTax>> taxByVoidInvoice = extInvoiceTaxRepository.findByInvoiceIdIn(voidInvoiceIds)
-                    .stream()
-                    .collect(Collectors.groupingBy(ExtInvoiceTax::getInvoiceId));
-            Map<UUID, List<CreditMemoTax>> attributionByVoid = creditMemoTaxRepository
-                    .findByCreditMemoIdIn(voids.stream()
-                            .map(CreditMemo::getCreditMemoId)
-                            .toList())
-                    .stream()
-                    .collect(Collectors.groupingBy(CreditMemoTax::getCreditMemoId));
+            Map<UUID, List<ExtInvoiceTax>> taxByVoidInvoice =
+                    extInvoiceTaxRepository.findByInvoiceIdIn(voidInvoiceIds).stream()
+                            .collect(Collectors.groupingBy(ExtInvoiceTax::getInvoiceId));
+            Map<UUID, List<CreditMemoTax>> attributionByVoid =
+                    creditMemoTaxRepository
+                            .findByCreditMemoIdIn(voids.stream()
+                                    .map(CreditMemo::getCreditMemoId)
+                                    .toList())
+                            .stream()
+                            .collect(Collectors.groupingBy(CreditMemoTax::getCreditMemoId));
 
             for (CreditMemo voided : voids) {
                 unattributedCredits = unattributedCredits.subtract(netCreditAcrossJurisdictions(
@@ -866,8 +870,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         BigDecimal totalCreditsNetted = sum(rows, TaxLiabilityRow::getCreditsNetted);
         BigDecimal totalNetTax = sum(rows, TaxLiabilityRow::getNetTax);
 
-        TaxLiabilityReconciliation reconciliation = reconcileAgainstTaxPayable(totalNetTax, unattributedCredits,
-                startDateTime, endDateTime);
+        TaxLiabilityReconciliation reconciliation =
+                reconcileAgainstTaxPayable(totalNetTax, unattributedCredits, startDateTime, endDateTime);
 
         log.info(
                 "Sales-tax liability generated for {}..{}: jurisdictions={}, gross={}, credits={}, netTax={}, glDrift={}",
@@ -974,8 +978,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             weights.merge(keyFor(row), nullSafe(row.getTaxAmount()), BigDecimal::add);
         }
 
-        Map<JurisdictionKey, BigDecimal> allocated = weights.isEmpty() ? Map.of()
-                : TaxCreditAllocator.allocate(reversed, weights);
+        Map<JurisdictionKey, BigDecimal> allocated =
+                weights.isEmpty() ? Map.of() : TaxCreditAllocator.allocate(reversed, weights);
         if (allocated.isEmpty()) {
             // Either the original invoice has no replicated tax rows at all, or every row
             // carries
@@ -1027,7 +1031,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         BigDecimal glNetActivity = glAccountRepository
                 .findByAccountCode(SALES_TAX_PAYABLE_ACCOUNT_CODE)
                 .map(account -> nullSafe(journalEntryRepository.sumPostedBalanceForAccount(
-                        account.getGlAccountId(), startDateTime, endDateTime))
+                                account.getGlAccountId(), startDateTime, endDateTime))
                         .negate())
                 .orElse(BigDecimal.ZERO);
 
@@ -1138,13 +1142,13 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     private GeneralLedgerAccountSection buildAccountSection(
             UUID glAccountId, @Nullable GLAccount account, List<JournalEntryLine> lines, LocalDateTime startDateTime) {
 
-        BigDecimal openingBalance = nullSafe(
-                journalEntryRepository.sumPostedBalanceForAccountBefore(glAccountId, startDateTime));
+        BigDecimal openingBalance =
+                nullSafe(journalEntryRepository.sumPostedBalanceForAccountBefore(glAccountId, startDateTime));
 
         // Chronological order: transaction date, then entry number, with stable
         // tie-breakers so equal-keyed lines are deterministic.
         lines.sort(Comparator.comparing(
-                (JournalEntryLine line) -> line.getJournalEntry().getTransactionDate())
+                        (JournalEntryLine line) -> line.getJournalEntry().getTransactionDate())
                 .thenComparing(
                         line -> line.getJournalEntry().getEntryNumber(),
                         Comparator.nullsLast(Comparator.naturalOrder()))
@@ -1176,10 +1180,10 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                     .build());
         }
 
-        String accountNumber = account != null ? account.getAccountCode()
-                : firstNonNull(lines, JournalEntryLine::getAccountCode);
-        String accountName = account != null ? account.getAccountName()
-                : firstNonNull(lines, JournalEntryLine::getAccountName);
+        String accountNumber =
+                account != null ? account.getAccountCode() : firstNonNull(lines, JournalEntryLine::getAccountCode);
+        String accountName =
+                account != null ? account.getAccountName() : firstNonNull(lines, JournalEntryLine::getAccountName);
 
         return GeneralLedgerAccountSection.builder()
                 .accountId(glAccountId.toString())

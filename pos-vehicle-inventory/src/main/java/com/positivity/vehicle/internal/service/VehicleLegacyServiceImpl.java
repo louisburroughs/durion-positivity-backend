@@ -27,8 +27,8 @@ public class VehicleLegacyServiceImpl implements VehicleLegacyService {
 
     private static final int MIN_MODEL_YEAR = 1886;
     private static final int FUTURE_YEAR_BUFFER = 1;
-    private static final Set<String> ALLOWED_VEHICLE_TYPES = Set.of("CAR", "VAN", "COMMERCIAL_TRUCK", "PASSENGER_TRUCK",
-            "TRUCK");
+    private static final Set<String> ALLOWED_VEHICLE_TYPES =
+            Set.of("CAR", "VAN", "COMMERCIAL_TRUCK", "PASSENGER_TRUCK", "TRUCK");
 
     private final VehicleDao vehicleDao;
     private final Clock clock;

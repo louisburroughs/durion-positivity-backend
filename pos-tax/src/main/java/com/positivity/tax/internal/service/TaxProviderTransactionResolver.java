@@ -63,52 +63,51 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class TaxProviderTransactionResolver {
 
-        private final TaxProviderTransactionRepository repository;
-        private final Clock clock;
+    private final TaxProviderTransactionRepository repository;
+    private final Clock clock;
 
-        /**
-         * Return the id of the lifecycle row for {@code referenceId}, creating it
-         * (status
-         * {@link TaxProviderTransactionStatus#PENDING_COMMIT}) if absent.
-         * Concurrent-insert safe.
-         *
-         * @param referenceId   the source document id (commit idempotency key)
-         * @param referenceType the source transaction type label (e.g.
-         *                      {@code INVOICE}); may be null
-         * @param providerName  the selected provider label
-         * @return the persisted row id
-         */
-        @NonNull
-        @Transactional
-        public UUID resolveId(@NonNull UUID referenceId, @Nullable String referenceType, @NonNull String providerName) {
-                return repository
-                                .findByReferenceId(referenceId)
-                                .map(TaxProviderTransaction::getId)
-                                .orElseGet(() -> upsert(referenceId, referenceType, providerName));
-        }
+    /**
+     * Return the id of the lifecycle row for {@code referenceId}, creating it
+     * (status
+     * {@link TaxProviderTransactionStatus#PENDING_COMMIT}) if absent.
+     * Concurrent-insert safe.
+     *
+     * @param referenceId   the source document id (commit idempotency key)
+     * @param referenceType the source transaction type label (e.g.
+     *                      {@code INVOICE}); may be null
+     * @param providerName  the selected provider label
+     * @return the persisted row id
+     */
+    @NonNull
+    @Transactional
+    public UUID resolveId(@NonNull UUID referenceId, @Nullable String referenceType, @NonNull String providerName) {
+        return repository
+                .findByReferenceId(referenceId)
+                .map(TaxProviderTransaction::getId)
+                .orElseGet(() -> upsert(referenceId, referenceType, providerName));
+    }
 
-        @NonNull
-        private UUID upsert(@NonNull UUID referenceId, @Nullable String referenceType, @NonNull String providerName) {
-                // Atomic create: inserts a fresh PENDING_COMMIT row, or no-ops on a concurrent
-                // winner's
-                // UNIQUE(reference_id) collision — never throws, never poisons this
-                // transaction. The id
-                // is generated in Java (ADR-0013 UUID v7); it is discarded on conflict.
-                repository.insertIfAbsent(
-                                UUIDv7Generator.generate(),
-                                referenceId,
-                                referenceType,
-                                providerName,
-                                TaxProviderTransactionStatus.PENDING_COMMIT.name(),
-                                Instant.now(clock));
-                // Unconditional re-read returns the winning row id whether we inserted it or
-                // adopted the
-                // concurrent winner's.
-                return repository
-                                .findByReferenceId(referenceId)
-                                .map(TaxProviderTransaction::getId)
-                                .orElseThrow(() -> new IllegalStateException(
-                                                "tax_provider_transaction row missing after upsert for reference "
-                                                                + referenceId));
-        }
+    @NonNull
+    private UUID upsert(@NonNull UUID referenceId, @Nullable String referenceType, @NonNull String providerName) {
+        // Atomic create: inserts a fresh PENDING_COMMIT row, or no-ops on a concurrent
+        // winner's
+        // UNIQUE(reference_id) collision — never throws, never poisons this
+        // transaction. The id
+        // is generated in Java (ADR-0013 UUID v7); it is discarded on conflict.
+        repository.insertIfAbsent(
+                UUIDv7Generator.generate(),
+                referenceId,
+                referenceType,
+                providerName,
+                TaxProviderTransactionStatus.PENDING_COMMIT.name(),
+                Instant.now(clock));
+        // Unconditional re-read returns the winning row id whether we inserted it or
+        // adopted the
+        // concurrent winner's.
+        return repository
+                .findByReferenceId(referenceId)
+                .map(TaxProviderTransaction::getId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "tax_provider_transaction row missing after upsert for reference " + referenceId));
+    }
 }

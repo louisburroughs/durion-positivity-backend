@@ -58,8 +58,8 @@ final class RerankedContentRetriever implements QueryDocumentRetriever {
      * refunds" never splits —
      * or (b) a sentence boundary ({@code ?} / {@code ;}) with trailing text.
      */
-    private static final Pattern SUB_QUERY_BOUNDARY_CANDIDATE = Pattern.compile(" (and|plus|but) |(?<=[?;]) ",
-            Pattern.CASE_INSENSITIVE);
+    private static final Pattern SUB_QUERY_BOUNDARY_CANDIDATE =
+            Pattern.compile(" (and|plus|but) |(?<=[?;]) ", Pattern.CASE_INSENSITIVE);
 
     private static final Set<String> SUB_QUERY_STARTERS = Set.of(
             "what", "which", "who", "whom", "whose", "when", "where", "why", "how", "is", "are", "was", "were", "do",
@@ -71,8 +71,8 @@ final class RerankedContentRetriever implements QueryDocumentRetriever {
      */
     private static final int MIN_SUB_QUERY_TOKENS = 3;
 
-    private static final Comparator<RankedContent> OVERALL_SCORE_ORDER = Comparator
-            .comparingDouble(RankedContent::score).reversed().thenComparingInt(RankedContent::originalRank);
+    private static final Comparator<RankedContent> OVERALL_SCORE_ORDER =
+            Comparator.comparingDouble(RankedContent::score).reversed().thenComparingInt(RankedContent::originalRank);
 
     private final QueryDocumentRetriever delegate;
     private final int topK;
@@ -113,7 +113,8 @@ final class RerankedContentRetriever implements QueryDocumentRetriever {
             deduped.merge(key, candidate, (left, right) -> left.score() >= right.score() ? left : right);
         }
 
-        List<RankedContent> overallOrder = deduped.values().stream().sorted(OVERALL_SCORE_ORDER).toList();
+        List<RankedContent> overallOrder =
+                deduped.values().stream().sorted(OVERALL_SCORE_ORDER).toList();
         if (!compoundSlotsEnabled || overallOrder.size() <= topK) {
             return topKOf(overallOrder);
         }
@@ -217,7 +218,7 @@ final class RerankedContentRetriever implements QueryDocumentRetriever {
         Set<String> subQueryTokens = tokens(subQuery);
         return candidates.stream()
                 .max(Comparator.<RankedContent>comparingDouble(
-                        candidate -> subQueryScore(candidate.content(), subQuery, subQueryTokens))
+                                candidate -> subQueryScore(candidate.content(), subQuery, subQueryTokens))
                         .thenComparing(Comparator.comparingInt(RankedContent::originalRank)
                                 .reversed()))
                 .orElseThrow();
@@ -243,10 +244,10 @@ final class RerankedContentRetriever implements QueryDocumentRetriever {
         }
         double lexicalScore = subQueryTokens.isEmpty() ? 0.0 : (double) overlap / subQueryTokens.size();
         double phraseBoost = contentText
-                .toLowerCase(Locale.ROOT)
-                .contains(normalize(subQuery).toLowerCase(Locale.ROOT))
-                        ? 0.2
-                        : 0.0;
+                        .toLowerCase(Locale.ROOT)
+                        .contains(normalize(subQuery).toLowerCase(Locale.ROOT))
+                ? 0.2
+                : 0.0;
         return (0.6 * lexicalScore) + phraseBoost;
     }
 
@@ -262,8 +263,8 @@ final class RerankedContentRetriever implements QueryDocumentRetriever {
         }
 
         double lexicalScore = queryTokens.isEmpty() ? 0.0 : (double) overlap / queryTokens.size();
-        double phraseBoost = contentText.toLowerCase(Locale.ROOT).contains(queryText.toLowerCase(Locale.ROOT)) ? 0.2
-                : 0.0;
+        double phraseBoost =
+                contentText.toLowerCase(Locale.ROOT).contains(queryText.toLowerCase(Locale.ROOT)) ? 0.2 : 0.0;
         double rankScore = 1.0 / (index + 1);
         double totalScore = (0.6 * lexicalScore) + (0.3 * rankScore) + phraseBoost;
         return new RankedContent(document, totalScore, index);
@@ -294,6 +295,5 @@ final class RerankedContentRetriever implements QueryDocumentRetriever {
                 .toList());
     }
 
-    private record RankedContent(@NonNull Document content, double score, int originalRank) {
-    }
+    private record RankedContent(@NonNull Document content, double score, int originalRank) {}
 }

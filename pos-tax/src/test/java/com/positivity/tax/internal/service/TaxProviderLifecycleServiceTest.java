@@ -38,16 +38,17 @@ import org.springframework.test.context.ActiveProfiles;
  * {@code V2__tax_provider_transaction.sql}
  * migration and Hibernate schema validation.
  */
-@DataJpaTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:pos_tax_lifecycle;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-        "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-        "spring.jpa.hibernate.ddl-auto=validate",
-        "spring.flyway.enabled=true",
-        "spring.flyway.locations=classpath:db/migration"
-})
+@DataJpaTest(
+        properties = {
+            "spring.datasource.url=jdbc:h2:mem:pos_tax_lifecycle;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
+            "spring.datasource.driver-class-name=org.h2.Driver",
+            "spring.datasource.username=sa",
+            "spring.datasource.password=",
+            "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
+            "spring.jpa.hibernate.ddl-auto=validate",
+            "spring.flyway.enabled=true",
+            "spring.flyway.locations=classpath:db/migration"
+        })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 class TaxProviderLifecycleServiceTest {
