@@ -7,9 +7,18 @@
         <artifactId>positivity</artifactId>
         <version>${revision}</version>
     </parent>
+
+    
     <artifactId>pos-warranty</artifactId>
     <name>pos-warranty</name>
     <description>POS Warranty Claims module</description>
+
+    <properties>
+        <!-- Coverage ratchet (plan Phase 4): measured 90.4% line / 80.7% branch.
+             Floors sit ~5 points under to catch regression without failing on noise. -->
+        <jacoco.line.min>0.85</jacoco.line.min>
+        <jacoco.branch.min>0.75</jacoco.branch.min>
+    </properties>
     <packaging>jar</packaging>
     <dependencies>
         <!-- Lombok for annotation processing -->

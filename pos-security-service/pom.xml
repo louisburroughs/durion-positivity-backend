@@ -6,9 +6,18 @@
         <artifactId>positivity</artifactId>
         <version>${revision}</version>
     </parent>
+
+    
     <artifactId>pos-security-service</artifactId>
     <name>pos-security-service</name>
     <description>POS Security Service Module for IAM and JWT management</description>
+
+    <properties>
+        <!-- Coverage ratchet (plan Phase 4): measured 81.8% line / 71.1% branch.
+             Floors sit ~5 points under to catch regression without failing on noise. -->
+        <jacoco.line.min>0.76</jacoco.line.min>
+        <jacoco.branch.min>0.66</jacoco.branch.min>
+    </properties>
     <packaging>jar</packaging>
 
     <pluginRepositories>

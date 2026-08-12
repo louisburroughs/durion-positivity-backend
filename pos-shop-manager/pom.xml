@@ -6,9 +6,18 @@
         <artifactId>positivity</artifactId>
         <version>${revision}</version>
     </parent>
+
+    
     <artifactId>pos-shop-manager</artifactId>
     <name>pos-shop-manager</name>
     <description>Module to manage vehicle repair shops</description>
+
+    <properties>
+        <!-- Coverage ratchet (plan Phase 4): measured 83.2% line / 67.1% branch.
+             Floors sit ~5 points under to catch regression without failing on noise. -->
+        <jacoco.line.min>0.78</jacoco.line.min>
+        <jacoco.branch.min>0.62</jacoco.branch.min>
+    </properties>
     <packaging>jar</packaging>
     <pluginRepositories>
         <pluginRepository>
