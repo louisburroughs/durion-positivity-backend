@@ -4,7 +4,6 @@ import com.positivity.supplier.internal.entity.SupplierAuthConfigEntity;
 import com.positivity.supplier.internal.enums.SupplierAuthType;
 import com.positivity.supplier.internal.spi.SupplierAuthConfigChanged;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -37,10 +36,11 @@ public class SupplierAuthStrategies {
      * @param strategies every strategy bean in the context
      * @throws IllegalStateException when two strategies claim one type, or a type has none
      */
+    @SuppressWarnings("java:S2583")
     public SupplierAuthStrategies(@NonNull List<SupplierAuthStrategy> strategies) {
         Objects.requireNonNull(strategies, "strategies must not be null");
         Map<SupplierAuthType, SupplierAuthStrategy> byType = new EnumMap<>(SupplierAuthType.class);
-        Map<SupplierAuthType, String> ownerByType = new HashMap<>();
+        Map<SupplierAuthType, String> ownerByType = new EnumMap<>(SupplierAuthType.class);
         for (SupplierAuthStrategy strategy : strategies) {
             SupplierAuthType type = strategy.supportedType();
             if (type == null) {

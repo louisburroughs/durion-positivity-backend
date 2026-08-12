@@ -226,6 +226,25 @@ class SupplierAuthStrategyTest {
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("Duplicate SupplierAuthStrategy for type BEARER");
         }
+
+        @Test
+        void strategyWithNullTypeFailsStartupWithIllegalStateException() {
+            SupplierAuthStrategy invalidStrategy = new SupplierAuthStrategy() {
+                @Override
+                public SupplierAuthType supportedType() {
+                    return null;
+                }
+
+                @Override
+                public void apply(HttpHeaders headers, SupplierAuthConfigEntity authConfig) {
+                    // Not exercised here.
+                }
+            };
+
+            assertThatThrownBy(() -> new SupplierAuthStrategies(List.of(invalidStrategy)))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("declares a null supported type");
+        }
     }
 
     // ── Fixtures ────────────────────────────────────────────────────────────────────

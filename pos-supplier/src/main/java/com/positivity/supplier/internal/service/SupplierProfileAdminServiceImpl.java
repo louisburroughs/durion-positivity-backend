@@ -409,16 +409,20 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
                     });
             return;
         }
+        UUID deliveryLocationId = request.deliveryLocationId();
+        if (deliveryLocationId == null) {
+            throw new IllegalStateException("DELIVERY account request must have a deliveryLocationId");
+        }
         accountRepository
                 .findByVendorProfileIdAndRoleAndDeliveryLocationId(
                         vendorProfileId,
                         com.positivity.supplier.internal.enums.SupplierAccountRole.DELIVERY,
-                        request.deliveryLocationId())
+                        deliveryLocationId)
                 .filter(existing -> !existing.getId().equals(selfId))
                 .ifPresent(existing -> {
                     throw new SupplierConflictException(
                             SupplierConflictException.ACCOUNT_SLOT_CONFLICT,
-                            "Location " + request.deliveryLocationId() + " already has a delivery account"
+                            "Location " + deliveryLocationId + " already has a delivery account"
                                     + " on this vendor profile (one delivery account per location, ADR-0050 §5)");
                 });
     }
