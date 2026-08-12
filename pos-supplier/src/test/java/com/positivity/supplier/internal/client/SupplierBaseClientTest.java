@@ -55,6 +55,23 @@ class SupplierBaseClientTest {
     private static final UUID BINDING_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60");
     private static final UUID AUTH_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61");
 
+    /**
+     * Read budget for every test whose subject is not a timeout.
+     *
+     * <p>It was 400ms for all of them, borrowed from the one test that must actually reach a read
+     * timeout — and that made unrelated assertions depend on latency. A test building its own client
+     * pays JDK {@code HttpClient} cold-start inside the budget rather than inheriting a warm one, and
+     * with {@code junit-platform.properties} running classes two-at-a-time on a shared CI runner, 400ms
+     * is not a safe margin: {@code anObserverThatThrowsDoesNotFailASuccessfulExchange} failed in CI with
+     * {@code POST_SEND_AMBIGUOUS} — a genuine read timeout — while passing locally every time.
+     *
+     * <p>A test that needs a tight timeout now asks for one, instead of every test inheriting it.
+     */
+    private static final int DEFAULT_READ_TIMEOUT_MS = 2_000;
+
+    /** For the hang test only: shorter than {@code FaultInjectingHttpServer}'s hang, to fail fast. */
+    private static final int SHORT_READ_TIMEOUT_MS = 400;
+
     /** Token endpoint the OAuth2 fixture resolves {@code env:TOKEN_URL} to; mutable per test. */
     private final AtomicReference<String> tokenUrl = new AtomicReference<>("http://127.0.0.1:1/oauth/token");
 
@@ -215,7 +232,9 @@ class SupplierBaseClientTest {
             // create a second purchase order.
             server.hang();
 
-            SupplierHttpResponse response = client.exchange(request(HttpMethod.POST, "{\"order\":1}", 3, null));
+            // The one place a tight read budget is the subject rather than an inherited constraint.
+            SupplierHttpResponse response =
+                    client.exchange(request(HttpMethod.POST, "{\"order\":1}", 3, null, SHORT_READ_TIMEOUT_MS));
 
             assertThat(response.outcome()).isEqualTo(ExchangeOutcome.POST_SEND_AMBIGUOUS);
             assertThat(response.isSafeToRedispatch()).isFalse();
@@ -784,13 +803,18 @@ class SupplierBaseClientTest {
     }
 
     private SupplierHttpRequest request(HttpMethod method, String body, int maxRetries, String baseUrlOverride) {
+        return request(method, body, maxRetries, baseUrlOverride, DEFAULT_READ_TIMEOUT_MS);
+    }
+
+    private SupplierHttpRequest request(
+            HttpMethod method, String body, int maxRetries, String baseUrlOverride, int readTimeoutMs) {
         SupplierProfileEntity profile = new SupplierProfileEntity();
         profile.setVendorProfileId(PROFILE_ID);
         profile.setSupplierRef("michelin-eu");
         profile.setDisplayName("Michelin EU");
         profile.setEnabled(true);
         profile.setConnectTimeoutMs(1_000);
-        profile.setReadTimeoutMs(400);
+        profile.setReadTimeoutMs(readTimeoutMs);
         profile.setRetryMaxAttempts(maxRetries);
 
         SupplierEndpointBindingEntity binding = new SupplierEndpointBindingEntity();
