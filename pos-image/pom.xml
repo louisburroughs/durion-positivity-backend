@@ -10,6 +10,15 @@
     <artifactId>pos-image</artifactId>
     <name>pos-image</name>
     <description>POS Image module</description>
+
+    <properties>
+        <!-- Coverage ratchet (plan Phase 4): measured 31.1% line / 100.0% branch.
+             First floor for this module — it was at 0% before wave §7. The line figure
+             is held down by Spring config classes; the controller itself is covered. -->
+        <jacoco.line.min>0.26</jacoco.line.min>
+        <jacoco.branch.min>0.95</jacoco.branch.min>
+    </properties>
+
     <packaging>jar</packaging>
     <dependencies>
         <!-- Lombok for annotation processing -->
@@ -91,6 +100,11 @@
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

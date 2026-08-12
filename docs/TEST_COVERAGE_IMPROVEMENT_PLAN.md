@@ -747,21 +747,28 @@ that, and CI always runs tests.
   a third of the reactor on day one, and a uniform 70% would let the best modules
   rot 15 points before anyone noticed.
 
-### 6.3 SonarCloud
+### 6.3 SonarCloud — already wired (correction)
 
-Not yet wired. The existing Sonar step should consume
-`pos-coverage-aggregate/target/site/jacoco-aggregate/jacoco.xml` from a CI run
-(see the §6.1 caveat about the local copy). That is the remaining Phase 4 task.
+An earlier draft of this section claimed the Sonar step still needed wiring. That
+was wrong: `.github/workflows/ci.yml` already uploads every module's
+`**/target/site/jacoco/jacoco.xml` as the `jacoco-coverage-reactor` artifact,
+downloads it in the Sonar job, and imports it via
+`-Dsonar.coverage.jacoco.xmlReportPaths=${{ github.workspace }}/sonar-coverage/**/jacoco.xml`
+(absolute by necessity — the scanner resolves a relative value against each
+module's own base directory). The aggregate XML is uploaded separately as
+`jacoco-coverage-aggregate`.
+
+Importing the **per-module** reports is also the right choice, and matches the
+ratchet: Sonar sees each module's own coverage rather than the aggregate's
+consumer-credited figure for shared libraries. No work is outstanding here.
 
 ## 7. What is still open
 
-1. **Wave 1c** (`{Module}PermissionRegistry`, §3.3) — three modules, small.
+1. ~~**Wave 1c** (`{Module}PermissionRegistry`, §3.3)~~ — closed 2026-08-12, see §7.1.
 2. **Controller `@WebMvcTest` slices** — `pos-vehicle-inventory` (~114 missed
    across four controllers), `pos-customer` CRM controllers (~71),
    `pos-marketing` (~30), `pos-people-contact`.
-3. **The four all-zero modules** — `pos-vehicle-reference-nhtsa` (189 lines),
-   `pos-vehicle-reference-carapi` (69), `pos-image` (61), `pos-inquiry` (16).
-   335 lines total; they are unguarded until they have tests.
+3. ~~**The four all-zero modules**~~ — closed 2026-08-12, see §7.2.
 4. **Branch-coverage tails** — `pos-catalog` (53.5% branch against 77.4% line),
    `pos-workorder` (56.7%), `pos-document-helper` (35.2%). Parameterized tests
    over the uncovered branches, not more happy paths.
@@ -769,7 +776,65 @@ Not yet wired. The existing Sonar step should consume
    `pos-domain-events` 39.3%, `pos-security-common` 46.8% on their own tests.
    They read far higher in the aggregate because consumers exercise them; their
    own floors are set from the honest per-module number.
-6. **SonarCloud wiring** (§6.3).
+6. ~~SonarCloud wiring~~ — already in place; see the §6.3 correction.
+
+### 7.1 Wave 1c closed (2026-08-12)
+
+`pos-marketing` and `pos-inventory` now have a `{Module}PermissionRegistry` test
+each. Both read `permissions.yaml` directly (no YAML dependency — the file is
+scanned for `- name:` lines) and assert three things about the registry: every
+constant matches `domain:resource:action` in snake_case, no name is declared
+twice, and the constants and the catalog agree with each other.
+
+The third assertion could not take the same form in both modules, and the
+difference is worth recording:
+
+- **pos-marketing** — constants and catalog correspond one-to-one, so the test
+  is bidirectional: no constant missing from the catalog, no catalog entry
+  without a constant.
+- **pos-inventory** — the catalog holds 54 entries against 29 constants, so a
+  bidirectional test fails by design. The orphan half was replaced with
+  `everyEnforcedAuthorityIsRegistered`, which scans `src/main/java` for
+  `hasAuthority("…")` string literals and asserts each one is in the catalog.
+  That is the assertion that actually protects production: a `@PreAuthorize`
+  naming an authority nobody registered is an endpoint no role can ever reach.
+  It found 46 literal-enforced authorities, all present.
+
+The 25 catalog entries with no constant are not a defect — they are permissions
+declared ahead of the code that will enforce them. A test that failed on them
+would be a test that punishes planning.
+
+### 7.2 The all-zero modules closed (2026-08-12)
+
+| Module | Line before | Line after | Branch after | Floor set |
+|---|---|---|---|---|
+| `pos-vehicle-reference-carapi` | 0% | 78.3% | 88.9% | 0.73 / 0.83 |
+| `pos-vehicle-reference-nhtsa` | 0% | 49.7% | 50.0% | 0.44 / 0.45 |
+| `pos-image` | 0% | 31.1% | 100.0% | 0.26 / 0.95 |
+| `pos-inquiry` | 0% | 0% | — | none |
+
+`pos-inquiry` was deliberately left alone. It is 16 lines of application
+scaffolding with no behaviour of its own — no controller, no service logic. A
+test dependency was added and then reverted rather than shipping a test that
+asserts the Spring context can start, which pins nothing. It gets a floor when
+it gets behaviour.
+
+`pos-image`'s line figure is held down by configuration classes; the controller
+itself — the only part with logic — is fully covered, which is why its branch
+floor is high and its line floor is low. The tests pin that a database row whose
+file is missing from disk returns 404 rather than a 500 or a stream that dies
+mid-response. That is the normal state after a restore or a volume remount, not
+an exotic one.
+
+The two vehicle-reference modules are 24-hour read-through caches over
+third-party APIs (CarAPI, and NHTSA's public vPIC). The tests pin the cache
+contract in both directions — fresh cache serves without any outbound call,
+stale cache refetches and replaces — and, for NHTSA, the derivation
+`UUID.nameUUIDFromBytes("make-" + vpicId)` that makes a refetch update rows
+instead of duplicating them.
+
+Writing them surfaced a live defect, filed as
+louisburroughs/durion-positivity-backend#1265 and listed below.
 
 ### Defects found by this work, still open
 
@@ -781,3 +846,10 @@ Not yet wired. The existing Sonar step should consume
   rejects every real Canadian province.
 - louisburroughs/durion-positivity-backend#1255 — replica listeners silently drop
   events whose payload omits a primitive field (Jackson 3).
+- louisburroughs/durion-positivity-backend#1265 — `pos-vehicle-reference-nhtsa`
+  inverts its own 24h cache: `isCacheExpired` computes "is still fresh", and
+  three of six call sites negate it, so those methods call vPIC on every request
+  while the cache is warm and then serve permanently frozen rows once it is not.
+  The same helper is copied into `pos-vehicle-reference-carapi`, where both call
+  sites happen to cancel out — correct by accident, and a trap for anyone who
+  fixes the name alone.
