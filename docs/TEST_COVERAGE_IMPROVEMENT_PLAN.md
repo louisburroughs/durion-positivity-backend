@@ -1,10 +1,12 @@
 # Test Coverage Improvement Plan
 
-Status: Phase 0 complete. Phase 1 complete except wave 1c (see §3.3). Phase 2 in
-progress — `pos-event-receiver` and `pos-marketing` done, `pos-order` and
-`pos-customer` substantially done (§4.1–§4.3); the remaining nine modules in the
-§4 table are untouched. Phases 3–4 outstanding.
-Date: 2026-08-11 (last updated 2026-08-11)
+Status: Phase 0 complete. Phase 1 complete except wave 1c (see §3.3); wave 1e is
+now closed in every module that had Kafka listeners at 0% (§4.5). Phases 2–3
+substantially complete — every module in the §4 priority table has been worked
+(§4.1–§4.5) except the two structural §5 gaps: the Failsafe IT layers for
+`pos-invoice` and `pos-warranty` remain unbuilt, and controller-layer
+`@WebMvcTest` coverage across several modules remains open. Phase 4 outstanding.
+Date: 2026-08-11 (last updated 2026-08-12)
 
 **Before Phase 4, re-run the Phase 0 full-reactor command.** Every figure in
 §4.1–§4.3 is unit-only (`-DskipITs`) and therefore not comparable to the §1.5
@@ -521,6 +523,44 @@ the real weakness.
 
 **pos-price (94.3%)** — leave alone. Already the reference standard; use its test
 style as the template for other modules.
+
+### 4.5 Phase 3 completion pass (2026-08-12, stacked PRs)
+
+All figures **unit-only**. Worked in a stacked-PR series so each review stays
+small: #1249 (vehicle-inventory, document-helper) → #1250 (catalog,
+shop-manager) → #1251 (workorder, tax-common) → mcp-server.
+
+| Module | Line | Branch |
+|---|---|---|
+| pos-vehicle-inventory | 46.5% → **66.4%** | 42.4% → **71.0%** |
+| pos-document-helper | 43.1% → **74.0%** | 25.9% → 35.2% |
+| pos-catalog | 73.1% → **77.4%** | 51.5% → 53.5% |
+| pos-shop-manager | 67.5% → **83.2%** | 60.3% → **67.1%** |
+| pos-workorder | 73.1% → **76.6%** | 55.1% → 56.7% |
+| pos-tax-common | no suite → **34.0%** | — → 46.4% |
+| pos-mcp-server | 78.5% → **80.2%** | 67.5% → 68.5% |
+
+**Wave 1e is now closed reactor-wide**: the listener families in catalog (2),
+shop-manager (6), and workorder (4) were the last Kafka listeners at 0%, all
+covered with the parameterized contract-test shape. pos-workorder's
+`PeopleReplicaEventsListener` is the notable one — a single component on two
+topics stamping a different `processed_events` owner per entry point, pinned
+because the wrong owner would corrupt both reconciliation windows at once.
+
+**Defect found (pos-tax-common):** `SubdivisionForCountryValidator` rejects every
+real Canadian province — the `i18n-subdivision-enums` dataset has no CA data and
+there is no CA fallback list (the US has one). A valid Canadian `TaxAddress`
+gets a 400. Pinned by `canadianProvincesAreRejected` as documented current
+behaviour. Two more `locationCommandsTopic` copy-paste field names found
+(catalog's inventory manifest listener, matching pos-invoice's workorder one);
+routing correct in both, noted in test comments.
+
+**Still open after this pass:** the §5 Failsafe IT layers for `pos-invoice` and
+`pos-warranty` (a different shape of work: DB-backed, `verify`-phase);
+controller `@WebMvcTest` slices across vehicle-inventory, customer, marketing,
+people-contact; the service-impl branch tails in catalog/workorder/mcp-server;
+and the four small 0% modules (§4 filler list). Then Phase 4's ratchet, which
+requires the full-reactor re-measure first.
 
 ## 5. Phase 3 — (merged into Phase 2)
 
