@@ -113,6 +113,9 @@ public class ReimbursementController {
                     illegal from the current status (nextAction lists the legal moves).
                     """)
     @ApiResponse(responseCode = "200", description = "Reimbursement updated.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Target status outside the updatable set, or amountApproved missing when required.")
     @ApiResponse(responseCode = "404", description = "Claim or reimbursement not found.")
     @ApiResponse(responseCode = "409", description = "Illegal reimbursement transition.")
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.REIMBURSEMENT_MANAGE + "')")
