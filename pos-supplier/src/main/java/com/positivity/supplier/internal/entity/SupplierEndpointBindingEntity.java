@@ -4,18 +4,25 @@ import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.enums.PayloadCaptureLevel;
+import com.positivity.supplier.internal.enums.RedactionClassification;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -98,6 +105,19 @@ public class SupplierEndpointBindingEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "capture_level", length = 32)
     private PayloadCaptureLevel captureLevel;
+
+    /**
+     * Data classifications whose named fields a {@code REDACTED} capture of this binding additionally
+     * removes (ADR-0050 §7 minimization — redaction configuration lives with the binding; issue #1259).
+     * Empty means credential redaction only. Eager because {@code ExchangeAuditWriter} reads the binding
+     * row once per audit write and must not depend on the session staying open.
+     */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "supplier_endpoint_binding_redaction", joinColumns = @JoinColumn(name = "binding_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "classification", nullable = false, length = 64)
+    @Builder.Default
+    private Set<RedactionClassification> redactionClassifications = new HashSet<>();
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

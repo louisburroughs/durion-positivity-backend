@@ -141,6 +141,9 @@ public record SupplierProfileProperties(@Nullable List<ProfileSpec> profiles) {
      * @param schedule cron expression for batch capabilities
      * @param enabled whether the binding resolves; {@code null} = {@code true}
      * @param captureLevel exchange-audit payload capture level key (ADR-0050 §7)
+     * @param redactions data classification keys additionally redacted from {@code REDACTED}
+     *     captures of this binding (ADR-0050 §7 minimization); {@code null}/empty = credential
+     *     redaction only
      */
     public record BindingSpec(
             @Nullable String capability,
@@ -151,7 +154,8 @@ public record SupplierProfileProperties(@Nullable List<ProfileSpec> profiles) {
             @Nullable String auth,
             @Nullable String schedule,
             @Nullable Boolean enabled,
-            @Nullable String captureLevel) {}
+            @Nullable String captureLevel,
+            @Nullable List<String> redactions) {}
 
     /**
      * Environment overlay (§7 {@code sandbox}).

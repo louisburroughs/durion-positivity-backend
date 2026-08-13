@@ -208,6 +208,7 @@ class ServiceModelInvariantsTest {
                             "basic-main",
                             null,
                             true,
+                            null,
                             null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("version must not be blank");

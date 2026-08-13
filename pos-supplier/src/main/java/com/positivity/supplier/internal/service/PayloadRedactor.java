@@ -1,8 +1,11 @@
 package com.positivity.supplier.internal.service;
 
 import com.positivity.supplier.internal.enums.PayloadCaptureLevel;
+import com.positivity.supplier.internal.enums.RedactionClassification;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
@@ -26,19 +29,26 @@ import org.jspecify.annotations.Nullable;
  * only its value replaced, so a redacted document still shows an operator that the field was present —
  * which is often the diagnostic they need — without disclosing it.
  *
- * <h2>Two limitations, both real and both deliberately not papered over</h2>
+ * <h2>Two levels of redaction: credentials always, classifications per binding</h2>
  *
- * <ol>
- *   <li><strong>The sensitive-name set is fixed, not per-binding.</strong> ADR-0050 §7 describes configurable
- *       per-binding field redaction; this is a compiled-in list applied identically everywhere. Nothing varies
- *       it — no property, no column, no request field. Deferred to CAP-318.
- *   <li><strong>Only NAMED fields can be found.</strong> The four pattern families match XML elements, XML
- *       attributes, JSON fields and form parameters, all of which pair a name with a value. A positional or
- *       fixed-width vendor format — an EDIFACT segment, a delimited flat file — carries values with no names
- *       at all, so nothing matches and a REDACTED capture of such a document is stored substantially intact.
- *       This is not a bug in the patterns; it is a limit of name-based redaction, and closing it needs a
- *       per-format field map, which is codec knowledge and therefore CAP-318's.
- * </ol>
+ * The credential vocabulary ({@link #SENSITIVE_NAMES}) applies identically to every binding — no
+ * configuration can narrow it, because failing to redact a credential is unrecoverable. On top of it, a
+ * binding may declare {@link RedactionClassification}s (issue #1259, ADR-0050 §7 minimization:
+ * "redaction configuration lives with the binding"), each of which contributes a compiled-in field-name
+ * vocabulary of its own — customer identifiers for fleet workorder authorization payloads, pricing for
+ * PRICAT-class documents. Classifications rather than free-text field lists, so the same class of data
+ * is treated consistently across vendors: widening a class here widens it for every binding declaring it.
+ *
+ * <h2>One limitation, real and deliberately not papered over</h2>
+ *
+ * <strong>Only NAMED fields can be found.</strong> The four pattern families match XML elements, XML
+ * attributes, JSON fields and form parameters, all of which pair a name with a value — and that holds
+ * for classification vocabularies exactly as for credentials. A positional or fixed-width vendor
+ * format — an EDIFACT segment, a delimited flat file — carries values with no names at all, so nothing
+ * matches and a REDACTED capture of such a document is stored substantially intact whatever
+ * classifications the binding declares. This is not a bug in the patterns; it is a limit of name-based
+ * redaction, and closing it needs a per-format field map, which is codec knowledge and therefore
+ * CAP-318's.
  *
  * <p>Until then, the honest operational advice is that {@code METADATA_ONLY} is the only level that
  * <em>guarantees</em> no commercial content is retained for a positional-format binding.
@@ -82,26 +92,102 @@ public final class PayloadRedactor {
             "username",
             "user_name");
 
-    /** {@code <Password>value</Password>} and {@code <ns:Password ...>value</ns:Password>}. */
-    private static final List<Pattern> XML_ELEMENT_PATTERNS = SENSITIVE_NAMES.stream()
-            .map(name -> Pattern.compile(
-                    "(<(?:[\\w.-]+:)?" + Pattern.quote(name) + "\\b[^>]*>)(.*?)(</(?:[\\w.-]+:)?" + Pattern.quote(name)
-                            + "\\s*>)",
-                    Pattern.CASE_INSENSITIVE | Pattern.DOTALL))
-            .toList();
+    /** The credential patterns, applied to every payload regardless of binding configuration. */
+    private static final NamePatterns CREDENTIAL_PATTERNS = NamePatterns.compile(SENSITIVE_NAMES);
 
-    /** {@code Password="value"} and {@code password='value'} attributes. */
-    private static final List<Pattern> XML_ATTRIBUTE_PATTERNS = SENSITIVE_NAMES.stream()
-            .map(name -> Pattern.compile(
-                    "(\\b" + Pattern.quote(name) + "\\s*=\\s*)([\"'])(.*?)(\\2)", Pattern.CASE_INSENSITIVE))
-            .toList();
+    /**
+     * The field-name vocabulary of each {@link RedactionClassification} — the per-binding half of
+     * ADR-0050 §7 minimization. Compiled in, like {@link #SENSITIVE_NAMES}, so a class means the same
+     * thing on every binding that declares it; what varies per binding is only WHICH classes apply.
+     *
+     * <p>Underscore variants are listed alongside the joined form for the same reason the credential set
+     * lists {@code api_key} next to {@code apikey}: matching is case-insensitive but literal, so
+     * {@code CustomerId} and {@code CUSTOMER_ID} need separate entries to both be found.
+     */
+    private static final Map<RedactionClassification, List<String>> CLASSIFICATION_NAMES = Map.of(
+            RedactionClassification.CUSTOMER_IDENTIFIER,
+                    List.of(
+                            "customerid",
+                            "customer_id",
+                            "customernumber",
+                            "customer_number",
+                            "customerno",
+                            "customer_no",
+                            "customerreference",
+                            "customer_reference",
+                            "customercode",
+                            "customer_code",
+                            "accountid",
+                            "account_id",
+                            "accountnumber",
+                            "account_number",
+                            "accountno",
+                            "account_no",
+                            "fleetid",
+                            "fleet_id",
+                            "fleetaccount",
+                            "fleet_account",
+                            "fleetnumber",
+                            "fleet_number",
+                            "driverid",
+                            "driver_id",
+                            "drivernumber",
+                            "driver_number",
+                            "drivername",
+                            "driver_name",
+                            "vin",
+                            "vehicleid",
+                            "vehicle_id",
+                            "licenseplate",
+                            "license_plate",
+                            "licenceplate",
+                            "licence_plate",
+                            "registrationnumber",
+                            "registration_number"),
+            RedactionClassification.COMMERCIAL_PRICING,
+                    List.of(
+                            "price",
+                            "unitprice",
+                            "unit_price",
+                            "netprice",
+                            "net_price",
+                            "grossprice",
+                            "gross_price",
+                            "listprice",
+                            "list_price",
+                            "purchaseprice",
+                            "purchase_price",
+                            "retailprice",
+                            "retail_price",
+                            "discount",
+                            "discountrate",
+                            "discount_rate",
+                            "discountpercent",
+                            "discount_percent",
+                            "rebate",
+                            "rebaterate",
+                            "rebate_rate",
+                            "netamount",
+                            "net_amount",
+                            "grossamount",
+                            "gross_amount"));
 
-    /** {@code "password": "value"} and {@code "password":123} in JSON. */
-    private static final List<Pattern> JSON_FIELD_PATTERNS = SENSITIVE_NAMES.stream()
-            .map(name -> Pattern.compile(
-                    "(\"" + Pattern.quote(name) + "\"\\s*:\\s*)(\"(?:[^\"\\\\]|\\\\.)*\"|[^,}\\s]+)",
-                    Pattern.CASE_INSENSITIVE))
-            .toList();
+    /**
+     * Compiled per-classification patterns. Built over {@code values()} rather than the map's keys so a
+     * new enum constant without a vocabulary fails class initialization — loudly, at startup — instead of
+     * silently redacting nothing for bindings that declare it.
+     */
+    private static final Map<RedactionClassification, NamePatterns> CLASSIFICATION_PATTERNS = java.util.Arrays.stream(
+                    RedactionClassification.values())
+            .collect(java.util.stream.Collectors.toUnmodifiableMap(java.util.function.Function.identity(), c -> {
+                List<String> names = CLASSIFICATION_NAMES.get(c);
+                if (names == null || names.isEmpty()) {
+                    throw new IllegalStateException(
+                            "RedactionClassification." + c + " has no field-name vocabulary in PayloadRedactor;"
+                                    + " a class that redacts nothing must not exist");
+                }
+                return NamePatterns.compile(names);
+            }));
 
     /**
      * Names redacted in a <strong>query string only</strong>, on top of {@link #SENSITIVE_NAMES}.
@@ -154,13 +240,75 @@ public final class PayloadRedactor {
     /** {@code //user:password@host} — userinfo, which is a plaintext credential in a URL (ADR-0050 §4). */
     private static final Pattern URL_USERINFO = Pattern.compile("(//)([^/@\\s]+)(@)");
 
-    /** {@code client_secret=value&...} in form-encoded bodies. */
-    private static final List<Pattern> FORM_FIELD_PATTERNS = SENSITIVE_NAMES.stream()
-            .map(name -> Pattern.compile("(\\b" + Pattern.quote(name) + "=)([^&\\s]*)", Pattern.CASE_INSENSITIVE))
-            .toList();
-
     private PayloadRedactor() {
         // static rules
+    }
+
+    /**
+     * The four name-addressable pattern families, compiled once from one name vocabulary. One instance
+     * exists for the credential set and one per {@link RedactionClassification}; applying an instance is
+     * what {@code REDACTED} means for that vocabulary.
+     */
+    private record NamePatterns(
+            List<Pattern> xmlElements,
+            List<Pattern> xmlAttributes,
+            List<Pattern> jsonFields,
+            List<Pattern> formFields) {
+
+        @NonNull
+        static NamePatterns compile(@NonNull List<String> names) {
+            return new NamePatterns(
+                    // <Password>value</Password> and <ns:Password ...>value</ns:Password>
+                    names.stream()
+                            .map(name -> Pattern.compile(
+                                    "(<(?:[\\w.-]+:)?" + Pattern.quote(name) + "\\b[^>]*>)(.*?)(</(?:[\\w.-]+:)?"
+                                            + Pattern.quote(name) + "\\s*>)",
+                                    Pattern.CASE_INSENSITIVE | Pattern.DOTALL))
+                            .toList(),
+                    // Password="value" and password='value' attributes
+                    names.stream()
+                            .map(name -> Pattern.compile(
+                                    "(\\b" + Pattern.quote(name) + "\\s*=\\s*)([\"'])(.*?)(\\2)",
+                                    Pattern.CASE_INSENSITIVE))
+                            .toList(),
+                    // "password": "value" and "password":123 in JSON
+                    names.stream()
+                            .map(name -> Pattern.compile(
+                                    "(\"" + Pattern.quote(name) + "\"\\s*:\\s*)(\"(?:[^\"\\\\]|\\\\.)*\"|[^,}\\s]+)",
+                                    Pattern.CASE_INSENSITIVE))
+                            .toList(),
+                    // client_secret=value&... in form-encoded bodies
+                    names.stream()
+                            .map(name -> Pattern.compile(
+                                    "(\\b" + Pattern.quote(name) + "=)([^&\\s]*)", Pattern.CASE_INSENSITIVE))
+                            .toList());
+        }
+
+        /** Applies all four families, value-preserving in shape exactly as the class javadoc describes. */
+        @NonNull
+        String apply(@NonNull String payload) {
+            String result = payload;
+            for (Pattern pattern : xmlElements) {
+                result = pattern.matcher(result)
+                        .replaceAll(matchResult ->
+                                Matcher.quoteReplacement(matchResult.group(1) + REDACTED + matchResult.group(3)));
+            }
+            for (Pattern pattern : xmlAttributes) {
+                result = pattern.matcher(result)
+                        .replaceAll(matchResult -> Matcher.quoteReplacement(
+                                matchResult.group(1) + matchResult.group(2) + REDACTED + matchResult.group(4)));
+            }
+            for (Pattern pattern : jsonFields) {
+                result = pattern.matcher(result)
+                        .replaceAll(
+                                matchResult -> Matcher.quoteReplacement(matchResult.group(1) + "\"" + REDACTED + "\""));
+            }
+            for (Pattern pattern : formFields) {
+                result = pattern.matcher(result)
+                        .replaceAll(matchResult -> Matcher.quoteReplacement(matchResult.group(1) + REDACTED));
+            }
+            return result;
+        }
     }
 
     /**
@@ -273,33 +421,35 @@ public final class PayloadRedactor {
      */
     @Nullable
     public static String redact(@Nullable String payload) {
+        return redact(payload, Set.of());
+    }
+
+    /**
+     * Redacts credential values plus the named fields of the binding's declared classifications.
+     *
+     * <p>The credential vocabulary is always applied — a binding cannot configure it away — and each
+     * classification contributes its own compiled vocabulary on top (ADR-0050 §7 minimization,
+     * issue #1259).
+     *
+     * @param payload the raw wire document, or {@code null}
+     * @param classifications the binding's declared classifications; empty means credentials only
+     * @return the payload with the configured values replaced, or {@code null} when given {@code null}
+     */
+    @Nullable
+    public static String redact(@Nullable String payload, @NonNull Set<RedactionClassification> classifications) {
+        Objects.requireNonNull(classifications, "classifications must not be null");
         if (payload == null || payload.isEmpty()) {
             return payload;
         }
-        String result = payload;
-        for (Pattern pattern : XML_ELEMENT_PATTERNS) {
-            result = pattern.matcher(result)
-                    .replaceAll(matchResult ->
-                            Matcher.quoteReplacement(matchResult.group(1) + REDACTED + matchResult.group(3)));
-        }
-        for (Pattern pattern : XML_ATTRIBUTE_PATTERNS) {
-            result = pattern.matcher(result)
-                    .replaceAll(matchResult -> Matcher.quoteReplacement(
-                            matchResult.group(1) + matchResult.group(2) + REDACTED + matchResult.group(4)));
-        }
-        for (Pattern pattern : JSON_FIELD_PATTERNS) {
-            result = pattern.matcher(result)
-                    .replaceAll(matchResult -> Matcher.quoteReplacement(matchResult.group(1) + "\"" + REDACTED + "\""));
-        }
-        for (Pattern pattern : FORM_FIELD_PATTERNS) {
-            result = pattern.matcher(result)
-                    .replaceAll(matchResult -> Matcher.quoteReplacement(matchResult.group(1) + REDACTED));
+        String result = CREDENTIAL_PATTERNS.apply(payload);
+        for (RedactionClassification classification : classifications) {
+            result = CLASSIFICATION_PATTERNS.get(classification).apply(result);
         }
         return result;
     }
 
     /**
-     * Applies a binding's capture level to a payload.
+     * Applies a binding's capture level to a payload, with credential redaction only.
      *
      * @param payload the raw wire document, or {@code null}
      * @param captureLevel the level governing this exchange
@@ -308,13 +458,30 @@ public final class PayloadRedactor {
      */
     @Nullable
     public static String applyCaptureLevel(@Nullable String payload, @NonNull PayloadCaptureLevel captureLevel) {
+        return applyCaptureLevel(payload, captureLevel, Set.of());
+    }
+
+    /**
+     * Applies a binding's capture level to a payload, honouring its declared classifications.
+     *
+     * @param payload the raw wire document, or {@code null}
+     * @param captureLevel the level governing this exchange
+     * @param classifications the binding's declared classifications; only consulted at {@code REDACTED}
+     * @return {@code null} for {@code METADATA_ONLY}; the payload unchanged for {@code FULL}; the
+     *     redacted payload for {@code REDACTED}
+     */
+    @Nullable
+    public static String applyCaptureLevel(
+            @Nullable String payload,
+            @NonNull PayloadCaptureLevel captureLevel,
+            @NonNull Set<RedactionClassification> classifications) {
         return switch (captureLevel) {
             case METADATA_ONLY -> null;
             // FULL means "keep the document as sent" -- the operator explicitly accepted that for
-            // this binding. Credential-header redaction is not at stake here because headers never
-            // reach a payload; what FULL preserves is body content.
+            // this binding, and classifications deliberately do NOT apply: declaring one narrows
+            // REDACTED, it does not turn FULL into a fourth level.
             case FULL -> payload;
-            case REDACTED -> redact(payload);
+            case REDACTED -> redact(payload, classifications);
         };
     }
 }

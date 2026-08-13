@@ -214,6 +214,127 @@ class PayloadRedactorTest {
         }
     }
 
+    /**
+     * Per-binding, classification-driven redaction (issue #1259, ADR-0050 §7 minimization). These are the
+     * §7 examples verbatim: a customer identifier in a fleet workorder authorization payload, and pricing
+     * in a PRICAT-class document.
+     */
+    @Nested
+    class ClassificationDrivenRedaction {
+
+        private static final String CUSTOMER_NUMBER = "FLEET-CUST-0042";
+        private static final String NET_PRICE = "184.60";
+
+        private static final String WORKORDER_XML = "<WorkorderAuthorization><CustomerNumber>" + CUSTOMER_NUMBER
+                + "</CustomerNumber><Vin>WVWZZZ1JZXW000001</Vin><Article>225/45R17</Article>"
+                + "</WorkorderAuthorization>";
+
+        private static final String PRICAT_JSON =
+                "{\"article\":\"225/45R17\",\"netPrice\":\"" + NET_PRICE + "\",\"net_price\":184.60}";
+
+        @Test
+        void withoutAClassificationTheCustomerIdentifierSurvivesRedaction() {
+            // The gap #1259 records: name-based credential redaction alone keeps every
+            // non-credential-named field of a REDACTED capture, for 400 days.
+            assertThat(PayloadRedactor.redact(WORKORDER_XML)).contains(CUSTOMER_NUMBER);
+            assertThat(PayloadRedactor.redact(WORKORDER_XML, java.util.Set.of()))
+                    .contains(CUSTOMER_NUMBER);
+        }
+
+        @Test
+        void customerIdentifierClassificationRedactsFleetWorkorderIdentity() {
+            String redacted = PayloadRedactor.redact(
+                    WORKORDER_XML,
+                    java.util.Set.of(
+                            com.positivity.supplier.internal.enums.RedactionClassification.CUSTOMER_IDENTIFIER));
+
+            assertThat(redacted).doesNotContain(CUSTOMER_NUMBER).doesNotContain("WVWZZZ1JZXW000001");
+            assertThat(redacted)
+                    .as("the commercial content the classification does not cover is the reason payloads are kept")
+                    .contains("225/45R17");
+            assertThat(redacted)
+                    .as("value-preserving in shape, like credential redaction")
+                    .contains("<CustomerNumber>")
+                    .contains("</CustomerNumber>");
+        }
+
+        @Test
+        void commercialPricingClassificationRedactsPricatFields() {
+            String redacted = PayloadRedactor.redact(
+                    PRICAT_JSON,
+                    java.util.Set.of(
+                            com.positivity.supplier.internal.enums.RedactionClassification.COMMERCIAL_PRICING));
+
+            assertThat(redacted).doesNotContain(NET_PRICE).contains("225/45R17");
+        }
+
+        @Test
+        void classificationsAreIndependentOfEachOther() {
+            // Declaring pricing must not start redacting customer identity, or a binding's declared
+            // scope and its actual scope diverge silently.
+            String redacted = PayloadRedactor.redact(
+                    WORKORDER_XML,
+                    java.util.Set.of(
+                            com.positivity.supplier.internal.enums.RedactionClassification.COMMERCIAL_PRICING));
+
+            assertThat(redacted).contains(CUSTOMER_NUMBER);
+        }
+
+        @Test
+        void credentialRedactionAlwaysAppliesWhateverTheClassifications() {
+            String document = "<Header><Password>" + SECRET + "</Password></Header>";
+
+            assertThat(PayloadRedactor.redact(document, java.util.Set.of())).doesNotContain(SECRET);
+            assertThat(PayloadRedactor.redact(
+                            document,
+                            java.util.Set.of(
+                                    com.positivity.supplier.internal.enums.RedactionClassification
+                                            .CUSTOMER_IDENTIFIER)))
+                    .doesNotContain(SECRET);
+        }
+
+        @Test
+        void everyClassificationHasACompiledVocabulary() {
+            // A classification that redacts nothing must not exist: PayloadRedactor fails class
+            // initialization on a constant with no vocabulary, and this test makes that a build failure
+            // by exercising every constant end to end.
+            for (var classification : com.positivity.supplier.internal.enums.RedactionClassification.values()) {
+                assertThat(PayloadRedactor.redact("<x/>", java.util.Set.of(classification)))
+                        .isEqualTo("<x/>");
+            }
+        }
+
+        @Test
+        void classificationsApplyAtRedactedAndNeverWidenFullOrMetadataOnly() {
+            var classes = java.util.Set.of(
+                    com.positivity.supplier.internal.enums.RedactionClassification.CUSTOMER_IDENTIFIER);
+
+            assertThat(PayloadRedactor.applyCaptureLevel(WORKORDER_XML, PayloadCaptureLevel.REDACTED, classes))
+                    .doesNotContain(CUSTOMER_NUMBER);
+            assertThat(PayloadRedactor.applyCaptureLevel(WORKORDER_XML, PayloadCaptureLevel.FULL, classes))
+                    .as("FULL is an explicit operator choice; classifications narrow REDACTED, they do not"
+                            + " create a fourth level")
+                    .isEqualTo(WORKORDER_XML);
+            assertThat(PayloadRedactor.applyCaptureLevel(WORKORDER_XML, PayloadCaptureLevel.METADATA_ONLY, classes))
+                    .isNull();
+        }
+
+        @Test
+        void positionalDocumentsAreUntouchedByClassifications() {
+            // The honestly-recorded limit (unchanged by #1259): an EDIFACT UNB segment carries the
+            // customer reference and password POSITIONALLY, so name-based classification redaction finds
+            // nothing and METADATA_ONLY remains the only safe level for positional families.
+            String edifact = "UNB+UNOC:3+SENDER+RECIPIENT+260813:1030+" + CUSTOMER_NUMBER + "'";
+
+            assertThat(PayloadRedactor.redact(
+                            edifact,
+                            java.util.Set.of(
+                                    com.positivity.supplier.internal.enums.RedactionClassification
+                                            .CUSTOMER_IDENTIFIER)))
+                    .isEqualTo(edifact);
+        }
+    }
+
     // ── URI redaction (ADR-0050 §4/§7) ──────────────────────────────────────────────
 
     @Nested

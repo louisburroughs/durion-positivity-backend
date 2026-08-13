@@ -3,6 +3,7 @@ package com.positivity.supplier.service.model;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
 import java.util.Objects;
+import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -31,6 +32,9 @@ import org.jspecify.annotations.Nullable;
  * @param enabled whether the binding resolves; a disabled binding behaves as absent
  * @param captureLevel exchange-audit payload capture level (ADR-0050 §7); {@code null} means
  *     the deployment default
+ * @param redactionClassifications data classifications additionally redacted from {@code REDACTED}
+ *     captures of this binding (ADR-0050 §7 minimization); {@code null} or empty means credential
+ *     redaction only
  */
 @Schema(
         description = "Create/update payload for a capability endpoint binding (ADR-0050 §3): at most one binding per"
@@ -103,7 +107,18 @@ public record EndpointBindingRequest(
                         "Exchange-audit payload capture level for this binding (ADR-0050 §7). Exchange metadata is always retained regardless. Omit to use the deployment default.",
                 example = "REDACTED")
         @Nullable
-        PayloadCaptureLevel captureLevel) {
+        PayloadCaptureLevel captureLevel,
+
+        @Schema(
+                description = "Data classifications whose named fields are additionally redacted from REDACTED"
+                        + " captures of this binding (ADR-0050 §7 minimization). Credential redaction always"
+                        + " applies and cannot be configured away; classifications only narrow what a REDACTED"
+                        + " capture retains. Name-based: for positional vendor formats (EDIFACT segments) they"
+                        + " redact nothing and METADATA_ONLY is the only level guaranteeing no content is"
+                        + " retained. Omit for credential redaction only.",
+                example = "[\"CUSTOMER_IDENTIFIER\"]")
+        @Nullable
+        Set<RedactionClassification> redactionClassifications) {
 
     public EndpointBindingRequest {
         requireNonBlank(capability, "capability");

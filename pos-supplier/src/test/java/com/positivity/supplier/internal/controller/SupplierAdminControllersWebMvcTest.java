@@ -265,7 +265,10 @@ class SupplierAdminControllersWebMvcTest {
                             "s2s-bearer",
                             null,
                             true,
-                            null));
+                            null,
+                            java.util.Set.of(
+                                    com.positivity.supplier.service.model.RedactionClassification
+                                            .CUSTOMER_IDENTIFIER)));
 
             mockMvc.perform(authed(
                             post(BASE + "/{id}/bindings", PROFILE_ID)
@@ -276,7 +279,8 @@ class SupplierAdminControllersWebMvcTest {
                     .andExpect(jsonPath("$.capability").value("STOCK_INQUIRY"))
                     .andExpect(jsonPath("$.protocolFamily").value("EDIWHEEL_A25"))
                     .andExpect(jsonPath("$.version").value("A2_5"))
-                    .andExpect(jsonPath("$.authConfigName").value("s2s-bearer"));
+                    .andExpect(jsonPath("$.authConfigName").value("s2s-bearer"))
+                    .andExpect(jsonPath("$.redactionClassifications[0]").value("CUSTOMER_IDENTIFIER"));
 
             ArgumentCaptor<EndpointBindingRequest> captor = ArgumentCaptor.captor();
             verify(adminService).createBinding(eq(PROFILE_ID), captor.capture());
