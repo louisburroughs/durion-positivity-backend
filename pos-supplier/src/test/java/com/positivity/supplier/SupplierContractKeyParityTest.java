@@ -101,7 +101,10 @@ class SupplierContractKeyParityTest {
                         com.positivity.supplier.internal.enums.AuditAccessKind.class),
                 Arguments.of(
                         com.positivity.supplier.service.model.AuditPayloadOutcome.class,
-                        com.positivity.supplier.internal.enums.AuditPayloadOutcome.class));
+                        com.positivity.supplier.internal.enums.AuditPayloadOutcome.class),
+                Arguments.of(
+                        com.positivity.supplier.service.model.RedactionClassification.class,
+                        com.positivity.supplier.internal.enums.RedactionClassification.class));
     }
 
     /**
@@ -157,6 +160,26 @@ class SupplierContractKeyParityTest {
                                     + " name() with no @Enumerated mapping, so nothing else links the two",
                             outcome)
                     .contains("'" + outcome.name() + "'");
+        }
+    }
+
+    /**
+     * The same pin for V7's redaction-classification CHECK. A classification added to the enum (and given a
+     * vocabulary in {@code PayloadRedactor}) but not to the constraint would fail the binding admin write
+     * that declares it — better than a silent audit gap, but still a runtime discovery this makes a build
+     * failure instead.
+     */
+    @Test
+    void redactionClassificationEnumMatchesTheCheckConstraintInTheV7Migration() throws Exception {
+        String migration = java.nio.file.Files.readString(
+                java.nio.file.Path.of("src/main/resources/db/migration/V7__binding_redaction_classifications.sql"));
+
+        for (var classification : com.positivity.supplier.internal.enums.RedactionClassification.values()) {
+            assertThat(constraintBody(migration, "chk_sbinding_redaction_classification"))
+                    .as(
+                            "RedactionClassification.%s must be permitted by chk_sbinding_redaction_classification",
+                            classification)
+                    .contains("'" + classification.name() + "'");
         }
     }
 

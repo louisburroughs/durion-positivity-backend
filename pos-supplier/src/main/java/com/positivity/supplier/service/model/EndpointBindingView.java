@@ -2,6 +2,7 @@ package com.positivity.supplier.service.model;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -22,6 +23,8 @@ import org.jspecify.annotations.Nullable;
  * @param enabled whether the binding resolves; a disabled binding behaves as absent
  * @param captureLevel exchange-audit payload capture level; {@code null} means the deployment
  *     default
+ * @param redactionClassifications data classifications additionally redacted from {@code REDACTED}
+ *     captures of this binding; empty means credential redaction only
  */
 @Schema(description = "Read model of a capability endpoint binding.")
 public record EndpointBindingView(
@@ -91,7 +94,15 @@ public record EndpointBindingView(
                         "Exchange-audit payload capture level for this binding (ADR-0050 §7). Exchange metadata is always retained regardless. Omit to use the deployment default.",
                 example = "REDACTED")
         @Nullable
-        PayloadCaptureLevel captureLevel) {
+        PayloadCaptureLevel captureLevel,
+
+        @Schema(
+                description = "Data classifications whose named fields are additionally redacted from REDACTED"
+                        + " captures of this binding (ADR-0050 §7 minimization). Empty means credential"
+                        + " redaction only.",
+                example = "[\"CUSTOMER_IDENTIFIER\"]")
+        @NonNull
+        Set<RedactionClassification> redactionClassifications) {
 
     public EndpointBindingView {
         Objects.requireNonNull(bindingId, "bindingId must not be null");
@@ -101,5 +112,7 @@ public record EndpointBindingView(
         Objects.requireNonNull(baseUrl, "baseUrl must not be null");
         Objects.requireNonNull(path, "path must not be null");
         Objects.requireNonNull(authConfigName, "authConfigName must not be null");
+        Objects.requireNonNull(redactionClassifications, "redactionClassifications must not be null");
+        redactionClassifications = Set.copyOf(redactionClassifications);
     }
 }

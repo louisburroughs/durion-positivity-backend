@@ -13,6 +13,7 @@ import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.enums.PayloadCaptureLevel;
 import com.positivity.supplier.internal.enums.ProfileSourceOfTruth;
+import com.positivity.supplier.internal.enums.RedactionClassification;
 import com.positivity.supplier.internal.enums.RetryBackoff;
 import com.positivity.supplier.internal.enums.SupplierAccountRole;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
@@ -32,6 +33,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -235,6 +237,18 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
                     bindingSpec.captureLevel() == null
                             ? null
                             : PayloadCaptureLevel.valueOf(bindingSpec.captureLevel()));
+            Set<RedactionClassification> redactions = bindingSpec.redactions() == null
+                    ? Set.of()
+                    : bindingSpec.redactions().stream()
+                            .map(RedactionClassification::valueOf)
+                            .collect(Collectors.toSet());
+            if (entity.getRedactionClassifications() == null) {
+                entity.setRedactionClassifications(new HashSet<>(redactions));
+            } else {
+                // In place, not replaced: Hibernate owns the @ElementCollection instance on a managed row.
+                entity.getRedactionClassifications().retainAll(redactions);
+                entity.getRedactionClassifications().addAll(redactions);
+            }
             bindingRepository.save(entity);
         }
         bindingRepository.deleteAll(existing.values());
@@ -408,6 +422,14 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
                         PayloadCaptureLevel::valueOf,
                         binding.captureLevel(),
                         where + "captureLevel '" + binding.captureLevel() + "' is not a canonical capture level");
+            }
+            if (binding.redactions() != null) {
+                for (String redaction : binding.redactions()) {
+                    parseEnumOrInvalid(
+                            RedactionClassification::valueOf,
+                            redaction,
+                            where + "redactions entry '" + redaction + "' is not a canonical redaction classification");
+                }
             }
         }
     }

@@ -476,6 +476,7 @@ class SupplierProfileAdminServiceImplTest {
                                 "s2s-bearer",
                                 null,
                                 true,
+                                null,
                                 null)),
                 SupplierValidationException.UNKNOWN_PROTOCOL_FAMILY);
         assertValidationFailure(
@@ -490,6 +491,7 @@ class SupplierProfileAdminServiceImplTest {
                                 "s2s-bearer",
                                 null,
                                 true,
+                                null,
                                 null)),
                 SupplierValidationException.UNKNOWN_PROTOCOL_FAMILY);
         assertValidationFailure(
@@ -507,6 +509,7 @@ class SupplierProfileAdminServiceImplTest {
                                 "s2s-bearer",
                                 "not-a-cron",
                                 true,
+                                null,
                                 null)),
                 SupplierValidationException.SCHEDULE_INVALID);
     }
@@ -528,13 +531,17 @@ class SupplierProfileAdminServiceImplTest {
                         "s2s-bearer",
                         "0 0 4 * * *",
                         true,
-                        PayloadCaptureLevel.REDACTED));
+                        PayloadCaptureLevel.REDACTED,
+                        java.util.Set.of(
+                                com.positivity.supplier.service.model.RedactionClassification.COMMERCIAL_PRICING)));
 
         assertThat(created.capability()).isEqualTo("PRICE_CATALOG");
         assertThat(created.protocolFamily()).isEqualTo("EDIWHEEL_B");
         assertThat(created.version()).isEqualTo("B4_0");
         assertThat(created.schedule()).isEqualTo("0 0 4 * * *");
         assertThat(created.captureLevel()).isEqualTo(PayloadCaptureLevel.REDACTED);
+        assertThat(created.redactionClassifications())
+                .containsExactly(com.positivity.supplier.service.model.RedactionClassification.COMMERCIAL_PRICING);
 
         assertConflict(
                 () -> adminService.createBinding(
@@ -548,6 +555,7 @@ class SupplierProfileAdminServiceImplTest {
                                 "s2s-bearer",
                                 null,
                                 true,
+                                null,
                                 null)),
                 SupplierConflictException.BINDING_CAPABILITY_CONFLICT);
 
@@ -563,9 +571,13 @@ class SupplierProfileAdminServiceImplTest {
                         "s2s-bearer",
                         null,
                         false,
+                        null,
                         null));
         assertThat(updated.enabled()).isFalse();
         assertThat(updated.schedule()).isNull();
+        // An omitted set on update CLEARS the declared classifications -- the request is the whole
+        // desired state of the binding, not a patch.
+        assertThat(updated.redactionClassifications()).isEmpty();
         assertThat(adminService.listBindings(profileId)).containsExactly(updated);
     }
 
@@ -599,7 +611,7 @@ class SupplierProfileAdminServiceImplTest {
 
     private static EndpointBindingRequest bindingRequest(String capability, String authName, String baseUrl) {
         return new EndpointBindingRequest(
-                capability, "EDIWHEEL_A25", "A2_5", baseUrl, "/inquiry", authName, null, true, null);
+                capability, "EDIWHEEL_A25", "A2_5", baseUrl, "/inquiry", authName, null, true, null, null);
     }
 
     private static void assertYamlRejected(ThrowingCallable callable) {
@@ -773,6 +785,7 @@ class SupplierProfileAdminServiceImplTest {
                             "s2s-bearer",
                             null,
                             true,
+                            null,
                             null));
         }
 
@@ -797,6 +810,7 @@ class SupplierProfileAdminServiceImplTest {
                             "s2s-bearer",
                             null,
                             true,
+                            null,
                             null));
         }
 

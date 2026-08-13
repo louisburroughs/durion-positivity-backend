@@ -320,6 +320,7 @@ public class SupplierExchangeAuditServiceImpl implements SupplierExchangeAuditSe
                 com.positivity.supplier.service.model.AuditAccessKind.valueOf(
                         entity.getAccessKind().name()),
                 com.positivity.supplier.service.model.AuditPayloadOutcome.valueOf(
-                        entity.getPayloadOutcome().name()));
+                        entity.getPayloadOutcome().name()),
+                entity.getCorrelationId());
     }
 }

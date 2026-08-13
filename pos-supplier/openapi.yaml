@@ -1386,6 +1386,17 @@ components:
           - REDACTED
           - METADATA_ONLY
           example: REDACTED
+        redactionClassifications:
+          type: array
+          description: 'Data classifications whose named fields are additionally redacted from REDACTED captures of this binding (ADR-0050 §7 minimization). Credential redaction always applies and cannot be configured away; classifications only narrow what a REDACTED capture retains. Name-based: for positional vendor formats (EDIFACT segments) they redact nothing and METADATA_ONLY is the only level guaranteeing no content is retained. Omit for credential redaction only.'
+          example:
+          - CUSTOMER_IDENTIFIER
+          items:
+            type: string
+            enum:
+            - CUSTOMER_IDENTIFIER
+            - COMMERCIAL_PRICING
+          uniqueItems: true
     EndpointBindingView:
       type: object
       description: Read model of a capability endpoint binding.
@@ -1435,6 +1446,17 @@ components:
           - REDACTED
           - METADATA_ONLY
           example: REDACTED
+        redactionClassifications:
+          type: array
+          description: Data classifications whose named fields are additionally redacted from REDACTED captures of this binding (ADR-0050 §7 minimization). Empty means credential redaction only.
+          example:
+          - CUSTOMER_IDENTIFIER
+          items:
+            type: string
+            enum:
+            - CUSTOMER_IDENTIFIER
+            - COMMERCIAL_PRICING
+          uniqueItems: true
     AuthConfigRequest:
       type: object
       description: 'Create/update payload for a vendor auth config (ADR-0050 §4). Every secret field is a scheme-prefixed REFERENCE (e.g. env:VAR_NAME) resolved at call time — plaintext credentials are rejected, and references are write-only: they never appear in any response.'
@@ -1765,6 +1787,10 @@ components:
           - UNREADABLE
           - NOT_CAPTURED
           example: DECRYPTED
+        correlationId:
+          type: string
+          description: Correlation id of the request that caused the read, reused from the caller's X-Correlation-Id header (or generated when absent). Null only for access records written before inbound correlation existed.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a90
     PagedResponseExchangeAuditAccessView:
       type: object
       description: A page of results.

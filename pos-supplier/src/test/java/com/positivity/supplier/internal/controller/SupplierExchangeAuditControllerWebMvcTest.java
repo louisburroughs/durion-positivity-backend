@@ -286,7 +286,8 @@ class SupplierExchangeAuditControllerWebMvcTest {
                                     "a.operator@example.com",
                                     Instant.parse("2026-08-11T14:22:07.412Z"),
                                     AuditAccessKind.PAYLOAD_READ,
-                                    AuditPayloadOutcome.UNREADABLE)),
+                                    AuditPayloadOutcome.UNREADABLE,
+                                    "corr-1264")),
                             0,
                             50,
                             1L,
@@ -297,7 +298,8 @@ class SupplierExchangeAuditControllerWebMvcTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.items[0].accessedBy").value("a.operator@example.com"))
                     .andExpect(jsonPath("$.items[0].accessKind").value("PAYLOAD_READ"))
-                    .andExpect(jsonPath("$.items[0].payloadOutcome").value("UNREADABLE"));
+                    .andExpect(jsonPath("$.items[0].payloadOutcome").value("UNREADABLE"))
+                    .andExpect(jsonPath("$.items[0].correlationId").value("corr-1264"));
         }
     }
 

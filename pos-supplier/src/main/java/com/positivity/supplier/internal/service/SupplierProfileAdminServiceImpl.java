@@ -561,6 +561,22 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
                         ? null
                         : com.positivity.supplier.internal.enums.PayloadCaptureLevel.valueOf(
                                 request.captureLevel().name()));
+        // Mutate the managed collection in place rather than replacing it: Hibernate owns the
+        // @ElementCollection instance, and swapping it for a fresh set on update breaks orphan tracking.
+        java.util.Set<com.positivity.supplier.internal.enums.RedactionClassification> classifications =
+                request.redactionClassifications() == null
+                        ? java.util.Set.of()
+                        : request.redactionClassifications().stream()
+                                .map(classification ->
+                                        com.positivity.supplier.internal.enums.RedactionClassification.valueOf(
+                                                classification.name()))
+                                .collect(java.util.stream.Collectors.toSet());
+        if (binding.getRedactionClassifications() == null) {
+            binding.setRedactionClassifications(new java.util.HashSet<>(classifications));
+        } else {
+            binding.getRedactionClassifications().retainAll(classifications);
+            binding.getRedactionClassifications().addAll(classifications);
+        }
     }
 
     @NonNull
@@ -614,6 +630,13 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
                 binding.isEnabled(),
                 binding.getCaptureLevel() == null
                         ? null
-                        : PayloadCaptureLevel.valueOf(binding.getCaptureLevel().name()));
+                        : PayloadCaptureLevel.valueOf(binding.getCaptureLevel().name()),
+                binding.getRedactionClassifications() == null
+                        ? java.util.Set.of()
+                        : binding.getRedactionClassifications().stream()
+                                .map(classification ->
+                                        com.positivity.supplier.service.model.RedactionClassification.valueOf(
+                                                classification.name()))
+                                .collect(java.util.stream.Collectors.toSet()));
     }
 }

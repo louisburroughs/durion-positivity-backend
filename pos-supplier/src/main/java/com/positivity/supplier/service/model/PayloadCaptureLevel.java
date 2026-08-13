@@ -8,18 +8,18 @@ public enum PayloadCaptureLevel {
     /** Capture raw request/response payloads with credential-header redaction only. */
     FULL,
     /**
-     * Capture payloads with credential-header redaction plus a <strong>fixed</strong> set of sensitive body
-     * field names.
+     * Capture payloads with credential redaction plus the named fields of the binding's declared
+     * {@link RedactionClassification}s (ADR-0050 §7 minimization — redaction configuration lives with the
+     * binding).
      *
-     * <p>Not per-binding configurable, despite ADR-0050 §7 describing that. The set is compiled into
-     * {@code PayloadRedactor} and applies identically to every binding; there is no property, column or
-     * request field that varies it. Recorded as a CAP-318 gap rather than implied here, because a level named
-     * REDACTED that quietly redacts less than an operator configured would be worse than one that says what
-     * it does.
+     * <p>The credential vocabulary is fixed and applies identically everywhere; what varies per binding is
+     * which classifications are declared on top of it. A binding declaring none redacts credentials only.
      *
-     * <p>It also only recognises <em>named</em> fields — XML elements and attributes, JSON fields, form
+     * <p>Both halves only recognise <em>named</em> fields — XML elements and attributes, JSON fields, form
      * parameters. A positional or fixed-width vendor format has no field names to match, so a REDACTED
-     * capture of one is stored substantially intact.
+     * capture of one is stored substantially intact whatever the binding declares; {@code METADATA_ONLY}
+     * remains the only level that guarantees no content is retained for positional families until CAP-318's
+     * codec-aware redaction.
      */
     REDACTED,
     /** Capture no payloads; keep exchange metadata only. */

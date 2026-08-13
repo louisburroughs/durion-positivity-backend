@@ -136,6 +136,9 @@ class SupplierYamlBootstrapTest {
                 .orElseThrow();
         assertThat(pricatBinding.getProtocolFamily()).isEqualTo(ProtocolFamily.EDIWHEEL_B);
         assertThat(pricatBinding.getScheduleCron()).isEqualTo("0 0 4 * * *");
+        assertThat(pricatBinding.getRedactionClassifications())
+                .containsExactly(com.positivity.supplier.internal.enums.RedactionClassification.COMMERCIAL_PRICING);
+        assertThat(stockBinding.getRedactionClassifications()).isEmpty();
     }
 
     @Test
@@ -191,6 +194,7 @@ class SupplierYamlBootstrapTest {
                         "https://api2.michelin.example",
                         "/A2_5/inquiry",
                         "ediwheel-basic",
+                        null,
                         null,
                         null,
                         null)),
@@ -353,6 +357,7 @@ class SupplierYamlBootstrapTest {
                         "no-such-auth",
                         null,
                         null,
+                        null,
                         null)),
                 null);
 
@@ -378,6 +383,7 @@ class SupplierYamlBootstrapTest {
                         "https://api.michelin.example",
                         "/A2_5/inquiry",
                         "ediwheel-basic",
+                        null,
                         null,
                         null,
                         null)),
@@ -552,6 +558,7 @@ class SupplierYamlBootstrapTest {
                                 "ediwheel-basic",
                                 null,
                                 null,
+                                null,
                                 null),
                         new BindingSpec(
                                 "PRICE_CATALOG",
@@ -562,7 +569,8 @@ class SupplierYamlBootstrapTest {
                                 "ediwheel-basic",
                                 "0 0 4 * * *",
                                 true,
-                                "REDACTED")),
+                                "REDACTED",
+                                List.of("COMMERCIAL_PRICING"))),
                 new Sandbox(true, "https://sandbox.api.michelin.example"));
     }
 }

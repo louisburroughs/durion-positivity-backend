@@ -4,6 +4,7 @@ import static java.util.Map.entry;
 
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.supplier.internal.audit.SupplierCorrelationContext;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -281,13 +282,18 @@ public class SupplierExceptionHandler {
                 status);
     }
 
+    /**
+     * The ambient scope first, then the inbound header, then a fresh id. {@code SupplierCorrelationFilter}
+     * opens a scope for every request, so in production the first branch always answers and the error
+     * envelope's id matches the one the filter echoed on the response header. The header and generate
+     * fallbacks remain for handler-only test slices where the filter is not in the chain.
+     */
     private String resolveCorrelationId(HttpServletRequest request) {
-        if (request == null) {
-            return UUIDv7Generator.generate().toString();
-        }
-        String header = request.getHeader(X_CORRELATION_ID);
-        return (header != null && !header.isBlank())
-                ? header
-                : UUIDv7Generator.generate().toString();
+        return SupplierCorrelationContext.current().orElseGet(() -> {
+            String header = request == null ? null : request.getHeader(X_CORRELATION_ID);
+            return (header != null && !header.isBlank())
+                    ? header
+                    : UUIDv7Generator.generate().toString();
+        });
     }
 }

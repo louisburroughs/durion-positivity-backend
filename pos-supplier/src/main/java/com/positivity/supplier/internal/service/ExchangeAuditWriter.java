@@ -2,12 +2,13 @@ package com.positivity.supplier.internal.service;
 
 import com.positivity.supplier.internal.audit.AuditActorContext;
 import com.positivity.supplier.internal.entity.ExchangeAuditEntity;
-import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.enums.PayloadCaptureLevel;
+import com.positivity.supplier.internal.enums.RedactionClassification;
 import com.positivity.supplier.internal.repository.ExchangeAuditRepository;
 import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.spi.ExchangeContext;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -73,7 +74,8 @@ public class ExchangeAuditWriter {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void write(@NonNull ExchangeContext context) {
         Objects.requireNonNull(context, "context must not be null");
-        PayloadCaptureLevel captureLevel = resolveCaptureLevel(context.bindingId());
+        CapturePolicy policy = resolveCapturePolicy(context.bindingId());
+        PayloadCaptureLevel captureLevel = policy.level();
         // Redacted before truncation, and kept in a local so the truncate bound stays a simple, greppable
         // pair -- ExchangeAuditColumnWidthParityTest parses these bounds out of this file and compares them
         // against the migrations, and a nested call hid one of them the first time.
@@ -111,9 +113,12 @@ public class ExchangeAuditWriter {
                 // the metadata listing.
                 .failureDetail(truncate(storedFailureDetail, 2048))
                 .captureLevel(captureLevel)
-                // The load-bearing line: raw bodies are never persisted unredacted.
-                .requestPayload(PayloadRedactor.applyCaptureLevel(context.requestBody(), captureLevel))
-                .responsePayload(PayloadRedactor.applyCaptureLevel(context.responseBody(), captureLevel))
+                // The load-bearing lines: raw bodies are never persisted unredacted, and a binding's
+                // declared redaction classifications (issue #1259) narrow REDACTED captures here.
+                .requestPayload(PayloadRedactor.applyCaptureLevel(
+                        context.requestBody(), captureLevel, policy.classifications()))
+                .responsePayload(PayloadRedactor.applyCaptureLevel(
+                        context.responseBody(), captureLevel, policy.classifications()))
                 .build();
 
         // Scheduler and client threads have no security context, so the system actor is supplied
@@ -125,23 +130,32 @@ public class ExchangeAuditWriter {
     }
 
     /**
-     * The capture level governing this exchange.
+     * The capture level and redaction classifications governing this exchange.
      *
-     * <p>Read from the binding rather than carried on the context, so a level change applies to
+     * <p>Read from the binding rather than carried on the context, so a configuration change applies to
      * subsequent exchanges immediately. When the binding cannot be read — it may have been deleted
-     * between the exchange and this write — the configured default applies rather than
-     * {@code FULL}: an unknown level must never widen capture.
+     * between the exchange and this write — the configured default level applies rather than
+     * {@code FULL}, with no classifications: an unknown level must never widen capture, and a
+     * classification set we cannot read is honestly empty rather than guessed.
      */
     @NonNull
-    private PayloadCaptureLevel resolveCaptureLevel(@Nullable UUID bindingId) {
+    private CapturePolicy resolveCapturePolicy(@Nullable UUID bindingId) {
         if (bindingId == null) {
-            return defaultCaptureLevel;
+            return new CapturePolicy(defaultCaptureLevel, Set.of());
         }
         return bindingRepository
                 .findById(bindingId)
-                .map(SupplierEndpointBindingEntity::getCaptureLevel)
-                .orElse(defaultCaptureLevel);
+                .map(binding -> new CapturePolicy(
+                        binding.getCaptureLevel() == null ? defaultCaptureLevel : binding.getCaptureLevel(),
+                        binding.getRedactionClassifications() == null
+                                ? Set.<RedactionClassification>of()
+                                : Set.copyOf(binding.getRedactionClassifications())))
+                .orElseGet(() -> new CapturePolicy(defaultCaptureLevel, Set.of()));
     }
+
+    /** One binding's payload-capture configuration: the level plus its declared classifications. */
+    private record CapturePolicy(
+            @NonNull PayloadCaptureLevel level, @NonNull Set<RedactionClassification> classifications) {}
 
     @Nullable
     private static String truncate(@Nullable String value, int max) {

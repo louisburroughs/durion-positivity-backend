@@ -6,9 +6,11 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
+import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.enums.ProfileSourceOfTruth;
 import com.positivity.supplier.internal.repository.ExchangeAuditRepository;
+import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.spi.ExchangeContext;
 import com.positivity.supplier.internal.spi.ExchangeOutcome;
@@ -73,6 +75,9 @@ class ExchangeAuditWriterTest {
     private SupplierProfileRepository profileRepository;
 
     @Autowired
+    private SupplierEndpointBindingRepository bindingRepository;
+
+    @Autowired
     private TransactionTemplate transactionTemplate;
 
     @Autowired
@@ -87,6 +92,8 @@ class ExchangeAuditWriterTest {
         try (Connection connection = dataSource.getConnection();
                 Statement statement = connection.createStatement()) {
             statement.executeUpdate("DELETE FROM supplier_exchange_audit");
+            statement.executeUpdate("DELETE FROM supplier_endpoint_binding_redaction");
+            statement.executeUpdate("DELETE FROM supplier_endpoint_binding");
             statement.executeUpdate("DELETE FROM supplier_profile");
         }
     }
@@ -247,5 +254,85 @@ class ExchangeAuditWriterTest {
                     .contains("Vendor redirected to")
                     .contains("(302)");
         });
+    }
+
+    // ── Per-binding classification-driven redaction (issue #1259, ADR-0050 §7 minimization) ─
+
+    /**
+     * Asserted on the persisted row for the same reason as the URI tests above: {@code PayloadRedactor}
+     * has classification unit coverage, and this is the seam that proves the writer actually reads the
+     * binding's declared classifications and passes them through.
+     */
+    @Test
+    void aBindingsDeclaredClassificationsNarrowItsRedactedCapture() {
+        UUID bindingId = transactionTemplate.execute(status -> {
+            SupplierProfileEntity profile = new SupplierProfileEntity();
+            profile.setSupplierRef("michelin-eu");
+            profile.setDisplayName("Michelin EU");
+            profile.setEnabled(true);
+            profile.setSourceOfTruth(ProfileSourceOfTruth.ADMIN);
+            profileRepository.saveAndFlush(profile);
+
+            SupplierEndpointBindingEntity binding = new SupplierEndpointBindingEntity();
+            binding.setVendorProfileId(profile.getVendorProfileId());
+            binding.setCapability(SupplierCapability.WORKORDER_AUTHORIZATION);
+            binding.setProtocolFamily(ProtocolFamily.EDIWHEEL_A25);
+            binding.setProtocolVersion("A2_5");
+            binding.setBaseUrl("https://edi.michelin.example");
+            binding.setPath("/a25/workorder");
+            binding.setAuthConfigName("ediwheel-basic");
+            binding.setEnabled(true);
+            binding.setCaptureLevel(com.positivity.supplier.internal.enums.PayloadCaptureLevel.REDACTED);
+            binding.setRedactionClassifications(new java.util.HashSet<>(java.util.Set.of(
+                    com.positivity.supplier.internal.enums.RedactionClassification.CUSTOMER_IDENTIFIER)));
+            return bindingRepository.saveAndFlush(binding).getId();
+        });
+
+        String workorderBody = "<WorkorderAuthorization><CustomerNumber>FLEET-CUST-0042</CustomerNumber>"
+                + "<Article>225/45R17</Article></WorkorderAuthorization>";
+        observer.onExchange(workorderContext(bindingId, workorderBody));
+
+        assertThat(auditRepository.findAll()).singleElement().satisfies(row -> {
+            assertThat(row.getRequestPayload())
+                    .as("the binding declared CUSTOMER_IDENTIFIER, so the §7 example -- a customer"
+                            + " identifier in a fleet workorder authorization payload -- must not be stored")
+                    .doesNotContain("FLEET-CUST-0042")
+                    .contains("225/45R17");
+            assertThat(row.getResponsePayload()).doesNotContain("FLEET-CUST-0042");
+        });
+    }
+
+    @Test
+    void withoutDeclaredClassificationsARedactedCaptureKeepsNonCredentialFields() {
+        // The default path (no binding row -> configured default REDACTED, no classifications): exactly
+        // the pre-#1259 behavior, now a deliberate configuration state rather than the only option.
+        String workorderBody = "<WorkorderAuthorization><CustomerNumber>FLEET-CUST-0042</CustomerNumber>"
+                + "</WorkorderAuthorization>";
+        observer.onExchange(workorderContext(BINDING_ID, workorderBody));
+
+        assertThat(auditRepository.findAll())
+                .singleElement()
+                .satisfies(row -> assertThat(row.getRequestPayload()).contains("FLEET-CUST-0042"));
+    }
+
+    private static ExchangeContext workorderContext(UUID bindingId, String body) {
+        return new ExchangeContext(
+                PROFILE_ID,
+                "michelin-eu",
+                SupplierCapability.WORKORDER_AUTHORIZATION,
+                ProtocolFamily.EDIWHEEL_A25,
+                "A2_5",
+                bindingId,
+                "POST",
+                "https://edi.michelin.example/a25/workorder",
+                1,
+                "classification-test",
+                ExchangeOutcome.OK,
+                200,
+                Instant.parse("2026-08-11T09:14:02.117Z"),
+                Duration.ofMillis(184),
+                body,
+                body,
+                null);
     }
 }
