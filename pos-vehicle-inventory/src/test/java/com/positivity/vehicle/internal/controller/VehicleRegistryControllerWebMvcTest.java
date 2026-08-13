@@ -19,6 +19,7 @@ import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.config.WebMvcTestSecurityConfig;
 import com.positivity.vehicle.service.VehicleService;
 import jakarta.persistence.EntityNotFoundException;
+import java.net.URI;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -43,9 +44,12 @@ import org.springframework.test.web.servlet.MockMvc;
  * malformed", or the reverse. The pair is pinned on both update and delete.
  *
  * <p>
- * The envelope itself is pinned too. Every error leaving this module must carry
- * {@code ApiError} (ADR-0017) — the bare statuses it used to return gave a caller
- * no {@code code} to branch on and no {@code correlationId} to quote.
+ * The envelope itself is pinned too: the errors this controller can raise must
+ * carry {@code ApiError} (ADR-0017), since the bare statuses it used to return
+ * gave a caller no {@code code} to branch on and no {@code correlationId} to
+ * quote. Errors the advice does not map — an unmapped runtime exception, a
+ * malformed body, the security chain's 401 — still use Spring's defaults and are
+ * out of scope here.
  */
 @WebMvcTest(VehicleRegistryController.class)
 @Import(WebMvcTestSecurityConfig.class)
@@ -189,6 +193,27 @@ class VehicleRegistryControllerWebMvcTest {
                 .andExpect(jsonPath("$.timestamp").isNotEmpty())
                 .andExpect(jsonPath("$.fieldErrors[0].field").value("vin"))
                 .andExpect(jsonPath("$.fieldErrors[0].message").value("size must be between 17 and 17"));
+
+        verifyNoInteractions(vehicleService);
+    }
+
+    @Test
+    @DisplayName("two violations on one path variable are reported in a stable order")
+    void multipleViolationsAreOrderedDeterministically() throws Exception {
+        // A blank VIN breaks @NotBlank and @Size at once. getConstraintViolations() is a Set, so
+        // without an explicit sort the two entries would arrive in whatever order the validator
+        // happened to hash them into — a response body that changes between identical requests.
+        // The URI is built directly rather than from a template, because the template form
+        // re-encodes the percent sign and the VIN never arrives blank.
+        for (int attempt = 0; attempt < 3; attempt++) {
+            mockMvc.perform(get(URI.create(PATH + "/vin/%20")).header(AUTH, BEARER))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.fieldErrors.length()").value(2))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("vin"))
+                    .andExpect(jsonPath("$.fieldErrors[0].message").value("must not be blank"))
+                    .andExpect(jsonPath("$.fieldErrors[1].field").value("vin"))
+                    .andExpect(jsonPath("$.fieldErrors[1].message").value("size must be between 17 and 17"));
+        }
 
         verifyNoInteractions(vehicleService);
     }

@@ -10,6 +10,7 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Path;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -24,13 +25,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  *
  * <p>
  * Without this advice the module returned bare statuses with empty bodies, and
- * constraint violations on path variables escaped as 500s. Every error leaving
- * this module now carries the {@link ApiError} envelope required by
+ * constraint violations on path variables escaped as 500s. The exceptions listed
+ * below now carry the {@link ApiError} envelope required by
  * {@code docs/ERROR_ENVELOPE.md} (ADR-0017), so a caller has a {@code code} to
- * branch on and a {@code correlationId} to quote.
- *
- * <p>
- * Handled exceptions:
+ * branch on and a {@code correlationId} to quote:
  * <ul>
  * <li>{@link ConstraintViolationException} - 400 Bad Request (path variable and
  * request parameter constraints on {@code @Validated} controllers)</li>
@@ -40,6 +38,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * <li>{@link IllegalArgumentException} - 400 Bad Request (domain
  * validation)</li>
  * </ul>
+ *
+ * <p>
+ * Anything not listed still falls through to Spring's default handling and does
+ * <em>not</em> get the envelope — an unmapped runtime exception is a 500 with
+ * Spring's own body, a malformed JSON body is a bare 400, and the 401/403 raised
+ * by the security filter chain never reaches an advice at all. Widening the
+ * coverage means adding handlers here, not assuming they exist.
  */
 @RestControllerAdvice
 @Slf4j
@@ -73,8 +78,11 @@ public class VehicleExceptionHandler {
         String correlationId = resolveCorrelationId(request);
         response.setHeader(X_CORRELATION_ID, correlationId);
 
+        // getConstraintViolations() is a Set with no defined iteration order, so a request that
+        // breaks two constraints would otherwise report them in a different order each time.
         List<ApiError.FieldError> fieldErrors = ex.getConstraintViolations().stream()
                 .map(violation -> new ApiError.FieldError(fieldName(violation), violation.getMessage()))
+                .sorted(Comparator.comparing(ApiError.FieldError::field).thenComparing(ApiError.FieldError::message))
                 .toList();
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
