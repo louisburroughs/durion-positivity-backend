@@ -217,8 +217,10 @@ class ProductDetailDegradationTest {
     void emptyAvailabilityIsAlsoUnavailable() {
         when(inventoryClient.fetchAvailability(any(), any())).thenReturn(Optional.empty());
 
-        assertThat(detail().getAvailability().getStatus()).isEqualTo(DataStatus.UNAVAILABLE);
-        assertThat(detail().getAvailability().getLeadTime().getSource()).isEqualTo(LeadTimeSource.CATALOG);
+        ProductDetailView view = detail();
+
+        assertThat(view.getAvailability().getStatus()).isEqualTo(DataStatus.UNAVAILABLE);
+        assertThat(view.getAvailability().getLeadTime().getSource()).isEqualTo(LeadTimeSource.CATALOG);
     }
 
     // ─── the two-tier lead time ──────────────────────────────────────────────
