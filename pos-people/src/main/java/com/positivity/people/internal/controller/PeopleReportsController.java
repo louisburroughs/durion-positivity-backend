@@ -30,9 +30,22 @@ public class PeopleReportsController {
     private final PeopleReportsService peopleReportsService;
 
     @Operation(
-            summary = "Get attendance and job time discrepancy report",
-            description =
-                    "Generates a per-technician, per-location, per-day discrepancy report based on attendance and approved job time totals.")
+            operationId = "getAttendanceDiscrepancyReport",
+            summary = "Get Attendance Versus Job Time Discrepancy Report",
+            description = """
+                    Generates a per-technician, per-location, per-day report comparing attendance minutes from time \
+                    entries with job minutes from the workorder job-time replica.
+                    Use this tool to spot technicians whose clocked attendance diverges from booked job time; use \
+                    listApprovedTimeForExport instead for the raw approved rows consumed by accounting export.
+                    Preconditions: attendance comes from local time entries and job minutes from the \
+                    ext_workorder_job_time replica, so very recent workorder activity may not be reflected yet.
+                    Required inputs: startDate and endDate (inclusive, yyyy-MM-dd) and timezone (IANA, used to bucket \
+                    minutes into local days); locationId and technicianIds are optional filters, and flaggedOnly \
+                    defaults to false.
+                    Emits a REPORT_ATTENDANCE_VS_JOBTIME_GENERATED audit event but changes no state; rows are \
+                    flagged when the absolute discrepancy exceeds the location's configured threshold minutes.
+                    Returns 400 when endDate is before startDate or timezone is not a valid IANA zone.
+                    """)
     @ApiResponse(responseCode = "200", description = "Report generated successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid parameters")
     @ApiResponse(responseCode = "403", description = "Forbidden")
@@ -65,9 +78,22 @@ public class PeopleReportsController {
     }
 
     @Operation(
-            summary = "Get approved time entries for accounting export",
-            description = "Returns People-domain approved time rows for a date range and one or more locations. "
-                    + "This endpoint is the stable source-data read contract for accounting export workflows.")
+            operationId = "listApprovedTimeForExport",
+            summary = "List Approved Time For Accounting Export",
+            description = """
+                    Returns APPROVED time-entry rows with worked hours, approval metadata, and resolved employee and \
+                    location names for a date range and one or more locations.
+                    Use this tool as the stable source-data read for accounting time-export workflows; use \
+                    getAttendanceDiscrepancyReport instead for variance analysis between attendance and job time.
+                    Preconditions: every supplied locationId must resolve to an active location; rows missing \
+                    approval or attendance timestamps are silently excluded.
+                    Required inputs: startDate and endDate (inclusive, yyyy-MM-dd, evaluated in UTC) and one or more \
+                    locationId query parameters.
+                    Emits a PEOPLE_TIME_APPROVED_EXPORT_READ audit event but changes no state; this is a read-only \
+                    projection sorted by entry date then time entry id.
+                    Returns 400 when endDate is before startDate, when no locationId is supplied, or when a \
+                    locationId is unknown or inactive.
+                    """)
     @ApiResponse(responseCode = "200", description = "Approved time rows retrieved successfully")
     @ApiResponse(responseCode = "400", description = "Invalid parameters")
     @ApiResponse(responseCode = "403", description = "Forbidden")

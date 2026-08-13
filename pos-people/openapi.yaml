@@ -41,9 +41,21 @@ paths:
     get:
       tags:
       - People - Staffing Assignments
-      summary: Get assignment by ID
-      description: Retrieves a single staffing assignment by its unique ID.
-      operationId: getAssignment
+      summary: Get Staffing Assignment By Id
+      description: 'Returns a single staffing assignment by its unique assignment id.
+
+        Use this tool when the assignment id is already known; use listStaffingAssignments instead to discover a person''s assignments.
+
+        Preconditions: the assignment must exist; both ACTIVE and ENDED assignments are returned.
+
+        Required inputs: assignmentId (UUID) path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no assignment exists for the supplied id.
+
+        '
+      operationId: getStaffingAssignment
       parameters:
       - name: assignmentId
         in: path
@@ -72,9 +84,21 @@ paths:
     put:
       tags:
       - People - Staffing Assignments
-      summary: Update staffing assignment
-      description: Updates an existing staffing assignment, including role, dates, and primary flag.
-      operationId: updateAssignment
+      summary: Update An Existing Staffing Assignment
+      description: 'Replaces a staffing assignment''s person, location, role, primary flag, and effective dates.
+
+        Use this tool to correct or reshape an existing assignment; do not use endStaffingAssignment, which only closes an assignment, and do not use createStaffingAssignment for a new one.
+
+        Preconditions: the assignment must exist, the person must exist with an ACTIVE employee record, the location must be active, and no other assignment for the same person, location, and role may overlap the effective dates.
+
+        Required inputs: assignmentId (UUID) path parameter plus the full body (personId, locationId, role, isPrimary, effectiveFrom); this is a full replacement, not a patch.
+
+        Emits a PEOPLE_STAFFING_ASSIGNMENT_UPDATE event and publishes a staffing-assignment fact; setting isPrimary true demotes and ends any other overlapping primary assignment.
+
+        Returns 404 when the assignment, person, employee record, or active location cannot be resolved, 409 when another assignment overlaps for the person, location, and role, and 400 when the person''s employee status is not ACTIVE.
+
+        '
+      operationId: updateStaffingAssignment
       parameters:
       - name: assignmentId
         in: path
@@ -83,10 +107,21 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Full replacement values for the assignment's person, location, role, primary flag, and effective dates.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateStaffingAssignmentRequest'
+            examples:
+              Extend assignment end date:
+                description: Extend assignment end date
+                value:
+                  personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  role: TECHNICIAN
+                  isPrimary: true
+                  effectiveFrom: 2026-02-16
+                  effectiveTo: 2026-12-31
         required: true
       responses:
         '200':
@@ -121,9 +156,21 @@ paths:
     delete:
       tags:
       - People - Staffing Assignments
-      summary: End (soft-delete) an assignment
-      description: Ends an active staffing assignment without physically deleting the record.
-      operationId: endAssignment
+      summary: End An Active Staffing Assignment
+      description: 'Ends a staffing assignment by setting its status to ENDED without physically deleting the row.
+
+        Use this tool when a person stops working at a location; do not use disableEmployee, which offboards the whole employee, and do not use updateStaffingAssignment to shorten dates manually.
+
+        Preconditions: the assignment must exist; ending an already ENDED assignment is accepted and republishes the fact.
+
+        Required inputs: assignmentId (UUID) path parameter; there is no request body.
+
+        Emits a PEOPLE_STAFFING_ASSIGNMENT_END event and publishes a staffing-assignment fact; a null effectiveTo is stamped with today''s date.
+
+        Returns 204 on success, and 404 when no assignment exists for the supplied id.
+
+        '
+      operationId: endStaffingAssignment
       parameters:
       - name: assignmentId
         in: path
@@ -145,8 +192,20 @@ paths:
     get:
       tags:
       - Employee API
-      summary: Get employee profile
-      description: Retrieves an employee profile by employee ID.
+      summary: Get Employee Profile By Person Id
+      description: 'Returns the full employee profile for a person id, merging identity fields from the pos-people-contact replica with local employment fields.
+
+        Use this tool when the person id is already known; use getEmployeeByNumber instead to resolve a human-entered employee number.
+
+        Preconditions: an employee row or identity-replica row must exist for the id; identity fields may briefly be null right after creation while the replica catches up.
+
+        Required inputs: employeeId (UUID) path parameter, which is the person id; there is no request body.
+
+        Emits a PEOPLE_EMPLOYEE_GET audit event but changes no state; this is a read-only projection.
+
+        Returns 404 when neither an employee record nor a person replica row exists for the id.
+
+        '
       operationId: getEmployee
       parameters:
       - name: employeeId
@@ -176,8 +235,20 @@ paths:
     put:
       tags:
       - Employee API
-      summary: Update employee profile
-      description: Updates an existing employee profile using the provided employee ID.
+      summary: Update An Existing Employee Profile
+      description: 'Updates an existing employee profile by person id, replacing employment attributes locally and forwarding identity attributes to pos-people-contact as an upsert command.
+
+        Use this tool when correcting or changing an existing employee''s details; do not use createEmployee, which registers a new person, and do not use disableEmployee, which is the offboarding transition.
+
+        Preconditions: an employee row or identity-replica row must exist for the supplied employeeId, which is the person id at this API surface.
+
+        Required inputs: employeeId (UUID) path parameter plus the full profile (firstName, lastName, employeeNumber, status, hireDate); this is a full replacement, not a patch, and duplicatePolicy defaults to STRICT.
+
+        Emits a PEOPLE_EMPLOYEE_UPDATE event and publishes a people.employee.updated fact; a status change also stamps statusEffectiveAt.
+
+        Returns 404 when no employee or person exists for the id, 409 when another employee already uses the employee number, email, or phone under STRICT policy, and 422 when terminationDate is before hireDate.
+
+        '
       operationId: updateEmployee
       parameters:
       - name: employeeId
@@ -187,10 +258,21 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Full replacement employee profile; identity fields are re-sent to pos-people-contact as an upsert command.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateEmployeeRequest'
+            examples:
+              Status change to leave:
+                description: Status change to leave
+                value:
+                  firstName: Jane
+                  lastName: Smith
+                  employeeNumber: EMP-0001
+                  status: ON_LEAVE
+                  hireDate: 2026-01-15
+                  duplicatePolicy: BALANCED
         required: true
       responses:
         '200':
@@ -232,8 +314,20 @@ paths:
     post:
       tags:
       - Work Sessions API
-      summary: Submit work session
-      description: Submit an ended work session with its billable and break totals for approval.
+      summary: Submit An Ended Work Session
+      description: 'Submits an ENDED work session for approval, recording billable and break minute totals and marking the session SUBMITTED.
+
+        Use this tool after stopWorkSession has ended the session; do not use approveTimeEntriesBatch, which decides time entries, not work sessions.
+
+        Preconditions: the session must exist and be in ENDED status; ACTIVE or already SUBMITTED sessions are rejected.
+
+        Required inputs: the work session id (UUID) path parameter and a body with billableMinutes and breakMinutes (both zero or greater) and submittedAt (ISO-8601 instant).
+
+        Emits a PEOPLE_WORK_SESSION_SUBMIT event.
+
+        Returns 404 when the session does not exist, and 409 when the session is not in ENDED status.
+
+        '
       operationId: submitWorkSession
       parameters:
       - name: id
@@ -245,10 +339,18 @@ paths:
           format: uuid
         example: 7b1f5a9d-0c2b-4c6d-9a5a-5f8e7c3a9b1c
       requestBody:
+        description: Billable and break minute totals plus the submission timestamp for the ended session.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/WorkSessionSubmitRequest'
+            examples:
+              Full day with lunch break:
+                description: Full day with lunch break
+                value:
+                  billableMinutes: 480
+                  breakMinutes: 30
+                  submittedAt: 2026-02-16 17:00:00+00:00
         required: true
       responses:
         '200':
@@ -277,8 +379,20 @@ paths:
     post:
       tags:
       - Work Sessions API
-      summary: Stop work session break
-      description: End a break within a work session.
+      summary: Stop The Open Work Session Break
+      description: 'Ends the open break on a work session, stamping the end time from the server clock.
+
+        Use this tool when a person returns from a break; do not use stopWorkSession, which ends the session and auto-closes any open break itself.
+
+        Preconditions: the session must have an open break with no recorded end time.
+
+        Required inputs: the work session id (UUID) as the path parameter; there is no request body.
+
+        Emits a PEOPLE_WORK_SESSION_BREAK_STOP event.
+
+        Returns 409 when no open break exists for the session, including when the session id itself is unknown.
+
+        '
       operationId: stopWorkSessionBreak
       parameters:
       - name: id
@@ -310,8 +424,20 @@ paths:
     post:
       tags:
       - Work Sessions API
-      summary: Start work session break
-      description: Start a break within an active work session.
+      summary: Start A Break In Work Session
+      description: 'Starts a break inside an active work session, stamping the start time from the server clock.
+
+        Use this tool when a person pauses work; do not use stopWorkSession, which ends the whole session rather than pausing it.
+
+        Preconditions: the session must exist and still be open, and no break may already be open on it.
+
+        Required inputs: the work session id (UUID) as the path parameter; there is no request body.
+
+        Emits a PEOPLE_WORK_SESSION_BREAK_START event.
+
+        Returns 404 when no open session exists for the id, and 409 when a break is already open, including under concurrent break-start races.
+
+        '
       operationId: startWorkSessionBreak
       parameters:
       - name: id
@@ -343,14 +469,32 @@ paths:
     post:
       tags:
       - Work Sessions API
-      summary: Stop work session
-      description: Stop an active work session.
+      summary: Stop An Active Work Session
+      description: 'Stops a person''s open work session, setting status ENDED and closing any break still open at the same timestamp.
+
+        Use this tool when a person clocks out; do not use submitWorkSession, which sends an already ENDED session for approval.
+
+        Preconditions: the person must have an open session; sessions are keyed by person here, not by session id.
+
+        Required inputs: personId (UUID) in the body; the body''s actor field is ignored in favour of the authenticated username.
+
+        Emits a PEOPLE_WORK_SESSION_STOP event.
+
+        Returns 404 when no active session exists for the person.
+
+        '
       operationId: stopWorkSession
       requestBody:
+        description: Identifies the person clocking out; the open session is found by person id, not session id.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/WorkSessionRequest'
+            examples:
+              Clock out:
+                description: Clock out
+                value:
+                  personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
         required: true
       responses:
         '200':
@@ -367,14 +511,32 @@ paths:
     post:
       tags:
       - Work Sessions API
-      summary: Start work session
-      description: Create/start a work session for a person.
+      summary: Start A Work Session For Person
+      description: 'Starts a new ACTIVE work session for a person, stamping the start time from the server clock and the actor from the security context.
+
+        Use this tool when a person clocks in for the day; do not use startWorkSessionBreak, which pauses an already running session.
+
+        Preconditions: the person must exist in the identity replica, and the person must have no session that is still open.
+
+        Required inputs: personId (UUID) in the body; the body''s actor field is ignored, because the recorded actor is always the authenticated username.
+
+        Emits a PEOPLE_WORK_SESSION_START event.
+
+        Returns 404 when the person is unknown, and 409 when an active session already exists for the person, including under concurrent start races.
+
+        '
       operationId: startWorkSession
       requestBody:
+        description: Identifies the person clocking in; the actor field is ignored in favour of the authenticated username.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/WorkSessionRequest'
+            examples:
+              Clock in:
+                description: Clock in
+                value:
+                  personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
         required: true
       responses:
         '200':
@@ -391,9 +553,21 @@ paths:
     post:
       tags:
       - Timekeeping Approval API
-      summary: Reject all pending timekeeping entries for a person in a period
-      description: Bulk-rejects all PENDING_APPROVAL timekeeping entries for the given employee in the given period.
-      operationId: rejectPeriod
+      summary: Reject All Pending Entries In Period
+      description: 'Bulk-rejects every PENDING_APPROVAL timekeeping entry for a person within a pay period, storing the reason on each entry as its correctionReason.
+
+        Use this tool to send a whole period back for correction; do not use rejectTimeEntriesBatch, which rejects individually selected time entries.
+
+        Preconditions: the time period must exist; only entries currently in PENDING_APPROVAL are touched.
+
+        Required inputs: timePeriodId (UUID) and personId (UUID) path parameters and a body with a non-blank reason.
+
+        No events are emitted; entries are flipped to REJECTED in place and the response reports the processed count.
+
+        Returns 400 when reason is blank, and 404 when the time period does not exist.
+
+        '
+      operationId: rejectTimePeriod
       parameters:
       - name: timePeriodId
         in: path
@@ -408,10 +582,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Rejection justification applied as the correctionReason on every pending entry in the period.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RejectTimePeriodRequest'
+            examples:
+              Missing breaks:
+                description: Missing breaks
+                value:
+                  reason: Missing break entries for two shifts
         required: true
       responses:
         '200':
@@ -441,9 +621,21 @@ paths:
     post:
       tags:
       - Timekeeping Approval API
-      summary: Approve all pending timekeeping entries for a person in a period
-      description: Bulk-approves all PENDING_APPROVAL timekeeping entries for the given employee in the given period.
-      operationId: approvePeriod
+      summary: Approve All Pending Entries In Period
+      description: 'Bulk-approves every PENDING_APPROVAL timekeeping entry for a person within a pay period''s date range.
+
+        Use this tool for pay-period sign-off; do not use approveTimeEntriesBatch, which decides individually selected time entries instead of a whole period.
+
+        Preconditions: the time period must exist; only entries currently in PENDING_APPROVAL are touched, so already decided entries are left as they are.
+
+        Required inputs: timePeriodId (UUID) and personId (UUID) path parameters; there is no request body.
+
+        No events are emitted; entries are flipped to APPROVED in place and the response reports the processed count.
+
+        Returns 200 with processedCount 0 when nothing was pending, and 404 when the time period does not exist.
+
+        '
+      operationId: approveTimePeriod
       parameters:
       - name: timePeriodId
         in: path
@@ -479,9 +671,21 @@ paths:
     post:
       tags:
       - Time Entry Approval API
-      summary: Batch reject time entries
-      description: Reject multiple time entries. rejectionReason is required for each decision.
-      operationId: rejectTimeEntries
+      summary: Batch Reject Submitted Time Entries
+      description: 'Rejects a batch of time entries, marking each SUBMITTED or PENDING_APPROVAL entry REJECTED with the supplied reason stored on the entry.
+
+        Use this tool to send individually selected entries back with a reason; do not use approveTimeEntriesBatch, which approves them, and do not use rejectTimePeriod, which rejects a whole pay period per person.
+
+        Preconditions: each entry must exist and be in SUBMITTED or PENDING_APPROVAL status, and the caller needs the people:timeEntry:reject authority for individual entries to succeed.
+
+        Required inputs: decisions, a non-empty list where every element carries timeEntryId and a non-blank rejectionReason; one missing reason fails the entire request before any entry is touched.
+
+        Emits a PEOPLE_TIME_ENTRY_REJECT event and writes an audit row per decision.
+
+        Returns 200 with a per-entry result list (failure codes NOT_FOUND, ENTRY_NOT_PENDING, FORBIDDEN), and 400 when any decision lacks a rejectionReason.
+
+        '
+      operationId: rejectTimeEntriesBatch
       parameters:
       - name: X-Correlation-Id
         in: header
@@ -489,10 +693,18 @@ paths:
         schema:
           type: string
       requestBody:
+        description: Batch of rejection decisions; every element must carry a non-blank rejectionReason.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/TimeEntryDecisionBatchRequest'
+            examples:
+              Reject one entry:
+                description: Reject one entry
+                value:
+                  decisions:
+                  - timeEntryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                    rejectionReason: Incomplete work details
         required: true
       responses:
         '200':
@@ -516,9 +728,21 @@ paths:
     post:
       tags:
       - Time Entry Approval API
-      summary: Batch approve time entries
-      description: Approve multiple time entries. pos-people is authoritative for approval execution.
-      operationId: approveTimeEntries
+      summary: Batch Approve Submitted Time Entries
+      description: 'Approves a batch of time entries, marking each SUBMITTED or PENDING_APPROVAL entry APPROVED and stamping the approver and approval time; pos-people is authoritative for approval execution.
+
+        Use this tool for supervisor approval of individually selected time entries; do not use rejectTimeEntriesBatch, which rejects them, and do not use approveTimePeriod, which approves a whole pay period per person.
+
+        Preconditions: each entry must exist and be in SUBMITTED or PENDING_APPROVAL status, and the caller needs the people:timeEntry:approve authority for individual entries to succeed.
+
+        Required inputs: decisions, a non-empty list of objects each carrying timeEntryId (UUID string); an optional X-Correlation-Id header is recorded in the audit trail.
+
+        Emits a PEOPLE_TIME_ENTRY_APPROVE event and writes an audit row per decision.
+
+        Returns 200 with a per-entry result list (failure codes NOT_FOUND, ENTRY_NOT_PENDING, FORBIDDEN) rather than failing the whole batch, and 400 when the decisions list is missing or empty.
+
+        '
+      operationId: approveTimeEntriesBatch
       parameters:
       - name: X-Correlation-Id
         in: header
@@ -526,10 +750,18 @@ paths:
         schema:
           type: string
       requestBody:
+        description: Batch of approval decisions, one element per time entry to approve; rejectionReason is ignored here.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/TimeEntryDecisionBatchRequest'
+            examples:
+              Approve two entries:
+                description: Approve two entries
+                value:
+                  decisions:
+                  - timeEntryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  - timeEntryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
         required: true
       responses:
         '200':
@@ -553,14 +785,35 @@ paths:
     post:
       tags:
       - People TimeEntries
-      summary: Create a time entry adjustment
-      description: Submit a request to adjust a time entry. The adjustment will be in PENDING status until approved.
-      operationId: createAdjustment
+      summary: Create A Pending Time Entry Adjustment
+      description: 'Creates a PENDING adjustment against a time entry, proposing either replacement start and end timestamps or a signed minutes delta.
+
+        Use this tool when a recorded time entry needs correction before approval; do not use approveTimeEntryAdjustment, which decides an already proposed adjustment.
+
+        Preconditions: the time entry must exist and be in PENDING_APPROVAL status; entries already approved or rejected cannot be adjusted.
+
+        Required inputs: timeEntryId (UUID), reasonCode, and exactly one of the pair proposedStartAt plus proposedEndAt (ISO-8601 offset timestamps) or minutesDelta (positive adds, negative subtracts); notes and createdBy are optional.
+
+        Emits a PEOPLE_TIME_ENTRY_ADJUSTMENT_CREATE event; the time entry itself is not modified until the adjustment is approved.
+
+        Returns 404 when the time entry does not exist, 409 when the entry is not in PENDING_APPROVAL status, and 400 when reasonCode is missing or the proposed-times versus minutesDelta rule is violated.
+
+        '
+      operationId: createTimeEntryAdjustment
       requestBody:
+        description: 'Proposed correction for one time entry: replacement start/end timestamps or a signed minutes delta, with a reason code.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/TimeEntryAdjustmentRequest'
+            examples:
+              Subtract a missed break:
+                description: Subtract a missed break
+                value:
+                  timeEntryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  reasonCode: MISSED_BREAK
+                  notes: Employee forgot to log lunch break
+                  minutesDelta: -30
         required: true
       responses:
         '201':
@@ -596,9 +849,21 @@ paths:
     post:
       tags:
       - People TimeEntries
-      summary: Approve a time entry adjustment
-      description: Approve a pending time entry adjustment. Requires approval permissions.
-      operationId: approveAdjustment
+      summary: Approve A Pending Time Entry Adjustment
+      description: 'Approves a time entry adjustment, stamping the deciding user and decision time and writing an ADJUSTMENT_APPROVED audit row.
+
+        Use this tool to accept a proposed correction; do not use approveTimeEntriesBatch, which approves the time entries themselves rather than adjustments.
+
+        Preconditions: the adjustment must exist; no status gate is enforced, so re-approving an already decided adjustment overwrites the previous decision.
+
+        Required inputs: adjustmentId (UUID) path parameter; an optional X-Correlation-Id header is carried into the audit trail.
+
+        Emits a PEOPLE_TIME_ENTRY_ADJUSTMENT_APPROVE event; the underlying time entry''s own timestamps are not recalculated by this call.
+
+        Returns 404 when no adjustment exists for the supplied id.
+
+        '
+      operationId: approveTimeEntryAdjustment
       parameters:
       - name: adjustmentId
         in: path
@@ -639,9 +904,21 @@ paths:
     get:
       tags:
       - People - Staffing Assignments
-      summary: List assignments for person
-      description: Returns all staffing assignments for the specified person.
-      operationId: getAssignments
+      summary: List Staffing Assignments For A Person
+      description: 'Lists every staffing assignment for a person, including ENDED ones, across all locations and roles.
+
+        Use this tool for assignment history and administration; use listPersonLocations instead when only the assignments active today are wanted.
+
+        Preconditions: none beyond authentication; an unknown personId simply yields no rows.
+
+        Required inputs: personId (UUID) as a query parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when the person has no assignments.
+
+        '
+      operationId: listStaffingAssignments
       parameters:
       - name: personId
         in: query
@@ -666,14 +943,36 @@ paths:
     post:
       tags:
       - People - Staffing Assignments
-      summary: Create staffing assignment
-      description: Link a person to a location with role, effective dates, and primary flag.
-      operationId: createAssignment
+      summary: Create Person To Location Staffing Assignment
+      description: 'Creates a staffing assignment linking a person to a location with a role, effective dates, and a primary flag.
+
+        Use this tool when a person starts working at a location; do not use updateStaffingAssignment, which modifies an existing assignment by id.
+
+        Preconditions: the person must exist in the identity replica with an ACTIVE employee record, the location must be active, and no assignment for the same person, location, and role may overlap the effective dates.
+
+        Required inputs: personId (UUID), locationId (UUID), role, isPrimary, and effectiveFrom (yyyy-MM-dd); effectiveTo is optional and open-ended when null.
+
+        Emits a PEOPLE_STAFFING_ASSIGNMENT_CREATE event and publishes a staffing-assignment fact; a new primary demotes and ends any overlapping existing primary, and a person''s first active assignment is forced primary regardless of the flag.
+
+        Returns 409 when an overlapping assignment exists for the person, location, and role, 404 when the person, employee record, or active location cannot be resolved, and 400 when the person''s employee status is not ACTIVE.
+
+        '
+      operationId: createStaffingAssignment
       requestBody:
+        description: Staffing assignment to create, binding one person to one location for a role over an effective date range.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateStaffingAssignmentRequest'
+            examples:
+              Primary technician assignment:
+                description: Primary technician assignment
+                value:
+                  personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  role: TECHNICIAN
+                  isPrimary: true
+                  effectiveFrom: 2026-02-16
         required: true
       responses:
         '201':
@@ -709,9 +1008,21 @@ paths:
     get:
       tags:
       - People - Exceptions
-      summary: List exceptions, optional filter by employeeId
-      description: Retrieve all exceptions or filter by a specific employee ID.
-      operationId: listByEmployee
+      summary: List Time Entry Exceptions By Employee
+      description: 'Lists time entry exceptions, either all of them or those recorded for one employee.
+
+        Use this tool to review open and historical exceptions; use createTimeEntryException instead to record a new one.
+
+        Preconditions: none; when employeeId is omitted every exception in the system is returned without pagination.
+
+        Required inputs: none; employeeId (string) is an optional filter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when nothing matches.
+
+        '
+      operationId: listTimeEntryExceptions
       parameters:
       - name: employeeId
         in: query
@@ -735,14 +1046,37 @@ paths:
     post:
       tags:
       - People - Exceptions
-      summary: Create a time entry exception
-      description: Create a new time entry exception record with validation of required fields.
-      operationId: createException
+      summary: Create A Time Entry Exception
+      description: 'Records a timekeeping exception in OPEN status for an employee, such as a missed clock-out.
+
+        Use this tool when a timekeeping anomaly is detected; do not use resolveTimeEntryException or waiveTimeEntryException, which close an existing exception.
+
+        Preconditions: none are checked against other records; employeeId and timeEntryId are stored as given without referential validation.
+
+        Required inputs: employeeId and exceptionCode; severity accepts WARNING or BLOCKING and silently falls back to WARNING on any other value, and detectedAt defaults to the current server time.
+
+        Emits a PEOPLE_TIME_ENTRY_EXCEPTION_CREATE event; the exception starts in OPEN status.
+
+        Returns 200 with the new exceptionId, and 400 when the JSON payload is malformed.
+
+        '
+      operationId: createTimeEntryException
       requestBody:
+        description: Timekeeping anomaly to record against an employee, optionally tied to a specific time entry.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/TimeEntryExceptionRequest'
+            examples:
+              Missed clock-out:
+                description: Missed clock-out
+                value:
+                  employeeId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  exceptionCode: MISSED_CLOCK_OUT
+                  severity: BLOCKING
+                  timeEntryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  resolutionNotes: Employee forgot to clock out at end of shift
+                  detectedAt: 2026-02-17 08:30:00-05:00
         required: true
       responses:
         '200':
@@ -766,9 +1100,21 @@ paths:
     post:
       tags:
       - People - Exceptions
-      summary: Waive an exception
-      description: Waive an exception with a reason. waiveReason is required.
-      operationId: waiveException
+      summary: Waive A Time Entry Exception
+      description: 'Marks a time entry exception as WAIVED with a mandatory reason, closing it without a correction.
+
+        Use this tool to deliberately dismiss an exception; use resolveTimeEntryException instead when the underlying issue was actually fixed.
+
+        Preconditions: the exception must exist and must not already be RESOLVED or WAIVED, which are terminal states.
+
+        Required inputs: exceptionId (UUID) path parameter and a body with a non-blank waiveReason, which is stored as the exception''s resolution notes.
+
+        Emits a PEOPLE_TIME_ENTRY_EXCEPTION_WAIVE event and writes an EXCEPTION_WAIVED audit row.
+
+        Returns 404 when the exception does not exist, and 400 when waiveReason is blank or the exception is already RESOLVED or WAIVED.
+
+        '
+      operationId: waiveTimeEntryException
       parameters:
       - name: exceptionId
         in: path
@@ -782,10 +1128,16 @@ paths:
         schema:
           type: string
       requestBody:
+        description: Waiver justification; the reason is mandatory and becomes the exception's resolution notes.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/TimeEntryExceptionWaiveRequest'
+            examples:
+              Waive for device outage:
+                description: Waive for device outage
+                value:
+                  waiveReason: Known device outage; entry validated manually
         required: true
       responses:
         '200':
@@ -815,9 +1167,21 @@ paths:
     post:
       tags:
       - People - Exceptions
-      summary: Resolve an exception
-      description: Mark an exception as resolved with optional resolution notes.
-      operationId: resolveException
+      summary: Resolve A Time Entry Exception
+      description: 'Marks a time entry exception as RESOLVED with optional resolution notes, stamping the acting user and timestamp.
+
+        Use this tool when the underlying issue has been fixed; use waiveTimeEntryException instead to close it without a fix, or acknowledgeTimeEntryException to flag it as merely seen.
+
+        Preconditions: the exception must exist and must not already be RESOLVED or WAIVED, which are terminal states.
+
+        Required inputs: exceptionId (UUID) path parameter; the body is optional and may carry resolutionNotes.
+
+        Emits a PEOPLE_TIME_ENTRY_EXCEPTION_RESOLVE event and writes an EXCEPTION_RESOLVED audit row.
+
+        Returns 404 when the exception does not exist, and 400 when it is already RESOLVED or WAIVED.
+
+        '
+      operationId: resolveTimeEntryException
       parameters:
       - name: exceptionId
         in: path
@@ -831,10 +1195,16 @@ paths:
         schema:
           type: string
       requestBody:
+        description: Optional resolution details; when present, resolutionNotes replaces the notes stored on the exception.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/TimeEntryExceptionResolveRequest'
+            examples:
+              Resolution with notes:
+                description: Resolution with notes
+                value:
+                  resolutionNotes: Corrected the clock-out time manually
       responses:
         '200':
           description: Exception resolved successfully
@@ -857,9 +1227,21 @@ paths:
     post:
       tags:
       - People - Exceptions
-      summary: Acknowledge an exception
-      description: Mark an exception as acknowledged.
-      operationId: acknowledgeException
+      summary: Acknowledge An Open Time Entry Exception
+      description: 'Marks an OPEN time entry exception as ACKNOWLEDGED, stamping the acting user and timestamp.
+
+        Use this tool to signal an exception has been seen but not yet fixed; use resolveTimeEntryException or waiveTimeEntryException instead to close it.
+
+        Preconditions: the exception must exist and must not already be RESOLVED or WAIVED, which are terminal states.
+
+        Required inputs: exceptionId (UUID) path parameter; there is no request body, and an optional X-Correlation-Id header is carried into the audit trail.
+
+        Emits a PEOPLE_TIME_ENTRY_EXCEPTION_ACKNOWLEDGE event and writes an EXCEPTION_ACKNOWLEDGED audit row.
+
+        Returns 404 when the exception does not exist, and 400 when it is already RESOLVED or WAIVED.
+
+        '
+      operationId: acknowledgeTimeEntryException
       parameters:
       - name: exceptionId
         in: path
@@ -894,14 +1276,41 @@ paths:
     post:
       tags:
       - Employee API
-      summary: Create employee profile
-      description: Creates a new employee profile with identity, employment, and role-related attributes.
+      summary: Create A New Employee Profile
+      description: 'Creates an employee profile: employment attributes (employee number, status, hire date) are stored in the people domain, while identity attributes (names, contact info) are forwarded to pos-people-contact as an upsert command with a server-generated UUIDv7 person id.
+
+        Use this tool when hiring or registering a brand-new employee; do not use updateEmployee, which modifies an existing profile, and do not use createEmployeesBulk, which imports many records in one call.
+
+        Preconditions: no existing employee may match the employee number, primary email, or phone when duplicatePolicy is STRICT (the default); identity duplicate checks run against an eventually consistent replica.
+
+        Required inputs: firstName, lastName, employeeNumber, status (ACTIVE, ON_LEAVE, SUSPENDED, TERMINATED, DISABLED) and hireDate (yyyy-MM-dd); duplicatePolicy defaults to STRICT, and BALANCED accepts suspected duplicates while returning warnings in the response.
+
+        Emits a PEOPLE_EMPLOYEE_CREATE event, publishes a people.employee.updated fact, and sends a person upsert command to pos-people-contact; the response echoes the submitted identity fields because the replica may lag.
+
+        Returns 409 when a duplicate employee number, email, or phone is detected under STRICT policy, and 422 when terminationDate is before hireDate.
+
+        '
       operationId: createEmployee
       requestBody:
+        description: 'Employee profile to create: identity fields forwarded to pos-people-contact plus local employment attributes.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateEmployeeRequest'
+            examples:
+              New technician:
+                description: New technician
+                value:
+                  firstName: Jane
+                  lastName: Smith
+                  preferredName: Jane
+                  employeeNumber: EMP-0001
+                  status: ACTIVE
+                  hireDate: 2026-01-15
+                  contactInfo:
+                    primaryEmail: jane.smith@example.com
+                    primaryPhone: +1-555-123-4567
+                  duplicatePolicy: STRICT
         required: true
       responses:
         '201':
@@ -937,8 +1346,20 @@ paths:
     post:
       tags:
       - Employee API
-      summary: Disable employee profile
-      description: Disables an employee profile and records optional disable metadata.
+      summary: Disable Employee And Offboard Assignments
+      description: 'Disables an ACTIVE employee, setting status DISABLED with a fresh statusEffectiveAt, and applies the requested staffing-assignment offboarding policy.
+
+        Use this tool for offboarding; do not use updateEmployee to force the status field, which skips offboarding, and do not use endStaffingAssignment, which ends a single assignment only.
+
+        Preconditions: the employee must exist and be in ACTIVE status; ON_LEAVE or SUSPENDED employees are rejected, as are already DISABLED or TERMINATED ones.
+
+        Required inputs: employeeId (UUID) path parameter; the body is optional, assignmentPolicy defaults to IMMEDIATE, and assignmentEndDate applies only with GRACE_PERIOD.
+
+        Emits a PEOPLE_EMPLOYEE_DISABLE event and publishes a people.employee.updated fact; when the downstream assignment action fails, a retry is queued with a five-minute delay instead of failing the request.
+
+        Returns 404 when the employee does not exist, and 400 when the employee is not currently ACTIVE.
+
+        '
       operationId: disableEmployee
       parameters:
       - name: employeeId
@@ -948,10 +1369,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Optional offboarding metadata controlling how the employee's staffing assignments are terminated; omitting it applies the IMMEDIATE policy.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/DisableEmployeeRequestDto'
+            examples:
+              Grace-period offboarding:
+                description: Grace-period offboarding
+                value:
+                  disableReason: Voluntary resignation
+                  assignmentPolicy: GRACE_PERIOD
+                  assignmentEndDate: 2026-03-31
       responses:
         '200':
           description: Employee disabled
@@ -980,14 +1409,45 @@ paths:
     post:
       tags:
       - People Bulk Ingest API
-      summary: Bulk ingest records
-      description: Accepts a batch of domain records for bulk import. Returns per-record results.
-      operationId: bulkIngest
+      summary: Bulk Import Employee Records From Batch
+      description: 'Imports a batch of employee records, creating each one through the same path as createEmployee with status forced to ACTIVE.
+
+        Use this tool for initial loads or migrations of many employees; use createEmployee instead for a single hire, since per-record failures here are reported in the response body rather than as an HTTP error.
+
+        Preconditions: each record is checked under the STRICT duplicate policy, so an existing employee number, email, or phone fails that record.
+
+        Required inputs: jobId (UUID), locationId (UUID), and records, each with firstName, lastName, employeeNumber, and hireDate as a YYYY-MM-DD string.
+
+        Emits a PEOPLE_BULK_INGEST event, and each successfully created employee also publishes its identity upsert command and people.employee.updated fact.
+
+        Returns 200 even when individual records fail (inspect per-record success flags and errorCode PEOPLE_INGEST_FAILED), and 400 when the envelope itself is invalid or the records list is empty.
+
+        '
+      operationId: createEmployeesBulk
       requestBody:
+        description: 'Bulk ingest envelope: a job-scoped batch of person records to import as ACTIVE employees.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BulkIngestRequestPersonBulkIngestRecord'
+            examples:
+              Two-person batch:
+                description: Two-person batch
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  operatorId: user-jdoe
+                  records:
+                  - firstName: Jane
+                    lastName: Smith
+                    employeeNumber: EMP-0001
+                    hireDate: 2026-01-15
+                    primaryEmail: jane.smith@example.com
+                  - firstName: John
+                    lastName: Doe
+                    employeeNumber: EMP-0002
+                    hireDate: 2026-02-01
+                    primaryPhone: +1-555-123-4567
         required: true
       responses:
         '200':
@@ -1011,9 +1471,21 @@ paths:
     get:
       tags:
       - People - Staffing Assignments
-      summary: List assignments for person (path variant)
-      description: Returns all staffing assignments for the person given in the path. Same contract as GET /v1/people/staffing/assignments?personId={personId}.
-      operationId: getAssignmentsByPath
+      summary: List Staffing Assignments By Person Path
+      description: 'Lists every staffing assignment for the person given in the path, including ENDED ones; the data is identical to listStaffingAssignments.
+
+        Use this tool when a path-style URL is preferred; use listStaffingAssignments instead for the query-parameter form, which returns the same rows.
+
+        Preconditions: none beyond authentication; an unknown personId simply yields no rows.
+
+        Required inputs: personId (UUID) path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when the person has no assignments.
+
+        '
+      operationId: listStaffingAssignmentsByPath
       parameters:
       - name: personId
         in: path
@@ -1039,8 +1511,20 @@ paths:
     get:
       tags:
       - People Availability API
-      summary: Get a person's primary location
-      description: Resolve a person's primary active location from their staffing assignments. Returns 404 when the person has no active assignment flagged as primary.
+      summary: Get Person Primary Location Assignment
+      description: 'Resolves a person''s primary active location from their staffing assignments as of today.
+
+        Use this tool for service-to-service location resolution by person id; use getMyPrimaryLocation instead for the authenticated caller.
+
+        Preconditions: the person must have an ACTIVE staffing assignment flagged primary whose effective dates cover today.
+
+        Required inputs: personId (UUID) path parameter; there is no request body.
+
+        Emits a PEOPLE_PERSON_PRIMARY_LOCATION_GET audit event but changes no state; this is a read-only projection.
+
+        Returns 404 when the person has no active assignment flagged as primary today.
+
+        '
       operationId: getPersonPrimaryLocation
       parameters:
       - name: personId
@@ -1072,9 +1556,21 @@ paths:
     get:
       tags:
       - People Availability API
-      summary: Get a person's active location assignments
-      description: List a person's staffing assignments that are active today, primary first. Returns an empty list when the person has no current location.
-      operationId: getPersonLocations
+      summary: List Person Active Location Assignments
+      description: 'Lists a given person''s staffing assignments that are active today, primary first.
+
+        Use this tool when acting on another person by id; use listMyLocations instead for the authenticated caller, and listStaffingAssignments for full history including ended assignments.
+
+        Preconditions: none beyond authentication; an unknown personId is not rejected.
+
+        Required inputs: personId (UUID) path parameter; there is no request body.
+
+        Emits a PEOPLE_PERSON_LOCATIONS_LIST audit event but changes no state; this is a read-only projection.
+
+        Returns 200 with an empty list when the person has no assignment active today, including when the personId is unknown.
+
+        '
+      operationId: listPersonLocations
       parameters:
       - name: personId
         in: path
@@ -1101,8 +1597,20 @@ paths:
     get:
       tags:
       - Timekeeping Approval API
-      summary: List timekeeping entries for a person in a period
-      description: Returns all timekeeping entries for the given person within the given time period's date range.
+      summary: List Timekeeping Entries For Person And Period
+      description: 'Lists a person''s timekeeping entries whose sessions fall entirely within the given pay period''s date range, evaluated in UTC.
+
+        Use this tool to review entries before deciding a period; use getTimePeriodApproval instead for just the status counts.
+
+        Preconditions: the time period must exist; sessions straddling the period boundary are excluded because both start and end must fall inside it.
+
+        Required inputs: personId (UUID) and timePeriodId (UUID) query parameters; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the time period does not exist.
+
+        '
       operationId: listTimekeepingEntries
       parameters:
       - name: personId
@@ -1143,8 +1651,20 @@ paths:
     get:
       tags:
       - Timekeeping Approval API
-      summary: List time periods
-      description: Returns all pay periods, optionally scoped to a tenant.
+      summary: List Pay Periods For Timekeeping Approval
+      description: 'Lists pay periods with their start and end dates and status, newest first when scoped to a tenant.
+
+        Use this tool to choose the period for approval screens; use listTimekeepingEntries instead for the entries inside a chosen period.
+
+        Preconditions: none; tenantId is an optional scope and omitting it returns all periods in repository order.
+
+        Required inputs: none; tenantId (UUID) is an optional query parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when no pay periods exist.
+
+        '
       operationId: listTimePeriods
       parameters:
       - name: tenantId
@@ -1171,8 +1691,20 @@ paths:
     get:
       tags:
       - Timekeeping Approval API
-      summary: Get approval summary for a person in a period
-      description: Returns the approval status counts and overall status for the given person in the given period.
+      summary: Get Time Period Approval Summary
+      description: 'Summarises a person''s timekeeping approval state for a pay period: total, pending, approved, and rejected counts plus an overall status.
+
+        Use this tool for a status badge or gate; use listTimekeepingEntries instead when the individual entries are needed.
+
+        Preconditions: the time period must exist; the overall status is PENDING_APPROVAL while any entry is pending, else REJECTED if any entry was rejected, else APPROVED.
+
+        Required inputs: personId (UUID) and timePeriodId (UUID) query parameters; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the time period does not exist.
+
+        '
       operationId: getTimePeriodApproval
       parameters:
       - name: personId
@@ -1209,9 +1741,21 @@ paths:
     get:
       tags:
       - Timekeeping Approval API
-      summary: List employees with timekeeping entries
-      description: Returns distinct employees who have at least one timekeeping entry.
-      operationId: listApprovalPeople
+      summary: List Employees With Timekeeping Entries
+      description: 'Lists the distinct employees that have at least one timekeeping entry, with display name and employee number.
+
+        Use this tool to build the person picker for pay-period approval; use listTimekeepingEntries instead for one person''s entries in a period.
+
+        Preconditions: none; display names come from the person identity replica, which is eventually consistent.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when no timekeeping entries exist.
+
+        '
+      operationId: listTimekeepingApprovalPeople
       responses:
         '200':
           description: List of employees
@@ -1230,9 +1774,21 @@ paths:
     get:
       tags:
       - People TimeEntries
-      summary: List adjustments for a time entry
-      description: Retrieve all adjustments associated with a specific time entry.
-      operationId: listForTimeEntry
+      summary: List Adjustments For A Time Entry
+      description: 'Lists all adjustments recorded against one time entry, in any status.
+
+        Use this tool to review an entry''s correction history; use createTimeEntryAdjustment instead to propose a new correction.
+
+        Preconditions: none; an unknown timeEntryId simply yields no rows.
+
+        Required inputs: timeEntryId (UUID) path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when the time entry has no adjustments.
+
+        '
+      operationId: listTimeEntryAdjustments
       parameters:
       - name: timeEntryId
         in: path
@@ -1258,8 +1814,20 @@ paths:
     get:
       tags:
       - People Reports API
-      summary: Get attendance and job time discrepancy report
-      description: Generates a per-technician, per-location, per-day discrepancy report based on attendance and approved job time totals.
+      summary: Get Attendance Versus Job Time Discrepancy Report
+      description: 'Generates a per-technician, per-location, per-day report comparing attendance minutes from time entries with job minutes from the workorder job-time replica.
+
+        Use this tool to spot technicians whose clocked attendance diverges from booked job time; use listApprovedTimeForExport instead for the raw approved rows consumed by accounting export.
+
+        Preconditions: attendance comes from local time entries and job minutes from the ext_workorder_job_time replica, so very recent workorder activity may not be reflected yet.
+
+        Required inputs: startDate and endDate (inclusive, yyyy-MM-dd) and timezone (IANA, used to bucket minutes into local days); locationId and technicianIds are optional filters, and flaggedOnly defaults to false.
+
+        Emits a REPORT_ATTENDANCE_VS_JOBTIME_GENERATED audit event but changes no state; rows are flagged when the absolute discrepancy exceeds the location''s configured threshold minutes.
+
+        Returns 400 when endDate is before startDate or timezone is not a valid IANA zone.
+
+        '
       operationId: getAttendanceDiscrepancyReport
       parameters:
       - name: startDate
@@ -1365,9 +1933,21 @@ paths:
     get:
       tags:
       - People Reports API
-      summary: Get approved time entries for accounting export
-      description: Returns People-domain approved time rows for a date range and one or more locations. This endpoint is the stable source-data read contract for accounting export workflows.
-      operationId: getApprovedTimeForExport
+      summary: List Approved Time For Accounting Export
+      description: 'Returns APPROVED time-entry rows with worked hours, approval metadata, and resolved employee and location names for a date range and one or more locations.
+
+        Use this tool as the stable source-data read for accounting time-export workflows; use getAttendanceDiscrepancyReport instead for variance analysis between attendance and job time.
+
+        Preconditions: every supplied locationId must resolve to an active location; rows missing approval or attendance timestamps are silently excluded.
+
+        Required inputs: startDate and endDate (inclusive, yyyy-MM-dd, evaluated in UTC) and one or more locationId query parameters.
+
+        Emits a PEOPLE_TIME_APPROVED_EXPORT_READ audit event but changes no state; this is a read-only projection sorted by entry date then time entry id.
+
+        Returns 400 when endDate is before startDate, when no locationId is supplied, or when a locationId is unknown or inactive.
+
+        '
+      operationId: listApprovedTimeForExport
       parameters:
       - name: startDate
         in: query
@@ -1451,9 +2031,21 @@ paths:
     get:
       tags:
       - People Availability API
-      summary: Get current user's primary location
-      description: Resolve the authenticated user's primary active location from their staffing assignments. Returns 404 when the user has no active assignment flagged as primary.
-      operationId: getCurrentUserPrimaryLocation
+      summary: Get Current User Primary Location
+      description: 'Resolves the authenticated caller''s primary active location from their staffing assignments as of today.
+
+        Use this tool when a UI or service needs the current user''s home location; use listMyLocations instead to see every active assignment, and getPersonPrimaryLocation for a different person.
+
+        Preconditions: the caller must be linked to a person, and that person must have an ACTIVE assignment flagged primary whose effective dates cover today.
+
+        Required inputs: none; identity comes from the bearer token and there are no parameters.
+
+        Emits a PEOPLE_PRIMARY_LOCATION_GET audit event but changes no state; this is a read-only projection.
+
+        Returns 404 when the caller has no person link or no active assignment flagged as primary today.
+
+        '
+      operationId: getMyPrimaryLocation
       responses:
         '200':
           description: Primary location resolved successfully.
@@ -1476,9 +2068,21 @@ paths:
     get:
       tags:
       - People Availability API
-      summary: Get current user's active location assignments
-      description: List the authenticated user's staffing assignments that are active today, primary first. Returns an empty list when the user has no current location.
-      operationId: getCurrentUserLocations
+      summary: List Current User Active Location Assignments
+      description: 'Lists the authenticated caller''s staffing assignments that are active today, primary first.
+
+        Use this tool to populate a location switcher for the current user; use getMyPrimaryLocation instead when only the single primary location is needed.
+
+        Preconditions: the caller must be linked to a person in the user-link replica; the link data is event-fed and can lag the link authority.
+
+        Required inputs: none; identity comes from the bearer token and there are no parameters.
+
+        Emits a PEOPLE_ME_LOCATIONS_LIST audit event but changes no state; this is a read-only projection.
+
+        Returns 200 with an empty list when the person has no assignment active today, 404 when no person is linked to the current user, and 401 when the security context carries no username.
+
+        '
+      operationId: listMyLocations
       responses:
         '200':
           description: Active location assignments returned successfully.
@@ -1503,9 +2107,21 @@ paths:
     get:
       tags:
       - Employee API
-      summary: Resolve employee by employee number
-      description: Resolves an employee number to a slim identity projection (person id + employment status). Used for service-to-service approver resolution, such as manager-approval-by-employee-number.
-      operationId: resolveByNumber
+      summary: Resolve Employee By Employee Number
+      description: 'Resolves an employee number to a slim identity projection containing the person id, employee number, employment status, and an active flag.
+
+        Use this tool for service-to-service approver resolution such as manager-approval-by-employee-number; use getEmployee instead when the full profile with names and contact info is needed.
+
+        Preconditions: an employee record with the given employee number must exist; matching is case-insensitive.
+
+        Required inputs: employeeNumber (string) path parameter; there is no request body and no pagination.
+
+        No events are emitted and no state changes; this is a read-only lookup.
+
+        Returns 404 when no employee carries the supplied employee number.
+
+        '
+      operationId: getEmployeeByNumber
       parameters:
       - name: employeeNumber
         in: path
@@ -1534,9 +2150,21 @@ paths:
     get:
       tags:
       - People Compliance API
-      summary: List active users linked to inactive persons
-      description: 'Compliance check (ADR-0015 §4): returns every ACTIVE user-person link whose linked person is in an inactive employment status (SUSPENDED, TERMINATED, DISABLED). Each row is a user that should have been disabled when the person was disabled/archived. Returns an empty list when none. Link facts come from the people-contact replica, so results can trail the link authority by the event-propagation delay.'
-      operationId: findActiveUsersForInactivePersons
+      summary: List Active Users Linked To Inactive Persons
+      description: 'Reports every ACTIVE user-person link whose linked person is in an inactive employment status (SUSPENDED, TERMINATED, or DISABLED), per ADR-0015 section 4; each row is a user that should have been disabled during offboarding.
+
+        Use this tool for periodic identity-compliance audits; do not use disableEmployee here, which performs the offboarding itself rather than reporting on it.
+
+        Preconditions: none; link facts come from the people-contact replica, so results can trail the link authority by the event-propagation delay.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        Emits a REPORT_INACTIVE_PERSON_ACTIVE_USER_GENERATED audit event but changes no state; this is a read-only report.
+
+        Returns 200 with an empty list when no offending links exist.
+
+        '
+      operationId: listInactivePersonActiveUsers
       responses:
         '200':
           description: Offending links returned (possibly empty)
@@ -1571,9 +2199,21 @@ paths:
     get:
       tags:
       - People Availability API
-      summary: Get people availability
-      description: Return availability with optional locationId and date filters.
-      operationId: getPeopleAvailability
+      summary: List People Availability For A Location
+      description: 'Lists people with staffing assignments active on a given date, joined with identity fields from the person replica, one row per assignment.
+
+        Use this tool to see who is available to work at a location on a date; use getPersonPrimaryLocation instead to resolve a single person''s home location.
+
+        Preconditions: when locationId is omitted the caller must be linked to a person with an active assignment, because the requester''s own location becomes the filter.
+
+        Required inputs: none are mandatory; locationId (UUID) defaults to the requester''s location and date (yyyy-MM-dd) defaults to today.
+
+        Emits a PEOPLE_AVAILABILITY_LIST audit event but changes no state; this is a read-only projection.
+
+        Returns 404 when locationId is omitted and the requester has no active location assignment or no person link.
+
+        '
+      operationId: listPeopleAvailability
       parameters:
       - name: locationId
         in: query
@@ -1920,18 +2560,20 @@ components:
       - status
     WorkSessionSubmitRequest:
       type: object
-      description: Work session submit request body
+      description: Request to submit a completed work session for review
       properties:
         billableMinutes:
           type: integer
           format: int32
           description: Total billable minutes for the session
           example: 480
+          minimum: 0
         breakMinutes:
           type: integer
           format: int32
           description: Total break minutes for the session
           example: 30
+          minimum: 0
         submittedAt:
           type: string
           format: date-time
@@ -2012,7 +2654,7 @@ components:
       - startedAt
     WorkSessionRequest:
       type: object
-      description: Work session start request body
+      description: Request to start or act on a work session for a person
       properties:
         personId:
           type: string

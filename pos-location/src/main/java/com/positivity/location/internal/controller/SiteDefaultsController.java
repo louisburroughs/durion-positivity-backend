@@ -7,6 +7,7 @@ import com.positivity.location.service.SiteDefaultsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -37,8 +38,22 @@ public class SiteDefaultsController {
 
     @PutMapping
     @Operation(
-            summary = "Configure site defaults",
-            description = "Create or update default site configuration for a location.")
+            operationId = "configureSiteDefaults",
+            summary = "Configure Default Storage Locations for Site",
+            description = """
+                    Creates or replaces the default staging and quarantine storage locations of a site in a \
+                    single idempotent upsert.
+                    Use this tool when commissioning a site's receiving flow or moving its defaults; use \
+                    getSiteDefaults instead to read the current assignment.
+                    Preconditions: the site must exist, and both referenced storage locations must belong to that \
+                    site.
+                    Required inputs: locationId (UUID) as a path parameter and a body with both \
+                    defaultStagingLocationId and defaultQuarantineLocationId; the two ids must differ.
+                    Emits a LOCATION_SITE_DEFAULTS_PUT event and republishes the location fact carrying the new \
+                    defaults.
+                    Returns 404 when the site does not exist, 400 when either id is missing or both ids are the \
+                    same, and 422 when a referenced storage location does not belong to the site.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Site defaults configured",
@@ -49,6 +64,7 @@ public class SiteDefaultsController {
     @ApiResponse(responseCode = "400", description = "Invalid request payload")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @ApiResponse(responseCode = "404", description = "Location not found")
+    @ApiResponse(responseCode = "422", description = "Default storage location does not belong to the site")
     @PreAuthorize("hasAuthority('location:write')")
     @EmitEvent(id = "LOCATION_SITE_DEFAULTS_PUT", apiVersion = "1")
     @SecurityRequirement(
@@ -56,12 +72,35 @@ public class SiteDefaultsController {
             scopes = {"location:write"})
     public ResponseEntity<SiteDefaultsResponse> configureDefaults(
             @Parameter(description = "ID of the location", required = true) @PathVariable UUID locationId,
-            @RequestBody SiteDefaultsRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Pair of storage location ids to install as the site's staging and"
+                                    + " quarantine defaults.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Staging and quarantine defaults",
+                                                            value = """
+                                                                    {"defaultStagingLocationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01",
+                                                                     "defaultQuarantineLocationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02"}
+                                                                    """)))
+                    @RequestBody
+                    SiteDefaultsRequest request) {
         return ResponseEntity.ok(siteDefaultsService.configureDefaults(locationId, request));
     }
 
     @GetMapping
-    @Operation(summary = "Get site defaults", description = "Retrieve default site configuration for a location.")
+    @Operation(operationId = "getSiteDefaults", summary = "Get Default Storage Locations for Site", description = """
+                    Returns the default staging and quarantine storage location ids configured for a site.
+                    Use this tool when routing received or quarantined inventory; do not use \
+                    configureSiteDefaults, which overwrites the assignment.
+                    Preconditions: the site must exist; both ids are null when defaults were never configured.
+                    Required inputs: locationId (UUID) as a path parameter.
+                    Emits a LOCATION_SITE_DEFAULTS_GET event; no state changes.
+                    Returns 404 when the site does not exist.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Site defaults returned",

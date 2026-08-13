@@ -3,6 +3,7 @@ modules:
     mode: STRICT
   pos-order:
     mode: STRICT
+    annotationDepth: STRICT
   pos-workorder:
     mode: STRICT
   pos-inventory:
@@ -14,8 +15,10 @@ modules:
     mode: STRICT
   pos-location:
     mode: STRICT
+    annotationDepth: STRICT
   pos-people:
     mode: STRICT
+    annotationDepth: STRICT
   pos-catalog:
     mode: STRICT
   pos-shop-manager:
@@ -32,6 +35,7 @@ modules:
     annotationDepth: STRICT
   pos-warranty:
     mode: STRICT
+    annotationDepth: STRICT
   pos-supplier:
     mode: STRICT
     annotationDepth: STRICT

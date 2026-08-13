@@ -28,7 +28,10 @@ public class BayPatchRequest {
     @Schema(description = "Display name of the bay", example = "Bay A1", requiredMode = NOT_REQUIRED)
     private String name;
 
-    @Schema(description = "Type classification of the bay", example = "LIFT", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Type classification of the bay; must be a BayType value",
+            example = "GENERAL_SERVICE",
+            requiredMode = NOT_REQUIRED)
     private String bayType;
 
     @Schema(description = "Operational status of the bay", example = "ACTIVE", requiredMode = NOT_REQUIRED)

@@ -7,6 +7,8 @@ import com.positivity.location.internal.dto.BayResponse;
 import com.positivity.location.service.BayService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,16 +35,35 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/locations/{locationId}/bays")
 public class BayController {
+
+    private static final String BAY_EXAMPLE = """
+            {"name":"Bay A1",
+             "bayType":"GENERAL_SERVICE",
+             "capacity":{"maxConcurrentVehicles":2},
+             "serviceCapabilityIds":["ALIGNMENT"],
+             "skillRequirementIds":["018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a20"],
+             "status":"ACTIVE"}
+            """;
+
     private final BayService bayService;
 
     public BayController(BayService bayService) {
         this.bayService = bayService;
     }
 
-    @Operation(
-            summary = "List bays",
-            description = "List bays for a location with optional status and bayType filters.")
+    @Operation(operationId = "listBays", summary = "List Service Bays of a Location", description = """
+                    Lists the service bays of a location as a page, optionally filtered by status and bayType.
+                    Use this tool to see bay capacity and status for a shop; use getBay instead when the bay id \
+                    is already known.
+                    Preconditions: the location must exist.
+                    Required inputs: locationId (UUID) as a path parameter; status (ACTIVE or OUT_OF_SERVICE) and \
+                    bayType filters are optional, and page defaults to 0 with size 20.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when the location does not exist; an unrecognized status or bayType filter value \
+                    fails the request rather than returning an empty page.
+                    """)
     @ApiResponse(responseCode = "200", description = "Bays retrieved successfully.")
+    @ApiResponse(responseCode = "404", description = "Location not found.")
     @PreAuthorize("hasAuthority('location:bay:read')")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -58,7 +79,16 @@ public class BayController {
         return ResponseEntity.ok(bayService.listBays(parseUuid(locationId), status, bayType, pageable));
     }
 
-    @Operation(summary = "Get bay", description = "Get a bay by location and bay id.")
+    @Operation(operationId = "getBay", summary = "Get a Service Bay by Identifier", description = """
+                    Returns a single service bay of a location, including its capacity, capability and skill \
+                    requirement details.
+                    Use this tool when both the location id and bay id are known; use listBays instead to search \
+                    or enumerate.
+                    Preconditions: the location must exist and the bay must belong to it.
+                    Required inputs: locationId and bayId (UUIDs) as path parameters.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when the location does not exist or the bay is not found under that location.
+                    """)
     @ApiResponse(responseCode = "200", description = "Bay retrieved successfully.")
     @ApiResponse(responseCode = "404", description = "Bay not found.")
     @PreAuthorize("hasAuthority('location:bay:read')")
@@ -72,8 +102,25 @@ public class BayController {
         return ResponseEntity.ok(bayService.getBay(parseUuid(locationId), parseUuid(bayId)));
     }
 
-    @Operation(summary = "Create bay", description = "Create a new bay for a specific location.")
+    @Operation(operationId = "createBay", summary = "Create a Service Bay for Location", description = """
+                    Creates a service bay under a location with a type classification, concurrency capacity and \
+                    optional capability and skill requirements.
+                    Use this tool when adding physical work capacity to a shop; do not use patchBay, which \
+                    modifies a bay that already exists, and use createStorageLocation for inventory storage \
+                    rather than vehicle bays.
+                    Preconditions: the location must exist, no bay of that location may already use the name \
+                    (case-insensitive), and any serviceCapabilityIds must match registered service capability \
+                    codes.
+                    Required inputs: name, bayType (one of GENERAL_SERVICE, ALIGNMENT, TIRE_SERVICE, HEAVY_DUTY, \
+                    INSPECTION or WASH_DETAIL) and capacity.maxConcurrentVehicles of at least 1; status is \
+                    optional, defaults to ACTIVE and only also accepts OUT_OF_SERVICE.
+                    Emits a LOCATION_BAY_CREATE event; no other records are touched.
+                    Returns 404 when the location does not exist and 409 when the bay name is already taken at \
+                    that location.
+                    """)
     @ApiResponse(responseCode = "201", description = "Bay created successfully.")
+    @ApiResponse(responseCode = "404", description = "Location not found.")
+    @ApiResponse(responseCode = "409", description = "Bay name already taken at this location.")
     @EmitEvent(id = "LOCATION_BAY_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('location:bay:manage')")
     @SecurityRequirement(
@@ -81,14 +128,40 @@ public class BayController {
             scopes = {"location:bay:manage"})
     @PostMapping
     public ResponseEntity<BayResponse> createBay(
-            @Parameter(description = "Location ID", example = "1") @PathVariable String locationId,
-            @Parameter(description = "Bay creation request body") @Valid @RequestBody BayRequest request) {
+            @Parameter(description = "Location ID", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable
+                    String locationId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Service bay to create, with its type classification and concurrent"
+                                    + " vehicle capacity.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(name = "General service bay", value = BAY_EXAMPLE)))
+                    @Valid
+                    @RequestBody
+                    BayRequest request) {
         BayResponse created = bayService.createBay(parseUuid(locationId), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
-    @Operation(summary = "Patch bay", description = "Patch bay fields including status transition and capacity.")
+    @Operation(operationId = "patchBay", summary = "Patch Fields of a Service Bay", description = """
+                    Applies a partial update to a bay, changing only the supplied fields: name, bayType, status, \
+                    capacity and the capability or skill requirement lists.
+                    Use this tool for status transitions between ACTIVE and OUT_OF_SERVICE and for capacity \
+                    changes; do not use createBay, which adds a new bay.
+                    Preconditions: the location must exist, the bay must belong to it, and a new name must not \
+                    collide with another bay at the same location.
+                    Required inputs: locationId and bayId (UUIDs) as path parameters and a body with at least one \
+                    field; capacity.maxConcurrentVehicles, when supplied, must be at least 1.
+                    Emits a LOCATION_BAY_UPDATE event; no other records are touched.
+                    Returns 404 when the location or bay does not exist and 409 when the new name is already \
+                    taken at that location.
+                    """)
     @ApiResponse(responseCode = "200", description = "Bay updated successfully.")
+    @ApiResponse(responseCode = "404", description = "Location or bay not found.")
+    @ApiResponse(responseCode = "409", description = "Bay name already taken at this location.")
     @EmitEvent(id = "LOCATION_BAY_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('location:bay:manage')")
     @SecurityRequirement(
@@ -96,7 +169,21 @@ public class BayController {
             scopes = {"location:bay:manage"})
     @PatchMapping("/{bayId}")
     public ResponseEntity<BayResponse> patchBay(
-            @PathVariable String locationId, @PathVariable String bayId, @RequestBody BayPatchRequest patchRequest) {
+            @PathVariable String locationId,
+            @PathVariable String bayId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Partial bay payload; only non-null fields are applied and all others"
+                                    + " are left unchanged.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Take bay out of service",
+                                                            value = "{\"status\":\"OUT_OF_SERVICE\"}")))
+                    @RequestBody
+                    BayPatchRequest patchRequest) {
         return ResponseEntity.ok(bayService.patchBay(parseUuid(locationId), parseUuid(bayId), patchRequest));
     }
 

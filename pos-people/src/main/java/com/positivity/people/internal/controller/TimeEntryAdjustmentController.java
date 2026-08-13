@@ -7,6 +7,8 @@ import com.positivity.people.internal.dto.TimeEntryAdjustmentResponse;
 import com.positivity.people.service.TimeEntryAdjustmentService;
 import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -33,9 +35,24 @@ public class TimeEntryAdjustmentController {
     private final TimeEntryAdjustmentService adjustmentService;
 
     @Operation(
-            summary = "Create a time entry adjustment",
-            description =
-                    "Submit a request to adjust a time entry. The adjustment will be in PENDING status until approved.")
+            operationId = "createTimeEntryAdjustment",
+            summary = "Create A Pending Time Entry Adjustment",
+            description = """
+                    Creates a PENDING adjustment against a time entry, proposing either replacement start and end \
+                    timestamps or a signed minutes delta.
+                    Use this tool when a recorded time entry needs correction before approval; do not use \
+                    approveTimeEntryAdjustment, which decides an already proposed adjustment.
+                    Preconditions: the time entry must exist and be in PENDING_APPROVAL status; entries already \
+                    approved or rejected cannot be adjusted.
+                    Required inputs: timeEntryId (UUID), reasonCode, and exactly one of the pair proposedStartAt \
+                    plus proposedEndAt (ISO-8601 offset timestamps) or minutesDelta (positive adds, negative \
+                    subtracts); notes and createdBy are optional.
+                    Emits a PEOPLE_TIME_ENTRY_ADJUSTMENT_CREATE event; the time entry itself is not modified until \
+                    the adjustment is approved.
+                    Returns 404 when the time entry does not exist, 409 when the entry is not in PENDING_APPROVAL \
+                    status, and 400 when reasonCode is missing or the proposed-times versus minutesDelta rule is \
+                    violated.
+                    """)
     @ApiResponse(responseCode = "201", description = "Adjustment created")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "404", description = "Time entry not found")
@@ -47,14 +64,38 @@ public class TimeEntryAdjustmentController {
             scopes = {"people:timeAdjustment:create"})
     @PreAuthorize("hasAuthority('people:timeAdjustment:create')")
     public ResponseEntity<TimeEntryAdjustmentResponse> createAdjustment(
-            @Valid @RequestBody TimeEntryAdjustmentRequest req) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Proposed correction for one time entry: replacement start/end timestamps"
+                                    + " or a signed minutes delta, with a reason code.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Subtract a missed break", value = """
+                                                                    {"timeEntryId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "reasonCode":"MISSED_BREAK",
+                                                                     "notes":"Employee forgot to log lunch break",
+                                                                     "minutesDelta":-30}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    TimeEntryAdjustmentRequest req) {
         TimeEntryAdjustmentResponse resp = adjustmentService.createAdjustment(req);
         return ResponseEntity.status(HttpStatus.CREATED).body(resp);
     }
 
     @Operation(
-            summary = "List adjustments for a time entry",
-            description = "Retrieve all adjustments associated with a specific time entry.")
+            operationId = "listTimeEntryAdjustments",
+            summary = "List Adjustments For A Time Entry",
+            description = """
+                    Lists all adjustments recorded against one time entry, in any status.
+                    Use this tool to review an entry's correction history; use createTimeEntryAdjustment instead to \
+                    propose a new correction.
+                    Preconditions: none; an unknown timeEntryId simply yields no rows.
+                    Required inputs: timeEntryId (UUID) path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty list when the time entry has no adjustments.
+                    """)
     @ApiResponse(responseCode = "200", description = "List returned")
     @GetMapping(value = "/{timeEntryId}/adjustments", produces = "application/json")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -67,8 +108,21 @@ public class TimeEntryAdjustmentController {
     }
 
     @Operation(
-            summary = "Approve a time entry adjustment",
-            description = "Approve a pending time entry adjustment. Requires approval permissions.")
+            operationId = "approveTimeEntryAdjustment",
+            summary = "Approve A Pending Time Entry Adjustment",
+            description = """
+                    Approves a time entry adjustment, stamping the deciding user and decision time and writing an \
+                    ADJUSTMENT_APPROVED audit row.
+                    Use this tool to accept a proposed correction; do not use approveTimeEntriesBatch, which \
+                    approves the time entries themselves rather than adjustments.
+                    Preconditions: the adjustment must exist; no status gate is enforced, so re-approving an already \
+                    decided adjustment overwrites the previous decision.
+                    Required inputs: adjustmentId (UUID) path parameter; an optional X-Correlation-Id header is \
+                    carried into the audit trail.
+                    Emits a PEOPLE_TIME_ENTRY_ADJUSTMENT_APPROVE event; the underlying time entry's own timestamps \
+                    are not recalculated by this call.
+                    Returns 404 when no adjustment exists for the supplied id.
+                    """)
     @ApiResponse(responseCode = "200", description = "Adjustment approved successfully")
     @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions")
     @ApiResponse(responseCode = "404", description = "Adjustment not found")

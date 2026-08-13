@@ -32,7 +32,10 @@ public class BayRequest {
     @NotBlank
     private String name;
 
-    @Schema(description = "Type classification of the bay", example = "LIFT", requiredMode = REQUIRED)
+    @Schema(
+            description = "Type classification of the bay; must be a BayType value",
+            example = "GENERAL_SERVICE",
+            requiredMode = REQUIRED)
     @NotBlank
     private String bayType;
 

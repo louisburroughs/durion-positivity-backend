@@ -33,7 +33,11 @@ public class TravelBufferPolicyRequest {
     @NotBlank
     private String name;
 
-    @Schema(description = "Type of buffer the policy applies", example = "FIXED_MINUTES", requiredMode = REQUIRED)
+    @Schema(
+            description =
+                    "Type of buffer the policy applies; one of FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or DISTANCE_MULTIPLIER",
+            example = "FLAT_MINUTES",
+            requiredMode = REQUIRED)
     @NotBlank
     private String bufferType;
 

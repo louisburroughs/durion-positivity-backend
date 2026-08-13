@@ -30,7 +30,19 @@ paths:
       tags:
       - Warranty Registrations
       summary: Get registration
-      description: Retrieve a warranty registration by id
+      description: 'Returns one warranty registration — the sold/instantiated coverage binding a policy to a customer, and optionally to a vehicle and its originating invoice line.
+
+        Use this tool when the registration id is already known; use searchRegistrations instead to locate coverage by customer, vehicle, or status.
+
+        Preconditions: the registration must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no registration exists for the supplied id.
+
+        '
       operationId: getRegistration
       parameters:
       - name: id
@@ -61,7 +73,19 @@ paths:
       tags:
       - Warranty Registrations
       summary: Update registration
-      description: Full update of an existing warranty registration
+      description: 'Fully replaces an existing warranty registration''s fields, including the policy binding, source references, and coverage dates.
+
+        Use this tool to correct or expire sold coverage; do not use createRegistration, which records new coverage.
+
+        Preconditions: the registration and the referenced policy must exist; omitting status keeps the current value, while the other fields are rewritten from the request and null clears them.
+
+        Required inputs: id (UUID) as a path parameter, plus policyId, customerId, and purchaseDate; vehicleId, source invoice references, contractNumber, expiresAt, and status (ACTIVE, EXPIRED, CANCELLED, EXHAUSTED) are optional.
+
+        Emits a WARRANTY_REGISTRATION_UPDATE event.
+
+        Returns 404 when the registration or the referenced policy cannot be resolved.
+
+        '
       operationId: updateRegistration
       parameters:
       - name: id
@@ -72,10 +96,24 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Full replacement of the registration's fields (omitting status keeps the current value).
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RegistrationRequest'
+            examples:
+              Road-hazard registration:
+                description: Road-hazard registration
+                value:
+                  policyId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a30
+                  customerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                  vehicleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                  sourceInvoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
+                  sourceInvoiceLineId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a05
+                  contractNumber: RH-2026-88412
+                  purchaseDate: 2026-05-14
+                  expiresAt: 2029-05-14
+                  status: ACTIVE
         required: true
       responses:
         '200':
@@ -105,7 +143,19 @@ paths:
       tags:
       - Warranty Providers
       summary: Get provider
-      description: Retrieve a warranty provider by id
+      description: 'Returns one warranty provider, including its funding type, AP vendor link, and claim-submission contact details.
+
+        Use this tool when the provider id is already known; use listProviders instead to locate a provider by status or type.
+
+        Preconditions: the provider must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no provider exists for the supplied id.
+
+        '
       operationId: getProvider
       parameters:
       - name: id
@@ -136,7 +186,19 @@ paths:
       tags:
       - Warranty Providers
       summary: Update provider
-      description: Full update of an existing warranty provider
+      description: 'Fully replaces an existing warranty provider''s fields, including funding type, contact details, and the AP vendor link.
+
+        Use this tool to change provider data; do not use createProvider, which adds a new provider.
+
+        Preconditions: the provider must exist; omitting status keeps the current value, while every other field is rewritten from the request and null clears it.
+
+        Required inputs: id (UUID) as a path parameter, plus name and providerType; apVendorId, manufacturerId, claimSubmissionMethod, and the contact fields are optional.
+
+        Emits a WARRANTY_PROVIDER_UPDATE event.
+
+        Returns 404 when no provider exists for the supplied id.
+
+        '
       operationId: updateProvider
       parameters:
       - name: id
@@ -147,10 +209,25 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Full replacement of the provider's fields (omitting status keeps the current value).
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ProviderRequest'
+            examples:
+              Manufacturer provider:
+                description: Manufacturer provider
+                value:
+                  name: Michelin North America
+                  providerType: MANUFACTURER
+                  status: ACTIVE
+                  apVendorId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a20
+                  manufacturerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a11
+                  claimSubmissionMethod: Portal
+                  portalUrl: https://warranty.michelin.example.com
+                  contactName: Claims Desk
+                  contactPhone: +1-800-555-0100
+                  contactEmail: claims@michelin.example.com
         required: true
       responses:
         '200':
@@ -180,7 +257,19 @@ paths:
       tags:
       - Warranty Policies
       summary: Get policy
-      description: Retrieve a warranty policy by id
+      description: 'Returns one warranty policy with its full structured coverage terms, including proration method, caps, and evidence requirements.
+
+        Use this tool when the policy id is already known; use listPolicies or findApplicablePolicies instead to locate a policy.
+
+        Preconditions: the policy must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no policy exists for the supplied id.
+
+        '
       operationId: getPolicy
       parameters:
       - name: id
@@ -211,7 +300,19 @@ paths:
       tags:
       - Warranty Policies
       summary: Update policy
-      description: Full update of an existing warranty policy
+      description: 'Fully replaces an existing warranty policy''s structured coverage terms; every field is rewritten from the request, and omitted optional booleans reset to false.
+
+        Use this tool to change a coverage program; do not use createPolicy, which adds a new program — claims already decided keep their frozen proration inputs regardless of policy edits.
+
+        Preconditions: the policy and the referenced provider must exist, the appliesTo scope keys must be consistent with appliesToType, and effectiveTo must not precede effectiveFrom.
+
+        Required inputs: id (UUID) as a path parameter and the same full body as createPolicy — this is full-update semantics, so omitting an optional field clears it or resets its default.
+
+        Emits a WARRANTY_POLICY_UPDATE event.
+
+        Returns 404 when the policy or the referenced provider cannot be resolved, and 400 when the appliesTo scope keys or the effective window are inconsistent.
+
+        '
       operationId: updatePolicy
       parameters:
       - name: id
@@ -222,10 +323,30 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Full replacement of the policy's structured coverage terms (full-update semantics).
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PolicyRequest'
+            examples:
+              Manufacturer tread-depth policy:
+                description: Manufacturer tread-depth policy
+                value:
+                  providerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  name: Michelin passenger replacement — workmanship & materials
+                  coverageType: MANUFACTURER_DEFECT
+                  appliesToType: MANUFACTURER
+                  appliesToManufacturerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a11
+                  effectiveFrom: 2025-01-01
+                  durationMonths: 72
+                  treadPullPointThirtySeconds: 2
+                  laborCovered: false
+                  prorationMethod: TREAD_DEPTH
+                  requiresPartReturn: true
+                  requiresPhotoEvidence: true
+                  transferable: false
+                  autoRegister: false
+                  termsText: Prorated on remaining tread down to the 2/32 pull point.
         required: true
       responses:
         '200':
@@ -255,7 +376,19 @@ paths:
       tags:
       - Warranty Part Returns
       summary: Update part return (RMA)
-      description: Advances the RMA (AWAITING_PART -> ON_HOLD -> SHIPPED -> RECEIVED_BY_VENDOR, or SCRAPPED/CLOSED per disposition) and/or updates RMA details
+      description: 'Advances a part return through its child state machine — AWAITING_PART to ON_HOLD to SHIPPED to RECEIVED_BY_VENDOR, or to SCRAPPED/CLOSED per disposition, where ON_HOLD may be skipped — and/or updates RMA details without a lifecycle move.
+
+        Use this tool for every change after creation; do not use createPartReturn, which opens a new RMA and rejects a line that already has one.
+
+        Preconditions: the part return must exist and not be terminal; moving to SHIPPED or RECEIVED_BY_VENDOR requires disposition RETURN_TO_VENDOR, and moving to SCRAPPED requires disposition SCRAP_AUTHORIZED (either already set or set in the same request).
+
+        Required inputs: part return id (UUID) as a path parameter; every body field is optional — omit status for a detail-only update, and shippedAt defaults to now when entering SHIPPED.
+
+        Emits a WARRANTY_PART_RETURN_UPDATE event, enqueues warranty.part-return.shipped when the return enters SHIPPED, and republishes the claim snapshot.
+
+        Returns 404 when the part return does not exist, and 409 when the transition is illegal, the disposition does not permit the target status, or the return is already terminal.
+
+        '
       operationId: updatePartReturn
       parameters:
       - name: id
@@ -266,10 +399,20 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Lifecycle move and/or RMA detail changes; all fields optional, omit status for a detail-only update.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PartReturnUpdateRequest'
+            examples:
+              Ship to vendor:
+                description: Ship to vendor
+                value:
+                  status: SHIPPED
+                  disposition: RETURN_TO_VENDOR
+                  carrier: UPS
+                  trackingNumber: 1Z999AA10123456784
+                  shippedAt: 2026-08-12 15:04:05+00:00
         required: true
       responses:
         '200':
@@ -299,7 +442,19 @@ paths:
       tags:
       - Warranty Claims
       summary: Get claim
-      description: Full detail incl. lines, settlements, reimbursements, part returns, history, notes
+      description: 'Returns the full warranty claim detail, including lines, settlements, reimbursements, part returns, status history, and notes.
+
+        Use this tool when the claim id is already known; use searchClaims instead to locate a claim by customer, vehicle, status, or claim code.
+
+        Preconditions: the claim must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body and no filtering.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no claim exists for the supplied id.
+
+        '
       operationId: getClaim
       parameters:
       - name: id
@@ -330,7 +485,19 @@ paths:
       tags:
       - Warranty Claims
       summary: Update claim
-      description: Edit intake fields while DRAFT or INFO_NEEDED
+      description: 'Replaces the intake fields of a claim that is still DRAFT or INFO_NEEDED: origin references, sale date, registration, failure details, and location use full-update semantics where null clears the value, while claimType and photoEvidenceUrls change only when non-null.
+
+        Use this tool to correct intake data before adjudication; do not use decideClaim, which records the approve/deny decision, and manage lines through addClaimLine and removeClaimLine rather than this operation.
+
+        Preconditions: the claim must exist and be in DRAFT or INFO_NEEDED — every other status rejects edits.
+
+        Required inputs: id (UUID) as a path parameter and the update body; clearing both originWorkorderId and originInvoiceId re-flags the claim originUnverified.
+
+        Emits a WARRANTY_CLAIM_UPDATE event and republishes the claim snapshot.
+
+        Returns 404 when the claim does not exist, and 409 (WARRANTY_CLAIM_NOT_EDITABLE) when the claim is not DRAFT or INFO_NEEDED.
+
+        '
       operationId: updateClaim
       parameters:
       - name: id
@@ -341,10 +508,21 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Intake fields to replace on the claim; null clears origin, failure, and location fields, while claimType and photoEvidenceUrls apply only when non-null.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ClaimUpdateRequest'
+            examples:
+              Correct intake data:
+                description: Correct intake data
+                value:
+                  claimType: ROAD_HAZARD
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
+                  originInvoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
+                  originSaleDate: 2025-11-02
+                  failureDescription: Sidewall puncture, right rear tire — updated after inspection
+                  failureDate: 2026-08-09
         required: true
       responses:
         '200':
@@ -374,7 +552,19 @@ paths:
       tags:
       - Warranty Reimbursements
       summary: Update vendor reimbursement
-      description: Records a vendor decision (APPROVED/PARTIALLY_APPROVED/DENIED), credit receipt, or write-off; only legal child-lifecycle transitions are accepted
+      description: 'Records the vendor''s resolution on a claim''s reimbursement: a decision (APPROVED, PARTIALLY_APPROVED, DENIED), the credit receipt (CREDIT_RECEIVED), or a write-off (WRITTEN_OFF).
+
+        Use this tool after the vendor responds; do not use submitReimbursement, which performs the initial NOT_SUBMITTED-to-SUBMITTED move.
+
+        Preconditions: the claim must have a reimbursement record and the move must be legal in the child state machine — SUBMITTED may resolve to APPROVED, PARTIALLY_APPROVED, or DENIED, approvals may then move to CREDIT_RECEIVED, and any non-terminal state may be WRITTEN_OFF; DENIED, CREDIT_RECEIVED, WRITTEN_OFF, and NOT_APPLICABLE are terminal and unblock claim close.
+
+        Required inputs: claim id (UUID) as a path parameter and a body with status; amountApproved is required for APPROVED and PARTIALLY_APPROVED, and creditReference typically accompanies CREDIT_RECEIVED.
+
+        Emits a WARRANTY_REIMBURSEMENT_UPDATE event and enqueues warranty.reimbursement.resolved for every resolution status so pos-accounting can match or stop expecting the vendor credit.
+
+        Returns 400 when the target status is outside the updatable set or amountApproved is missing, 404 when the claim or its reimbursement record does not exist, and 409 when the transition is illegal from the current status (nextAction lists the legal moves).
+
+        '
       operationId: updateReimbursement
       parameters:
       - name: id
@@ -385,10 +575,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: 'Vendor resolution: target status with the approved amount, credit reference, or notes that go with it.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ReimbursementUpdateRequest'
+            examples:
+              Vendor approved:
+                description: Vendor approved
+                value:
+                  status: APPROVED
+                  amountApproved: 130.0
+                  notes: Vendor approved at adjusted labor rate
         required: true
       responses:
         '200':
@@ -418,7 +616,19 @@ paths:
       tags:
       - Warranty Registrations
       summary: Search registrations
-      description: Optionally filter by customer, vehicle, and status
+      description: 'Searches sold-coverage registrations, optionally filtered by customer, vehicle, and lifecycle status.
+
+        Use this tool to find a customer''s road-hazard or extended-plan coverage; use getRegistration instead when the registration id is already known.
+
+        Preconditions: none — an empty list is returned when nothing matches.
+
+        Required inputs: customerId, vehicleId, and status (ACTIVE, EXPIRED, CANCELLED, EXHAUSTED) are all optional query parameters; with no filters every registration is returned.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the list, which is empty rather than 404 when nothing matches.
+
+        '
       operationId: searchRegistrations
       parameters:
       - name: customerId
@@ -463,13 +673,39 @@ paths:
       tags:
       - Warranty Registrations
       summary: Create registration
-      description: Record sold/instantiated coverage
+      description: 'Records sold/instantiated coverage — a registration binding a governing policy to a customer, and optionally to a vehicle and the originating invoice line.
+
+        Use this tool when coverage such as a road-hazard add-on or extended plan is sold; do not use createPolicy, which defines the reusable program a registration instantiates.
+
+        Preconditions: the governing policy must exist; policies flagged autoRegister create registrations automatically from invoiced sales, so manual creation covers the remaining cases.
+
+        Required inputs: policyId (UUID), customerId (UUID), and purchaseDate (ISO date); vehicleId, source invoice references, contractNumber, and expiresAt are optional, and status defaults to ACTIVE.
+
+        Emits a WARRANTY_REGISTRATION_CREATE event.
+
+        Returns 404 when the referenced policy cannot be resolved.
+
+        '
       operationId: createRegistration
       requestBody:
+        description: 'Sold coverage to record: governing policy, covered customer and vehicle, and the originating sale references.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RegistrationRequest'
+            examples:
+              Road-hazard registration:
+                description: Road-hazard registration
+                value:
+                  policyId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a30
+                  customerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                  vehicleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                  sourceInvoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
+                  sourceInvoiceLineId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a05
+                  contractNumber: RH-2026-88412
+                  purchaseDate: 2026-05-14
+                  expiresAt: 2029-05-14
+                  status: ACTIVE
         required: true
       responses:
         '201':
@@ -499,7 +735,19 @@ paths:
       tags:
       - Warranty Providers
       summary: List providers
-      description: Optionally filter by status and/or provider type
+      description: 'Returns warranty providers, optionally filtered by lifecycle status and/or provider type.
+
+        Use this tool to browse who funds warranty programs; use getProvider instead when the provider id is already known.
+
+        Preconditions: none — an empty list is returned when nothing matches.
+
+        Required inputs: status (ACTIVE or INACTIVE) and providerType (MANUFACTURER, DISTRIBUTOR_PROGRAM, THIRD_PARTY_ADMIN, DEALER) are optional query parameters; when both are given the status filter is applied first and provider type filters the result.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the list, which is empty rather than 404 when no provider matches.
+
+        '
       operationId: listProviders
       parameters:
       - name: status
@@ -536,13 +784,40 @@ paths:
       tags:
       - Warranty Providers
       summary: Create provider
-      description: Create a new warranty provider
+      description: 'Creates a warranty provider — the party that funds a warranty program, from a manufacturer or third-party administrator to the dealer itself.
+
+        Use this tool to register a new payer before configuring its policies with createPolicy; do not use updateProvider, which rewrites an existing provider.
+
+        Preconditions: none — there is no duplicate-name check, so repeating the call creates a second provider.
+
+        Required inputs: name and providerType (MANUFACTURER, DISTRIBUTOR_PROGRAM, THIRD_PARTY_ADMIN, or DEALER — DEALER means self-funded, which later makes vendor reimbursement NOT_APPLICABLE); status defaults to ACTIVE, and apVendorId optionally links the pos-accounting vendor for credit matching.
+
+        Emits a WARRANTY_PROVIDER_CREATE event; no policies or claims are touched.
+
+        Returns 201 with the created provider on success.
+
+        '
       operationId: createProvider
       requestBody:
+        description: 'Warranty provider to create: funding type, lifecycle status, and claim-submission contact details.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ProviderRequest'
+            examples:
+              Manufacturer provider:
+                description: Manufacturer provider
+                value:
+                  name: Michelin North America
+                  providerType: MANUFACTURER
+                  status: ACTIVE
+                  apVendorId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a20
+                  manufacturerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a11
+                  claimSubmissionMethod: Portal
+                  portalUrl: https://warranty.michelin.example.com
+                  contactName: Claims Desk
+                  contactPhone: +1-800-555-0100
+                  contactEmail: claims@michelin.example.com
         required: true
       responses:
         '201':
@@ -566,7 +841,19 @@ paths:
       tags:
       - Warranty Policies
       summary: List policies
-      description: Optionally filter by provider and/or coverage type
+      description: 'Returns warranty policies, optionally filtered by owning provider and/or coverage type.
+
+        Use this tool to browse configured coverage programs; use findApplicablePolicies instead to resolve which policies cover a specific product on a specific sale date.
+
+        Preconditions: none — an empty list is returned when nothing matches.
+
+        Required inputs: providerId and coverageType are optional query parameters; when both are given the provider filter is applied first and coverage type filters the result.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the list, which is empty rather than 404 when no policy matches.
+
+        '
       operationId: listPolicies
       parameters:
       - name: providerId
@@ -604,13 +891,45 @@ paths:
       tags:
       - Warranty Policies
       summary: Create policy
-      description: Create a new warranty policy
+      description: 'Creates a warranty policy — one row of structured coverage terms owned by a provider, governing eligibility, proration, and evidence requirements for claims.
+
+        Use this tool to configure a new coverage program; do not use updatePolicy, which fully replaces an existing policy, and do not use createRegistration, which records coverage sold to one customer under a policy.
+
+        Preconditions: the owning provider must exist; the appliesTo scope must be internally consistent — PRODUCT_LIST needs a non-empty appliesToProductEntityIds, CATEGORY needs appliesToCategoryId, MANUFACTURER needs appliesToManufacturerId — and effectiveTo must not precede effectiveFrom.
+
+        Required inputs: providerId (UUID), name, coverageType, appliesToType, effectiveFrom (ISO date), and prorationMethod (NONE, TREAD_DEPTH, MILEAGE, or TIME); laborCovered, requiresPartReturn, requiresPhotoEvidence, transferable, and autoRegister all default to false.
+
+        Emits a WARRANTY_POLICY_CREATE event; no claims or registrations are touched.
+
+        Returns 404 when the referenced provider cannot be resolved, and 400 when the appliesTo scope keys or the effective window are inconsistent.
+
+        '
       operationId: createPolicy
       requestBody:
+        description: 'Structured coverage terms of the program: scope, effective window, limits, proration method, and evidence requirements.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PolicyRequest'
+            examples:
+              Manufacturer tread-depth policy:
+                description: Manufacturer tread-depth policy
+                value:
+                  providerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  name: Michelin passenger replacement — workmanship & materials
+                  coverageType: MANUFACTURER_DEFECT
+                  appliesToType: MANUFACTURER
+                  appliesToManufacturerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a11
+                  effectiveFrom: 2025-01-01
+                  durationMonths: 72
+                  treadPullPointThirtySeconds: 2
+                  laborCovered: false
+                  prorationMethod: TREAD_DEPTH
+                  requiresPartReturn: true
+                  requiresPhotoEvidence: true
+                  transferable: false
+                  autoRegister: false
+                  termsText: Prorated on remaining tread down to the 2/32 pull point.
         required: true
       responses:
         '201':
@@ -640,7 +959,19 @@ paths:
       tags:
       - Warranty Claims
       summary: Search claims
-      description: Paged claim summaries; filter by customer, vehicle, status, claim code, location
+      description: 'Searches warranty claims and returns a page of claim summaries filtered by customer, vehicle, status, claim code, and location.
+
+        Use this tool to locate claims by criteria or to browse a worklist; do not use getClaim, which requires a known claim id and returns the full detail including lines, settlements, and history.
+
+        Preconditions: none — an empty page is returned when nothing matches.
+
+        Required inputs: every filter is optional; claimCode must be exact (for example WC-2026-000123) and short-circuits the other filters to at most one match, and paging defaults to size 20 sorted by createdAt descending.
+
+        Emits a WARRANTY_CLAIM_SEARCH audit event; no claim state changes, this is a read-only projection.
+
+        Returns 200 with the page, which is empty rather than 404 when no claim matches.
+
+        '
       operationId: searchClaims
       parameters:
       - name: customerId
@@ -706,13 +1037,51 @@ paths:
       tags:
       - Warranty Claims
       summary: Create draft claim
-      description: Creates a DRAFT claim; snapshots VIN/odometer
+      description: 'Creates a DRAFT warranty claim for a customer and vehicle, assigning the next WC-{yyyy}-{seq} claim code and freezing the VIN and odometer snapshot from the event-fed vehicle replica when the vehicle fact has already arrived; walk-ins with no locatable sale leave the origin fields null and the claim is flagged originUnverified.
+
+        Use this tool to open a brand-new claim at intake; do not use updateClaim, which edits an existing DRAFT or INFO_NEEDED claim, and use searchCandidateLines first to locate the origin sale lines.
+
+        Preconditions: none beyond a known customerId and vehicleId — the vehicle replica may still be empty (the claim is created with a null snapshot) and no origin sale reference is required.
+
+        Required inputs: claimType (MANUFACTURER_DEFECT, DEALER_WORKMANSHIP, ROAD_HAZARD, or EXTENDED_PLAN), customerId (UUID), and vehicleId (UUID); locationId, origin workorder/invoice ids, originSaleDate, registrationId, failure details, photoEvidenceUrls, and initial lines are optional, and each line''s quantity defaults to 1.
+
+        Emits a WARRANTY_CLAIM_CREATE event, records a DRAFT status-history row, and publishes the claim snapshot.
+
+        Returns 201 with the DRAFT claim; there is no duplicate check, so repeating the call creates a second claim.
+
+        '
       operationId: createClaim
       requestBody:
+        description: 'Draft-claim intake payload: customer, vehicle, claim type, and optional origin references, failure details, photos, and initial lines.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ClaimCreateRequest'
+            examples:
+              Road-hazard tire claim:
+                description: Road-hazard tire claim
+                value:
+                  claimType: ROAD_HAZARD
+                  customerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                  vehicleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
+                  originInvoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
+                  originSaleDate: 2025-11-02
+                  failureDescription: Sidewall puncture, right rear tire
+                  failureDate: 2026-08-10
+                  photoEvidenceUrls:
+                  - https://media.example.com/claims/tire-1.jpg
+                  lines:
+                  - sourceType: INVOICE_LINE
+                    sourceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
+                    sourceLineId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a05
+                    productEntityId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a06
+                    sku: MICH-DEF2-225-65R17
+                    description: Michelin Defender2 225/65R17
+                    quantity: 1
+                    originalUnitPrice: 189.99
+                    originalTreadDepth: 12
+                    measuredTreadDepth: 9
         required: true
       responses:
         '201':
@@ -736,7 +1105,19 @@ paths:
       tags:
       - Warranty Claims
       summary: Submit claim
-      description: 'Intake complete: runs eligibility, then DRAFT→SUBMITTED (or INFO_NEEDED→IN_REVIEW)'
+      description: 'Completes intake by running the eligibility evaluation and then moving the claim DRAFT to SUBMITTED, or INFO_NEEDED back to IN_REVIEW once the requested information is provided.
+
+        Use this tool when intake is finished; do not use decideClaim, which records the adjudication outcome, and do not use evaluateClaimEligibility, which recomputes the suggestion without any status change.
+
+        Preconditions: the claim must be DRAFT or INFO_NEEDED, must have at least one claim line, and must carry at least one photo when the winning policy requires photo evidence.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body — eligibility, policy selection, and per-line proration are computed server-side and persisted onto the claim.
+
+        Emits a WARRANTY_CLAIM_SUBMIT event and republishes the claim snapshot.
+
+        Returns 400 when the claim has no lines or the selected policy requires missing photo evidence, 404 when the claim does not exist, and 409 when the current status does not allow submit (nextAction lists the legal moves).
+
+        '
       operationId: submitClaim
       parameters:
       - name: id
@@ -780,7 +1161,19 @@ paths:
       tags:
       - Warranty Settlements
       summary: Execute a settlement
-      description: 'Executes one settlement on an APPROVED (or already SETTLED) claim: creates an invoice adjustment/refund via pos-invoice for credit/refund types, links a validated replacement workorder, or records NO_ACTION. The first successful settlement moves the claim to SETTLED.'
+      description: 'Executes one settlement on an APPROVED or already SETTLED claim: credit types (INVOICE_CREDIT, PRORATED_CREDIT, GOODWILL) create an invoice adjustment via pos-invoice, REFUND initiates a refund of a captured payment via pos-invoice, REPLACEMENT_WORKORDER links a workorder that staff already created through the normal flow, and NO_ACTION records that nothing is owed.
+
+        Use this tool when the clerk settles the customer; do not use decideClaim, which approves the claim first, and do not use submitReimbursement, which is the later vendor-recovery step that never blocks customer settlement.
+
+        Preconditions: the claim must be APPROVED or SETTLED (concurrent settlements of the same claim are serialized under a pessimistic lock), a replacement workorder must already exist in the event-fed workorder replica, and pos-invoice writes carry the settlement id as the idempotency key (externalReference).
+
+        Required inputs: claim id (UUID) and a body with settlementType, coveredAmount, and customerAmount (both zero or positive); replacementWorkorderId is required for REPLACEMENT_WORKORDER, invoiceId for the credit types, and invoiceId plus paymentId for REFUND.
+
+        Emits a WARRANTY_CLAIM_SETTLE event and enqueues warranty.claim.settled for pos-accounting; the first successful settlement moves the claim APPROVED to SETTLED, and a failed pos-invoice write keeps a durable FAILED settlement row for the reconciliation worklist.
+
+        Returns 400 when the type-specific reference id is missing, 404 when the claim does not exist, 409 when the claim is not settleable, 422 when the replacement workorder cannot be resolved, and 502 when the pos-invoice write fails (the settlement is recorded FAILED and staff retry with a fresh settlement after checking reconcileSettlements).
+
+        '
       operationId: createSettlement
       parameters:
       - name: id
@@ -791,10 +1184,20 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: 'Settlement to execute: how the customer is made whole, the covered and customer amounts, and the type-specific reference ids.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SettlementCreateRequest'
+            examples:
+              Prorated credit:
+                description: Prorated credit
+                value:
+                  settlementType: PRORATED_CREDIT
+                  coveredAmount: 142.49
+                  customerAmount: 47.5
+                  invoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
+                  notes: Prorated at 75% remaining tread
         required: true
       responses:
         '201':
@@ -836,7 +1239,19 @@ paths:
       tags:
       - Warranty Reimbursements
       summary: Submit vendor reimbursement
-      description: Creates/updates the claim's single reimbursement NOT_SUBMITTED -> SUBMITTED; claim must be APPROVED or SETTLED and provider must not be dealer-funded
+      description: 'Submits the claim''s single vendor reimbursement to the warranty provider, creating the record if needed and moving it NOT_SUBMITTED to SUBMITTED.
+
+        Use this tool for the back-office recovery step after the customer is settled; do not use updateReimbursement, which records the vendor''s decision, credit receipt, or write-off on an already-submitted reimbursement.
+
+        Preconditions: the claim must be APPROVED or SETTLED (settle-customer-first), must have a provider assigned, the provider must not be DEALER-funded (self-funded programs are NOT_APPLICABLE), and the reimbursement must still be NOT_SUBMITTED — each claim has at most one.
+
+        Required inputs: claim id (UUID) as a path parameter and a body with amountRequested (positive decimal); vendorClaimReference and notes are optional.
+
+        Emits a WARRANTY_REIMBURSEMENT_SUBMIT event and enqueues warranty.reimbursement.submitted so pos-accounting can expect the vendor credit; the claim''s own status is never touched.
+
+        Returns 404 when the claim or its provider cannot be resolved, and 409 when the claim state disallows submission, no provider is assigned, the provider is dealer-funded, or the reimbursement was already submitted (including a concurrent submit).
+
+        '
       operationId: submitReimbursement
       parameters:
       - name: id
@@ -847,10 +1262,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Amount requested from the vendor with an optional vendor claim reference and back-office notes.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ReimbursementSubmitRequest'
+            examples:
+              Portal submission:
+                description: Portal submission
+                value:
+                  amountRequested: 145.5
+                  vendorClaimReference: MICH-CLM-99120
+                  notes: Submitted via provider portal
         required: true
       responses:
         '200':
@@ -880,8 +1303,20 @@ paths:
       tags:
       - Warranty Claims
       summary: Add photo
-      description: Attach a photo-evidence URL while DRAFT or INFO_NEEDED
-      operationId: addPhoto
+      description: 'Attaches one photo-evidence URL to a claim that is still DRAFT or INFO_NEEDED; a URL that is already attached is kept once, so the add is idempotent.
+
+        Use this tool to attach evidence the governing policy may require before submission; do not use removeClaimPhoto, which detaches a URL, and do not use updateClaim for single-photo changes because its photoEvidenceUrls field replaces the whole list.
+
+        Preconditions: the claim must exist and be in DRAFT or INFO_NEEDED.
+
+        Required inputs: id (UUID) as a path parameter and a body with url (max 2048 characters); the image itself is stored elsewhere — warranty keeps only the URL reference.
+
+        Emits a WARRANTY_CLAIM_UPDATE event and republishes the claim snapshot.
+
+        Returns 404 when the claim does not exist, and 409 when the claim is not editable in its current status.
+
+        '
+      operationId: addClaimPhoto
       parameters:
       - name: id
         in: path
@@ -891,10 +1326,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Photo-evidence URL to attach to the claim (URL-reference pattern; the image is hosted elsewhere).
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ClaimPhotoRequest'
+            examples:
+              Tire photo:
+                description: Tire photo
+                value:
+                  url: https://media.example.com/claims/wc-2026-000123/tire-1.jpg
         required: true
       responses:
         '200':
@@ -923,8 +1364,20 @@ paths:
       tags:
       - Warranty Claims
       summary: Remove photo
-      description: Detach a photo-evidence URL while DRAFT or INFO_NEEDED
-      operationId: removePhoto
+      description: 'Detaches one photo-evidence URL from a claim that is still DRAFT or INFO_NEEDED.
+
+        Use this tool to withdraw a wrongly attached photo; do not use addClaimPhoto, which attaches a URL, and do not use updateClaim for single-photo changes because its list field is full-replace.
+
+        Preconditions: the claim must exist, be in DRAFT or INFO_NEEDED, and the URL must currently be attached.
+
+        Required inputs: id (UUID) as a path parameter and url as a query parameter matching the attached URL exactly; there is no request body.
+
+        Emits a WARRANTY_CLAIM_UPDATE event and republishes the claim snapshot.
+
+        Returns 404 when the claim does not exist or the URL is not attached, and 409 when the claim is not editable in its current status.
+
+        '
+      operationId: removeClaimPhoto
       parameters:
       - name: id
         in: path
@@ -968,7 +1421,19 @@ paths:
       tags:
       - Warranty Part Returns
       summary: Create part return (RMA)
-      description: Opens the RMA lifecycle for one claim line (at most one per line); starts AWAITING_PART
+      description: 'Opens the defective-part RMA lifecycle for one claim line, creating a part return in AWAITING_PART with the chosen disposition.
+
+        Use this tool when the governing policy requires the part back or staff choose to hold or return it; do not use updatePartReturn, which advances or annotates an RMA that already exists — at most one part return is allowed per claim line.
+
+        Preconditions: the claim must exist and not be CANCELLED or CLOSED, the line must belong to the claim, and no part return may already exist for that line; no policy check gates creation because staff choice is always permitted.
+
+        Required inputs: claim id (UUID) as a path parameter and a body with claimLineId (UUID) and disposition (HOLD_FOR_INSPECTION, RETURN_TO_VENDOR, SCRAP_AUTHORIZED, or CUSTOMER_RETAINED); rmaNumber and holdLocationNote are optional.
+
+        Emits a WARRANTY_PART_RETURN_CREATE event, enqueues warranty.part-return.requested so pos-inventory can quarantine the defective unit, and republishes the claim snapshot.
+
+        Returns 404 when the claim or the line cannot be found, and 409 when the line already has a part return or the claim is terminal.
+
+        '
       operationId: createPartReturn
       parameters:
       - name: id
@@ -979,10 +1444,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Claim line whose defective part is being returned or held, with its disposition and optional RMA details.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PartReturnCreateRequest'
+            examples:
+              Return to vendor:
+                description: Return to vendor
+                value:
+                  claimLineId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a07
+                  disposition: RETURN_TO_VENDOR
+                  rmaNumber: RMA-88231
+                  holdLocationNote: Hold shelf B3
         required: true
       responses:
         '201':
@@ -1012,8 +1486,20 @@ paths:
       tags:
       - Warranty Claims
       summary: Add note
-      description: Append a free-form staff note (any status)
-      operationId: addNote
+      description: 'Appends one free-form, append-only staff note to a warranty claim in any status.
+
+        Use this tool to record context that is not a status change; do not use decideClaim or updateClaim, which mutate the claim itself — notes are never editable or deletable once written.
+
+        Preconditions: the claim must exist; there is no status restriction.
+
+        Required inputs: id (UUID) as a path parameter and a body with note (non-blank, max 10000 characters).
+
+        Emits a WARRANTY_CLAIM_UPDATE event; the claim''s own fields and status are untouched.
+
+        Returns 201 with the full claim detail including the new note, and 404 when the claim does not exist.
+
+        '
+      operationId: addClaimNote
       parameters:
       - name: id
         in: path
@@ -1023,10 +1509,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Free-form staff note text to append to the claim's audit trail.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ClaimNoteRequest'
+            examples:
+              Staff note:
+                description: Staff note
+                value:
+                  note: Customer called; defective tire is on hold shelf B3
         required: true
       responses:
         '201':
@@ -1050,8 +1542,20 @@ paths:
       tags:
       - Warranty Claims
       summary: Add claim line
-      description: Add a failed part/service line while DRAFT or INFO_NEEDED
-      operationId: addLine
+      description: 'Adds one failed part or service line to a claim that is still DRAFT or INFO_NEEDED, snapshotting SKU, description, serial numbers, price, and tread depths at intake.
+
+        Use this tool to build the claim''s line list; do not use updateClaim, which edits header fields and cannot touch lines, and use removeClaimLine to take a line off.
+
+        Preconditions: the claim must exist and be in DRAFT or INFO_NEEDED.
+
+        Required inputs: id (UUID) as a path parameter and a line body with sourceType (INVOICE_LINE, WORKORDER_PART, WORKORDER_SERVICE, or MANUAL); sourceId and sourceLineId are null for MANUAL lines, quantity defaults to 1, and tread depths are integers in 32nds of an inch.
+
+        Emits a WARRANTY_CLAIM_UPDATE event and republishes the claim snapshot.
+
+        Returns 404 when the claim does not exist, and 409 when the claim is not editable in its current status.
+
+        '
+      operationId: addClaimLine
       parameters:
       - name: id
         in: path
@@ -1061,10 +1565,24 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: One failed part or service line with its source provenance and intake snapshots.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ClaimLineRequest'
+            examples:
+              Manual tire line:
+                description: Manual tire line
+                value:
+                  sourceType: MANUAL
+                  sku: MICH-DEF2-225-65R17
+                  description: Michelin Defender2 225/65R17
+                  serialNumber: SN-4471002
+                  dotNumber: DOT Y9RJ FPUU 2325
+                  quantity: 1
+                  originalUnitPrice: 189.99
+                  originalTreadDepth: 12
+                  measuredTreadDepth: 9
         required: true
       responses:
         '200':
@@ -1094,8 +1612,20 @@ paths:
       tags:
       - Warranty Claims
       summary: Re-run eligibility
-      description: Recompute the eligibility suggestion on demand (DRAFT, SUBMITTED, IN_REVIEW, or INFO_NEEDED only)
-      operationId: evaluateEligibility
+      description: 'Recomputes the eligibility suggestion — result, reasons, suggested outcome, policy selection, and per-line proration — on demand without changing the claim status.
+
+        Use this tool after intake data changes to refresh the suggestion; do not use submitClaim, which also runs eligibility but performs the lifecycle move, and do not use decideClaim, which records the human decision that may override the suggestion.
+
+        Preconditions: the claim must be DRAFT, SUBMITTED, IN_REVIEW, or INFO_NEEDED — once decided (APPROVED, DENIED, SETTLED) the persisted inputs are frozen audit evidence, and a DENIED claim regains recompute only through an appeal back to IN_REVIEW.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits a WARRANTY_CLAIM_UPDATE event and republishes the claim snapshot with the recomputed suggestion.
+
+        Returns 404 when the claim does not exist, and 409 when the claim is already decided or terminal.
+
+        '
+      operationId: evaluateClaimEligibility
       parameters:
       - name: id
         in: path
@@ -1132,7 +1662,19 @@ paths:
       tags:
       - Warranty Claims
       summary: Decide claim
-      description: APPROVE/DENY/REQUEST_INFO (implicitly begins review on a SUBMITTED claim); APPEAL reopens a DENIED claim. Deny, appeal, and suggestion overrides require a reason. Optional lineDecisions record per-line approved amounts/dispositions; amounts that differ from the computed request require an audited override reason
+      description: 'Records the human adjudication decision on a claim — APPROVE, DENY, or REQUEST_INFO, where a decision on a SUBMITTED claim implicitly begins review first — while APPEAL reopens a DENIED claim back to IN_REVIEW and clears the standing decision (the denial stays audited in the status history).
+
+        Use this tool to adjudicate; do not use submitClaim, which moves intake into adjudication, and do not use createSettlement, which executes the payout only after approval.
+
+        Preconditions: the claim must be SUBMITTED, IN_REVIEW, or DENIED (APPEAL only); DENY and APPEAL require a reason, and a decision contradicting the computed suggestion (approving an INELIGIBLE or denying an ELIGIBLE claim) also requires a reason and marks the claim overrodeSuggestion.
+
+        Required inputs: id (UUID) and a body with decision; optional lineDecisions (APPROVE/DENY only) set per-line amountApproved and lineDisposition, omitted lines default to the computed amountRequested on approve or to DENIED on deny, and an amountApproved differing from the computed amount requires an overrideReason that is audited as a claim note.
+
+        Emits a WARRANTY_CLAIM_DECIDE event and republishes the claim snapshot.
+
+        Returns 400 when a required reason or overrideReason is missing or lineDecisions accompany REQUEST_INFO, 404 when the claim or a referenced line does not exist, and 409 when the current status does not allow the move (nextAction lists the legal moves).
+
+        '
       operationId: decideClaim
       parameters:
       - name: id
@@ -1143,10 +1685,22 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Adjudication action with its reason and optional per-line approved amounts and dispositions.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ClaimDecisionRequest'
+            examples:
+              Approve with line override:
+                description: Approve with line override
+                value:
+                  decision: APPROVE
+                  reason: Covered failure verified against policy terms
+                  lineDecisions:
+                  - lineId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a07
+                    amountApproved: 142.49
+                    lineDisposition: PARTIALLY_APPROVED
+                    overrideReason: Prorated to 75% remaining tread per manual gauge reading
         required: true
       responses:
         '200':
@@ -1182,7 +1736,19 @@ paths:
       tags:
       - Warranty Claims
       summary: Close claim
-      description: Close from SETTLED or DENIED once every reimbursement and part return is terminal
+      description: 'Closes a warranty claim, moving SETTLED or DENIED to the terminal CLOSED status once every child record is terminal.
+
+        Use this tool to finish the back-office lifecycle after the customer journey is done; do not use cancelClaim, which abandons a claim before adjudication — open children block CLOSED but never SETTLED (settle-customer-first).
+
+        Preconditions: the claim must be SETTLED or DENIED; every vendor reimbursement must be terminal (CREDIT_RECEIVED, WRITTEN_OFF, NOT_APPLICABLE, or DENIED), every part return must be terminal (RECEIVED_BY_VENDOR, SCRAPPED, or CLOSED), and a SETTLED claim whose policy requires part return must have at least one part return on record.
+
+        Required inputs: id (UUID) as a path parameter; the body is optional and carries only a reason recorded in the status history.
+
+        Emits a WARRANTY_CLAIM_CLOSE event and republishes the claim snapshot.
+
+        Returns 404 when the claim does not exist, and 409 when the transition is illegal or open child records block closing (WARRANTY_CLAIM_CLOSE_BLOCKED, with nextAction describing what to resolve).
+
+        '
       operationId: closeClaim
       parameters:
       - name: id
@@ -1193,10 +1759,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Optional closure reason recorded in the claim status history.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ClaimActionRequest'
+            examples:
+              Close with reason:
+                description: Close with reason
+                value:
+                  reason: Vendor credit received; RMA received by vendor
       responses:
         '200':
           description: Claim closed.
@@ -1225,7 +1797,19 @@ paths:
       tags:
       - Warranty Claims
       summary: Cancel claim
-      description: Cancel from DRAFT, SUBMITTED, or INFO_NEEDED
+      description: 'Cancels a warranty claim, moving DRAFT, SUBMITTED, or INFO_NEEDED to the terminal CANCELLED status with an audited status-history row.
+
+        Use this tool when the customer or staff abandons the claim before adjudication completes; do not use closeClaim, which finishes a SETTLED or DENIED claim after its child records are terminal.
+
+        Preconditions: the claim must be DRAFT, SUBMITTED, or INFO_NEEDED — IN_REVIEW, APPROVED, DENIED, SETTLED, and terminal claims cannot be cancelled.
+
+        Required inputs: id (UUID) as a path parameter; the body is optional and carries only a reason recorded in the status history.
+
+        Emits a WARRANTY_CLAIM_CANCEL event and republishes the claim snapshot.
+
+        Returns 404 when the claim does not exist, and 409 when the current status does not allow cancellation (nextAction lists the legal moves).
+
+        '
       operationId: cancelClaim
       parameters:
       - name: id
@@ -1236,10 +1820,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Optional cancellation reason recorded in the claim status history.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ClaimActionRequest'
+            examples:
+              Cancel with reason:
+                description: Cancel with reason
+                value:
+                  reason: Customer withdrew the claim
       responses:
         '200':
           description: Claim cancelled.
@@ -1268,7 +1858,19 @@ paths:
       tags:
       - Warranty Settlements
       summary: Reconcile FAILED settlements against pos-invoice
-      description: 'Read-only worklist (issue #922): every FAILED adjustment/refund settlement checked against pos-invoice by its externalReference (the settlement id). Rows with committedOnInvoice=true are the double-pay risk — pos-invoice committed the money write even though warranty recorded the settlement as FAILED. Rows with checkStatus=UNKNOWN could not be verified (pos-invoice unreachable) and should be re-checked.'
+      description: 'Builds the reconciliation worklist for FAILED invoice-writing settlements by asking pos-invoice whether each adjustment or refund actually committed, matched by externalReference (the settlement id).
+
+        Use this tool to detect double-pay risk after a settlement failure; do not retry with createSettlement until the row shows committedOnInvoice=false — committedOnInvoice=true means pos-invoice committed the money write even though warranty recorded the settlement as FAILED.
+
+        Preconditions: none — only settlements already recorded FAILED with an invoice-writing type appear, and pos-invoice is consulted live at request time.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        Emits a WARRANTY_SETTLEMENT_RECONCILIATION audit event; no state changes, this is a read-only cross-service check.
+
+        Returns 200 with one row per FAILED settlement, where checkStatus UNKNOWN means pos-invoice was unreachable for that invoice and the worklist should be re-run before acting.
+
+        '
       operationId: reconcileSettlements
       responses:
         '200':
@@ -1288,7 +1890,19 @@ paths:
       tags:
       - Warranty Reimbursements
       summary: Reimbursement worklist
-      description: Back-office worklist of vendor reimbursements, filterable by status and provider
+      description: 'Returns the back-office worklist of vendor reimbursements across all claims, optionally filtered by status and provider.
+
+        Use this tool to work open vendor credits; use getClaim instead to see the reimbursement of one specific claim.
+
+        Preconditions: none — an empty list is returned when nothing matches.
+
+        Required inputs: status and providerId are optional query parameters and combine as AND when both are given; omitting both returns every reimbursement.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the list, which is empty rather than 404 when nothing matches.
+
+        '
       operationId: listReimbursements
       parameters:
       - name: status
@@ -1331,7 +1945,19 @@ paths:
       tags:
       - Warranty Policies
       summary: Find applicable policies
-      description: Policies in effect on the sale date whose appliesTo scope matches any provided key, ordered most-specific-first (PRODUCT > MANUFACTURER > CATEGORY > ALL)
+      description: 'Resolves the policies in effect on the original sale date whose appliesTo scope matches any provided catalog key, ordered most-specific-first (PRODUCT_LIST, then MANUFACTURER, then CATEGORY, then ALL).
+
+        Use this tool during intake or eligibility work to find the governing policy for a product; do not use listPolicies, which lists policies without effective-date or scope matching.
+
+        Preconditions: policies must exist with an effectiveFrom/effectiveTo window covering the sale date; ALL-scoped policies always match, while scoped policies match only when the corresponding key is provided and equal.
+
+        Required inputs: saleDate (ISO-8601 date) is required; productEntityId, manufacturerId, and categoryId are optional pos-catalog keys, and coverageType optionally restricts the result to one coverage type.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with matching policies most specific first (empty when none match), and 400 when saleDate is missing or malformed.
+
+        '
       operationId: findApplicablePolicies
       parameters:
       - name: productEntityId
@@ -1399,7 +2025,19 @@ paths:
       tags:
       - Warranty Part Returns
       summary: Part-return worklist
-      description: Hold-shelf / shipping worklist of part returns, filterable by status
+      description: 'Returns the hold-shelf and shipping worklist of part returns across all claims, optionally filtered by status.
+
+        Use this tool to drive the back-office RMA worklist; use getClaim instead to see the part returns of one specific claim.
+
+        Preconditions: none — an empty list is returned when nothing matches.
+
+        Required inputs: status is an optional query parameter (AWAITING_PART, ON_HOLD, SHIPPED, RECEIVED_BY_VENDOR, SCRAPPED, CLOSED); omitting it returns every part return.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the list, which is empty rather than 404 when no part return matches.
+
+        '
       operationId: listPartReturns
       parameters:
       - name: status
@@ -1433,7 +2071,19 @@ paths:
       tags:
       - Warranty Claims
       summary: Search candidate origin lines
-      description: Cross-service search of invoices and workorders for origin-line matching (PRD §7 step 2)
+      description: 'Searches the event-fed invoice and workorder replicas for a customer''s historical sale lines that could be the origin of a warranty claim (PRD §7 step 2).
+
+        Use this tool during intake to match a failed part to its original sale before creating claim lines; do not use searchClaims, which searches existing warranty claims rather than origin sales.
+
+        Preconditions: the replicas are eventually consistent and each source degrades independently — a read failure on one source still returns the other''s results, and a very recent sale may not have arrived yet.
+
+        Required inputs: customerId (UUID) is required; vehicleId, sku, and productEntityId optionally narrow the match, workorder parts match by productEntityId directly while invoice and service lines match by description tokens, and fan-out is capped at 25 invoices and 25 workorders.
+
+        Emits a WARRANTY_CANDIDATE_LINE_SEARCH audit event; no state changes, this is a read-only cross-replica projection.
+
+        Returns 200 with candidate lines, which may be empty or partial — the clerk falls back to manual origin entry (originUnverified) when the sale cannot be located.
+
+        '
       operationId: searchCandidateLines
       parameters:
       - name: customerId
@@ -1481,8 +2131,20 @@ paths:
       tags:
       - Warranty Claims
       summary: Remove claim line
-      description: Remove a claim line while DRAFT or INFO_NEEDED
-      operationId: removeLine
+      description: 'Removes one line from a claim that is still DRAFT or INFO_NEEDED.
+
+        Use this tool to drop a mistakenly added line; do not use addClaimLine, which appends a line — there is no line-edit operation, so correcting a line means removing and re-adding it.
+
+        Preconditions: the claim must exist, be in DRAFT or INFO_NEEDED, and the line must belong to the claim.
+
+        Required inputs: id and lineId (UUIDs) as path parameters; there is no request body.
+
+        Emits a WARRANTY_CLAIM_UPDATE event and republishes the claim snapshot.
+
+        Returns 404 when the claim does not exist or the line is not on the claim, and 409 when the claim is not editable in its current status.
+
+        '
+      operationId: removeClaimLine
       parameters:
       - name: id
         in: path
@@ -1774,10 +2436,12 @@ components:
           type: integer
           format: int32
           description: Time limit in months from sale date; null = unlimited
+          minimum: 0
         mileageLimit:
           type: integer
           format: int32
           description: Miles from sale odometer; null = n/a
+          minimum: 0
         treadPullPointThirtySeconds:
           type: integer
           format: int32
@@ -2446,6 +3110,7 @@ components:
         amountApproved:
           type: number
           description: Amount the vendor approved (required for APPROVED / PARTIALLY_APPROVED)
+          minimum: 0
         creditReference:
           type: string
           description: Vendor credit/payment reference (typically with CREDIT_RECEIVED)
@@ -2660,9 +3325,11 @@ components:
         coveredAmount:
           type: number
           description: Amount coverage pays
+          minimum: 0
         customerAmount:
           type: number
           description: Amount the customer still owes (proration remainder, upcharge, fees)
+          minimum: 0
         replacementWorkorderId:
           type: string
           format: uuid
@@ -2751,6 +3418,7 @@ components:
         amountRequested:
           type: number
           description: Amount requested from the vendor
+          minimum: 0
         vendorClaimReference:
           type: string
           description: The vendor's own claim reference number, if already assigned
@@ -3004,12 +3672,12 @@ components:
     PageClaimSummaryResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -3024,13 +3692,13 @@ components:
           $ref: '#/components/schemas/SortObject'
         pageable:
           $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     PageableObject:
@@ -3039,16 +3707,16 @@ components:
         offset:
           type: integer
           format: int64
-        sort:
-          $ref: '#/components/schemas/SortObject'
-        paged:
-          type: boolean
         pageNumber:
           type: integer
           format: int32
         pageSize:
           type: integer
           format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        paged:
+          type: boolean
         unpaged:
           type: boolean
     SortObject:

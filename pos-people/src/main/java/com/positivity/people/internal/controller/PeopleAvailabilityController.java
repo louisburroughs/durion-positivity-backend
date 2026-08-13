@@ -42,8 +42,22 @@ public class PeopleAvailabilityController {
     private final UserPersonTranslationService userPersonTranslationService;
 
     @Operation(
-            summary = "Get people availability",
-            description = "Return availability with optional locationId and date filters.")
+            operationId = "listPeopleAvailability",
+            summary = "List People Availability For A Location",
+            description = """
+                    Lists people with staffing assignments active on a given date, joined with identity fields from \
+                    the person replica, one row per assignment.
+                    Use this tool to see who is available to work at a location on a date; use \
+                    getPersonPrimaryLocation instead to resolve a single person's home location.
+                    Preconditions: when locationId is omitted the caller must be linked to a person with an active \
+                    assignment, because the requester's own location becomes the filter.
+                    Required inputs: none are mandatory; locationId (UUID) defaults to the requester's location and \
+                    date (yyyy-MM-dd) defaults to today.
+                    Emits a PEOPLE_AVAILABILITY_LIST audit event but changes no state; this is a read-only \
+                    projection.
+                    Returns 404 when locationId is omitted and the requester has no active location assignment or no \
+                    person link.
+                    """)
     @ApiResponse(responseCode = "200", description = "Availability data returned successfully.")
     @GetMapping("/availability")
     @EmitEvent(id = "PEOPLE_AVAILABILITY_LIST", apiVersion = "1")
@@ -63,10 +77,18 @@ public class PeopleAvailabilityController {
         return ResponseEntity.ok(peopleAvailabilityService.getPeopleAvailability(locationId, date));
     }
 
-    @Operation(
-            summary = "Get current user's primary location",
-            description = "Resolve the authenticated user's primary active location from their staffing assignments. "
-                    + "Returns 404 when the user has no active assignment flagged as primary.")
+    @Operation(operationId = "getMyPrimaryLocation", summary = "Get Current User Primary Location", description = """
+                    Resolves the authenticated caller's primary active location from their staffing assignments as \
+                    of today.
+                    Use this tool when a UI or service needs the current user's home location; use listMyLocations \
+                    instead to see every active assignment, and getPersonPrimaryLocation for a different person.
+                    Preconditions: the caller must be linked to a person, and that person must have an ACTIVE \
+                    assignment flagged primary whose effective dates cover today.
+                    Required inputs: none; identity comes from the bearer token and there are no parameters.
+                    Emits a PEOPLE_PRIMARY_LOCATION_GET audit event but changes no state; this is a read-only \
+                    projection.
+                    Returns 404 when the caller has no person link or no active assignment flagged as primary today.
+                    """)
     @ApiResponse(responseCode = "200", description = "Primary location resolved successfully.")
     @ApiResponse(
             responseCode = "404",
@@ -89,9 +111,20 @@ public class PeopleAvailabilityController {
     }
 
     @Operation(
-            summary = "Get current user's active location assignments",
-            description = "List the authenticated user's staffing assignments that are active today, primary first."
-                    + " Returns an empty list when the user has no current location.")
+            operationId = "listMyLocations",
+            summary = "List Current User Active Location Assignments",
+            description = """
+                    Lists the authenticated caller's staffing assignments that are active today, primary first.
+                    Use this tool to populate a location switcher for the current user; use getMyPrimaryLocation \
+                    instead when only the single primary location is needed.
+                    Preconditions: the caller must be linked to a person in the user-link replica; the link data is \
+                    event-fed and can lag the link authority.
+                    Required inputs: none; identity comes from the bearer token and there are no parameters.
+                    Emits a PEOPLE_ME_LOCATIONS_LIST audit event but changes no state; this is a read-only \
+                    projection.
+                    Returns 200 with an empty list when the person has no assignment active today, 404 when no \
+                    person is linked to the current user, and 401 when the security context carries no username.
+                    """)
     @ApiResponse(responseCode = "200", description = "Active location assignments returned successfully.")
     @ApiResponse(
             responseCode = "404",
@@ -112,9 +145,19 @@ public class PeopleAvailabilityController {
     }
 
     @Operation(
-            summary = "Get a person's active location assignments",
-            description = "List a person's staffing assignments that are active today, primary first. Returns an"
-                    + " empty list when the person has no current location.")
+            operationId = "listPersonLocations",
+            summary = "List Person Active Location Assignments",
+            description = """
+                    Lists a given person's staffing assignments that are active today, primary first.
+                    Use this tool when acting on another person by id; use listMyLocations instead for the \
+                    authenticated caller, and listStaffingAssignments for full history including ended assignments.
+                    Preconditions: none beyond authentication; an unknown personId is not rejected.
+                    Required inputs: personId (UUID) path parameter; there is no request body.
+                    Emits a PEOPLE_PERSON_LOCATIONS_LIST audit event but changes no state; this is a read-only \
+                    projection.
+                    Returns 200 with an empty list when the person has no assignment active today, including when \
+                    the personId is unknown.
+                    """)
     @ApiResponse(responseCode = "200", description = "Active location assignments returned successfully.")
     @GetMapping("/{personId}/locations")
     @EmitEvent(id = "PEOPLE_PERSON_LOCATIONS_LIST", apiVersion = "1")
@@ -128,9 +171,19 @@ public class PeopleAvailabilityController {
     }
 
     @Operation(
-            summary = "Get a person's primary location",
-            description = "Resolve a person's primary active location from their staffing assignments. Returns 404"
-                    + " when the person has no active assignment flagged as primary.")
+            operationId = "getPersonPrimaryLocation",
+            summary = "Get Person Primary Location Assignment",
+            description = """
+                    Resolves a person's primary active location from their staffing assignments as of today.
+                    Use this tool for service-to-service location resolution by person id; use getMyPrimaryLocation \
+                    instead for the authenticated caller.
+                    Preconditions: the person must have an ACTIVE staffing assignment flagged primary whose effective \
+                    dates cover today.
+                    Required inputs: personId (UUID) path parameter; there is no request body.
+                    Emits a PEOPLE_PERSON_PRIMARY_LOCATION_GET audit event but changes no state; this is a read-only \
+                    projection.
+                    Returns 404 when the person has no active assignment flagged as primary today.
+                    """)
     @ApiResponse(responseCode = "200", description = "Primary location resolved successfully.")
     @ApiResponse(
             responseCode = "404",

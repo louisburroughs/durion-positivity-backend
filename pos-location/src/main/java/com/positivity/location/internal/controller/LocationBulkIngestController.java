@@ -9,6 +9,10 @@ import com.positivity.location.internal.dto.LocationBulkIngestRecord;
 import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationTypeDTO;
 import com.positivity.location.service.LocationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -34,13 +38,59 @@ import org.springframework.web.bind.annotation.RestController;
 public class LocationBulkIngestController extends AbstractBulkIngestController<LocationBulkIngestRecord> {
 
     private static final String DEFAULT_LOCATION_TYPE_NAME = "STORE";
+
+    private static final String BULK_INGEST_EXAMPLE = """
+            {"jobId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01",
+             "locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02",
+             "operatorId":"user-jdoe",
+             "records":[{"name":"Downtown Service Center",
+                         "code":"LOC-001",
+                         "addressLine1":"123 Main St",
+                         "city":"Springfield",
+                         "stateOrProvince":"IL",
+                         "postalCode":"62704",
+                         "countryCode":"US",
+                         "active":true,
+                         "locationTypeName":"STORE"}]}
+            """;
+
     private final LocationService locationService;
 
     @Override
+    @Operation(operationId = "bulkIngestLocations", summary = "Bulk Import a Batch of Locations", description = """
+                    Imports a batch of location records in one call, creating each row independently and \
+                    reporting per-record success or failure.
+                    Use this tool for initial data loads or migrations; do not use createLocation, which creates \
+                    a single location per call.
+                    Preconditions: names and codes must be unique against existing locations; each record is \
+                    validated independently, so one failure does not abort the batch.
+                    Required inputs: jobId, locationId and a non-empty records array, each record with name and \
+                    code; active defaults to true and locationTypeName defaults to STORE when omitted.
+                    Emits a LOCATION_BULK_INGEST event, and every successfully created location also publishes a \
+                    location fact for replica consumers.
+                    Returns 200 with per-record results even when some records fail (failed rows carry errorCode \
+                    LOCATION_INGEST_FAILED), and 400 when the batch envelope itself is invalid.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Batch processed (check per-record success/failure in response)")
+    @ApiResponse(responseCode = "400", description = "Invalid request payload")
     @PreAuthorize("hasAuthority('location:write')")
     @EmitEvent(id = "LOCATION_BULK_INGEST", apiVersion = "1")
     public ResponseEntity<BulkIngestResponse> bulkIngest(
-            @Valid @RequestBody @NonNull BulkIngestRequest<LocationBulkIngestRecord> request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Batch envelope of location records to import, scoped to a bulk ingest"
+                                    + " job and submitting operator.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Single-record batch",
+                                                            value = BULK_INGEST_EXAMPLE)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    BulkIngestRequest<LocationBulkIngestRecord> request) {
         return super.bulkIngest(request);
     }
 
