@@ -16,10 +16,10 @@
     <description>Shared domain event contracts (envelope, topic naming, versioned payload DTOs) per ADR-0044</description>
 
     <properties>
-        <!-- Coverage ratchet (plan Phase 4): measured 39.3% line / 37.2% branch.
+        <!-- Coverage ratchet (plan Phase 4): measured 87.1% line / 82.9% branch after the §7 shared-library wave (was 39.3% / 37.2%).
              Floors sit ~5 points under to catch regression without failing on noise. -->
-        <jacoco.line.min>0.34</jacoco.line.min>
-        <jacoco.branch.min>0.32</jacoco.branch.min>
+        <jacoco.line.min>0.82</jacoco.line.min>
+        <jacoco.branch.min>0.77</jacoco.branch.min>
     </properties>
 
     <dependencies>

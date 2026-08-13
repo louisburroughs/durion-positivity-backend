@@ -14,10 +14,10 @@
     <description>Shared security components for gateway-based JWT authentication</description>
 
     <properties>
-        <!-- Coverage ratchet (plan Phase 4): measured 46.8% line / 36.5% branch.
+        <!-- Coverage ratchet (plan Phase 4): measured 79.6% line / 80.7% branch after the §7 shared-library wave (was 46.8% / 36.5%).
              Floors sit ~5 points under to catch regression without failing on noise. -->
-        <jacoco.line.min>0.41</jacoco.line.min>
-        <jacoco.branch.min>0.31</jacoco.branch.min>
+        <jacoco.line.min>0.74</jacoco.line.min>
+        <jacoco.branch.min>0.75</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>
 
