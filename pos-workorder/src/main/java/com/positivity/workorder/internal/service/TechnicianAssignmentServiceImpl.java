@@ -3,13 +3,13 @@ package com.positivity.workorder.internal.service;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.TechnicianAssignmentService;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +43,6 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
     private final WorkorderStateMachine stateMachine;
 
     private static final String REASSIGNMENT_REASON = "Reassigned to different technician";
-    private static final String WORKORDER_NOT_FOUND = "Workorder not found: ";
 
     /**
      * Assign a technician to a workorder.
@@ -57,7 +56,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
      * @param assignedBy   the user ID performing the assignment
      * @param notes        optional notes for the assignment
      * @return the created assignment record
-     * @throws NoSuchElementException if workorder not found
+     * @throws WorkorderNotFoundException if workorder not found
      * @throws IllegalStateException  if workorder status doesn't allow assignment
      */
     @Transactional
@@ -67,7 +66,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
 
         Workorder workorder = workorderRepository
                 .findById(workorderId)
-                .orElseThrow(() -> new NoSuchElementException(WORKORDER_NOT_FOUND + workorderId));
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         // Validate status
         validateAssignmentAllowed(workorder);
@@ -120,7 +119,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
      * @param reason          the reason for reassignment
      * @param notes           optional additional notes
      * @return the new assignment record
-     * @throws NoSuchElementException if workorder not found or no current
+     * @throws WorkorderNotFoundException if workorder not found; IllegalStateException if no current
      *                                assignment exists
      * @throws IllegalStateException  if workorder status doesn't allow reassignment
      */
@@ -135,7 +134,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
 
         Workorder workorder = workorderRepository
                 .findById(workorderId)
-                .orElseThrow(() -> new NoSuchElementException(WORKORDER_NOT_FOUND + workorderId));
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         // Validate status
         validateAssignmentAllowed(workorder);
@@ -224,14 +223,14 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
      *
      * @param workorderId the workorder ID
      * @return the workorder status
-     * @throws NoSuchElementException if workorder not found
+     * @throws WorkorderNotFoundException if workorder not found
      */
     @NonNull
     public WorkorderStatus getWorkorderStatus(@NonNull UUID workorderId) {
         return workorderRepository
                 .findById(workorderId)
                 .map(Workorder::getStatus)
-                .orElseThrow(() -> new NoSuchElementException(WORKORDER_NOT_FOUND + workorderId));
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
     }
 
     /**

@@ -61,7 +61,8 @@ public class WorkorderPartsUsageController {
                     Emits a WORKORDER_PART_ISSUE event and marks the workorder fact changed for downstream \
                     replication.
                     Returns 201 with the ISSUE event, 400 when the quantity is not positive or the part cannot \
-                    be found, and 409 when the part belongs to a different workorder.
+                    be found, 404 when the workorder does not exist, and 409 when the part belongs to a \
+                    different workorder.
                     """)
     @ApiResponse(
             responseCode = "201",
@@ -113,8 +114,8 @@ public class WorkorderPartsUsageController {
                     usage event.
                     Emits a WORKORDER_PART_CONSUME event and marks the workorder fact changed.
                     Returns 201 with the CONSUME event, 400 when the quantity is not positive, exceeds the \
-                    issued quantity, or the part cannot be found, and 409 when the part belongs to a different \
-                    workorder.
+                    issued quantity, or the part cannot be found, 404 when the workorder does not exist, and \
+                    409 when the part belongs to a different workorder.
                     """)
     @ApiResponse(
             responseCode = "201",
@@ -169,8 +170,8 @@ public class WorkorderPartsUsageController {
                     usage event.
                     Emits a WORKORDER_PART_RETURN event and marks the workorder fact changed.
                     Returns 201 with the RETURN event, 400 when the quantity is not positive, exceeds the \
-                    available quantity, or the part cannot be found, and 409 when the part belongs to a \
-                    different workorder.
+                    available quantity, or the part cannot be found, 404 when the workorder does not exist, \
+                    and 409 when the part belongs to a different workorder.
                     """)
     @ApiResponse(
             responseCode = "201",
@@ -222,8 +223,8 @@ public class WorkorderPartsUsageController {
                     Required inputs: workorderId (UUID) as a path parameter; partLineId (UUID) is an optional \
                     query filter.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 200 with the events, 400 when the filtered part cannot be found, and 409 when the \
-                    filtered part belongs to a different workorder.
+                    Returns 200 with the events, 400 when the filtered part cannot be found, 404 when the \
+                    workorder does not exist, and 409 when the filtered part belongs to a different workorder.
                     """)
     @ApiResponse(
             responseCode = "200",

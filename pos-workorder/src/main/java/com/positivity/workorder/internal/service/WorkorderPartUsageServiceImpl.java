@@ -4,6 +4,7 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.workorder.internal.dto.WorkorderPartUsageEventResponse;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartUsageEvent;
+import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartUsageEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -13,7 +14,6 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -46,7 +46,6 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
     private static final String IDEMPOTENCY_KEY_ALREADY_PROCESSED_RETURNING_EXISTING_EVENT =
             "Idempotency key already processed, returning existing event {}";
     private static final String EVENT_NOT_FOUND = "Event not found: ";
-    private static final String WORKORDER_NOT_FOUND = "Workorder not found: ";
     private static final String IDEMPOTENCY_OPERATION_PART_ISSUE = "part-usage.issue";
     private static final String IDEMPOTENCY_OPERATION_PART_CONSUME = "part-usage.consume";
     private static final String IDEMPOTENCY_OPERATION_PART_RETURN = "part-usage.return";
@@ -82,7 +81,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      * @param quantity       quantity to issue (must be positive)
      * @param idempotencyKey optional idempotency key
      * @return the created usage event
-     * @throws NoSuchElementException   if workorder or part not found
+     * @throws WorkorderNotFoundException if the workorder does not exist; IllegalArgumentException if the part is not found
      * @throws IllegalArgumentException if quantity is not positive
      * @throws IllegalStateException    if part line does not belong to workorder
      */
@@ -114,9 +113,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         }
 
         // Validate workorder and part exist
-        workorderRepository
-                .findById(workorderId)
-                .orElseThrow(() -> new NoSuchElementException(WORKORDER_NOT_FOUND + workorderId));
+        workorderRepository.findById(workorderId).orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         WorkorderPart part = workorderPartRepository
                 .findById(partLineId)
@@ -163,7 +160,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      * @param quantity       quantity to consume (must be positive)
      * @param idempotencyKey optional idempotency key
      * @return the created usage event
-     * @throws NoSuchElementException   if workorder or part not found
+     * @throws WorkorderNotFoundException if the workorder does not exist; IllegalArgumentException if the part is not found
      * @throws IllegalArgumentException if quantity exceeds issued quantity
      */
     @Transactional
@@ -194,9 +191,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         }
 
         // Validate workorder and part exist
-        workorderRepository
-                .findById(workorderId)
-                .orElseThrow(() -> new NoSuchElementException(WORKORDER_NOT_FOUND + workorderId));
+        workorderRepository.findById(workorderId).orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         WorkorderPart part = workorderPartRepository
                 .findById(partLineId)
@@ -251,7 +246,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      * @param quantity       quantity to return (must be positive)
      * @param idempotencyKey optional idempotency key
      * @return the created usage event
-     * @throws NoSuchElementException   if workorder or part not found
+     * @throws WorkorderNotFoundException if the workorder does not exist; IllegalArgumentException if the part is not found
      * @throws IllegalArgumentException if quantity exceeds available (issued -
      *                                  consumed)
      */
@@ -283,9 +278,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         }
 
         // Validate workorder and part exist
-        workorderRepository
-                .findById(workorderId)
-                .orElseThrow(() -> new NoSuchElementException(WORKORDER_NOT_FOUND + workorderId));
+        workorderRepository.findById(workorderId).orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         WorkorderPart part = workorderPartRepository
                 .findById(partLineId)
@@ -346,9 +339,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
     @NonNull
     public List<WorkorderPartUsageEventResponse> getUsageHistory(@NonNull UUID workorderId, @NonNull UUID partLineId) {
         // Validate workorder exists
-        workorderRepository
-                .findById(workorderId)
-                .orElseThrow(() -> new NoSuchElementException(WORKORDER_NOT_FOUND + workorderId));
+        workorderRepository.findById(workorderId).orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         // Validate part exists
         WorkorderPart part = workorderPartRepository
@@ -372,9 +363,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
     @NonNull
     public List<WorkorderPartUsageEventResponse> getAllUsageHistory(@NonNull UUID workorderId) {
         // Validate workorder exists
-        workorderRepository
-                .findById(workorderId)
-                .orElseThrow(() -> new NoSuchElementException(WORKORDER_NOT_FOUND + workorderId));
+        workorderRepository.findById(workorderId).orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         return usageEventRepository.findByWorkorderIdOrderByPerformedAtDesc(workorderId).stream()
                 .map(this::toResponse)
