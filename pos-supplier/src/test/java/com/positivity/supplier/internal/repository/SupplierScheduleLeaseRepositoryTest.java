@@ -22,12 +22,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
+import org.hibernate.id.IdentifierGenerationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+import org.springframework.orm.jpa.JpaSystemException;
 
 /**
  * Lease correctness under contention (binding decision 4).
@@ -389,20 +391,16 @@ class SupplierScheduleLeaseRepositoryTest {
     }
 
     /**
-     * The lease's primary key is the <em>binding's</em> id, never a minted one. It nonetheless carries
-     * {@code @UUIDv7Id}, because the fleet-wide ADR-0013 rule requires that of every UUID {@code @Id}, and
-     * that annotation attaches a real Hibernate identifier generator. This pins the only property that
-     * makes the combination safe: an assigned id survives. If a future change to
-     * {@code UUIDv7HibernateGenerator} stopped honouring {@code currentValue}, every lease would silently
-     * be keyed to a binding that does not exist -- no constraint would catch it, because the invented id
-     * is a perfectly valid UUID and the table has no foreign key to the binding.
+     * The lease's primary key is the <em>binding's</em> id, never a minted one — {@code bindingId} is
+     * {@code @AssignedIdentifier}, so nothing generates it. This pins the property that matters: the id the
+     * caller supplies is the id the row is stored under, and no lease appears keyed to anything else.
      *
      * <p>It also proves the ADR-0024 auditing listener is wired: the builder leaves {@code createdAt} and
      * {@code updatedAt} null and both columns are NOT NULL, so the insert only succeeds because
      * {@code @CreatedDate}/{@code @LastModifiedDate} populated them.
      */
     @Test
-    void assignedBindingIdSurvivesTheIdentifierGenerator() {
+    void theLeaseIsStoredUnderTheBindingIdItWasGiven() {
         SupplierEndpointBindingEntity second = new SupplierEndpointBindingEntity();
         second.setVendorProfileId(profileId);
         second.setCapability(SupplierCapability.STOCK_REPORT);
@@ -442,35 +440,54 @@ class SupplierScheduleLeaseRepositoryTest {
      * The other half of the same concern, and the half that would actually bite: a lease saved with
      * <em>no</em> binding id must not become a lease on a binding that does not exist.
      *
-     * <p>{@code @UUIDv7Id} attaches a real Hibernate generator, so Hibernate mints an id here rather than
-     * failing on NOT NULL as it did before the annotation. What makes that harmless is
-     * {@code fk_slease_binding}: the minted UUID references no binding, so the insert is rejected. This test
-     * pins that FK, because it is the only thing standing between the annotation and a permanently
-     * unclaimable orphan lease -- a row that would look entirely valid and simply never be worked.
+     * <p>This is what {@code @AssignedIdentifier} buys over the {@code @UUIDv7Id} the field used to carry
+     * (#1261). That annotation attached a real Hibernate generator, so a null id was quietly minted and the
+     * only thing rejecting the row was {@code fk_slease_binding} at the database. With no generator attached
+     * the save fails outright, and the invariant is owned by the entity rather than by a migration that a
+     * later one could drop.
      *
      * <p>It also records a correction. A {@code @PrePersist} null-check was written for this first and was
-     * dead code: the callback fires AFTER identifier generation, so it never sees null. This test is what
-     * exposed both that ordering and the FK, and it is deliberately asserted at the database rather than in
-     * Java so it keeps testing the thing that is really doing the work.
+     * dead code: the callback fires AFTER identifier generation, so with a generator attached it never sees
+     * null. That is why the fix is to attach no generator rather than to guard one.
      */
     @Test
-    void aMintedBindingIdCannotBecomeAnOrphanLease() {
+    void aLeaseWithNoBindingIdIsRejectedRatherThanKeyedToAnInventedBinding() {
         SupplierScheduleLeaseEntity unkeyed = SupplierScheduleLeaseEntity.builder()
                 .vendorProfileId(profileId)
                 .capability(SupplierCapability.STOCK_REPORT)
                 .build();
 
         assertThatThrownBy(() -> leaseRepository.saveAndFlush(unkeyed))
-                .as("an id Hibernate invented references no binding, so fk_slease_binding must reject it")
-                .hasRootCauseInstanceOf(java.sql.SQLIntegrityConstraintViolationException.class)
+                .as("no generator may invent a binding id; the save must fail instead")
+                .isInstanceOf(JpaSystemException.class)
                 .rootCause()
-                .hasMessageContaining("FK_SLEASE_BINDING");
+                .isInstanceOf(IdentifierGenerationException.class);
 
         entityManager.clear();
         assertThat(leaseRepository.findAll())
                 .extracting(SupplierScheduleLeaseEntity::getBindingId)
                 .as("and no orphan lease may be left behind")
                 .containsExactly(bindingId);
+    }
+
+    /**
+     * Defence in depth for the case above: even if a lease were somehow inserted with a binding id nobody
+     * assigned, {@code fk_slease_binding} still rejects it. The entity is now the first line of defence and
+     * the FK the second — this asserts the second is still standing, at the database, where the work happens.
+     */
+    @Test
+    void anUnknownBindingIdIsStillRejectedByTheForeignKey() {
+        SupplierScheduleLeaseEntity orphan = SupplierScheduleLeaseEntity.builder()
+                .bindingId(UUID.randomUUID())
+                .vendorProfileId(profileId)
+                .capability(SupplierCapability.STOCK_REPORT)
+                .build();
+
+        assertThatThrownBy(() -> leaseRepository.saveAndFlush(orphan))
+                .as("a binding id referencing no binding must not become a permanently unclaimable lease")
+                .hasRootCauseInstanceOf(java.sql.SQLIntegrityConstraintViolationException.class)
+                .rootCause()
+                .hasMessageContaining("FK_SLEASE_BINDING");
     }
 
     @Test

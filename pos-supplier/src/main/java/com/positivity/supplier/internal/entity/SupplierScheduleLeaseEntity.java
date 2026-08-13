@@ -1,6 +1,6 @@
 package com.positivity.supplier.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.shared.id.AssignedIdentifier;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -64,31 +64,30 @@ public class SupplierScheduleLeaseEntity {
     /**
      * The binding this lease governs. Also the primary key: one lease per binding, by construction.
      *
-     * <h3>An assigned identifier that still carries {@code @UUIDv7Id}</h3>
+     * <h3>Assigned, never generated</h3>
      *
-     * This id is <strong>never generated</strong> — it is the binding's own identity, so a lease row with
-     * an invented id would be a lease on nothing. {@code @UUIDv7Id} is present because the fleet-wide
-     * ADR-0013 rule ({@code EntityStandardsArchitectureTest}) requires every UUID {@code @Id} to declare
-     * it, and it is safe here only because {@code UUIDv7HibernateGenerator} returns
-     * {@code currentValue != null ? currentValue : generate()} and reports
-     * {@code allowAssignedIdentifiers() == true}: an assigned id always wins.
+     * This id is the binding's own identity, so a lease row with an invented id would be a lease on nothing.
+     * {@code @AssignedIdentifier} says exactly that and, because ADR-0013 governs identifier
+     * <em>generation</em>, exempts the field from the fleet-wide {@code @UUIDv7Id} requirement
+     * ({@code EntityStandardsArchitectureTest}). No generator is attached, so a save with a null
+     * {@code bindingId} fails loudly at persist time rather than being keyed to a binding that does not exist
+     * — {@code SupplierScheduleLeaseRepositoryTest.aLeaseWithNoBindingIdIsRejectedRatherThanKeyedToAnInventedBinding}
+     * pins that.
      *
-     * <p>What stops a <em>minted</em> id — one Hibernate generates because the caller supplied none — from
-     * becoming a lease on a binding that does not exist is {@code fk_slease_binding}: {@code binding_id} is
-     * a foreign key to {@code supplier_endpoint_binding}, so an invented UUID fails the insert. That FK is
-     * what makes the {@code @UUIDv7Id} annotation safe to carry here, not the generator's
-     * assigned-value-wins behaviour alone, and
-     * {@code SupplierScheduleLeaseRepositoryTest.aMintedBindingIdCannotBecomeAnOrphanLease} pins it. If a
-     * future migration ever drops that FK, this annotation stops being harmless and needs a guard.
+     * <p>It previously carried {@code @UUIDv7Id} to satisfy that rule (#1261), which attached a real Hibernate
+     * generator and turned the null case into a silently minted id. That was harmless only because
+     * {@code fk_slease_binding} rejected the invented UUID at the database — a safety property owned by a
+     * migration rather than by this entity. The FK is still there and still worth having as defence in depth;
+     * it is no longer the only thing standing between a missing binding id and an orphan lease.
      *
-     * <p>Note for anyone tempted by a {@code @PrePersist} null-check instead: it does not work. The callback
-     * fires <em>after</em> identifier generation, so by the time it runs the field is already populated with
-     * a generated value and the check can never see null. Verified, not assumed — an earlier attempt at
-     * exactly that guard was dead code, and the test that was written to defend it is what exposed both this
-     * ordering and the existence of the FK above.
+     * <p>Note for anyone tempted to restore a generator plus a {@code @PrePersist} null-check: that guard does
+     * not work. The callback fires <em>after</em> identifier generation, so by the time it runs the field is
+     * already populated and the check can never see null. Verified, not assumed — an earlier attempt at exactly
+     * that guard was dead code that read as protection.
      */
     @Id
-    @UUIDv7Id
+    @AssignedIdentifier("the binding's own id: one lease per binding, and a lease on an invented id"
+            + " would be a lease on nothing")
     @Column(name = "binding_id", nullable = false, updatable = false)
     private UUID bindingId;
 

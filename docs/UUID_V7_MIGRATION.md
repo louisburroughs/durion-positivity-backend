@@ -238,6 +238,49 @@ public ResponseEntity<ProductDto> getProduct(@PathVariable UUID id) {
 2. **Breaking changes acceptable**: We'll fix integration issues after migration
 3. **Database support**: Postgres (UUID type) and H2 (UUID type)
 4. **No GenerationType.UUID**: Use `@PrePersist` with `UUIDv7Generator` for explicit control
+5. **Assigned natural keys are out of scope**: ADR-0013 governs identifier *generation*, so an `@Id` supplied by
+   the caller declares `@AssignedIdentifier` instead of `@UUIDv7Id` (see below)
+
+## Assigned Natural Keys (`@AssignedIdentifier`)
+
+Not every UUID `@Id` is a surrogate key. Where the identifier **is** the row's meaning — a lease keyed by the
+binding it governs, a projection keyed by the aggregate it mirrors — the value comes from the caller, and
+requiring `@UUIDv7Id` there asks a generator to invent an identifier whose whole point is that it must not be
+invented.
+
+Such a field declares `com.positivity.shared.id.AssignedIdentifier` with a reason:
+
+```java
+@Id
+@AssignedIdentifier("the binding's own id: a lease on an invented id would be a lease on nothing")
+@Column(name = "binding_id", nullable = false, updatable = false)
+private UUID bindingId;
+```
+
+The marker attaches no generator and changes no runtime behaviour. Its effects are:
+
+- **Documentation at the entity.** The next reader sees the intent instead of a generator annotation that
+  contradicts the field.
+- **Exemption from the ADR-0013 rule.** `EntityStandardsArchitectureTest` no longer requires `@UUIDv7Id` on the
+  field.
+- **A null id fails loudly.** With no generator attached, persisting a null identifier raises
+  `IdentifierGenerationException` rather than silently minting a UUID and keying the row to something that does
+  not exist.
+
+Rules the architecture test enforces:
+
+| Rule | Why |
+|---|---|
+| Never combine `@AssignedIdentifier` with `@UUIDv7Id` | They make opposite claims, and the generator stays attached |
+| The reason string must be non-blank | An unexplained opt-out from a fleet-wide rule reads as a mistake |
+| Only valid on `@Id` fields | Elsewhere it is decoration that looks significant |
+
+Use it only for genuine natural keys. If the platform is free to invent the value, it is a surrogate key and
+ADR-0013 applies in full.
+
+> **Do not reach for a `@PrePersist` null-check as an alternative guard.** The callback fires *after* identifier
+> generation, so with a generator attached it can never observe a null id. That is why the fix is to attach no
+> generator rather than to guard one.
 
 ## Testing Strategy
 

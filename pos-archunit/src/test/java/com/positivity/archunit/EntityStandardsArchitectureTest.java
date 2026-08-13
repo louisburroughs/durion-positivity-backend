@@ -50,6 +50,7 @@ class EntityStandardsArchitectureTest {
     private static final String LAST_MODIFIED_DATE_ANNOTATION = "org.springframework.data.annotation.LastModifiedDate";
     private static final String UUIDV7_ID_ANNOTATION = "com.positivity.shared.id.UUIDv7Id";
     private static final String UUIDV7_GENERATOR = "com.positivity.shared.id.UUIDv7Generator";
+    private static final String ASSIGNED_IDENTIFIER_ANNOTATION = "com.positivity.shared.id.AssignedIdentifier";
 
     private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL =
             new DescribedPredicate<>("call UUID.randomUUID()") {
@@ -81,6 +82,12 @@ class EntityStandardsArchitectureTest {
             .allowEmptyShould(true)
             .because("ADR-0013 disallows UUID.randomUUID() in entities");
 
+    /**
+     * ADR-0013 governs identifier <em>generation</em>, so a natural key assigned by the caller is outside it:
+     * requiring {@code @UUIDv7Id} there asks a generator to invent a value whose whole meaning is that it must
+     * not be invented. Such a field opts out with {@code @AssignedIdentifier} instead, which documents the
+     * intent at the entity rather than leaving a generator annotation that contradicts the field (#1261).
+     */
     @ArchTest
     static final ArchRule uuid_id_fields_should_use_adr_0013_generation = classes()
             .that()
@@ -89,7 +96,23 @@ class EntityStandardsArchitectureTest {
             .areAnnotatedWith(ENTITY_ANNOTATION)
             .should(useAdr0013IdentifierStandard())
             .allowEmptyShould(true)
-            .because("ADR-0013 requires UUID IDs to use @UUIDv7Id or UUIDv7Generator");
+            .because("ADR-0013 requires generated UUID IDs to use @UUIDv7Id or UUIDv7Generator,"
+                    + " and assigned natural keys to say so with @AssignedIdentifier");
+
+    /**
+     * {@code @AssignedIdentifier} is an opt-out from the identifier rule and means nothing anywhere else.
+     * Left to drift onto ordinary columns it reads as significant while doing nothing.
+     */
+    @ArchTest
+    static final ArchRule assigned_identifier_should_only_mark_id_fields = fields().that()
+            .areDeclaredInClassesThat()
+            .resideInAnyPackage(ENFORCED_ENTITY_PACKAGES)
+            .and()
+            .areAnnotatedWith(ASSIGNED_IDENTIFIER_ANNOTATION)
+            .should()
+            .beAnnotatedWith(ID_ANNOTATION)
+            .allowEmptyShould(true)
+            .because("@AssignedIdentifier only exempts an @Id from ADR-0013; on any other field it is decoration");
 
     @ArchTest
     static final ArchRule created_at_field_should_use_created_date = fields().that()
@@ -152,14 +175,48 @@ class EntityStandardsArchitectureTest {
                         // migrations
                     }
                     boolean hasUuidV7IdAnnotation = idField.isAnnotatedWith(UUIDV7_ID_ANNOTATION);
+                    boolean isAssignedIdentifier = idField.isAnnotatedWith(ASSIGNED_IDENTIFIER_ANNOTATION);
+
+                    if (isAssignedIdentifier && hasUuidV7IdAnnotation) {
+                        // The two make opposite claims: one says the platform mints this id, the other says
+                        // only the caller may supply it. Carrying both leaves the generator attached, which is
+                        // exactly the state @AssignedIdentifier exists to replace.
+                        events.add(SimpleConditionEvent.violated(
+                                item,
+                                item.getName() + " declares both @UUIDv7Id and @AssignedIdentifier on @Id field '"
+                                        + idField.getName()
+                                        + "'; an identifier is either generated or assigned, not both"));
+                        continue;
+                    }
+                    if (isAssignedIdentifier) {
+                        assertReasonIsGiven(item, idField, events);
+                        continue; // a natural key is not generated, so ADR-0013 does not govern it
+                    }
                     if (!hasUuidV7IdAnnotation && !dependsOnUuidV7Generator) {
                         String message = item.getName()
                                 + " has UUID @Id field '" + idField.getName()
-                                + "' but uses neither @UUIDv7Id nor UUIDv7Generator";
+                                + "' but uses neither @UUIDv7Id nor UUIDv7Generator"
+                                + " (if it is a natural key assigned by the caller, declare @AssignedIdentifier)";
                         events.add(SimpleConditionEvent.violated(item, message));
                     }
                 }
             }
         };
+    }
+
+    /**
+     * An opt-out from a fleet-wide rule with no stated reason is indistinguishable from a mistake, so the
+     * marker's reason is required to say something.
+     */
+    private static void assertReasonIsGiven(JavaClass item, JavaField idField, ConditionEvents events) {
+        String reason = String.valueOf(idField.getAnnotationOfType(ASSIGNED_IDENTIFIER_ANNOTATION)
+                .get("value")
+                .orElse(""));
+        if (reason.isBlank()) {
+            events.add(SimpleConditionEvent.violated(
+                    item,
+                    item.getName() + " marks @Id field '" + idField.getName()
+                            + "' @AssignedIdentifier without saying why it is assigned rather than generated"));
+        }
     }
 }
