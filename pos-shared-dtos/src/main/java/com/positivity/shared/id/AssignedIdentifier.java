@@ -1,7 +1,6 @@
 package com.positivity.shared.id;
 
 import static java.lang.annotation.ElementType.FIELD;
-import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 import java.lang.annotation.Documented;
@@ -46,10 +45,18 @@ import java.lang.annotation.Target;
  *
  * <p>It does not apply to surrogate keys. If the identifier is one the platform is free to invent, it
  * belongs under ADR-0013 and must use {@link UUIDv7Id}.
+ *
+ * <h2>Fields only</h2>
+ *
+ * Unlike {@link UUIDv7Id}, which must also target methods because it attaches a generator and Hibernate
+ * allows property access, this targets {@code FIELD} alone. The rule it opts out of inspects {@code @Id}
+ * <em>fields</em>, so a marker on a getter would be unenforceable in both directions: it could not exempt
+ * anything, and nothing would stop it drifting onto unrelated methods. Restricting the target closes that
+ * at compile time rather than asking another architecture rule to notice.
  */
 @Documented
 @Retention(RUNTIME)
-@Target({FIELD, METHOD})
+@Target(FIELD)
 public @interface AssignedIdentifier {
 
     /**

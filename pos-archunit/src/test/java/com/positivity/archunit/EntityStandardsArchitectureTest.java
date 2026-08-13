@@ -102,6 +102,9 @@ class EntityStandardsArchitectureTest {
     /**
      * {@code @AssignedIdentifier} is an opt-out from the identifier rule and means nothing anywhere else.
      * Left to drift onto ordinary columns it reads as significant while doing nothing.
+     *
+     * <p>Fields are the whole surface: the annotation targets {@code FIELD} only, so a method can never carry
+     * it and no companion rule over methods is needed.
      */
     @ArchTest
     static final ArchRule assigned_identifier_should_only_mark_id_fields = fields().that()

@@ -275,6 +275,10 @@ Rules the architecture test enforces:
 | The reason string must be non-blank | An unexplained opt-out from a fleet-wide rule reads as a mistake |
 | Only valid on `@Id` fields | Elsewhere it is decoration that looks significant |
 
+The marker targets `FIELD` only — unlike `@UUIDv7Id`, which must also target methods because it attaches a
+generator and Hibernate permits property access. The rule inspects `@Id` *fields*, so a marker on a getter
+could exempt nothing while still drifting onto unrelated methods; the compiler rules that out.
+
 Use it only for genuine natural keys. If the platform is free to invent the value, it is a surrogate key and
 ADR-0013 applies in full.
 
