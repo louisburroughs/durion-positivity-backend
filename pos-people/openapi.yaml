@@ -410,8 +410,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BreakDto'
-        '404':
-          description: Work session or break not found.
+        '409':
+          description: No open break exists for the session, including when the session id itself is unknown.
           content:
             application/json:
               schema:
