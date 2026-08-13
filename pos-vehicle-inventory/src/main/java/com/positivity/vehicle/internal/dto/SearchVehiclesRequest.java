@@ -10,13 +10,22 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
+import lombok.extern.jackson.Jacksonized;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Request DTO for searching vehicles (CAP:091 Story #103).
+ *
+ * <p>
+ * {@code @Jacksonized} is load-bearing: {@code @Builder} on a class with final
+ * fields generates only a package-private all-args constructor, which leaves
+ * Jackson with no creator and makes {@code POST /v1/vehicles/search} fail during
+ * message conversion for every body. It wires the generated builder up as the
+ * creator while keeping the fields final.
  */
 @Getter
 @Builder(toBuilder = true)
+@Jacksonized
 @ToString
 @Schema(description = "Request payload for searching vehicles by free-text query with optional pagination")
 public class SearchVehiclesRequest {

@@ -1,6 +1,5 @@
 package com.positivity.vehicle.internal.controller;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -12,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -19,7 +19,6 @@ import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.config.WebMvcTestSecurityConfig;
 import com.positivity.vehicle.service.VehicleService;
 import jakarta.persistence.EntityNotFoundException;
-import jakarta.validation.ConstraintViolationException;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -36,13 +35,17 @@ import org.springframework.test.web.servlet.MockMvc;
  * Web-slice tests for {@link VehicleRegistryController}.
  *
  * <p>
- * This controller catches its own exceptions rather than letting them reach an
- * advice, and the mapping it applies is the contract: {@link EntityNotFoundException}
- * becomes 404 and {@link IllegalArgumentException} becomes 400. Those two arrive
- * from the same service methods and are one {@code catch} clause apart, so an
- * accidental reorder or a merged clause would turn "you asked for something that
- * does not exist" into "your request was malformed", or the reverse. The pair is
- * pinned on both update and delete.
+ * The controller no longer catches anything (#1269); the mapping now belongs to
+ * {@code VehicleExceptionHandler} and is still the contract:
+ * {@link EntityNotFoundException} becomes 404 and {@link IllegalArgumentException}
+ * becomes 400. Those two arrive from the same service methods, so collapsing them
+ * would turn "you asked for something that does not exist" into "your request was
+ * malformed", or the reverse. The pair is pinned on both update and delete.
+ *
+ * <p>
+ * The envelope itself is pinned too. Every error leaving this module must carry
+ * {@code ApiError} (ADR-0017) — the bare statuses it used to return gave a caller
+ * no {@code code} to branch on and no {@code correlationId} to quote.
  */
 @WebMvcTest(VehicleRegistryController.class)
 @Import(WebMvcTestSecurityConfig.class)
@@ -93,18 +96,6 @@ class VehicleRegistryControllerWebMvcTest {
     }
 
     @Test
-    @DisplayName("POST turns a rejected create into 400, not 500")
-    void createRejectionIsBadRequest() throws Exception {
-        when(vehicleService.createVehicle(any())).thenThrow(new IllegalArgumentException("duplicate VIN"));
-
-        mockMvc.perform(post(PATH)
-                        .header(AUTH, BEARER)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(CREATE_BODY))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
     @DisplayName("POST rejects a body with no VIN before reaching the service")
     void createWithoutVinIsRejected() throws Exception {
         mockMvc.perform(post(PATH)
@@ -142,7 +133,7 @@ class VehicleRegistryControllerWebMvcTest {
                 .thenThrow(new IllegalArgumentException("unit number too long"));
 
         // Two consecutive calls, two different exceptions from the same method. Collapsing the
-        // catch clauses would make one of these silently report the other.
+        // advice's two handlers would make one of these silently report the other.
         mockMvc.perform(put(PATH + "/" + VEHICLE_ID)
                         .header(AUTH, BEARER)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -182,21 +173,58 @@ class VehicleRegistryControllerWebMvcTest {
     }
 
     @Test
-    @DisplayName("BUG: a VIN of the wrong length escapes as a server error instead of a 400")
-    void shortVinOnPathIsAServerError() {
-        // Documents current behaviour, not desired behaviour. The class is @Validated and the
-        // path variable carries @Size(min = 17, max = 17), so a short VIN does get rejected —
-        // but as a ConstraintViolationException, and this module has no @ControllerAdvice to
-        // translate it. The client sees a 500 for what is plainly a malformed request, with no
-        // ApiError envelope (ADR-0017) and nothing naming the offending field. Tracked as
-        // issue #1269. When that is fixed this becomes status().isBadRequest() with an
-        // ApiError body.
-        assertThatThrownBy(() -> mockMvc.perform(get(PATH + "/vin/TOOSHORT").header(AUTH, BEARER)))
-                .rootCause()
-                .isInstanceOf(ConstraintViolationException.class)
-                .hasMessageContaining("size must be between 17 and 17");
+    @DisplayName("a VIN of the wrong length is a 400 naming the field, not a server error")
+    void shortVinOnPathIsBadRequest() throws Exception {
+        // The class is @Validated and the path variable carries @Size(min = 17, max = 17), so a
+        // short VIN is rejected as a ConstraintViolationException. Until #1269 the module had no
+        // advice to translate that and it escaped as a 500 — a malformed request reported as a
+        // server fault, which also made a client looping on a bad VIN look like an outage. The
+        // field name is asserted because the violation's property path is method-scoped
+        // ("getVehicleByVin.vin") and only the leaf names something the caller actually sent.
+        mockMvc.perform(get(PATH + "/vin/TOOSHORT").header(AUTH, BEARER))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("vin"))
+                .andExpect(jsonPath("$.fieldErrors[0].message").value("size must be between 17 and 17"));
 
         verifyNoInteractions(vehicleService);
+    }
+
+    @Test
+    @DisplayName("POST turns a rejected create into 400 carrying the reason, not 500")
+    void createRejectionCarriesApiError() throws Exception {
+        when(vehicleService.createVehicle(any())).thenThrow(new IllegalArgumentException("duplicate VIN"));
+
+        // The status alone was never the useful part: before #1269 the 400 had an empty body, so
+        // the reason the service rejected the request was written to the log and discarded.
+        mockMvc.perform(post(PATH)
+                        .header(AUTH, BEARER)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(CREATE_BODY))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("duplicate VIN"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("a correlation id supplied by the caller is echoed back in the envelope")
+    void correlationIdFromRequestIsPreserved() throws Exception {
+        when(vehicleService.getVehicle(VEHICLE_ID)).thenReturn(Optional.empty());
+        doThrow(new EntityNotFoundException("no such vehicle"))
+                .when(vehicleService)
+                .deleteVehicle(VEHICLE_ID);
+
+        // A support ticket quotes the correlation id the caller already has; minting a fresh one
+        // on the error path would break the trace at exactly the point someone needs it.
+        mockMvc.perform(delete(PATH + "/" + VEHICLE_ID).header(AUTH, BEARER).header("X-Correlation-Id", "trace-1269"))
+                .andExpect(status().isNotFound())
+                .andExpect(header().string("X-Correlation-Id", "trace-1269"))
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.correlationId").value("trace-1269"));
     }
 
     @Test
