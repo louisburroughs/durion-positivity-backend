@@ -7,8 +7,12 @@ import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.RejectAdjustmentRequest;
 import com.positivity.inventory.internal.enums.AdjustmentStatus;
 import com.positivity.inventory.service.CycleCountAdjustmentService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -68,13 +72,61 @@ public class CycleCountAdjustmentController {
             scopes = {"inventory:adjustment:create"})
     @PreAuthorize("hasAuthority('inventory:adjustment:create')")
     @Operation(
+            operationId = "createCycleCountAdjustment",
             summary = "Create cycle count adjustment",
-            description =
-                    "Creates a new adjustment from a cycle count. Automatically evaluates against approval thresholds.",
+            description = """
+                    Creates an inventory adjustment from a cycle count variance and evaluates it against the \
+                    configured approval thresholds: below all thresholds it is AUTO_APPROVED and its \
+                    COUNT_VARIANCE_IN or COUNT_VARIANCE_OUT entry posts to the inventory ledger in the same \
+                    transaction, otherwise it enters PENDING_APPROVAL with a required approval tier.
+                    Use this tool to settle a counted variance; do not use submitCycleCount, which only records a \
+                    count, and do not use approveCycleCountAdjustment, which acts on an adjustment that already \
+                    exists.
+                    Preconditions: countedQuantity must differ from quantityOnHandBefore (a zero variance is \
+                    rejected), a supplied taskId must reference an existing cycle count task, and the auto-approve \
+                    path additionally requires the linked task to have no unreviewed in-window stock movements.
+                    Required inputs: stockItemId (UUID), reasonCode, countedQuantity, quantityOnHandBefore, \
+                    costAtTimeOfAdjustment and createdByUserId; taskId is optional but enables conflict detection; \
+                    the posted unit cost prefers the costing engine's per-SKU running cost and falls back to \
+                    costAtTimeOfAdjustment only for a SKU the engine has not costed.
+                    Emits an INVENTORY_CYCLE_COUNT_ADJUSTMENT_CREATE event, and an auto-approved posting changes \
+                    on-hand immediately.
+                    Returns 400 when the counted quantity matches the system quantity, 404 when the referenced \
+                    task does not exist, and 409 (CYCLE_COUNT_CONFLICT) when auto-approval detects in-window \
+                    movements — the task is flagged CONFLICT and a reviewer must explicitly recount or approve \
+                    with recomputation.
+                    """,
             tags = {"Cycle Count Adjustments"})
     @ApiResponse(responseCode = "201", description = "Adjustment created successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request or no variance detected")
-    public ResponseEntity<AdjustmentResponse> createAdjustment(@Valid @RequestBody CreateAdjustmentRequest request) {
+    @ApiResponse(
+            responseCode = "404",
+            description = "Referenced cycle count task not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "In-window stock movements detected on auto-approval (CYCLE_COUNT_CONFLICT)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<AdjustmentResponse> createAdjustment(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Cycle count variance to turn into an inventory adjustment, with the"
+                                    + " before/after quantities and the fallback unit cost.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Task-linked shortage", value = """
+                                                                    {"stockItemId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "taskId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+                                                                     "reasonCode":"CYCLE_COUNT_VARIANCE",
+                                                                     "countedQuantity":12,
+                                                                     "quantityOnHandBefore":15,
+                                                                     "costAtTimeOfAdjustment":12.50,
+                                                                     "createdByUserId":"user-10042"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    CreateAdjustmentRequest request) {
         log.info("Received request to create adjustment for SKU {}", request.getStockItemId());
         AdjustmentResponse response = adjustmentService.createAdjustment(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -98,15 +150,51 @@ public class CycleCountAdjustmentController {
             scopes = {"inventory:adjustment:approve"})
     @PreAuthorize("hasAuthority('inventory:adjustment:approve')")
     @Operation(
+            operationId = "approveCycleCountAdjustment",
             summary = "Approve adjustment",
-            description = "Approves a pending adjustment and posts it to the inventory ledger",
+            description = """
+                    Approves a PENDING_APPROVAL cycle count adjustment and posts its COUNT_VARIANCE_IN or \
+                    COUNT_VARIANCE_OUT entry to the inventory ledger, marking the linked task APPROVED.
+                    Use this tool after reviewing a pending adjustment; do not use rejectCycleCountAdjustment, \
+                    which discards it without touching inventory.
+                    Preconditions: the adjustment must be in PENDING_APPROVAL; for a task-linked adjustment the \
+                    conflict gate applies — a first approval that detects in-window stock movements flags the task \
+                    CONFLICT and aborts, and re-approving a CONFLICT task recomputes the variance against current \
+                    on-hand rather than the stale snapshot (a recomputed zero variance approves without posting \
+                    anything).
+                    Required inputs: adjustmentId (UUID) path parameter; the body's approverUserId is legacy and \
+                    ignored — the actor is resolved from the authenticated context; notes are optional, and an \
+                    optional X-Correlation-Id header is propagated to the audit event.
+                    Emits an INVENTORY_CYCLE_COUNT_ADJUSTMENT_APPROVE event plus a MovementAdjusted audit event, \
+                    and the posting changes on-hand immediately.
+                    Returns 400 when no adjustment exists for the id (the unknown id maps to a validation error, \
+                    not 404), and 409 when the adjustment is not PENDING_APPROVAL or the conflict gate rejects the \
+                    first approval (CYCLE_COUNT_CONFLICT).
+                    """,
             tags = {"Cycle Count Adjustments"})
     @ApiResponse(responseCode = "200", description = "Adjustment approved and posted")
     @ApiResponse(responseCode = "400", description = "Adjustment not found or not in approvable state")
     @ApiResponse(responseCode = "403", description = "User lacks required approval permission")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Adjustment not PENDING_APPROVAL, or conflict gate rejected the approval"
+                    + " (CYCLE_COUNT_CONFLICT)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<AdjustmentResponse> approveAdjustment(
             @Parameter(description = "Adjustment ID", required = true) @PathVariable UUID adjustmentId,
-            @Valid @RequestBody ApproveAdjustmentRequest request,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Approval context; the authoritative approver is resolved server-side"
+                                    + " from the authenticated caller.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Approval with notes", value = """
+                                                                    {"notes":"Variance confirmed against receiving log"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    ApproveAdjustmentRequest request,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
         log.info("Received request to approve adjustment {}", adjustmentId);
         AdjustmentResponse response = adjustmentService.approveAdjustment(adjustmentId, request, correlationId);
@@ -132,15 +220,44 @@ public class CycleCountAdjustmentController {
             scopes = {"inventory:adjustment:approve"})
     @PreAuthorize("hasAuthority('inventory:adjustment:approve')")
     @Operation(
+            operationId = "rejectCycleCountAdjustment",
             summary = "Reject adjustment",
-            description = "Rejects a pending adjustment with a reason. No inventory changes are made.",
+            description = """
+                    Rejects a PENDING_APPROVAL cycle count adjustment with a recorded reason; rejection is final \
+                    and no inventory or ledger change is made.
+                    Use this tool to discard a variance that should not post; do not use \
+                    approveCycleCountAdjustment, which posts the variance to the ledger.
+                    Preconditions: the adjustment must be in PENDING_APPROVAL status.
+                    Required inputs: adjustmentId (UUID) path parameter plus rejectorUserId and rejectionReason in \
+                    the body, both non-blank.
+                    Emits an INVENTORY_CYCLE_COUNT_ADJUSTMENT_REJECT event; the adjustment moves to REJECTED and \
+                    its linked task is left untouched.
+                    Returns 400 when no adjustment exists for the id (mapped to a validation error, not 404), and \
+                    409 when the adjustment is not PENDING_APPROVAL.
+                    """,
             tags = {"Cycle Count Adjustments"})
     @ApiResponse(responseCode = "200", description = "Adjustment rejected")
     @ApiResponse(responseCode = "400", description = "Adjustment not found or not in rejectable state")
     @ApiResponse(responseCode = "403", description = "User lacks required approval permission")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Adjustment is not in PENDING_APPROVAL status",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<AdjustmentResponse> rejectAdjustment(
             @Parameter(description = "Adjustment ID", required = true) @PathVariable UUID adjustmentId,
-            @Valid @RequestBody RejectAdjustmentRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Rejection context recording who rejected the adjustment and why.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Rejection", value = """
+                                                                    {"rejectorUserId":"user-30077",
+                                                                     "rejectionReason":"Recount required before posting"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    RejectAdjustmentRequest request) {
         log.info("Received request to reject adjustment {}", adjustmentId);
         AdjustmentResponse response = adjustmentService.rejectAdjustment(adjustmentId, request);
         return ResponseEntity.ok(response);
@@ -158,8 +275,19 @@ public class CycleCountAdjustmentController {
             scopes = {"inventory:adjustment:view", "inventory:adjustment:approve"})
     @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
     @Operation(
+            operationId = "getCycleCountAdjustment",
             summary = "Get adjustment details",
-            description = "Retrieves details of a specific cycle count adjustment",
+            description = """
+                    Returns one cycle count adjustment with its variance, cost snapshot, approval tier, lifecycle \
+                    status and ledger-entry linkage.
+                    Use this tool when the adjustmentId is already known; use listCycleCountAdjustments instead to \
+                    search by status.
+                    Preconditions: the adjustment must exist.
+                    Required inputs: adjustmentId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 400 when no adjustment exists for the supplied id — the module maps the unknown-id \
+                    lookup to a validation error rather than 404.
+                    """,
             tags = {"Cycle Count Adjustments"})
     @ApiResponse(responseCode = "200", description = "Adjustment found")
     @ApiResponse(responseCode = "404", description = "Adjustment not found")
@@ -181,8 +309,21 @@ public class CycleCountAdjustmentController {
             scopes = {"inventory:adjustment:view", "inventory:adjustment:approve"})
     @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
     @Operation(
+            operationId = "listCycleCountAdjustments",
             summary = "List adjustments by status",
-            description = "Lists all adjustments matching the specified status",
+            description = """
+                    Returns every cycle count adjustment in one lifecycle status.
+                    Use this tool to browse adjustments by status; do not use listPendingCycleCountAdjustments, \
+                    which returns only the pending-approval subset without a parameter, or \
+                    countPendingCycleCountAdjustments, which returns just their number.
+                    Preconditions: none.
+                    Required inputs: status is an optional query parameter (PENDING_APPROVAL, AUTO_APPROVED, \
+                    APPROVED, POSTED, REJECTED or FAILED) and defaults to PENDING_APPROVAL when omitted; there is \
+                    no paging.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty array when no adjustments match, so an empty result is not an error \
+                    condition.
+                    """,
             tags = {"Cycle Count Adjustments"})
     @ApiResponse(responseCode = "200", description = "Adjustments retrieved")
     public ResponseEntity<List<AdjustmentResponse>> listAdjustments(
@@ -205,8 +346,18 @@ public class CycleCountAdjustmentController {
             scopes = {"inventory:adjustment:view", "inventory:adjustment:approve"})
     @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
     @Operation(
+            operationId = "listPendingCycleCountAdjustments",
             summary = "List pending approvals",
-            description = "Lists all adjustments awaiting approval",
+            description = """
+                    Returns every cycle count adjustment currently awaiting approval (status PENDING_APPROVAL).
+                    Use this tool to build an approval work queue; use countPendingCycleCountAdjustments instead \
+                    when only the badge number is needed, and listCycleCountAdjustments to browse other statuses.
+                    Preconditions: none.
+                    Required inputs: none; there is no request body, paging or filtering.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty array when nothing awaits approval, so an empty result is not an \
+                    error condition.
+                    """,
             tags = {"Cycle Count Adjustments"})
     @ApiResponse(responseCode = "200", description = "Pending adjustments retrieved")
     public ResponseEntity<List<AdjustmentResponse>> listPendingApprovals() {
@@ -226,8 +377,17 @@ public class CycleCountAdjustmentController {
             scopes = {"inventory:adjustment:view", "inventory:adjustment:approve"})
     @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
     @Operation(
+            operationId = "countPendingCycleCountAdjustments",
             summary = "Count pending approvals",
-            description = "Returns the count of adjustments awaiting approval",
+            description = """
+                    Returns the number of cycle count adjustments awaiting approval, as a bare JSON number.
+                    Use this tool for dashboards and badge counts; use listPendingCycleCountAdjustments instead \
+                    when the adjustments themselves are needed.
+                    Preconditions: none.
+                    Required inputs: none; there is no request body or filtering.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with 0 when nothing awaits approval, so zero is not an error condition.
+                    """,
             tags = {"Cycle Count Adjustments"})
     @ApiResponse(responseCode = "200", description = "Count retrieved")
     public ResponseEntity<Long> countPendingApprovals() {

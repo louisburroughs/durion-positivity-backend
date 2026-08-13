@@ -11,6 +11,7 @@ import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -75,10 +76,23 @@ public class CreditMemoController {
             scopes = {"accounting:credit-memo:create"})
     @PreAuthorize("hasAuthority('accounting:credit-memo:create')")
     @Operation(
-            summary = "Create credit memo",
-            description = "Create a new Credit Memo to reverse invoice charges. "
-                    + "Reduces Accounts Receivable by posting offsetting GL entries. "
-                    + "Requires finalized invoice and credit amount within outstanding balance.",
+            operationId = "createCreditMemo",
+            summary = "Create Credit Memo",
+            description = """
+                    Creates and posts a credit memo against a finalized invoice, reversing invoice charges by \
+                    posting debit revenue and tax, credit Accounts Receivable, and reducing the invoice's \
+                    outstanding balance.
+                    Use this tool for AR corrections against a specific invoice; do not use \
+                    applyCustomerCredit, which draws down a standing customer credit, and do not use \
+                    voidCreditMemo, which backs out a memo already posted.
+                    Preconditions: the invoice must exist and be finalized, and creditAmount must not exceed \
+                    the invoice's outstanding balance.
+                    Required inputs: originalInvoiceId (UUID), creditAmount (min 0.01) and reasonCode (max 50 \
+                    chars, kept for the audit trail); justificationNote (max 1000 chars) is optional.
+                    Emits an ACCOUNTING_CREDIT_MEMO_CREATE event and posts the reversing GL entries.
+                    Returns 404 when the invoice is not found, 409 when the amount exceeds the outstanding \
+                    balance or the invoice is not finalized, and 401 when no authenticated user is present.
+                    """,
             tags = {"Credit Memos"})
     @ApiResponse(responseCode = "201", description = "Credit memo created successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request - validation errors")
@@ -87,7 +101,22 @@ public class CreditMemoController {
             responseCode = "409",
             description = "Business rule violation - amount exceeds balance or invoice not finalized")
     @EmitEvent(id = "ACCOUNTING_CREDIT_MEMO_CREATE", apiVersion = "1")
-    public ResponseEntity<CreditMemoResponse> createCreditMemo(@Valid @RequestBody CreateCreditMemoRequest request) {
+    public ResponseEntity<CreditMemoResponse> createCreditMemo(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Credit to issue against a finalized invoice, with the audit reason code.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Partial credit", value = """
+                                                                    {"originalInvoiceId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "creditAmount":45.00,
+                                                                     "reasonCode":"BILLING_ERROR",
+                                                                     "justificationNote":"Labor line billed twice"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    CreateCreditMemoRequest request) {
 
         String currentUser = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated"));
@@ -121,12 +150,22 @@ public class CreditMemoController {
             scopes = {"accounting:credit-memo:void"})
     @PreAuthorize("hasAuthority('accounting:credit-memo:void')")
     @Operation(
-            summary = "Void a posted credit memo",
-            description = "Void a POSTED Credit Memo: posts the mirror GL entry (Dr AR / Cr Revenue + Cr Sales-Tax"
-                    + " Payable) dated at void time and restores the invoice's outstanding balance. The memo's"
-                    + " original posting-period figures are never restated; the tax-liability report restores the"
-                    + " reversed tax in the void's period. Only POSTED memos are voidable — APPLIED memos have been"
-                    + " consumed and VOIDED is terminal.",
+            operationId = "voidCreditMemo",
+            summary = "Void Credit Memo",
+            description = """
+                    Voids a POSTED credit memo by posting the mirror GL entry (debit AR, credit Revenue and \
+                    Sales-Tax Payable) dated at void time, restoring the invoice's outstanding balance.
+                    Use this tool to back out a memo issued in error; do not use createCreditMemo, which \
+                    issues new credit, and note that APPLIED memos have been consumed and cannot be voided.
+                    Preconditions: the credit memo must exist and be in POSTED status; VOIDED is terminal.
+                    Required inputs: creditMemoId (UUID) as a path parameter and a non-blank voidReason (max \
+                    1000 chars).
+                    Emits an ACCOUNTING_CREDIT_MEMO_VOID event; the memo's original posting-period figures \
+                    are never restated, and the tax-liability report restores the reversed tax in the void's \
+                    period so GL drift stays zero.
+                    Returns 404 when the memo is not found, 409 when it is not POSTED, and 400 when the void \
+                    reason is missing or blank.
+                    """,
             tags = {"Credit Memos"})
     @ApiResponse(
             responseCode = "200",
@@ -147,7 +186,20 @@ public class CreditMemoController {
     @EmitEvent(id = "ACCOUNTING_CREDIT_MEMO_VOID", apiVersion = "1")
     public ResponseEntity<CreditMemoResponse> voidCreditMemo(
             @Parameter(description = "Credit Memo id", required = true) @PathVariable UUID creditMemoId,
-            @Valid @RequestBody VoidCreditMemoRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Mandatory audit reason for voiding the posted memo.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Void issued in error",
+                                                            value =
+                                                                    "{\"voidReason\":\"Memo issued against wrong invoice\"}")))
+                    @Valid
+                    @RequestBody
+                    VoidCreditMemoRequest request) {
 
         String currentUser = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated"));
@@ -177,10 +229,19 @@ public class CreditMemoController {
             scopes = {"accounting:credit-memo:read"})
     @PreAuthorize("hasAuthority('accounting:credit-memo:read')")
     @Operation(
-            summary = "List credit memos",
-            description = "Retrieve paginated credit memos with optional filters. "
-                    + "Filter by customer, invoice, or status. "
-                    + "Supports standard pagination parameters (page, size, sort).",
+            operationId = "listCreditMemos",
+            summary = "List Credit Memos",
+            description = """
+                    Lists credit memos as a paginated projection, optionally filtered by customer, original \
+                    invoice or lifecycle status.
+                    Use this tool when browsing or reconciling memos; do not use getCreditMemo, which fetches \
+                    one memo by its known id.
+                    Preconditions: none beyond the caller holding accounting:credit-memo:read.
+                    Required inputs: none; customerId, originalInvoiceId and status (DRAFT, POSTED, APPLIED, \
+                    VOIDED) are optional filters, with standard page, size and sort parameters.
+                    Emits an ACCOUNTING_CREDIT_MEMO_LIST audit event; no state changes.
+                    Returns 400 when pagination or filter parameters are invalid.
+                    """,
             tags = {"Credit Memos"})
     @ApiResponse(responseCode = "200", description = "Credit memos retrieved successfully")
     @ApiResponse(responseCode = "400", description = "Invalid pagination or filter parameters")
@@ -219,9 +280,18 @@ public class CreditMemoController {
             scopes = {"accounting:credit-memo:read"})
     @PreAuthorize("hasAuthority('accounting:credit-memo:read')")
     @Operation(
-            summary = "Get credit memo",
-            description = "Retrieve details for a specific Credit Memo by ID. "
-                    + "Includes full audit trail and current invoice balance.",
+            operationId = "getCreditMemo",
+            summary = "Get Credit Memo",
+            description = """
+                    Returns one credit memo with its amounts, status, audit trail and the invoice's current \
+                    balance.
+                    Use this tool when the memo id is already known; use listCreditMemos instead when \
+                    searching by customer, invoice or status.
+                    Preconditions: the credit memo must exist.
+                    Required inputs: creditMemoId (UUID) as a path parameter; there is no request body.
+                    Emits an ACCOUNTING_CREDIT_MEMO_GET audit event; no state changes.
+                    Returns 404 when no credit memo exists for the supplied id.
+                    """,
             tags = {"Credit Memos"})
     @ApiResponse(responseCode = "200", description = "Credit memo retrieved successfully")
     @ApiResponse(responseCode = "404", description = "Credit memo not found")

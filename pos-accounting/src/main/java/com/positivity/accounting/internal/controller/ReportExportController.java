@@ -8,6 +8,7 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -68,8 +69,22 @@ public class ReportExportController {
     @PreAuthorize("hasAuthority('accounting:report:export')")
     @EmitEvent(id = "ACCOUNTING_REPORT_EXPORT_REQUEST", apiVersion = "1")
     @Operation(
-            summary = "Request async report export",
-            description = "Submit an asynchronous report export job. Returns immediately with PENDING status.",
+            operationId = "requestReportExport",
+            summary = "Request Async Report Export",
+            description = """
+                    Submits an asynchronous export job that renders a financial report to a downloadable \
+                    artifact, returning immediately with status PENDING.
+                    Use this tool to produce a file for one of the reporting endpoints' outputs; do not use \
+                    the synchronous generate operations such as generateIncomeStatement when a file artifact \
+                    is what is needed, and poll getReportExportStatus for completion.
+                    Preconditions: none; as-of report types use the request's endDate as the as-of date.
+                    Required inputs: format (PDF, CSV, XLSX or JSON), reportType (TAX_LIABILITY, \
+                    INCOME_STATEMENT, BALANCE_SHEET, TRIAL_BALANCE, GENERAL_LEDGER, AGED_RECEIVABLES or \
+                    AGED_PAYABLES), startDate and endDate (endDate on or after startDate); accountId and \
+                    filename are optional.
+                    Emits an ACCOUNTING_REPORT_EXPORT_REQUEST event and records the requesting operator.
+                    Returns 400 when the payload is invalid or the end date precedes the start date.
+                    """,
             tags = {"Financial Reporting"})
     @ApiResponse(
             responseCode = "201",
@@ -79,7 +94,22 @@ public class ReportExportController {
     @ApiResponse(responseCode = "401", description = "Unauthorized")
     @ApiResponse(responseCode = "403", description = "Forbidden - missing accounting:report:export")
     public ResponseEntity<ReportExportResponse> requestExport(
-            @Valid @RequestBody ReportExportRequest request, @AuthenticationPrincipal UserDetails principal) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Report type, format and date range to render asynchronously.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Trial balance CSV", value = """
+                                                                    {"format":"CSV",
+                                                                     "reportType":"TRIAL_BALANCE",
+                                                                     "startDate":"2026-07-01",
+                                                                     "endDate":"2026-07-31"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    ReportExportRequest request,
+            @AuthenticationPrincipal UserDetails principal) {
 
         String operatorId = (principal != null) ? principal.getUsername() : "unknown";
         validateDateRange(request);
@@ -94,8 +124,18 @@ public class ReportExportController {
     @PreAuthorize("hasAuthority('accounting:report:export')")
     @EmitEvent(id = "ACCOUNTING_REPORT_EXPORT_STATUS", apiVersion = "1")
     @Operation(
-            summary = "Get export status",
-            description = "Poll the current status of an async report export job.",
+            operationId = "getReportExportStatus",
+            summary = "Get Report Export Status",
+            description = """
+                    Returns the current status of an asynchronous report export job: PENDING, IN_PROGRESS, \
+                    COMPLETED or FAILED.
+                    Use this tool to poll a job created by requestReportExport; do not use \
+                    downloadReportExport until the status is COMPLETED.
+                    Preconditions: the export job must exist.
+                    Required inputs: exportId (UUID) as a path parameter; there is no request body.
+                    Emits an ACCOUNTING_REPORT_EXPORT_STATUS audit event; no state changes.
+                    Returns 404 EXPORT_JOB_NOT_FOUND when no export job exists for the supplied id.
+                    """,
             tags = {"Financial Reporting"})
     @ApiResponse(
             responseCode = "200",
@@ -126,8 +166,20 @@ public class ReportExportController {
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "ACCOUNTING_REPORT_EXPORT_DOWNLOAD", apiVersion = "1")
     @Operation(
-            summary = "Download rendered export artifact",
-            description = "Download the rendered CSV or PDF artifact of a COMPLETED export job.",
+            operationId = "downloadReportExport",
+            summary = "Download Report Export Artifact",
+            description = """
+                    Downloads the rendered artifact of a COMPLETED export job as an attachment whose content \
+                    type matches the requested format, for example text/csv or application/pdf.
+                    Use this tool after getReportExportStatus reports COMPLETED; do not use it earlier, and \
+                    note it requires reporting:view:financial-statements because the artifact carries actual \
+                    financial figures.
+                    Preconditions: the export job must exist, be COMPLETED and still have its artifact.
+                    Required inputs: exportId (UUID) as a path parameter; there is no request body.
+                    Emits an ACCOUNTING_REPORT_EXPORT_DOWNLOAD audit event; no state changes.
+                    Returns 404 when the job or its artifact is missing, and 409 when the job is not \
+                    COMPLETED.
+                    """,
             tags = {"Financial Reporting"})
     @ApiResponse(
             responseCode = "200",
@@ -162,8 +214,18 @@ public class ReportExportController {
     @PreAuthorize("hasAuthority('accounting:report:export')")
     @EmitEvent(id = "ACCOUNTING_REPORT_EXPORT_LIST", apiVersion = "1")
     @Operation(
-            summary = "List export history",
-            description = "List all async report export jobs, paginated and sorted by most-recent first.",
+            operationId = "listReportExports",
+            summary = "List Report Export History",
+            description = """
+                    Lists all asynchronous report export jobs as a paginated projection, most recent first.
+                    Use this tool to review past exports and their statuses; do not use \
+                    getReportExportStatus, which polls a single job by id.
+                    Preconditions: none beyond the caller holding accounting:report:export.
+                    Required inputs: none; the page defaults to 20 items and only requestedAt is a supported \
+                    sort property.
+                    Emits an ACCOUNTING_REPORT_EXPORT_LIST audit event; no state changes.
+                    Returns 400 when an unsupported sort property is requested.
+                    """,
             tags = {"Financial Reporting"})
     @ApiResponse(responseCode = "200", description = "Export history returned")
     @ApiResponse(responseCode = "401", description = "Unauthorized")

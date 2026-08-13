@@ -68,13 +68,22 @@ public class TaxLiabilitySnapshotController {
     @PreAuthorize("hasAuthority('accounting:tax-snapshot:freeze')")
     @EmitEvent(id = "TAX_LIABILITY_SNAPSHOT_FREEZE", apiVersion = "1")
     @Operation(
-            summary = "Freeze the Sales-Tax Liability report for a closed period",
-            description =
-                    "Generate the Sales-Tax Liability report over the accounting period's exact date range and persist"
-                            + " it as an immutable snapshot with a canonical SHA-256 content hash. The period must be"
-                            + " CLOSED. If an ACTIVE snapshot already exists for the period the request fails with 409"
-                            + " unless supersede=true, which demotes the prior snapshot to SUPERSEDED (reopen → adjust"
-                            + " → re-close flow) and preserves history.",
+            operationId = "freezeTaxLiabilitySnapshot",
+            summary = "Freeze Sales-Tax Liability Snapshot",
+            description = """
+                    Generates the Sales-Tax Liability report over a closed accounting period's exact date \
+                    range and persists it as an immutable snapshot with a canonical SHA-256 content hash; \
+                    snapshots are provider-neutral and carry no filing-provider identifiers.
+                    Use this tool at period close to fix filing figures; do not use \
+                    generateTaxLiabilityReport, which computes the live report without freezing anything.
+                    Preconditions: the accounting period must exist and be CLOSED, and no ACTIVE snapshot may \
+                    exist for the period unless supersede is set.
+                    Required inputs: periodCode (YYYY-MM) as a query parameter; supersede defaults to false \
+                    and, when true, demotes the prior ACTIVE snapshot to SUPERSEDED while preserving history.
+                    Emits a TAX_LIABILITY_SNAPSHOT_FREEZE event.
+                    Returns 404 when the period does not exist, 409 when the period is not CLOSED or an \
+                    ACTIVE snapshot exists without supersede, and 400 when the period code is malformed.
+                    """,
             tags = {"Financial Reporting", "Financial Reporting for Tax Liability"})
     @ApiResponse(
             responseCode = "201",
@@ -119,8 +128,18 @@ public class TaxLiabilitySnapshotController {
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "TAX_LIABILITY_SNAPSHOT_LIST", apiVersion = "1")
     @Operation(
-            summary = "List Sales-Tax Liability snapshots",
-            description = "List snapshot summaries (no rows), newest freeze first, optionally filtered by period code.",
+            operationId = "listTaxLiabilitySnapshots",
+            summary = "List Sales-Tax Liability Snapshots",
+            description = """
+                    Lists Sales-Tax Liability snapshot summaries without their row detail, newest freeze \
+                    first, optionally filtered by period code.
+                    Use this tool to find which periods are frozen and which snapshot is ACTIVE; use \
+                    getTaxLiabilitySnapshot instead for a snapshot's full frozen content.
+                    Preconditions: none.
+                    Required inputs: none; periodCode (YYYY-MM) is an optional filter.
+                    Emits a TAX_LIABILITY_SNAPSHOT_LIST audit event; no state changes.
+                    Returns 200 with an empty list when no snapshots exist.
+                    """,
             tags = {"Financial Reporting", "Financial Reporting for Tax Liability"})
     @ApiResponse(
             responseCode = "200",
@@ -152,8 +171,20 @@ public class TaxLiabilitySnapshotController {
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "TAX_LIABILITY_SNAPSHOT_GET", apiVersion = "1")
     @Operation(
-            summary = "Get a Sales-Tax Liability snapshot",
-            description = "Full frozen snapshot including per-jurisdiction rows, totals, reconciliation, and hash.",
+            operationId = "getTaxLiabilitySnapshot",
+            summary = "Get Sales-Tax Liability Snapshot",
+            description = """
+                    Returns one frozen Sales-Tax Liability snapshot in full: per-jurisdiction rows, totals, \
+                    reconciliation and the canonical content hash.
+                    Use this tool to read filing figures exactly as frozen; use listTaxLiabilitySnapshots \
+                    instead when hunting for the right snapshot, and verifyTaxLiabilitySnapshot to check it \
+                    against live data.
+                    Preconditions: the snapshot must exist.
+                    Required inputs: snapshotId (UUID) as a path parameter; there is no request body.
+                    Emits a TAX_LIABILITY_SNAPSHOT_GET audit event; the snapshot is immutable and never \
+                    changed by reads.
+                    Returns 404 TAX_SNAPSHOT_NOT_FOUND when no snapshot exists for the supplied id.
+                    """,
             tags = {"Financial Reporting", "Financial Reporting for Tax Liability"})
     @ApiResponse(
             responseCode = "200",
@@ -183,12 +214,20 @@ public class TaxLiabilitySnapshotController {
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "TAX_LIABILITY_SNAPSHOT_VERIFY", apiVersion = "1")
     @Operation(
-            summary = "Verify a snapshot against live data",
-            description =
-                    "Re-derive the Sales-Tax Liability report for the snapshot's period from the live replicas and"
-                            + " compare canonical hashes. Read-only: the snapshot is never mutated. Inconsistency"
-                            + " means underlying data moved after the freeze (e.g. postings into a reopened period);"
-                            + " re-freeze with supersede=true once the period is closed again.",
+            operationId = "verifyTaxLiabilitySnapshot",
+            summary = "Verify Sales-Tax Liability Snapshot",
+            description = """
+                    Re-derives the Sales-Tax Liability report for a snapshot's period from the live replicas \
+                    and compares canonical hashes, reporting consistent=true when they match.
+                    Use this tool to detect drift after a freeze; do not use freezeTaxLiabilitySnapshot to \
+                    check consistency, since freezing creates state.
+                    Preconditions: the snapshot must exist; inconsistency means underlying data moved after \
+                    the freeze, for example postings into a reopened period, and the remedy is re-freezing \
+                    with supersede=true once the period is closed again.
+                    Required inputs: snapshotId (UUID) as a path parameter; there is no request body.
+                    Emits a TAX_LIABILITY_SNAPSHOT_VERIFY audit event; the snapshot itself is never mutated.
+                    Returns 404 TAX_SNAPSHOT_NOT_FOUND when no snapshot exists for the supplied id.
+                    """,
             tags = {"Financial Reporting", "Financial Reporting for Tax Liability"})
     @ApiResponse(
             responseCode = "200",

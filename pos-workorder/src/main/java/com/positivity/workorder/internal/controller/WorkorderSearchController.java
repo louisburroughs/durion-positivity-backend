@@ -37,10 +37,20 @@ public class WorkorderSearchController {
 
     private final WorkorderSearchService workorderSearchService;
 
-    @Operation(
-            summary = "Search workorders",
-            description = "Paginated free-text search for workorders matching customer name or workorder id, "
-                    + "optionally filtered by exact customer and/or vehicle.")
+    @Operation(operationId = "searchWorkorders", summary = "Search Workorders With Filters", description = """
+                    Searches workorders by free-text query against customer display names or a literal workorder \
+                    id, optionally narrowed by exact customerId and vehicleId filters, returning a page of rows \
+                    enriched with customer name, vehicle label, and VIN.
+                    Use this tool when finding workorders by customer or id fragments; use listWorkorders instead \
+                    for an unfiltered listing, and resolveWorkorderNumbers to map known ids to human numbers.
+                    Preconditions: customer-name matching depends on the local customer replica; at most 10 \
+                    name-matched customers are considered per query.
+                    Required inputs: none are mandatory — q defaults to an empty string and is treated as a \
+                    workorder id when it parses as a UUID; page size defaults to 25.
+                    Emits a WORKORDER_SEARCH audit event; no workorder state changes — this is a read-only \
+                    projection.
+                    Returns 200 with an empty page when nothing matches; no 404 is produced for empty results.
+                    """)
     @ApiResponse(responseCode = "200", description = "Page of workorder search results returned.")
     @GetMapping("/search")
     @PreAuthorize("hasAuthority('workorder:workorder:view')")
@@ -63,16 +73,40 @@ public class WorkorderSearchController {
         return workorderSearchService.search(q == null ? "" : q.trim(), customerId, vehicleId, pageable);
     }
 
-    @Operation(
-            summary = "Resolve workorder numbers",
-            description = "Batch-resolves a set of workorder ids to their human workorder numbers. "
-                    + "Consumed server-side by sibling services that store only the workorder id "
-                    + "and need the human number for finder/search enrichment.")
+    @Operation(operationId = "resolveWorkorderNumbers", summary = "Resolve Workorder Ids to Numbers", description = """
+                    Batch-resolves workorder ids to their human-readable workorder numbers for sibling services \
+                    that store only the id.
+                    Use this tool when known workorder ids need display numbers; do not use searchWorkorders, \
+                    which is for discovering workorders by text query rather than resolving known ids.
+                    Preconditions: none — nulls and duplicates in the id list are silently dropped, and ids with \
+                    no matching workorder are omitted from the response rather than erroring.
+                    Required inputs: a body with workorderIds, a non-empty list of UUIDs.
+                    Emits a WORKORDER_NUMBER_RESOLVE audit event; no workorder state changes — this is a \
+                    read-only projection.
+                    Returns 200 with one pairing per found workorder, and 400 when workorderIds is missing or \
+                    empty.
+                    """)
     @ApiResponse(responseCode = "200", description = "Resolved workorder id-to-number pairings returned.")
     @PostMapping("/numbers:resolve")
     @PreAuthorize("hasAuthority('workorder:workorder:view')")
     @EmitEvent(id = "WORKORDER_NUMBER_RESOLVE", apiVersion = "1")
-    public List<WorkorderNumberRef> resolveNumbers(@Valid @RequestBody WorkorderNumberResolveRequest request) {
+    public List<WorkorderNumberRef> resolveNumbers(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Batch of workorder ids to resolve to human workorder numbers.",
+                            required = true,
+                            content =
+                                    @io.swagger.v3.oas.annotations.media.Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                            name = "Two ids",
+                                                            value = """
+                                                                    {"workorderIds":["018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a11",
+                                                                                     "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a12"]}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    WorkorderNumberResolveRequest request) {
         return workorderSearchService.resolveNumbers(request.workorderIds());
     }
 }

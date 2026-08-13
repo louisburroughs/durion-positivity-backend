@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -68,13 +69,19 @@ public class AccountingPeriodController {
     @PreAuthorize("hasAuthority('accounting:period:view')")
     @EmitEvent(id = "ACCOUNTING_PERIOD_LIST", apiVersion = "1")
     @Operation(
-            summary = "List accounting periods",
             operationId = "listAccountingPeriods",
-            description = "Lists all known accounting periods, most recent first (descending period code)."
-                    + " Use this tool to review period statuses before closing or reopening a period."
-                    + " Periods are auto-provisioned on first posting, so months never posted into may be absent;"
-                    + " an absent month counts as OPEN for posting purposes."
-                    + " No preconditions and no side effects; nothing is created by this call.",
+            summary = "List Accounting Periods",
+            description = """
+                    Lists all known accounting periods with their OPEN or CLOSED status, most recent first \
+                    (descending period code).
+                    Use this tool to review period statuses before closing or reopening a period; do not use \
+                    closeAccountingPeriod or reopenAccountingPeriod, which perform the state transitions.
+                    Preconditions: none; periods are auto-provisioned on first posting, so months never \
+                    posted into may be absent, and an absent month counts as OPEN for posting purposes.
+                    Required inputs: none; there are no parameters and no request body.
+                    Emits an ACCOUNTING_PERIOD_LIST audit event; nothing is created or changed by this call.
+                    Returns 200 with an empty list when no period has ever been provisioned.
+                    """,
             tags = {"Accounting Periods"})
     @ApiResponse(
             responseCode = "200",
@@ -97,21 +104,23 @@ public class AccountingPeriodController {
     @PreAuthorize("hasAuthority('accounting:period:close')")
     @EmitEvent(id = "ACCOUNTING_PERIOD_CLOSE", apiVersion = "1")
     @Operation(
-            summary = "Close an accounting period",
             operationId = "closeAccountingPeriod",
-            description = "Closes an OPEN accounting period (OPEN → CLOSED), recording its lifecycle status as"
-                    + " CLOSED. Use this tool during month-end close after all journal entries for the month"
-                    + " are posted; use reopenAccountingPeriod to reverse the transition."
-                    + " Note: journal-entry posting paths do not yet reject postings dated into a CLOSED period;"
-                    + " that enforcement (error code PERIOD_CLOSED) arrives with the period-enforcement story"
-                    + " (parity-B2)."
-                    + " Preconditions: the period must not already be CLOSED, and no DRAFT journal entries may"
-                    + " be dated inside the period. A valid YYYY-MM period with no row whose month has already"
-                    + " started is auto-provisioned and then closed."
-                    + " The close is audit-logged with the acting user and emits ACCOUNTING_PERIOD_CLOSE."
-                    + " Returns 409 PERIOD_ALREADY_CLOSED if the period is already closed, and 422"
-                    + " PERIOD_HAS_DRAFT_ENTRIES listing the blocking draft journal entry IDs in fieldErrors —"
-                    + " post or delete those entries before retrying.",
+            summary = "Close Accounting Period",
+            description = """
+                    Closes an OPEN accounting period (OPEN to CLOSED), after which posting paths reject \
+                    entries dated inside it with PERIOD_CLOSED unless a permissioned override is supplied.
+                    Use this tool during month-end close after all journal entries for the month are posted; \
+                    do not use reopenAccountingPeriod, which reverses this transition for late adjustments.
+                    Preconditions: the period must not already be CLOSED, and no DRAFT journal entries may be \
+                    dated inside the period; a valid YYYY-MM code with no row whose month has already started \
+                    is auto-provisioned and then closed.
+                    Required inputs: periodCode (YYYY-MM) as a path parameter; there is no request body.
+                    Emits an ACCOUNTING_PERIOD_CLOSE event and audit-logs the close with the acting user.
+                    Returns 409 PERIOD_ALREADY_CLOSED when the period is already closed, 404 PERIOD_NOT_FOUND \
+                    when no row exists and the month has not started, and 422 PERIOD_HAS_DRAFT_ENTRIES listing \
+                    the blocking draftJournalEntryIds in fieldErrors; post or delete those entries before \
+                    retrying.
+                    """,
             tags = {"Accounting Periods"})
     @ApiResponse(
             responseCode = "200",
@@ -157,17 +166,21 @@ public class AccountingPeriodController {
     @PreAuthorize("hasAuthority('accounting:period:reopen')")
     @EmitEvent(id = "ACCOUNTING_PERIOD_REOPEN", apiVersion = "1")
     @Operation(
-            summary = "Reopen a closed accounting period",
             operationId = "reopenAccountingPeriod",
-            description = "Reopens a CLOSED accounting period (CLOSED → OPEN), resetting its lifecycle status"
-                    + " to OPEN."
-                    + " Use this tool only when late adjustments must be posted into an already-closed month;"
-                    + " use closeAccountingPeriod to close it again afterwards."
-                    + " Preconditions: a period row must exist for the code and be CLOSED."
-                    + " Required input: a non-blank justification (max 500 characters) which is recorded on the"
-                    + " period and in the audit trail with the acting user."
-                    + " Emits ACCOUNTING_PERIOD_REOPEN. Returns 409 PERIOD_ALREADY_OPEN if the period is not"
-                    + " closed, and 400 if the justification is missing or blank.",
+            summary = "Reopen Accounting Period",
+            description = """
+                    Reopens a CLOSED accounting period (CLOSED to OPEN), allowing entries to be posted into \
+                    that month again.
+                    Use this tool only when late adjustments must be posted into an already-closed month; use \
+                    closeAccountingPeriod instead to close it again afterwards, and prefer a permissioned \
+                    closed-period override on postJournalEntry for a one-off posting.
+                    Preconditions: a period row must exist for the code and be CLOSED.
+                    Required inputs: periodCode (YYYY-MM) as a path parameter and a non-blank justification \
+                    (max 500 characters), recorded on the period and in the audit trail with the acting user.
+                    Emits an ACCOUNTING_PERIOD_REOPEN event.
+                    Returns 409 PERIOD_ALREADY_OPEN when the period is not closed, 404 PERIOD_NOT_FOUND when \
+                    no period row exists for the code, and 400 when the justification is missing or blank.
+                    """,
             tags = {"Accounting Periods"})
     @ApiResponse(
             responseCode = "200",
@@ -194,7 +207,21 @@ public class AccountingPeriodController {
                     @PathVariable
                     @NonNull
                     String periodCode,
-            @Valid @RequestBody @NonNull AccountingPeriodReopenRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Audit justification for reopening the closed period.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Late adjustment",
+                                                            value =
+                                                                    "{\"justification\":\"Post late utility accrual approved by controller\"}")))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    AccountingPeriodReopenRequest request) {
         if (log.isInfoEnabled()) {
             log.info("Reopen accounting period {}", sanitizeForLog(periodCode));
         }
@@ -210,15 +237,19 @@ public class AccountingPeriodController {
     @PreAuthorize("hasAuthority('accounting:period:view')")
     @EmitEvent(id = "ACCOUNTING_PERIOD_HARD_LOCK_VIEW", apiVersion = "1")
     @Operation(
-            summary = "Get the accounting hard-lock date",
             operationId = "getAccountingHardLockDate",
-            description = "Returns the org-level hard-lock date: journal entries dated strictly before this"
-                    + " date are permanently rejected (422 PERIOD_HARD_LOCKED) with no override path — unlike"
-                    + " a CLOSED period, which accounting:period:override plus a justification can bypass."
-                    + " Use this tool to check the current lock boundary before posting backdated entries or"
-                    + " before moving the lock with setAccountingHardLockDate."
-                    + " Returns hardLockDate: null when no hard lock has been configured yet."
-                    + " No preconditions and no side effects.",
+            summary = "Get Accounting Hard-Lock Date",
+            description = """
+                    Returns the org-level hard-lock date; journal entries dated strictly before this date are \
+                    permanently rejected with PERIOD_HARD_LOCKED and no override path, unlike a CLOSED period \
+                    which accounting:period:override plus a justification can bypass.
+                    Use this tool to check the current lock boundary before posting backdated entries; do not \
+                    use setAccountingHardLockDate, which moves the lock, unless a change is intended.
+                    Preconditions: none; the lock may be unset.
+                    Required inputs: none; there are no parameters and no request body.
+                    Emits an ACCOUNTING_PERIOD_HARD_LOCK_VIEW audit event; no state changes.
+                    Returns 200 with hardLockDate null when no hard lock has been configured yet.
+                    """,
             tags = {"Accounting Periods"})
     @ApiResponse(
             responseCode = "200",
@@ -242,21 +273,22 @@ public class AccountingPeriodController {
     @PreAuthorize("hasAuthority('accounting:period:hard_lock')")
     @EmitEvent(id = "ACCOUNTING_PERIOD_HARD_LOCK_SET", apiVersion = "1")
     @Operation(
-            summary = "Set the accounting hard-lock date",
             operationId = "setAccountingHardLockDate",
-            description = "Sets the org-level hard-lock date: from then on, journal entries dated strictly"
-                    + " before this date are permanently rejected (422 PERIOD_HARD_LOCKED) with NO override"
-                    + " path — not even accounting:period:override can bypass it (that permission only covers"
-                    + " CLOSED periods, error PERIOD_CLOSED)."
-                    + " Use this tool after statutory filings or audits to make history immutable; use"
-                    + " closeAccountingPeriod for the reversible month-end close instead."
-                    + " The date is monotonic-forward-only: it must be on or after the currently stored"
-                    + " hard-lock date, and moving it backward is rejected with 422 HARD_LOCK_DATE_REGRESSION"
-                    + " — effectively irreversible, so set it deliberately."
-                    + " Required inputs: hardLockDate (ISO date) and a non-blank justification (max 500"
-                    + " characters), recorded in the audit trail with the acting user."
-                    + " Emits ACCOUNTING_PERIOD_HARD_LOCK_SET and returns the stored hard-lock date."
-                    + " Returns 400 if the date is missing or the justification is missing or blank.",
+            summary = "Set Accounting Hard-Lock Date",
+            description = """
+                    Sets the org-level hard-lock date; from then on, journal entries dated strictly before \
+                    this date are permanently rejected with PERIOD_HARD_LOCKED and no override path, not even \
+                    accounting:period:override, which only covers CLOSED periods.
+                    Use this tool after statutory filings or audits to make history immutable; use \
+                    closeAccountingPeriod for the reversible month-end close instead.
+                    Preconditions: the new date must be on or after the currently stored hard-lock date; the \
+                    lock is monotonic-forward-only and effectively irreversible, so set it deliberately.
+                    Required inputs: hardLockDate (ISO date) and a non-blank justification (max 500 \
+                    characters), recorded in the audit trail with the acting user.
+                    Emits an ACCOUNTING_PERIOD_HARD_LOCK_SET event and returns the stored hard-lock date.
+                    Returns 422 HARD_LOCK_DATE_REGRESSION when the date would move backward, and 400 when the \
+                    date or justification is missing or blank.
+                    """,
             tags = {"Accounting Periods"})
     @ApiResponse(
             responseCode = "200",
@@ -277,7 +309,20 @@ public class AccountingPeriodController {
                     + " (HARD_LOCK_DATE_REGRESSION) — the hard lock only moves forward",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<HardLockDateResponse> setHardLockDate(
-            @Valid @RequestBody @NonNull HardLockDateUpdateRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "New hard-lock date with the audit justification for moving it forward.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Lock after audit", value = """
+                                                                    {"hardLockDate":"2026-01-01",
+                                                                     "justification":"FY2025 audit finalized; history locked"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    HardLockDateUpdateRequest request) {
         if (log.isInfoEnabled()) {
             log.info("Set accounting hard-lock date to {}", sanitizeForLog(request.getHardLockDate()));
         }

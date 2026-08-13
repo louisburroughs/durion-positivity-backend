@@ -61,8 +61,20 @@ paths:
     get:
       tags:
       - Posting Rules
-      summary: Get posting rule set
-      description: Retrieve a posting rule set by identifier.
+      summary: Get Posting Rule Set
+      description: 'Returns one posting rule set with its metadata and current version state.
+
+        Use this tool when the rule set id is already known; use listPostingRuleSets instead when searching, or listPostingRuleVersions for the full version history.
+
+        Preconditions: the posting rule set must exist.
+
+        Required inputs: postingRuleSetId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 400 when no posting rule set exists for the supplied id (mapped as VALIDATION_ERROR, not 404).
+
+        '
       operationId: getPostingRuleSet
       parameters:
       - name: postingRuleSetId
@@ -93,8 +105,20 @@ paths:
     put:
       tags:
       - Posting Rules
-      summary: Update posting rule set metadata
-      description: Update a posting rule set (only possible if no PUBLISHED version exists).
+      summary: Update Posting Rule Set
+      description: 'Updates a posting rule set''s metadata and draft rules definition while no PUBLISHED version exists.
+
+        Use this tool to iterate on a draft before publishing; do not use it once a version is PUBLISHED, and do not use publishPostingRuleSet, which is the activation step.
+
+        Preconditions: the rule set must exist and must not have a PUBLISHED version.
+
+        Required inputs: postingRuleSetId (UUID) as a path parameter plus the same body shape as createPostingRuleSet (name, eventType, rulesDefinition, createdBy).
+
+        Emits an ACCOUNTING_POSTING_RULE_UPDATE event.
+
+        Returns 409 when a PUBLISHED version already exists, and 400 when the rule set id cannot be resolved (mapped as VALIDATION_ERROR, not 404).
+
+        '
       operationId: updatePostingRuleSet
       parameters:
       - name: postingRuleSetId
@@ -105,10 +129,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Replacement rule set metadata and draft rules definition.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PostingRuleSetCreateRequest'
+            examples:
+              Revised draft rules:
+                description: Revised draft rules
+                value:
+                  name: Invoice posting rules v2
+                  eventType: INVOICE_FINALIZED
+                  rulesDefinition: '{"rules":[{"debit":"1100","credit":"4000","amountField":"totalAmount"}]}'
+                  createdBy: jdoe
         required: true
       responses:
         '200':
@@ -138,8 +171,20 @@ paths:
     get:
       tags:
       - Posting Categories
-      summary: Get posting category
-      description: Retrieve a posting category by identifier.
+      summary: Get Posting Category
+      description: 'Returns one posting category with its name, description and active flag.
+
+        Use this tool when the category id is already known; use listPostingCategories instead when browsing or filtering.
+
+        Preconditions: the posting category must exist.
+
+        Required inputs: postingCategoryId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no posting category exists for the supplied id.
+
+        '
       operationId: getPostingCategory
       parameters:
       - name: postingCategoryId
@@ -170,8 +215,20 @@ paths:
     put:
       tags:
       - Posting Categories
-      summary: Update posting category
-      description: Update an existing posting category.
+      summary: Update Posting Category
+      description: 'Renames a posting category or changes its description; mapping keys under it are unaffected.
+
+        Use this tool to correct a category''s name or description; do not use deactivatePostingCategory, which retires the category from future mapping use.
+
+        Preconditions: the posting category must exist, and a changed name must not collide with another category.
+
+        Required inputs: postingCategoryId (UUID) as a path parameter, categoryName (max 100 chars) and modifiedBy (max 50 chars); description is optional.
+
+        Emits an ACCOUNTING_POSTING_CATEGORY_UPDATE event.
+
+        Returns 404 when the category does not exist, and 400 when the new name already exists.
+
+        '
       operationId: updatePostingCategory
       parameters:
       - name: postingCategoryId
@@ -182,10 +239,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Replacement name and description for the posting category.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PostingCategoryUpdateRequest'
+            examples:
+              Rename category:
+                description: Rename category
+                value:
+                  categoryName: PAYMENT_TENDERS
+                  description: Payment tender classifications
+                  modifiedBy: jdoe
         required: true
       responses:
         '200':
@@ -215,8 +280,20 @@ paths:
     get:
       tags:
       - Accounting Periods
-      summary: Get the accounting hard-lock date
-      description: 'Returns the org-level hard-lock date: journal entries dated strictly before this date are permanently rejected (422 PERIOD_HARD_LOCKED) with no override path — unlike a CLOSED period, which accounting:period:override plus a justification can bypass. Use this tool to check the current lock boundary before posting backdated entries or before moving the lock with setAccountingHardLockDate. Returns hardLockDate: null when no hard lock has been configured yet. No preconditions and no side effects.'
+      summary: Get Accounting Hard-Lock Date
+      description: 'Returns the org-level hard-lock date; journal entries dated strictly before this date are permanently rejected with PERIOD_HARD_LOCKED and no override path, unlike a CLOSED period which accounting:period:override plus a justification can bypass.
+
+        Use this tool to check the current lock boundary before posting backdated entries; do not use setAccountingHardLockDate, which moves the lock, unless a change is intended.
+
+        Preconditions: none; the lock may be unset.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        Emits an ACCOUNTING_PERIOD_HARD_LOCK_VIEW audit event; no state changes.
+
+        Returns 200 with hardLockDate null when no hard lock has been configured yet.
+
+        '
       operationId: getAccountingHardLockDate
       responses:
         '200':
@@ -239,14 +316,33 @@ paths:
     put:
       tags:
       - Accounting Periods
-      summary: Set the accounting hard-lock date
-      description: 'Sets the org-level hard-lock date: from then on, journal entries dated strictly before this date are permanently rejected (422 PERIOD_HARD_LOCKED) with NO override path — not even accounting:period:override can bypass it (that permission only covers CLOSED periods, error PERIOD_CLOSED). Use this tool after statutory filings or audits to make history immutable; use closeAccountingPeriod for the reversible month-end close instead. The date is monotonic-forward-only: it must be on or after the currently stored hard-lock date, and moving it backward is rejected with 422 HARD_LOCK_DATE_REGRESSION — effectively irreversible, so set it deliberately. Required inputs: hardLockDate (ISO date) and a non-blank justification (max 500 characters), recorded in the audit trail with the acting user. Emits ACCOUNTING_PERIOD_HARD_LOCK_SET and returns the stored hard-lock date. Returns 400 if the date is missing or the justification is missing or blank.'
+      summary: Set Accounting Hard-Lock Date
+      description: 'Sets the org-level hard-lock date; from then on, journal entries dated strictly before this date are permanently rejected with PERIOD_HARD_LOCKED and no override path, not even accounting:period:override, which only covers CLOSED periods.
+
+        Use this tool after statutory filings or audits to make history immutable; use closeAccountingPeriod for the reversible month-end close instead.
+
+        Preconditions: the new date must be on or after the currently stored hard-lock date; the lock is monotonic-forward-only and effectively irreversible, so set it deliberately.
+
+        Required inputs: hardLockDate (ISO date) and a non-blank justification (max 500 characters), recorded in the audit trail with the acting user.
+
+        Emits an ACCOUNTING_PERIOD_HARD_LOCK_SET event and returns the stored hard-lock date.
+
+        Returns 422 HARD_LOCK_DATE_REGRESSION when the date would move backward, and 400 when the date or justification is missing or blank.
+
+        '
       operationId: setAccountingHardLockDate
       requestBody:
+        description: New hard-lock date with the audit justification for moving it forward.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/HardLockDateUpdateRequest'
+            examples:
+              Lock after audit:
+                description: Lock after audit
+                value:
+                  hardLockDate: 2026-01-01
+                  justification: FY2025 audit finalized; history locked
         required: true
       responses:
         '200':
@@ -282,8 +378,20 @@ paths:
     get:
       tags:
       - Mapping Keys
-      summary: Get mapping key
-      description: Retrieve a mapping key by identifier.
+      summary: Get Mapping Key
+      description: 'Returns one mapping key with its posting category, name, description and active flag.
+
+        Use this tool when the mapping key id is already known; use listMappingKeysByCategory instead when browsing the keys of a category.
+
+        Preconditions: the mapping key and its parent posting category must exist.
+
+        Required inputs: mappingKeyId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no mapping key exists for the supplied id.
+
+        '
       operationId: getMappingKey
       parameters:
       - name: mappingKeyId
@@ -314,8 +422,20 @@ paths:
     put:
       tags:
       - Mapping Keys
-      summary: Update mapping key
-      description: Update an existing mapping key.
+      summary: Update Mapping Key
+      description: 'Renames a mapping key or changes its description; the key stays in its posting category.
+
+        Use this tool to correct a key''s name or description; do not use deactivateMappingKey, which retires the key from future mapping use.
+
+        Preconditions: the mapping key must exist, and a changed name must not collide with another key in the same category.
+
+        Required inputs: mappingKeyId (UUID) as a path parameter, keyName (max 100 chars) and modifiedBy (max 50 chars); description is optional.
+
+        Emits an ACCOUNTING_MAPPING_KEY_UPDATE event.
+
+        Returns 404 when the mapping key does not exist, and 400 when the new name already exists in the category.
+
+        '
       operationId: updateMappingKey
       parameters:
       - name: mappingKeyId
@@ -326,10 +446,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Replacement name and description for the mapping key.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/MappingKeyUpdateRequest'
+            examples:
+              Rename key:
+                description: Rename key
+                value:
+                  keyName: TENDER_CASH_DRAWER
+                  description: Cash drawer tender postings
+                  modifiedBy: jdoe
         required: true
       responses:
         '200':
@@ -359,8 +487,20 @@ paths:
     get:
       tags:
       - Journal Entries
-      summary: Get journal entry
-      description: Retrieve a journal entry by identifier.
+      summary: Get Journal Entry
+      description: 'Returns one journal entry with its lines, status (DRAFT, POSTED or REVERSED), entry type and posting metadata.
+
+        Use this tool when the journal entry id is already known; use listJournalEntries instead when searching by entry number or browsing.
+
+        Preconditions: the journal entry must exist.
+
+        Required inputs: journalEntryId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 400 with code VALIDATION_ERROR when no journal entry exists for the supplied id (this module maps entry not-found to 400, not 404).
+
+        '
       operationId: getJournalEntry
       parameters:
       - name: journalEntryId
@@ -391,8 +531,20 @@ paths:
     put:
       tags:
       - Journal Entries
-      summary: Update journal entry
-      description: Update an existing journal entry.
+      summary: Update Journal Entry
+      description: 'Replaces the description and lines of a journal entry that is still in DRAFT status; posted entries are immutable.
+
+        Use this tool to correct a draft before posting; do not use it on a POSTED entry, which only reverseJournalEntry can back out.
+
+        Preconditions: the entry must exist in DRAFT status, and the replacement lines must remain balanced.
+
+        Required inputs: journalEntryId (UUID) as a path parameter plus the full replacement body (same shape as createJournalEntry); supplied lines replace the existing line set wholesale.
+
+        Emits an ACCOUNTING_JOURNAL_ENTRY_UPDATE event; GL balances are unchanged because drafts are not yet in the ledger.
+
+        Returns 409 when the entry is no longer DRAFT, and 400 when the updated entry is unbalanced or the entry id does not exist.
+
+        '
       operationId: updateJournalEntry
       parameters:
       - name: journalEntryId
@@ -403,10 +555,22 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Replacement description and balanced line set for the draft entry.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/JournalEntryCreateRequest'
+            examples:
+              Corrected draft:
+                description: Corrected draft
+                value:
+                  transactionDate: 2026-08-13 00:00:00
+                  description: Corrected cash sale amount
+                  lines:
+                  - glAccountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                    debitAmount: 130.0
+                  - glAccountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                    creditAmount: 130.0
         required: true
       responses:
         '200':
@@ -430,8 +594,20 @@ paths:
     get:
       tags:
       - GL Accounts
-      summary: Get GL account
-      description: Retrieve a GL account by identifier.
+      summary: Get GL Account
+      description: 'Returns one GL account with its code, name, type, subtype, reconcilable flag and derived lifecycle status.
+
+        Use this tool when the GL account id is already known; use listGLAccounts instead when searching by code, name or status.
+
+        Preconditions: the GL account must exist.
+
+        Required inputs: glAccountId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no GL account exists for the supplied id.
+
+        '
       operationId: getGLAccount
       parameters:
       - name: glAccountId
@@ -462,8 +638,20 @@ paths:
     put:
       tags:
       - GL Accounts
-      summary: Update GL account
-      description: Update details for an existing GL account.
+      summary: Update GL Account
+      description: 'Updates the mutable descriptive fields of an existing GL account: name, description, subtype and the reconcilable flag.
+
+        Use this tool when correcting or enriching an account''s metadata; do not use createGLAccount, which adds a new account, and note that accountCode and accountType are immutable and cannot be changed by any operation.
+
+        Preconditions: the GL account must exist.
+
+        Required inputs: glAccountId (UUID) as a path parameter; all body fields are optional and only supplied fields are changed (accountName max 100 chars, description max 500).
+
+        Emits an ACCOUNTING_GL_ACCOUNT_UPDATE event; posted journal entries referencing the account are unaffected.
+
+        Returns 404 when no GL account exists for the supplied id.
+
+        '
       operationId: updateGLAccount
       parameters:
       - name: glAccountId
@@ -474,10 +662,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Mutable GL account fields to change; omitted fields keep their current values.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/GLAccountUpdateRequest'
+            examples:
+              Rename and mark reconcilable:
+                description: Rename and mark reconcilable
+                value:
+                  accountName: Operating Cash
+                  description: Primary operating bank account
+                  accountSubtype: BANK_CASH
+                  reconcilable: true
         required: true
       responses:
         '200':
@@ -501,8 +698,20 @@ paths:
     get:
       tags:
       - Default GL Mappings
-      summary: Get default GL mapping
-      description: Retrieve a default GL mapping by identifier
+      summary: Get Default GL Mapping
+      description: 'Returns one default GL mapping with its event type, debit and credit accounts, scope and active flag.
+
+        Use this tool when the mapping id is already known; use searchDefaultMappings or listDefaultMappings instead when hunting by event type or organization.
+
+        Preconditions: the default mapping must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 400 when no default mapping exists for the supplied id (mapped as VALIDATION_ERROR, not 404).
+
+        '
       operationId: getDefaultMapping
       parameters:
       - name: id
@@ -539,8 +748,20 @@ paths:
     put:
       tags:
       - Default GL Mappings
-      summary: Update default GL mapping
-      description: Update an existing default GL account mapping
+      summary: Update Default GL Mapping
+      description: 'Updates an existing default GL mapping''s event type, accounts, scope, description or active flag.
+
+        Use this tool to repoint or rescope an existing fallback; do not use createDefaultMapping, which adds a new one, or deactivateDefaultMapping, which soft deletes.
+
+        Preconditions: the default mapping must exist.
+
+        Required inputs: id (UUID) as a path parameter plus the full replacement body with eventType, debitAccountId and creditAccountId; organizationId null means global scope.
+
+        Emits an ACCOUNTING_DEFAULT_MAPPING_UPDATE event; future postings resolve against the updated pair while already-posted entries are untouched.
+
+        Returns 400 when no default mapping exists for the supplied id (mapped as VALIDATION_ERROR, not 404).
+
+        '
       operationId: updateDefaultMapping
       parameters:
       - name: id
@@ -551,10 +772,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Replacement fallback mapping definition for the event type.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/DefaultGLMappingRequest'
+            examples:
+              Repoint credit account:
+                description: Repoint credit account
+                value:
+                  eventType: CASH_SALE
+                  debitAccountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  creditAccountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
+                  active: true
         required: true
       responses:
         '200':
@@ -583,8 +813,20 @@ paths:
     delete:
       tags:
       - Default GL Mappings
-      summary: Deactivate default GL mapping
-      description: Soft delete (deactivate) a default GL mapping
+      summary: Deactivate Default GL Mapping
+      description: 'Soft deletes a default GL mapping by marking it inactive; the row is retained for history and stops participating in fallback resolution.
+
+        Use this tool to retire a fallback pair; do not use updateDefaultMapping with active=false only when other fields must change at the same time, and note there is no reactivation endpoint other than updateDefaultMapping.
+
+        Preconditions: the default mapping must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_DEFAULT_MAPPING_DELETE event.
+
+        Returns 400 when no default mapping exists for the supplied id (mapped as VALIDATION_ERROR, not 404), and 204 with no body on success.
+
+        '
       operationId: deactivateDefaultMapping
       parameters:
       - name: id
@@ -610,14 +852,42 @@ paths:
     post:
       tags:
       - Vendor Bill API
-      summary: Create vendor bill from goods received event
-      description: Creates a vendor bill from an inbound goods-received event payload
-      operationId: createBillFromGoodsReceivedEvent
+      summary: Create Vendor Bill From Goods Received
+      description: 'Creates a vendor bill in PENDING_RECEIPT_MATCH status from a goods-received event, totaling the received line items and syncing the vendor into the AP vendor directory.
+
+        Use this tool when goods arrive against a purchase order; do not use matchVendorInvoice, which is the later step that matches the vendor''s invoice against this pending bill.
+
+        Preconditions: none; a duplicate eventId is ignored and the existing bill is returned instead of creating a second one.
+
+        Required inputs: eventId, organizationId, purchaseOrderId and vendorId (UUIDs), receivedDate, and lineItems each with productId, description, quantity and unitPrice; vendorName and dimensions are optional.
+
+        Emits an ACCOUNTING_VENDOR_BILL_CREATE event; a vendor-directory sync failure is logged and never fails bill creation.
+
+        Returns 201 with the created (or already-existing) bill, and 400 when the payload fails validation.
+
+        '
+      operationId: createVendorBillFromGoodsReceived
       requestBody:
+        description: Goods-received event payload that seeds a pending vendor bill.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/GoodsReceivedEvent'
+            examples:
+              Goods received:
+                description: Goods received
+                value:
+                  eventId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  organizationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  purchaseOrderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
+                  vendorId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e
+                  vendorName: Acme Parts Co
+                  receivedDate: 2026-08-13 09:30:00
+                  lineItems:
+                  - productId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5f
+                    description: Brake pads
+                    quantity: 10
+                    unitPrice: 24.99
         required: true
       responses:
         '201':
@@ -641,9 +911,21 @@ paths:
     post:
       tags:
       - Vendor Bill API
-      summary: Resolve bill match exception
-      description: Resolves a matching exception with action ACCEPT, VOID, or CORRECT
-      operationId: resolveMatchException
+      summary: Resolve Vendor Bill Match Exception
+      description: 'Resolves a vendor bill parked in MATCH_EXCEPTION with an operator decision: ACCEPT approves the bill despite the discrepancy, VOID rejects it, and CORRECT sends it back for correction.
+
+        Use this tool for quantity, price or medium-confidence exceptions on one identified bill; do not use selectVendorBillMatchCandidate, which resolves an ambiguous match by picking among several candidate bills.
+
+        Preconditions: the bill must exist and be in MATCH_EXCEPTION status.
+
+        Required inputs: billId (UUID) as a path parameter, resolutionAction (ACCEPT, VOID or CORRECT), reason and operatorId, all recorded for audit.
+
+        Emits an ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE event.
+
+        Returns 400 when the bill is not found, is not in MATCH_EXCEPTION status, or the action is not one of ACCEPT, VOID or CORRECT.
+
+        '
+      operationId: resolveVendorBillMatchException
       parameters:
       - name: billId
         in: path
@@ -654,10 +936,18 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       requestBody:
+        description: Operator decision (ACCEPT, VOID or CORRECT) with the audit reason.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ExceptionResolutionRequest'
+            examples:
+              Accept variance:
+                description: Accept variance
+                value:
+                  resolutionAction: ACCEPT
+                  reason: Invoice variance approved by manager
+                  operatorId: manager-001
         required: true
       responses:
         '200':
@@ -681,14 +971,42 @@ paths:
     post:
       tags:
       - Vendor Bill API
-      summary: Match vendor invoice
-      description: Performs matching for a received vendor invoice and creates/updates bill state
+      summary: Match Vendor Invoice
+      description: 'Runs the three-way match of a received vendor invoice against pending goods-received bills: a HIGH_CONFIDENCE match with consistent quantities and prices auto-approves the bill, while a discrepancy, a MEDIUM confidence score or an AMBIGUOUS match parks it in MATCH_EXCEPTION.
+
+        Use this tool when a vendor invoice arrives; do not use createVendorBillFromGoodsReceived, which records the receipt, and use resolveVendorBillMatchException or selectVendorBillMatchCandidate to clear exceptions.
+
+        Preconditions: a bill in PENDING_RECEIPT_MATCH must exist for the vendor; an ambiguous outcome persists scored candidates for later operator selection.
+
+        Required inputs: eventId, organizationId and vendorId (UUIDs), invoiceReference, invoiceDate and lineItems; dueDate is optional.
+
+        Emits an ACCOUNTING_VENDOR_BILL_MATCH event; the returned bill''s status conveys the outcome (APPROVED or MATCH_EXCEPTION), so callers must inspect it rather than assume approval.
+
+        Returns 400 when no pending receipt matches the invoice or the payload fails validation.
+
+        '
       operationId: matchVendorInvoice
       requestBody:
+        description: Vendor invoice payload to three-way match against pending receipt bills.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/VendorInvoiceReceivedEvent'
+            examples:
+              Vendor invoice received:
+                description: Vendor invoice received
+                value:
+                  eventId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60
+                  organizationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  vendorId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e
+                  invoiceReference: INV-88421
+                  invoiceDate: 2026-08-12 00:00:00
+                  dueDate: 2026-09-11 00:00:00
+                  lineItems:
+                  - productId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5f
+                    description: Brake pads
+                    quantity: 10
+                    unitPrice: 24.99
         required: true
       responses:
         '201':
@@ -712,9 +1030,21 @@ paths:
     post:
       tags:
       - Vendor Bill API
-      summary: Select match candidate
-      description: Selects a candidate and approves corresponding vendor bill flow
-      operationId: selectMatchCandidate
+      summary: Select Vendor Bill Match Candidate
+      description: 'Selects one candidate from an ambiguous invoice match, approving the corresponding vendor bill and marking the candidate set resolved.
+
+        Use this tool after reviewing listVendorBillMatchCandidates; do not use resolveVendorBillMatchException, which handles discrepancy exceptions on a single bill.
+
+        Preconditions: the candidate must exist and must not already be resolved.
+
+        Required inputs: candidateId (UUID) as a path parameter and operatorId in the body, recorded as the approver.
+
+        Emits an ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATE_SELECT event.
+
+        Returns 400 when the candidate is missing or already resolved (mapped as VALIDATION_ERROR, not 404).
+
+        '
+      operationId: selectVendorBillMatchCandidate
       parameters:
       - name: candidateId
         in: path
@@ -725,10 +1055,16 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440030
       requestBody:
+        description: Operator making the candidate selection, recorded as the approver.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CandidateSelectionRequest'
+            examples:
+              Select candidate:
+                description: Select candidate
+                value:
+                  operatorId: advisor-001
         required: true
       responses:
         '200':
@@ -752,8 +1088,20 @@ paths:
     post:
       tags:
       - Settlement Reconciliation
-      summary: Write off a small unmatched settlement line
-      description: 'Writes off an UNMATCHED settlement line whose gross is at or below the configured reconciliation write-off threshold (default $25.00, decision D-14), posting a reversible adjustment entry (Dr Settlement Suspense / Cr Settlement Adjustment) — never a silent status flip. Use this tool only for genuinely unidentifiable small residuals; above the threshold there is no self-service write-off — manually match or escalate. Preconditions: the line must exist and be UNMATCHED, its gross must not exceed the threshold (compared on absolute value), and a non-blank reason (max 500 chars) is required and audited. Respects accounting period locks (Story B2). Emits ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF. Returns 422 when the absolute gross exceeds the threshold (WRITE_OFF_THRESHOLD_EXCEEDED) or the adjustment entry is dated into a locked accounting period (PERIOD_CLOSED / PERIOD_HARD_LOCKED), and 409 when the line is no longer UNMATCHED (SETTLEMENT_LINE_NOT_UNMATCHED) or the settlement has not yet posted (SETTLEMENT_NOT_POSTED).'
+      summary: Write Off Small Settlement Line
+      description: 'Writes off an UNMATCHED settlement line whose gross is at or below the configured write-off threshold (default 25.00), posting a reversible adjustment entry (debit Settlement Suspense, credit Settlement Adjustment) rather than a silent status flip.
+
+        Use this tool only for genuinely unidentifiable small residuals; do not use it above the threshold, where matchSettlementLine or escalation is the only path.
+
+        Preconditions: the line must exist and be UNMATCHED, its parent settlement must be POSTED, and the line''s absolute gross must not exceed the threshold.
+
+        Required inputs: lineId (UUID) as a path parameter and a non-blank audited reason (max 500 chars).
+
+        Emits an ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF event and posts the adjustment entry through the accounting-period gate.
+
+        Returns 422 WRITE_OFF_THRESHOLD_EXCEEDED when the absolute gross exceeds the threshold or PERIOD_CLOSED / PERIOD_HARD_LOCKED for locked periods, 409 SETTLEMENT_LINE_NOT_UNMATCHED or SETTLEMENT_NOT_POSTED for state conflicts, and 404 SETTLEMENT_LINE_NOT_FOUND when the line is missing.
+
+        '
       operationId: writeOffSettlementLine
       parameters:
       - name: lineId
@@ -764,10 +1112,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Audited reason for writing off the small unmatched residual.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SettlementWriteOffRequest'
+            examples:
+              Write off rounding residual:
+                description: Write off rounding residual
+                value:
+                  reason: Processor rounding residual, no matching payment
         required: true
       responses:
         '200':
@@ -815,8 +1169,20 @@ paths:
     post:
       tags:
       - Settlement Reconciliation
-      summary: Manually match a settlement line
-      description: 'Manually matches an UNMATCHED settlement line to an AR receivable payment, posting a reclass entry (Dr Settlement Suspense / Cr Undeposited Funds) that clears the line''s gross out of suspense. Use this tool when the automatic gross match could not identify the payment. AP (vendor) matching is not supported in v1. Preconditions: the line must exist and be UNMATCHED, its parent settlement must already be POSTED, and the receivable payment must exist. Returns 404 if the line or payment is not found (SETTLEMENT_LINE_NOT_FOUND / RECEIVABLE_PAYMENT_NOT_FOUND), 409 if the line is no longer UNMATCHED (SETTLEMENT_LINE_NOT_UNMATCHED) or the settlement has not yet posted (SETTLEMENT_NOT_POSTED), and 422 if the reclass entry is dated into a locked accounting period (PERIOD_CLOSED / PERIOD_HARD_LOCKED). Emits ACCOUNTING_SETTLEMENT_LINE_MATCH.'
+      summary: Manually Match Settlement Line
+      description: 'Manually matches an UNMATCHED settlement line to an AR receivable payment, posting a reclass entry (debit Settlement Suspense, credit Undeposited Funds) that clears the line''s gross out of suspense.
+
+        Use this tool when the automatic gross match could not identify the payment; do not use writeOffSettlementLine, which is only for small unidentifiable residuals, and note that AP vendor matching is not supported in v1.
+
+        Preconditions: the line must exist and be UNMATCHED, its parent settlement must already be POSTED, and the receivable payment must exist.
+
+        Required inputs: lineId (UUID) as a path parameter and receivablePaymentId (UUID) in the body.
+
+        Emits an ACCOUNTING_SETTLEMENT_LINE_MATCH event and posts the reclass journal entry.
+
+        Returns 404 SETTLEMENT_LINE_NOT_FOUND or RECEIVABLE_PAYMENT_NOT_FOUND when either record is missing, 409 SETTLEMENT_LINE_NOT_UNMATCHED or SETTLEMENT_NOT_POSTED for state conflicts, and 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED when the reclass entry is dated into a locked period.
+
+        '
       operationId: matchSettlementLine
       parameters:
       - name: lineId
@@ -827,10 +1193,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Receivable payment to match the unmatched settlement line against.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SettlementManualMatchRequest'
+            examples:
+              Match to payment:
+                description: Match to payment
+                value:
+                  receivablePaymentId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
         required: true
       responses:
         '200':
@@ -879,9 +1251,21 @@ paths:
       tags:
       - Financial Reporting
       - Financial Reporting for Tax Liability
-      summary: List Sales-Tax Liability snapshots
-      description: List snapshot summaries (no rows), newest freeze first, optionally filtered by period code.
-      operationId: listSnapshots
+      summary: List Sales-Tax Liability Snapshots
+      description: 'Lists Sales-Tax Liability snapshot summaries without their row detail, newest freeze first, optionally filtered by period code.
+
+        Use this tool to find which periods are frozen and which snapshot is ACTIVE; use getTaxLiabilitySnapshot instead for a snapshot''s full frozen content.
+
+        Preconditions: none.
+
+        Required inputs: none; periodCode (YYYY-MM) is an optional filter.
+
+        Emits a TAX_LIABILITY_SNAPSHOT_LIST audit event; no state changes.
+
+        Returns 200 with an empty list when no snapshots exist.
+
+        '
+      operationId: listTaxLiabilitySnapshots
       parameters:
       - name: periodCode
         in: query
@@ -921,9 +1305,21 @@ paths:
       tags:
       - Financial Reporting
       - Financial Reporting for Tax Liability
-      summary: Freeze the Sales-Tax Liability report for a closed period
-      description: Generate the Sales-Tax Liability report over the accounting period's exact date range and persist it as an immutable snapshot with a canonical SHA-256 content hash. The period must be CLOSED. If an ACTIVE snapshot already exists for the period the request fails with 409 unless supersede=true, which demotes the prior snapshot to SUPERSEDED (reopen → adjust → re-close flow) and preserves history.
-      operationId: freezeSnapshot
+      summary: Freeze Sales-Tax Liability Snapshot
+      description: 'Generates the Sales-Tax Liability report over a closed accounting period''s exact date range and persists it as an immutable snapshot with a canonical SHA-256 content hash; snapshots are provider-neutral and carry no filing-provider identifiers.
+
+        Use this tool at period close to fix filing figures; do not use generateTaxLiabilityReport, which computes the live report without freezing anything.
+
+        Preconditions: the accounting period must exist and be CLOSED, and no ACTIVE snapshot may exist for the period unless supersede is set.
+
+        Required inputs: periodCode (YYYY-MM) as a query parameter; supersede defaults to false and, when true, demotes the prior ACTIVE snapshot to SUPERSEDED while preserving history.
+
+        Emits a TAX_LIABILITY_SNAPSHOT_FREEZE event.
+
+        Returns 404 when the period does not exist, 409 when the period is not CLOSED or an ACTIVE snapshot exists without supersede, and 400 when the period code is malformed.
+
+        '
+      operationId: freezeTaxLiabilitySnapshot
       parameters:
       - name: periodCode
         in: query
@@ -987,9 +1383,21 @@ paths:
       tags:
       - Financial Reporting
       - Financial Reporting for Tax Liability
-      summary: Verify a snapshot against live data
-      description: 'Re-derive the Sales-Tax Liability report for the snapshot''s period from the live replicas and compare canonical hashes. Read-only: the snapshot is never mutated. Inconsistency means underlying data moved after the freeze (e.g. postings into a reopened period); re-freeze with supersede=true once the period is closed again.'
-      operationId: verifySnapshot
+      summary: Verify Sales-Tax Liability Snapshot
+      description: 'Re-derives the Sales-Tax Liability report for a snapshot''s period from the live replicas and compares canonical hashes, reporting consistent=true when they match.
+
+        Use this tool to detect drift after a freeze; do not use freezeTaxLiabilitySnapshot to check consistency, since freezing creates state.
+
+        Preconditions: the snapshot must exist; inconsistency means underlying data moved after the freeze, for example postings into a reopened period, and the remedy is re-freezing with supersede=true once the period is closed again.
+
+        Required inputs: snapshotId (UUID) as a path parameter; there is no request body.
+
+        Emits a TAX_LIABILITY_SNAPSHOT_VERIFY audit event; the snapshot itself is never mutated.
+
+        Returns 404 TAX_SNAPSHOT_NOT_FOUND when no snapshot exists for the supplied id.
+
+        '
+      operationId: verifyTaxLiabilitySnapshot
       parameters:
       - name: snapshotId
         in: path
@@ -1032,9 +1440,21 @@ paths:
     get:
       tags:
       - Financial Reporting
-      summary: List export history
-      description: List all async report export jobs, paginated and sorted by most-recent first.
-      operationId: getExportHistory
+      summary: List Report Export History
+      description: 'Lists all asynchronous report export jobs as a paginated projection, most recent first.
+
+        Use this tool to review past exports and their statuses; do not use getReportExportStatus, which polls a single job by id.
+
+        Preconditions: none beyond the caller holding accounting:report:export.
+
+        Required inputs: none; the page defaults to 20 items and only requestedAt is a supported sort property.
+
+        Emits an ACCOUNTING_REPORT_EXPORT_LIST audit event; no state changes.
+
+        Returns 400 when an unsupported sort property is requested.
+
+        '
+      operationId: listReportExports
       parameters:
       - name: pageable
         in: query
@@ -1068,14 +1488,35 @@ paths:
     post:
       tags:
       - Financial Reporting
-      summary: Request async report export
-      description: Submit an asynchronous report export job. Returns immediately with PENDING status.
-      operationId: requestExport
+      summary: Request Async Report Export
+      description: 'Submits an asynchronous export job that renders a financial report to a downloadable artifact, returning immediately with status PENDING.
+
+        Use this tool to produce a file for one of the reporting endpoints'' outputs; do not use the synchronous generate operations such as generateIncomeStatement when a file artifact is what is needed, and poll getReportExportStatus for completion.
+
+        Preconditions: none; as-of report types use the request''s endDate as the as-of date.
+
+        Required inputs: format (PDF, CSV, XLSX or JSON), reportType (TAX_LIABILITY, INCOME_STATEMENT, BALANCE_SHEET, TRIAL_BALANCE, GENERAL_LEDGER, AGED_RECEIVABLES or AGED_PAYABLES), startDate and endDate (endDate on or after startDate); accountId and filename are optional.
+
+        Emits an ACCOUNTING_REPORT_EXPORT_REQUEST event and records the requesting operator.
+
+        Returns 400 when the payload is invalid or the end date precedes the start date.
+
+        '
+      operationId: requestReportExport
       requestBody:
+        description: Report type, format and date range to render asynchronously.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ReportExportRequest'
+            examples:
+              Trial balance CSV:
+                description: Trial balance CSV
+                value:
+                  format: CSV
+                  reportType: TRIAL_BALANCE
+                  startDate: 2026-07-01
+                  endDate: 2026-07-31
         required: true
       responses:
         '201':
@@ -1111,8 +1552,20 @@ paths:
     post:
       tags:
       - Bank Reconciliation
-      summary: Reverse a match
-      description: Reverses a match by matchId or by statement line ids, returning the affected statement lines to UNMATCHED and releasing the linked GL lines. Returns 404 RECONCILIATION_NOT_FOUND if the reconciliation or match group is missing, and 409 RECONCILIATION_ALREADY_FINALIZED if the reconciliation is finalized.
+      summary: Reverse A Reconciliation Match
+      description: 'Reverses a previously recorded match, returning the affected statement lines to UNMATCHED and releasing the linked GL lines for re-matching.
+
+        Use this tool to correct a wrong pairing while the reconciliation is still IN_PROGRESS; do not use matchReconciliation, which records new matches.
+
+        Preconditions: the reconciliation must not be FINALIZED, and either the matchId or the statementLineIds must resolve to exactly one match group.
+
+        Required inputs: reconciliationId (UUID) as a path parameter plus matchId or statementLineIds in the body (one of the two is required).
+
+        Emits an ACCOUNTING_RECONCILIATION_UNMATCH event.
+
+        Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation or match group is missing, 409 RECONCILIATION_ALREADY_FINALIZED when finalized, and 400 when neither identifier resolves to a single match group.
+
+        '
       operationId: unmatchReconciliation
       parameters:
       - name: reconciliationId
@@ -1123,10 +1576,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Match group to reverse, identified by matchId or by its statement line ids.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ReconciliationUnmatchRequest'
+            examples:
+              Unmatch by match id:
+                description: Unmatch by match id
+                value:
+                  matchId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
         required: true
       responses:
         '200':
@@ -1168,8 +1627,20 @@ paths:
     post:
       tags:
       - Bank Reconciliation
-      summary: Match statement lines to GL lines
-      description: Matches a set of statement lines to a set of posted GL journal-entry lines on the reconciled account (1-to-1 or N-to-1). The two sets must net to equal signed amounts within ±0.01. Marks the statement lines MATCHED and records the linkage. Returns 404 RECONCILIATION_NOT_FOUND if the reconciliation or a line is missing, 409 RECONCILIATION_ALREADY_FINALIZED if the reconciliation is finalized, and 422 MATCH_AMOUNT_MISMATCH if the sets do not net.
+      summary: Match Statement Lines To GL Lines
+      description: 'Matches a set of statement lines to a set of posted GL journal-entry lines on the reconciled account (1-to-1 or N-to-1), marking the statement lines MATCHED and recording the linkage.
+
+        Use this tool to pair bank activity with ledger activity; do not use unmatchReconciliation, which reverses a match, and use addReconciliationAdjustment for bank-only items like fees that have no GL counterpart yet.
+
+        Preconditions: the reconciliation must be IN_PROGRESS, every statement line must be UNMATCHED, every GL line must be POSTED and not already reconciled, and the two sets must net to equal signed amounts within 0.01.
+
+        Required inputs: reconciliationId (UUID) as a path parameter plus non-empty statementLineIds and glLineIds lists.
+
+        Emits an ACCOUNTING_RECONCILIATION_MATCH event; no journal entries are created by matching.
+
+        Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation or a line is missing, 409 RECONCILIATION_ALREADY_FINALIZED or RECONCILIATION_LINE_INELIGIBLE for state conflicts, and 422 MATCH_AMOUNT_MISMATCH when the sets do not net.
+
+        '
       operationId: matchReconciliation
       parameters:
       - name: reconciliationId
@@ -1180,10 +1651,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Statement-line and GL-line id sets to link; the sets must net to equal amounts.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ReconciliationMatchRequest'
+            examples:
+              One-to-one match:
+                description: One-to-one match
+                value:
+                  statementLineIds:
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  glLineIds:
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
         required: true
       responses:
         '200':
@@ -1231,8 +1711,20 @@ paths:
     post:
       tags:
       - Bank Reconciliation
-      summary: Finalize a reconciliation
-      description: 'Finalizes a reconciliation (IN_PROGRESS to FINALIZED) only when it balances: the statement ending balance must equal the GL ending balance plus the sum of adjustments, within ±0.01 (matched GL lines are already reflected in the GL ending balance). Returns 404 RECONCILIATION_NOT_FOUND if missing, 409 RECONCILIATION_ALREADY_FINALIZED if already finalized, and 422 RECONCILIATION_NOT_BALANCED (with the outstanding difference) if it does not balance.'
+      summary: Finalize Reconciliation
+      description: 'Finalizes a reconciliation (IN_PROGRESS to FINALIZED), locking it against further matching, unmatching or adjustments.
+
+        Use this tool once all lines are matched or adjusted; do not use it while a difference remains, which addReconciliationAdjustment or further matching must clear first.
+
+        Preconditions: the statement ending balance must equal the GL ending balance plus the sum of adjustments within 0.01, matched GL lines being already reflected in the GL ending balance.
+
+        Required inputs: reconciliationId (UUID) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_RECONCILIATION_FINALIZE event; FINALIZED is terminal for the reconciliation.
+
+        Returns 404 RECONCILIATION_NOT_FOUND when missing, 409 RECONCILIATION_ALREADY_FINALIZED when already finalized, and 422 RECONCILIATION_NOT_BALANCED carrying the outstanding difference as a field error when it does not balance.
+
+        '
       operationId: finalizeReconciliation
       parameters:
       - name: reconciliationId
@@ -1282,8 +1774,20 @@ paths:
     post:
       tags:
       - Bank Reconciliation
-      summary: Record a reconciliation adjustment
-      description: Records a signed adjustment and posts a real balanced journal entry (Dr/Cr the reconciled cash account against the type's mapped counter account) through the accounting-period gate. Returns 404 RECONCILIATION_NOT_FOUND if the reconciliation is missing, 409 RECONCILIATION_ALREADY_FINALIZED if it is finalized, and 422 PERIOD_CLOSED / PERIOD_HARD_LOCKED if the adjustment JE is dated into a locked accounting period.
+      summary: Record Reconciliation Adjustment
+      description: 'Records a signed reconciliation adjustment and posts a real balanced journal entry, debiting or crediting the reconciled cash account against the type''s mapped counter account, through the accounting-period gate.
+
+        Use this tool for bank-only items such as fees or interest that have no GL counterpart; do not use matchReconciliation, which links existing posted GL lines.
+
+        Preconditions: the reconciliation must be IN_PROGRESS, and the amount sign must be permitted for the type (BANK_FEE and NSF_FEE negative, INTEREST_EARNED positive, OTHER any).
+
+        Required inputs: reconciliationId (UUID) as a path parameter, type (BANK_FEE, NSF_FEE, INTEREST_EARNED or OTHER) and a non-zero signed amount; description (max 500 chars) is optional.
+
+        Emits an ACCOUNTING_RECONCILIATION_ADJUSTMENT event and posts a journal entry that changes GL balances.
+
+        Returns 404 RECONCILIATION_NOT_FOUND when the reconciliation is missing, 409 RECONCILIATION_ALREADY_FINALIZED when finalized, and 422 PERIOD_CLOSED, PERIOD_HARD_LOCKED or RECONCILIATION_ADJUSTMENT_SIGN_INVALID for period-gate or sign failures.
+
+        '
       operationId: addReconciliationAdjustment
       parameters:
       - name: reconciliationId
@@ -1294,10 +1798,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Typed, signed adjustment that will post a balanced journal entry.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ReconciliationAdjustmentRequest'
+            examples:
+              Bank fee:
+                description: Bank fee
+                value:
+                  type: BANK_FEE
+                  amount: -15.0
+                  description: Monthly account service fee
         required: true
       responses:
         '200':
@@ -1345,14 +1857,42 @@ paths:
     post:
       tags:
       - Bank Reconciliation
-      summary: Import a bank statement CSV and start a reconciliation
-      description: 'Parses a bank statement CSV (columns: date, description, amount [signed], reference) for a reconcilable GL cash account and creates an IN_PROGRESS reconciliation with its imported statement lines (UNMATCHED). The GL ending balance is snapshotted from posted journal-entry lines on the account as-of the statement date. Returns 422 ACCOUNT_NOT_RECONCILABLE if the account''s reconcilable flag (story H1) is false, and 400 if the CSV is malformed.'
+      summary: Import Bank Statement CSV
+      description: 'Parses a bank statement CSV (columns: date, description, signed amount, reference) for a reconcilable GL cash account and creates an IN_PROGRESS reconciliation whose statement lines start UNMATCHED, snapshotting the GL ending balance from posted journal-entry lines as of the statement date.
+
+        Use this tool to start a reconciliation cycle; do not use matchReconciliation, addReconciliationAdjustment or finalizeReconciliation, which operate on a reconciliation that already exists.
+
+        Preconditions: the GL account must exist with its reconcilable flag set to true.
+
+        Required inputs: glAccountId (UUID), periodStartDate, periodEndDate, statementDate, statementEndingBalance, currency (3-letter ISO code) and the csv text itself.
+
+        Emits an ACCOUNTING_RECONCILIATION_IMPORT event.
+
+        Returns 422 ACCOUNT_NOT_RECONCILABLE when the account''s reconcilable flag is false, and 400 when the CSV is malformed.
+
+        '
       operationId: importReconciliation
       requestBody:
+        description: Statement metadata plus the raw CSV text to import for the cash account.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BankReconciliationImportRequest'
+            examples:
+              July statement import:
+                description: July statement import
+                value:
+                  glAccountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  periodStartDate: 2026-07-01
+                  periodEndDate: 2026-07-31
+                  statementDate: 2026-07-31
+                  statementEndingBalance: 10250.75
+                  currency: USD
+                  csv: 'date,description,amount,reference
+
+                    2026-07-02,Deposit,500.00,DEP-1
+
+                    2026-07-05,Bank fee,-15.00,FEE-1'
         required: true
       responses:
         '200':
@@ -1388,8 +1928,20 @@ paths:
     get:
       tags:
       - Posting Rules
-      summary: List posting rule sets
-      description: Retrieve paginated posting rule sets.
+      summary: List Posting Rule Sets
+      description: 'Lists posting rule sets, the event-to-journal-entry conversion definitions, as a paginated projection.
+
+        Use this tool when browsing rule sets; do not use getPostingRuleSet, which fetches one set by id, or listPostingRuleVersions, which lists a set''s version history.
+
+        Preconditions: none beyond the caller holding accounting:posting_rules:view.
+
+        Required inputs: none; page defaults to 0, size to 20, and sort to createdAt descending (supported fields: createdAt, modifiedAt, updatedAt, name, eventType).
+
+        Emits an ACCOUNTING_POSTING_RULE_LIST audit event; no state changes.
+
+        Returns 400 when the sort property is not one of the supported fields.
+
+        '
       operationId: listPostingRuleSets
       parameters:
       - name: page
@@ -1445,14 +1997,36 @@ paths:
     post:
       tags:
       - Posting Rules
-      summary: Create posting rule set
-      description: Create a new posting rule set with initial DRAFT version.
+      summary: Create Posting Rule Set
+      description: 'Creates a posting rule set for one event type together with its initial DRAFT version holding the rules definition.
+
+        Use this tool to introduce new event-to-journal-entry conversion rules; do not use publishPostingRuleSet, which activates an existing draft, and do not use createDefaultMapping, which only sets a fallback account pair.
+
+        Preconditions: none; drafts may hold work-in-progress definitions because split-group and predicate-grammar invariants are enforced only at publish time.
+
+        Required inputs: name (max 100 chars), eventType (max 100 chars), rulesDefinition (JSON rules document as a string) and createdBy (max 50 chars); description is optional.
+
+        Emits an ACCOUNTING_POSTING_RULE_CREATE event; the new version starts in DRAFT and does not affect posting until published.
+
+        Returns 400 when required fields are missing or blank.
+
+        '
       operationId: createPostingRuleSet
       requestBody:
+        description: Rule set metadata with the initial DRAFT rules definition document.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PostingRuleSetCreateRequest'
+            examples:
+              Invoice finalized rules:
+                description: Invoice finalized rules
+                value:
+                  name: Invoice posting rules
+                  eventType: INVOICE_FINALIZED
+                  description: AR and revenue postings for finalized invoices
+                  rulesDefinition: '{"rules":[{"debit":"1100","credit":"4000","amountField":"totalAmount"}]}'
+                  createdBy: jdoe
         required: true
       responses:
         '201':
@@ -1476,8 +2050,20 @@ paths:
     post:
       tags:
       - Posting Rules
-      summary: Publish posting rule set
-      description: Publish the latest DRAFT version.
+      summary: Publish Posting Rule Set
+      description: 'Publishes the rule set''s DRAFT version (DRAFT to PUBLISHED), making it the live conversion definition for its event type; any previously PUBLISHED version is archived atomically in the same call.
+
+        Use this tool to activate reviewed rules; do not use archivePostingRuleSet, which retires the live version without a replacement, and use resolveTestMapping to dry-run the rules first.
+
+        Preconditions: the set must have a DRAFT version with a non-empty rules definition that passes split-group and condition-predicate validation.
+
+        Required inputs: postingRuleSetId (UUID) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_POSTING_RULE_PUBLISH event; subsequent accounting events for the event type post through the new version.
+
+        Returns 400 when no DRAFT version exists or its definition is empty, and 422 UNBALANCED_RULES listing every offending condition, group or line in fieldErrors when publish-time validation fails.
+
+        '
       operationId: publishPostingRuleSet
       parameters:
       - name: postingRuleSetId
@@ -1515,8 +2101,20 @@ paths:
     post:
       tags:
       - Posting Rules
-      summary: Archive posting rule set
-      description: Archive the PUBLISHED version.
+      summary: Archive Posting Rule Set
+      description: 'Archives the rule set''s PUBLISHED version (PUBLISHED to ARCHIVED), taking it out of live event-to-journal-entry conversion.
+
+        Use this tool to retire live rules deliberately; do not use publishPostingRuleSet, which already archives the old version automatically when a replacement draft is published.
+
+        Preconditions: the rule set must have a PUBLISHED version; after archiving, events of this type fall back to default GL mappings or fail as UNMAPPED_EVENT_TYPE.
+
+        Required inputs: postingRuleSetId (UUID) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_POSTING_RULE_ARCHIVE event.
+
+        Returns 400 when no PUBLISHED version exists to archive.
+
+        '
       operationId: archivePostingRuleSet
       parameters:
       - name: postingRuleSetId
@@ -1554,8 +2152,20 @@ paths:
     get:
       tags:
       - Posting Categories
-      summary: List posting categories
-      description: Retrieve paginated posting categories.
+      summary: List Posting Categories
+      description: 'Lists posting categories as a paginated projection, optionally filtered by active flag.
+
+        Use this tool when browsing the mapping taxonomy; do not use getPostingCategory, which fetches a single category by id.
+
+        Preconditions: none beyond the caller holding accounting:posting-category:view.
+
+        Required inputs: none; page defaults to 0, size to 20, sort to categoryName (an unsupported sort field silently falls back to categoryName), and isActive is an optional filter.
+
+        Emits an ACCOUNTING_POSTING_CATEGORY_LIST audit event; no state changes.
+
+        Returns 200 with an empty page when no categories exist.
+
+        '
       operationId: listPostingCategories
       parameters:
       - name: page
@@ -1611,14 +2221,34 @@ paths:
     post:
       tags:
       - Posting Categories
-      summary: Create posting category
-      description: Create a new posting category.
+      summary: Create Posting Category
+      description: 'Creates a posting category, the top level of the GL mapping taxonomy under which mapping keys are grouped.
+
+        Use this tool when adding a new grouping to the taxonomy; do not use createMappingKey, which adds a key inside an existing category.
+
+        Preconditions: no category with the same trimmed name may already exist.
+
+        Required inputs: categoryName (max 100 chars, trimmed before the uniqueness check) and createdBy (max 50 chars); description is optional.
+
+        Emits an ACCOUNTING_POSTING_CATEGORY_CREATE event.
+
+        Returns 400 when a category with the same name already exists.
+
+        '
       operationId: createPostingCategory
       requestBody:
+        description: Posting category to add to the GL mapping taxonomy.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PostingCategoryCreateRequest'
+            examples:
+              Tender category:
+                description: Tender category
+                value:
+                  categoryName: TENDER_TYPES
+                  description: Payment tender classifications
+                  createdBy: jdoe
         required: true
       responses:
         '201':
@@ -1642,8 +2272,20 @@ paths:
     post:
       tags:
       - Posting Categories
-      summary: Deactivate posting category
-      description: Deactivate a posting category.
+      summary: Deactivate Posting Category
+      description: 'Deactivates a posting category so it can no longer be used for new GL mappings; the record and its keys are retained.
+
+        Use this tool to retire an unused category; do not use deactivateMappingKey, which retires a single key inside a category.
+
+        Preconditions: the posting category must exist and have no active GL mappings attached.
+
+        Required inputs: postingCategoryId (UUID) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_POSTING_CATEGORY_DEACTIVATE event.
+
+        Returns 404 when the category does not exist, 409 when active GL mappings still reference it, and 204 with no body on success.
+
+        '
       operationId: deactivatePostingCategory
       parameters:
       - name: postingCategoryId
@@ -1669,8 +2311,20 @@ paths:
     post:
       tags:
       - Accounting Periods
-      summary: Reopen a closed accounting period
-      description: 'Reopens a CLOSED accounting period (CLOSED → OPEN), resetting its lifecycle status to OPEN. Use this tool only when late adjustments must be posted into an already-closed month; use closeAccountingPeriod to close it again afterwards. Preconditions: a period row must exist for the code and be CLOSED. Required input: a non-blank justification (max 500 characters) which is recorded on the period and in the audit trail with the acting user. Emits ACCOUNTING_PERIOD_REOPEN. Returns 409 PERIOD_ALREADY_OPEN if the period is not closed, and 400 if the justification is missing or blank.'
+      summary: Reopen Accounting Period
+      description: 'Reopens a CLOSED accounting period (CLOSED to OPEN), allowing entries to be posted into that month again.
+
+        Use this tool only when late adjustments must be posted into an already-closed month; use closeAccountingPeriod instead to close it again afterwards, and prefer a permissioned closed-period override on postJournalEntry for a one-off posting.
+
+        Preconditions: a period row must exist for the code and be CLOSED.
+
+        Required inputs: periodCode (YYYY-MM) as a path parameter and a non-blank justification (max 500 characters), recorded on the period and in the audit trail with the acting user.
+
+        Emits an ACCOUNTING_PERIOD_REOPEN event.
+
+        Returns 409 PERIOD_ALREADY_OPEN when the period is not closed, 404 PERIOD_NOT_FOUND when no period row exists for the code, and 400 when the justification is missing or blank.
+
+        '
       operationId: reopenAccountingPeriod
       parameters:
       - name: periodCode
@@ -1681,10 +2335,16 @@ paths:
           type: string
         example: 2026-06
       requestBody:
+        description: Audit justification for reopening the closed period.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AccountingPeriodReopenRequest'
+            examples:
+              Late adjustment:
+                description: Late adjustment
+                value:
+                  justification: Post late utility accrual approved by controller
         required: true
       responses:
         '200':
@@ -1726,8 +2386,20 @@ paths:
     post:
       tags:
       - Accounting Periods
-      summary: Close an accounting period
-      description: 'Closes an OPEN accounting period (OPEN → CLOSED), recording its lifecycle status as CLOSED. Use this tool during month-end close after all journal entries for the month are posted; use reopenAccountingPeriod to reverse the transition. Note: journal-entry posting paths do not yet reject postings dated into a CLOSED period; that enforcement (error code PERIOD_CLOSED) arrives with the period-enforcement story (parity-B2). Preconditions: the period must not already be CLOSED, and no DRAFT journal entries may be dated inside the period. A valid YYYY-MM period with no row whose month has already started is auto-provisioned and then closed. The close is audit-logged with the acting user and emits ACCOUNTING_PERIOD_CLOSE. Returns 409 PERIOD_ALREADY_CLOSED if the period is already closed, and 422 PERIOD_HAS_DRAFT_ENTRIES listing the blocking draft journal entry IDs in fieldErrors — post or delete those entries before retrying.'
+      summary: Close Accounting Period
+      description: 'Closes an OPEN accounting period (OPEN to CLOSED), after which posting paths reject entries dated inside it with PERIOD_CLOSED unless a permissioned override is supplied.
+
+        Use this tool during month-end close after all journal entries for the month are posted; do not use reopenAccountingPeriod, which reverses this transition for late adjustments.
+
+        Preconditions: the period must not already be CLOSED, and no DRAFT journal entries may be dated inside the period; a valid YYYY-MM code with no row whose month has already started is auto-provisioned and then closed.
+
+        Required inputs: periodCode (YYYY-MM) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_PERIOD_CLOSE event and audit-logs the close with the acting user.
+
+        Returns 409 PERIOD_ALREADY_CLOSED when the period is already closed, 404 PERIOD_NOT_FOUND when no row exists and the month has not started, and 422 PERIOD_HAS_DRAFT_ENTRIES listing the blocking draftJournalEntryIds in fieldErrors; post or delete those entries before retrying.
+
+        '
       operationId: closeAccountingPeriod
       parameters:
       - name: periodCode
@@ -1783,8 +2455,20 @@ paths:
     post:
       tags:
       - Payment Applications
-      summary: Void payment
-      description: Void a payment before settlement.
+      summary: Void Payment
+      description: 'Voids a receivable payment that has not been applied to any invoice, zeroing its unapplied amount so it can never be applied.
+
+        Use this tool for a payment recorded in error before any application; do not use reversePayment, which backs out a payment whose applications already exist.
+
+        Preconditions: the payment must exist and have no invoice applications; voiding an already-voided payment is a no-op.
+
+        Required inputs: paymentId (UUID) as a path parameter; the request body is optional and ignored.
+
+        Emits an ACCOUNTING_PAYMENT_VOID event.
+
+        Returns 404 when the payment is not found, 409 when invoice applications already exist (reverse those first), and 204 with no body on success.
+
+        '
       operationId: voidPayment
       parameters:
       - name: paymentId
@@ -1795,10 +2479,14 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Optional and ignored; send an empty object or omit the body entirely.
         content:
           application/json:
             schema:
               type: object
+            examples:
+              Empty body:
+                description: Empty body
       responses:
         '204':
           description: Payment voided
@@ -1815,8 +2503,20 @@ paths:
     post:
       tags:
       - Payment Applications
-      summary: Reverse payment
-      description: Reverse a previously applied payment.
+      summary: Reverse Payment
+      description: 'Reverses every application of a receivable payment as new compensating records, restoring each invoice''s balance and the payment''s unapplied amount.
+
+        Use this tool to back out a whole applied payment, which is also the required path for multi-invoice applications; do not use reversePaymentApplication, which reverses one single-invoice application, and do not use voidPayment, which only handles never-applied payments.
+
+        Preconditions: the payment must exist and have at least one application; already-reversed applications are skipped rather than double-reversed.
+
+        Required inputs: paymentId (UUID) as a path parameter and a reason of 10 to 1000 characters for the audit trail.
+
+        Emits an ACCOUNTING_PAYMENT_REVERSE event; reversals are new records, never deletions.
+
+        Returns 404 when the payment is not found, 409 when it has no applications to reverse, and 204 with no body on success.
+
+        '
       operationId: reversePayment
       parameters:
       - name: paymentId
@@ -1827,10 +2527,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Audit reason for reversing all of the payment's applications.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PaymentApplicationReversalRequest'
+            examples:
+              Reverse misapplied payment:
+                description: Reverse misapplied payment
+                value:
+                  reason: Payment applied to the wrong customer account
         required: true
       responses:
         '204':
@@ -1848,8 +2554,20 @@ paths:
     post:
       tags:
       - Payment Applications
-      summary: Apply payment
-      description: 'Apply a payment to one or more invoices and update their status. The optional allocationStrategy field controls allocation order: CALLER_ORDER (default when omitted) honors the caller-supplied order; OLDEST_FIRST allocates by ascending invoice date.'
+      summary: Apply Payment To Invoices
+      description: 'Applies a receivable payment to one or more invoices atomically, updating each invoice''s balance and status and reducing the payment''s unapplied amount.
+
+        Use this tool to settle invoices from an available payment; do not use applyCustomerCredit, which draws down a standing credit rather than a payment.
+
+        Preconditions: the payment must be AVAILABLE with sufficient unapplied funds, and every target invoice must be applicable (not paid in full, voided or cancelled); an overpayment creates a CustomerCredit for the excess.
+
+        Required inputs: paymentId (UUID) as a path parameter, applicationRequestId (max 100 chars, the idempotency key) and a non-empty applications list of invoiceId plus amountToApply (min 0.01); allocationStrategy is optional, CALLER_ORDER when omitted or OLDEST_FIRST to allocate by ascending invoice date.
+
+        Emits an ACCOUNTING_PAYMENT_APPLY event; the application is atomic across all invoices and idempotent on applicationRequestId.
+
+        Returns 404 when the payment is not found, 400 for insufficient funds, 409 for a currency mismatch or an inapplicable invoice, and 503 when the invoice service is unreachable.
+
+        '
       operationId: applyPayment
       parameters:
       - name: paymentId
@@ -1860,10 +2578,22 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Idempotent, atomic allocation of the payment across one or more invoices.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PaymentApplicationRequest'
+            examples:
+              Apply to two invoices oldest first:
+                description: Apply to two invoices oldest first
+                value:
+                  applicationRequestId: apply-2026-08-13-042
+                  allocationStrategy: OLDEST_FIRST
+                  applications:
+                  - invoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                    amountToApply: 100.0
+                  - invoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                    amountToApply: 50.0
         required: true
       responses:
         '201':
@@ -1899,8 +2629,20 @@ paths:
     post:
       tags:
       - Payment Applications
-      summary: Reverse payment application
-      description: Reverse a payment application with compensating transaction (no deletion).
+      summary: Reverse Payment Application
+      description: 'Reverses one payment application as a new compensating record, restoring the invoice''s balance and the payment''s unapplied amount.
+
+        Use this tool for an application that settled a single invoice; do not use it on an application created by a multi-invoice apply request, which must be reversed as a whole via reversePayment.
+
+        Preconditions: the application must exist, must not already be reversed, and must not belong to a multi-application request.
+
+        Required inputs: applicationId (UUID) as a path parameter and a reason of 10 to 1000 characters for the audit trail; the caller needs accounting:payment:reverse or an ACCOUNTING_ADMIN or AR_MANAGER authority.
+
+        Emits an ACCOUNTING_PAYMENT_APPLICATION_REVERSE event; the reversal is a new record, not a deletion.
+
+        Returns 404 when the application is not found, 409 when it is already reversed, 422 WHOLE_REQUEST_REVERSAL_REQUIRED when it belongs to a multi-application request, and 204 with no body on success.
+
+        '
       operationId: reversePaymentApplication
       parameters:
       - name: applicationId
@@ -1911,10 +2653,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Audit reason for reversing this single payment application.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PaymentApplicationReversalRequest'
+            examples:
+              Reverse one application:
+                description: Reverse one application
+                value:
+                  reason: Applied to invoice with disputed line items
         required: true
       responses:
         '204':
@@ -1936,15 +2684,35 @@ paths:
     post:
       tags:
       - GL Mapping API
-      summary: Create GL mapping
-      description: Creates a new GL mapping for source-system external code resolution
+      summary: Create GL Mapping
+      description: 'Creates a date-effective mapping from a source-system external code to a GL account, used when posting events that carry external codes.
+
+        Use this tool to register how an upstream system''s code lands in the ledger; do not use createDefaultMapping, which sets the fallback debit and credit pair for an event type without explicit rules.
+
+        Preconditions: the target GL account must exist and be active, and the new effective date range must not overlap an existing mapping for the same sourceSystem and externalCode.
+
+        Required inputs: sourceSystem, externalCode, glAccountId (UUID) and effectiveStartDate; effectiveEndDate defaults to null (open-ended) and dimensions are optional.
+
+        Emits an ACCOUNTING_GL_MAPPING_CREATE event; a cash-receipt code mapped to an implausible account subtype logs a non-blocking warning.
+
+        Returns 400 when the GL account is missing or inactive, or when the effective dates overlap an existing mapping.
+
+        '
       operationId: createGLMapping
       requestBody:
-        description: GL mapping creation request
+        description: Date-effective external-code-to-GL-account mapping to create.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/GLMappingCreateRequest'
+            examples:
+              POS cash code mapping:
+                description: POS cash code mapping
+                value:
+                  sourceSystem: POS
+                  externalCode: CASH_RECEIPT
+                  glAccountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  effectiveStartDate: 2026-01-01 00:00:00
         required: true
       responses:
         '201':
@@ -1968,15 +2736,34 @@ paths:
     post:
       tags:
       - GL Mapping API
-      summary: Resolve GL mapping
-      description: Resolves source-system external code to a GL account using effective-date rules
+      summary: Resolve GL Mapping
+      description: 'Resolves a source-system external code to the GL account whose mapping is effective on the supplied transaction date.
+
+        Use this tool to look up where a coded transaction will post; do not use resolveTestMapping, which dry-runs full posting-rule evaluation for an event payload rather than a single code lookup.
+
+        Preconditions: a mapping must exist for the sourceSystem and externalCode whose effective date range covers the transaction date.
+
+        Required inputs: sourceSystem, externalCode and transactionDate (ISO date-time); there are no optional fields.
+
+        Emits an ACCOUNTING_GL_MAPPING_RESOLVE audit event; no mappings or entries are created.
+
+        Returns 400 when no mapping is effective for the code on that date.
+
+        '
       operationId: resolveGLMapping
       requestBody:
-        description: GL mapping resolve request
+        description: External code and transaction date to resolve against effective mappings.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/GLMappingResolveRequest'
+            examples:
+              Resolve POS cash code:
+                description: Resolve POS cash code
+                value:
+                  sourceSystem: POS
+                  externalCode: CASH_RECEIPT
+                  transactionDate: 2026-08-13 00:00:00
         required: true
       responses:
         '200':
@@ -2000,15 +2787,36 @@ paths:
     post:
       tags:
       - GL Mapping API
-      summary: Dry-run mapping/rule resolution
-      description: 'Resolves a hypothetical accounting event against the published posting rules and GL mappings, returning the matched rule (id/name/version), mapping details, the exact journal entry lines the evaluator would post (including E1 proportional split-line shares and residual distribution), and per-predicate evaluation outcomes (E2 condition grammar). This is a read-only inspection tool: NOTHING is persisted — no accounting event, journal entry, or outbox record is created. A no-match outcome is a normal 200 response with matched=false (not a 404).'
+      summary: Dry-Run Mapping Rule Resolution
+      description: 'Resolves a hypothetical accounting event against the published posting rules and GL mappings, returning the matched rule (id, name, version), the exact journal entry lines the evaluator would post including proportional split-line shares and residual distribution, and per-predicate evaluation outcomes.
+
+        Use this tool to inspect what a rule set would do before real events arrive; do not use resolveGLMapping, which only resolves a single external code to one account.
+
+        Preconditions: a PUBLISHED posting rule set should exist, though a no-match outcome is a normal 200 response with matched=false rather than an error.
+
+        Required inputs: eventType and transactionDate (ISO date); samplePayload is an optional JSON object evaluated by the rule predicates.
+
+        Emits an ACCOUNTING_MAPPING_RESOLVE_TEST audit event only; nothing is persisted, and no accounting event, journal entry or outbox record is created.
+
+        Returns 400 when the sample payload cannot be interpreted by the rules.
+
+        '
       operationId: resolveTestMapping
       requestBody:
-        description: Dry-run mapping/rule resolution request
+        description: Hypothetical event type, sample payload and date to evaluate against published rules.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/MappingResolutionTestRequest'
+            examples:
+              Invoice finalized dry run:
+                description: Invoice finalized dry run
+                value:
+                  eventType: INVOICE_FINALIZED
+                  samplePayload:
+                    totalAmount: 150.0
+                    taxAmount: 10.5
+                  transactionDate: 2026-08-13
         required: true
       responses:
         '200':
@@ -2044,14 +2852,35 @@ paths:
     post:
       tags:
       - Mapping Keys
-      summary: Create mapping key
-      description: Create a new mapping key for a posting category.
+      summary: Create Mapping Key
+      description: 'Creates a mapping key inside a posting category, extending the taxonomy that GL mappings attach to.
+
+        Use this tool when adding a new key under an existing category; do not use createPostingCategory, which creates the parent category itself.
+
+        Preconditions: the posting category must exist, and no key with the same trimmed name may already exist inside it.
+
+        Required inputs: postingCategoryId (UUID), keyName (max 100 chars, trimmed before uniqueness check) and createdBy (max 50 chars); description is optional.
+
+        Emits an ACCOUNTING_MAPPING_KEY_CREATE event.
+
+        Returns 404 when the posting category does not exist, and 400 when the key name already exists in that category.
+
+        '
       operationId: createMappingKey
       requestBody:
+        description: Mapping key to add under an existing posting category.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/MappingKeyCreateRequest'
+            examples:
+              Tender type key:
+                description: Tender type key
+                value:
+                  postingCategoryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  keyName: TENDER_CASH
+                  description: Cash tender postings
+                  createdBy: jdoe
         required: true
       responses:
         '201':
@@ -2075,8 +2904,20 @@ paths:
     post:
       tags:
       - Mapping Keys
-      summary: Deactivate mapping key
-      description: Deactivate a mapping key.
+      summary: Deactivate Mapping Key
+      description: 'Deactivates a mapping key so it can no longer be attached to new GL mappings; the record is retained.
+
+        Use this tool to retire an unused key; do not use deactivatePostingCategory, which retires the whole parent category.
+
+        Preconditions: the mapping key must exist and have no active GL mappings attached.
+
+        Required inputs: mappingKeyId (UUID) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_MAPPING_KEY_DEACTIVATE event.
+
+        Returns 404 when the mapping key does not exist, 409 when active GL mappings still reference it, and 204 with no body on success.
+
+        '
       operationId: deactivateMappingKey
       parameters:
       - name: mappingKeyId
@@ -2102,8 +2943,20 @@ paths:
     get:
       tags:
       - Journal Entries
-      summary: List journal entries
-      description: Retrieve paginated journal entries, optionally filtered by exact posted-entry number.
+      summary: List Journal Entries
+      description: 'Lists journal entries of every status as a paginated projection, optionally filtered by the exact posted-entry number.
+
+        Use this tool when browsing or searching entries; do not use getJournalEntry, which retrieves one entry by its known id.
+
+        Preconditions: none beyond the caller holding accounting:je:view.
+
+        Required inputs: none; page defaults to 0, size to 20, sort to createdAt descending, and entryNumber (format JE-{YYYYMM}-{seq}, assigned only at posting) is an optional exact-match filter that never matches unposted entries.
+
+        Emits an ACCOUNTING_JOURNAL_ENTRY_LIST audit event; no accounting state changes.
+
+        Returns 400 when the sort property is not one of the supported fields.
+
+        '
       operationId: listJournalEntries
       parameters:
       - name: page
@@ -2166,14 +3019,40 @@ paths:
     post:
       tags:
       - Journal Entries
-      summary: Create journal entry
-      description: Create a new journal entry.
+      summary: Create Journal Entry
+      description: 'Creates a balanced journal entry in DRAFT status; nothing hits the general ledger until the entry is posted.
+
+        Use this tool to stage a manual entry for review; do not use postJournalEntry, which finalizes an existing draft, and note that system event-driven entries are created by the posting engine, not this operation.
+
+        Preconditions: total debits must equal total credits across the lines, and every glAccountId must reference a GL account active on the transaction date.
+
+        Required inputs: transactionDate and at least one line with glAccountId (UUID) and a debitAmount or creditAmount; description (max 500), sourceEventId, sourceEventType and dimensions are optional.
+
+        Emits an ACCOUNTING_JOURNAL_ENTRY_CREATE event; GL balances are unchanged until posting.
+
+        Returns 400 when the entry is unbalanced or a GL account is missing or inactive on the transaction date.
+
+        '
       operationId: createJournalEntry
       requestBody:
+        description: Draft journal entry with balanced debit and credit lines.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/JournalEntryCreateRequest'
+            examples:
+              Balanced two-line entry:
+                description: Balanced two-line entry
+                value:
+                  transactionDate: 2026-08-13 00:00:00
+                  description: Record cash sale
+                  lines:
+                  - glAccountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                    debitAmount: 125.0
+                    description: Cash
+                  - glAccountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                    creditAmount: 125.0
+                    description: Sales revenue
         required: true
       responses:
         '201':
@@ -2197,8 +3076,20 @@ paths:
     post:
       tags:
       - Journal Entries
-      summary: Reverse journal entry
-      description: 'Reverses a POSTED journal entry by creating and immediately posting an inverse entry (debits and credits swapped) with its own entryNumber, and transitioning the original POSTED → REVERSED. Use this tool to back out an incorrect posted entry; do NOT use it on DRAFT entries — delete or edit those instead. Preconditions: the entry must exist and be in POSTED status. Required input: a non-blank reason, recorded on the reversal entry and in the audit trail. Optional input: reversalDate — when omitted, it defaults to the original entry''s transaction date if that period is OPEN, otherwise to today; the resolved date must fall in an OPEN accounting period. Period gate (story B2): a resolved date strictly before the org-level hard-lock date is rejected unconditionally with 422 PERIOD_HARD_LOCKED (never overridable); a date in a CLOSED period is rejected with 422 PERIOD_CLOSED unless the caller holds accounting:period:override AND supplies a non-blank overrideJustification, in which case the reversal posts into the closed period and the override is audit-logged. Emits ACCOUNTING_JOURNAL_ENTRY_REVERSE and returns the reversal entry. Returns 409 JE_ALREADY_REVERSED if the entry was already reversed (including a lost concurrent-reversal race), 409 JE_NOT_POSTED if it is DRAFT/PENDING, and 422 PERIOD_CLOSED if the reversal date falls in a CLOSED period without a valid override — pick an open-period date, supply an override, or reopen the period before retrying.'
+      summary: Reverse Journal Entry
+      description: 'Reverses a POSTED journal entry by creating and immediately posting an inverse entry (debits and credits swapped) with its own entryNumber, transitioning the original POSTED to REVERSED.
+
+        Use this tool to back out an incorrect posted entry; do not use it on DRAFT entries, which updateJournalEntry can still edit, and do not use postJournalEntry, which finalizes drafts.
+
+        Preconditions: the entry must exist in POSTED status, and the resolved reversal date must clear the accounting-period gate.
+
+        Required inputs: a non-blank reason (recorded on the reversal entry and audit trail); reversalDate is optional and defaults to the original transaction date when that period is OPEN, otherwise today; overrideJustification with the accounting:period:override permission allows reversing into a CLOSED period, but never before the hard-lock date.
+
+        Emits an ACCOUNTING_JOURNAL_ENTRY_REVERSE event and returns the posted reversal entry.
+
+        Returns 409 JE_ALREADY_REVERSED when the entry was already reversed (including a lost concurrent-reversal race), 409 JE_NOT_POSTED when it is DRAFT or PENDING, 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures, and 400 when the reason is blank or the entry does not exist.
+
+        '
       operationId: reverseJournalEntry
       parameters:
       - name: journalEntryId
@@ -2209,10 +3100,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Reversal reason with optional reversal date and closed-period override justification.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/JournalEntryReversalRequest'
+            examples:
+              Reverse with explicit date:
+                description: Reverse with explicit date
+                value:
+                  reason: Duplicate posting of invoice INV-1042
+                  reversalDate: 2026-08-13
         required: true
       responses:
         '200':
@@ -2254,8 +3152,20 @@ paths:
     post:
       tags:
       - Journal Entries
-      summary: Post journal entry
-      description: 'Posts a DRAFT journal entry to the general ledger (DRAFT → POSTED), assigning its entryNumber and updating GL balances; the entry is immutable afterwards — use reverseJournalEntry to back it out. Preconditions: the entry must exist, be in DRAFT status, and be balanced. The request body is OPTIONAL: omit it entirely for a normal post. The entry''s transaction date is checked against the accounting-period gate (story B2): a date strictly before the org-level hard-lock date is rejected unconditionally with 422 PERIOD_HARD_LOCKED (never overridable); a date in a CLOSED period is rejected with 422 PERIOD_CLOSED unless the caller holds accounting:period:override AND supplies a non-blank overrideJustification in the body, in which case the posting proceeds and the override is audit-logged. Emits ACCOUNTING_JOURNAL_ENTRY_POST and returns the posted entry. Returns 409 ENTRY_ALREADY_POSTED if the entry is already POSTED or REVERSED, and 422 UNBALANCED_ENTRY if debits do not equal credits.'
+      summary: Post Journal Entry
+      description: 'Posts a DRAFT journal entry to the general ledger (DRAFT to POSTED), assigning its entryNumber (JE-{YYYYMM}-{seq}) and updating GL balances; the entry is immutable afterwards.
+
+        Use this tool to finalize a balanced draft; do not use reverseJournalEntry, which backs out an entry that is already POSTED.
+
+        Preconditions: the entry must exist in DRAFT status, debits must equal credits, every line''s GL account must be active on the transaction date, and the transaction date must clear the accounting-period gate.
+
+        Required inputs: journalEntryId (UUID) as a path parameter; the body is optional and carries only overrideJustification (max 500 chars), which together with the accounting:period:override permission allows posting into a CLOSED period with the override audit-logged; a date before the org hard-lock date is never overridable.
+
+        Emits an ACCOUNTING_JOURNAL_ENTRY_POST event and returns the posted entry.
+
+        Returns 409 ENTRY_ALREADY_POSTED when the entry is already POSTED or REVERSED, 422 UNBALANCED_ENTRY when debits do not equal credits, 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures, and 400 when no entry exists for the id.
+
+        '
       operationId: postJournalEntry
       parameters:
       - name: journalEntryId
@@ -2266,10 +3176,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Optional closed-period override justification; omit the body for a normal post.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/JournalEntryPostRequest'
+            examples:
+              Closed-period override:
+                description: Closed-period override
+                value:
+                  overrideJustification: Late vendor accrual approved by controller
       responses:
         '200':
           description: Journal entry posted; the posted entry with its entryNumber is returned
@@ -2310,14 +3226,33 @@ paths:
     post:
       tags:
       - Invoice Payments
-      summary: Regenerate invoice from workorder
-      description: Regenerate an invoice from a workorder.
+      summary: Regenerate Invoice From Workorder
+      description: 'Requests regeneration of an invoice from a completed workorder, either synchronously or via the asynchronous command path.
+
+        Use this tool when an invoice must be rebuilt from its source workorder; do not use getInvoiceStatus, which only reads the current payment status.
+
+        Preconditions: the workorder must exist and be in COMPLETED state.
+
+        Required inputs: workorderId (UUID); idempotencyKey is optional and de-duplicates repeated regeneration commands.
+
+        Emits an ACCOUNTING_INVOICE_REGENERATE event; on the async path the call returns 202 with status PENDING and the invoice arrives later via invoice.events.v1.
+
+        Returns 202 when the command is accepted asynchronously, 404 when the workorder is not found, 409 when it is not COMPLETED, and 503 when the workorder service is unavailable.
+
+        '
       operationId: regenerateInvoiceFromWorkorder
       requestBody:
+        description: Workorder to rebuild the invoice from, with an optional idempotency key.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RegenerateInvoiceFromWorkorderRequest'
+            examples:
+              Regenerate invoice:
+                description: Regenerate invoice
+                value:
+                  workorderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  idempotencyKey: regen-2026-08-13-001
         required: true
       responses:
         '200':
@@ -2359,8 +3294,20 @@ paths:
     get:
       tags:
       - GL Accounts
-      summary: List GL accounts
-      description: Retrieve paginated GL accounts filtered by status and sorted by a field.
+      summary: List GL Accounts
+      description: 'Lists the chart of accounts as a paginated projection, optionally filtered by derived lifecycle status and sorted by a named field.
+
+        Use this tool when browsing or searching the chart of accounts; do not use getGLAccount, which retrieves one account by its known id.
+
+        Preconditions: none beyond the caller holding accounting:coa:view; an empty chart returns an empty page rather than an error.
+
+        Required inputs: none; page defaults to 0, size to 20, sort to accountCode ascending (format ''field,direction''), and status optionally filters by ACTIVE, INACTIVE or NOT_YET_ACTIVE.
+
+        Emits an ACCOUNTING_GL_ACCOUNT_LIST audit event; no accounting state changes.
+
+        Returns 400 when the sort property is not one of the supported fields.
+
+        '
       operationId: listGLAccounts
       parameters:
       - name: page
@@ -2422,14 +3369,38 @@ paths:
     post:
       tags:
       - GL Accounts
-      summary: Create GL account
-      description: Create a new GL account.
+      summary: Create GL Account
+      description: 'Creates a GL account in the chart of accounts with a unique account code, classification and activation date.
+
+        Use this tool when adding a new account to the chart; do not use updateGLAccount, which edits the mutable fields of an account that already exists.
+
+        Preconditions: no account may already exist with the same accountCode; a parentAccountId, when supplied, must reference an existing account.
+
+        Required inputs: accountCode (pattern #### or ####-###), accountName, accountType (ASSET, LIABILITY, EQUITY, REVENUE or EXPENSE) and activationDate; accountSubtype, description and parentAccountId are optional, and reconcilable defaults to false.
+
+        Emits an ACCOUNTING_GL_ACCOUNT_CREATE event; the account code and type are immutable after creation.
+
+        Returns 409 when the account code already exists, and 400 when the parent account cannot be resolved.
+
+        '
       operationId: createGLAccount
       requestBody:
+        description: GL account definition to add to the chart of accounts.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/GLAccountCreateRequest'
+            examples:
+              Cash account:
+                description: Cash account
+                value:
+                  accountCode: '1000'
+                  accountName: Cash on Hand
+                  accountType: ASSET
+                  accountSubtype: BANK_CASH
+                  reconcilable: true
+                  description: Register and vault cash
+                  activationDate: 2026-01-01 00:00:00
         required: true
       responses:
         '201':
@@ -2453,8 +3424,20 @@ paths:
     post:
       tags:
       - GL Accounts
-      summary: Deactivate GL account
-      description: Mark a GL account as inactive.
+      summary: Deactivate GL Account
+      description: 'Deactivates a GL account by stamping its deactivation date now, preventing future postings to it.
+
+        Use this tool when retiring an account from active use; do not use archiveGLAccount, which additionally flags an already-INACTIVE account as archived, and do not use it while the account still carries a balance.
+
+        Preconditions: the GL account must exist and its posted balance must be exactly zero.
+
+        Required inputs: glAccountId (UUID) as a path parameter; the request body is optional and ignored.
+
+        Emits an ACCOUNTING_GL_ACCOUNT_DEACTIVATE event; historical journal entries remain intact.
+
+        Returns 404 when no GL account exists for the supplied id, and 400 when the account balance is not zero.
+
+        '
       operationId: deactivateGLAccount
       parameters:
       - name: glAccountId
@@ -2465,10 +3448,14 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Optional and ignored; send an empty object or omit the body entirely.
         content:
           application/json:
             schema:
               type: object
+            examples:
+              Empty body:
+                description: Empty body
       responses:
         '200':
           description: GL account deactivated
@@ -2491,8 +3478,20 @@ paths:
     post:
       tags:
       - GL Accounts
-      summary: Archive GL account
-      description: Archive a GL account and remove it from active use.
+      summary: Archive GL Account
+      description: 'Archives an inactive GL account as a soft delete, tagging it [ARCHIVED] while keeping the record and its posting history.
+
+        Use this tool only after deactivateGLAccount has succeeded; do not use it on an ACTIVE account, which must be deactivated to zero balance first.
+
+        Preconditions: the GL account must exist and its derived status must be INACTIVE.
+
+        Required inputs: glAccountId (UUID) as a path parameter; the request body is optional and ignored.
+
+        Emits an ACCOUNTING_GL_ACCOUNT_ARCHIVE event; the row is never physically deleted.
+
+        Returns 404 when no GL account exists for the supplied id, and 400 when the account is not INACTIVE.
+
+        '
       operationId: archiveGLAccount
       parameters:
       - name: glAccountId
@@ -2503,10 +3502,14 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Optional and ignored; send an empty object or omit the body entirely.
         content:
           application/json:
             schema:
               type: object
+            examples:
+              Empty body:
+                description: Empty body
       responses:
         '200':
           description: GL account archived
@@ -2529,8 +3532,20 @@ paths:
     post:
       tags:
       - GL Accounts
-      summary: Activate GL account
-      description: Mark a GL account as active.
+      summary: Activate GL Account
+      description: 'Activates a GL account for posting by setting its activation date to the start of the supplied effective date and clearing any deactivation date.
+
+        Use this tool when re-enabling an inactive account or bringing a not-yet-active account into service; do not use deactivateGLAccount, which does the reverse.
+
+        Preconditions: the GL account must exist; activation is idempotent and simply resets the effective dates.
+
+        Required inputs: glAccountId (UUID) as a path parameter and effectiveDate (ISO date) in the body; the account becomes ACTIVE at start of day on that date.
+
+        Emits an ACCOUNTING_GL_ACCOUNT_ACTIVATE event; no journal entries are created or altered.
+
+        Returns 404 when no GL account exists for the supplied id.
+
+        '
       operationId: activateGLAccount
       parameters:
       - name: glAccountId
@@ -2541,10 +3556,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Effective date on which the account becomes active for posting.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/GLAccountActivateRequest'
+            examples:
+              Activate at month start:
+                description: Activate at month start
+                value:
+                  effectiveDate: 2026-09-01
         required: true
       responses:
         '200':
@@ -2568,14 +3589,36 @@ paths:
     post:
       tags:
       - Accounting Exports
-      summary: Request timekeeping export
-      description: Submit an export job request.
-      operationId: requestExport_1
+      summary: Request Timekeeping Export
+      description: 'Submits an asynchronous timekeeping or generic data export job and returns it in its initial accepted state.
+
+        Use this tool to export timekeeping data; do not use requestReportExport, which renders financial-statement reports, and poll getExportStatus for completion.
+
+        Preconditions: none; the job is queued for asynchronous processing.
+
+        Required inputs: exportType and format (both non-blank strings); filters (JSON object) and deliveryMode are optional.
+
+        Emits an ACCOUNTING_EXPORT_REQUEST event and returns 202 while the job runs asynchronously.
+
+        Returns 400 when exportType or format is missing or blank.
+
+        '
+      operationId: requestExport
       requestBody:
+        description: Export job definition with type, format and optional filters.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ExportJobRequest'
+            examples:
+              Timekeeping CSV export:
+                description: Timekeeping CSV export
+                value:
+                  exportType: TIMEKEEPING
+                  format: CSV
+                  filters:
+                    from: 2026-08-01
+                    to: 2026-08-13
         required: true
       responses:
         '202':
@@ -2605,8 +3648,20 @@ paths:
     get:
       tags:
       - Accounting Events
-      summary: List accounting events
-      description: Retrieve paginated accounting events with optional filters.
+      summary: List Accounting Events
+      description: 'Lists ingested accounting events as a paginated projection with rich optional filters: organization, event type, idempotency outcome, received-at range, event id, ingestion id, domain key, invoice id and processing status.
+
+        Use this tool to monitor or triage the event pipeline; do not use getAccountingEvent, which fetches one event by its known id.
+
+        Preconditions: none beyond the caller holding accounting:events:view; an unrecognized status value is silently ignored rather than rejected.
+
+        Required inputs: none; all filters are optional and the page defaults to 20 items sorted by receivedAt descending.
+
+        Emits an ACCOUNTING_EVENT_LIST audit event; no state changes.
+
+        Returns 200 with an empty page when nothing matches the filters.
+
+        '
       operationId: listAccountingEvents
       parameters:
       - name: organizationId
@@ -2701,14 +3756,39 @@ paths:
     post:
       tags:
       - Accounting Events
-      summary: Submit event
-      description: Submit a new accounting event for processing.
-      operationId: submitEvent
+      summary: Submit Accounting Event
+      description: 'Submits a business event into the accounting pipeline, where the posting engine converts it into journal entries via published posting rules or default GL mappings.
+
+        Use this tool to feed source-system activity into the ledger; do not use createJournalEntry, which bypasses the rules engine for manual entries, and use resolveTestMapping to preview the rules first.
+
+        Preconditions: no event with the same eventId may already be ingested; duplicates are rejected rather than reprocessed.
+
+        Required inputs: eventType (max 100 chars), organizationId (UUID) and payload (JSON object); eventId, sourceSystem and transactionDate (ISO-8601) are optional, eventId being generated when omitted.
+
+        Emits an ACCOUNTING_EVENT_SUBMIT event and returns 202 while processing continues asynchronously; callers poll getAccountingEvent for the outcome.
+
+        Returns 409 DUPLICATE_EVENT when the eventId was already ingested, and 400 when required fields are missing or the transactionDate is not valid ISO-8601.
+
+        '
+      operationId: submitAccountingEvent
       requestBody:
+        description: Business event envelope to convert into journal entries.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AccountingEventSubmitRequest'
+            examples:
+              Invoice finalized event:
+                description: Invoice finalized event
+                value:
+                  eventId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  eventType: INVOICE_FINALIZED
+                  organizationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  sourceSystem: POS
+                  transactionDate: 2026-08-13 10:15:00
+                  payload:
+                    invoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
+                    totalAmount: 150.0
         required: true
       responses:
         '202':
@@ -2732,9 +3812,21 @@ paths:
     post:
       tags:
       - Accounting Events
-      summary: Retry event processing
-      description: Retry processing for a failed accounting event.
-      operationId: retryEventProcessing
+      summary: Retry Accounting Event Processing
+      description: 'Re-runs pipeline processing for a failed accounting event using its original payload and the current rules.
+
+        Use this tool for transient failures; do not use reprocessSuspendedEvent, which is the audited path for SUSPENDED events after a mapping or rule correction.
+
+        Preconditions: the event must exist and be in a retryable failed state.
+
+        Required inputs: eventId (UUID) as a path parameter; the request body is optional and ignored.
+
+        Emits an ACCOUNTING_EVENT_RETRY event and returns 202 while processing continues asynchronously.
+
+        Returns 404 EVENT_NOT_FOUND when the event does not exist.
+
+        '
+      operationId: retryAccountingEvent
       parameters:
       - name: eventId
         in: path
@@ -2744,10 +3836,14 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Optional and ignored; send an empty object or omit the body entirely.
         content:
           application/json:
             schema:
               type: object
+            examples:
+              Empty body:
+                description: Empty body
       responses:
         '202':
           description: Retry requested
@@ -2770,8 +3866,20 @@ paths:
     post:
       tags:
       - Accounting Events
-      summary: Reprocess suspended event
-      description: Reprocess a SUSPENDED accounting event after mapping/rule correction. Idempotent - returns 409 Conflict if already PROCESSED.
+      summary: Reprocess Suspended Event
+      description: 'Reprocesses a SUSPENDED accounting event after a mapping or rule correction, recording an audited reprocessing attempt with the triggering user.
+
+        Use this tool once the underlying mapping gap is fixed; do not use retryAccountingEvent, which is the unaudited retry for transient failures.
+
+        Preconditions: the event must exist and be SUSPENDED; an event already PROCESSED is rejected to preserve idempotency.
+
+        Required inputs: eventId (UUID) as a path parameter and triggeredByUserId in the body; mappingVersionToUse and reprocessingNotes are optional.
+
+        Emits an ACCOUNTING_EVENT_REPROCESS event; a successful synchronous outcome returns 200 with status PROCESSED while 202 means processing continues.
+
+        Returns 404 EVENT_NOT_FOUND when the event does not exist, 409 when it is already PROCESSED, and 400 when the request is invalid.
+
+        '
       operationId: reprocessSuspendedEvent
       parameters:
       - name: eventId
@@ -2782,10 +3890,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Audited reprocessing trigger with optional mapping version pin and notes.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ReprocessEventRequest'
+            examples:
+              Reprocess after mapping fix:
+                description: Reprocess after mapping fix
+                value:
+                  triggeredByUserId: jdoe
+                  reprocessingNotes: Default mapping added for CASH_SALE
         required: true
       responses:
         '202':
@@ -2821,8 +3936,20 @@ paths:
     get:
       tags:
       - Default GL Mappings
-      summary: List default GL mappings
-      description: Retrieve paginated list of default GL mappings
+      summary: List Default GL Mappings
+      description: 'Lists all default GL mappings as a paginated projection, including inactive ones.
+
+        Use this tool to browse the fallback catalog; use searchDefaultMappings instead to filter by event type or organization, or resolveDefaultMapping to find the one that would apply to an event.
+
+        Preconditions: none beyond the caller holding accounting:default-mapping:view.
+
+        Required inputs: none; page defaults to 0 and size to 20.
+
+        Emits an ACCOUNTING_DEFAULT_MAPPING_LIST audit event; no state changes.
+
+        Returns 200 with an empty page when no default mappings exist.
+
+        '
       operationId: listDefaultMappings
       parameters:
       - name: page
@@ -2864,14 +3991,36 @@ paths:
     post:
       tags:
       - Default GL Mappings
-      summary: Create default GL mapping
-      description: Create a new default GL account mapping for an event type
+      summary: Create Default GL Mapping
+      description: 'Creates a fallback debit and credit account pair for an event type, used by the posting engine when no explicit posting rule matches; resolution order is explicit rule, then org-scoped default, then global default, then UNMAPPED_EVENT_TYPE failure.
+
+        Use this tool to guarantee an event type always posts somewhere; do not use createGLMapping, which maps a source-system external code to a single account.
+
+        Preconditions: the debit and credit GL accounts must exist.
+
+        Required inputs: eventType (max 100 chars), debitAccountId (UUID) and creditAccountId (UUID); organizationId is optional (null makes the default global) and active defaults to true.
+
+        Emits an ACCOUNTING_DEFAULT_MAPPING_CREATE event.
+
+        Returns 400 when a referenced GL account cannot be resolved.
+
+        '
       operationId: createDefaultMapping
       requestBody:
+        description: Fallback debit and credit account pair for one event type.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/DefaultGLMappingRequest'
+            examples:
+              Global fallback for cash sales:
+                description: Global fallback for cash sales
+                value:
+                  eventType: CASH_SALE
+                  debitAccountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  creditAccountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  description: Fallback posting for cash sales
+                  active: true
         required: true
       responses:
         '201':
@@ -2901,8 +4050,20 @@ paths:
     post:
       tags:
       - Customer Credits
-      summary: Refund customer credit
-      description: Refund an open customer credit as cash back to the customer. Posts Dr Customer Credit Liability / Cr Undeposited Funds for the refunded amount. Idempotent on requestId.
+      summary: Refund Customer Credit
+      description: 'Refunds an open customer credit as cash back to the customer, posting debit Customer Credit Liability, credit Undeposited Funds for the refunded amount.
+
+        Use this tool to pay standing credit out; do not use applyCustomerCredit, which consumes the credit against an invoice instead.
+
+        Preconditions: the credit must have sufficient open amount and the accounting period must be open.
+
+        Required inputs: creditId (UUID) as a path parameter, requestId (max 100 chars, the idempotency key) and amount (min 0.01); note (max 500 chars) is optional.
+
+        Emits an ACCOUNTING_CUSTOMER_CREDIT_REFUND event; replaying the same requestId returns the original refund instead of double-paying.
+
+        Returns 404 when the credit is not found, 409 for insufficient open credit, a closed period, or a requestId reused for a different operation, and 400 when the amount is missing or non-positive.
+
+        '
       operationId: refundCustomerCredit
       parameters:
       - name: creditId
@@ -2913,10 +4074,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Idempotent cash refund of part or all of the open credit.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CustomerCreditRefundRequest'
+            examples:
+              Refund remainder:
+                description: Refund remainder
+                value:
+                  requestId: refund-2026-08-13-001
+                  amount: 15.0
+                  note: Customer requested cash back
         required: true
       responses:
         '200':
@@ -2952,8 +4121,20 @@ paths:
     post:
       tags:
       - Customer Credits
-      summary: Apply customer credit to an invoice
-      description: Draw an open customer credit down against an outstanding invoice. Posts Dr Customer Credit Liability / Cr Accounts Receivable for the applied amount. Idempotent on requestId.
+      summary: Apply Customer Credit To Invoice
+      description: 'Draws an open customer credit down against an outstanding invoice, posting debit Customer Credit Liability, credit Accounts Receivable for the applied amount.
+
+        Use this tool to consume standing credit against an invoice; do not use refundCustomerCredit, which pays the credit back as cash, and do not use createCreditMemo, which issues new credit against an invoice.
+
+        Preconditions: the credit must have sufficient open amount, the invoice must be AR-eligible and belong to the same customer, the amount must not exceed the invoice balance, and the accounting period must be open.
+
+        Required inputs: creditId (UUID) as a path parameter, requestId (max 100 chars, the idempotency key), invoiceId (UUID) and amount (min 0.01).
+
+        Emits an ACCOUNTING_CUSTOMER_CREDIT_APPLY event; replaying the same requestId returns the original application instead of double-applying.
+
+        Returns 404 when the credit or invoice is not found, 409 for insufficient open credit, an ineligible or foreign invoice, an amount over the invoice balance, a closed period, or a requestId reused for a different operation, and 400 when the amount is missing or non-positive.
+
+        '
       operationId: applyCustomerCredit
       parameters:
       - name: creditId
@@ -2964,10 +4145,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Idempotent draw-down of the credit against one outstanding invoice.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CustomerCreditApplicationRequest'
+            examples:
+              Apply to invoice:
+                description: Apply to invoice
+                value:
+                  requestId: apply-2026-08-13-001
+                  invoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  amount: 25.0
         required: true
       responses:
         '200':
@@ -3003,8 +4192,20 @@ paths:
     get:
       tags:
       - Credit Memos
-      summary: List credit memos
-      description: Retrieve paginated credit memos with optional filters. Filter by customer, invoice, or status. Supports standard pagination parameters (page, size, sort).
+      summary: List Credit Memos
+      description: 'Lists credit memos as a paginated projection, optionally filtered by customer, original invoice or lifecycle status.
+
+        Use this tool when browsing or reconciling memos; do not use getCreditMemo, which fetches one memo by its known id.
+
+        Preconditions: none beyond the caller holding accounting:credit-memo:read.
+
+        Required inputs: none; customerId, originalInvoiceId and status (DRAFT, POSTED, APPLIED, VOIDED) are optional filters, with standard page, size and sort parameters.
+
+        Emits an ACCOUNTING_CREDIT_MEMO_LIST audit event; no state changes.
+
+        Returns 400 when pagination or filter parameters are invalid.
+
+        '
       operationId: listCreditMemos
       parameters:
       - name: customerId
@@ -3058,14 +4259,35 @@ paths:
     post:
       tags:
       - Credit Memos
-      summary: Create credit memo
-      description: Create a new Credit Memo to reverse invoice charges. Reduces Accounts Receivable by posting offsetting GL entries. Requires finalized invoice and credit amount within outstanding balance.
+      summary: Create Credit Memo
+      description: 'Creates and posts a credit memo against a finalized invoice, reversing invoice charges by posting debit revenue and tax, credit Accounts Receivable, and reducing the invoice''s outstanding balance.
+
+        Use this tool for AR corrections against a specific invoice; do not use applyCustomerCredit, which draws down a standing customer credit, and do not use voidCreditMemo, which backs out a memo already posted.
+
+        Preconditions: the invoice must exist and be finalized, and creditAmount must not exceed the invoice''s outstanding balance.
+
+        Required inputs: originalInvoiceId (UUID), creditAmount (min 0.01) and reasonCode (max 50 chars, kept for the audit trail); justificationNote (max 1000 chars) is optional.
+
+        Emits an ACCOUNTING_CREDIT_MEMO_CREATE event and posts the reversing GL entries.
+
+        Returns 404 when the invoice is not found, 409 when the amount exceeds the outstanding balance or the invoice is not finalized, and 401 when no authenticated user is present.
+
+        '
       operationId: createCreditMemo
       requestBody:
+        description: Credit to issue against a finalized invoice, with the audit reason code.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateCreditMemoRequest'
+            examples:
+              Partial credit:
+                description: Partial credit
+                value:
+                  originalInvoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  creditAmount: 45.0
+                  reasonCode: BILLING_ERROR
+                  justificationNote: Labor line billed twice
         required: true
       responses:
         '201':
@@ -3101,8 +4323,20 @@ paths:
     post:
       tags:
       - Credit Memos
-      summary: Void a posted credit memo
-      description: 'Void a POSTED Credit Memo: posts the mirror GL entry (Dr AR / Cr Revenue + Cr Sales-Tax Payable) dated at void time and restores the invoice''s outstanding balance. The memo''s original posting-period figures are never restated; the tax-liability report restores the reversed tax in the void''s period. Only POSTED memos are voidable — APPLIED memos have been consumed and VOIDED is terminal.'
+      summary: Void Credit Memo
+      description: 'Voids a POSTED credit memo by posting the mirror GL entry (debit AR, credit Revenue and Sales-Tax Payable) dated at void time, restoring the invoice''s outstanding balance.
+
+        Use this tool to back out a memo issued in error; do not use createCreditMemo, which issues new credit, and note that APPLIED memos have been consumed and cannot be voided.
+
+        Preconditions: the credit memo must exist and be in POSTED status; VOIDED is terminal.
+
+        Required inputs: creditMemoId (UUID) as a path parameter and a non-blank voidReason (max 1000 chars).
+
+        Emits an ACCOUNTING_CREDIT_MEMO_VOID event; the memo''s original posting-period figures are never restated, and the tax-liability report restores the reversed tax in the void''s period so GL drift stays zero.
+
+        Returns 404 when the memo is not found, 409 when it is not POSTED, and 400 when the void reason is missing or blank.
+
+        '
       operationId: voidCreditMemo
       parameters:
       - name: creditMemoId
@@ -3113,10 +4347,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Mandatory audit reason for voiding the posted memo.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/VoidCreditMemoRequest'
+            examples:
+              Void issued in error:
+                description: Void issued in error
+                value:
+                  voidReason: Memo issued against wrong invoice
         required: true
       responses:
         '200':
@@ -3152,14 +4392,36 @@ paths:
     post:
       tags:
       - Audit Trail
-      summary: Record a refund
-      description: Creates an audit trail entry for a refund exception with policy validation and settlement handling
-      operationId: recordRefund
+      summary: Record Refund Audit Entry
+      description: 'Records an audit trail entry for a refund exception, validating refund policy and settlement handling for the original payment before persisting.
+
+        Use this tool when a customer refund is granted; do not use refundCustomerCredit, which actually moves money out of a standing credit, and do not use recordPriceOverrideAudit for price changes.
+
+        Preconditions: the refund must pass the refund authorization policy for its type and amount; a denial records nothing.
+
+        Required inputs: invoiceId (UUID), paymentId (UUID), refundType, refundAmount and originalPaymentStatus; actorId is optional.
+
+        Emits an ACCOUNTING_AUDIT_REFUND event.
+
+        Returns 403 AUTHORIZATION_DENIED when separate authorization is required and absent, and 400 when required fields are missing.
+
+        '
+      operationId: recordRefundAudit
       requestBody:
+        description: Refund exception details with type, amount and original payment status.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RefundRequest'
+            examples:
+              Settled payment reversal:
+                description: Settled payment reversal
+                value:
+                  invoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  paymentId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  refundType: REVERSAL
+                  refundAmount: 25.0
+                  originalPaymentStatus: SETTLED
         required: true
       responses:
         '201':
@@ -3201,14 +4463,37 @@ paths:
     post:
       tags:
       - Audit Trail
-      summary: Record a price override
-      description: Creates an audit trail entry for a price override exception with policy validation
-      operationId: recordPriceOverride
+      summary: Record Price Override Audit Entry
+      description: 'Records an audit trail entry for a price override exception, validating the acting role''s authorization level against the override amount before persisting.
+
+        Use this tool when an order line price is overridden at the point of sale; do not use recordRefundAudit or recordCancellationAudit, which cover those other exception types.
+
+        Preconditions: the actor''s role must be authorized for the override delta; a denied authorization publishes an AuthorizationDenied event and records nothing.
+
+        Required inputs: orderId (UUID), lineItemId (UUID), originalPrice, adjustedPrice, actorRole and reason; categoryCode is optional.
+
+        Emits an ACCOUNTING_AUDIT_PRICE_OVERRIDE event.
+
+        Returns 403 AUTHORIZATION_DENIED when the role''s limit does not cover the override, and 400 when required fields are missing.
+
+        '
+      operationId: recordPriceOverrideAudit
       requestBody:
+        description: Price override exception with the acting role and audit reason.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PriceOverrideRequest'
+            examples:
+              Manager price override:
+                description: Manager price override
+                value:
+                  orderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  lineItemId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  originalPrice: 49.99
+                  adjustedPrice: 39.99
+                  actorRole: STORE_MANAGER
+                  reason: Price match against competitor
         required: true
       responses:
         '201':
@@ -3250,14 +4535,37 @@ paths:
     post:
       tags:
       - Audit Trail
-      summary: Record a cancellation
-      description: Creates an audit trail entry for an order or invoice cancellation
-      operationId: recordCancellation
+      summary: Record Cancellation Audit Entry
+      description: 'Records an audit trail entry for an order or invoice cancellation, capturing before and after document snapshots.
+
+        Use this tool when an order or invoice is cancelled upstream; do not use recordRefundAudit, which covers money returned on a retained document.
+
+        Preconditions: none enforced beyond validation; either orderId or invoiceId should identify the cancelled document.
+
+        Required inputs: cancellationType (ORDER_CANCELLED, INVOICE_CANCELLED or PAYMENT_FAILED), beforeSnapshot and afterSnapshot (JSON strings), actorRole and reason; orderId, invoiceId, actorId and partialPaymentInfo are optional.
+
+        Emits an ACCOUNTING_AUDIT_CANCELLATION event.
+
+        Returns 400 when required fields are missing.
+
+        '
+      operationId: recordCancellationAudit
       requestBody:
+        description: Cancellation exception with before and after document snapshots.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CancellationRequest'
+            examples:
+              Order cancellation:
+                description: Order cancellation
+                value:
+                  orderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  cancellationType: ORDER_CANCELLED
+                  beforeSnapshot: '{"status":"OPEN"}'
+                  afterSnapshot: '{"status":"CANCELLED"}'
+                  actorRole: SERVICE_ADVISOR
+                  reason: Customer cancelled before work began
         required: true
       responses:
         '201':
@@ -3293,14 +4601,39 @@ paths:
     post:
       tags:
       - AP Payments
-      summary: Execute vendor payment
-      description: 'Execute a vendor payment with optional explicit allocations to bills. Idempotent using paymentRef: same ref + same payload returns existing payment; same ref + different payload yields 409 conflict.'
-      operationId: executePayment
+      summary: Execute Vendor Payment
+      description: 'Executes an AP vendor payment through the payment gateway, optionally allocating it across approved vendor bills, and posts the corresponding GL entries.
+
+        Use this tool to pay a vendor; do not use applyPayment, which is the AR-side application of customer payments to invoices, and use listApBills first to find APPROVED bills to allocate against.
+
+        Preconditions: every allocated bill must exist, be APPROVED and belong to the vendor, and the allocation total must not exceed the gross amount.
+
+        Required inputs: vendorId (UUID), grossAmount (min 0.01), currency (3-char ISO code), paymentRef (max 100 chars, the idempotency key) and paymentMethod (e.g. ACH, CHECK); feeAmount, netAmount, paymentSource, memo and explicit allocations are optional.
+
+        Emits an AP_PAYMENT_EXECUTE event; the call is idempotent on paymentRef, replaying the same ref with the same payload as a 200 instead of paying twice.
+
+        Returns 200 on an idempotent replay, 409 IDEMPOTENCY_CONFLICT when the paymentRef exists with a different payload, 400 when a bill is missing, unapproved or over-allocated, and 500 PAYMENT_GATEWAY_FAILURE when the gateway cannot be reached.
+
+        '
+      operationId: executeApPayment
       requestBody:
+        description: Vendor payment instruction with idempotency key and optional bill allocations.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ExecuteAPPaymentRequest'
+            examples:
+              ACH payment allocated to one bill:
+                description: ACH payment allocated to one bill
+                value:
+                  vendorId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  grossAmount: 250.0
+                  currency: USD
+                  paymentRef: ap-pay-2026-08-13-007
+                  paymentMethod: ACH
+                  allocations:
+                  - vendorBillId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                    appliedAmount: 250.0
         required: true
       responses:
         '200':
@@ -3342,8 +4675,20 @@ paths:
     get:
       tags:
       - Vendor Directory API
-      summary: Search vendors by name
-      description: Case-insensitive name-contains search over the AP vendor directory, ordered by name. Omit the name parameter to list all vendors (up to the limit).
+      summary: Search Vendors By Name
+      description: 'Searches the AP vendor directory with a case-insensitive name-contains match, returning vendors ordered by name for typeahead use.
+
+        Use this tool to resolve a vendor name to its vendorId; use getVendorById instead when a vendor id is already known and only its label is needed.
+
+        Preconditions: none; a blank or absent name lists all vendors up to the limit.
+
+        Required inputs: none; name is an optional contains term and limit defaults to 20 with a server cap of 100.
+
+        Emits an ACCOUNTING_VENDOR_SEARCH audit event; no state changes.
+
+        Returns 200 with an empty list when no vendor name matches.
+
+        '
       operationId: searchVendors
       parameters:
       - name: name
@@ -3380,8 +4725,20 @@ paths:
     get:
       tags:
       - Vendor Directory API
-      summary: Get vendor by id
-      description: Resolves a single vendor by its identifier, e.g. to display a name for a deep-linked id
+      summary: Get Vendor By Id
+      description: 'Returns one AP vendor by its identifier, typically to display a name for a deep-linked vendor id.
+
+        Use this tool when the vendor id is already known; use searchVendors instead when resolving a name typed by a user.
+
+        Preconditions: the vendor must exist in the AP vendor directory.
+
+        Required inputs: vendorId (UUID) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_VENDOR_GET audit event; no state changes.
+
+        Returns 404 when no vendor exists for the supplied id.
+
+        '
       operationId: getVendorById
       parameters:
       - name: vendorId
@@ -3414,9 +4771,21 @@ paths:
     get:
       tags:
       - Vendor Bill API
-      summary: Get vendor bill by id
-      description: Retrieves a vendor bill by its unique identifier
-      operationId: getBillById
+      summary: Get Vendor Bill By Id
+      description: 'Returns one vendor bill with its status, amounts, match metadata and approval history.
+
+        Use this tool when the bill id is already known; use getVendorBillByOriginEventId instead when only the goods-received event id is available, or listApBills to browse APPROVED bills.
+
+        Preconditions: the vendor bill must exist.
+
+        Required inputs: billId (UUID) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_VENDOR_BILL_GET audit event; no state changes.
+
+        Returns 404 when no vendor bill exists for the supplied id.
+
+        '
+      operationId: getVendorBillById
       parameters:
       - name: billId
         in: path
@@ -3448,9 +4817,21 @@ paths:
     get:
       tags:
       - Vendor Bill API
-      summary: List match candidates
-      description: Lists unresolved match candidates for an ambiguous invoice event
-      operationId: listMatchCandidates
+      summary: List Vendor Bill Match Candidates
+      description: 'Lists the unresolved, scored candidate bills persisted when an invoice match came back AMBIGUOUS, ordered by score descending.
+
+        Use this tool to review the choices before calling selectVendorBillMatchCandidate; do not use resolveVendorBillMatchException, which handles single-bill discrepancies rather than ambiguity.
+
+        Preconditions: a matchVendorInvoice call for this invoice event must have produced an AMBIGUOUS outcome.
+
+        Required inputs: invoiceEventId (UUID of the triggering invoice event) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATES_LIST audit event; no state changes.
+
+        Returns 200 with an empty list when no unresolved candidates exist for the event.
+
+        '
+      operationId: listVendorBillMatchCandidates
       parameters:
       - name: invoiceEventId
         in: path
@@ -3476,9 +4857,21 @@ paths:
     get:
       tags:
       - Vendor Bill API
-      summary: Get vendor bill by origin event id
-      description: Retrieves a vendor bill by origin goods-received event identifier
-      operationId: getBillByOriginEventId
+      summary: Get Vendor Bill By Origin Event
+      description: 'Returns the vendor bill created from a specific goods-received event, using the event id recorded at bill creation.
+
+        Use this tool to check whether a goods-received event was already billed, for example before replaying it; use getVendorBillById instead when the bill id is known.
+
+        Preconditions: a bill must have been created from the event.
+
+        Required inputs: eventId (UUID of the origin GoodsReceivedEvent) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_VENDOR_BILL_GET_BY_EVENT audit event; no state changes.
+
+        Returns 404 when no vendor bill originates from the supplied event id.
+
+        '
+      operationId: getVendorBillByOriginEventId
       parameters:
       - name: eventId
         in: path
@@ -3510,8 +4903,20 @@ paths:
     get:
       tags:
       - Settlement Reconciliation
-      summary: List settlement lines
-      description: Lists the lines of one processor settlement (payout), optionally filtered to only the UNMATCHED lines awaiting review. Use this tool to triage a settlement before manually matching or writing off its unmatched lines. Matched lines are already posted; unmatched lines park their gross in the settlement suspense account until resolved (decision D-13). No preconditions and no side effects; an unknown settlementId returns an empty list.
+      summary: List Settlement Lines
+      description: 'Lists the lines of one processor settlement (payout), optionally filtered to only the UNMATCHED lines awaiting review; matched lines are already posted, while unmatched lines park their gross in the settlement suspense account until resolved.
+
+        Use this tool to triage a settlement before matchSettlementLine or writeOffSettlementLine; do not use those mutation tools just to inspect state.
+
+        Preconditions: none; an unknown settlementId returns an empty list rather than an error.
+
+        Required inputs: settlementId (the provider payout id string) as a path parameter; unmatchedOnly defaults to false.
+
+        Emits an ACCOUNTING_SETTLEMENT_LINES_LIST audit event; no state changes.
+
+        Returns 200 with an empty list when the settlement is unknown or fully filtered out.
+
+        '
       operationId: listSettlementLines
       parameters:
       - name: settlementId
@@ -3553,8 +4958,20 @@ paths:
     get:
       tags:
       - Location Cost Reporting
-      summary: Generate Labor & Overhead Cost Report
-      description: Return the canonical Labor & Overhead cost-line matrix (12 monthly amounts + YTD, with section subtotals) for a location and fiscal year, derived from posted GL data.
+      summary: Generate Labor Overhead Cost Report
+      description: 'Generates the read-only Location Labor and Overhead Cost Report: the canonical cost-line matrix of 12 monthly amounts plus YTD with section subtotals, for one location and fiscal year, derived entirely from posted GL data.
+
+        Use this tool for location-level labor and overhead cost review; do not use generateIncomeStatement, which is the org-wide statement without the location dimension.
+
+        Preconditions: none; a location with no posted activity yields zeroed lines.
+
+        Required inputs: locationId (the accounting locationId dimension, e.g. LOC-107) and fiscalYear (four-digit year); asOfMonth (1-12) is optional and defaults to 12, bounding the YTD column.
+
+        Emits a REPORT_LABOR_OVERHEAD_GENERATE audit event; no state changes.
+
+        Returns 400 when fiscalYear is not a four-digit year or asOfMonth is outside 1 to 12.
+
+        '
       operationId: generateLaborOverheadReport
       parameters:
       - name: locationId
@@ -3616,7 +5033,19 @@ paths:
       tags:
       - Financial Reporting
       summary: Generate Trial Balance
-      description: 'Generate Trial Balance as of a specific date: per-account debit/credit/balance rows from POSTED journal lines, grand totals proving sum(debit) == sum(credit), and an entry-number gap-check footnote per monthly sequence scope'
+      description: 'Generates the Trial Balance as of a specific date: per-account debit, credit and balance rows from POSTED journal lines, grand totals proving total debits equal total credits, and an entry-number gap-check footnote per monthly sequence scope.
+
+        Use this tool to prove ledger integrity before period close; do not use generateBalanceSheet, which classifies balances into statement sections.
+
+        Preconditions: none; rows are empty when no POSTED data exists as of the date.
+
+        Required inputs: asOf (ISO date) as a query parameter.
+
+        Emits a REPORT_TRIAL_BALANCE_GENERATE audit event; no state changes.
+
+        Returns 400 when the asOf date is missing or malformed.
+
+        '
       operationId: generateTrialBalance
       parameters:
       - name: asOf
@@ -3661,9 +5090,21 @@ paths:
     get:
       tags:
       - Financial Reporting
-      summary: Generate Sales-Tax Liability report
-      description: 'Generate the reconciliation-grade sales-tax liability report for a date range: per-jurisdiction (state/county/city/special) taxable base, exempt base with reasons, gross tax collected, POSTED credit-memo reversals netted pro-rata, and net tax; plus a GL-drift column reconciling total net tax against the Sales-Tax Payable (2200) account activity. Accrual basis: invoice tax bucketed by finalization period, credits by posting period.'
-      operationId: generateTaxLiability
+      summary: Generate Sales-Tax Liability Report
+      description: 'Generates the reconciliation-grade sales-tax liability report for a date range: per-jurisdiction (state, county, city, special) taxable base, exempt base with reasons, gross tax collected, POSTED credit-memo reversals netted pro-rata, and net tax, plus a GL-drift column reconciling total net tax against Sales-Tax Payable (2200) activity.
+
+        Use this tool for filing-period review on the accrual basis, where invoice tax buckets by finalization period and credits by posting period; do not use createTaxLiabilitySnapshot, which freezes a closed period''s figures for filing.
+
+        Preconditions: none; rows are empty when no in-period tax exists.
+
+        Required inputs: startDate and endDate (ISO dates), with endDate on or after startDate.
+
+        Emits a REPORT_TAX_LIABILITY_GENERATE audit event; no state changes.
+
+        Returns 400 when the end date is before the start date.
+
+        '
+      operationId: generateTaxLiabilityReport
       parameters:
       - name: startDate
         in: query
@@ -3716,9 +5157,21 @@ paths:
       tags:
       - Financial Reporting
       - Financial Reporting for Tax Liability
-      summary: Get a Sales-Tax Liability snapshot
-      description: Full frozen snapshot including per-jurisdiction rows, totals, reconciliation, and hash.
-      operationId: getSnapshot
+      summary: Get Sales-Tax Liability Snapshot
+      description: 'Returns one frozen Sales-Tax Liability snapshot in full: per-jurisdiction rows, totals, reconciliation and the canonical content hash.
+
+        Use this tool to read filing figures exactly as frozen; use listTaxLiabilitySnapshots instead when hunting for the right snapshot, and verifyTaxLiabilitySnapshot to check it against live data.
+
+        Preconditions: the snapshot must exist.
+
+        Required inputs: snapshotId (UUID) as a path parameter; there is no request body.
+
+        Emits a TAX_LIABILITY_SNAPSHOT_GET audit event; the snapshot is immutable and never changed by reads.
+
+        Returns 404 TAX_SNAPSHOT_NOT_FOUND when no snapshot exists for the supplied id.
+
+        '
+      operationId: getTaxLiabilitySnapshot
       parameters:
       - name: snapshotId
         in: path
@@ -3762,7 +5215,19 @@ paths:
       tags:
       - Financial Reporting
       summary: Generate Income Statement
-      description: Generate Profit & Loss report for a date range with revenue, expenses, and net income
+      description: 'Generates the Profit and Loss statement for a date range, aggregating POSTED journal activity into revenue, expense and net-income lines.
+
+        Use this tool for period profitability; do not use generateBalanceSheet, which is the point-in-time financial position, and use drilldownToAccounts to expand a statement line.
+
+        Preconditions: none; a period with no POSTED activity yields zeroed lines.
+
+        Required inputs: startDate and endDate (ISO dates) as query parameters, with endDate on or after startDate.
+
+        Emits a REPORT_INCOME_STATEMENT_GENERATE audit event; no state changes.
+
+        Returns 400 when the end date is before the start date.
+
+        '
       operationId: generateIncomeStatement
       parameters:
       - name: startDate
@@ -3816,7 +5281,19 @@ paths:
       tags:
       - Financial Reporting
       summary: Generate General Ledger
-      description: 'Generate a General Ledger report for a date range: per-account chronological POSTED journal lines with a running balance, opening/closing balances, and grand totals. Optionally filter to a single account.'
+      description: 'Generates the General Ledger report for a date range: per-account chronological POSTED journal lines with a running balance, opening and closing balances, and grand totals.
+
+        Use this tool for full ledger detail over a period; do not use generateTrialBalance, which shows only closing balances per account, and use drilldownToJournalLines for a single account slice.
+
+        Preconditions: none; sections are empty when no POSTED activity exists.
+
+        Required inputs: startDate and endDate (ISO dates), with endDate on or after startDate; accountId (UUID) is optional and restricts the report to one account.
+
+        Emits a REPORT_GENERAL_LEDGER_GENERATE audit event; no state changes.
+
+        Returns 400 when the account id is not a UUID or the end date precedes the start date.
+
+        '
       operationId: generateGeneralLedger
       parameters:
       - name: accountId
@@ -3877,8 +5354,20 @@ paths:
     get:
       tags:
       - Financial Reporting
-      summary: Drilldown to Journal Lines
-      description: Show source journal entries contributing to a GL account balance
+      summary: Drilldown To Journal Lines
+      description: 'Shows the source journal lines contributing to a GL account''s balance over a date range, completing the statement-to-transaction audit path.
+
+        Use this tool after drilldownToAccounts has identified the account of interest; use getJournalEntry instead to open a full entry from a returned line.
+
+        Preconditions: the accountId path parameter must be a UUID.
+
+        Required inputs: accountId (UUID) as a path parameter plus startDate and endDate (ISO dates), with endDate on or after startDate.
+
+        Emits a REPORT_DRILLDOWN_JOURNAL_LINES audit event; no state changes.
+
+        Returns 400 when the account id is not a UUID or the end date precedes the start date.
+
+        '
       operationId: drilldownToJournalLines
       parameters:
       - name: accountId
@@ -3948,8 +5437,20 @@ paths:
     get:
       tags:
       - Financial Reporting
-      summary: Drilldown to Accounts
-      description: Show which GL accounts contribute to a specific statement line
+      summary: Drilldown To Accounts
+      description: 'Shows which GL accounts contribute to a specific financial-statement line over a date range, with each account''s contribution amount.
+
+        Use this tool to expand one line of an income statement or balance sheet; do not use drilldownToJournalLines, which is the next level down from an account to its source entries.
+
+        Preconditions: the statementLineCode must follow the uppercase-and-underscores format (e.g. REVENUE_SALES).
+
+        Required inputs: statementLineCode as a path parameter plus startDate and endDate (ISO dates), with endDate on or after startDate.
+
+        Emits a REPORT_DRILLDOWN_ACCOUNTS audit event; no state changes.
+
+        Returns 400 when the code format is invalid or the end date precedes the start date.
+
+        '
       operationId: drilldownToAccounts
       parameters:
       - name: statementLineCode
@@ -4019,7 +5520,19 @@ paths:
       tags:
       - Financial Reporting
       summary: Generate Balance Sheet
-      description: Generate Balance Sheet as of a specific date with assets, liabilities, and equity
+      description: 'Generates the Balance Sheet as of a specific date, presenting assets, liabilities and equity from POSTED journal activity.
+
+        Use this tool for financial position at a point in time; do not use generateIncomeStatement, which covers activity over a period, and use generateTrialBalance for the raw per-account debit and credit proof.
+
+        Preconditions: none; a date with no POSTED activity yields zeroed sections.
+
+        Required inputs: asOfDate (ISO date) as a query parameter.
+
+        Emits a REPORT_BALANCE_SHEET_GENERATE audit event; no state changes.
+
+        Returns 400 when the asOfDate is missing or malformed.
+
+        '
       operationId: generateBalanceSheet
       parameters:
       - name: asOfDate
@@ -4065,7 +5578,19 @@ paths:
       tags:
       - Financial Reporting
       summary: Generate Aged Receivables
-      description: 'Generate the Aged Receivables report as of a date: per-customer open invoice balances bucketed by days past due (0-30 / 31-60 / 61-90 / 90+) with grand totals.'
+      description: 'Generates the Aged Receivables report as of a date: per-customer open invoice balances bucketed by days past due (0-30, 31-60, 61-90, 90+) with grand totals.
+
+        Use this tool to review customer collection exposure; do not use generateAgedPayables, which is the vendor-side mirror of this report.
+
+        Preconditions: none; rows are empty when no open receivables exist.
+
+        Required inputs: asOfDate (ISO date) as a query parameter.
+
+        Emits a REPORT_AGED_RECEIVABLES_GENERATE audit event; no state changes.
+
+        Returns 400 when the asOfDate is missing or malformed.
+
+        '
       operationId: generateAgedReceivables
       parameters:
       - name: asOfDate
@@ -4111,7 +5636,19 @@ paths:
       tags:
       - Financial Reporting
       summary: Generate Aged Payables
-      description: 'Generate the Aged Payables report as of a date: per-vendor open vendor-bill balances bucketed by days past due (0-30 / 31-60 / 61-90 / 90+) with grand totals.'
+      description: 'Generates the Aged Payables report as of a date: per-vendor open vendor-bill balances bucketed by days past due (0-30, 31-60, 61-90, 90+) with grand totals.
+
+        Use this tool to review what is owed to vendors and how overdue it is; do not use generateAgedReceivables, which is the customer-side mirror, and use listApBills to pick individual bills for payment.
+
+        Preconditions: none; rows are empty when no open payables exist.
+
+        Required inputs: asOfDate (ISO date) as a query parameter.
+
+        Emits a REPORT_AGED_PAYABLES_GENERATE audit event; no state changes.
+
+        Returns 400 when the asOfDate is missing or malformed.
+
+        '
       operationId: generateAgedPayables
       parameters:
       - name: asOfDate
@@ -4156,9 +5693,21 @@ paths:
     get:
       tags:
       - Financial Reporting
-      summary: Get export status
-      description: Poll the current status of an async report export job.
-      operationId: getExportStatus
+      summary: Get Report Export Status
+      description: 'Returns the current status of an asynchronous report export job: PENDING, IN_PROGRESS, COMPLETED or FAILED.
+
+        Use this tool to poll a job created by requestReportExport; do not use downloadReportExport until the status is COMPLETED.
+
+        Preconditions: the export job must exist.
+
+        Required inputs: exportId (UUID) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_REPORT_EXPORT_STATUS audit event; no state changes.
+
+        Returns 404 EXPORT_JOB_NOT_FOUND when no export job exists for the supplied id.
+
+        '
+      operationId: getReportExportStatus
       parameters:
       - name: exportId
         in: path
@@ -4201,9 +5750,21 @@ paths:
     get:
       tags:
       - Financial Reporting
-      summary: Download rendered export artifact
-      description: Download the rendered CSV or PDF artifact of a COMPLETED export job.
-      operationId: downloadExport
+      summary: Download Report Export Artifact
+      description: 'Downloads the rendered artifact of a COMPLETED export job as an attachment whose content type matches the requested format, for example text/csv or application/pdf.
+
+        Use this tool after getReportExportStatus reports COMPLETED; do not use it earlier, and note it requires reporting:view:financial-statements because the artifact carries actual financial figures.
+
+        Preconditions: the export job must exist, be COMPLETED and still have its artifact.
+
+        Required inputs: exportId (UUID) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_REPORT_EXPORT_DOWNLOAD audit event; no state changes.
+
+        Returns 404 when the job or its artifact is missing, and 409 when the job is not COMPLETED.
+
+        '
+      operationId: downloadReportExport
       parameters:
       - name: exportId
         in: path
@@ -4257,8 +5818,20 @@ paths:
     get:
       tags:
       - Bank Reconciliation
-      summary: List reconciliations
-      description: Lists reconciliations, optionally filtered by glAccountId and/or status, most recent first. Paginated. No side effects.
+      summary: List Reconciliations
+      description: 'Lists bank reconciliations most recent first as a paginated projection, optionally filtered by GL account and status.
+
+        Use this tool to find in-progress or finalized reconciliations; do not use getReconciliation, which fetches one reconciliation with its lines by id.
+
+        Preconditions: none beyond the caller holding accounting:reconciliation:view.
+
+        Required inputs: none; glAccountId and status (IN_PROGRESS, FINALIZED) are optional filters, page defaults to 0 and size to 20.
+
+        Emits an ACCOUNTING_RECONCILIATION_LIST audit event; no state changes.
+
+        Returns 200 with an empty page when nothing matches the filters.
+
+        '
       operationId: listReconciliations
       parameters:
       - name: glAccountId
@@ -4318,8 +5891,20 @@ paths:
     get:
       tags:
       - Bank Reconciliation
-      summary: Get a reconciliation
-      description: Returns one reconciliation with its imported statement lines and adjustments. Returns 404 RECONCILIATION_NOT_FOUND if the id is unknown.
+      summary: Get Reconciliation
+      description: 'Returns one bank reconciliation with its imported statement lines, match state and adjustments.
+
+        Use this tool when the reconciliation id is already known; use listReconciliations instead when searching by account or status, or getReconciliationReport for the balance summary view.
+
+        Preconditions: the reconciliation must exist.
+
+        Required inputs: reconciliationId (UUID) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_RECONCILIATION_GET audit event; no state changes.
+
+        Returns 404 RECONCILIATION_NOT_FOUND when the id is unknown.
+
+        '
       operationId: getReconciliation
       parameters:
       - name: reconciliationId
@@ -4357,8 +5942,20 @@ paths:
     get:
       tags:
       - Bank Reconciliation
-      summary: Reconciliation report
-      description: 'Returns the reconciliation report: opening (GL) and closing (statement) balances, matched vs outstanding lines, adjustments, and the outstanding difference. Returns 404 RECONCILIATION_NOT_FOUND if the id is unknown.'
+      summary: Get Reconciliation Report
+      description: 'Returns the reconciliation report: opening GL and closing statement balances, matched versus outstanding lines, adjustments and the outstanding difference.
+
+        Use this tool to see how far a reconciliation is from balancing before finalizeReconciliation; use getReconciliation instead for the raw line-level detail.
+
+        Preconditions: the reconciliation must exist.
+
+        Required inputs: reconciliationId (UUID) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_RECONCILIATION_REPORT audit event; no state changes.
+
+        Returns 404 RECONCILIATION_NOT_FOUND when the id is unknown.
+
+        '
       operationId: getReconciliationReport
       parameters:
       - name: reconciliationId
@@ -4396,8 +5993,20 @@ paths:
     get:
       tags:
       - Bank Reconciliation
-      summary: Reconciliation audit trail
-      description: Returns the audit trail of a reconciliation's actions (import, matches, adjustments, finalize), ordered by time. Returns 404 RECONCILIATION_NOT_FOUND if the id is unknown.
+      summary: Get Reconciliation Audit Trail
+      description: 'Returns the time-ordered audit trail of a reconciliation''s actions: import, matches, unmatches, adjustments and finalize, each with the acting user.
+
+        Use this tool when reviewing who did what during a reconciliation; use getReconciliationReport instead for the balance summary.
+
+        Preconditions: the reconciliation must exist.
+
+        Required inputs: reconciliationId (UUID) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_RECONCILIATION_AUDIT audit event; no state changes.
+
+        Returns 404 RECONCILIATION_NOT_FOUND when the id is unknown.
+
+        '
       operationId: getReconciliationAudit
       parameters:
       - name: reconciliationId
@@ -4435,8 +6044,20 @@ paths:
     get:
       tags:
       - Bank Reconciliation
-      summary: List reconciliation adjustment types
-      description: Returns the supported reconciliation adjustment types (decision D-6) so the frontend never hardcodes the enum. No preconditions and no side effects.
+      summary: List Reconciliation Adjustment Types
+      description: 'Returns the supported reconciliation adjustment types with their sign rules (BANK_FEE and NSF_FEE negative-only, INTEREST_EARNED positive-only, OTHER any), so clients never hardcode the enum.
+
+        Use this tool to populate an adjustment picker before calling addReconciliationAdjustment; do not use addReconciliationAdjustment itself just to discover the types.
+
+        Preconditions: none.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        Emits an ACCOUNTING_RECONCILIATION_ADJUSTMENT_TYPES_LIST audit event; no state changes.
+
+        Returns 200 with the full static type list.
+
+        '
       operationId: listReconciliationAdjustmentTypes
       responses:
         '200':
@@ -4462,8 +6083,20 @@ paths:
     get:
       tags:
       - Posting Rules
-      summary: List posting rule versions
-      description: List versions for a posting rule set.
+      summary: List Posting Rule Versions
+      description: 'Lists the version history of one posting rule set with each version''s DRAFT, PUBLISHED or ARCHIVED state and timestamps.
+
+        Use this tool to audit how a rule set evolved; use getPostingRuleSet instead for the set''s current metadata only.
+
+        Preconditions: the posting rule set must exist; a set always has at least its initial version.
+
+        Required inputs: postingRuleSetId (UUID) as a path parameter; page defaults to 0 and size to 10.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when the page index is beyond the version history.
+
+        '
       operationId: listPostingRuleVersions
       parameters:
       - name: postingRuleSetId
@@ -4517,8 +6150,20 @@ paths:
     get:
       tags:
       - Mapping Keys
-      summary: List mapping keys by category
-      description: Retrieve paginated mapping keys for a posting category.
+      summary: List Mapping Keys By Category
+      description: 'Lists the mapping keys of one posting category as a paginated projection, optionally filtered by active flag.
+
+        Use this tool when browsing a category''s keys; do not use getMappingKey, which fetches a single key by id.
+
+        Preconditions: the posting category must exist.
+
+        Required inputs: postingCategoryId (UUID) as a path parameter; page defaults to 0, size to 20, sort to keyName (an unsupported sort field silently falls back to keyName), and isActive is an optional filter.
+
+        Emits an ACCOUNTING_MAPPING_KEY_LIST audit event; no state changes.
+
+        Returns 404 when the posting category does not exist.
+
+        '
       operationId: listMappingKeysByCategory
       parameters:
       - name: postingCategoryId
@@ -4588,8 +6233,20 @@ paths:
     get:
       tags:
       - Accounting Periods
-      summary: List accounting periods
-      description: Lists all known accounting periods, most recent first (descending period code). Use this tool to review period statuses before closing or reopening a period. Periods are auto-provisioned on first posting, so months never posted into may be absent; an absent month counts as OPEN for posting purposes. No preconditions and no side effects; nothing is created by this call.
+      summary: List Accounting Periods
+      description: 'Lists all known accounting periods with their OPEN or CLOSED status, most recent first (descending period code).
+
+        Use this tool to review period statuses before closing or reopening a period; do not use closeAccountingPeriod or reopenAccountingPeriod, which perform the state transitions.
+
+        Preconditions: none; periods are auto-provisioned on first posting, so months never posted into may be absent, and an absent month counts as OPEN for posting purposes.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        Emits an ACCOUNTING_PERIOD_LIST audit event; nothing is created or changed by this call.
+
+        Returns 200 with an empty list when no period has ever been provisioned.
+
+        '
       operationId: listAccountingPeriods
       responses:
         '200':
@@ -4615,9 +6272,21 @@ paths:
     get:
       tags:
       - Journal Entries
-      summary: Get journal traceability
-      description: Trace a journal entry across related records.
-      operationId: getJournalTraceability
+      summary: Get Journal Entry Traceability
+      description: 'Returns the traceability chain for a journal entry: its source event, posting rule set and version, and any reversal relationships.
+
+        Use this tool when auditing where an entry came from; use getJournalEntry instead for the entry''s lines and amounts.
+
+        Preconditions: the journal entry must exist; system-generated entries carry source-event links while manual entries may not.
+
+        Required inputs: journalEntryId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 400 with code VALIDATION_ERROR when no journal entry exists for the supplied id.
+
+        '
+      operationId: getJournalEntryTraceability
       parameters:
       - name: journalEntryId
         in: path
@@ -4648,8 +6317,20 @@ paths:
     get:
       tags:
       - Invoice Payments
-      summary: Get invoice status
-      description: Retrieve current payment status for an invoice.
+      summary: Get Invoice Payment Status
+      description: 'Returns the current payment status of an invoice as tracked by the accounting module''s invoice replica.
+
+        Use this tool to check whether an invoice is open, partially paid or paid before applying payments or credits; do not use applyPayment, which changes the status.
+
+        Preconditions: the invoice must be known to the accounting module.
+
+        Required inputs: invoiceId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the invoice is not found, and 400 when the identifier is rejected by the status service.
+
+        '
       operationId: getInvoiceStatus
       parameters:
       - name: invoiceId
@@ -4687,8 +6368,20 @@ paths:
     get:
       tags:
       - Invoice Payments
-      summary: Get billing rules
-      description: Retrieve billing rules for a customer.
+      summary: Get Customer Billing Rules
+      description: 'Returns the billing rule references configured for a customer, fetched from the customer service.
+
+        Use this tool to inspect how a customer is billed before generating or regenerating invoices; do not use regenerateInvoiceFromWorkorder, which performs the regeneration itself.
+
+        Preconditions: the customer must exist in the customer service.
+
+        Required inputs: customerId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection over a cross-service call.
+
+        Returns 404 when the customer is not found, and 503 when the customer service is unavailable.
+
+        '
       operationId: getBillingRules
       parameters:
       - name: customerId
@@ -4726,9 +6419,21 @@ paths:
     get:
       tags:
       - GL Accounts
-      summary: Get GL account balance
-      description: Retrieve the current balance for a GL account.
-      operationId: getAccountBalance
+      summary: Get GL Account Balance
+      description: 'Returns the current posted balance of one GL account, computed from its journal entry lines.
+
+        Use this tool for a single account''s balance; use the trial balance report in financial reporting instead when balances for the whole chart are needed.
+
+        Preconditions: the GL account must exist; an account with no postings reports a zero balance.
+
+        Required inputs: glAccountId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no GL account exists for the supplied id.
+
+        '
+      operationId: getGLAccountBalance
       parameters:
       - name: glAccountId
         in: path
@@ -4759,9 +6464,21 @@ paths:
     get:
       tags:
       - Accounting Exports
-      summary: Get export job status
-      description: Retrieve the current status of an export job.
-      operationId: getExportStatus_1
+      summary: Get Export Job Status
+      description: 'Returns the current status of one timekeeping or generic export job.
+
+        Use this tool to poll a job created by requestExport; use listExportHistory instead to browse all past jobs.
+
+        Preconditions: the export job must exist.
+
+        Required inputs: jobId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 EXPORT_JOB_NOT_FOUND when no export job exists for the supplied id.
+
+        '
+      operationId: getExportStatus
       parameters:
       - name: jobId
         in: path
@@ -4798,8 +6515,20 @@ paths:
     get:
       tags:
       - Accounting Exports
-      summary: List export history
-      description: Retrieve paginated export job history.
+      summary: List Export Job History
+      description: 'Lists timekeeping and generic export jobs as a paginated projection, most recent first.
+
+        Use this tool to review past export jobs; do not use getExportStatus, which polls one job by its id.
+
+        Preconditions: none beyond the caller holding accounting:export:view.
+
+        Required inputs: none; the page defaults to 20 items and only requestedAt is a supported sort property.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 400 UNSUPPORTED_SORT_PROPERTY when an unsupported sort property is requested.
+
+        '
       operationId: listExportHistory
       parameters:
       - name: pageable
@@ -4829,9 +6558,21 @@ paths:
     get:
       tags:
       - Accounting Events
-      summary: Get event
-      description: Retrieve details for an accounting event.
-      operationId: getEvent
+      summary: Get Accounting Event
+      description: 'Returns one ingested accounting event with its payload, processing status and idempotency outcome.
+
+        Use this tool when the event id is already known; use listAccountingEvents instead when searching by type, status or time range.
+
+        Preconditions: the event must exist.
+
+        Required inputs: eventId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 EVENT_NOT_FOUND when no accounting event exists for the supplied id.
+
+        '
+      operationId: getAccountingEvent
       parameters:
       - name: eventId
         in: path
@@ -4862,9 +6603,21 @@ paths:
     get:
       tags:
       - Accounting Events
-      summary: Get reprocessing history
-      description: Retrieve all reprocessing attempts for a suspended accounting event. Returns an empty list if the event does not exist or has no reprocessing history.
-      operationId: getReprocessingHistory
+      summary: Get Event Reprocessing History
+      description: 'Returns every recorded reprocessing attempt for an accounting event, including who triggered each attempt and its outcome.
+
+        Use this tool when auditing a suspended event''s correction history; use getEventProcessingLog instead for the step-by-step pipeline log of a single run.
+
+        Preconditions: none; an unknown event yields an empty list rather than an error.
+
+        Required inputs: eventId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when the event does not exist or was never reprocessed.
+
+        '
+      operationId: getEventReprocessingHistory
       parameters:
       - name: eventId
         in: path
@@ -4891,8 +6644,20 @@ paths:
     get:
       tags:
       - Accounting Events
-      summary: Get event processing log
-      description: Retrieve the structured processing audit log for an accounting event. Returns an empty list if the event has no processing log.
+      summary: Get Event Processing Log
+      description: 'Returns the structured, step-by-step processing audit log for one accounting event, covering rule matching, mapping resolution and posting outcomes.
+
+        Use this tool to diagnose why an event suspended or failed; use getEventReprocessingHistory instead for the list of manual reprocessing attempts.
+
+        Preconditions: none; an event with no log yields an empty list.
+
+        Required inputs: eventId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when the event has no processing log.
+
+        '
       operationId: getEventProcessingLog
       parameters:
       - name: eventId
@@ -4920,8 +6685,20 @@ paths:
     get:
       tags:
       - Accounting Events
-      summary: Get event envelope contract
-      description: Returns the current event envelope schema contract for SDK validation.
+      summary: Get Event Envelope Contract
+      description: 'Returns the current accounting event envelope schema contract, which SDKs use to validate events before submission.
+
+        Use this tool to fetch the authoritative envelope shape before calling submitAccountingEvent; do not use submitAccountingEvent itself to probe validation rules.
+
+        Preconditions: none.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the contract document.
+
+        '
       operationId: getEventContract
       responses:
         '200':
@@ -4945,8 +6722,20 @@ paths:
     get:
       tags:
       - Default GL Mappings
-      summary: Search default GL mappings
-      description: Find default GL mappings by event type or organization
+      summary: Search Default GL Mappings
+      description: 'Finds default GL mappings filtered by event type or organization; when both filters are omitted it returns the global defaults only.
+
+        Use this tool to filter the fallback catalog; do not use resolveDefaultMapping, which applies the org-then-global resolution priority to pick the single winning mapping.
+
+        Preconditions: none; eventType takes precedence when both filters are supplied.
+
+        Required inputs: none; eventType and organizationId are optional query parameters.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when nothing matches the filter.
+
+        '
       operationId: searchDefaultMappings
       parameters:
       - name: eventType
@@ -4988,8 +6777,20 @@ paths:
     get:
       tags:
       - Default GL Mappings
-      summary: Resolve default mapping for event
-      description: Find the most specific active default mapping for an event type and organization
+      summary: Resolve Default Mapping For Event
+      description: 'Finds the most specific active default mapping for an event type, preferring an org-scoped mapping over the global one.
+
+        Use this tool to see which fallback the posting engine would use for an event; do not use searchDefaultMappings, which lists matches without applying resolution priority.
+
+        Preconditions: an active default mapping must exist for the event type at org or global scope.
+
+        Required inputs: eventType as a query parameter; organizationId (UUID) is optional and widens resolution to that org''s mappings first.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no active default mapping resolves for the event type.
+
+        '
       operationId: resolveDefaultMapping
       parameters:
       - name: eventType
@@ -5034,9 +6835,21 @@ paths:
     get:
       tags:
       - Default GL Mappings
-      summary: List global default mappings
-      description: Retrieve all global default GL mappings (organizationId IS NULL)
-      operationId: listGlobalDefaults
+      summary: List Global Default Mappings
+      description: 'Returns all global default GL mappings, meaning those with no organizationId, which act as the last fallback before an event type fails as UNMAPPED_EVENT_TYPE.
+
+        Use this tool to audit the global safety net; use searchDefaultMappings instead when org-scoped mappings are also of interest.
+
+        Preconditions: none beyond the caller holding accounting:default-mapping:view.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when no global defaults are configured.
+
+        '
+      operationId: listGlobalDefaultMappings
       responses:
         '200':
           description: Global default mappings returned
@@ -5063,8 +6876,20 @@ paths:
     get:
       tags:
       - Customer Credits
-      summary: List customer credits
-      description: List AR customer credits with their remaining open amounts, optionally filtered by customer and consumption state.
+      summary: List Customer Credits
+      description: 'Lists AR customer credits with their remaining open amounts as a paginated projection, optionally filtered by customer and consumption state.
+
+        Use this tool to find open credit before applying or refunding; do not use getCustomerCredit, which fetches one credit by its known id.
+
+        Preconditions: none beyond the caller holding accounting:customer-credit:view.
+
+        Required inputs: none; customerId and status are optional filters, with standard page, size and sort parameters.
+
+        Emits an ACCOUNTING_CUSTOMER_CREDIT_LIST audit event; no state changes.
+
+        Returns 200 with an empty page when nothing matches the filters.
+
+        '
       operationId: listCustomerCredits
       parameters:
       - name: customerId
@@ -5105,8 +6930,20 @@ paths:
     get:
       tags:
       - Customer Credits
-      summary: Get customer credit
-      description: Fetch one AR customer credit with its applied/refunded totals and remaining open amount.
+      summary: Get Customer Credit
+      description: 'Returns one AR customer credit with its applied and refunded totals and the remaining open amount.
+
+        Use this tool when the credit id is already known; use listCustomerCredits instead when searching by customer or consumption state.
+
+        Preconditions: the customer credit must exist.
+
+        Required inputs: creditId (UUID) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_CUSTOMER_CREDIT_GET audit event; no state changes.
+
+        Returns 404 when no customer credit exists for the supplied id.
+
+        '
       operationId: getCustomerCredit
       parameters:
       - name: creditId
@@ -5138,8 +6975,20 @@ paths:
     get:
       tags:
       - Credit Memos
-      summary: Get credit memo
-      description: Retrieve details for a specific Credit Memo by ID. Includes full audit trail and current invoice balance.
+      summary: Get Credit Memo
+      description: 'Returns one credit memo with its amounts, status, audit trail and the invoice''s current balance.
+
+        Use this tool when the memo id is already known; use listCreditMemos instead when searching by customer, invoice or status.
+
+        Preconditions: the credit memo must exist.
+
+        Required inputs: creditMemoId (UUID) as a path parameter; there is no request body.
+
+        Emits an ACCOUNTING_CREDIT_MEMO_GET audit event; no state changes.
+
+        Returns 404 when no credit memo exists for the supplied id.
+
+        '
       operationId: getCreditMemo
       parameters:
       - name: creditMemoId
@@ -5171,9 +7020,21 @@ paths:
     get:
       tags:
       - Audit Trail
-      summary: Get audit trail by exception type
-      description: Retrieves audit trail entries filtered by exception type and date range
-      operationId: getByType
+      summary: Get Audit Trail By Exception Type
+      description: 'Returns audit trail entries of one exception type (PRICE_OVERRIDE, REFUND or CANCELLATION) within a date range.
+
+        Use this tool to review one exception category across documents; use getAuditTrailByActor instead when reviewing one user''s activity.
+
+        Preconditions: none; an empty range yields an empty list.
+
+        Required inputs: type as a path parameter plus startDate and endDate (ISO-8601 instants) as query parameters.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 400 when the type or dates cannot be parsed.
+
+        '
+      operationId: getAuditTrailByType
       parameters:
       - name: type
         in: path
@@ -5233,9 +7094,21 @@ paths:
     get:
       tags:
       - Audit Trail
-      summary: Get audit trail by date range
-      description: Retrieves all audit trail entries within a specified date range
-      operationId: getByDateRange
+      summary: Get Audit Trail By Date Range
+      description: 'Returns all audit trail entries of every exception type within a date range.
+
+        Use this tool for a broad period review; use getAuditTrailByType or getAuditTrailByActor instead when a narrower slice is wanted.
+
+        Preconditions: none; a quiet range yields an empty list.
+
+        Required inputs: startDate and endDate (ISO-8601 instants) as query parameters.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 400 when the dates cannot be parsed.
+
+        '
+      operationId: getAuditTrailByDateRange
       parameters:
       - name: startDate
         in: query
@@ -5285,9 +7158,21 @@ paths:
     get:
       tags:
       - Audit Trail
-      summary: Get audit trail for invoice
-      description: Retrieves all audit trail entries associated with a specific invoice
-      operationId: getByInvoiceId
+      summary: Get Audit Trail For Invoice
+      description: 'Returns all audit trail entries recorded against one invoice, covering refunds and cancellations.
+
+        Use this tool when the invoice id is known; use getAuditTrailByOrder for order-scoped entries instead.
+
+        Preconditions: none; an invoice with no exceptions yields an empty list.
+
+        Required inputs: invoiceId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when no audit entries exist for the invoice.
+
+        '
+      operationId: getAuditTrailByInvoice
       parameters:
       - name: invoiceId
         in: path
@@ -5329,9 +7214,21 @@ paths:
     get:
       tags:
       - Audit Trail
-      summary: Get audit trail for order
-      description: Retrieves all audit trail entries associated with a specific order
-      operationId: getByOrderId
+      summary: Get Audit Trail For Order
+      description: 'Returns all audit trail entries recorded against one order, covering price overrides and cancellations.
+
+        Use this tool when the order id is known; use getAuditTrailByType or getAuditTrailByDateRange instead for cross-document review.
+
+        Preconditions: none; an order with no exceptions yields an empty list.
+
+        Required inputs: orderId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when no audit entries exist for the order.
+
+        '
+      operationId: getAuditTrailByOrder
       parameters:
       - name: orderId
         in: path
@@ -5373,9 +7270,21 @@ paths:
     get:
       tags:
       - Audit Trail
-      summary: Get audit trail for order
-      description: Retrieves all audit trail entries associated with a specific order
-      operationId: getByOrderId_1
+      summary: Get Audit Trail For Order
+      description: 'Returns all audit trail entries recorded against one order, covering price overrides and cancellations.
+
+        Use this tool when the order id is known; use getAuditTrailByType or getAuditTrailByDateRange instead for cross-document review.
+
+        Preconditions: none; an order with no exceptions yields an empty list.
+
+        Required inputs: orderId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when no audit entries exist for the order.
+
+        '
+      operationId: getAuditTrailByOrder_1
       parameters:
       - name: orderId
         in: path
@@ -5417,9 +7326,21 @@ paths:
     get:
       tags:
       - Audit Trail
-      summary: Get audit trail by actor
-      description: Retrieves audit trail entries for a specific actor (user) within a date range
-      operationId: getByActor
+      summary: Get Audit Trail By Actor
+      description: 'Returns audit trail entries recorded by one actor (user) within a date range, across all exception types.
+
+        Use this tool to review a specific user''s overrides, refunds and cancellations; use getAuditTrailByType instead to slice by exception category.
+
+        Preconditions: none; an unknown actor yields an empty list.
+
+        Required inputs: actorId (user identifier string) as a path parameter plus startDate and endDate (ISO-8601 instants) as query parameters.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 400 when the dates cannot be parsed.
+
+        '
+      operationId: getAuditTrailByActor
       parameters:
       - name: actorId
         in: path
@@ -5484,9 +7405,21 @@ paths:
     get:
       tags:
       - AP Payments
-      summary: Get payment details
-      description: Retrieve AP payment details including allocations and GL posting status.
-      operationId: getPayment
+      summary: Get AP Payment Details
+      description: 'Returns one AP payment with its bill allocations and GL posting status.
+
+        Use this tool when the payment id is already known; use getApPaymentByRef instead when only the idempotency reference is available.
+
+        Preconditions: the payment must exist.
+
+        Required inputs: paymentId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no AP payment exists for the supplied id.
+
+        '
+      operationId: getApPayment
       parameters:
       - name: paymentId
         in: path
@@ -5518,9 +7451,21 @@ paths:
     get:
       tags:
       - AP Payments
-      summary: Get payment by reference
-      description: Retrieve AP payment details by paymentRef (idempotency key).
-      operationId: getPaymentByRef
+      summary: Get AP Payment By Reference
+      description: 'Returns one AP payment looked up by its paymentRef, the caller-chosen idempotency key supplied at execution time.
+
+        Use this tool to check whether a payment reference was already executed before retrying executeApPayment; use getApPayment instead when the payment UUID is known.
+
+        Preconditions: a payment must have been executed with this paymentRef.
+
+        Required inputs: paymentRef (1-100 chars, no newlines) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no AP payment exists for the supplied reference.
+
+        '
+      operationId: getApPaymentByRef
       parameters:
       - name: paymentRef
         in: path
@@ -5554,8 +7499,20 @@ paths:
     get:
       tags:
       - AP Payments
-      summary: List eligible vendor bills
-      description: Get eligible vendor bills for payment (status = APPROVED). Bills are ordered by due date (oldest first, nulls last), then bill date, then bill ID. Sort order is server-controlled.
+      summary: List Eligible Vendor Bills
+      description: 'Lists vendor bills eligible for payment, meaning those in APPROVED status, ordered by due date oldest first with nulls last, then bill date, then bill id.
+
+        Use this tool to pick bills before calling executeApPayment; do not use listVendorBills on the vendor-bill API, which returns bills of every status.
+
+        Preconditions: none; the sort order is server-controlled and cannot be overridden.
+
+        Required inputs: none; vendorId (UUID) is an optional filter and page size defaults to 20.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 400 when the vendor id is malformed.
+
+        '
       operationId: listApBills
       parameters:
       - name: vendorId
@@ -6528,10 +8485,12 @@ components:
           type: number
           description: Quantity received
           example: 100.0
+          minimum: 0
         unitPrice:
           type: number
           description: Unit price from PO
           example: 12.5
+          minimum: 0
         isInventoryItem:
           type: boolean
           description: Is this an inventory item (true) or expense item (false)
@@ -6676,10 +8635,12 @@ components:
           type: number
           description: Invoiced quantity
           example: 100.0
+          minimum: 0
         unitPrice:
           type: number
           description: Unit price from invoice
           example: 12.5
+          minimum: 0
       required:
       - description
       - productId
@@ -10052,12 +12013,12 @@ components:
     PageReportExportResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -10068,17 +12029,17 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     PageableObject:
@@ -10576,12 +12537,12 @@ components:
     PageExportJobResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -10592,28 +12553,28 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     PageAccountingEventResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -10624,17 +12585,17 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     ReprocessingAttemptHistoryResponse:
@@ -10852,12 +12813,12 @@ components:
     PageCustomerCreditResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -10868,28 +12829,28 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     PageCreditMemoResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -10900,28 +12861,28 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     PageVendorBillSummaryResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -10932,17 +12893,17 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     VendorBillSummaryResponse:

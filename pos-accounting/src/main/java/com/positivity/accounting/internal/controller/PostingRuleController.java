@@ -8,6 +8,8 @@ import com.positivity.accounting.service.PostingRuleService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -55,8 +57,19 @@ public class PostingRuleController {
             scopes = {"accounting:posting_rules:view"})
     @PreAuthorize("hasAuthority('accounting:posting_rules:view')")
     @Operation(
-            summary = "List posting rule sets",
-            description = "Retrieve paginated posting rule sets.",
+            operationId = "listPostingRuleSets",
+            summary = "List Posting Rule Sets",
+            description = """
+                    Lists posting rule sets, the event-to-journal-entry conversion definitions, as a \
+                    paginated projection.
+                    Use this tool when browsing rule sets; do not use getPostingRuleSet, which fetches one \
+                    set by id, or listPostingRuleVersions, which lists a set's version history.
+                    Preconditions: none beyond the caller holding accounting:posting_rules:view.
+                    Required inputs: none; page defaults to 0, size to 20, and sort to createdAt descending \
+                    (supported fields: createdAt, modifiedAt, updatedAt, name, eventType).
+                    Emits an ACCOUNTING_POSTING_RULE_LIST audit event; no state changes.
+                    Returns 400 when the sort property is not one of the supported fields.
+                    """,
             tags = {"Posting Rules"})
     @ApiResponse(responseCode = "200", description = "Posting rule sets listed")
     @ApiResponse(responseCode = "400", description = "Unsupported sort property or direction")
@@ -83,8 +96,18 @@ public class PostingRuleController {
             scopes = {"accounting:posting_rules:view"})
     @PreAuthorize("hasAuthority('accounting:posting_rules:view')")
     @Operation(
-            summary = "Get posting rule set",
-            description = "Retrieve a posting rule set by identifier.",
+            operationId = "getPostingRuleSet",
+            summary = "Get Posting Rule Set",
+            description = """
+                    Returns one posting rule set with its metadata and current version state.
+                    Use this tool when the rule set id is already known; use listPostingRuleSets instead when \
+                    searching, or listPostingRuleVersions for the full version history.
+                    Preconditions: the posting rule set must exist.
+                    Required inputs: postingRuleSetId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 400 when no posting rule set exists for the supplied id (mapped as \
+                    VALIDATION_ERROR, not 404).
+                    """,
             tags = {"Posting Rules"})
     @ApiResponse(responseCode = "200", description = "Posting rule set returned")
     @ApiResponse(responseCode = "404", description = "Posting rule set not found")
@@ -101,14 +124,43 @@ public class PostingRuleController {
             scopes = {"accounting:posting_rules:create"})
     @PreAuthorize("hasAuthority('accounting:posting_rules:create')")
     @Operation(
-            summary = "Create posting rule set",
-            description = "Create a new posting rule set with initial DRAFT version.",
+            operationId = "createPostingRuleSet",
+            summary = "Create Posting Rule Set",
+            description = """
+                    Creates a posting rule set for one event type together with its initial DRAFT version \
+                    holding the rules definition.
+                    Use this tool to introduce new event-to-journal-entry conversion rules; do not use \
+                    publishPostingRuleSet, which activates an existing draft, and do not use \
+                    createDefaultMapping, which only sets a fallback account pair.
+                    Preconditions: none; drafts may hold work-in-progress definitions because split-group and \
+                    predicate-grammar invariants are enforced only at publish time.
+                    Required inputs: name (max 100 chars), eventType (max 100 chars), rulesDefinition (JSON \
+                    rules document as a string) and createdBy (max 50 chars); description is optional.
+                    Emits an ACCOUNTING_POSTING_RULE_CREATE event; the new version starts in DRAFT and does \
+                    not affect posting until published.
+                    Returns 400 when required fields are missing or blank.
+                    """,
             tags = {"Posting Rules"})
     @ApiResponse(responseCode = "201", description = "Posting rule set created")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @EmitEvent(id = "ACCOUNTING_POSTING_RULE_CREATE", apiVersion = "1")
     public ResponseEntity<PostingRuleSetResponse> createPostingRuleSet(
-            @Valid @RequestBody PostingRuleSetCreateRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Rule set metadata with the initial DRAFT rules definition document.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Invoice finalized rules", value = """
+                                                                    {"name":"Invoice posting rules",
+                                                                     "eventType":"INVOICE_FINALIZED",
+                                                                     "description":"AR and revenue postings for finalized invoices",
+                                                                     "rulesDefinition":"{\\"rules\\":[{\\"debit\\":\\"1100\\",\\"credit\\":\\"4000\\",\\"amountField\\":\\"totalAmount\\"}]}",
+                                                                     "createdBy":"jdoe"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    PostingRuleSetCreateRequest request) {
 
         PostingRuleSetResponse response = postingRuleService.createPostingRuleSetWithVersion(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -120,8 +172,24 @@ public class PostingRuleController {
             scopes = {"accounting:posting_rules:publish"})
     @PreAuthorize("hasAuthority('accounting:posting_rules:publish')")
     @Operation(
-            summary = "Publish posting rule set",
-            description = "Publish the latest DRAFT version.",
+            operationId = "publishPostingRuleSet",
+            summary = "Publish Posting Rule Set",
+            description = """
+                    Publishes the rule set's DRAFT version (DRAFT to PUBLISHED), making it the live \
+                    conversion definition for its event type; any previously PUBLISHED version is archived \
+                    atomically in the same call.
+                    Use this tool to activate reviewed rules; do not use archivePostingRuleSet, which retires \
+                    the live version without a replacement, and use resolveTestMapping to dry-run the rules \
+                    first.
+                    Preconditions: the set must have a DRAFT version with a non-empty rules definition that \
+                    passes split-group and condition-predicate validation.
+                    Required inputs: postingRuleSetId (UUID) as a path parameter; there is no request body.
+                    Emits an ACCOUNTING_POSTING_RULE_PUBLISH event; subsequent accounting events for the \
+                    event type post through the new version.
+                    Returns 400 when no DRAFT version exists or its definition is empty, and 422 \
+                    UNBALANCED_RULES listing every offending condition, group or line in fieldErrors when \
+                    publish-time validation fails.
+                    """,
             tags = {"Posting Rules"})
     @ApiResponse(responseCode = "200", description = "Posting rule set published")
     @ApiResponse(responseCode = "404", description = "Posting rule set not found")
@@ -140,8 +208,20 @@ public class PostingRuleController {
             scopes = {"accounting:posting_rules:create"})
     @PreAuthorize("hasAuthority('accounting:posting_rules:create')")
     @Operation(
-            summary = "Update posting rule set metadata",
-            description = "Update a posting rule set (only possible if no PUBLISHED version exists).",
+            operationId = "updatePostingRuleSet",
+            summary = "Update Posting Rule Set",
+            description = """
+                    Updates a posting rule set's metadata and draft rules definition while no PUBLISHED \
+                    version exists.
+                    Use this tool to iterate on a draft before publishing; do not use it once a version is \
+                    PUBLISHED, and do not use publishPostingRuleSet, which is the activation step.
+                    Preconditions: the rule set must exist and must not have a PUBLISHED version.
+                    Required inputs: postingRuleSetId (UUID) as a path parameter plus the same body shape as \
+                    createPostingRuleSet (name, eventType, rulesDefinition, createdBy).
+                    Emits an ACCOUNTING_POSTING_RULE_UPDATE event.
+                    Returns 409 when a PUBLISHED version already exists, and 400 when the rule set id cannot \
+                    be resolved (mapped as VALIDATION_ERROR, not 404).
+                    """,
             tags = {"Posting Rules"})
     @ApiResponse(responseCode = "200", description = "Posting rule set updated")
     @ApiResponse(responseCode = "404", description = "Posting rule set not found")
@@ -149,7 +229,21 @@ public class PostingRuleController {
     @EmitEvent(id = "ACCOUNTING_POSTING_RULE_UPDATE", apiVersion = "1")
     public ResponseEntity<PostingRuleSetResponse> updatePostingRuleSet(
             @Parameter(description = "Posting rule set identifier") @PathVariable UUID postingRuleSetId,
-            @Valid @RequestBody PostingRuleSetCreateRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Replacement rule set metadata and draft rules definition.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Revised draft rules", value = """
+                                                                    {"name":"Invoice posting rules v2",
+                                                                     "eventType":"INVOICE_FINALIZED",
+                                                                     "rulesDefinition":"{\\"rules\\":[{\\"debit\\":\\"1100\\",\\"credit\\":\\"4000\\",\\"amountField\\":\\"totalAmount\\"}]}",
+                                                                     "createdBy":"jdoe"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    PostingRuleSetCreateRequest request) {
 
         // Delegate to service layer which handles entity creation and updates
         postingRuleService.updatePostingRuleSetFromRequest(postingRuleSetId, request);
@@ -163,8 +257,19 @@ public class PostingRuleController {
             scopes = {"accounting:posting_rules:archive"})
     @PreAuthorize("hasAuthority('accounting:posting_rules:archive')")
     @Operation(
-            summary = "Archive posting rule set",
-            description = "Archive the PUBLISHED version.",
+            operationId = "archivePostingRuleSet",
+            summary = "Archive Posting Rule Set",
+            description = """
+                    Archives the rule set's PUBLISHED version (PUBLISHED to ARCHIVED), taking it out of live \
+                    event-to-journal-entry conversion.
+                    Use this tool to retire live rules deliberately; do not use publishPostingRuleSet, which \
+                    already archives the old version automatically when a replacement draft is published.
+                    Preconditions: the rule set must have a PUBLISHED version; after archiving, events of \
+                    this type fall back to default GL mappings or fail as UNMAPPED_EVENT_TYPE.
+                    Required inputs: postingRuleSetId (UUID) as a path parameter; there is no request body.
+                    Emits an ACCOUNTING_POSTING_RULE_ARCHIVE event.
+                    Returns 400 when no PUBLISHED version exists to archive.
+                    """,
             tags = {"Posting Rules"})
     @ApiResponse(responseCode = "200", description = "Posting rule set archived")
     @ApiResponse(responseCode = "404", description = "Posting rule set not found")
@@ -183,8 +288,20 @@ public class PostingRuleController {
             scopes = {"accounting:posting_rules:view"})
     @PreAuthorize("hasAuthority('accounting:posting_rules:view')")
     @Operation(
-            summary = "List posting rule versions",
-            description = "List versions for a posting rule set.",
+            operationId = "listPostingRuleVersions",
+            summary = "List Posting Rule Versions",
+            description = """
+                    Lists the version history of one posting rule set with each version's DRAFT, PUBLISHED or \
+                    ARCHIVED state and timestamps.
+                    Use this tool to audit how a rule set evolved; use getPostingRuleSet instead for the \
+                    set's current metadata only.
+                    Preconditions: the posting rule set must exist; a set always has at least its initial \
+                    version.
+                    Required inputs: postingRuleSetId (UUID) as a path parameter; page defaults to 0 and \
+                    size to 10.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty list when the page index is beyond the version history.
+                    """,
             tags = {"Posting Rules"})
     @ApiResponse(responseCode = "200", description = "Posting rule versions listed")
     @ApiResponse(responseCode = "404", description = "Posting rule set not found")

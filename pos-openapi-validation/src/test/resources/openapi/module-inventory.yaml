@@ -1,13 +1,16 @@
 modules:
   pos-accounting:
     mode: STRICT
+    annotationDepth: STRICT
   pos-order:
     mode: STRICT
     annotationDepth: STRICT
   pos-workorder:
     mode: STRICT
+    annotationDepth: STRICT
   pos-inventory:
     mode: STRICT
+    annotationDepth: STRICT
   pos-price:
     mode: STRICT
     annotationDepth: STRICT

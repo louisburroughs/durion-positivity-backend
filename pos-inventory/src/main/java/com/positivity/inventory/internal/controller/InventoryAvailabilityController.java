@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -46,16 +47,28 @@ public class InventoryAvailabilityController {
             scopes = {"inventory:on_hand:view"})
     @PreAuthorize("hasAuthority('inventory:on_hand:view')")
     @Operation(
-            operationId = "getInventoryAvailability",
-            summary = "Query inventory availability",
-            description = "Returns per-location availability for a product, including forecast quantities "
-                    + "(incomingQty, outgoingQty, projectedAvailable) computed from open purchase orders, ASNs, "
-                    + "reservations, and released pick tasks (odoo-parity A2). "
-                    + "With 'asOf', returns historical on-hand per location computed by direct ledger aggregation "
-                    + "(timestamp <= asOf) instead: availableToPromiseQuantity and the forecast fields are null, "
-                    + "because historical allocation state is not reliably reconstructable from ATP-neutral ledger "
-                    + "events. As-of requests additionally require the 'inventory:ledger:view' authority (history "
-                    + "exposure) and reject future instants with 422; 'asOf' cannot be combined with 'horizon'.",
+            operationId = "getAvailabilityByProduct",
+            summary = "Query per-location inventory availability",
+            description = """
+                    Returns per-location availability for a product: on-hand, available-to-promise and the forecast \
+                    quantities incomingQty, outgoingQty and projectedAvailable computed from open purchase orders, \
+                    ASNs, reservations and released pick tasks; ATP in this per-location list subtracts hard \
+                    allocations, soft reservations and expired ACTIVE lot on-hand from on-hand.
+                    Use this tool when the productId is known and a per-location breakdown is wanted; use \
+                    getAvailabilityBySku instead for a single aggregated view keyed by SKU, and \
+                    getInventoryLeadTime for lead-time estimates.
+                    Preconditions: none for the current view; an asOf request additionally requires the \
+                    inventory:ledger:view authority because it exposes ledger history.
+                    Required inputs: productId (UUID) path parameter; horizon (ISO-8601 instant) optionally bounds \
+                    incomingQty/outgoingQty and excludes documents without an expected date; asOf (ISO-8601 \
+                    instant) switches to historical on-hand computed by direct ledger aggregation, in which case \
+                    availableToPromiseQuantity and the forecast fields are null because historical allocation state \
+                    is not reliably reconstructable.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 400 when asOf is combined with horizon (INVALID_PARAM_COMBINATION) or productId is \
+                    missing, 403 when an asOf request lacks inventory:ledger:view, and 422 when asOf is in the \
+                    future (AS_OF_IN_FUTURE).
+                    """,
             tags = {"Inventory Availability"})
     @ApiResponse(
             responseCode = "200",
@@ -99,10 +112,25 @@ public class InventoryAvailabilityController {
             scopes = {"inventory:on_hand:view", "inventory:on_hand:search"})
     @PreAuthorize("hasAnyAuthority('inventory:on_hand:view','inventory:on_hand:search')")
     @Operation(
-            operationId = "queryAvailabilityBySkuList",
+            operationId = "listAvailabilityBySku",
             summary = "Query inventory availability by SKU (list form)",
-            description =
-                    "Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location, wrapped in a list. Accepts 'sku' as the query param name.",
+            description = """
+                    Returns the same single aggregated availability view as getAvailabilityBySku, wrapped in a \
+                    one-element array, and takes the query parameter name sku instead of productSku.
+                    Use this tool only when a caller requires a list-shaped response from the root availability \
+                    path; use getAvailabilityBySku instead for the plain object form, and getAvailabilityByProduct \
+                    for a per-location breakdown.
+                    Preconditions: the SKU must have at least one stock-summary row, meaning it has been received \
+                    or counted at least once.
+                    Required inputs: sku (string); locationId and storageLocationId (UUIDs) optionally narrow the \
+                    scope, sourceType (WAREHOUSE, SUPPLIER or TRANSIT) selects the lookup strategy, and horizon \
+                    (ISO-8601 instant) bounds the forecast quantities; locationId is only valid when sourceType is \
+                    WAREHOUSE or omitted.
+                    No events are emitted and no state changes; ATP here is on-hand minus hard allocations minus \
+                    expired ACTIVE lot on-hand — soft reservations are not subtracted (ADR-0001).
+                    Returns 404 when the SKU has no stock-summary rows, and 400 when locationId is combined with a \
+                    non-WAREHOUSE sourceType (INVALID_PARAM_COMBINATION).
+                    """,
             tags = {"Inventory Availability"})
     @ApiResponses(
             value = {
@@ -169,10 +197,27 @@ public class InventoryAvailabilityController {
             scopes = {"inventory:on_hand:view", "inventory:on_hand:search"})
     @PreAuthorize("hasAnyAuthority('inventory:on_hand:view','inventory:on_hand:search')")
     @Operation(
-            operationId = "listAvailabilityBySku",
+            operationId = "getAvailabilityBySku",
             summary = "Query inventory availability by SKU and location",
-            description =
-                    "Returns on-hand, allocated, and available-to-promise quantities for a product at a specific location. storageLocationId is optional to narrow the scope to a sub-location.",
+            description = """
+                    Returns a single aggregated availability view for a SKU: on-hand, allocated, \
+                    available-to-promise, the derived unit of measure and the forecast quantities incomingQty, \
+                    outgoingQty and projectedAvailable.
+                    Use this tool to check whether quantity can be promised, for example before \
+                    createOrUpdateReservation; use getAvailabilityByProduct instead for a per-location breakdown, \
+                    and listAvailabilityBySku only when a list-shaped response is required.
+                    Preconditions: the SKU must have at least one stock-summary row; expired ACTIVE lots stay \
+                    counted in on-hand but are subtracted from ATP.
+                    Required inputs: productSku (string); locationId and storageLocationId (UUIDs) optionally \
+                    narrow the scope (storageLocationId wins when both are given), sourceType (WAREHOUSE, SUPPLIER \
+                    or TRANSIT) selects the lookup strategy, and horizon (ISO-8601 instant) bounds the forecast \
+                    quantities; forecast supply is keyed by site, so a storage location is resolved to its parent \
+                    site for the forecast fields.
+                    No events are emitted and no state changes; ATP is on-hand minus hard allocations minus expired \
+                    ACTIVE lot on-hand — soft reservations are not subtracted (ADR-0001).
+                    Returns 404 when the SKU has no stock-summary rows, and 400 when locationId is combined with a \
+                    non-WAREHOUSE sourceType (INVALID_PARAM_COMBINATION).
+                    """,
             tags = {"Inventory Availability"})
     @ApiResponses(
             value = {
@@ -254,9 +299,22 @@ public class InventoryAvailabilityController {
             scopes = {"inventory:on_hand:view", "inventory:on_hand:search"})
     @PreAuthorize("hasAnyAuthority('inventory:on_hand:view','inventory:on_hand:search')")
     @Operation(
-            operationId = "getLeadTime",
+            operationId = "getInventoryLeadTime",
             summary = "Query product lead time",
-            description = "Returns dynamic lead-time estimate for a product at a location.",
+            description = """
+                    Returns a dynamic lead-time estimate (minDays, maxDays, display text, source and confidence) \
+                    for a product, preferring the distributor inventory feed (source INVENTORY, confidence HIGH) \
+                    and falling back to the manufacturer supply feed (source SUPPLY_CHAIN, confidence MEDIUM).
+                    Use this tool to estimate replenishment timing when stock is short; use getAvailabilityBySku \
+                    instead for on-hand and ATP quantities.
+                    Preconditions: at least one normalized feed must carry lead-time data for the product.
+                    Required inputs: productId (UUID); locationId and storageLocationId (UUIDs) are optional and \
+                    are echoed into the response scope (storageLocationId wins) but do not filter the feed lookup, \
+                    and sourceType follows the same WAREHOUSE-only rule as the availability reads.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no feed carries lead-time data for the product, and 400 when locationId is \
+                    combined with a non-WAREHOUSE sourceType (INVALID_PARAM_COMBINATION).
+                    """,
             tags = {"Inventory Availability"})
     @ApiResponses(
             value = {
@@ -345,10 +403,20 @@ public class InventoryAvailabilityController {
             scopes = {"inventory:adjustment:create", "inventory:adjustment:approve"})
     @PreAuthorize("hasAnyAuthority('inventory:adjustment:create','inventory:adjustment:approve')")
     @Operation(
+            operationId = "updateInventoryAvailability",
             summary = "Update inventory availability",
-            description =
-                    "Not implemented by design. Availability is derived from ledger events and is read-only via this endpoint. "
-                            + "Use POST /v1/inventory/stock-movements or POST /v1/inventory/adjustments for inventory changes.",
+            description = """
+                    Rejects direct availability writes with 501 NOT_IMPLEMENTED by design: availability is a \
+                    projection derived from inventory ledger events, and overwriting it would bypass movement \
+                    validation and break auditability.
+                    Use this tool for nothing in production flows; record a movement with createStockMovement or \
+                    raise a correction with createAdjustmentRequest (posted via approveAdjustmentRequest) instead.
+                    Preconditions: none are evaluated; the request is rejected before any validation.
+                    Required inputs: productId (UUID) path parameter; any request body is ignored.
+                    Emits an INVENTORY_AVAILABILITY_UPDATE event recording the rejected attempt; no inventory \
+                    state changes.
+                    Returns 501 for every call.
+                    """,
             tags = {"Inventory Availability"})
     @ApiResponse(
             responseCode = "200",
@@ -360,7 +428,15 @@ public class InventoryAvailabilityController {
     @ApiResponse(responseCode = "501", description = "Not implemented")
     public ResponseEntity<InventoryAvailabilityResponse> updateInventoryAvailability(
             @Parameter(description = "Product identifier", required = true) @PathVariable UUID productId,
-            @RequestBody(required = false) Object requestBody) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Ignored; the endpoint rejects every call with 501 before reading the body.",
+                            required = false,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Ignored body", value = "{}")))
+                    @RequestBody(required = false)
+                    Object requestBody) {
         log.info("POST /v1/inventory/availability/{}", productId);
         return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_IMPLEMENTED)
                 .build();

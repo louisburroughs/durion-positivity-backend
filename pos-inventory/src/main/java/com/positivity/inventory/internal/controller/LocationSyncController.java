@@ -53,10 +53,22 @@ public class LocationSyncController {
     @Operation(
             operationId = "triggerLocationSync",
             summary = "Trigger a location roster re-sync",
-            description = "Requests an administrative re-emit of pos-location's outbox on location.commands.v1 "
-                    + "(ADR-0044 #892); the location.events.v1 consumer then idempotently repairs the local "
-                    + "reference table, so the run completes asynchronously with outcome REQUESTED. Re-sending "
-                    + "the same Idempotency-Key returns the original run instead of requesting again.",
+            description = """
+                    Requests an administrative re-emit of pos-location's outbox on the location.commands.v1 topic \
+                    so the location.events.v1 consumer idempotently repairs the local location roster replica.
+                    Use this tool when the roster replica looks stale or damaged; use listSyncLogs instead to \
+                    inspect past runs — the repair completes asynchronously, so this call never returns repaired \
+                    counts.
+                    Preconditions: the Kafka location event feed must be enabled; with the feed disabled the run is \
+                    recorded as FAILED instead of REQUESTED.
+                    Required inputs: none in the body; an optional Idempotency-Key header makes retries safe — \
+                    re-sending the same key returns the original run — and an optional X-Correlation-Id header is \
+                    recorded on the run log.
+                    Emits an INVENTORY_LOCATION_SYNC_TRIGGER event and writes one sync-log run entry; the re-emit \
+                    covers the configured lookback window (pos.inventory.location.replay-lookback, default P30D).
+                    Returns 202 with outcome REQUESTED when the replay command was published, and 202 with outcome \
+                    FAILED and the error recorded in the sync log when publishing was not possible.
+                    """,
             tags = {"Location Sync"})
     @ApiResponse(
             responseCode = "202",
@@ -88,8 +100,18 @@ public class LocationSyncController {
     @Operation(
             operationId = "listSyncLogs",
             summary = "List location sync logs",
-            description = "Lists one page of location sync audit entries, newest first, optionally filtered by "
-                    + "outcome. Accepts page/size or the pageIndex/pageSize aliases; response is a plain array.",
+            description = """
+                    Lists one page of location sync audit entries newest first, optionally filtered by outcome.
+                    Use this tool to audit roster sync activity or find a syncLogId; use getSyncLog instead when \
+                    the id is known, and use triggerLocationSync to request a new re-emit.
+                    Preconditions: none.
+                    Required inputs: none; outcome (OK, PARTIAL, FAILED, INVALID_PAYLOAD, REQUESTED) is optional, \
+                    page defaults to 0 and size to 50, and pageIndex/pageSize are accepted as aliases; the response \
+                    is a plain array, not a page envelope.
+                    Emits an INVENTORY_LOCATION_SYNC_LOG_LIST event; no state changes.
+                    Returns 200 with an empty array when no entries match, so an empty result is not an error \
+                    condition.
+                    """,
             tags = {"Location Sync"})
     @ApiResponse(
             responseCode = "200",
@@ -127,7 +149,16 @@ public class LocationSyncController {
     @Operation(
             operationId = "getSyncLog",
             summary = "Get a location sync log entry",
-            description = "Returns one location sync audit entry by identifier.",
+            description = """
+                    Returns one location sync audit entry with its outcome, per-location counters, timing and any \
+                    error message.
+                    Use this tool when the syncLogId is already known; use listSyncLogs instead to page through the \
+                    audit trail.
+                    Preconditions: the sync log entry must exist.
+                    Required inputs: syncLogId (UUID) as a path parameter; there is no request body.
+                    Emits an INVENTORY_LOCATION_SYNC_LOG_GET event; no state changes.
+                    Returns 404 when no sync log entry exists for the supplied id.
+                    """,
             tags = {"Location Sync"})
     @ApiResponse(
             responseCode = "200",

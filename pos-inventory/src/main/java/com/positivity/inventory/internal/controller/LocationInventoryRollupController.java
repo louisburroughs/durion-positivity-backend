@@ -40,14 +40,24 @@ public class LocationInventoryRollupController {
     @Operation(
             operationId = "getLocationInventoryRollup",
             summary = "Get parent-location inventory rollup",
-            description = "Aggregates inventory totals across all descendant sites of a parent location"
-                    + " (building/place/region) along a typed parent chain (default PHYSICAL, ADR-0016)."
-                    + " Returns per-site summaries plus a grand total. With expand=tree, each site entry"
-                    + " inlines its full storage-location rollup tree; expansion is rejected with 422 when"
-                    + " the descendant site count exceeds the configured cap"
-                    + " (pos.inventory.rollup.expand-site-cap, default 25). Without expand, summaries are computed"
-                    + " sequentially for every descendant regardless of count; prefer narrow parent locations"
-                    + " for large hierarchies.",
+            description = """
+                    Aggregates inventory totals across all descendant sites of a parent location (building, place \
+                    or region) along a typed parent chain, returning per-site summaries plus a grand total.
+                    Use this tool for multi-site aggregation above the site level; do not use \
+                    getSiteInventoryRollup, which walks the storage-location tree inside one site rather than \
+                    across the descendant sites of a parent location.
+                    Preconditions: the parent location must exist in pos-location, whose topology is fetched at \
+                    request time.
+                    Required inputs: locationId (UUID) path parameter; parentType defaults to PHYSICAL, sku is an \
+                    optional filter, and expand=tree inlines each site's full storage-location tree with optional \
+                    depth (minimum 1) and includeEmpty (default false); without expand, summaries are computed \
+                    sequentially for every descendant regardless of count.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when the location is not found, 422 with ROLLUP_EXPANSION_TOO_LARGE when \
+                    expand=tree covers more descendant sites than the configured cap \
+                    (pos.inventory.rollup.expand-site-cap, default 25), 400 for an unknown parentType or an \
+                    unsupported expand value, and 503 when the location service is unavailable.
+                    """,
             tags = {"Inventory Rollup"})
     @ApiResponse(
             responseCode = "200",

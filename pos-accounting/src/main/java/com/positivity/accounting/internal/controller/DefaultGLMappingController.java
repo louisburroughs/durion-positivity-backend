@@ -7,6 +7,8 @@ import com.positivity.accounting.service.DefaultGLMappingService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -61,15 +63,46 @@ public class DefaultGLMappingController {
             scopes = {"accounting:default-mapping:create"})
     @PreAuthorize("hasAuthority('accounting:default-mapping:create')")
     @Operation(
-            summary = "Create default GL mapping",
-            description = "Create a new default GL account mapping for an event type",
+            operationId = "createDefaultMapping",
+            summary = "Create Default GL Mapping",
+            description = """
+                    Creates a fallback debit and credit account pair for an event type, used by the posting \
+                    engine when no explicit posting rule matches; resolution order is explicit rule, then \
+                    org-scoped default, then global default, then UNMAPPED_EVENT_TYPE failure.
+                    Use this tool to guarantee an event type always posts somewhere; do not use \
+                    createGLMapping, which maps a source-system external code to a single account.
+                    Preconditions: the debit and credit GL accounts must exist.
+                    Required inputs: eventType (max 100 chars), debitAccountId (UUID) and creditAccountId \
+                    (UUID); organizationId is optional (null makes the default global) and active defaults to \
+                    true.
+                    Emits an ACCOUNTING_DEFAULT_MAPPING_CREATE event.
+                    Returns 400 when a referenced GL account cannot be resolved.
+                    """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "201", description = "Default mapping created")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @EmitEvent(id = "ACCOUNTING_DEFAULT_MAPPING_CREATE", apiVersion = "1")
     public ResponseEntity<DefaultGLMappingResponse> createDefaultMapping(
-            @Valid @RequestBody DefaultGLMappingRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Fallback debit and credit account pair for one event type.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Global fallback for cash sales",
+                                                            value = """
+                                                                    {"eventType":"CASH_SALE",
+                                                                     "debitAccountId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "creditAccountId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+                                                                     "description":"Fallback posting for cash sales",
+                                                                     "active":true}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    DefaultGLMappingRequest request) {
         log.info(
                 "Create default GL mapping: eventType={}, orgId={}",
                 request.getEventType(),
@@ -84,8 +117,22 @@ public class DefaultGLMappingController {
             scopes = {"accounting:default-mapping:edit"})
     @PreAuthorize("hasAuthority('accounting:default-mapping:edit')")
     @Operation(
-            summary = "Update default GL mapping",
-            description = "Update an existing default GL account mapping",
+            operationId = "updateDefaultMapping",
+            summary = "Update Default GL Mapping",
+            description = """
+                    Updates an existing default GL mapping's event type, accounts, scope, description or \
+                    active flag.
+                    Use this tool to repoint or rescope an existing fallback; do not use \
+                    createDefaultMapping, which adds a new one, or deactivateDefaultMapping, which soft \
+                    deletes.
+                    Preconditions: the default mapping must exist.
+                    Required inputs: id (UUID) as a path parameter plus the full replacement body with \
+                    eventType, debitAccountId and creditAccountId; organizationId null means global scope.
+                    Emits an ACCOUNTING_DEFAULT_MAPPING_UPDATE event; future postings resolve against the \
+                    updated pair while already-posted entries are untouched.
+                    Returns 400 when no default mapping exists for the supplied id (mapped as \
+                    VALIDATION_ERROR, not 404).
+                    """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "200", description = "Default mapping updated")
     @ApiResponse(responseCode = "404", description = "Default mapping not found")
@@ -93,7 +140,21 @@ public class DefaultGLMappingController {
     @EmitEvent(id = "ACCOUNTING_DEFAULT_MAPPING_UPDATE", apiVersion = "1")
     public ResponseEntity<DefaultGLMappingResponse> updateDefaultMapping(
             @Parameter(description = "Default mapping identifier") @PathVariable UUID id,
-            @Valid @RequestBody DefaultGLMappingRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Replacement fallback mapping definition for the event type.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Repoint credit account", value = """
+                                                                    {"eventType":"CASH_SALE",
+                                                                     "debitAccountId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "creditAccountId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d",
+                                                                     "active":true}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    DefaultGLMappingRequest request) {
         log.info("Update default GL mapping: id={}", id);
         DefaultGLMappingResponse response = defaultGLMappingService.updateDefaultMapping(id, request);
         return ResponseEntity.ok(response);
@@ -105,8 +166,20 @@ public class DefaultGLMappingController {
             scopes = {"accounting:default-mapping:delete"})
     @PreAuthorize("hasAuthority('accounting:default-mapping:delete')")
     @Operation(
-            summary = "Deactivate default GL mapping",
-            description = "Soft delete (deactivate) a default GL mapping",
+            operationId = "deactivateDefaultMapping",
+            summary = "Deactivate Default GL Mapping",
+            description = """
+                    Soft deletes a default GL mapping by marking it inactive; the row is retained for history \
+                    and stops participating in fallback resolution.
+                    Use this tool to retire a fallback pair; do not use updateDefaultMapping with \
+                    active=false only when other fields must change at the same time, and note there is no \
+                    reactivation endpoint other than updateDefaultMapping.
+                    Preconditions: the default mapping must exist.
+                    Required inputs: id (UUID) as a path parameter; there is no request body.
+                    Emits an ACCOUNTING_DEFAULT_MAPPING_DELETE event.
+                    Returns 400 when no default mapping exists for the supplied id (mapped as \
+                    VALIDATION_ERROR, not 404), and 204 with no body on success.
+                    """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "204", description = "Default mapping deactivated")
     @ApiResponse(responseCode = "404", description = "Default mapping not found")
@@ -125,8 +198,19 @@ public class DefaultGLMappingController {
             scopes = {"accounting:default-mapping:view"})
     @PreAuthorize("hasAuthority('accounting:default-mapping:view')")
     @Operation(
-            summary = "Get default GL mapping",
-            description = "Retrieve a default GL mapping by identifier",
+            operationId = "getDefaultMapping",
+            summary = "Get Default GL Mapping",
+            description = """
+                    Returns one default GL mapping with its event type, debit and credit accounts, scope and \
+                    active flag.
+                    Use this tool when the mapping id is already known; use searchDefaultMappings or \
+                    listDefaultMappings instead when hunting by event type or organization.
+                    Preconditions: the default mapping must exist.
+                    Required inputs: id (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 400 when no default mapping exists for the supplied id (mapped as \
+                    VALIDATION_ERROR, not 404).
+                    """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "200", description = "Default mapping returned")
     @ApiResponse(responseCode = "404", description = "Default mapping not found")
@@ -144,8 +228,18 @@ public class DefaultGLMappingController {
             scopes = {"accounting:default-mapping:view"})
     @PreAuthorize("hasAuthority('accounting:default-mapping:view')")
     @Operation(
-            summary = "List default GL mappings",
-            description = "Retrieve paginated list of default GL mappings",
+            operationId = "listDefaultMappings",
+            summary = "List Default GL Mappings",
+            description = """
+                    Lists all default GL mappings as a paginated projection, including inactive ones.
+                    Use this tool to browse the fallback catalog; use searchDefaultMappings instead to filter \
+                    by event type or organization, or resolveDefaultMapping to find the one that would apply \
+                    to an event.
+                    Preconditions: none beyond the caller holding accounting:default-mapping:view.
+                    Required inputs: none; page defaults to 0 and size to 20.
+                    Emits an ACCOUNTING_DEFAULT_MAPPING_LIST audit event; no state changes.
+                    Returns 200 with an empty page when no default mappings exist.
+                    """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "200", description = "Default mappings listed")
     @ApiResponse(responseCode = "403", description = "Forbidden")
@@ -164,8 +258,18 @@ public class DefaultGLMappingController {
             scopes = {"accounting:default-mapping:view"})
     @PreAuthorize("hasAuthority('accounting:default-mapping:view')")
     @Operation(
-            summary = "Search default GL mappings",
-            description = "Find default GL mappings by event type or organization",
+            operationId = "searchDefaultMappings",
+            summary = "Search Default GL Mappings",
+            description = """
+                    Finds default GL mappings filtered by event type or organization; when both filters are \
+                    omitted it returns the global defaults only.
+                    Use this tool to filter the fallback catalog; do not use resolveDefaultMapping, which \
+                    applies the org-then-global resolution priority to pick the single winning mapping.
+                    Preconditions: none; eventType takes precedence when both filters are supplied.
+                    Required inputs: none; eventType and organizationId are optional query parameters.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty list when nothing matches the filter.
+                    """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "200", description = "Matching default mappings returned")
     @ApiResponse(responseCode = "403", description = "Forbidden")
@@ -194,8 +298,18 @@ public class DefaultGLMappingController {
             scopes = {"accounting:default-mapping:view"})
     @PreAuthorize("hasAuthority('accounting:default-mapping:view')")
     @Operation(
-            summary = "List global default mappings",
-            description = "Retrieve all global default GL mappings (organizationId IS NULL)",
+            operationId = "listGlobalDefaultMappings",
+            summary = "List Global Default Mappings",
+            description = """
+                    Returns all global default GL mappings, meaning those with no organizationId, which act \
+                    as the last fallback before an event type fails as UNMAPPED_EVENT_TYPE.
+                    Use this tool to audit the global safety net; use searchDefaultMappings instead when \
+                    org-scoped mappings are also of interest.
+                    Preconditions: none beyond the caller holding accounting:default-mapping:view.
+                    Required inputs: none; there are no parameters and no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty list when no global defaults are configured.
+                    """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "200", description = "Global default mappings returned")
     @ApiResponse(responseCode = "403", description = "Forbidden")
@@ -211,8 +325,20 @@ public class DefaultGLMappingController {
             scopes = {"accounting:default-mapping:view"})
     @PreAuthorize("hasAuthority('accounting:default-mapping:view')")
     @Operation(
-            summary = "Resolve default mapping for event",
-            description = "Find the most specific active default mapping for an event type and organization",
+            operationId = "resolveDefaultMapping",
+            summary = "Resolve Default Mapping For Event",
+            description = """
+                    Finds the most specific active default mapping for an event type, preferring an \
+                    org-scoped mapping over the global one.
+                    Use this tool to see which fallback the posting engine would use for an event; do not use \
+                    searchDefaultMappings, which lists matches without applying resolution priority.
+                    Preconditions: an active default mapping must exist for the event type at org or global \
+                    scope.
+                    Required inputs: eventType as a query parameter; organizationId (UUID) is optional and \
+                    widens resolution to that org's mappings first.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no active default mapping resolves for the event type.
+                    """,
             tags = {"Default GL Mappings"})
     @ApiResponse(responseCode = "200", description = "Default mapping resolved")
     @ApiResponse(responseCode = "404", description = "No default mapping found")

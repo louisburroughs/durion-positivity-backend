@@ -51,14 +51,24 @@ public class ValuationController {
     @Operation(
             operationId = "getInventoryValuation",
             summary = "Get inventory valuation",
-            description = "Returns on-hand value (on-hand × current unit cost) per SKU with a total. Optionally"
-                    + " site-scoped via 'locationId' and/or restricted to one SKU via 'sku'. The unit cost is"
-                    + " sourced from each SKU's running cost state per its resolved costing method (AVERAGE or"
-                    + " STANDARD); uncosted SKUs report a null unit cost and zero value. With 'asOf', the"
-                    + " valuation is reconstructed from the ledger as of that instant (on-hand and unit cost both"
-                    + " replayed); as-of requests additionally require 'inventory:ledger:view', reject future"
-                    + " instants with 422, and may reject uncapped full-catalog requests with 422 when the"
-                    + " SKU fan-out exceeds the configured safety cap.",
+            description = """
+                    Returns on-hand inventory value per SKU with a total, computing on-hand times the current unit \
+                    cost derived from each SKU's resolved costing method — the running average under AVERAGE, the \
+                    standard price (falling back to the latest-receipt memo) under STANDARD — with uncosted SKUs \
+                    reported at null unit cost and zero value rather than as errors.
+                    Use this tool for valuation reporting; use listInventoryLedger instead for the raw movements \
+                    behind the numbers, and createRevaluation to change a cost rather than read it.
+                    Preconditions: none for a current valuation; an asOf request additionally requires the \
+                    inventory:ledger:view authority because it replays ledger history.
+                    Required inputs: none are mandatory — locationId scopes to one site, sku restricts to one \
+                    stock item, and asOf (ISO-8601 instant) reconstructs both on-hand and unit cost from the \
+                    ledger as of that instant.
+                    No events are emitted and no state changes; this is a read-only projection computed on demand \
+                    and never persisted.
+                    Returns 422 when asOf is in the future (AS_OF_IN_FUTURE) or when an uncapped full-catalog \
+                    asOf request exceeds the configured SKU safety cap (default 1000), and 403 when asOf is \
+                    requested without inventory:ledger:view.
+                    """,
             tags = {"Inventory Valuation"})
     @ApiResponse(
             responseCode = "200",

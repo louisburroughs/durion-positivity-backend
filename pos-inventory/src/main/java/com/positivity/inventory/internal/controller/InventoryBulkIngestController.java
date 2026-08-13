@@ -9,6 +9,8 @@ import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.InventoryBulkIngestRecord;
 import com.positivity.inventory.service.StockMovementService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
@@ -41,12 +43,47 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
     @PreAuthorize("hasAuthority('inventory:adjustment:create')")
     @EmitEvent(id = "INVENTORY_BULK_INGEST", apiVersion = "1")
     @Operation(
+            operationId = "bulkIngestInventoryAdjustments",
             summary = "Bulk ingest inventory adjustments",
-            description =
-                    "Processes a batch of inventory adjustment records and creates adjustment requests for each accepted row.",
+            description = """
+                    Processes a batch of inventory adjustment records, creating one PENDING adjustment request per \
+                    accepted row for the normal approval flow rather than posting stock changes directly.
+                    Use this tool for bulk imports such as cycle-count loads; do not use createAdjustmentRequest, \
+                    which files a single interactive adjustment, and do not expect on-hand to change until each \
+                    request is approved.
+                    Preconditions: none beyond authentication; rows are processed independently, so one bad row \
+                    fails only itself.
+                    Required inputs: jobId (UUID), locationId (UUID) and at least one record with sku and a \
+                    non-negative quantity; a record-level locationId overrides the batch location, reasonCode \
+                    defaults to CYCLE_COUNT_ADJUSTMENT, and operatorId attributes the rows when a service account \
+                    submits the batch.
+                    Emits an INVENTORY_BULK_INGEST event; each accepted row persists a PENDING adjustment request \
+                    attributed to the resolved actor.
+                    Returns 200 with per-row results — failed rows carry errorCode INVENTORY_INGEST_FAILED and the \
+                    failure message — and 400 when the envelope itself is invalid because jobId, locationId or \
+                    records are missing.
+                    """,
             tags = {"Inventory Bulk Ingest API"})
     public ResponseEntity<BulkIngestResponse> bulkIngest(
-            @Valid @RequestBody @NonNull BulkIngestRequest<InventoryBulkIngestRecord> request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Batch envelope with the job, target location and the adjustment records"
+                                    + " to file.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Cycle-count batch", value = """
+                                                                    {"jobId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a20",
+                                                                     "locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01",
+                                                                     "operatorId":"user-jdoe",
+                                                                     "records":[{"sku":"SKU-10042","quantity":120,
+                                                                                 "reasonCode":"CYCLE_COUNT",
+                                                                                 "unitOfMeasure":"EACH"}]}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    BulkIngestRequest<InventoryBulkIngestRecord> request) {
         return super.bulkIngest(request);
     }
 

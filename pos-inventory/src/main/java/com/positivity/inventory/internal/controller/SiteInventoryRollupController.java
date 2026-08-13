@@ -38,11 +38,22 @@ public class SiteInventoryRollupController {
     @Operation(
             operationId = "getSiteInventoryRollup",
             summary = "Get site inventory rollup",
-            description = "Returns on-hand, allocated, and available quantities grouped and subtotaled along the"
-                    + " storage-location hierarchy of a site. Each node carries its own quantities and the rolled-up"
-                    + " sum of itself plus all descendants. Topology comes from pos-location at request time"
-                    + " (ADR-0016). Ledger rows at location ids unknown to the site are excluded in v1 (no"
-                    + " 'unassigned' bucket).",
+            description = """
+                    Returns on-hand, allocated and available quantities grouped and subtotaled along the \
+                    storage-location hierarchy of one site, each node carrying its own quantities plus the \
+                    rolled-up sum of itself and all descendants.
+                    Use this tool for the storage-location tree inside a single site; do not use \
+                    getLocationInventoryRollup, which aggregates across the descendant sites of a parent location \
+                    (building, place or region) rather than within one site.
+                    Preconditions: the site must exist in pos-location, whose topology is fetched at request time; \
+                    ledger rows at location ids unknown to the site are excluded — there is no unassigned bucket.
+                    Required inputs: siteId (UUID) path parameter; sku is an optional filter, depth (minimum 1, \
+                    where 1 returns root storage locations only) limits the returned tree, and includeEmpty \
+                    defaults to false.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when the site is not found, 400 for invalid parameters, and 503 when the location \
+                    service is unavailable.
+                    """,
             tags = {"Inventory Rollup"})
     @ApiResponse(
             responseCode = "200",

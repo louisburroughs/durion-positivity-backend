@@ -35,8 +35,19 @@ public class ApprovalConfigurationController {
     private final ApprovalConfigurationService approvalConfigurationService;
 
     @Operation(
-            summary = "Get all approval configurations",
-            description = "Retrieve a list of all approval configurations.")
+            operationId = "listApprovalConfigurations",
+            summary = "List All Approval Configurations",
+            description = """
+                    Returns every approval configuration, covering location-specific, customer-specific, and \
+                    global default rows that govern how estimate and workorder approvals are captured.
+                    Use this tool when administering approval rules; use getApplicableApprovalConfiguration \
+                    instead to resolve the single configuration that applies to one location and customer.
+                    Preconditions: none beyond the caller holding workorder:approval_config:view.
+                    Required inputs: none — there are no filters or pagination parameters.
+                    Emits a WORKORDER_APPROVAL_CONFIG_LIST audit event; no configuration state changes — this is \
+                    a read-only projection.
+                    Returns 200 with the full list, possibly empty.
+                    """)
     @ApiResponse(responseCode = "200", description = "List of configurations returned successfully.")
     @GetMapping
     @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_LIST", apiVersion = "1")
@@ -49,8 +60,18 @@ public class ApprovalConfigurationController {
     }
 
     @Operation(
-            summary = "Get configuration by ID",
-            description = "Retrieve an approval configuration by its unique ID.")
+            operationId = "getApprovalConfiguration",
+            summary = "Get Approval Configuration by Id",
+            description = """
+                    Returns a single approval configuration by its unique id.
+                    Use this tool when the configuration id is already known; use \
+                    getApplicableApprovalConfiguration instead to resolve which configuration governs a given \
+                    location and customer.
+                    Preconditions: the configuration must exist.
+                    Required inputs: approvalId (UUID) as a path parameter.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no configuration exists for the id.
+                    """)
     @ApiResponse(responseCode = "200", description = "Configuration found and returned.")
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
     @GetMapping("/approvalConfigurations/{approvalId}")
@@ -71,8 +92,20 @@ public class ApprovalConfigurationController {
     }
 
     @Operation(
-            summary = "Get applicable configuration",
-            description = "Get the most specific configuration for a location and customer.")
+            operationId = "getApplicableApprovalConfiguration",
+            summary = "Resolve Applicable Approval Configuration",
+            description = """
+                    Resolves the most specific approval configuration for a location and customer, trying the \
+                    location-plus-customer row first, then the location-wide row, then the global default with \
+                    no location or customer.
+                    Use this tool when deciding how an approval must be captured for a specific job; use \
+                    getApprovalConfiguration instead when the configuration id is already known.
+                    Preconditions: none — both filters are optional and narrower matches win.
+                    Required inputs: locationId (UUID) and customerId (UUID) as optional query parameters.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no configuration matches at any specificity, in which case callers fall \
+                    back to built-in defaults.
+                    """)
     @ApiResponse(responseCode = "200", description = "Configuration found and returned.")
     @ApiResponse(responseCode = "404", description = "No configuration found (default will be used).")
     @GetMapping("/approvalConfigurations/applicable")
@@ -93,12 +126,40 @@ public class ApprovalConfigurationController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @Operation(summary = "Create a new approval configuration", description = "Add a new approval configuration.")
+    @Operation(
+            operationId = "createApprovalConfiguration",
+            summary = "Create Approval Configuration",
+            description = """
+                    Creates an approval configuration defining how approvals are captured for a location, a \
+                    location-customer pair, or globally when both scoping ids are omitted.
+                    Use this tool when introducing a new approval rule; do not use updateApprovalConfiguration, \
+                    which modifies an existing configuration by id.
+                    Preconditions: none — duplicates for the same scope are not rejected, and the most specific \
+                    row wins at resolution time.
+                    Required inputs: approvalMethod, one of CLICK_CONFIRM, SIGNATURE, ELECTRONIC_SIGNATURE, or \
+                    VERBAL_CONFIRMATION; locationId, customerId, declineExpiryDays, requireSignature, and \
+                    priority are optional.
+                    Emits a WORKORDER_APPROVAL_CONFIG_CREATE event.
+                    Returns 200 with the persisted configuration, and 400 when approvalMethod is not one of the \
+                    accepted values.
+                    """)
     @ApiResponse(responseCode = "200", description = "Configuration created successfully.")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Configuration object to be created",
+            description = "Approval capture rule to create, scoped by optional location and customer ids.",
             required = true,
-            content = @Content(schema = @Schema(implementation = ApprovalConfigurationRequest.class)))
+            content =
+                    @Content(
+                            schema = @Schema(implementation = ApprovalConfigurationRequest.class),
+                            examples =
+                                    @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                            name = "Location signature rule",
+                                            value = """
+                                                    {"locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61",
+                                                     "approvalMethod":"SIGNATURE",
+                                                     "declineExpiryDays":14,
+                                                     "requireSignature":true,
+                                                     "priority":10}
+                                                    """)))
     @PostMapping("/approvalConfigurations")
     @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_CREATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -112,13 +173,41 @@ public class ApprovalConfigurationController {
         return ResponseEntity.ok(created);
     }
 
-    @Operation(summary = "Update an approval configuration", description = "Update an existing approval configuration.")
+    @Operation(
+            operationId = "updateApprovalConfiguration",
+            summary = "Update Approval Configuration",
+            description = """
+                    Replaces every field of an existing approval configuration with the values in the request, \
+                    including nulling fields that are omitted.
+                    Use this tool when changing an existing approval rule; do not use \
+                    createApprovalConfiguration, which adds a new rule rather than replacing one.
+                    Preconditions: the configuration must exist; this is a full replacement, so send all fields \
+                    that should remain set.
+                    Required inputs: approvalId (UUID) as a path parameter and approvalMethod (CLICK_CONFIRM, \
+                    SIGNATURE, ELECTRONIC_SIGNATURE, or VERBAL_CONFIRMATION) in the body; locationId, \
+                    customerId, declineExpiryDays, requireSignature, and priority are optional.
+                    Emits a WORKORDER_APPROVAL_CONFIG_UPDATE event.
+                    Returns 404 when the configuration does not exist and also when approvalMethod is not a \
+                    valid value, because both surface as the same IllegalArgumentException in this operation.
+                    """)
     @ApiResponse(responseCode = "200", description = "Configuration updated successfully.")
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Updated configuration object",
+            description = "Full replacement values for the approval configuration.",
             required = true,
-            content = @Content(schema = @Schema(implementation = ApprovalConfigurationRequest.class)))
+            content =
+                    @Content(
+                            schema = @Schema(implementation = ApprovalConfigurationRequest.class),
+                            examples =
+                                    @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                            name = "Switch to electronic signature",
+                                            value = """
+                                                    {"locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61",
+                                                     "approvalMethod":"ELECTRONIC_SIGNATURE",
+                                                     "declineExpiryDays":7,
+                                                     "requireSignature":true,
+                                                     "priority":10}
+                                                    """)))
     @PutMapping("/approvalConfigurations/{approvalId}")
     @EmitEvent(id = "WORKORDER_APPROVAL_CONFIG_UPDATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -142,7 +231,20 @@ public class ApprovalConfigurationController {
         }
     }
 
-    @Operation(summary = "Delete an approval configuration", description = "Delete a configuration by its unique ID.")
+    @Operation(
+            operationId = "deleteApprovalConfiguration",
+            summary = "Delete Approval Configuration",
+            description = """
+                    Deletes an approval configuration by id, after which resolution falls through to broader \
+                    scopes or the global default.
+                    Use this tool when retiring an approval rule; do not use updateApprovalConfiguration, which \
+                    keeps the rule and changes its values.
+                    Preconditions: none — deletion is idempotent, and deleting an id that does not exist is a \
+                    silent no-op.
+                    Required inputs: approvalId (UUID) as a path parameter; there is no request body.
+                    Emits a WORKORDER_APPROVAL_CONFIG_DELETE event.
+                    Returns 204 regardless of whether the configuration previously existed.
+                    """)
     @ApiResponse(responseCode = "204", description = "Configuration deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Configuration not found.")
     @DeleteMapping("/approvalConfigurations/{approvalId}")

@@ -50,10 +50,19 @@ public class InventoryTraceabilityController {
             scopes = {"inventory:ledger:view"})
     @PreAuthorize("hasAuthority('inventory:ledger:view')")
     @Operation(
+            operationId = "traceInventoryLot",
             summary = "Lot traceability",
-            description = "Returns a lot's upstream origin (PO / ASN / goods receipt, vendor, receipt date) and its"
-                    + " downstream movement chain (putaway → pick → consumption → return → scrap → transfer),"
-                    + " reconstructed from the lot-tagged ledger entries in chronological order",
+            description = """
+                    Returns a lot's upstream origin (purchase order, ASN, goods receipt, vendor and receipt date) \
+                    and its downstream movement chain (putaway, pick, consumption, return, scrap, transfer), \
+                    reconstructed chronologically from the lot-tagged append-only ledger entries.
+                    Use this tool for recall or quality investigations on a lot; use getInventoryLot instead for \
+                    current per-location on-hand, and use traceSerialUnit for a single serialized unit's chain.
+                    Preconditions: the lot must exist.
+                    Required inputs: lotId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only reconstruction from the ledger.
+                    Returns 404 when no lot exists for the supplied id.
+                    """,
             tags = {"Traceability"})
     @ApiResponse(responseCode = "200", description = "Lot traceability assembled")
     @ApiResponse(
@@ -87,10 +96,19 @@ public class InventoryTraceabilityController {
             scopes = {"inventory:ledger:view"})
     @PreAuthorize("hasAuthority('inventory:ledger:view')")
     @Operation(
+            operationId = "traceSerialUnit",
             summary = "Serial traceability",
-            description = "Returns a serial unit's upstream origin (PO / ASN / goods receipt via its lot) and its"
-                    + " downstream chain (receipt → issue → workorder → return/scrap) from the serial's receipt and"
-                    + " consumption ledger linkages, plus any warranty-hold linkage joined by serial number",
+            description = """
+                    Returns a serial unit's upstream origin (purchase order, ASN and goods receipt via its lot) and \
+                    its downstream chain (receipt, issue, workorder, return, scrap) from the serial's receipt and \
+                    consumption ledger linkages, plus any warranty-hold linkage joined by serial number.
+                    Use this tool to investigate one serialized unit's history; use traceInventoryLot instead for a \
+                    whole lot's chain, and use getSerialUnit for just the current status and location.
+                    Preconditions: the serial unit must exist.
+                    Required inputs: serialUnitId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only reconstruction from the ledger.
+                    Returns 404 when no serial unit exists for the supplied id.
+                    """,
             tags = {"Traceability"})
     @ApiResponse(responseCode = "200", description = "Serial traceability assembled")
     @ApiResponse(

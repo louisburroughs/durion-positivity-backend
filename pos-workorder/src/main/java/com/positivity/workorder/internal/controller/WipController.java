@@ -46,10 +46,22 @@ public class WipController {
 
     private final WipService wipService;
 
-    @Operation(
-            summary = "List active WIP workorders",
-            description = "Returns a paginated list of workorders in active WIP statuses. "
-                    + "When the caller holds workorder:wip:view_all_locations, results span all locations.")
+    @Operation(operationId = "listWipWorkorders", summary = "List Active WIP Workorders", description = """
+                    Returns a page of workorders in active work-in-progress statuses (APPROVED, ASSIGNED, \
+                    WORK_IN_PROGRESS, AWAITING_PARTS, AWAITING_APPROVAL), enriched with customer and vehicle \
+                    references.
+                    Use this tool for the WIP status board; do not use getDispatchDashboard, which aggregates \
+                    mechanics, bays, and conflicts for one date, and use getWipDetail for a single workorder's \
+                    status history.
+                    Preconditions: multiLocation=true requires the caller to hold \
+                    workorder:wip:view_all_locations; otherwise results are scoped to the given location.
+                    Required inputs: locationId (UUID as a string) as a query parameter — ignored when \
+                    multiLocation is true; multiLocation defaults to false and page size defaults to 25.
+                    Emits a WORKORDER_WIP_LIST audit event; no workorder state changes — this is a read-only \
+                    projection.
+                    Returns 400 when locationId does not parse as a UUID, and 403 when multiLocation is \
+                    requested without workorder:wip:view_all_locations.
+                    """)
     @GetMapping
     @PreAuthorize("hasAuthority('workorder:wip:view')")
     @EmitEvent(id = "WORKORDER_WIP_LIST", apiVersion = "1")
@@ -75,9 +87,20 @@ public class WipController {
         return ResponseEntity.ok(result);
     }
 
-    @Operation(
-            summary = "Get WIP detail for a workorder",
-            description = "Returns full WIP detail for a single workorder including status history.")
+    @Operation(operationId = "getWipDetail", summary = "Get WIP Detail for Workorder", description = """
+                    Returns the full work-in-progress detail for one workorder: current status, the complete \
+                    status transition history with actors and reasons, blocking part numbers, and the currently \
+                    assigned technician.
+                    Use this tool when drilling into a single workorder from the WIP board; use listWipWorkorders \
+                    instead for the paginated board itself.
+                    Preconditions: the workorder must exist; it does not need to be in an active WIP status to be \
+                    viewed.
+                    Required inputs: workorderId (UUID) as a path parameter.
+                    Emits a WORKORDER_WIP_VIEW audit event; no workorder state changes — this is a read-only \
+                    projection.
+                    Returns 400 with code INVALID_ARGUMENT when no workorder exists for the id — the not-found \
+                    case surfaces as 400 rather than 404 in this operation.
+                    """)
     @GetMapping("/{workorderId}")
     @PreAuthorize("hasAuthority('workorder:wip:view')")
     @EmitEvent(id = "WORKORDER_WIP_VIEW", apiVersion = "1")

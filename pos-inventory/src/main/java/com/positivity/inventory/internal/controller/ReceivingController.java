@@ -13,6 +13,7 @@ import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -47,8 +48,24 @@ public class ReceivingController {
     @PreAuthorize("hasAuthority('inventory:receiving:create')")
     @EmitEvent(id = "INVENTORY_RECEIVING_SESSION_CREATE", apiVersion = "1")
     @Operation(
-            summary = "Create receiving session",
-            description = "Creates a receiving session from a source document (PO/ASN) using MANUAL or SCAN entry mode",
+            operationId = "createReceivingSession",
+            summary = "Create Receiving Session",
+            description = """
+                    Creates an OPEN receiving session against a source document, pre-populating one EXPECTED line \
+                    per source-document line fetched from the owning service.
+                    Use this tool to start a line-by-line receiving workflow before recording actual quantities \
+                    with receiveItemsIntoStaging; do not use createGoodsReceipt, which posts stock against a \
+                    purchase order in one call without a session.
+                    Preconditions: the source document must resolve to at least one receivable line and must not \
+                    already be fully received; the document type is detected from the id prefix, ASN when the id \
+                    starts with ASN and PO otherwise.
+                    Required inputs: sourceDocumentId (non-blank string); entryMethod is optional and defaults to \
+                    MANUAL, with SCAN the other accepted value.
+                    Emits an INVENTORY_RECEIVING_SESSION_CREATE event; no stock is posted, the session only stages \
+                    expected quantities until items are received.
+                    Returns 404 when the source document yields no receiving lines, and 400 when the source \
+                    document has already been fully received or entryMethod is not a known value.
+                    """,
             tags = {"Receiving"})
     @ApiResponse(
             responseCode = "201",
@@ -72,8 +89,16 @@ public class ReceivingController {
     public ResponseEntity<ReceivingSessionResponse> createReceivingSession(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             required = true,
-                            description = "Receiving session creation payload",
-                            content = @Content(schema = @Schema(implementation = CreateReceivingSessionRequest.class)))
+                            description = "Source document to receive against and the line entry method.",
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = CreateReceivingSessionRequest.class),
+                                            examples =
+                                                    @ExampleObject(name = "Manual PO receiving session", value = """
+                                                                    {"sourceDocumentId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02",
+                                                                     "entryMethod":"MANUAL"}
+                                                                    """)))
                     @Valid
                     @RequestBody
                     CreateReceivingSessionRequest request) {
@@ -92,8 +117,20 @@ public class ReceivingController {
     @PreAuthorize("hasAuthority('inventory:receiving:view')")
     @EmitEvent(id = "INVENTORY_RECEIVING_SESSION_GET", apiVersion = "1")
     @Operation(
-            summary = "Get receiving session",
-            description = "Retrieves receiving session details by session identifier",
+            operationId = "getReceivingSession",
+            summary = "Get Receiving Session",
+            description = """
+                    Returns one receiving session with its status, entry method and per-line expected and received \
+                    quantities.
+                    Use this tool when the sessionId is already known, for example to check line statuses before \
+                    or after receiveItemsIntoStaging; use getGoodsReceipt instead for one-shot receipts posted \
+                    outside a session.
+                    Preconditions: the receiving session must exist.
+                    Required inputs: sessionId (UUIDv7) path parameter; there is no request body.
+                    Emits an INVENTORY_RECEIVING_SESSION_GET audit event; no stock state changes, this is a \
+                    read-only projection.
+                    Returns 404 when no receiving session exists for the supplied id.
+                    """,
             tags = {"Receiving"})
     @ApiResponse(
             responseCode = "200",
@@ -129,9 +166,29 @@ public class ReceivingController {
     @PreAuthorize("hasAuthority('inventory:receiving:complete')")
     @EmitEvent(id = "INVENTORY_RECEIVING_SESSION_COMPLETE", apiVersion = "1")
     @Operation(
-            summary = "Receive items into staging",
-            description =
-                    "Records received quantities for receiving session lines and generates receipt ledger/variance records",
+            operationId = "receiveItemsIntoStaging",
+            summary = "Receive Items Into Staging",
+            description = """
+                    Records actual received quantities for receiving session lines, posting a GOODS_RECEIPT ledger \
+                    entry into the staging location per line and a SHORTAGE or OVERAGE variance record for every \
+                    expected-vs-received mismatch.
+                    Use this tool to book arrived stock into an open session; do not use crossDockReceivingLine, \
+                    which routes a line straight to a workorder instead of staging, and do not use \
+                    createGoodsReceipt, the sessionless PO receipt.
+                    Preconditions: the receiving session must exist; lines naming a lineId not present in the \
+                    session are skipped rather than failing.
+                    Required inputs: sessionId (UUIDv7) path parameter and lines (non-empty), each naming lineId \
+                    plus either a whole-number receivedQuantity in base UoM or the documentUom/documentQuantity \
+                    pair; lotNumber is mandatory for LOT-tracked products (expirationDate optionally stamps a new \
+                    lot) and serialNumbers must enumerate exactly the received quantity for SERIAL-tracked \
+                    products.
+                    Emits an INVENTORY_RECEIVING_SESSION_COMPLETE event, marks each line RECEIVED, RECEIVED_SHORT \
+                    or RECEIVED_OVER, and moves the session to COMPLETED when every line is settled or IN_PROGRESS \
+                    otherwise.
+                    Returns 404 when the receiving session does not exist, 400 when a quantity is missing or not a \
+                    whole number, and 422 when a documentUom has no conversion path, a LOT-tracked line omits \
+                    lotNumber, or a serialized line's serial count mismatches the received quantity.
+                    """,
             tags = {"Receiving"})
     @ApiResponse(
             responseCode = "200",
@@ -156,8 +213,20 @@ public class ReceivingController {
             @Parameter(description = "Receiving session identifier", required = true) @PathVariable UUID sessionId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             required = true,
-                            description = "Receive lines payload",
-                            content = @Content(schema = @Schema(implementation = ReceiveItemsRequest.class)))
+                            description = "Actual received quantities, lot and serial data for the session lines.",
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = ReceiveItemsRequest.class),
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Lot-tracked line received in full",
+                                                            value = """
+                                                                    {"lines":[{"lineId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a06",
+                                                                      "receivedQuantity":8,
+                                                                      "lotNumber":"LOT-2026-0042",
+                                                                      "expirationDate":"2027-01-31"}]}
+                                                                    """)))
                     @Valid
                     @RequestBody
                     ReceiveItemsRequest request) {
@@ -184,9 +253,29 @@ public class ReceivingController {
     @PreAuthorize("hasAuthority('inventory:receiving:complete') and hasAuthority('inventory:issue:parts')")
     @EmitEvent(id = "INVENTORY_RECEIVING_CROSSDOCK", apiVersion = "1")
     @Operation(
-            summary = "Cross-dock receiving line to workorder",
-            description =
-                    "Cross-docks received quantity from a session line directly to a workorder line with atomic receipt and issue ledger events",
+            operationId = "crossDockReceivingLine",
+            summary = "Cross-Dock Receiving Line To Workorder",
+            description = """
+                    Cross-docks received quantity from a receiving session line directly to a workorder line, \
+                    posting paired GOODS_RECEIPT and GOODS_ISSUE ledger entries atomically at the cross-dock \
+                    location so on-hand nets to zero.
+                    Use this tool when arrived stock should bypass staging and go straight to the demanding \
+                    workorder; do not use receiveItemsIntoStaging, which books the quantity into the staging \
+                    location for later putaway.
+                    Preconditions: the session and line must exist, the workorder must not be COMPLETED, CANCELLED \
+                    or CLOSED, the cumulative received quantity may not exceed the line's expected quantity, and \
+                    the line's product must match the workorder line's demanded product unless the caller holds \
+                    inventory:override:part-match.
+                    Required inputs: sessionId and lineId (UUIDv7) path parameters plus workorderId, \
+                    workorderLineId and a positive quantity; lotNumber is mandatory for LOT-tracked products, \
+                    falling back to the lot already keyed on the line, and notes is optional.
+                    Emits an INVENTORY_RECEIVING_CROSSDOCK event, stamps the workorder reference on the line, \
+                    updates the line to RECEIVED, RECEIVED_SHORT or RECEIVED_OVER, and completes the session when \
+                    every line is settled.
+                    Returns 404 when the session or line is not found, 400 when the workorder is closed or the \
+                    quantity exceeds the expected quantity, 403 when the product mismatches the workorder demand \
+                    without the override permission, and 422 when a LOT-tracked product resolves no lot number.
+                    """,
             tags = {"Receiving"})
     @ApiResponse(
             responseCode = "200",
@@ -212,8 +301,21 @@ public class ReceivingController {
             @Parameter(description = "Receiving line identifier", required = true) @PathVariable UUID lineId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             required = true,
-                            description = "Cross-dock request payload",
-                            content = @Content(schema = @Schema(implementation = CrossDockRequest.class)))
+                            description = "Workorder destination and quantity for the cross-docked stock.",
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = CrossDockRequest.class),
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Cross-dock to urgent workorder",
+                                                            value = """
+                                                                    {"workorderId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a07",
+                                                                     "workorderLineId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a08",
+                                                                     "quantity":12,
+                                                                     "notes":"Cross-docked at dock door 3",
+                                                                     "lotNumber":"LOT-2026-0042"}
+                                                                    """)))
                     @Valid
                     @RequestBody
                     CrossDockRequest request) {

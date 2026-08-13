@@ -48,9 +48,21 @@ public class WorkorderPartsUsageController {
             scopes = {"workorder:parts:add"})
     @PreAuthorize("hasAuthority('workorder:parts:add')")
     @EmitEvent(id = "WORKORDER_PART_ISSUE", apiVersion = "1")
-    @Operation(
-            summary = "Issue parts to workorder",
-            description = "Issue parts from inventory, reserving them for consumption on the workorder")
+    @Operation(operationId = "issueParts", summary = "Issue Parts to Workorder", description = """
+                    Issues a quantity of a part line to the workorder, incrementing the line's quantityIssued and \
+                    recording an ISSUE usage event with the acting user.
+                    Use this tool when stock is handed to the job; do not use consumeParts, which records actual \
+                    installation against previously issued quantity.
+                    Preconditions: the workorder and part line must exist, the part must belong to the \
+                    workorder, and the caller must have an authenticated username.
+                    Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID) and a \
+                    positive quantity in the body; an Idempotency-Key header makes retries return the original \
+                    usage event.
+                    Emits a WORKORDER_PART_ISSUE event and marks the workorder fact changed for downstream \
+                    replication.
+                    Returns 201 with the ISSUE event, 400 when the quantity is not positive or the part cannot \
+                    be found, and 409 when the part belongs to a different workorder.
+                    """)
     @ApiResponse(
             responseCode = "201",
             description = "Parts issued successfully",
@@ -59,7 +71,7 @@ public class WorkorderPartsUsageController {
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @ApiResponse(responseCode = "409", description = "Idempotency conflict (duplicate key)")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Issue part request",
+            description = "Part line and quantity being issued from inventory to the job.",
             required = true,
             content =
                     @Content(
@@ -89,9 +101,21 @@ public class WorkorderPartsUsageController {
             scopes = {"workorder:parts:add"})
     @PreAuthorize("hasAuthority('workorder:parts:add')")
     @EmitEvent(id = "WORKORDER_PART_CONSUME", apiVersion = "1")
-    @Operation(
-            summary = "Consume parts on workorder",
-            description = "Record actual consumption of parts. Quantity consumed cannot exceed quantity issued.")
+    @Operation(operationId = "consumeParts", summary = "Record Part Consumption on Workorder", description = """
+                    Records actual consumption of an issued part, incrementing the line's quantityConsumed and \
+                    writing a CONSUME usage event.
+                    Use this tool when a part is actually installed on the vehicle; do not use issueParts, which \
+                    only reserves quantity, or returnParts, which sends unused quantity back.
+                    Preconditions: the part must belong to the workorder and cumulative consumption must not \
+                    exceed the quantity already issued.
+                    Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID) and a \
+                    positive quantity in the body; an Idempotency-Key header makes retries return the original \
+                    usage event.
+                    Emits a WORKORDER_PART_CONSUME event and marks the workorder fact changed.
+                    Returns 201 with the CONSUME event, 400 when the quantity is not positive, exceeds the \
+                    issued quantity, or the part cannot be found, and 409 when the part belongs to a different \
+                    workorder.
+                    """)
     @ApiResponse(
             responseCode = "201",
             description = "Parts consumption recorded successfully",
@@ -99,7 +123,7 @@ public class WorkorderPartsUsageController {
     @ApiResponse(responseCode = "400", description = "Invalid request (exceeds issued quantity, etc.)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Consume part request",
+            description = "Part line and quantity actually consumed on the job.",
             required = true,
             content =
                     @Content(
@@ -133,9 +157,21 @@ public class WorkorderPartsUsageController {
             scopes = {"workorder:parts:add"})
     @PreAuthorize("hasAuthority('workorder:parts:add')")
     @EmitEvent(id = "WORKORDER_PART_RETURN", apiVersion = "1")
-    @Operation(
-            summary = "Return unused parts to inventory",
-            description = "Return unused parts after partial consumption or service completion")
+    @Operation(operationId = "returnParts", summary = "Return Unused Parts to Inventory", description = """
+                    Returns unused issued quantity of a part line to inventory, incrementing quantityReturned \
+                    and writing a RETURN usage event.
+                    Use this tool for the normal return of leftover stock after partial consumption; do not use \
+                    returnUnusedPartQuantity, which is the adjustment-flow return that also records a reason.
+                    Preconditions: the part must belong to the workorder, and the return cannot exceed the \
+                    available quantity — issued minus consumed minus already returned.
+                    Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID) and a \
+                    positive quantity in the body; an Idempotency-Key header makes retries return the original \
+                    usage event.
+                    Emits a WORKORDER_PART_RETURN event and marks the workorder fact changed.
+                    Returns 201 with the RETURN event, 400 when the quantity is not positive, exceeds the \
+                    available quantity, or the part cannot be found, and 409 when the part belongs to a \
+                    different workorder.
+                    """)
     @ApiResponse(
             responseCode = "201",
             description = "Parts returned successfully",
@@ -143,7 +179,7 @@ public class WorkorderPartsUsageController {
     @ApiResponse(responseCode = "400", description = "Invalid request (exceeds available quantity, etc.)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Return part request",
+            description = "Part line and unused quantity going back to inventory.",
             required = true,
             content =
                     @Content(
@@ -177,9 +213,18 @@ public class WorkorderPartsUsageController {
             name = "bearerAuth",
             scopes = {"workorder:parts:view"})
     @PreAuthorize("hasAuthority('workorder:parts:view')")
-    @Operation(
-            summary = "Get parts usage history",
-            description = "Retrieve usage history (issue, consume, return events) for parts on the workorder")
+    @Operation(operationId = "getPartsUsageHistory", summary = "Get Parts Usage History", description = """
+                    Returns the ISSUE, CONSUME, and RETURN usage events for a workorder's parts, either for the \
+                    whole workorder or filtered to one part line.
+                    Use this tool when auditing how part quantities moved; use getPartAdjustmentHistory instead \
+                    for substitutions, corrections, and reasoned returns from the adjustment flow.
+                    Preconditions: when partLineId is supplied, the part must belong to the workorder.
+                    Required inputs: workorderId (UUID) as a path parameter; partLineId (UUID) is an optional \
+                    query filter.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with the events, 400 when the filtered part cannot be found, and 409 when the \
+                    filtered part belongs to a different workorder.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Usage history retrieved successfully",

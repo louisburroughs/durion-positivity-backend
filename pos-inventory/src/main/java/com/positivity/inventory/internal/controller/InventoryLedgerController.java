@@ -39,7 +39,22 @@ public class InventoryLedgerController {
     @Operation(
             operationId = "listInventoryLedger",
             summary = "List inventory ledger entries",
-            description = "Returns inventory ledger entries using optional filters.",
+            description = """
+                    Returns one token-paged slice of inventory ledger entries in stable ledgerEntryId order, \
+                    optionally filtered by SKU, location, timestamp range, source transaction and movement types.
+                    Use this tool to trace stock movement history and audit on-hand changes; use \
+                    getInventoryLedgerEntry instead when the entryId is already known, and getInventoryValuation \
+                    when a value report rather than raw movements is wanted.
+                    Preconditions: none.
+                    Required inputs: all parameters are optional — productSku, locationId, dateFrom and dateTo \
+                    (ISO-8601 instants, inclusive), sourceTransactionId, movementTypes (InventoryLedgerEventType \
+                    names), pageToken (the opaque nextPageToken from the previous page) and pageSize (default \
+                    50); storageLocationId, workorderId and workorderLineId are accepted but not yet applied \
+                    because the ledger does not store those columns.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 400 when a movementTypes value is not a known event type or pageToken is not a token \
+                    this endpoint issued, and 200 with a null nextPageToken on the last page.
+                    """,
             tags = {"Inventory Ledger"})
     @ApiResponse(
             responseCode = "200",
@@ -90,7 +105,16 @@ public class InventoryLedgerController {
     @Operation(
             operationId = "getInventoryLedgerEntry",
             summary = "Get inventory ledger entry",
-            description = "Returns a single inventory ledger entry by ID.",
+            description = """
+                    Returns a single inventory ledger entry with its movement type, quantity delta, resulting \
+                    quantity, unit cost and source references.
+                    Use this tool when the entryId is already known; use listInventoryLedger instead to search by \
+                    SKU, location, time range or movement type.
+                    Preconditions: the ledger entry must exist.
+                    Required inputs: entryId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no ledger entry exists for the supplied id.
+                    """,
             tags = {"Inventory Ledger"})
     @ApiResponse(
             responseCode = "200",

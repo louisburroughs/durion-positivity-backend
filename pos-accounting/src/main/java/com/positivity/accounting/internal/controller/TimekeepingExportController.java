@@ -6,6 +6,8 @@ import com.positivity.accounting.service.TimekeepingExportService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -45,14 +47,39 @@ public class TimekeepingExportController {
     @PreAuthorize("hasAuthority('accounting:export:request')")
     @EmitEvent(id = "ACCOUNTING_EXPORT_REQUEST", apiVersion = "1")
     @Operation(
-            summary = "Request timekeeping export",
             operationId = "requestExport",
-            description = "Submit an export job request.",
+            summary = "Request Timekeeping Export",
+            description = """
+                    Submits an asynchronous timekeeping or generic data export job and returns it in its \
+                    initial accepted state.
+                    Use this tool to export timekeeping data; do not use requestReportExport, which renders \
+                    financial-statement reports, and poll getExportStatus for completion.
+                    Preconditions: none; the job is queued for asynchronous processing.
+                    Required inputs: exportType and format (both non-blank strings); filters (JSON object) \
+                    and deliveryMode are optional.
+                    Emits an ACCOUNTING_EXPORT_REQUEST event and returns 202 while the job runs \
+                    asynchronously.
+                    Returns 400 when exportType or format is missing or blank.
+                    """,
             tags = {"Accounting Exports"})
     @ApiResponse(responseCode = "202", description = "Export job accepted")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "403", description = "Forbidden")
-    public ResponseEntity<ExportJobResponse> requestExport(@Valid @RequestBody ExportJobRequest request) {
+    public ResponseEntity<ExportJobResponse> requestExport(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Export job definition with type, format and optional filters.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Timekeeping CSV export", value = """
+                                                                    {"exportType":"TIMEKEEPING",
+                                                                     "format":"CSV",
+                                                                     "filters":{"from":"2026-08-01","to":"2026-08-13"}}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    ExportJobRequest request) {
         ExportJobResponse response = timekeepingExportService.requestExport(request);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
@@ -63,9 +90,17 @@ public class TimekeepingExportController {
             scopes = {"accounting:export:view"})
     @PreAuthorize("hasAuthority('accounting:export:view')")
     @Operation(
-            summary = "Get export job status",
             operationId = "getExportStatus",
-            description = "Retrieve the current status of an export job.",
+            summary = "Get Export Job Status",
+            description = """
+                    Returns the current status of one timekeeping or generic export job.
+                    Use this tool to poll a job created by requestExport; use listExportHistory instead to \
+                    browse all past jobs.
+                    Preconditions: the export job must exist.
+                    Required inputs: jobId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 EXPORT_JOB_NOT_FOUND when no export job exists for the supplied id.
+                    """,
             tags = {"Accounting Exports"})
     @ApiResponse(responseCode = "200", description = "Export job status returned")
     @ApiResponse(responseCode = "404", description = "Export job not found")
@@ -82,9 +117,18 @@ public class TimekeepingExportController {
             scopes = {"accounting:export:view"})
     @PreAuthorize("hasAuthority('accounting:export:view')")
     @Operation(
-            summary = "List export history",
             operationId = "listExportHistory",
-            description = "Retrieve paginated export job history.",
+            summary = "List Export Job History",
+            description = """
+                    Lists timekeeping and generic export jobs as a paginated projection, most recent first.
+                    Use this tool to review past export jobs; do not use getExportStatus, which polls one \
+                    job by its id.
+                    Preconditions: none beyond the caller holding accounting:export:view.
+                    Required inputs: none; the page defaults to 20 items and only requestedAt is a supported \
+                    sort property.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 400 UNSUPPORTED_SORT_PROPERTY when an unsupported sort property is requested.
+                    """,
             tags = {"Accounting Exports"})
     @ApiResponse(responseCode = "200", description = "Export history returned")
     @ApiResponse(responseCode = "403", description = "Forbidden")
