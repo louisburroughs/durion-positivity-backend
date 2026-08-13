@@ -223,8 +223,9 @@ public class VehiclePreferencesController {
                     Returns 204 in all cases, including when no preference document exists, because deletion is \
                     idempotent.
                     """)
-    @ApiResponse(responseCode = "204", description = "Preferences deleted successfully")
-    @ApiResponse(responseCode = "404", description = "No preferences found to delete")
+    @ApiResponse(
+            responseCode = "204",
+            description = "Preferences deleted, or no preference document existed (idempotent delete)")
     @DeleteMapping
     @EmitEvent(id = "VEHICLE_PREFERENCES_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deletePreferences(@Parameter(description = "Vehicle ID") @PathVariable UUID vehicleId) {
