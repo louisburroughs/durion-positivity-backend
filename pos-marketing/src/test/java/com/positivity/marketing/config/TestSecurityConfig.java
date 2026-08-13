@@ -1,0 +1,108 @@
+package com.positivity.marketing.config;
+
+import com.positivity.security.common.GatewaySecurityConstants;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Profile;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+/**
+ * Web-slice security for pos-marketing, mirroring the equivalent config in
+ * pos-inventory.
+ *
+ * <p>
+ * The gateway is the real authenticator (ADR-0011/0014); downstream services
+ * only ever see the authorities it decoded into {@code X-Authorities}. This
+ * config reproduces exactly that: a request's authorities come from the header,
+ * so a test can grant one specific permission and check that an endpoint gated
+ * on a different one refuses it. Without the header the request gets the full
+ * set, which keeps tests that are not about authorization short.
+ */
+@TestConfiguration(proxyBeanMethods = false)
+@EnableWebSecurity
+@EnableMethodSecurity(prePostEnabled = true)
+@Profile("test")
+public class TestSecurityConfig {
+
+    private static final List<SimpleGrantedAuthority> TEST_AUTHORITIES = List.of(
+            new SimpleGrantedAuthority("marketing:campaign:view"),
+            new SimpleGrantedAuthority("marketing:campaign:create"),
+            new SimpleGrantedAuthority("marketing:campaign:edit"),
+            new SimpleGrantedAuthority("marketing:campaign:schedule"),
+            new SimpleGrantedAuthority("marketing:campaign:manage"),
+            new SimpleGrantedAuthority("marketing:campaign:send"),
+            new SimpleGrantedAuthority("marketing:template:view"),
+            new SimpleGrantedAuthority("marketing:template:manage"),
+            new SimpleGrantedAuthority("marketing:stats:view"));
+
+    @Bean(name = "gatewaySecurityFilterChain")
+    @Primary
+    public SecurityFilterChain gatewaySecurityFilterChain(HttpSecurity http) {
+        http.csrf(AbstractHttpConfigurer::disable)
+                .addFilterBefore(new TestAutoAuthFilter(), UsernamePasswordAuthenticationFilter.class)
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+        return http.build();
+    }
+
+    @Bean
+    @Primary
+    @SuppressWarnings("java:S1874")
+    public UserDetailsService testUserDetailsService() {
+        var user = User.withUsername("test-user")
+                .password("{noop}local-test-password-9xA7")
+                .authorities(TEST_AUTHORITIES)
+                .build();
+        return new InMemoryUserDetailsManager(user);
+    }
+
+    private static class TestAutoAuthFilter extends OncePerRequestFilter {
+        @Override
+        protected void doFilterInternal(
+                HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+                throws ServletException, IOException {
+            String headerAuthorities = request.getHeader("X-Authorities");
+            List<SimpleGrantedAuthority> authorities = headerAuthorities == null || headerAuthorities.isBlank()
+                    ? TEST_AUTHORITIES
+                    : Arrays.stream(headerAuthorities.split(","))
+                            .map(String::trim)
+                            .filter(value -> !value.isBlank())
+                            .map(SimpleGrantedAuthority::new)
+                            .toList();
+
+            String headerUser = request.getHeader("X-User");
+            String username = (headerUser != null && !headerUser.isBlank()) ? headerUser : "test-user";
+
+            var authentication = new UsernamePasswordAuthenticationToken(username, null, authorities);
+            // Mirror the gateway filter: SecurityContextHelper resolves the audit
+            // username from the authentication details map (ADR-0018).
+            authentication.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, username));
+            Authentication existing = SecurityContextHolder.getContext().getAuthentication();
+            if (existing == null || !existing.isAuthenticated()) {
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            }
+            filterChain.doFilter(request, response);
+        }
+    }
+}
