@@ -765,9 +765,7 @@ consumer-credited figure for shared libraries. No work is outstanding here.
 ## 7. What is still open
 
 1. ~~**Wave 1c** (`{Module}PermissionRegistry`, §3.3)~~ — closed 2026-08-12, see §7.1.
-2. **Controller `@WebMvcTest` slices** — `pos-vehicle-inventory` (~114 missed
-   across four controllers), `pos-customer` CRM controllers (~71),
-   `pos-marketing` (~30), `pos-people-contact`.
+2. ~~**Controller `@WebMvcTest` slices**~~ — closed 2026-08-12, see §7.3.
 3. ~~**The four all-zero modules**~~ — closed 2026-08-12, see §7.2.
 4. **Branch-coverage tails** — `pos-catalog` (53.5% branch against 77.4% line),
    `pos-workorder` (56.7%), `pos-document-helper` (35.2%). Parameterized tests
@@ -836,6 +834,51 @@ instead of duplicating them.
 Writing them surfaced a live defect, filed as
 louisburroughs/durion-positivity-backend#1265 and listed below.
 
+### 7.3 Controller web slices closed (2026-08-12)
+
+| Module | Line before | Line after | Branch after | Floor |
+|---|---|---|---|---|
+| `pos-vehicle-inventory` | 66.4% | 76.7% | 74.1% | 0.71 / 0.69 |
+| `pos-marketing` | 87.4% | 89.7% | 82.9% | 0.84 / 0.77 |
+| `pos-people-contact` | 64.1% | 70.1% | 55.9% | 0.65 / 0.50 |
+| `pos-customer` | 85.4% | 86.3% | 71.5% | 0.81 / 0.66 |
+
+The slices reuse each module's existing web-slice security config where one
+existed; `pos-marketing` needed its first, modelled on `pos-inventory`'s.
+Authorities arrive on `X-Authorities` exactly as the gateway supplies them
+(ADR-0011/0014), which is what makes per-endpoint permission assertions possible
+without standing up the gateway.
+
+**What these tests are for.** Three recurring shapes turned out to carry the risk,
+and they are worth naming because they recur across the reactor:
+
+1. *Sibling permissions on adjacent methods.* `pos-marketing`'s campaign
+   lifecycle splits across five authorities (create, edit, schedule, manage,
+   send) on methods that differ by one word. Nothing structural enforces the
+   split — a copy-paste between two of them is invisible after the fact. Each
+   action is therefore checked against a neighbouring authority that must *not*
+   open it, rather than only against the one that should.
+2. *Two implementations of one interface.* `pos-customer`'s `CustomerController`
+   holds two `CustomerService` fields, commercial and individual, assigned in the
+   opposite order to the constructor's parameters. Correct today; still compiles
+   if swapped, and a swap answers every question about the wrong kind of
+   customer. Same shape in `pos-people-contact`'s `PostalAddressController`,
+   where person and organization endpoints differ by one word in the path, one in
+   the `@PreAuthorize`, and one enum constant.
+3. *Verbs that disagree about null.* `pos-vehicle-inventory`'s preferences PUT
+   and PATCH both accept a null `serviceIntervalMonths` and mean opposite things
+   by it (#1175) — clear the override versus leave it alone. Both arrive as an
+   absent JSON field, so the verb is the only thing carrying the distinction.
+
+`pos-people-contact`'s `PeopleExceptionHandler` was the largest single uncovered
+class in the whole wave (58 missed lines) and is now covered exhaustively. It is
+the module's entire error contract — twenty near-identical four-line handlers
+where a wrong `HttpStatus` still compiles and still returns a well-formed
+ProblemDetail.
+
+Two defects were found and filed by this wave (#1269 and #1270); they join the
+standing list below.
+
 ### Defects found by this work, still open
 
 - louisburroughs/durion-positivity-backend#1245 — a partial customer update
@@ -853,6 +896,17 @@ louisburroughs/durion-positivity-backend#1265 and listed below.
   The same helper is copied into `pos-vehicle-reference-carapi`, where both call
   sites happen to cancel out — correct by accident, and a trap for anyone who
   fixes the name alone.
+- louisburroughs/durion-positivity-backend#1269 — `pos-vehicle-inventory` has no
+  `@ControllerAdvice` at all, so a wrong-length VIN on `@Validated`
+  `GET /vin/{vin}` raises `ConstraintViolationException` and surfaces as 500, and
+  no error from the module carries the `ApiError` envelope required by
+  `docs/ERROR_ENVELOPE.md` — every error return is a bare status with an empty
+  body.
+- louisburroughs/durion-positivity-backend#1270 — `POST /v1/vehicles/search` is
+  broken for every request: `SearchVehiclesRequest` is `@Builder` with final
+  fields and no `@Jacksonized`, so Jackson has no creator and message conversion
+  fails before the controller is entered. The GET route builds the object in
+  Java, which is why nothing caught it.
 - louisburroughs/durion-positivity-backend#1267 — `pos-vehicle-reference-carapi`
   conflates its own primary key with CarAPI's make id inside one method, so no
   argument to `GET /models/{makeId}` is correct for all three of its uses; the

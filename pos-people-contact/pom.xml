@@ -13,10 +13,11 @@
     <description>Identity/contact/user-link authority module (ADR-0044 Phase 3)</description>
 
     <properties>
-        <!-- Coverage ratchet (plan Phase 4): measured 65.2% line / 52.3% branch.
+        <!-- Coverage ratchet (plan Phase 4): measured 70.1% line / 55.9% branch after the
+             §7 controller web-slice wave (was 64.1% / 52.3%).
              Floors sit ~5 points under to catch regression without failing on noise. -->
-        <jacoco.line.min>0.60</jacoco.line.min>
-        <jacoco.branch.min>0.47</jacoco.branch.min>
+        <jacoco.line.min>0.65</jacoco.line.min>
+        <jacoco.branch.min>0.50</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>
 
