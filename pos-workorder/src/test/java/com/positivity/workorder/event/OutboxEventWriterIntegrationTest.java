@@ -76,12 +76,16 @@ class OutboxEventWriterIntegrationTest {
         assertThat(row.getRecordKey()).isEqualTo(SAMPLE_ID.toString());
         assertThat(row.getPublishedAt()).isNull();
         assertThat(row.getCreatedAt()).isEqualTo(Instant.parse("2026-07-08T12:00:00Z"));
-        // Every field the previous direct producer emitted, under the same name (pos-customer
-        // consumer contract), plus schemaVersion — the envelope change in #1286 is additive.
+        // Now a serialized DomainEventEnvelope rather than the hand-built map (#1286). Every field
+        // the map emitted is still emitted under the same name — that is the pos-customer consumer
+        // contract, and those listeners read the envelope as a JsonNode tree by field name — and
+        // the envelope adds schemaVersion, aggregateId, correlationId and actor on top.
         assertThat(row.getPayload())
                 .contains("\"eventId\"")
                 .contains("\"eventType\":\"workorder.work-session.started.v1\"")
                 .contains("\"schemaVersion\":1")
+                .contains("\"aggregateId\":\"" + SAMPLE_ID + "\"")
+                .contains("\"aggregateVersion\"")
                 .contains("\"occurredAtUtc\"")
                 .contains("\"sourceService\":\"pos-workorder\"")
                 .contains("\"payload\"");
@@ -106,8 +110,10 @@ class OutboxEventWriterIntegrationTest {
     @Test
     @DisplayName("A schemaVersion below 1 is rejected rather than published")
     void rejectsNonPositiveSchemaVersion() {
-        // Mirrors the DomainEventEnvelope guard. This envelope is hand-built (#1286), so nothing
-        // else would stop a 0 from reaching consumers as a legitimate-looking version.
+        // The guard is DomainEventEnvelope's own, reached through the writer. Pinning it here is
+        // what proves the writer actually routes through the shared envelope: while this module
+        // hand-built its map (#1286) nothing validated the version at all, and a 0 would have
+        // reached consumers looking legitimate.
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(
                         () -> writer.publish("workorder.work-session.started.v1", 0, SAMPLE_ID, workSessionStarted()))
