@@ -878,8 +878,9 @@ the module's entire error contract — twenty near-identical four-line handlers
 where a wrong `HttpStatus` still compiles and still returns a well-formed
 ProblemDetail.
 
-Two defects were found and filed by this wave (#1269 and #1270); they join the
-standing list below.
+Two defects were found and filed by this wave (#1269 and #1270); both have since
+been fixed — see below. The two tests that pinned them were written to fail
+loudly once the behaviour changed, and are now ordinary assertions.
 
 ### 7.4 Branch tails, first pass (2026-08-12)
 
@@ -1069,17 +1070,22 @@ One defect filed: #1279.
   The same helper is copied into `pos-vehicle-reference-carapi`, where both call
   sites happen to cancel out — correct by accident, and a trap for anyone who
   fixes the name alone.
-- louisburroughs/durion-positivity-backend#1269 — `pos-vehicle-inventory` has no
-  `@ControllerAdvice` at all, so a wrong-length VIN on `@Validated`
-  `GET /vin/{vin}` raises `ConstraintViolationException` and surfaces as 500, and
-  no error from the module carries the `ApiError` envelope required by
-  `docs/ERROR_ENVELOPE.md` — every error return is a bare status with an empty
-  body.
-- louisburroughs/durion-positivity-backend#1270 — `POST /v1/vehicles/search` is
-  broken for every request: `SearchVehiclesRequest` is `@Builder` with final
-  fields and no `@Jacksonized`, so Jackson has no creator and message conversion
-  fails before the controller is entered. The GET route builds the object in
-  Java, which is why nothing caught it.
+- ~~louisburroughs/durion-positivity-backend#1269~~ — closed 2026-08-13.
+  `pos-vehicle-inventory` had no `@ControllerAdvice` at all, so a wrong-length VIN
+  on `@Validated` `GET /vin/{vin}` raised `ConstraintViolationException` and
+  surfaced as 500, and no error from the module carried the `ApiError` envelope
+  required by `docs/ERROR_ENVELOPE.md`. `VehicleExceptionHandler` now maps
+  constraint violations, body validation, `EntityNotFoundException` and
+  `IllegalArgumentException` into the envelope, and the hand-rolled `try/catch`
+  blocks in `VehicleRegistryController` and `VehicleController` are gone.
+- ~~louisburroughs/durion-positivity-backend#1270~~ — closed 2026-08-13.
+  `POST /v1/vehicles/search` was broken for every request: `SearchVehiclesRequest`
+  was `@Builder` with final fields and no `@Jacksonized`, so Jackson had no
+  creator and message conversion failed before the controller was entered. The GET
+  route builds the object in Java, which is why nothing caught it. `@Jacksonized`
+  now wires the builder up as the creator. A sweep for the same shape — a
+  `@Builder` class with no Jackson creator used as a `@RequestBody` — found no
+  other instance in the reactor.
 - ~~louisburroughs/durion-positivity-backend#1274~~ — **fixed** by PR #1277, which
   deleted the duplicate `com.positivity.documents.helper` tree. The module went
   from 35.2% to 90.0% branch coverage by deletion rather than by testing; see
