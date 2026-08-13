@@ -44,9 +44,17 @@ public class WorkorderPickedItemsController {
             name = "bearerAuth",
             scopes = {"inventory:pick_list:view"})
     @PreAuthorize("hasAuthority('inventory:pick_list:view')")
-    @Operation(
-            summary = "Get picked items for workorder",
-            description = "Retrieve the items already picked for a workorder before they are consumed")
+    @Operation(operationId = "getPickedItems", summary = "Get Picked Items for Workorder", description = """
+                    Returns the items already picked for a workorder from the local pick replica, showing picked \
+                    and consumed quantities before installation.
+                    Use this tool to see what is staged and available to consume; use consumeWorkorderPickedItems to \
+                    actually record consumption, and getPickTasks for lines still being picked.
+                    Preconditions: none — a workorder without a pick list yields an empty list rather than an \
+                    error.
+                    Required inputs: workorderId (UUID) as a path parameter.
+                    No events are emitted and no state changes; this is a read-only replica projection.
+                    Returns 200 with the picked items, possibly empty.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Picked items retrieved successfully",
@@ -75,10 +83,23 @@ public class WorkorderPickedItemsController {
     @PreAuthorize("hasAuthority('workorder:parts:consume')")
     @EmitEvent(id = "WORKORDER_PICKED_ITEMS_CONSUME", apiVersion = "1")
     @Operation(
-            summary = "Consume picked items into workorder",
-            description = "Queues asynchronous consumption of picked items (ADR-0044 #901): the response is "
-                    + "202 with per-item status PENDING; the inventory.consumption.recorded fact updates the "
-                    + "pick replicas and subsequent picked-items reads observe the consumed quantities.")
+            operationId = "consumeWorkorderPickedItems",
+            summary = "Consume Picked Items into Workorder",
+            description = """
+                    Queues asynchronous consumption of picked items into the workorder over the Kafka command \
+                    feed per ADR-0044; each item is acknowledged with status PENDING, and the inventory \
+                    consumption-recorded fact later updates the pick replicas.
+                    Use this tool when staged picked parts are installed on the job; do not use consumeParts, \
+                    which operates on workorder part lines outside the pick flow.
+                    Preconditions: a pick list replica must exist for the workorder and every referenced \
+                    pickTaskId must belong to it.
+                    Required inputs: workorderId (UUID) as a path parameter and a non-empty items list, each \
+                    entry carrying pickTaskId (UUID) and quantityToConsume (integer).
+                    Emits a WORKORDER_PICKED_ITEMS_CONSUME event and publishes a consume command; callers must \
+                    poll getPickedItems to observe the consumed quantities.
+                    Returns 202 with per-item PENDING results, 404 when the pick list or a referenced pick task \
+                    is missing, and 503 when the command feed is unavailable.
+                    """)
     @ApiResponse(
             responseCode = "202",
             description = "Consumption queued; poll the picked items for consumed quantities (status PENDING).",
@@ -95,14 +116,24 @@ public class WorkorderPickedItemsController {
             responseCode = "404",
             description = "Workorder not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<ConsumePickedItemsResponse> consumePickedItems(
+    public ResponseEntity<ConsumePickedItemsResponse> consumeWorkorderPickedItems(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     @NonNull
                     UUID workorderId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Picked pick-task quantities to consume into the workorder.",
                             required = true,
-                            content = @Content(schema = @Schema(implementation = ConsumePickedItemsRequest.class)))
+                            content =
+                                    @Content(
+                                            schema = @Schema(implementation = ConsumePickedItemsRequest.class),
+                                            examples =
+                                                    @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                            name = "Consume one task",
+                                                            value = """
+                                                                    {"items":[{"pickTaskId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4ab1",
+                                                                               "quantityToConsume":2}]}
+                                                                    """)))
                     @RequestBody
                     @Valid
                     ConsumePickedItemsRequest request) {

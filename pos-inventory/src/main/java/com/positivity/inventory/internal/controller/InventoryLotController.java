@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -64,9 +65,21 @@ public class InventoryLotController {
             scopes = {"inventory:on_hand:view"})
     @PreAuthorize("hasAuthority('inventory:on_hand:view')")
     @Operation(
+            operationId = "listInventoryLots",
             summary = "List lots",
-            description = "Lists lot master records filtered by stock item, status, and lot number,"
-                    + " newest received first",
+            description = """
+                    Lists lot master records newest received first, optionally filtered by stock item, lifecycle \
+                    status and exact lot number.
+                    Use this tool to discover a lotId or survey lot statuses; use getInventoryLot instead when the \
+                    id is known and per-location on-hand is needed, and use traceInventoryLot for the movement \
+                    history.
+                    Preconditions: none; lots are created only by the inbound receipt paths, never through this API.
+                    Required inputs: none; stockItemId (catalog product id), status (ACTIVE, QUARANTINED, RECALLED, \
+                    CONSUMED) and lotNumber are optional query filters.
+                    Emits an INVENTORY_LOT_LIST event; no state changes.
+                    Returns 200 with an empty array when nothing matches, so an empty result is not an error \
+                    condition.
+                    """,
             tags = {"Lots"})
     @ApiResponse(
             responseCode = "200",
@@ -104,9 +117,18 @@ public class InventoryLotController {
             scopes = {"inventory:on_hand:view"})
     @PreAuthorize("hasAuthority('inventory:on_hand:view')")
     @Operation(
+            operationId = "getInventoryLot",
             summary = "Get lot details",
-            description = "Retrieves one lot master record with its per-location on-hand from the per-lot"
-                    + " stock summary rows",
+            description = """
+                    Returns one lot master record together with its per-location on-hand and in-transit balances, \
+                    served from the per-lot stock summary rows rather than by aggregating the ledger.
+                    Use this tool when the lotId is already known; use listInventoryLots instead to search by stock \
+                    item, status or lot number.
+                    Preconditions: the lot must exist.
+                    Required inputs: lotId (UUID) as a path parameter; there is no request body.
+                    Emits an INVENTORY_LOT_GET event; no state changes.
+                    Returns 404 when no lot exists for the supplied id.
+                    """,
             tags = {"Lots"})
     @ApiResponse(responseCode = "200", description = "Lot found")
     @ApiResponse(
@@ -142,11 +164,22 @@ public class InventoryLotController {
             scopes = {"inventory:lot:manage"})
     @PreAuthorize("hasAuthority('inventory:lot:manage')")
     @Operation(
+            operationId = "updateInventoryLotStatus",
             summary = "Change lot status",
-            description = "Quarantines, recalls, or releases a lot back to ACTIVE. QUARANTINED and RECALLED lots"
-                    + " are blocked from lot suggestion and outbound movement. Status flip only — physically"
-                    + " moving stock to the site's quarantine bin is a separate operator-driven transfer."
-                    + " CONSUMED is rejected (reconciler-owned).",
+            description = """
+                    Changes a lot's lifecycle status: quarantines or recalls it, or releases it back to ACTIVE; \
+                    QUARANTINED and RECALLED lots are blocked from lot suggestion and outbound movement.
+                    Use this tool to gate a lot for quality or recall reasons; do not use \
+                    updateInventoryLotExpiration, which only re-dates the lot, and note the status flip does not \
+                    move stock — relocating units to a quarantine bin is a separate operator-driven transfer.
+                    Preconditions: the lot must exist and must not already be CONSUMED, because a CONSUMED lot \
+                    holds no stock and its status is owned by the posting-funnel reconciler.
+                    Required inputs: lotId (UUID) path parameter plus a body with status (ACTIVE, QUARANTINED or \
+                    RECALLED; CONSUMED is rejected) and a mandatory reason recorded for traceability.
+                    Emits an INVENTORY_LOT_STATUS_UPDATE event; no ledger entries are posted.
+                    Returns 404 when the lot does not exist, and 400 when the target status is CONSUMED, the lot is \
+                    already CONSUMED, or reason is missing.
+                    """,
             tags = {"Lots"})
     @ApiResponse(responseCode = "200", description = "Lot status updated")
     @ApiResponse(
@@ -172,7 +205,22 @@ public class InventoryLotController {
                             schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<LotResponse> updateLotStatus(
             @Parameter(description = "Lot ID", required = true) @PathVariable UUID lotId,
-            @Valid @RequestBody LotStatusUpdateRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Target lifecycle status with the mandatory traceability reason.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Quarantine after recall notice",
+                                                            value = """
+                                                                    {"status":"QUARANTINED",
+                                                                     "reason":"Supplier recall notice R-2026-014"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    LotStatusUpdateRequest request) {
         return ResponseEntity.ok(lotService.updateStatus(lotId, request));
     }
 
@@ -190,9 +238,20 @@ public class InventoryLotController {
             scopes = {"inventory:lot:manage"})
     @PreAuthorize("hasAuthority('inventory:lot:manage')")
     @Operation(
+            operationId = "updateInventoryLotExpiration",
             summary = "Set lot expiration",
-            description = "Sets or clears a lot's expiration date and alert-window date. Re-dating resets the"
-                    + " emit-once alert bookkeeping so the daily expiry scan can alert the new dates.",
+            description = """
+                    Sets or clears a lot's expiration date and expiring-soon alert-window date.
+                    Use this tool to re-date a lot after inspection or vendor correction; do not use \
+                    updateInventoryLotStatus, which changes the lifecycle status rather than the dates.
+                    Preconditions: the lot must exist.
+                    Required inputs: lotId (UUID) path parameter plus a body with optional expirationDate and \
+                    alertDate (ISO dates); a null clears the corresponding date, and alertDate null means no early \
+                    alert.
+                    Emits an INVENTORY_LOT_EXPIRATION_SET event and resets the emit-once alert bookkeeping so the \
+                    daily expiry scan can alert the new dates afresh.
+                    Returns 404 when the lot does not exist.
+                    """,
             tags = {"Lots"})
     @ApiResponse(responseCode = "200", description = "Lot expiration updated")
     @ApiResponse(
@@ -211,7 +270,20 @@ public class InventoryLotController {
                             schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<LotResponse> updateLotExpiration(
             @Parameter(description = "Lot ID", required = true) @PathVariable UUID lotId,
-            @Valid @RequestBody LotExpirationUpdateRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Expiration and alert-window dates to set; a null clears the"
+                                    + " corresponding date.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                            examples = @ExampleObject(name = "Re-date with early alert", value = """
+                                                                    {"expirationDate":"2027-01-31",
+                                                                     "alertDate":"2027-01-01"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    LotExpirationUpdateRequest request) {
         return ResponseEntity.ok(lotService.updateExpiration(lotId, request));
     }
 }

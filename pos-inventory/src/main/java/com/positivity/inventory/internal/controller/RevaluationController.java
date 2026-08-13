@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -63,10 +64,27 @@ public class RevaluationController {
             scopes = {"inventory:valuation:adjust"})
     @PreAuthorize("hasAuthority('inventory:valuation:adjust')")
     @Operation(
+            operationId = "createRevaluation",
             summary = "Submit cost revaluation",
-            description = "Submits a manual cost revaluation for a SKU. Below the configured value-delta thresholds"
-                    + " the revaluation is auto-applied (cost state restated and ProductValueChangedV1 emitted) in"
-                    + " the same transaction; at or above them it enters PENDING_APPROVAL with no cost change.",
+            description = """
+                    Submits a manual cost revaluation for a SKU, correcting the cost its resolved costing method \
+                    uses — the standard price under STANDARD, the running average under AVERAGE; below the \
+                    configured value-delta thresholds it is AUTO_APPLIED (cost state restated and a \
+                    ProductValueChangedV1 fact emitted) in the same transaction, and at or above them it enters \
+                    PENDING_APPROVAL with no cost change.
+                    Use this tool to correct a wrong unit cost; do not use upsertCostingMethodConfig, which \
+                    switches the costing method without restating values, and do not use approveRevaluation, \
+                    which acts on a revaluation that already exists.
+                    Preconditions: the caller must be an authenticated user; the SKU's cost state row is seeded \
+                    automatically when absent, so no prior costing history is required.
+                    Required inputs: stockItemId plus exactly one of newUnitCost (absolute, zero or positive) or \
+                    costDelta (signed, applied to the current cost), and a reason for the audit log; the value \
+                    delta gating the approval tier is the cost change multiplied by current on-hand.
+                    Emits an INVENTORY_REVALUATION_CREATE event, and the auto-apply path additionally emits the \
+                    ProductValueChangedV1 fact so accounting can post the revaluation journal entry.
+                    Returns 400 when neither or both of newUnitCost and costDelta are supplied, or when the \
+                    resulting unit cost would be negative.
+                    """,
             tags = {"Inventory Revaluation"})
     @ApiResponse(responseCode = "201", description = "Revaluation created (AUTO_APPLIED or PENDING_APPROVAL)")
     @ApiResponse(
@@ -83,7 +101,22 @@ public class RevaluationController {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<RevaluationResponse> createRevaluation(@Valid @RequestBody CreateRevaluationRequest request) {
+    public ResponseEntity<RevaluationResponse> createRevaluation(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Cost correction for one SKU: an absolute new unit cost or a signed"
+                                    + " delta, with the justification recorded in the audit log.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Absolute correction", value = """
+                                                                    {"stockItemId":"OIL-5W30-5QT",
+                                                                     "newUnitCost":5.5000,
+                                                                     "reason":"Q3 physical recount valuation correction"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    CreateRevaluationRequest request) {
         log.info("Received request to revalue {}", request.getStockItemId());
         return ResponseEntity.status(HttpStatus.CREATED).body(revaluationService.createRevaluation(request));
     }
@@ -101,9 +134,22 @@ public class RevaluationController {
             scopes = {"inventory:valuation:adjust"})
     @PreAuthorize("hasAuthority('inventory:valuation:adjust')")
     @Operation(
+            operationId = "approveRevaluation",
             summary = "Approve cost revaluation",
-            description = "Approves a pending revaluation, restating the SKU cost state and emitting"
-                    + " ProductValueChangedV1",
+            description = """
+                    Approves a PENDING_APPROVAL revaluation and applies it: the SKU's cost state is restated to \
+                    the recorded new unit cost and a ProductValueChangedV1 fact is emitted for the accounting \
+                    journal entry.
+                    Use this tool after reviewing an above-threshold revaluation; do not use rejectRevaluation, \
+                    which discards it and leaves the cost state untouched.
+                    Preconditions: the revaluation must exist and be in PENDING_APPROVAL status; the approver need \
+                    not differ from the submitter.
+                    Required inputs: revaluationId (UUID) as a path parameter; there is no request body.
+                    Emits an INVENTORY_REVALUATION_APPROVE event plus the ProductValueChangedV1 fact; the new cost \
+                    applies from now on and no ledger entries are rewritten.
+                    Returns 404 when the revaluation does not exist, and 409 when it is not in PENDING_APPROVAL \
+                    status.
+                    """,
             tags = {"Inventory Revaluation"})
     @ApiResponse(responseCode = "200", description = "Revaluation approved and applied")
     @ApiResponse(
@@ -147,8 +193,21 @@ public class RevaluationController {
             scopes = {"inventory:valuation:adjust"})
     @PreAuthorize("hasAuthority('inventory:valuation:adjust')")
     @Operation(
+            operationId = "rejectRevaluation",
             summary = "Reject cost revaluation",
-            description = "Rejects a pending revaluation with a reason. The SKU cost state is untouched.",
+            description = """
+                    Rejects a PENDING_APPROVAL revaluation with a recorded reason; the SKU cost state is untouched \
+                    and the record moves to the terminal REJECTED status.
+                    Use this tool to discard a disputed cost correction; do not use approveRevaluation, which \
+                    restates the SKU cost state.
+                    Preconditions: the revaluation must exist and be in PENDING_APPROVAL status; the rejecting \
+                    actor is taken from the authenticated context, not the body.
+                    Required inputs: revaluationId (UUID) path parameter and rejectionReason (non-blank, max 1000 \
+                    characters) in the body.
+                    Emits an INVENTORY_REVALUATION_REJECT event; no cost or ledger change is made.
+                    Returns 404 when the revaluation does not exist, and 409 when it is not in PENDING_APPROVAL \
+                    status.
+                    """,
             tags = {"Inventory Revaluation"})
     @ApiResponse(responseCode = "200", description = "Revaluation rejected")
     @ApiResponse(
@@ -167,7 +226,18 @@ public class RevaluationController {
                             schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<RevaluationResponse> rejectRevaluation(
             @Parameter(description = "Revaluation document ID", required = true) @PathVariable UUID revaluationId,
-            @Valid @RequestBody RejectRevaluationRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Rejection context recording why the cost correction is discarded.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Rejection", value = """
+                                                                    {"rejectionReason":"Recount disputed; leave standard price unchanged"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    RejectRevaluationRequest request) {
         log.info("Received request to reject revaluation {}", revaluationId);
         return ResponseEntity.ok(revaluationService.rejectRevaluation(revaluationId, request));
     }
@@ -184,8 +254,18 @@ public class RevaluationController {
             scopes = {"inventory:valuation:view", "inventory:valuation:adjust"})
     @PreAuthorize("hasAnyAuthority('inventory:valuation:view','inventory:valuation:adjust')")
     @Operation(
+            operationId = "getRevaluation",
             summary = "Get revaluation details",
-            description = "Retrieves one revaluation document",
+            description = """
+                    Returns one revaluation document with its old and new unit cost, on-hand snapshot, signed \
+                    value delta, approval tier and lifecycle status.
+                    Use this tool when the revaluationId is already known; use listRevaluations instead to search \
+                    by SKU or status.
+                    Preconditions: the revaluation must exist.
+                    Required inputs: revaluationId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no revaluation exists for the supplied id.
+                    """,
             tags = {"Inventory Revaluation"})
     @ApiResponse(responseCode = "200", description = "Revaluation found")
     @ApiResponse(
@@ -213,8 +293,20 @@ public class RevaluationController {
             scopes = {"inventory:valuation:view", "inventory:valuation:adjust"})
     @PreAuthorize("hasAnyAuthority('inventory:valuation:view','inventory:valuation:adjust')")
     @Operation(
+            operationId = "listRevaluations",
             summary = "List revaluations",
-            description = "Lists revaluation documents filtered by SKU and lifecycle status, newest first",
+            description = """
+                    Returns revaluation documents, newest first, optionally filtered by SKU and/or lifecycle \
+                    status (PENDING_APPROVAL, AUTO_APPLIED, APPLIED, REJECTED).
+                    Use this tool to find pending approvals or audit past cost corrections; use getRevaluation \
+                    instead when the revaluationId is already known.
+                    Preconditions: none.
+                    Required inputs: stockItemId and status are optional query parameters; there is no paging — \
+                    the full match set is returned.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty array when no revaluations match, so an empty result is not an \
+                    error condition.
+                    """,
             tags = {"Inventory Revaluation"})
     @ApiResponse(
             responseCode = "200",

@@ -65,9 +65,19 @@ public class VendorDirectoryController {
             scopes = {"accounting:ap:view"})
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(
-            summary = "Search vendors by name",
-            description = "Case-insensitive name-contains search over the AP vendor directory, ordered by name."
-                    + " Omit the name parameter to list all vendors (up to the limit).",
+            operationId = "searchVendors",
+            summary = "Search Vendors By Name",
+            description = """
+                    Searches the AP vendor directory with a case-insensitive name-contains match, returning \
+                    vendors ordered by name for typeahead use.
+                    Use this tool to resolve a vendor name to its vendorId; use getVendorById instead when a \
+                    vendor id is already known and only its label is needed.
+                    Preconditions: none; a blank or absent name lists all vendors up to the limit.
+                    Required inputs: none; name is an optional contains term and limit defaults to 20 with a \
+                    server cap of 100.
+                    Emits an ACCOUNTING_VENDOR_SEARCH audit event; no state changes.
+                    Returns 200 with an empty list when no vendor name matches.
+                    """,
             tags = {"Vendor Directory API"})
     @ApiResponse(
             responseCode = "200",
@@ -101,8 +111,18 @@ public class VendorDirectoryController {
             scopes = {"accounting:ap:view"})
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(
-            summary = "Get vendor by id",
-            description = "Resolves a single vendor by its identifier, e.g. to display a name for a deep-linked id",
+            operationId = "getVendorById",
+            summary = "Get Vendor By Id",
+            description = """
+                    Returns one AP vendor by its identifier, typically to display a name for a deep-linked \
+                    vendor id.
+                    Use this tool when the vendor id is already known; use searchVendors instead when \
+                    resolving a name typed by a user.
+                    Preconditions: the vendor must exist in the AP vendor directory.
+                    Required inputs: vendorId (UUID) as a path parameter; there is no request body.
+                    Emits an ACCOUNTING_VENDOR_GET audit event; no state changes.
+                    Returns 404 when no vendor exists for the supplied id.
+                    """,
             tags = {"Vendor Directory API"})
     @ApiResponse(
             responseCode = "200",

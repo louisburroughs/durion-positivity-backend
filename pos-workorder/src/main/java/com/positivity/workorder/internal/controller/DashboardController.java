@@ -31,9 +31,22 @@ public class DashboardController {
     @GetMapping("/today")
     @PreAuthorize("hasAuthority('workorder:dashboard:view')")
     @EmitEvent(id = "WORKEXEC_DASHBOARD_TODAY_GET", apiVersion = "1")
-    @Operation(
-            summary = "Get daily dispatch dashboard",
-            description = "Returns workorder, mechanic, bay, and conflict data for the given location and date")
+    @Operation(operationId = "getDispatchDashboard", summary = "Get Daily Dispatch Board Dashboard", description = """
+                    Returns the aggregated dispatch board for one location and one date: workorder summaries, \
+                    mechanic statuses, bay statuses derived from workorder assignments, and detected scheduling \
+                    conflicts.
+                    Use this tool when rendering the shop's daily dispatch board; do not use listWipWorkorders, \
+                    which returns flat work-in-progress rows without mechanic, bay, or conflict aggregation.
+                    Preconditions: the location must exist as a UUID-keyed location; mechanic availability comes \
+                    from local people replicas, and a failed replica lookup sets dataQualityWarning to true \
+                    instead of failing the call.
+                    Required inputs: locationId (UUID as a string) as a query parameter; date (ISO date) is \
+                    optional and defaults to today on the server clock.
+                    Emits a WORKEXEC_DASHBOARD_TODAY_GET audit event; no workorder state changes — this is a \
+                    read-only aggregation.
+                    Returns 400 when locationId does not parse as a UUID, and 200 with empty panels when no \
+                    workorders are scheduled for the date.
+                    """)
     public ResponseEntity<DashboardResponse> getDashboard(
             @RequestParam String locationId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {

@@ -5,10 +5,12 @@ import com.positivity.inventory.internal.dto.putaway.GeneratePutawayTasksRequest
 import com.positivity.inventory.internal.dto.putaway.PutawayTaskResponse;
 import com.positivity.inventory.service.PutawayGenerationService;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -43,8 +45,24 @@ public class PutawayController {
     @PreAuthorize("hasAuthority('inventory:putaway:generate')")
     @Operation(
             operationId = "generatePutawayTasks",
-            summary = "Generate putaway tasks",
-            description = "Generates putaway tasks for received inventory lines.",
+            summary = "Generate Putaway Tasks",
+            description = """
+                    Generates one UNASSIGNED putaway task per received line of a goods receipt, sourced from the \
+                    staging location, with the suggested destination resolved by the highest-priority enabled \
+                    putaway rule or the default location when no rule exists.
+                    Use this tool once staged goods need storage assignments; do not use executePutaway, which \
+                    performs the physical move for one task, and do not use claimPutawayTask, which assigns an \
+                    existing task to a worker.
+                    Preconditions: the goods receipt named by sourceReceiptId must exist; putaway rules are \
+                    optional.
+                    Required inputs: sourceReceiptId (UUID string) plus either lineItems, each naming productId \
+                    (UUID string) and a quantity of at least 1, or the legacy productId/quantity pair, but never \
+                    both forms together.
+                    Emits an INVENTORY_PUTAWAY_TASK_GENERATE event; the tasks are created UNASSIGNED and no stock \
+                    moves until executePutaway runs.
+                    Returns 404 when the goods receipt does not exist, and 400 when both line forms are supplied, \
+                    neither is supplied, an id is not a valid UUID, or a quantity is below 1.
+                    """,
             tags = {"Putaway"})
     @ApiResponse(
             responseCode = "201",
@@ -54,8 +72,27 @@ public class PutawayController {
                             mediaType = "application/json",
                             array = @ArraySchema(schema = @Schema(implementation = PutawayTaskResponse.class))))
     @ApiResponse(responseCode = "400", description = "Validation failure")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Goods receipt not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<PutawayTaskResponse>> generateTasks(
-            @Valid @RequestBody GeneratePutawayTasksRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The source goods receipt and the received lines needing storage.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = GeneratePutawayTasksRequest.class),
+                                            examples = @ExampleObject(name = "Two received lines", value = """
+                                                                    {"sourceReceiptId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a40",
+                                                                     "lineItems":[
+                                                                       {"productId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a41","quantity":12},
+                                                                       {"productId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a42","quantity":4}]}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    GeneratePutawayTasksRequest request) {
         List<PutawayTaskResponse> response = putawayGenerationService.generateTasksForReceipt(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -67,8 +104,19 @@ public class PutawayController {
     @PreAuthorize("hasAuthority('inventory:putaway:view')")
     @Operation(
             operationId = "listPutawayTasks",
-            summary = "List available putaway tasks",
-            description = "Returns all currently available putaway tasks.",
+            summary = "List Available Putaway Tasks",
+            description = """
+                    Returns every UNASSIGNED putaway task, each with its product, quantity, staging source and \
+                    suggested destination.
+                    Use this tool to find claimable putaway work before claimPutawayTask; tasks already ASSIGNED \
+                    or COMPLETED never appear here, so do not use it to check a specific task's progress.
+                    Preconditions: none; tasks exist only after generatePutawayTasks has run for a receipt.
+                    Required inputs: none; locationId and storageLocationId optionally scope the list by source \
+                    location, and storageLocationId wins when both are given.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty array when no unassigned tasks match, so an empty result is not an \
+                    error condition.
+                    """,
             tags = {"Putaway"})
     @ApiResponse(
             responseCode = "200",
@@ -92,8 +140,20 @@ public class PutawayController {
     @PreAuthorize("hasAuthority('inventory:putaway:claim')")
     @Operation(
             operationId = "claimPutawayTask",
-            summary = "Claim a putaway task",
-            description = "Claims an available putaway task for the current actor.",
+            summary = "Claim Putaway Task",
+            description = """
+                    Claims a putaway task for the calling user, locking the row and marking it ASSIGNED with the \
+                    caller as assignee.
+                    Use this tool after finding a task via listPutawayTasks and before executePutaway; do not use \
+                    executePutaway to claim, execution completes the task regardless of assignee.
+                    Preconditions: the task must exist; the service applies no status gate, so claiming an \
+                    already ASSIGNED task silently reassigns it to the caller.
+                    Required inputs: taskId (UUID string) path parameter; there is no request body.
+                    Emits an INVENTORY_PUTAWAY_TASK_CLAIM event; no stock moves and the task's suggested \
+                    destination is unchanged.
+                    Returns 404 when no putaway task exists for the supplied id, and 400 when taskId is not a \
+                    valid UUID.
+                    """,
             tags = {"Putaway"})
     @ApiResponse(
             responseCode = "200",

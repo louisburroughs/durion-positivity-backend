@@ -13,6 +13,7 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -51,7 +52,17 @@ public class CrmSegmentController {
         this.segmentService = segmentService;
     }
 
-    @Operation(summary = "List segments", description = "List saved segments, optionally filtered by audience type")
+    @Operation(operationId = "listSegments", summary = "List Audience Segments", description = """
+                    Returns all saved audience segments with their type, audience type, active flag, and \
+                    member counts, optionally filtered by audience type.
+                    Use this tool when browsing or picking a segment; use getSegment instead when the \
+                    segment id is already known.
+                    Preconditions: none; an empty list is returned when no segment matches.
+                    Required inputs: none; audienceType optionally filters on COMMERCIAL or INDIVIDUAL, and \
+                    there is no request body.
+                    Emits a CRM_SEGMENT_LIST audit event; no state changes occur.
+                    Returns 200 with an empty list rather than an error when no segments exist.
+                    """)
     @ApiResponses({
         @ApiResponse(
                 responseCode = "200",
@@ -73,10 +84,17 @@ public class CrmSegmentController {
         return ResponseEntity.ok(segmentService.list(audienceType));
     }
 
-    @Operation(
-            summary = "List the segment attribute catalog",
-            description =
-                    "Every whitelisted attribute a dynamic predicate may reference, with operand kind, allowed operators, and description")
+    @Operation(operationId = "listSegmentAttributes", summary = "List Segment Attribute Catalog", description = """
+                    Returns the whitelist of attributes a dynamic segment predicate may reference, each with \
+                    its operand kind, allowed operators, and description.
+                    Use this tool before createSegment or updateSegment to build a valid DYNAMIC predicate; \
+                    do not use listSegments, which lists saved segments rather than the predicate vocabulary.
+                    Preconditions: none; the catalog is fixed in code per audience type.
+                    Required inputs: none; there are no parameters and no request body.
+                    Emits a CRM_SEGMENT_ATTRIBUTES audit event; no state changes occur.
+                    Returns 200 with the full catalog in every successful call; there are no business error \
+                    responses.
+                    """)
     @ApiResponses({
         @ApiResponse(
                 responseCode = "200",
@@ -99,7 +117,16 @@ public class CrmSegmentController {
         return ResponseEntity.ok(segmentService.attributeCatalog());
     }
 
-    @Operation(summary = "Get segment", description = "Retrieve a segment definition by id")
+    @Operation(operationId = "getSegment", summary = "Get Segment Definition", description = """
+                    Returns one segment's definition, including its type, audience type, predicate for \
+                    DYNAMIC segments, active flag, and member count.
+                    Use this tool when the segment id is already known; use listSegments instead to browse \
+                    segments, and resolveSegment to compute who currently matches.
+                    Preconditions: the segment must exist.
+                    Required inputs: segmentId (UUID) as a path parameter; there is no request body.
+                    Emits a CRM_SEGMENT_GET audit event; no state changes occur.
+                    Returns 404 when no segment exists for the supplied segmentId.
+                    """)
     @ApiResponses({
         @ApiResponse(
                 responseCode = "200",
@@ -118,10 +145,19 @@ public class CrmSegmentController {
         return ResponseEntity.ok(segmentService.get(segmentId));
     }
 
-    @Operation(
-            summary = "Create segment",
-            description =
-                    "Create a static or dynamic segment. Dynamic predicates are validated against the attribute catalog.")
+    @Operation(operationId = "createSegment", summary = "Create Audience Segment", description = """
+                    Creates a saved audience segment, either STATIC with an explicitly pinned member list or \
+                    DYNAMIC with a predicate validated against the attribute catalog.
+                    Use this tool when defining a new audience; do not use updateSegment, which modifies an \
+                    existing segment and cannot change its type or audience type.
+                    Preconditions: no existing segment may already use the same name case-insensitively; a \
+                    DYNAMIC segment must carry a predicate and a STATIC one must not.
+                    Required inputs: name (max 150), audienceType (COMMERCIAL or INDIVIDUAL), and type \
+                    (STATIC or DYNAMIC); description, predicate, and active are optional.
+                    Emits a CRM_SEGMENT_CREATE event and publishes the segment definition to consumers.
+                    Returns 409 when the name is already taken, and 422 when the predicate is missing on a \
+                    DYNAMIC segment, present on a STATIC one, or references attributes outside the catalog.
+                    """)
     @ApiResponses({
         @ApiResponse(
                 responseCode = "201",
@@ -137,14 +173,46 @@ public class CrmSegmentController {
             scopes = {CrmPermissionRegistry.SEGMENT_MANAGE})
     @PreAuthorize("hasAuthority('crm:segment:manage')")
     @EmitEvent(id = "CRM_SEGMENT_CREATE", apiVersion = "1")
-    public ResponseEntity<SegmentResponse> create(@Valid @RequestBody UpsertSegmentRequest request) {
+    public ResponseEntity<SegmentResponse> create(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "The segment definition; DYNAMIC segments carry a predicate tree over catalog attributes, STATIC ones do not.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Dynamic gold-tier segment", value = """
+                                                                    {"name":"Gold-tier commercial accounts",
+                                                                     "description":"Commercial parties at GOLD tier or above",
+                                                                     "audienceType":"COMMERCIAL",
+                                                                     "type":"DYNAMIC",
+                                                                     "predicate":{"nodeType":"COMPARISON",
+                                                                                  "attribute":"party.accountTier",
+                                                                                  "operator":"IN",
+                                                                                  "values":["GOLD","PLATINUM","ENTERPRISE"]}}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    UpsertSegmentRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(segmentService.create(request));
     }
 
-    @Operation(
-            summary = "Update segment",
-            description =
-                    "Update a segment's name, description, predicate, or active flag. Type and audience type are immutable.")
+    @Operation(operationId = "updateSegment", summary = "Update Audience Segment", description = """
+                    Updates a segment's name, description, predicate, or active flag; type and audienceType \
+                    are immutable after creation because switching kinds would strand pinned members or a \
+                    predicate.
+                    Use this tool when refining an existing segment; use createSegment instead when a \
+                    different type or audience type is needed.
+                    Preconditions: the segment must exist, the new name must not collide with another \
+                    segment case-insensitively, and the submitted type and audienceType must equal the \
+                    stored values.
+                    Required inputs: segmentId (UUID) as a path parameter plus the full upsert body with \
+                    name, audienceType, and type restated; predicate rules follow the segment's type and \
+                    active is optional.
+                    Emits a CRM_SEGMENT_UPDATE event and republishes the segment definition.
+                    Returns 404 when the segment does not exist, 409 when the name is taken, and 422 when \
+                    type or audienceType differ from the stored segment or the predicate is invalid.
+                    """)
     @ApiResponses({
         @ApiResponse(
                 responseCode = "200",
@@ -165,11 +233,40 @@ public class CrmSegmentController {
     @PreAuthorize("hasAuthority('crm:segment:manage')")
     @EmitEvent(id = "CRM_SEGMENT_UPDATE", apiVersion = "1")
     public ResponseEntity<SegmentResponse> update(
-            @PathVariable UUID segmentId, @Valid @RequestBody UpsertSegmentRequest request) {
+            @PathVariable UUID segmentId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "The revised segment definition; type and audienceType must match the stored segment.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Rename and deactivate", value = """
+                                                                    {"name":"Gold-tier accounts (retired)",
+                                                                     "audienceType":"COMMERCIAL",
+                                                                     "type":"DYNAMIC",
+                                                                     "predicate":{"nodeType":"COMPARISON",
+                                                                                  "attribute":"party.accountTier",
+                                                                                  "operator":"IN",
+                                                                                  "values":["GOLD"]},
+                                                                     "active":false}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    UpsertSegmentRequest request) {
         return ResponseEntity.ok(segmentService.update(segmentId, request));
     }
 
-    @Operation(summary = "Delete segment", description = "Delete a segment and its pinned membership")
+    @Operation(operationId = "deleteSegment", summary = "Delete Audience Segment", description = """
+                    Deletes a segment and all of its pinned membership rows permanently.
+                    Use this tool when a segment is no longer wanted at all; use updateSegment with active \
+                    false instead to retire a segment while keeping its definition.
+                    Preconditions: the segment must exist; deletion is not reversible.
+                    Required inputs: segmentId (UUID) as a path parameter; there is no request body.
+                    Emits a CRM_SEGMENT_DELETE event and publishes a deletion notice so consumers drop the \
+                    segment.
+                    Returns 404 when no segment exists for the supplied segmentId.
+                    """)
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Segment deleted", content = @Content),
         @ApiResponse(responseCode = "404", description = "Segment not found", content = @Content),
@@ -186,9 +283,17 @@ public class CrmSegmentController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(
-            summary = "Pin members",
-            description = "Add parties to a static segment; already-present parties are ignored")
+    @Operation(operationId = "addSegmentMembers", summary = "Pin Segment Members", description = """
+                    Pins parties onto a STATIC segment's member list, recording who added them and when; \
+                    parties already in the segment are silently skipped.
+                    Use this tool when curating a hand-picked audience; do not use it on a DYNAMIC segment, \
+                    whose membership is computed from its predicate by resolveSegment.
+                    Preconditions: the segment must exist and be STATIC.
+                    Required inputs: segmentId (UUID) as a path parameter and partyIds, a non-empty list of \
+                    up to 5000 UUIDs; duplicates in the list are collapsed.
+                    Emits a CRM_SEGMENT_MEMBERS_ADD event; only new membership rows are written.
+                    Returns 404 when the segment does not exist, and 422 when the segment is DYNAMIC.
+                    """)
     @ApiResponses({
         @ApiResponse(
                 responseCode = "200",
@@ -205,11 +310,34 @@ public class CrmSegmentController {
     @PreAuthorize("hasAuthority('crm:segment:manage')")
     @EmitEvent(id = "CRM_SEGMENT_MEMBERS_ADD", apiVersion = "1")
     public ResponseEntity<SegmentResponse> addMembers(
-            @PathVariable UUID segmentId, @Valid @RequestBody SegmentMembersRequest request) {
+            @PathVariable UUID segmentId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The party ids to pin onto the static segment's member list.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Pin two parties", value = """
+                                                                    {"partyIds":["018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                                 "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c"]}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    SegmentMembersRequest request) {
         return ResponseEntity.ok(segmentService.addMembers(segmentId, request));
     }
 
-    @Operation(summary = "Unpin member", description = "Remove a party from a static segment")
+    @Operation(operationId = "removeSegmentMember", summary = "Unpin Segment Member", description = """
+                    Removes one party from a static segment's pinned member list.
+                    Use this tool when a hand-picked party should leave the audience; do not use \
+                    deleteSegment, which removes the whole segment and every member with it.
+                    Preconditions: none are enforced; removing a party that is not a member, or naming an \
+                    unknown segment, is a silent no-op.
+                    Required inputs: segmentId and partyId (UUIDs) as path parameters; there is no request \
+                    body.
+                    Emits a CRM_SEGMENT_MEMBER_REMOVE event; at most one membership row is deleted.
+                    Returns 204 in every authorized call, including when nothing was actually removed.
+                    """)
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Member removed", content = @Content),
         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
@@ -225,10 +353,20 @@ public class CrmSegmentController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(
-            summary = "Resolve segment",
-            description =
-                    "Resolve a segment to a match count, an optional per-channel eligible count, and a masked sample")
+    @Operation(operationId = "resolveSegment", summary = "Resolve Segment Audience", description = """
+                    Resolves a segment to its current match count, an optional per-channel eligible count \
+                    that folds in consent and suppression, and a masked sample of members; the full \
+                    recipient list is never returned, so the preview cannot become a bulk PII export.
+                    Use this tool when previewing an audience before a campaign; use getSegment instead for \
+                    the stored definition without computing membership.
+                    Preconditions: the segment must exist; eligible counts are computed only when a channel \
+                    is supplied.
+                    Required inputs: segmentId (UUID) as a path parameter; channel (EMAIL or SMS) is \
+                    optional, and sampleSize defaults to 10 and is clamped to the server's maximum.
+                    Emits a CRM_SEGMENT_RESOLVE audit event; no state changes occur.
+                    Returns 404 when no segment exists for the supplied segmentId, and 200 with a truncated \
+                    flag when the match list was capped during resolution.
+                    """)
     @ApiResponses({
         @ApiResponse(
                 responseCode = "200",

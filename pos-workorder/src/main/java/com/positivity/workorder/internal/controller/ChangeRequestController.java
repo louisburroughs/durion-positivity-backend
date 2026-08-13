@@ -35,11 +35,25 @@ public class ChangeRequestController {
     private final ChangeRequestService changeRequestService;
 
     @Operation(
-            summary = "Create a change request",
-            description = "Technician creates a request for additional work beyond authorized scope. "
-                    + "Items are marked as PENDING_APPROVAL until advisor approves. "
-                    + "Requires description and at least one service or part item. "
-                    + "Supports idempotent creation via Idempotency-Key header to prevent duplicate change requests.")
+            operationId = "createChangeRequest",
+            summary = "Create Change Request for Additional Work",
+            description = """
+                    Creates a change request for work beyond the authorized scope, placing it in \
+                    AWAITING_ADVISOR_REVIEW with its service and part items marked PENDING_APPROVAL.
+                    Use this tool when a technician finds additional work mid-job; do not use \
+                    approveChangeRequest or declineChangeRequest, which are the advisor's decision steps on an \
+                    existing request.
+                    Preconditions: the workorder must exist and be in WORK_IN_PROGRESS status, and emergency \
+                    exception requests must carry the required emergency documentation on their items.
+                    Required inputs: workorderId (UUID) as a path parameter, a non-blank description, and at \
+                    least one entry in services or parts; an Idempotency-Key header is recommended — a repeated \
+                    key returns the originally created request instead of a duplicate.
+                    Emits a WORKORDER_CHANGE_REQUEST_CREATE event and renders a supplemental estimate PDF via \
+                    the documents service when items are present.
+                    Returns 400 when the description or items are missing, the workorder is absent or not \
+                    WORK_IN_PROGRESS, or emergency documentation is incomplete — all failures surface as 400 in \
+                    this operation.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description =
@@ -49,16 +63,16 @@ public class ChangeRequestController {
             description = "Invalid request - missing description, no items, or validation failed")
     @ApiResponse(responseCode = "404", description = "Work order not found")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Change request details including items",
+            description = "Requested additional work: description plus the service and part items needing approval.",
             required = true,
             content =
                     @Content(
                             schema = @Schema(implementation = CreateChangeRequestDTO.class),
-                            examples =
-                                    @ExampleObject(
-                                            name = "createChangeRequest",
-                                            value =
-                                                    "{\"description\":\"Customer requested additional diagnostics\",\"approvalGated\":true}")))
+                            examples = @ExampleObject(name = "createChangeRequest", value = """
+                                                    {"description":"Front brake pads worn to metal; replacement required",
+                                                     "services":[{"serviceEntityId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a71","quantity":1}],
+                                                     "parts":[{"productEntityId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a72","quantity":2}]}
+                                                    """)))
     @PostMapping("/{workorderId}/changeRequests")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_CREATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -85,16 +99,24 @@ public class ChangeRequestController {
         }
     }
 
-    @Operation(
-            summary = "Approve a change request",
-            description = "Service Advisor approves the change request. "
-                    + "Items move from PENDING_APPROVAL to READY_TO_EXECUTE status. "
-                    + "Approval note is required as the approval artifact.")
+    @Operation(operationId = "approveChangeRequest", summary = "Approve a Change Request", description = """
+                    Approves a change request awaiting advisor review, setting it to APPROVED, writing an \
+                    immutable approval record, and moving its items from PENDING_APPROVAL to READY_TO_EXECUTE.
+                    Use this tool for a normal advisor approval; do not use applyChangeRequestEmergencyOverride, \
+                    which is the manager's exception path producing APPROVED_WITH_EXCEPTION.
+                    Preconditions: the change request must exist in AWAITING_ADVISOR_REVIEW status, and the \
+                    caller must be an authenticated user whose identity becomes the approver of record.
+                    Required inputs: changeId (UUID) as a path parameter and a non-blank approvalNote as the \
+                    approval artifact; the approvedBy body field is ignored in favor of the security context.
+                    Emits a WORKORDER_CHANGE_REQUEST_APPROVE event and persists an ApprovalRecord audit row.
+                    Returns 400 when the change request cannot be found, is not awaiting review, or the note is \
+                    missing — all failures surface as 400 in this operation.
+                    """)
     @ApiResponse(responseCode = "200", description = "Change request approved successfully")
     @ApiResponse(responseCode = "400", description = "Cannot approve - invalid state or missing approval note")
     @ApiResponse(responseCode = "404", description = "Change request not found")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Approval details including user ID and note",
+            description = "Advisor's approval note recorded as the approval artifact.",
             required = true,
             content =
                     @Content(
@@ -125,16 +147,26 @@ public class ChangeRequestController {
         }
     }
 
-    @Operation(
-            summary = "Decline a change request",
-            description = "Service Advisor declines the change request. "
-                    + "Items move from PENDING_APPROVAL to CANCELLED status (not billable). "
-                    + "Approval note is required to record the decline decision.")
+    @Operation(operationId = "declineChangeRequest", summary = "Decline a Change Request", description = """
+                    Declines a change request awaiting advisor review, setting it to DECLINED, writing an \
+                    immutable approval record, and moving its items from PENDING_APPROVAL to CANCELLED so they \
+                    are not billable.
+                    Use this tool when the customer refuses the additional work; do not use \
+                    approveChangeRequest, which authorizes the work instead.
+                    Preconditions: the change request must exist in AWAITING_ADVISOR_REVIEW status, and the \
+                    caller must be an authenticated user whose identity becomes the decliner of record.
+                    Required inputs: changeId (UUID) as a path parameter and a non-blank approvalNote recording \
+                    the decline decision.
+                    Emits a WORKORDER_CHANGE_REQUEST_DECLINE event; declined emergency items later require \
+                    acknowledgeChangeRequestDenial before the workorder can close.
+                    Returns 400 when the change request cannot be found, is not awaiting review, or the note is \
+                    missing — all failures surface as 400 in this operation.
+                    """)
     @ApiResponse(responseCode = "200", description = "Change request declined successfully")
     @ApiResponse(responseCode = "400", description = "Cannot decline - invalid state or missing note")
     @ApiResponse(responseCode = "404", description = "Change request not found")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Decline details including note",
+            description = "Advisor's note recording why the change request was declined.",
             required = true,
             content =
                     @Content(
@@ -163,9 +195,20 @@ public class ChangeRequestController {
     }
 
     @Operation(
-            summary = "Record customer denial acknowledgment",
-            description = "For declined emergency/safety items, record that customer acknowledged the denial. "
-                    + "Required before closing the work order and returning the vehicle.")
+            operationId = "acknowledgeChangeRequestDenial",
+            summary = "Record Customer Denial Acknowledgment",
+            description = """
+                    Records that the customer acknowledged the denial of a declined emergency or safety change \
+                    request, marking every emergency-flagged service and part item on it as acknowledged.
+                    Use this tool after a customer refuses safety-critical work so the vehicle can be released; \
+                    use checkWorkorderCanClose instead to verify whether any acknowledgments are still outstanding.
+                    Preconditions: the change request must exist, be flagged as an emergency or safety \
+                    exception, and be in DECLINED status.
+                    Required inputs: changeId (UUID) as a path parameter; there is no request body.
+                    Emits a WORKORDER_CHANGE_REQUEST_DENIAL_ACKNOWLEDGE event.
+                    Returns 204 on success, and 400 when the change request cannot be found, is not an \
+                    emergency exception, or is not declined — all failures surface as 400 in this operation.
+                    """)
     @ApiResponse(responseCode = "204", description = "Acknowledgment recorded successfully")
     @ApiResponse(responseCode = "400", description = "Not an emergency request or invalid state")
     @ApiResponse(responseCode = "404", description = "Change request not found")
@@ -186,16 +229,30 @@ public class ChangeRequestController {
     }
 
     @Operation(
-            summary = "Apply emergency override",
-            description = "Manager applies emergency override to approve a change request with exception. "
-                    + "Requires Manager role and a valid exception reason. "
-                    + "Items move from PENDING_APPROVAL to READY_TO_EXECUTE status.")
+            operationId = "applyChangeRequestEmergencyOverride",
+            summary = "Apply Manager Emergency Override",
+            description = """
+                    Applies a manager's emergency override to a change request awaiting advisor review, setting \
+                    it to APPROVED_WITH_EXCEPTION, flagging it as an emergency exception, and moving its items \
+                    to READY_TO_EXECUTE.
+                    Use this tool only when safety-critical work must proceed without the normal approval \
+                    artifact; do not use approveChangeRequest, which is the standard advisor approval.
+                    Preconditions: the change request must exist in AWAITING_ADVISOR_REVIEW status, and the \
+                    caller must hold workorder:change_request:emergency_override — the caller's identity becomes \
+                    the overriding manager of record.
+                    Required inputs: changeId (UUID) as a path parameter and a non-blank exceptionReason; the \
+                    managerId body field is ignored in favor of the security context.
+                    Emits a WORKORDER_CHANGE_REQUEST_EMERGENCY_OVERRIDE event and persists an ApprovalRecord \
+                    with the APPROVED_WITH_EXCEPTION resolution.
+                    Returns 400 when the change request cannot be found, is not awaiting review, or the reason \
+                    is missing — all failures surface as 400 in this operation.
+                    """)
     @ApiResponse(responseCode = "200", description = "Emergency override applied successfully")
     @ApiResponse(responseCode = "400", description = "Cannot apply override - invalid state or missing reason")
     @ApiResponse(responseCode = "403", description = "Insufficient permissions - Manager role required")
     @ApiResponse(responseCode = "404", description = "Change request not found")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Emergency override details including manager ID and reason",
+            description = "Reason justifying the manager's emergency exception approval.",
             required = true,
             content =
                     @Content(
@@ -225,7 +282,16 @@ public class ChangeRequestController {
         }
     }
 
-    @Operation(summary = "Get change request by ID", description = "Retrieve details of a specific change request")
+    @Operation(operationId = "getChangeRequest", summary = "Get Change Request by Id", description = """
+                    Returns one change request with its status, description, emergency flags, approval details, \
+                    and item associations.
+                    Use this tool when the change request id is known; use listChangeRequests instead to see \
+                    every change request on a workorder.
+                    Preconditions: the change request must exist.
+                    Required inputs: changeId (UUID) as a path parameter.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no change request exists for the id.
+                    """)
     @ApiResponse(responseCode = "200", description = "Change request found")
     @ApiResponse(responseCode = "404", description = "Change request not found")
     @GetMapping("/changeRequests/{changeId}")
@@ -245,9 +311,17 @@ public class ChangeRequestController {
         }
     }
 
-    @Operation(
-            summary = "Get all change requests for a work order",
-            description = "Retrieve all change requests associated with a specific work order")
+    @Operation(operationId = "listChangeRequests", summary = "List Change Requests for Workorder", description = """
+                    Returns every change request attached to a workorder, in all statuses from \
+                    AWAITING_ADVISOR_REVIEW through APPROVED, DECLINED, CANCELLED, and APPROVED_WITH_EXCEPTION.
+                    Use this tool when reviewing a workorder's additional-work history; use getChangeRequest \
+                    instead for one request by id.
+                    Preconditions: none — an unknown workorderId simply yields an empty list.
+                    Required inputs: workorderId (UUID) as a path parameter.
+                    Emits a WORKORDER_CHANGE_REQUEST_LIST audit event; no change request state changes — this is \
+                    a read-only projection.
+                    Returns 200 with the list, possibly empty; no 404 is produced for unknown workorders.
+                    """)
     @ApiResponse(responseCode = "200", description = "List of change requests returned")
     @GetMapping("/{workorderId}/changeRequests")
     @EmitEvent(id = "WORKORDER_CHANGE_REQUEST_LIST", apiVersion = "1")
@@ -264,9 +338,17 @@ public class ChangeRequestController {
                 changeRequests.stream().map(ChangeRequestResponse::fromEntity).toList());
     }
 
-    @Operation(
-            summary = "Check if work order can be closed",
-            description = "Verify all declined emergency/safety items have customer denial acknowledgment")
+    @Operation(operationId = "checkWorkorderCanClose", summary = "Check Workorder Close Eligibility", description = """
+                    Checks whether a workorder can be closed with respect to declined emergency change requests, \
+                    returning true only when every declined emergency or safety item has a customer denial \
+                    acknowledgment.
+                    Use this tool before completing a workorder that had declined safety work; use \
+                    acknowledgeChangeRequestDenial to clear a blocking acknowledgment rather than re-polling this check.
+                    Preconditions: none — a workorder with no declined emergency requests yields true.
+                    Required inputs: workorderId (UUID) as a path parameter.
+                    No events are emitted and no state changes; this is a read-only check.
+                    Returns 200 with a bare boolean body; no 404 is produced for unknown workorders.
+                    """)
     @ApiResponse(responseCode = "200", description = "Returns true if work order can be closed, false otherwise")
     @GetMapping("/{workorderId}/canClose")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")

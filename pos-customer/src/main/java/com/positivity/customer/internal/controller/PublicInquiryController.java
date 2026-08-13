@@ -7,6 +7,7 @@ import com.positivity.customer.service.InquiryService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -75,10 +76,23 @@ public class PublicInquiryController {
         this.inquiryService = inquiryService;
     }
 
-    @Operation(
-            summary = "Submit an inquiry",
-            description =
-                    "Public, unauthenticated capture of a service or fleet-quote request. Rate-limited per submitter; returns only a reference id.")
+    @Operation(operationId = "submitPublicInquiry", summary = "Submit Public Inquiry", description = """
+                    Accepts an anonymous service or fleet-quote inquiry from the public web form, \
+                    rate-limited per hashed submitter fingerprint, and returns only a reference id and NEW \
+                    status so the endpoint cannot be used to enumerate existing customers.
+                    Use this tool only for the unauthenticated public form when the deployment has enabled \
+                    it via pos.customer.inquiry.public.enabled; do not use captureInquiry here, which is \
+                    the authenticated staff path and is not rate-limited.
+                    Preconditions: the public-inquiry feature flag must be enabled and the submitter must \
+                    be under the per-source rate ceiling; the raw source address is never stored, only a \
+                    truncated SHA-256 fingerprint.
+                    Required inputs: channel, audienceType (COMMERCIAL or INDIVIDUAL), contactName, and at \
+                    least one of email or phone; message and interest fields are optional.
+                    Emits a CRM_PUBLIC_INQUIRY_SUBMIT event and persists the inquiry in NEW status, \
+                    unassigned in the shared triage queue.
+                    Returns 429 when the submitter has exceeded the rate limit, and 400 when required \
+                    fields are missing or neither email nor phone is supplied.
+                    """)
     @ApiResponses({
         @ApiResponse(
                 responseCode = "202",
@@ -91,7 +105,25 @@ public class PublicInquiryController {
     @PreAuthorize("permitAll()")
     @EmitEvent(id = "CRM_PUBLIC_INQUIRY_SUBMIT", apiVersion = "1")
     public ResponseEntity<InquiryAcceptedResponse> submit(
-            @Valid @RequestBody SubmitInquiryRequest request, HttpServletRequest httpRequest) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The public web-form inquiry, carrying who is asking and how to reach them.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Web-form service inquiry", value = """
+                                                                    {"channel":"WEB_FORM",
+                                                                     "audienceType":"INDIVIDUAL",
+                                                                     "contactName":"Sam Rivera",
+                                                                     "email":"sam.rivera@example.com",
+                                                                     "vehicleOfInterest":"2018 Honda CR-V",
+                                                                     "serviceOfInterest":"Timing belt replacement",
+                                                                     "message":"Looking for a quote and earliest availability"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    SubmitInquiryRequest request,
+            HttpServletRequest httpRequest) {
         UUID inquiryId = inquiryService.captureFromPublicForm(request, fingerprint(httpRequest));
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(new InquiryAcceptedResponse(inquiryId, InquiryStatus.NEW.name()));

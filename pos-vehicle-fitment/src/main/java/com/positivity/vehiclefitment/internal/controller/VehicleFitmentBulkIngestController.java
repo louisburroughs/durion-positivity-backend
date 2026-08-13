@@ -9,6 +9,9 @@ import com.positivity.vehiclefitment.internal.dto.FitmentBulkIngestRecord;
 import com.positivity.vehiclefitment.service.VehicleFitmentService;
 import com.positivity.vehiclefitment.service.dto.CreatePartFitmentRequest;
 import com.positivity.vehiclefitment.service.dto.PartFitmentResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
@@ -36,12 +39,62 @@ public class VehicleFitmentBulkIngestController extends AbstractBulkIngestContro
 
     private final VehicleFitmentService vehicleFitmentService;
 
+    private static final String BULK_INGEST_EXAMPLE = """
+            {"jobId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+             "locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+             "operatorId":"user-jdoe",
+             "records":[{"partNumberId":100245,
+                         "manufacturerName":"Toyota Motor Corporation",
+                         "makeName":"Toyota",
+                         "modelName":"Camry",
+                         "vehicleTypeName":"Passenger Car",
+                         "vehicleYear":"2018-2022",
+                         "engineType":"2.5L I4",
+                         "submodel":"SE",
+                         "notes":"Verified against OEM catalog"}]}
+            """;
+
     @Override
+    @Operation(
+            operationId = "bulkIngestVehicleFitments",
+            summary = "Bulk Ingest Part Fitment Records",
+            description = """
+                    Bulk-imports part fitment records, creating one part-to-vehicle fitment row per record and \
+                    resolving manufacturer, make, model and vehicle-type names to reference rows.
+                    Use this tool for catalog-scale fitment loads from a prepared batch; do not use \
+                    createVehicleHint, which manages per-product applicability hint tags rather than part fitment \
+                    rows.
+                    Preconditions: the caller must hold vehicle-fitment:hint:create; referenced manufacturer, make, \
+                    model and vehicle-type names need not pre-exist, because each is matched case-insensitively and \
+                    created on the fly when missing.
+                    Required inputs: jobId (UUID), locationId (UUID) and records, a non-empty list where each record \
+                    requires partNumberId (numeric); manufacturerName, makeName, modelName, vehicleTypeName, \
+                    vehicleYear, engineType, submodel and notes are optional, and jobId, locationId and operatorId \
+                    are accepted for the envelope but not persisted by this module.
+                    Emits a VEHICLE_FITMENT_BULK_INGEST event covering the whole batch; rows are processed \
+                    independently, so one failed row does not roll back the others.
+                    Returns 200 even when every row fails, so callers must inspect each result's success flag and \
+                    FITMENT_INGEST_FAILED errorCode rather than trusting the status alone.
+                    """)
     @PostMapping("/bulk-ingest")
     @PreAuthorize("hasAuthority('vehicle-fitment:hint:create')")
     @EmitEvent(id = "VEHICLE_FITMENT_BULK_INGEST", apiVersion = "1")
     public ResponseEntity<BulkIngestResponse> bulkIngest(
-            @Valid @RequestBody @NonNull BulkIngestRequest<FitmentBulkIngestRecord> request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Batch envelope of part fitment records to import, each naming the vehicle the part applies to.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Single fitment record",
+                                                            value = BULK_INGEST_EXAMPLE)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    BulkIngestRequest<FitmentBulkIngestRecord> request) {
         return super.bulkIngest(request);
     }
 

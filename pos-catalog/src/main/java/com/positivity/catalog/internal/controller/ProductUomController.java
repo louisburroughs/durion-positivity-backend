@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -43,11 +44,21 @@ public class ProductUomController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
     @PostMapping
-    @Operation(
-            summary = "Add product UoM conversion",
-            description = "Adds a purchase/pack (or base) UoM with its conversion factor to the product's base UoM"
-                    + " and a precision scale. Re-emits the product contract event.",
-            operationId = "addProductUom")
+    @Operation(operationId = "addProductUom", summary = "Add Product UoM Conversion", description = """
+            Adds a unit-of-measure entry to a product's conversion set, binding a UoM code to its factor \
+            relative to the product's base unit; the code is normalised to upper case and the factor stored \
+            at six decimal places.
+            Use this tool to define how a purchase or pack unit converts for one product; do not use \
+            createUomConversion, which defines global cross-unit conversions not tied to a product.
+            Preconditions: the product must exist and must not already define the UoM code; a BASE-type entry \
+            must carry factorToBase exactly 1.
+            Required inputs: productId (UUID) path parameter plus uomCode, uomType (BASE, PURCHASE or PACK) \
+            and a positive factorToBase; precisionScale is optional.
+            Emits a CATALOG_PRODUCT_UOM_CREATE event and re-publishes the product fact with a bumped \
+            aggregate version so downstream replicas refresh.
+            Returns 404 when the product does not exist, 409 when the UoM code is already defined for the \
+            product, and 400 when factorToBase is not positive or a BASE entry's factor is not 1.
+            """)
     @ApiResponse(
             responseCode = "201",
             description = "Product UoM created",
@@ -58,7 +69,21 @@ public class ProductUomController {
     @EmitEvent(id = "CATALOG_PRODUCT_UOM_CREATE", apiVersion = "1")
     public ResponseEntity<ProductUomDto> addProductUom(
             @Parameter(description = "Product ID", required = true) @PathVariable UUID productId,
-            @Valid @RequestBody ProductUomCreateRequestDto request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "UoM entry to add: the code, its role for this product, and how many"
+                                    + " base units one such unit represents.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = ProductUomCreateRequestDto.class),
+                                            examples = @ExampleObject(name = "Case of twelve", value = """
+                                                                    {"uomCode":"CS12","uomType":"PACK",
+                                                                     "factorToBase":12,"precisionScale":0}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    ProductUomCreateRequestDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(productUomService.addProductUom(productId, request));
     }
 
@@ -67,10 +92,17 @@ public class ProductUomController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
     @GetMapping
-    @Operation(
-            summary = "List product UoM conversions",
-            description = "Returns the product's UoM conversion set ordered by UoM code.",
-            operationId = "listProductUoms")
+    @Operation(operationId = "listProductUoms", summary = "List Product UoM Conversions", description = """
+            Returns the product's unit-of-measure conversion set ordered by UoM code, each entry carrying its \
+            type, factor to base and precision scale.
+            Use this tool to read a product's unit conversions; use listUomConversions instead for the \
+            global, product-independent conversion table.
+            Preconditions: the product must exist.
+            Required inputs: productId (UUID) as a path parameter; there is no request body.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 404 when the product does not exist, and 200 with an empty array when the product \
+            defines no UoM entries.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Product UoMs listed",
@@ -89,11 +121,20 @@ public class ProductUomController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
     @PutMapping("/{uomId}")
-    @Operation(
-            summary = "Update product UoM conversion",
-            description = "Updates factor, precision scale, and optionally the UoM role. The UoM code is immutable."
-                    + " Re-emits the product contract event.",
-            operationId = "updateProductUom")
+    @Operation(operationId = "updateProductUom", summary = "Update Product UoM Conversion", description = """
+            Updates the conversion factor, precision scale and optionally the type of one product UoM entry; \
+            the UoM code itself is immutable.
+            Use this tool to correct a factor or reclassify an entry; do not use addProductUom, which adds a \
+            new code, or deleteProductUom, which removes one.
+            Preconditions: the product must exist and the UoM entry must belong to it; changing the type to \
+            BASE requires factorToBase exactly 1, and omitting uomType keeps the current type.
+            Required inputs: productId and uomId (UUIDs) path parameters plus a positive factorToBase; \
+            uomType and precisionScale are optional.
+            Emits a CATALOG_PRODUCT_UOM_UPDATE event and re-publishes the product fact with a bumped \
+            aggregate version so downstream replicas refresh.
+            Returns 404 when the product or the UoM entry does not exist under that product, and 400 when \
+            factorToBase is not positive or a BASE entry's factor is not 1.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Product UoM updated",
@@ -104,7 +145,20 @@ public class ProductUomController {
     public ResponseEntity<ProductUomDto> updateProductUom(
             @Parameter(description = "Product ID", required = true) @PathVariable UUID productId,
             @Parameter(description = "Product UoM ID", required = true) @PathVariable UUID uomId,
-            @Valid @RequestBody ProductUomUpdateRequestDto request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Replacement factor and precision for the entry; uomType is optional"
+                                    + " and keeps the current role when omitted.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = ProductUomUpdateRequestDto.class),
+                                            examples = @ExampleObject(name = "Correct pack factor", value = """
+                                                                    {"uomType":"PACK","factorToBase":24,"precisionScale":0}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    ProductUomUpdateRequestDto request) {
         return ResponseEntity.ok(productUomService.updateProductUom(productId, uomId, request));
     }
 
@@ -113,10 +167,19 @@ public class ProductUomController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
     @DeleteMapping("/{uomId}")
-    @Operation(
-            summary = "Delete product UoM conversion",
-            description = "Removes a UoM from the product's conversion set and re-emits the product contract event.",
-            operationId = "deleteProductUom")
+    @Operation(operationId = "deleteProductUom", summary = "Delete Product UoM Conversion", description = """
+            Removes one unit-of-measure entry from a product's conversion set permanently; there is no soft \
+            delete.
+            Use this tool when a purchase or pack unit no longer applies to the product; do not use \
+            updateProductUom, which changes an entry's factor or type while keeping it.
+            Preconditions: the product must exist and the UoM entry must belong to it; no guard prevents \
+            deleting the BASE entry, so callers must not orphan the conversion set.
+            Required inputs: productId and uomId (UUIDs) as path parameters; there is no request body.
+            Emits a CATALOG_PRODUCT_UOM_DELETE event and re-publishes the product fact with a bumped \
+            aggregate version so downstream replicas refresh.
+            Returns 204 on success, and 404 when the product or the UoM entry does not exist under that \
+            product.
+            """)
     @ApiResponse(responseCode = "204", description = "Product UoM deleted")
     @ApiResponse(responseCode = "404", description = "Product or UoM not found")
     @EmitEvent(id = "CATALOG_PRODUCT_UOM_DELETE", apiVersion = "1")

@@ -8,6 +8,7 @@ import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -48,11 +49,19 @@ public class AuditExportController {
      * synchronous resource
      * creation (201); this deviation is intentional for async job endpoints.
      */
-    @Operation(
-            operationId = "requestAuditExport",
-            summary = "Request audit export",
-            description =
-                    "Submits an asynchronous audit export job. Returns 202 Accepted with the created job reference.")
+    @Operation(operationId = "requestAuditExport", summary = "Request an Asynchronous Audit Export", description = """
+                    Submits an asynchronous audit export job and answers 202 Accepted with the job id and an \
+                    initial PENDING status.
+                    Use this tool for bulk extraction of audit data as a file; use searchAuditEvents instead for \
+                    interactive paged queries.
+                    Preconditions: the caller must hold security:audit:export; jobs are currently held in an \
+                    in-memory store, so they do not survive a service restart.
+                    Required inputs: format (CSV or JSON) and deliveryMode (DOWNLOAD or WEBHOOK); filters is \
+                    optional and scopes the export with the same criteria as searchAuditEvents.
+                    Emits a SECURITY_AUDIT_EXPORT_REQUEST event; execution is deferred, so callers must poll \
+                    getAuditExportJob for status and the eventual download URL.
+                    Returns 400 when format or deliveryMode is missing or not a valid enum value.
+                    """)
     @ApiResponse(
             responseCode = "202",
             description = "Export job created",
@@ -66,17 +75,38 @@ public class AuditExportController {
             description = "Insufficient authority",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<AuditExportJobResponse> requestAuditExport(
-            @RequestBody @Valid @NonNull AuditExportRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Format, delivery mode, and optional filter scope of the export job.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "CSV download export", value = """
+                                                                    {"format":"CSV",
+                                                                     "deliveryMode":"DOWNLOAD",
+                                                                     "filters":{"eventType":"PERMISSION_DENIED"}}
+                                                                    """)))
+                    @RequestBody
+                    @Valid
+                    @NonNull
+                    AuditExportRequest request) {
         AuditExportJobResponse response = auditExportService.requestExport(request);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
     @GetMapping("/{jobId}")
     @PreAuthorize("hasAuthority('security:audit:export')")
-    @Operation(
-            operationId = "getAuditExportJob",
-            summary = "Get audit export job status",
-            description = "Returns the current status of a previously submitted audit export job.")
+    @Operation(operationId = "getAuditExportJob", summary = "Get Audit Export Job Status", description = """
+                    Returns the current status of a previously submitted audit export job, including completion \
+                    time, download URL, and error message when present.
+                    Use this tool to poll a job created by requestAuditExport; do not resubmit the export while a \
+                    job is still PENDING.
+                    Preconditions: the caller must hold security:audit:export and the job must exist in the \
+                    in-memory store, which is cleared on service restart.
+                    Required inputs: jobId (UUID) as a path parameter.
+                    No events are emitted and no state changes; this is a read-only status projection.
+                    Returns 404 when the job id is unknown or the store was cleared by a restart.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Export job status",

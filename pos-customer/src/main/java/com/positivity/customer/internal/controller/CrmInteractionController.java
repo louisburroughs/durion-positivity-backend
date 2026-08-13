@@ -9,6 +9,7 @@ import com.positivity.customer.service.CustomerInteractionService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -42,9 +43,19 @@ public class CrmInteractionController {
         this.interactionService = interactionService;
     }
 
-    @Operation(
-            summary = "List party interactions",
-            description = "Interaction history for a party, newest first, optionally filtered by type")
+    @Operation(operationId = "listPartyInteractions", summary = "List Party Interaction Timeline", description = """
+                    Returns a party's interaction timeline newest first, unifying campaign sends, CSR \
+                    touches, and workorder notes, with interaction bodies passed through redaction before \
+                    they are returned.
+                    Use this tool when reviewing a party's touch history; do not use recordInteraction, which \
+                    appends a new entry to the timeline instead of reading it.
+                    Preconditions: none; an unknown partyId simply yields an empty page rather than an error.
+                    Required inputs: partyId (UUID) as a path parameter; type optionally filters to one of \
+                    CAMPAIGN_SEND, EMAIL, SMS, CALL, FOLLOW_UP, NOTE, or WORKORDER_NOTE, page defaults to 0, \
+                    and size defaults to 50 with a clamp between 1 and 200.
+                    Emits a CRM_INTERACTION_LIST audit event; no state changes occur.
+                    Returns 200 with an empty page rather than an error when the party has no interactions.
+                    """)
     @ApiResponses({
         @ApiResponse(
                 responseCode = "200",
@@ -66,9 +77,20 @@ public class CrmInteractionController {
         return ResponseEntity.ok(interactionService.listForParty(partyId, type, page, size));
     }
 
-    @Operation(
-            summary = "Record an interaction",
-            description = "Record a CSR-initiated touch (call, email, note) on a party's timeline")
+    @Operation(operationId = "recordInteraction", summary = "Record Party Interaction", description = """
+                    Records a CSR-initiated touch such as a call, email, or note on a party's interaction \
+                    timeline, stamping the acting username from the security context.
+                    Use this tool when logging a manual customer touch; do not use listPartyInteractions, \
+                    which reads the timeline, and note that campaign and workorder interactions are ingested \
+                    from events rather than through this endpoint.
+                    Preconditions: none are checked against the party; the interaction is stored against the \
+                    supplied partyId as-is.
+                    Required inputs: partyId (UUID) as a path parameter and type (CAMPAIGN_SEND, EMAIL, SMS, \
+                    CALL, FOLLOW_UP, NOTE, or WORKORDER_NOTE) in the body; direction defaults to OUTBOUND, \
+                    occurredAt defaults to now, and channel accepts EMAIL or SMS.
+                    Emits a CRM_INTERACTION_RECORD event and persists the interaction row.
+                    Returns 400 when type is missing or subject, summary, or body exceed their length limits.
+                    """)
     @ApiResponses({
         @ApiResponse(
                 responseCode = "201",
@@ -84,7 +106,24 @@ public class CrmInteractionController {
     @PreAuthorize("hasAuthority('crm:interaction:manage')")
     @EmitEvent(id = "CRM_INTERACTION_RECORD", apiVersion = "1")
     public ResponseEntity<CustomerInteractionResponse> record(
-            @PathVariable UUID partyId, @Valid @RequestBody RecordInteractionRequest request) {
+            @PathVariable UUID partyId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "The CSR touch to append to the party's timeline, typed by interaction kind and optional channel.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Follow-up call note", value = """
+                                                                    {"type":"CALL",
+                                                                     "direction":"OUTBOUND",
+                                                                     "subject":"Brake job follow-up",
+                                                                     "summary":"Customer satisfied, will book alignment next month",
+                                                                     "occurredAt":"2026-08-10T15:30:00Z"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    RecordInteractionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(interactionService.record(partyId, request));
     }
 }

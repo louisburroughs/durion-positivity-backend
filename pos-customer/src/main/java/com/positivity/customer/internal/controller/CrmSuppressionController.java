@@ -9,6 +9,7 @@ import com.positivity.customer.service.SuppressionService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -45,7 +46,17 @@ public class CrmSuppressionController {
         this.suppressionService = suppressionService;
     }
 
-    @Operation(summary = "List suppression entries", description = "List suppressed addresses, newest first")
+    @Operation(operationId = "listSuppressionEntries", summary = "List Suppression Entries", description = """
+                    Returns hard-suppressed marketing addresses newest first, showing only a masked address \
+                    hint and the normalized hash — raw addresses are never stored or returned.
+                    Use this tool when reviewing the suppression list; use checkAddressSuppression instead \
+                    to test one specific address before a send.
+                    Preconditions: none; an empty page is returned when nothing matches.
+                    Required inputs: none; channel optionally filters on EMAIL or SMS, page defaults to 0, \
+                    and size defaults to 50 clamped between 1 and 200.
+                    Emits a CRM_SUPPRESSION_LIST audit event; no state changes occur.
+                    Returns 200 with an empty page rather than an error when the list is empty.
+                    """)
     @ApiResponses({
         @ApiResponse(
                 responseCode = "200",
@@ -66,9 +77,20 @@ public class CrmSuppressionController {
         return ResponseEntity.ok(suppressionService.list(channel, page, size));
     }
 
-    @Operation(
-            summary = "Check address suppression",
-            description = "Whether a raw address is currently blocked on a channel. Used by send pipelines.")
+    @Operation(operationId = "checkAddressSuppression", summary = "Check Address Suppression", description = """
+                    Reports whether a raw address is currently hard-blocked on a channel by normalizing and \
+                    hashing it and looking the hash up in the suppression list.
+                    Use this tool from send pipelines immediately before dispatch; use \
+                    resolveMarketingEligibility instead for the full party-level decision that also folds \
+                    in consent and the account gate.
+                    Preconditions: none; suppression outranks consent, so a true result must block the send \
+                    regardless of opt-in state.
+                    Required inputs: channel (EMAIL or SMS) and address (the raw address to test) as \
+                    required query parameters; the raw address is used only for hashing and never stored.
+                    Emits a CRM_SUPPRESSION_CHECK audit event; no state changes occur.
+                    Returns 200 with a bare boolean body, true when the address is suppressed on that \
+                    channel and false otherwise.
+                    """)
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Result returned"),
         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
@@ -84,9 +106,22 @@ public class CrmSuppressionController {
         return ResponseEntity.ok(suppressionService.isSuppressed(channel, address));
     }
 
-    @Operation(
-            summary = "Suppress an address",
-            description = "Hard-block an address from marketing. Idempotent: re-adding returns the existing entry.")
+    @Operation(operationId = "addSuppressionEntry", summary = "Suppress Marketing Address", description = """
+                    Hard-blocks an address from marketing on one channel, storing only a normalized hash \
+                    and a masked hint of the address.
+                    Use this tool for bounce feeds, spam complaints, and legal do-not-contact requests; do \
+                    not use updateMarketingConsent, which records a party's choice and can be reversed by \
+                    the party, whereas suppression outranks consent entirely.
+                    Preconditions: none; the call is idempotent, and re-adding an already-suppressed \
+                    address returns the existing entry without touching the audit trail.
+                    Required inputs: channel (EMAIL or SMS), address (raw, max 320 characters), and reason \
+                    (HARD_BOUNCE, SPAM_COMPLAINT, LEGAL_DNC, MANUAL, or UNSUBSCRIBE_LINK); partyId is \
+                    optional and source defaults to CSR.
+                    Emits a CRM_SUPPRESSION_ADD event and publishes a suppression-changed fact when a new \
+                    entry is actually created.
+                    Returns 400 when channel, address, or reason is missing, and 201 with the existing \
+                    entry when the address was already suppressed.
+                    """)
     @ApiResponses({
         @ApiResponse(
                 responseCode = "201",
@@ -101,11 +136,38 @@ public class CrmSuppressionController {
             scopes = {CrmPermissionRegistry.SUPPRESSION_MANAGE})
     @PreAuthorize("hasAuthority('crm:suppression:manage')")
     @EmitEvent(id = "CRM_SUPPRESSION_ADD", apiVersion = "1")
-    public ResponseEntity<SuppressionEntryResponse> add(@Valid @RequestBody AddSuppressionRequest request) {
+    public ResponseEntity<SuppressionEntryResponse> add(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "The address to hard-block, the channel it applies to, and why it is being suppressed.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Hard bounce", value = """
+                                                                    {"channel":"EMAIL",
+                                                                     "address":"bounced@example.com",
+                                                                     "partyId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "reason":"HARD_BOUNCE",
+                                                                     "source":"SYSTEM"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    AddSuppressionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(suppressionService.add(request));
     }
 
-    @Operation(summary = "Lift a suppression", description = "Remove a suppression entry")
+    @Operation(operationId = "removeSuppressionEntry", summary = "Lift Address Suppression", description = """
+                    Removes one suppression entry, allowing marketing to reach the address again subject to \
+                    normal consent rules.
+                    Use this tool when an address was suppressed in error or a legal block is lifted; do \
+                    not use updateMarketingConsent for this, which cannot override a suppression entry.
+                    Preconditions: the suppression entry must exist.
+                    Required inputs: suppressionId (UUID) as a path parameter; there is no request body.
+                    Emits a CRM_SUPPRESSION_REMOVE event and publishes a suppression-changed fact so \
+                    consumers stop blocking the address.
+                    Returns 404 when no suppression entry exists for the supplied suppressionId.
+                    """)
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Suppression lifted", content = @Content),
         @ApiResponse(responseCode = "404", description = "Suppression entry not found", content = @Content),

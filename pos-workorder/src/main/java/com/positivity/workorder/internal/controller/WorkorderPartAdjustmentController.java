@@ -57,9 +57,23 @@ public class WorkorderPartAdjustmentController {
             scopes = {"workorder:parts:add"})
     @PreAuthorize("hasAuthority('workorder:parts:add')")
     @EmitEvent(id = "WORKORDER_PART_SUBSTITUTE", apiVersion = "1")
-    @Operation(
-            summary = "Substitute part",
-            description = "Replace one part with another. Original part preserved for history.")
+    @Operation(operationId = "substitutePart", summary = "Substitute Part on Workorder", description = """
+                    Substitutes one part line with a different part, preserving the original line for audit \
+                    history, capturing a pricing snapshot, and recording a substitution adjustment event.
+                    Use this tool when the planned part is replaced by an alternative; use \
+                    suggestWorkorderSubstitutes first to find candidate parts, and do not use \
+                    correctPartQuantity, which fixes quantities rather than parts.
+                    Preconditions: the workorder and original part must exist, the original part must belong to \
+                    the workorder and must not have any consumed quantity, and the substitute must differ from \
+                    the original.
+                    Required inputs: workorderId (UUID) as a path parameter, plus originalPartId and \
+                    substitutePartId (UUIDs) and a reason in the body; notes are optional and an Idempotency-Key \
+                    header deduplicates retries.
+                    Emits a WORKORDER_PART_SUBSTITUTE event.
+                    Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, and \
+                    400 when the part is already consumed, does not belong to the workorder, or the substitute \
+                    equals the original.
+                    """)
     @ApiResponse(
             responseCode = "201",
             description = "Part substituted successfully",
@@ -68,7 +82,7 @@ public class WorkorderPartAdjustmentController {
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @ApiResponse(responseCode = "409", description = "Idempotency conflict")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Substitute part request",
+            description = "Original part, replacement part, and the reason for the swap.",
             required = true,
             content =
                     @Content(
@@ -110,9 +124,21 @@ public class WorkorderPartAdjustmentController {
             scopes = {"workorder:parts:add"})
     @PreAuthorize("hasAuthority('workorder:parts:add')")
     @EmitEvent(id = "WORKORDER_PART_RETURN_UNUSED", apiVersion = "1")
-    @Operation(
-            summary = "Return unused quantity",
-            description = "Return unused part quantity beyond normal return flow")
+    @Operation(operationId = "returnUnusedPartQuantity", summary = "Return Unused Part Quantity", description = """
+                    Returns unused part quantity through the adjustment flow, recording a reasoned return \
+                    adjustment event alongside the quantity change.
+                    Use this tool when a return needs an explicit reason and audit trail; use returnParts \
+                    instead for the plain usage-flow return without a reason.
+                    Preconditions: the workorder and part must exist, the part must belong to the workorder, and \
+                    the return cannot exceed the quantity still available on the line.
+                    Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID), a \
+                    positive quantity, and a reason in the body; notes are optional and an Idempotency-Key \
+                    header deduplicates retries.
+                    Emits a WORKORDER_PART_RETURN_UNUSED event.
+                    Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, and \
+                    400 when the quantity is not positive, exceeds the available quantity, or the part does not \
+                    belong to the workorder.
+                    """)
     @ApiResponse(
             responseCode = "201",
             description = "Unused quantity returned successfully",
@@ -120,7 +146,7 @@ public class WorkorderPartAdjustmentController {
     @ApiResponse(responseCode = "400", description = "Invalid request (exceeds available quantity, etc.)")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Return unused quantity request",
+            description = "Part line, quantity going back, and the reason for the reasoned return.",
             required = true,
             content =
                     @Content(
@@ -161,7 +187,19 @@ public class WorkorderPartAdjustmentController {
             scopes = {"workorder:parts:add"})
     @PreAuthorize("hasAuthority('workorder:parts:add')")
     @EmitEvent(id = "WORKORDER_PART_CORRECT", apiVersion = "1")
-    @Operation(summary = "Correct part quantity", description = "Administrative correction for data entry errors")
+    @Operation(operationId = "correctPartQuantity", summary = "Correct Part Quantity", description = """
+                    Applies an administrative correction to a part line's quantity, recording the correction and \
+                    its reason as an adjustment event for data-entry fixes.
+                    Use this tool only to repair mistaken quantities; do not use consumeParts or returnParts, \
+                    which record real physical movement of stock.
+                    Preconditions: the workorder and part must exist and the part must belong to the workorder.
+                    Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID), a \
+                    positive newQuantity, and a reason in the body; notes are optional and an Idempotency-Key \
+                    header deduplicates retries.
+                    Emits a WORKORDER_PART_CORRECT event.
+                    Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, and \
+                    400 when newQuantity is not positive or the part does not belong to the workorder.
+                    """)
     @ApiResponse(
             responseCode = "201",
             description = "Part quantity corrected successfully",
@@ -169,7 +207,7 @@ public class WorkorderPartAdjustmentController {
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Correct part quantity request",
+            description = "Part line, corrected quantity, and the reason for the administrative fix.",
             required = true,
             content =
                     @Content(
@@ -210,10 +248,18 @@ public class WorkorderPartAdjustmentController {
             name = "bearerAuth",
             scopes = {"workorder:parts:view"})
     @PreAuthorize("hasAuthority('workorder:parts:view')")
-    @Operation(
-            summary = "Get part adjustment history",
-            description =
-                    "Retrieve adjustment history (substitutions, returns, corrections) for parts on the workorder")
+    @Operation(operationId = "getPartAdjustmentHistory", summary = "Get Part Adjustment History", description = """
+                    Returns the substitution, reasoned-return, and correction adjustment events for a \
+                    workorder's parts, newest first, either for the whole workorder or filtered to one part.
+                    Use this tool when auditing part swaps and corrections; use getPartsUsageHistory instead for \
+                    the plain issue, consume, and return quantity movements.
+                    Preconditions: none — an unknown workorder or part simply yields an empty list, and the \
+                    partId filter is not validated against the workorder in the path.
+                    Required inputs: workorderId (UUID) as a path parameter; partId (UUID) is an optional query \
+                    filter.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with the adjustment events, possibly empty.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Adjustment history retrieved successfully (newest first)",

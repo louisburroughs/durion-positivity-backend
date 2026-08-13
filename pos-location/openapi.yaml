@@ -31,9 +31,21 @@ paths:
     get:
       tags:
       - Mobile Unit API
-      summary: Get coverage rules
-      description: Get coverage rules for a mobile unit.
-      operationId: getCoverageRules
+      summary: Get Coverage Rules of Mobile Unit
+      description: 'Returns the coverage rules of a mobile unit ordered by ascending priority.
+
+        Use this tool to inspect where a unit currently operates; use findEligibleMobileUnits instead to answer which units cover a given postal code.
+
+        Preconditions: none; an unknown unit id yields an empty list rather than an error.
+
+        Required inputs: id (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the ordered rule list, empty when the unit has no rules or does not exist.
+
+        '
+      operationId: listCoverageRules
       parameters:
       - name: id
         in: path
@@ -58,8 +70,20 @@ paths:
     put:
       tags:
       - Mobile Unit API
-      summary: Replace coverage rules
-      description: Atomically replace coverage rules for a mobile unit.
+      summary: Replace Coverage Rules for Mobile Unit
+      description: 'Atomically replaces the full set of coverage rules for a mobile unit, deleting the existing rules and inserting the supplied ones in one transaction.
+
+        Use this tool whenever coverage changes, sending the complete desired rule set; do not use patchMobileUnit, which cannot modify coverage.
+
+        Preconditions: the mobile unit must exist; a referenced serviceAreaId that does not resolve is stored as a rule without a service area rather than rejected.
+
+        Required inputs: id (UUID) as a path parameter and a body of the form {"rules": [...]}, each rule carrying ruleType and optionally serviceAreaId, priority (defaults to 0), validFrom, validTo and maxDistance.
+
+        Emits a LOCATION_COVERAGE_RULES_REPLACE event.
+
+        Returns 404 when the mobile unit does not exist; an omitted or empty rules array clears all coverage.
+
+        '
       operationId: replaceCoverageRules
       parameters:
       - name: id
@@ -69,10 +93,21 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Envelope holding the complete replacement rule set under the "rules" key; existing rules not present here are deleted.
         content:
           application/json:
             schema:
               type: object
+            examples:
+              Single service-area rule:
+                description: Single service-area rule
+                value:
+                  rules:
+                  - serviceAreaId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
+                    ruleType: SERVICE_AREA
+                    priority: 1
+                    validFrom: 2026-06-18
+                    validTo: 2026-12-31
         required: true
       responses:
         '200':
@@ -100,8 +135,20 @@ paths:
     get:
       tags:
       - Location API
-      summary: Get location by ID
-      description: Retrieve a location by its unique ID.
+      summary: Get Location by Unique Identifier
+      description: 'Returns the full location record, including address fields, active flag, responsible person id and type classification, for a known id.
+
+        Use this tool when the location id is already known; use listLocations instead to enumerate, and use validateLocation when only existence and active state are needed.
+
+        Preconditions: the location must exist.
+
+        Required inputs: locationId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no location exists for the supplied id.
+
+        '
       operationId: getLocationById
       parameters:
       - name: locationId
@@ -133,8 +180,20 @@ paths:
     put:
       tags:
       - Location API
-      summary: Update an existing location
-      description: Update the details of an existing location.
+      summary: Update an Existing Location Fully
+      description: 'Replaces the mutable fields of an existing location with the supplied full payload, including address, timezone, operating hours and type.
+
+        Use this tool when the complete corrected state of a location is known; use patchLocation instead to change selected fields and leave the rest untouched.
+
+        Preconditions: the location must exist, and no other location may already use the new name.
+
+        Required inputs: locationId (UUID) as a path parameter plus a full body with name, code and type; omitted optional fields are overwritten with the request values, not preserved.
+
+        Emits a LOCATION_LOCATION_UPDATE event and publishes a location fact for replica consumers.
+
+        Returns 404 when the location does not exist, 409 when the name or code collides with another location, and 422 when the timezone or operating hours are invalid.
+
+        '
       operationId: updateLocation
       parameters:
       - name: locationId
@@ -146,10 +205,33 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       requestBody:
+        description: Full replacement state for the location; every mutable field is overwritten with the values supplied here.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LocationRequestDTO'
+            examples:
+              Full replacement:
+                description: Full replacement
+                value:
+                  name: Downtown Service Center
+                  code: LOC-001
+                  type:
+                    name: STORE
+                  timezone: America/Chicago
+                  addressLine1: 123 Main St
+                  city: Springfield
+                  state: IL
+                  postalCode: '62704'
+                  country: US
+                  active: true
+                  responsiblePersonId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  operatingHours:
+                  - dayOfWeek: MONDAY
+                    openTime: 08:00
+                    closeTime: 1020
+                  checkInBufferMinutes: 15
+                  cleanupBufferMinutes: 10
         required: true
       responses:
         '200':
@@ -164,6 +246,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LocationResponseDTO'
+        '409':
+          description: Location name or code already taken.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationResponseDTO'
+        '422':
+          description: Invalid timezone or operating hours.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationResponseDTO'
       security:
       - bearerAuth:
         - location:write
@@ -172,8 +266,20 @@ paths:
     delete:
       tags:
       - Location API
-      summary: Delete a location
-      description: Delete a location by its unique ID.
+      summary: Delete a Location by Identifier
+      description: 'Deletes a location permanently by id and publishes a deletion fact so replica consumers drop the row.
+
+        Use this tool only when a location was created in error; use patchLocation with status INACTIVE instead to retire a real site while preserving history.
+
+        Preconditions: the location must exist; there is no child-relationship or usage check, so callers must confirm the location is unreferenced first.
+
+        Required inputs: locationId (UUID) as a path parameter; there is no request body.
+
+        Emits a LOCATION_LOCATION_DELETE event; the row is hard-deleted, not soft-deleted.
+
+        Returns 204 on success and 404 when the location does not exist.
+
+        '
       operationId: deleteLocation
       parameters:
       - name: locationId
@@ -197,8 +303,20 @@ paths:
     patch:
       tags:
       - Location API
-      summary: Patch a location
-      description: Patch selected fields for a location.
+      summary: Patch Selected Fields of a Location
+      description: 'Applies a partial update to a location, changing only the supplied fields: name, status, timezone, operatingHours, holidayClosures, checkInBufferMinutes and cleanupBufferMinutes.
+
+        Use this tool for targeted edits such as deactivation or hours changes; do not use updateLocation, which overwrites every mutable field including address and type.
+
+        Preconditions: the location must exist, and a new name must not be used by another location.
+
+        Required inputs: locationId (UUID) as a path parameter and a body with at least one field; status only accepts the value INACTIVE to deactivate, and reactivation is not supported through this operation.
+
+        Emits a LOCATION_PATCH event and publishes a location fact for replica consumers.
+
+        Returns 404 when the location does not exist, 409 when the new name is taken, and 422 when a supplied timezone or operating-hours entry is invalid.
+
+        '
       operationId: patchLocation
       parameters:
       - name: locationId
@@ -210,10 +328,16 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       requestBody:
+        description: Partial location payload; only non-null fields are applied and all others are left unchanged.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LocationPatchRequest'
+            examples:
+              Deactivate location:
+                description: Deactivate location
+                value:
+                  status: INACTIVE
         required: true
       responses:
         '200':
@@ -228,6 +352,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LocationResponseDTO'
+        '409':
+          description: Location name already taken.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationResponseDTO'
+        '422':
+          description: Invalid timezone or operating hours.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationResponseDTO'
       security:
       - bearerAuth:
         - location:write
@@ -237,9 +373,21 @@ paths:
     get:
       tags:
       - Site Defaults API
-      summary: Get site defaults
-      description: Retrieve default site configuration for a location.
-      operationId: getDefaults
+      summary: Get Default Storage Locations for Site
+      description: 'Returns the default staging and quarantine storage location ids configured for a site.
+
+        Use this tool when routing received or quarantined inventory; do not use configureSiteDefaults, which overwrites the assignment.
+
+        Preconditions: the site must exist; both ids are null when defaults were never configured.
+
+        Required inputs: locationId (UUID) as a path parameter.
+
+        Emits a LOCATION_SITE_DEFAULTS_GET event; no state changes.
+
+        Returns 404 when the site does not exist.
+
+        '
+      operationId: getSiteDefaults
       parameters:
       - name: locationId
         in: path
@@ -275,9 +423,21 @@ paths:
     put:
       tags:
       - Site Defaults API
-      summary: Configure site defaults
-      description: Create or update default site configuration for a location.
-      operationId: configureDefaults
+      summary: Configure Default Storage Locations for Site
+      description: 'Creates or replaces the default staging and quarantine storage locations of a site in a single idempotent upsert.
+
+        Use this tool when commissioning a site''s receiving flow or moving its defaults; use getSiteDefaults instead to read the current assignment.
+
+        Preconditions: the site must exist, and both referenced storage locations must belong to that site.
+
+        Required inputs: locationId (UUID) as a path parameter and a body with both defaultStagingLocationId and defaultQuarantineLocationId; the two ids must differ.
+
+        Emits a LOCATION_SITE_DEFAULTS_PUT event and republishes the location fact carrying the new defaults.
+
+        Returns 404 when the site does not exist, 400 when either id is missing or both ids are the same, and 422 when a referenced storage location does not belong to the site.
+
+        '
+      operationId: configureSiteDefaults
       parameters:
       - name: locationId
         in: path
@@ -287,10 +447,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Pair of storage location ids to install as the site's staging and quarantine defaults.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SiteDefaultsRequest'
+            examples:
+              Staging and quarantine defaults:
+                description: Staging and quarantine defaults
+                value:
+                  defaultStagingLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                  defaultQuarantineLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
         required: true
       responses:
         '200':
@@ -317,6 +484,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SiteDefaultsResponse'
+        '422':
+          description: Default storage location does not belong to the site
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteDefaultsResponse'
       security:
       - bearerAuth:
         - location:write
@@ -326,9 +499,21 @@ paths:
     get:
       tags:
       - Travel Buffer Policy API
-      summary: List travel buffer policies
-      description: List configured travel buffer policies available for routing and scheduling decisions
-      operationId: list
+      summary: List All Travel Buffer Policies
+      description: 'Lists all travel buffer policies with their buffer type, value and notes.
+
+        Use this tool to discover policy ids for createMobileUnit or patchMobileUnit; use patchTravelBufferPolicy instead to change one.
+
+        Preconditions: none beyond the location:travel-buffer-policy:read authority.
+
+        Required inputs: none; there are no parameters, no paging and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the full unpaginated list.
+
+        '
+      operationId: listTravelBufferPolicies
       responses:
         '200':
           description: Travel buffer policies listed
@@ -346,18 +531,45 @@ paths:
     post:
       tags:
       - Travel Buffer Policy API
-      summary: Create travel buffer policy
-      description: Create a travel buffer policy that defines extra travel time handling rules
-      operationId: create
+      summary: Create a New Travel Buffer Policy
+      description: 'Creates a travel buffer policy that adds slack time around mobile unit travel for scheduling decisions.
+
+        Use this tool before assigning the policy to mobile units via createMobileUnit or patchMobileUnit; do not use patchTravelBufferPolicy, which edits an existing policy.
+
+        Preconditions: the name must not collide with an existing policy.
+
+        Required inputs: name and bufferType, one of FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or DISTANCE_MULTIPLIER; bufferValue is optional, must be non-negative, and is interpreted according to the bufferType.
+
+        Emits a LOCATION_TRAVEL_BUFFER_POLICY_CREATE event.
+
+        Returns 201 with the created policy and 409 when the name is already taken.
+
+        '
+      operationId: createTravelBufferPolicy
       requestBody:
+        description: Travel buffer policy to create, pairing a buffer type with its numeric value.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/TravelBufferPolicyRequest'
+            examples:
+              Flat minutes buffer:
+                description: Flat minutes buffer
+                value:
+                  name: Standard Metro Buffer
+                  bufferType: FLAT_MINUTES
+                  bufferValue: 30
+                  notes: Applies during peak hours only
         required: true
       responses:
         '201':
           description: Travel buffer policy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TravelBufferPolicyResponse'
+        '409':
+          description: Travel buffer policy name already taken
           content:
             application/json:
               schema:
@@ -371,9 +583,21 @@ paths:
     get:
       tags:
       - Service Area API
-      summary: List service areas
-      description: List configured service areas available for dispatching and coverage management
-      operationId: list_1
+      summary: List All Configured Service Areas
+      description: 'Lists all configured service areas with their postal code sets and active flags.
+
+        Use this tool to discover area ids for coverage rules; use listCoverageRules instead to see which areas a specific mobile unit uses.
+
+        Preconditions: none beyond the location:service-area:read authority.
+
+        Required inputs: none; there are no parameters, no paging and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the full unpaginated list.
+
+        '
+      operationId: listServiceAreas
       responses:
         '200':
           description: Service areas listed
@@ -391,18 +615,49 @@ paths:
     post:
       tags:
       - Service Area API
-      summary: Create service area
-      description: Create a service area that defines where a location can provide service coverage
-      operationId: create_1
+      summary: Create a Postal Code Service Area
+      description: 'Creates a service area, a named set of postal codes that defines where mobile coverage can be offered.
+
+        Use this tool before wiring coverage rules that reference the area; do not use patchServiceArea, which edits an existing area.
+
+        Preconditions: at least one postal code entry must be supplied and every entry must carry a countryCode; the name must not collide with an existing service area.
+
+        Required inputs: name and postalCodes, each entry with postalCode and countryCode; description is optional and active defaults to true.
+
+        Emits a LOCATION_SERVICE_AREA_CREATE event.
+
+        Returns 201 with the created area and 409 when the name is already taken.
+
+        '
+      operationId: createServiceArea
       requestBody:
+        description: Service area to create, defined by its postal code and country code entries.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ServiceAreaRequest'
+            examples:
+              Metro area:
+                description: Metro area
+                value:
+                  name: North Metro
+                  description: Northern metropolitan coverage zone
+                  active: true
+                  postalCodes:
+                  - postalCode: '62704'
+                    countryCode: US
+                  - postalCode: '62711'
+                    countryCode: US
         required: true
       responses:
         '201':
           description: Service area created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAreaResponse'
+        '409':
+          description: Service area name already taken
           content:
             application/json:
               schema:
@@ -416,8 +671,20 @@ paths:
     get:
       tags:
       - Mobile Unit API
-      summary: List mobile units
-      description: List mobile units with pagination.
+      summary: List Mobile Units With Pagination
+      description: 'Lists all mobile units as a page with status, base location and travel buffer policy references.
+
+        Use this tool to enumerate or browse units; use getMobileUnitById instead when the unit id is known, and findEligibleMobileUnits to match units to a service address.
+
+        Preconditions: none beyond the location:mobile-unit:read authority.
+
+        Required inputs: none; page defaults to 0 and size to 20.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with a page of mobile units, empty when none exist.
+
+        '
       operationId: listMobileUnits
       parameters:
       - name: page
@@ -449,18 +716,53 @@ paths:
     post:
       tags:
       - Mobile Unit API
-      summary: Create mobile unit
-      description: Create a new mobile unit.
+      summary: Create a New Mobile Service Unit
+      description: 'Creates a mobile service unit with an optional base location, travel buffer policy, capability list and initial coverage rules.
+
+        Use this tool when commissioning a van or truck that serves customers off-site; do not use patchMobileUnit, which updates an existing unit, and change coverage later with replaceCoverageRules.
+
+        Preconditions: a unit created with status ACTIVE must include travelBufferPolicyId, capabilityIds and coverageRules; the travel buffer policy must exist, capability ids or codes must resolve to registered capabilities, DISTANCE_TIER coverage rules must be strictly ascending by maxDistance and end with a null catch-all tier, and the name must be unique at the base location.
+
+        Required inputs: name; status defaults to INACTIVE when omitted, and baseLocationId, travelBufferPolicyId, notes, capabilityIds and coverageRules are optional for inactive units.
+
+        Emits a LOCATION_MOBILE_UNIT_CREATE event and persists any supplied coverage rules in the same transaction.
+
+        Returns 201 with the created unit and 409 when the name is already taken at the base location.
+
+        '
       operationId: createMobileUnit
       requestBody:
+        description: Mobile unit to create; an ACTIVE unit must arrive complete with its travel buffer policy, capabilities and coverage rules.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/MobileUnitRequest'
+            examples:
+              Active mobile unit:
+                description: Active mobile unit
+                value:
+                  name: Van 7
+                  baseLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                  status: ACTIVE
+                  travelBufferPolicyId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                  notes: Equipped with hydraulic lift
+                  capabilityIds:
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  coverageRules:
+                  - serviceAreaId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
+                    ruleType: SERVICE_AREA
+                    priority: 1
+                    validFrom: 2026-06-18
         required: true
       responses:
         '201':
           description: Mobile unit created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileUnitResponse'
+        '409':
+          description: Mobile unit name already taken at the base location.
           content:
             application/json:
               schema:
@@ -474,9 +776,21 @@ paths:
     get:
       tags:
       - Location API
-      summary: Get all locations
-      description: Retrieve a list of all locations.
-      operationId: getAllLocations
+      summary: List All Locations Without Pagination
+      description: 'Lists every location in the system as a flat, unpaginated collection with address, status and type details.
+
+        Use this tool when a complete location inventory is needed at once; use getLocationRoster instead for a paginated sync feed with status and updated-since filtering, and do not use it to fetch a single known id, which is getLocationById.
+
+        Preconditions: none beyond the location:read authority; an empty system returns an empty list.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the full list; there are no business error conditions for this operation.
+
+        '
+      operationId: listLocations
       responses:
         '200':
           description: List of locations returned successfully.
@@ -494,18 +808,65 @@ paths:
     post:
       tags:
       - Location API
-      summary: Create a new location
-      description: Add a new location to the system.
+      summary: Create a New Location Record
+      description: 'Creates a location with address, timezone, operating hours, scheduling buffers and type classification, defaulting status to ACTIVE.
+
+        Use this tool when registering a new physical or logical site; do not use updateLocation, which replaces an existing location, and use bulkIngestLocations for batch imports.
+
+        Preconditions: no existing location may share the same name (case-insensitive) or code, and a type referenced by id must already exist; a type given only by name is created on the fly.
+
+        Required inputs: name, code and type (id or name); timezone must be a valid IANA zone id, operatingHours entries must have unique dayOfWeek values with openTime before closeTime, and active defaults to true.
+
+        Emits a LOCATION_LOCATION_CREATE event and publishes a location fact for replica consumers.
+
+        Returns 409 when the name or code is already taken, 422 when the timezone or operating hours are invalid, and 400 when a referenced location type id is unknown.
+
+        '
       operationId: createLocation
       requestBody:
+        description: Location to create, including its type and optional address, timezone and operating-hours configuration.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LocationRequestDTO'
+            examples:
+              Store location:
+                description: Store location
+                value:
+                  name: Downtown Service Center
+                  code: LOC-001
+                  type:
+                    name: STORE
+                  timezone: America/Chicago
+                  addressLine1: 123 Main St
+                  city: Springfield
+                  state: IL
+                  postalCode: '62704'
+                  country: US
+                  active: true
+                  responsiblePersonId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  operatingHours:
+                  - dayOfWeek: MONDAY
+                    openTime: 08:00
+                    closeTime: 1020
+                  checkInBufferMinutes: 15
+                  cleanupBufferMinutes: 10
         required: true
       responses:
         '201':
           description: Location created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationResponseDTO'
+        '409':
+          description: Location name or code already taken.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationResponseDTO'
+        '422':
+          description: Invalid timezone or operating hours.
           content:
             application/json:
               schema:
@@ -519,9 +880,21 @@ paths:
     get:
       tags:
       - Storage Location API
-      summary: List storage locations
-      description: List storage locations for a site with optional type and status filtering
-      operationId: list_2
+      summary: List Storage Locations of a Site
+      description: 'Lists the storage locations of a site as a page, optionally filtered by type and status.
+
+        Use this tool for paginated browsing; use getStorageLocationTopology instead when the complete unpaginated hierarchy of the site is needed.
+
+        Preconditions: none; an unknown site id yields an empty page rather than an error.
+
+        Required inputs: siteId (UUID) as a path parameter; type (FLOOR, SHELF, BIN, CAGE, TRUCK) and status (ACTIVE, INACTIVE, MAINTENANCE, QUARANTINED) filters are optional, and standard page, size and sort parameters control paging.
+
+        Emits a LOCATION_STORAGE_LOCATION_LIST event; no state changes.
+
+        Returns 200 with a page of storage locations regardless of whether any match the filters.
+
+        '
+      operationId: listStorageLocations
       parameters:
       - name: siteId
         in: path
@@ -570,9 +943,21 @@ paths:
     post:
       tags:
       - Storage Location API
-      summary: Create storage location
-      description: Create a storage location within a site using the provided topology and status details
-      operationId: create_2
+      summary: Create a Storage Location Within Site
+      description: 'Creates a storage location (FLOOR, SHELF, BIN, CAGE or TRUCK) inside a site, always starting in ACTIVE status.
+
+        Use this tool when adding storage topology to a site; do not use patchStorageLocation, which modifies an existing node, and use createBay for vehicle service bays rather than inventory storage.
+
+        Preconditions: the site must exist, the name must be unique within the site (case-insensitive), any barcode must be unique within the site, and a parentStorageLocationId must reference a storage location of the same site.
+
+        Required inputs: name and type; barcode, parentStorageLocationId, capacity and temperature (free-form JSON objects) are optional.
+
+        Emits a LOCATION_STORAGE_LOCATION_CREATE event and publishes a storage-location fact for replica consumers.
+
+        Returns 404 when the site does not exist, 409 when the name or barcode is already used in the site, and 400 when the parent storage location is unknown or belongs to a different site.
+
+        '
+      operationId: createStorageLocation
       parameters:
       - name: siteId
         in: path
@@ -581,14 +966,47 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Storage location to create, positioned in the site's topology via its optional parent reference.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/StorageLocationRequest'
+            examples:
+              Refrigerated bin:
+                description: Refrigerated bin
+                value:
+                  name: Aisle 3 Bin 12
+                  barcode: SL-000312
+                  type: BIN
+                  parentStorageLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  capacity:
+                    maxUnits: 100
+                  temperature:
+                    min: 2
+                    max: 8
+                    unit: C
         required: true
       responses:
         '201':
           description: Storage location created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageLocationResponse'
+        '400':
+          description: Parent storage location unknown or in another site
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageLocationResponse'
+        '404':
+          description: Site not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageLocationResponse'
+        '409':
+          description: Duplicate name or barcode within the site
           content:
             application/json:
               schema:
@@ -602,8 +1020,20 @@ paths:
     get:
       tags:
       - Bay API
-      summary: List bays
-      description: List bays for a location with optional status and bayType filters.
+      summary: List Service Bays of a Location
+      description: 'Lists the service bays of a location as a page, optionally filtered by status and bayType.
+
+        Use this tool to see bay capacity and status for a shop; use getBay instead when the bay id is already known.
+
+        Preconditions: the location must exist.
+
+        Required inputs: locationId (UUID) as a path parameter; status (ACTIVE or OUT_OF_SERVICE) and bayType filters are optional, and page defaults to 0 with size 20.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the location does not exist; an unrecognized status or bayType filter value fails the request rather than returning an empty page.
+
+        '
       operationId: listBays
       parameters:
       - name: locationId
@@ -643,6 +1073,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PageBayResponse'
+        '404':
+          description: Location not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageBayResponse'
       security:
       - bearerAuth:
         - location:bay:read
@@ -651,8 +1087,20 @@ paths:
     post:
       tags:
       - Bay API
-      summary: Create bay
-      description: Create a new bay for a specific location.
+      summary: Create a Service Bay for Location
+      description: 'Creates a service bay under a location with a type classification, concurrency capacity and optional capability and skill requirements.
+
+        Use this tool when adding physical work capacity to a shop; do not use patchBay, which modifies a bay that already exists, and use createStorageLocation for inventory storage rather than vehicle bays.
+
+        Preconditions: the location must exist, no bay of that location may already use the name (case-insensitive), and any serviceCapabilityIds must match registered service capability codes.
+
+        Required inputs: name, bayType (one of GENERAL_SERVICE, ALIGNMENT, TIRE_SERVICE, HEAVY_DUTY, INSPECTION or WASH_DETAIL) and capacity.maxConcurrentVehicles of at least 1; status is optional, defaults to ACTIVE and only also accepts OUT_OF_SERVICE.
+
+        Emits a LOCATION_BAY_CREATE event; no other records are touched.
+
+        Returns 404 when the location does not exist and 409 when the bay name is already taken at that location.
+
+        '
       operationId: createBay
       parameters:
       - name: locationId
@@ -661,16 +1109,42 @@ paths:
         required: true
         schema:
           type: string
-        example: 1
+        example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       requestBody:
+        description: Service bay to create, with its type classification and concurrent vehicle capacity.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BayRequest'
+            examples:
+              General service bay:
+                description: General service bay
+                value:
+                  name: Bay A1
+                  bayType: GENERAL_SERVICE
+                  capacity:
+                    maxConcurrentVehicles: 2
+                  serviceCapabilityIds:
+                  - ALIGNMENT
+                  skillRequirementIds:
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a20
+                  status: ACTIVE
         required: true
       responses:
         '201':
           description: Bay created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BayResponse'
+        '404':
+          description: Location not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BayResponse'
+        '409':
+          description: Bay name already taken at this location.
           content:
             application/json:
               schema:
@@ -684,9 +1158,21 @@ paths:
     post:
       tags:
       - Location API
-      summary: Add a parent to a location
-      description: Add a parent relationship to a location.
-      operationId: addParent
+      summary: Add Typed Parent Relationship to Location
+      description: 'Creates a typed parent-child edge between two existing locations, giving the child at most one parent per relationship type.
+
+        Use this tool when building the location hierarchy; do not use listLocationChildren or listLocationDescendants, which only read the hierarchy.
+
+        Preconditions: both locations must exist, the child must not already have a parent of that type, the pair must not already be linked in either direction, and the parent must not be a descendant of the child because cycles are forbidden by ADR-0016.
+
+        Required inputs: childId and parentId (UUIDs) as path parameters and a parentType query parameter, one of HOME_OFFICE, HEADQUARTERS, REGION, DISTRICT, PHYSICAL, ORGANIZATIONAL, FINANCIAL or SHIPPING.
+
+        Emits a LOCATION_PARENT_ADD event and republishes the child''s location fact, which carries the new edge to replica consumers.
+
+        Returns 400 when parentType is not a recognized value; self-parenting, duplicate, inverse or circular relationships are rejected before the edge is written.
+
+        '
+      operationId: addLocationParent
       parameters:
       - name: childId
         in: path
@@ -717,6 +1203,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LocationParentResponseDTO'
+        '400':
+          description: Invalid parentType value.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationParentResponseDTO'
       security:
       - bearerAuth:
         - location:write
@@ -726,14 +1218,44 @@ paths:
     post:
       tags:
       - Location Bulk Ingest API
-      summary: Bulk ingest records
-      description: Accepts a batch of domain records for bulk import. Returns per-record results.
-      operationId: bulkIngest
+      summary: Bulk Import a Batch of Locations
+      description: 'Imports a batch of location records in one call, creating each row independently and reporting per-record success or failure.
+
+        Use this tool for initial data loads or migrations; do not use createLocation, which creates a single location per call.
+
+        Preconditions: names and codes must be unique against existing locations; each record is validated independently, so one failure does not abort the batch.
+
+        Required inputs: jobId, locationId and a non-empty records array, each record with name and code; active defaults to true and locationTypeName defaults to STORE when omitted.
+
+        Emits a LOCATION_BULK_INGEST event, and every successfully created location also publishes a location fact for replica consumers.
+
+        Returns 200 with per-record results even when some records fail (failed rows carry errorCode LOCATION_INGEST_FAILED), and 400 when the batch envelope itself is invalid.
+
+        '
+      operationId: bulkIngestLocations
       requestBody:
+        description: Batch envelope of location records to import, scoped to a bulk ingest job and submitting operator.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BulkIngestRequestLocationBulkIngestRecord'
+            examples:
+              Single-record batch:
+                description: Single-record batch
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                  operatorId: user-jdoe
+                  records:
+                  - name: Downtown Service Center
+                    code: LOC-001
+                    addressLine1: 123 Main St
+                    city: Springfield
+                    stateOrProvince: IL
+                    postalCode: '62704'
+                    countryCode: US
+                    active: true
+                    locationTypeName: STORE
         required: true
       responses:
         '200':
@@ -757,9 +1279,21 @@ paths:
     patch:
       tags:
       - Travel Buffer Policy API
-      summary: Patch travel buffer policy
-      description: Patch an existing travel buffer policy using the provided partial field updates
-      operationId: patch
+      summary: Patch Fields of Travel Buffer Policy
+      description: 'Applies a partial update to a travel buffer policy, accepting the keys bufferType, bufferValue and notes.
+
+        Use this tool to tune buffer behavior; do not use it to rename a policy, whose name is immutable after createTravelBufferPolicy.
+
+        Preconditions: the policy must exist; the resulting bufferType must remain one of FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or DISTANCE_MULTIPLIER and the resulting bufferValue non-negative.
+
+        Required inputs: id (UUID) as a path parameter and a JSON object of the fields to change; keys other than bufferType, bufferValue and notes are silently ignored.
+
+        Emits a LOCATION_TRAVEL_BUFFER_POLICY_PATCH event.
+
+        Returns 400 when the id is not a valid UUID and 404 when no policy exists for it.
+
+        '
+      operationId: patchTravelBufferPolicy
       parameters:
       - name: id
         in: path
@@ -767,10 +1301,16 @@ paths:
         schema:
           type: string
       requestBody:
+        description: Free-form patch object; only the keys bufferType, bufferValue and notes are recognized.
         content:
           application/json:
             schema:
               type: object
+            examples:
+              Raise buffer value:
+                description: Raise buffer value
+                value:
+                  bufferValue: 45
         required: true
       responses:
         '200':
@@ -800,9 +1340,21 @@ paths:
     patch:
       tags:
       - Service Area API
-      summary: Patch service area
-      description: Patch an existing service area using the provided partial field updates
-      operationId: patch_1
+      summary: Patch Fields of a Service Area
+      description: 'Applies a partial update to a service area, accepting only the keys description and active.
+
+        Use this tool to retire an area with active=false or amend its description; do not use it to rename an area or change its postal codes, which are immutable after createServiceArea.
+
+        Preconditions: the service area must exist.
+
+        Required inputs: id (UUID) as a path parameter and a JSON object; keys other than description and active are silently ignored.
+
+        Emits a LOCATION_SERVICE_AREA_PATCH event.
+
+        Returns 400 when the id is not a valid UUID and 404 when no service area exists for it.
+
+        '
+      operationId: patchServiceArea
       parameters:
       - name: id
         in: path
@@ -810,10 +1362,17 @@ paths:
         schema:
           type: string
       requestBody:
+        description: Free-form patch object; only the keys description and active are recognized.
         content:
           application/json:
             schema:
               type: object
+            examples:
+              Retire area:
+                description: Retire area
+                value:
+                  description: Retired winter zone
+                  active: false
         required: true
       responses:
         '200':
@@ -843,8 +1402,20 @@ paths:
     get:
       tags:
       - Mobile Unit API
-      summary: Get mobile unit
-      description: Get a mobile unit by ID.
+      summary: Get a Mobile Unit by Identifier
+      description: 'Returns a single mobile unit with its status, base location, capability ids and travel buffer policy reference.
+
+        Use this tool when the unit id is already known; use listMobileUnits instead to enumerate, and listCoverageRules to read the unit''s coverage separately.
+
+        Preconditions: the mobile unit must exist.
+
+        Required inputs: id (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no mobile unit exists for the supplied id.
+
+        '
       operationId: getMobileUnitById
       parameters:
       - name: id
@@ -875,8 +1446,20 @@ paths:
     patch:
       tags:
       - Mobile Unit API
-      summary: Patch mobile unit
-      description: Partially update a mobile unit.
+      summary: Patch Fields of a Mobile Unit
+      description: 'Applies a partial update to a mobile unit, accepting the keys name, status, notes and travelBufferPolicyId.
+
+        Use this tool for status transitions and travel-buffer-policy reassignment; use replaceCoverageRules instead to change where the unit operates.
+
+        Preconditions: none are enforced; when the unit id does not exist nothing is persisted and a synthesized response built from the patch is echoed back, so callers must verify existence first with getMobileUnitById.
+
+        Required inputs: id (UUID) as a path parameter and a JSON object of the fields to change; status values are upper-cased and a blank status normalizes to INACTIVE.
+
+        Emits a LOCATION_MOBILE_UNIT_UPDATE event.
+
+        Returns 200 even for unknown ids (with the unpersisted echo) and 409 when a name change collides with another unit at the same base location.
+
+        '
       operationId: patchMobileUnit
       parameters:
       - name: id
@@ -886,14 +1469,27 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Free-form patch object; only the keys name, status, notes and travelBufferPolicyId are recognized.
         content:
           application/json:
             schema:
               type: object
+            examples:
+              Deactivate unit:
+                description: Deactivate unit
+                value:
+                  status: INACTIVE
+                  notes: Winter maintenance
         required: true
       responses:
         '200':
           description: Mobile units managed successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileUnitResponse'
+        '409':
+          description: Mobile unit name already taken at the base location.
           content:
             application/json:
               schema:
@@ -907,9 +1503,21 @@ paths:
     get:
       tags:
       - Storage Location API
-      summary: Get storage location
-      description: Retrieve a single storage location for a site by its storage location identifier
-      operationId: get
+      summary: Get a Storage Location by Identifier
+      description: 'Returns a single storage location of a site, including capacity and temperature attributes and its parent reference.
+
+        Use this tool when the storage location id and its site are both known; use validateStorageLocation instead when only existence, active state and site ownership must be checked without knowing the site.
+
+        Preconditions: the storage location must exist and belong to the supplied site.
+
+        Required inputs: siteId and storageLocationId (UUIDs) as path parameters.
+
+        Emits a LOCATION_STORAGE_LOCATION_GET event; no state changes.
+
+        Returns 404 when no storage location with that id exists under the site.
+
+        '
+      operationId: getStorageLocation
       parameters:
       - name: siteId
         in: path
@@ -944,9 +1552,21 @@ paths:
     patch:
       tags:
       - Storage Location API
-      summary: Patch storage location
-      description: Patch an existing storage location for a site using the provided partial updates
-      operationId: patch_2
+      summary: Patch Fields of a Storage Location
+      description: 'Applies a partial update to a storage location, covering rename, barcode, reparenting, capacity, temperature and status transitions.
+
+        Use this tool for all storage-location mutations after creation, including deactivation; do not use createStorageLocation, which adds a new node.
+
+        Preconditions: the storage location must exist in the site; a new name or barcode must be unique within the site, a new parent must belong to the same site without creating a cycle, and deactivating a node that still holds on-hand stock requires a destinationStorageLocationId naming an ACTIVE storage location of the same site to receive the transferred inventory.
+
+        Required inputs: siteId and storageLocationId (UUIDs) as path parameters and a body with at least one field; status accepts ACTIVE, INACTIVE, MAINTENANCE or QUARANTINED.
+
+        Emits a LOCATION_STORAGE_LOCATION_UPDATE event, publishes a storage-location fact, and on deactivation with stock triggers an atomic inventory transfer to the destination.
+
+        Returns 404 when the storage location or transfer destination does not exist, 409 when the name or barcode collides or the new parent would create a cycle, 400 when the parent is unknown or in another site, and 422 when deactivation needs a destination that is missing, inactive or the node itself.
+
+        '
+      operationId: patchStorageLocation
       parameters:
       - name: siteId
         in: path
@@ -961,10 +1581,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Partial storage-location payload; only non-null fields are applied, and destinationStorageLocationId is consumed only when deactivating a node that still holds stock.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/StorageLocationPatchRequest'
+            examples:
+              Deactivate with stock transfer:
+                description: Deactivate with stock transfer
+                value:
+                  status: INACTIVE
+                  destinationStorageLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a11
         required: true
       responses:
         '200':
@@ -973,8 +1600,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StorageLocationResponse'
+        '400':
+          description: Parent storage location unknown or in another site
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageLocationResponse'
         '404':
           description: Storage location not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageLocationResponse'
+        '409':
+          description: Duplicate name or barcode, or reparenting would create a cycle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageLocationResponse'
+        '422':
+          description: Deactivation destination missing, inactive or invalid
           content:
             application/json:
               schema:
@@ -988,8 +1633,20 @@ paths:
     get:
       tags:
       - Bay API
-      summary: Get bay
-      description: Get a bay by location and bay id.
+      summary: Get a Service Bay by Identifier
+      description: 'Returns a single service bay of a location, including its capacity, capability and skill requirement details.
+
+        Use this tool when both the location id and bay id are known; use listBays instead to search or enumerate.
+
+        Preconditions: the location must exist and the bay must belong to it.
+
+        Required inputs: locationId and bayId (UUIDs) as path parameters.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the location does not exist or the bay is not found under that location.
+
+        '
       operationId: getBay
       parameters:
       - name: locationId
@@ -1025,8 +1682,20 @@ paths:
     patch:
       tags:
       - Bay API
-      summary: Patch bay
-      description: Patch bay fields including status transition and capacity.
+      summary: Patch Fields of a Service Bay
+      description: 'Applies a partial update to a bay, changing only the supplied fields: name, bayType, status, capacity and the capability or skill requirement lists.
+
+        Use this tool for status transitions between ACTIVE and OUT_OF_SERVICE and for capacity changes; do not use createBay, which adds a new bay.
+
+        Preconditions: the location must exist, the bay must belong to it, and a new name must not collide with another bay at the same location.
+
+        Required inputs: locationId and bayId (UUIDs) as path parameters and a body with at least one field; capacity.maxConcurrentVehicles, when supplied, must be at least 1.
+
+        Emits a LOCATION_BAY_UPDATE event; no other records are touched.
+
+        Returns 404 when the location or bay does not exist and 409 when the new name is already taken at that location.
+
+        '
       operationId: patchBay
       parameters:
       - name: locationId
@@ -1040,14 +1709,32 @@ paths:
         schema:
           type: string
       requestBody:
+        description: Partial bay payload; only non-null fields are applied and all others are left unchanged.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BayPatchRequest'
+            examples:
+              Take bay out of service:
+                description: Take bay out of service
+                value:
+                  status: OUT_OF_SERVICE
         required: true
       responses:
         '200':
           description: Bay updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BayResponse'
+        '404':
+          description: Location or bay not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BayResponse'
+        '409':
+          description: Bay name already taken at this location.
           content:
             application/json:
               schema:
@@ -1061,8 +1748,20 @@ paths:
     get:
       tags:
       - storage-location-validation-controller
-      summary: Validate storage location reference
-      description: Returns existence, active status, and site ownership for a storage location ID.
+      summary: Validate Storage Location Reference State
+      description: 'Returns existence, active status, owning site id and maximum unit capacity for a storage location id without requiring the site to be known.
+
+        Use this tool for inter-service reference validation before storing a storageLocationId; use getStorageLocation instead when the full record is needed and the site id is known.
+
+        Preconditions: none; unknown ids are a valid input.
+
+        Required inputs: storageLocationId (UUID) as a path parameter.
+
+        Emits a LOCATION_STORAGE_LOCATION_VALIDATE event; no state changes.
+
+        Returns 200 always, with exists=false and a null siteId when the id is unknown, and 400 when the path value is not a valid UUID.
+
+        '
       operationId: validateStorageLocation
       parameters:
       - name: storageLocationId
@@ -1100,8 +1799,20 @@ paths:
     get:
       tags:
       - mobile-unit-eligibility-controller
-      summary: Find eligible mobile units
-      description: Return eligible active units for a service request.
+      summary: Find Eligible Mobile Units for Address
+      description: 'Finds the ACTIVE mobile units whose coverage rules include a postal code on a given date, ordered by ascending rule priority.
+
+        Use this tool when dispatching a mobile service request to a customer address; use listMobileUnits instead for plain enumeration without eligibility matching.
+
+        Preconditions: coverage rules must already link units to service areas containing the postal code; units whose status is not ACTIVE are excluded.
+
+        Required inputs: postalCode, countryCode and at (an ISO-8601 instant), all mandatory; the instant is reduced to a UTC calendar date for validFrom and validTo matching.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the eligible units, empty when nothing covers the address on that date.
+
+        '
       operationId: findEligibleMobileUnits
       parameters:
       - name: postalCode
@@ -1138,9 +1849,21 @@ paths:
     get:
       tags:
       - Storage Location API
-      summary: Get storage location topology
-      description: Return every storage location of a site, regardless of status, as a flat unpaginated list with id, name, type, status, and parentStorageLocationId for topology consumers
-      operationId: topology
+      summary: Get Full Storage Location Topology
+      description: 'Returns every storage location of a site, regardless of status, as a flat unpaginated list with id, name, type, status and parentStorageLocationId.
+
+        Use this tool when a rollup or topology consumer needs the whole storage tree in one call; use listStorageLocations instead for paginated, filtered browsing.
+
+        Preconditions: the site must exist.
+
+        Required inputs: siteId (UUID) as a path parameter; there is no filtering.
+
+        Emits a LOCATION_STORAGE_LOCATION_TOPOLOGY event; no state changes.
+
+        Returns 404 when the site does not exist.
+
+        '
+      operationId: getStorageLocationTopology
       parameters:
       - name: siteId
         in: path
@@ -1175,8 +1898,20 @@ paths:
     get:
       tags:
       - Location API
-      summary: Validate location reference
-      description: Return existence and active state for a location ID.
+      summary: Validate Location Existence and Active State
+      description: 'Returns an existence-and-active-state check for a location id without transferring the full record.
+
+        Use this tool for inter-service reference validation before storing a locationId; do not use getLocationById, which returns the full payload and answers 404 for unknown ids.
+
+        Preconditions: none; unknown ids are a valid input.
+
+        Required inputs: locationId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 always, with exists=false and active=false when the id is unknown, so callers must inspect the flags rather than the status code.
+
+        '
       operationId: validateLocation
       parameters:
       - name: locationId
@@ -1203,9 +1938,21 @@ paths:
     get:
       tags:
       - Location API
-      summary: Get responsible person for a location
-      description: Retrieve the person responsible for a given location.
-      operationId: getResponsiblePerson
+      summary: Get Responsible Person for a Location
+      description: 'Returns the person responsible for a location, resolved from the people-contact replica with name, email and phone details.
+
+        Use this tool to find who owns a site operationally; do not use getLocationById, which returns only the responsiblePersonId without contact details.
+
+        Preconditions: the location must exist and have a responsiblePersonId assigned.
+
+        Required inputs: locationId (UUID) as a path parameter.
+
+        Emits a LOCATION_RESPONSIBLE_PERSON_GET event; no state changes.
+
+        Returns 404 when the location does not exist or no responsible person is assigned; when the replica row has not yet arrived, a 200 with only the person id is returned and names follow with the feed.
+
+        '
+      operationId: getLocationResponsiblePerson
       parameters:
       - name: locationId
         in: path
@@ -1237,9 +1984,21 @@ paths:
     get:
       tags:
       - Location API
-      summary: Get all descendants for a location
-      description: Walk typed parent-child edges downward from a location and return every descendant as a flat list with its immediate parent id and depth (1 = direct child). Traversal is cycle-safe and depth-capped at 20.
-      operationId: getDescendants
+      summary: List All Descendants of a Location
+      description: 'Walks typed parent-child edges downward from a location and returns every descendant as a flat list with its immediate parent id and depth, where depth 1 is a direct child.
+
+        Use this tool when a whole subtree is needed in one call; use listLocationChildren instead for only the direct children of one location.
+
+        Preconditions: the root location must exist; traversal is cycle-safe and silently truncates at depth 20.
+
+        Required inputs: locationId (UUID) as a path parameter; parentType defaults to PHYSICAL when omitted.
+
+        Emits a LOCATION_DESCENDANTS_GET event; no state changes.
+
+        Returns 404 when the root location does not exist and 400 when parentType is not a recognized ParentType value.
+
+        '
+      operationId: listLocationDescendants
       parameters:
       - name: locationId
         in: path
@@ -1290,9 +2049,21 @@ paths:
     get:
       tags:
       - Location API
-      summary: Get all children for a location
-      description: Retrieve all child locations for a given parent location.
-      operationId: getAllChildren
+      summary: List Direct Children of a Location
+      description: 'Returns the direct child locations of a parent location, optionally restricted to one relationship type.
+
+        Use this tool for one level of hierarchy; use listLocationDescendants instead when the whole subtree with depth information is needed.
+
+        Preconditions: none; an unknown or childless parent id yields an empty list rather than an error.
+
+        Required inputs: locationId (UUID) as a path parameter; parentType is optional and, when omitted, edges of every relationship type are returned.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 400 when parentType is supplied but is not a recognized ParentType value.
+
+        '
+      operationId: listLocationChildren
       parameters:
       - name: locationId
         in: path
@@ -1317,6 +2088,14 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/LocationResponseDTO'
+        '400':
+          description: Invalid parentType value.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LocationResponseDTO'
       security:
       - bearerAuth:
         - location:read
@@ -1326,9 +2105,21 @@ paths:
     get:
       tags:
       - Location API
-      summary: Get location roster
-      description: Retrieve paginated location refs for sync consumers.
-      operationId: getRoster
+      summary: Get Paginated Location Roster for Sync
+      description: 'Returns a paginated roster of lightweight location references (id, name, code, status, hrLocationId, timezone, updatedAt) for sync consumers.
+
+        Use this tool when incrementally synchronising locations into another system; do not use listLocations, which returns full unpaginated location payloads.
+
+        Preconditions: none beyond the location:read authority.
+
+        Required inputs: none are mandatory; status filters exactly on the stored status value such as ACTIVE, sinceUpdatedAt is an ISO-8601 instant returning only rows updated after it, and standard page, size and sort parameters control paging.
+
+        Emits a LOCATION_ROSTER_GET event; no location state changes.
+
+        Returns 200 with a page of location refs; an unknown status value yields an empty page rather than an error.
+
+        '
+      operationId: getLocationRoster
       parameters:
       - name: status
         in: query
@@ -1366,9 +2157,21 @@ paths:
     get:
       tags:
       - Location API
-      summary: Get all location parents
-      description: Retrieve all parent relationships for locations.
-      operationId: getAllParents
+      summary: List All Location Parent Relationships
+      description: 'Lists every parent-child relationship edge across all locations, with parentId, childId and parentType.
+
+        Use this tool when a full hierarchy dump is needed; use listLocationChildren instead to read the children of one location, or listLocationDescendants for a deep traversal.
+
+        Preconditions: none beyond the location:read authority.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the full unpaginated edge list.
+
+        '
+      operationId: listLocationParents
       responses:
         '200':
           description: List of location parents returned successfully.
@@ -1448,7 +2251,7 @@ components:
       - date
     LocationRequestDTO:
       type: object
-      description: Location object to be created
+      description: Request payload for creating or updating a location
       properties:
         name:
           type: string
@@ -1686,8 +2489,8 @@ components:
           minLength: 1
         bufferType:
           type: string
-          description: Type of buffer the policy applies
-          example: FIXED_MINUTES
+          description: Type of buffer the policy applies; one of FLAT_MINUTES, PERCENTAGE_OF_TRAVEL or DISTANCE_MULTIPLIER
+          example: FLAT_MINUTES
           minLength: 1
         bufferValue:
           type: number
@@ -1855,7 +2658,7 @@ components:
       - serviceAreaId
     MobileUnitRequest:
       type: object
-      description: Mobile unit creation request body
+      description: Request payload for creating or updating a mobile unit
       properties:
         name:
           type: string
@@ -2062,7 +2865,7 @@ components:
       - maxConcurrentVehicles
     BayRequest:
       type: object
-      description: Bay creation request body
+      description: Request payload for creating a service bay
       properties:
         name:
           type: string
@@ -2071,8 +2874,8 @@ components:
           minLength: 1
         bayType:
           type: string
-          description: Type classification of the bay
-          example: LIFT
+          description: Type classification of the bay; must be a BayType value
+          example: GENERAL_SERVICE
           minLength: 1
         capacity:
           $ref: '#/components/schemas/BayCapacityRequest'
@@ -2374,7 +3177,7 @@ components:
             unit: C
     LocationPatchRequest:
       type: object
-      description: Partial location payload
+      description: Partial update payload for a location; null fields are left unchanged
       properties:
         name:
           type: string
@@ -2420,8 +3223,8 @@ components:
           example: Bay A1
         bayType:
           type: string
-          description: Type classification of the bay
-          example: LIFT
+          description: Type classification of the bay; must be a BayType value
+          example: GENERAL_SERVICE
         status:
           type: string
           description: Operational status of the bay

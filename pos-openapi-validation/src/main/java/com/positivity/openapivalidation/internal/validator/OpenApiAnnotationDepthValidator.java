@@ -76,9 +76,10 @@ public class OpenApiAnnotationDepthValidator {
         if (requestBody.getDescription() == null || requestBody.getDescription().isBlank()) {
             findings.add("request body missing description (ADR-0042 §3)");
         }
-        if (requestBody.getRequired() == null) {
-            findings.add("request body missing explicit required flag (ADR-0042 §3)");
-        }
+        // ADR-0042 §3 also wants an explicit `required` flag, but springdoc omits `required: false`
+        // (the OpenAPI default) from generated specs, so absence is indistinguishable from an
+        // explicit false. That rule is therefore enforced at the annotation level by convention
+        // (docs/OPENAPI_DESCRIPTION_STANDARD.md), not here.
         if (!hasExample(requestBody.getContent())) {
             findings.add("request body missing example (ADR-0042 §3)");
         }

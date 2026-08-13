@@ -6,6 +6,8 @@ import com.positivity.mcp.internal.dto.ToolPermissionsResponse;
 import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.internal.service.ToolPermissionAdminService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
@@ -47,8 +49,18 @@ class ToolPermissionController {
     @PreAuthorize("hasAuthority('mcp:tool:view')")
     @Operation(
             operationId = "listToolPermissions",
-            summary = "List a tool's permission grants",
-            description = "Return the permission codes currently granted to a discovered OpenAPI tool.",
+            summary = "List a Tool's Permission Grants",
+            description = """
+                    Returns the permission codes currently granted to a discovered OpenAPI tool.
+                    Use this tool to inspect why a discovered tool is or is not selectable for a caller; use \
+                    grantToolPermission or revokeToolPermission instead to change the grants.
+                    Preconditions: the named tool must exist as a discovered (source openapi) tool; discovered \
+                    tools are fail-closed and unselectable until at least one grant exists.
+                    Required inputs: toolName as a path parameter, matching the tool's registered name exactly.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with the grant set (possibly empty), and 404 when no discovered OpenAPI tool has \
+                    the given name.
+                    """,
             tags = {"MCP Tool Permissions"})
     ResponseEntity<ToolPermissionsResponse> list(@PathVariable @NonNull String toolName) {
         return ResponseEntity.ok(service.listPermissions(toolName));
@@ -62,12 +74,40 @@ class ToolPermissionController {
     @PreAuthorize("hasAuthority('mcp:tool:manage')")
     @Operation(
             operationId = "grantToolPermission",
-            summary = "Grant a permission to a tool",
-            description = "Grant a permission code to a discovered OpenAPI tool so callers holding it can select "
-                    + "the tool. Idempotent. Returns the tool's full permission set.",
+            summary = "Grant a Permission to a Tool",
+            description = """
+                    Grants a permission code to a discovered OpenAPI tool so callers holding that code can select \
+                    the tool during chat.
+                    Use this tool to open up a fail-closed discovered operation; do not use \
+                    revokeToolPermission, which removes a grant.
+                    Preconditions: the named tool must exist as a discovered (source openapi) tool; granting a \
+                    code that is already present changes nothing.
+                    Required inputs: toolName as a path parameter and permissionCode in the body, either the \
+                    literal AUTHENTICATED or a domain:resource:action code such as event-receiver:event_type:view.
+                    Emits a MCP_TOOL_PERMISSION_GRANT event; when the grant set actually changes, cached role \
+                    agents are invalidated so the tool becomes selectable on the next chat turn.
+                    Returns 201 with the tool's full permission set (idempotently for repeated grants), 404 when \
+                    no discovered OpenAPI tool has the given name, and 400 when the permission code does not match \
+                    the required pattern.
+                    """,
             tags = {"MCP Tool Permissions"})
     ResponseEntity<ToolPermissionsResponse> grant(
-            @PathVariable @NonNull String toolName, @RequestBody @Validated @NonNull ToolPermissionRequest request) {
+            @PathVariable @NonNull String toolName,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The permission code the tool should be selectable under.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Domain permission grant",
+                                                            value =
+                                                                    "{\"permissionCode\":\"event-receiver:event_type:view\"}")))
+                    @RequestBody
+                    @Validated
+                    @NonNull
+                    ToolPermissionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(service.grantPermission(toolName, request.permissionCode()));
     }
@@ -80,8 +120,21 @@ class ToolPermissionController {
     @PreAuthorize("hasAuthority('mcp:tool:manage')")
     @Operation(
             operationId = "revokeToolPermission",
-            summary = "Revoke a permission from a tool",
-            description = "Revoke a permission code from a discovered OpenAPI tool. Idempotent.",
+            summary = "Revoke a Permission From a Tool",
+            description = """
+                    Revokes a permission code from a discovered OpenAPI tool, removing it from the set that makes \
+                    the tool selectable.
+                    Use this tool to withdraw chat access to a discovered operation; do not use \
+                    grantToolPermission, which adds a grant.
+                    Preconditions: the named tool must exist as a discovered (source openapi) tool; revoking a \
+                    code that is not granted changes nothing.
+                    Required inputs: toolName as a path parameter and permissionCode as a query parameter; there \
+                    is no request body.
+                    Emits a MCP_TOOL_PERMISSION_REVOKE event; when the grant set actually changes, cached role \
+                    agents are invalidated so the tool stops being selectable.
+                    Returns 204 whether or not the code was granted (idempotent), 404 when no discovered OpenAPI \
+                    tool has the given name, and 400 when the permission code is blank.
+                    """,
             tags = {"MCP Tool Permissions"})
     ResponseEntity<Void> revoke(
             @PathVariable @NonNull String toolName, @RequestParam("permissionCode") @NotBlank @NonNull String code) {

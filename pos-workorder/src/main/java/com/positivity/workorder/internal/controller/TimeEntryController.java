@@ -28,9 +28,19 @@ public class TimeEntryController {
             name = "bearerAuth",
             scopes = {"workorder:timeEntry:approve"})
     @PreAuthorize("hasAuthority('workorder:timeEntry:approve')")
-    @Operation(
-            summary = "Approve a time entry in SUBMITTED state",
-            description = "Approve a submitted time entry so it can move forward in the workorder timekeeping workflow")
+    @Operation(operationId = "approveTimeEntry", summary = "Approve a Submitted Time Entry", description = """
+                    Approves a SUBMITTED time entry, stamping the approving user and decision timestamp so the \
+                    hours can flow onward in the workorder timekeeping workflow.
+                    Use this tool when a supervisor accepts a technician's submitted hours; do not use \
+                    rejectTimeEntry, which marks the entry REJECTED with a reason instead.
+                    Preconditions: the time entry must exist and be in SUBMITTED status; entries already \
+                    APPROVED or REJECTED cannot be re-decided.
+                    Required inputs: timeEntryId (UUID) as a path parameter; there is no request body, and the \
+                    approver identity is taken from the security context.
+                    Emits a WORKORDER_TIME_ENTRY_APPROVED event recording the decision.
+                    Returns 404 when no time entry exists for the id, and 409 when the entry is not in \
+                    SUBMITTED status.
+                    """)
     public ResponseEntity<TimeEntryResponse> approveTimeEntry(@PathVariable UUID timeEntryId) {
         return ResponseEntity.ok(TimeEntryMapper.toResponse(timeEntryService.approveTimeEntry(timeEntryId)));
     }
@@ -41,11 +51,36 @@ public class TimeEntryController {
             name = "bearerAuth",
             scopes = {"workorder:timeEntry:reject"})
     @PreAuthorize("hasAuthority('workorder:timeEntry:reject')")
-    @Operation(
-            summary = "Reject a time entry in SUBMITTED state",
-            description = "Reject a submitted time entry and record the rejection details for follow-up")
+    @Operation(operationId = "rejectTimeEntry", summary = "Reject a Submitted Time Entry", description = """
+                    Rejects a SUBMITTED time entry, recording the rejection reason, the deciding user, and the \
+                    decision timestamp for technician follow-up.
+                    Use this tool when submitted hours are wrong and must be sent back; do not use \
+                    approveTimeEntry, which accepts the entry as-is.
+                    Preconditions: the time entry must exist and be in SUBMITTED status; entries already \
+                    APPROVED or REJECTED cannot be re-decided.
+                    Required inputs: timeEntryId (UUID) as a path parameter and a body with a non-blank \
+                    rejectionReason; the deciding identity is taken from the security context.
+                    Emits a WORKORDER_TIME_ENTRY_REJECTED event carrying the rejection reason.
+                    Returns 404 when no time entry exists for the id, and 409 when the entry is not in \
+                    SUBMITTED status.
+                    """)
     public ResponseEntity<TimeEntryResponse> rejectTimeEntry(
-            @PathVariable UUID timeEntryId, @Valid @RequestBody RejectTimeEntryRequest request) {
+            @PathVariable UUID timeEntryId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Rejection details explaining why the submitted hours are being sent back.",
+                            required = true,
+                            content =
+                                    @io.swagger.v3.oas.annotations.media.Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                            name = "Rejection",
+                                                            value = """
+                                                                    {"rejectionReason":"Hours overlap an existing approved entry for the same day"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    RejectTimeEntryRequest request) {
         return ResponseEntity.ok(TimeEntryMapper.toResponse(timeEntryService.rejectTimeEntry(timeEntryId, request)));
     }
 }

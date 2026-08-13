@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -46,9 +47,24 @@ public class ShortageController {
     @Operation(
             operationId = "listShortageOptions",
             summary = "List computed shortage options",
-            description = "Computes the resolution options (backorder, substitute, transfer-in, emergency purchase,"
-                    + " cancel) for a shortage, each with an expected-resolution date and a cost delta where"
-                    + " computable.",
+            description = """
+                    Computes the live resolution options for an inventory shortage: BACKORDER (always offered; \
+                    expected date from the SKU's replenishment lead time at the site, defaulting to 7 days), \
+                    SUBSTITUTE (substitution-group members with positive ATP at the site, with cost delta), \
+                    TRANSFER_IN (sibling sites whose surplus of on-hand minus allocated covers the shortage, 3-day \
+                    lead), EMERGENCY_PURCHASE (always offered; vendor-selected lead and cost delta, defaulting to \
+                    14 days) and CANCEL_LINE (always offered, immediate).
+                    Use this tool to present choices before calling resolveShortage with the selected optionType; \
+                    do not call resolveShortage blind, because SUBSTITUTE and TRANSFER_IN need fields \
+                    (substituteSku, sourceLocationId) that this computation supplies.
+                    Preconditions: none beyond a positive shortQuantity; SUBSTITUTE and TRANSFER_IN options appear \
+                    only when locationId is provided, and SUBSTITUTE additionally requires sku to parse as a \
+                    product UUID.
+                    Required inputs: allocationId (UUID), sku (non-blank) and shortQuantity (positive integer); \
+                    workorderLineId and locationId are optional but drive which options appear.
+                    No events are emitted and no state changes; this is a read-only computation.
+                    Returns 400 when shortQuantity is not positive or sku is blank.
+                    """,
             tags = {"Shortage Resolution"})
     @ApiResponse(
             responseCode = "200",
@@ -85,7 +101,28 @@ public class ShortageController {
     @Operation(
             operationId = "resolveShortage",
             summary = "Resolve shortage",
-            description = "Resolves inventory shortage using a selected strategy.",
+            description = """
+                    Executes one chosen shortage-resolution option atomically and records the created artifact: \
+                    BACKORDER opens a backorder, SUBSTITUTE reserves the substitute SKU through the reservation \
+                    upsert, TRANSFER_IN creates a cross-site transfer order, EMERGENCY_PURCHASE stores a purchase \
+                    suggestion, and CANCEL_LINE cancels the workorder line's reservation.
+                    Use this tool after picking an option from listShortageOptions; do not use \
+                    createOrUpdateReservation directly for substitutes or cancelReservation directly for line \
+                    cancels when an auditable, idempotent resolution record is wanted.
+                    Preconditions: option-specific — workorderLineId for BACKORDER and SUBSTITUTE, substituteSku \
+                    (a product UUID with positive ATP at locationId when locationId is given) for SUBSTITUTE, and \
+                    both sourceLocationId and locationId for TRANSFER_IN.
+                    Required inputs: idempotencyKey (unique per resolution attempt — a replay with the same key \
+                    returns the stored result without re-executing), allocationId (UUID), sku, a positive \
+                    shortQuantity and optionType (BACKORDER, SUBSTITUTE, TRANSFER_IN, EMERGENCY_PURCHASE or \
+                    CANCEL_LINE), plus the option-specific fields above; notes is optional free text.
+                    Emits an INVENTORY_SHORTAGE_RESOLVE event and persists a shortage-resolution record \
+                    referencing the artifact (BACKORDER, RESERVATION, TRANSFER_ORDER, PURCHASE_SUGGESTION or NONE).
+                    Returns 422 with per-case codes when execution preconditions fail — MISSING_FIELD for an \
+                    absent option-specific field, SUBSTITUTE_UNAVAILABLE when the substitute has no ATP at the \
+                    site, INVALID_IDENTIFIER when substituteSku is not a UUID — and 400 when idempotencyKey, \
+                    allocationId, sku or optionType is missing.
+                    """,
             tags = {"Shortage Resolution"})
     @ApiResponse(
             responseCode = "200",
@@ -107,7 +144,26 @@ public class ShortageController {
             description = "Unable to resolve shortage under current constraints",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ShortageResolutionResultDto> resolveShortage(
-            @Valid @RequestBody ShortageResolveRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The chosen resolution option with its idempotency key and the"
+                                    + " option-specific fields listShortageOptions supplied.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(name = "Backorder the short demand", value = """
+                                                                    {"idempotencyKey":"shortage-resolve-018f0a1b-0001",
+                                                                     "allocationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01",
+                                                                     "optionType":"BACKORDER",
+                                                                     "sku":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02",
+                                                                     "shortQuantity":3,
+                                                                     "locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a0c",
+                                                                     "workorderLineId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    ShortageResolveRequest request) {
         return ResponseEntity.ok(shortageResolutionService.resolveShortage(request));
     }
 }

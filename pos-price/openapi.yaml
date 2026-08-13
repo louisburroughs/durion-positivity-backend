@@ -31,14 +31,40 @@ paths:
     post:
       tags:
       - Promotion Offers
-      summary: Create promotion offer
-      description: Creates a new promotion offer with code, lifecycle settings, and discount policy.
-      operationId: createOffer
+      summary: Create Promotion Offer
+      description: 'Creates a promotion offer in DRAFT status with a unique promo code, a validity window, and a discount policy.
+
+        Use this tool to define a new promotion; do not use activatePromotionOffer, which only transitions an existing offer to ACTIVE, and note that a DRAFT offer cannot be applied until activated.
+
+        Preconditions: no offer may already exist with the same promoCode, and startDate must not be after endDate.
+
+        Required inputs: promoCode (max 64 characters), name, discountType (PERCENT_LABOR, PERCENT_PARTS, or FIXED_INVOICE), discountValue (minimum 0.01, two decimal places), startDate, and endDate; usageLimit and storeCode are optional and default to unlimited usage and no store scoping.
+
+        Emits a PROMOTION_OFFER_CREATE event and persists the offer with status DRAFT and a zero usage count.
+
+        Returns 409 when the promoCode already exists, and 422 when startDate is after endDate.
+
+        '
+      operationId: createPromotionOffer
       requestBody:
+        description: 'Promotion offer definition: promo code, discount policy, and validity window.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreatePromotionOfferRequest'
+            examples:
+              Percent labor promotion:
+                description: Percent labor promotion
+                value:
+                  promoCode: SUMMER20
+                  name: Summer Labor Discount
+                  description: 20% off labor for seasonal service
+                  discountType: PERCENT_LABOR
+                  discountValue: 20.0
+                  startDate: 2026-06-01
+                  endDate: 2026-08-31
+                  usageLimit: 100
+                  storeCode: NYC-001
         required: true
       responses:
         '201':
@@ -59,6 +85,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PromotionOfferResponse'
+        '422':
+          description: startDate is after endDate.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionOfferResponse'
         '403':
           description: Forbidden.
           content:
@@ -74,9 +106,21 @@ paths:
     get:
       tags:
       - Promotion Eligibility Rules
-      summary: List eligibility rules for promotion offer
-      description: Returns all eligibility rules configured for the specified promotion offer.
-      operationId: getRules
+      summary: List Eligibility Rules For Promotion Offer
+      description: 'Lists every eligibility rule currently attached to the promotion offer identified by promotionId.
+
+        Use this tool to inspect a promotion''s audience constraints before editing them; use evaluatePromotionEligibility instead to test whether a concrete account, vehicle, or campaign context passes those rules.
+
+        Preconditions: none beyond the pricing:promotion:view authority; an unknown promotionId is not rejected.
+
+        Required inputs: promotionId (UUID) as a path parameter; there is no request body, filtering, or paging.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty array both when the promotion has no rules and when the promotionId matches no offer, so this operation cannot verify that a promotion exists.
+
+        '
+      operationId: listPromotionEligibilityRules
       parameters:
       - name: promotionId
         in: path
@@ -87,14 +131,6 @@ paths:
       responses:
         '200':
           description: Eligibility rules returned.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/EligibilityRuleResponse'
-        '404':
-          description: Promotion offer not found.
           content:
             application/json:
               schema:
@@ -117,9 +153,21 @@ paths:
     post:
       tags:
       - Promotion Eligibility Rules
-      summary: Add eligibility rule to promotion offer
-      description: Creates and attaches a new eligibility rule to the specified promotion offer.
-      operationId: addRule
+      summary: Add Eligibility Rule To Promotion Offer
+      description: 'Creates an eligibility rule and attaches it to the promotion offer identified by promotionId, constraining who may receive the promotion.
+
+        Use this tool when a promotion must be limited by account list, fleet size, vehicle tag, audience type, or campaign code; do not use evaluatePromotionEligibility, which tests a context against the existing rules without changing them.
+
+        Preconditions: the promotion offer must exist; rules may be added regardless of the offer''s status.
+
+        Required inputs: conditionType (ACCOUNT_ID_LIST, VEHICLE_TAG, ACCOUNT_FLEET_SIZE, AUDIENCE_TYPE, or CAMPAIGN_CODE), an operator supported by that type (IN, NOT_IN, EQUALS, GREATER_THAN_OR_EQUAL_TO), and value (max 255 characters; comma-separated for list types); ruleCombination is optional and defaults to AND, and at evaluation time the first rule''s combination governs all rules.
+
+        Emits a PROMOTION_RULE_CREATE event and the rule takes effect on the next eligibility evaluation.
+
+        Returns 404 when the promotion offer does not exist, and 400 when conditionType, operator, or value is missing or invalid.
+
+        '
+      operationId: createPromotionEligibilityRule
       parameters:
       - name: promotionId
         in: path
@@ -128,10 +176,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: 'Eligibility rule definition: the condition, operator, and comparison value to attach.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AddEligibilityRuleRequest'
+            examples:
+              Fleet size rule:
+                description: Fleet size rule
+                value:
+                  conditionType: ACCOUNT_FLEET_SIZE
+                  operator: GREATER_THAN_OR_EQUAL_TO
+                  value: '25'
+                  ruleCombination: AND
         required: true
       responses:
         '201':
@@ -167,9 +224,21 @@ paths:
     post:
       tags:
       - Promotion Eligibility Rules
-      summary: Evaluate promotion eligibility
-      description: Evaluates whether a promotion offer is eligible for the provided evaluation context.
-      operationId: evaluateEligibility
+      summary: Evaluate Promotion Eligibility
+      description: 'Evaluates whether the supplied account, vehicle, audience, and campaign context passes the eligibility rules attached to a promotion offer, returning an eligible flag and a reason code.
+
+        Use this tool to pre-check eligibility without consuming promotion usage; do not use applyPromotionOffer, which applies the discount and increments the offer''s usage count.
+
+        Preconditions: the first rule''s ruleCombination governs the evaluation (AND requires every rule to pass, OR requires any one); a promotion with no rules, or an unknown promotionId, evaluates to eligible because only the stored rules are consulted.
+
+        Required inputs: a context body whose fields are all optional; accountId and vehicleId (UUIDs), audienceType (compared case-insensitively), and campaignCode, where omitting a field that a rule needs fails that rule with a missing-context reason code such as MISSING_ACCOUNT_CONTEXT.
+
+        Emits a PROMOTION_RULE_EVALUATE event; no promotion state or usage count changes.
+
+        Returns 200 with eligible true or false and a reason code such as ELIGIBLE, ACCOUNT_NOT_IN_LIST, FLEET_SIZE_TOO_SMALL, or VEHICLE_TAG_NOT_PRESENT; 400 occurs only for an unparseable body.
+
+        '
+      operationId: evaluatePromotionEligibility
       parameters:
       - name: promotionId
         in: path
@@ -178,10 +247,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Account, vehicle, audience, and campaign context the promotion's rules are evaluated against.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/EligibilityContext'
+            examples:
+              Fleet account context:
+                description: Fleet account context
+                value:
+                  accountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  vehicleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  audienceType: COMMERCIAL
+                  campaignCode: SPRING-FLEET-2026
         required: true
       responses:
         '200':
@@ -192,12 +270,6 @@ paths:
                 $ref: '#/components/schemas/EligibilityDecisionResponse'
         '400':
           description: Invalid evaluation request.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EligibilityDecisionResponse'
-        '404':
-          description: Promotion offer not found.
           content:
             application/json:
               schema:
@@ -217,14 +289,42 @@ paths:
     post:
       tags:
       - Promotion Offers
-      summary: Apply promotion offer during estimate pricing
-      description: Applies a promotion offer to pricing inputs and returns resulting discount and adjusted totals.
-      operationId: applyPromotion
+      summary: Apply Promotion Offer During Estimate Pricing
+      description: 'Applies a promotion code to an estimate''s pricing context and returns the discount adjustment and the adjusted total.
+
+        Use this tool at estimate time to price in a promotion; use evaluatePromotionEligibility instead for a dry-run check, because this operation consumes one usage against the offer''s usageLimit.
+
+        Preconditions: the offer must be ACTIVE, the current date must fall within startDate and endDate, the context must pass the offer''s eligibility rules, the usage limit must not be exhausted, and no promo code may already be applied because only one promotion is allowed per estimate.
+
+        Required inputs: promotionCode and estimateContext with estimateId, customerId, subtotal, and at least one line item; PERCENT_LABOR and PERCENT_PARTS both currently discount the full subtotal by the percentage, while FIXED_INVOICE subtracts the fixed discountValue.
+
+        Emits a PROMOTION_OFFER_APPLY event and atomically increments the offer''s usage count.
+
+        Returns 400 with code PROMO_NOT_FOUND when the code is unknown, PROMO_NOT_APPLICABLE when the offer is inactive, outside its date range, ineligible for the context, or over its usage limit, and PROMO_MULTIPLE_NOT_ALLOWED when the estimate already carries an applied promo code.
+
+        '
+      operationId: applyPromotionOffer
       requestBody:
+        description: Promotion code plus the estimate context (customer, line items, subtotal) it is applied against.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ApplyPromotionRequest'
+            examples:
+              Apply to estimate:
+                description: Apply to estimate
+                value:
+                  promotionCode: SUMMER20
+                  estimateContext:
+                    estimateId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                    customerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                    vehicleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
+                    lineItems:
+                    - sku: P001
+                      quantity: 1
+                      unitPrice: 500.0
+                    subtotal: 500.0
+                    appliedPromoCodes: []
         required: true
       responses:
         '200':
@@ -234,13 +334,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApplyPromotionResponse'
         '400':
-          description: Invalid promotion application request.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApplyPromotionResponse'
-        '404':
-          description: Promotion offer not found or not eligible.
+          description: Invalid request, unknown promo code, promotion not applicable, or promotion already applied.
           content:
             application/json:
               schema:
@@ -260,14 +354,38 @@ paths:
     post:
       tags:
       - Price Restrictions
-      summary: Override price restrictions
-      description: Issues an override for price restrictions. Requires pricing:restriction:override authority.
-      operationId: overrideRestrictions
+      summary: Override Price Restrictions
+      description: 'Issues an audited, time-boxed override of a sale-restriction rule for a specific transaction and product.
+
+        Use this tool after evaluatePriceRestrictions returns ALLOW_WITH_OVERRIDE; do not use deactivateRestrictionRule, which retires the rule for everyone instead of exempting one transaction.
+
+        Preconditions: the referenced restriction rule must exist; the rule''s overrideable flag is not re-checked here, so callers must honour a BLOCK decision from evaluation rather than overriding it.
+
+        Required inputs: ruleId, transactionId, and productId (UUIDs), overrideContext (BROWSE, QUOTE, CHECKOUT, INVOICE_FINALIZE, or COMMIT_SALE), and reasonCode; notes and approvedBy are optional.
+
+        Emits a PRICE_RESTRICTIONS_OVERRIDE event and persists an ISSUED audit record capturing the actor and the rule''s policyVersion; the returned overrideId expires 24 hours after issue.
+
+        Returns 404 when the referenced restriction rule does not exist.
+
+        '
+      operationId: overridePriceRestriction
       requestBody:
+        description: Override justification tying a restriction rule to the transaction and product it is waived for.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RestrictionOverrideRequest'
+            examples:
+              Manager-approved override:
+                description: Manager-approved override
+                value:
+                  ruleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4c01
+                  transactionId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4c02
+                  productId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01
+                  overrideContext: CHECKOUT
+                  reasonCode: MANAGER_APPROVAL
+                  notes: Customer is a licensed reseller
+                  approvedBy: user-001
         required: true
       responses:
         '200':
@@ -294,6 +412,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RestrictionOverrideResponse'
+        '404':
+          description: Restriction rule not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestrictionOverrideResponse'
       security:
       - bearerAuth:
         - pricing:restriction:override
@@ -303,14 +427,36 @@ paths:
     post:
       tags:
       - Price Restrictions
-      summary: Evaluate price restrictions
-      description: Evaluates whether products are subject to restrictions in the given context.
-      operationId: evaluateRestrictions
+      summary: Evaluate Price Restrictions
+      description: 'Evaluates each submitted product and context entry against active sale-restriction rules and returns a per-item decision of ALLOW, BLOCK, ALLOW_WITH_OVERRIDE, or RESTRICTION_UNKNOWN.
+
+        Use this tool before quoting or selling a product to learn whether the sale is blocked or needs an override; do not use overridePriceRestriction, which records the override itself after a decision of ALLOW_WITH_OVERRIDE.
+
+        Preconditions: none; items with no matching active rule resolve to ALLOW.
+
+        Required inputs: items (at least one), each with productId (UUID), locationTag, serviceTag, and context (BROWSE, QUOTE, CHECKOUT, INVOICE_FINALIZE, or COMMIT_SALE); any matching rule with overrideable false forces BLOCK, otherwise matching rules yield ALLOW_WITH_OVERRIDE with the matched ruleIds.
+
+        Emits a PRICE_RESTRICTIONS_EVALUATE event; the evaluation itself is read-only and each item is bounded by an 800 ms timeout.
+
+        Returns 503 when evaluation fails or times out for an item in a commit-path context (CHECKOUT, INVOICE_FINALIZE, COMMIT_SALE), while the same failure on BROWSE or QUOTE degrades that item to a RESTRICTION_UNKNOWN decision instead of an error.
+
+        '
+      operationId: evaluatePriceRestrictions
       requestBody:
+        description: Batch of product/location/service/context entries to test against the active restriction rules.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RestrictionEvaluationRequest'
+            examples:
+              Checkout evaluation:
+                description: Checkout evaluation
+                value:
+                  items:
+                  - productId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01
+                    locationTag: RETAIL_STORE
+                    serviceTag: POS_SALE
+                    context: CHECKOUT
         required: true
       responses:
         '200':
@@ -345,9 +491,21 @@ paths:
     get:
       tags:
       - Restriction Rules
-      summary: List all active restriction rules
-      description: Returns all currently active price restriction rules that can affect pricing decisions.
-      operationId: listRules
+      summary: List All Active Restriction Rules
+      description: 'Lists every currently active sale-restriction rule that can affect pricing and sale decisions.
+
+        Use this tool to review the standing restriction policy; use getRestrictionRuleById instead to fetch one rule, including deactivated rules, which this listing omits.
+
+        Preconditions: none beyond an authenticated caller.
+
+        Required inputs: none; there is no request body, filtering, or paging.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty array when no active restriction rules exist.
+
+        '
+      operationId: listRestrictionRules
       responses:
         '200':
           description: List of restriction rules.
@@ -372,14 +530,38 @@ paths:
     post:
       tags:
       - Restriction Rules
-      summary: Create a restriction rule
-      description: Creates a price restriction rule for a product, location tag, and service tag combination.
-      operationId: createRule
+      summary: Create A Restriction Rule
+      description: 'Creates an active sale-restriction rule that blocks or gates a product for a location tag and service tag combination.
+
+        Use this tool to configure a standing restriction policy; do not use overridePriceRestriction, which grants a one-time transaction exemption from an existing rule.
+
+        Preconditions: none are checked beyond authorization; duplicate rules for the same product and tag combination are not rejected, so each call appends a new rule.
+
+        Required inputs: productId (UUID), locationTag (ALL_LOCATIONS, RETAIL_STORE, WAREHOUSE, MOBILE_SERVICE, FRANCHISE, or TEST_LOCATION), serviceTag (POS_SALE, WORKORDER, ESTIMATE, INVOICE, or DELIVERY), effectiveFrom (date), and overrideable; effectiveTo is optional, and policyVersion defaults to 1 when omitted.
+
+        Emits a PRICE_RESTRICTION_RULE_CREATE event and the rule participates in evaluation immediately; a rule with overrideable false forces a BLOCK decision that cannot be overridden.
+
+        Returns 201 with the stored rule, and 400 when a required field is missing or a tag is not a valid enum value.
+
+        '
+      operationId: createRestrictionRule
       requestBody:
+        description: Restriction rule definition scoping a product restriction to location and service tags.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateRestrictionRuleRequest'
+            examples:
+              Overrideable retail restriction:
+                description: Overrideable retail restriction
+                value:
+                  productId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01
+                  locationTag: RETAIL_STORE
+                  serviceTag: POS_SALE
+                  effectiveFrom: 2026-03-01
+                  effectiveTo: 2026-12-31
+                  policyVersion: 3
+                  overrideable: true
         required: true
       responses:
         '201':
@@ -415,14 +597,37 @@ paths:
     post:
       tags:
       - Price Quotes
-      summary: Calculate contextual price quote
-      description: Calculates a contextual price quote using request inputs such as product, location, customer tier, and pricing context.
+      summary: Calculate Contextual Price Quote
+      description: 'Calculates a contextual unit and extended price for a product by resolving, in order, the base MSRP effective at the pricing instant, then an active location price override that replaces the running price, then a customer tier discount rate applied to the running price.
+
+        Use this tool to price a line for an estimate or cart; do not use applyPromotionOffer here, because promotions are layered onto the estimate separately, and use getPricingSnapshotById to re-read a previously captured price instead of recalculating.
+
+        Preconditions: a base price for the product and quote currency must be effective at the pricing instant; location overrides and tier rules are optional layers that apply only when active.
+
+        Required inputs: productId, locationId, and customerTierId (UUIDs) plus quantity (minimum 1); effectiveTimestamp defaults to the current time, and currency defaults to the configured pos.price.default-currency (USD unless overridden).
+
+        Emits a PRICE_QUOTE_CALCULATE event but writes no pricing state; the unit price is rounded half-even to two decimals, priceSource is MSRP_FALLBACK when only the base price applied and CALCULATED otherwise, and each resolution step is itemised in pricingBreakdown.
+
+        Returns 404 with code PRICE_BASE_UNAVAILABLE when no base price is effective for the product, currency, and instant.
+
+        '
       operationId: calculatePriceQuote
       requestBody:
+        description: Pricing context identifying the product, quantity, location, customer tier, and optional instant and currency.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PriceQuoteRequest'
+            examples:
+              Tiered quote:
+                description: Tiered quote
+                value:
+                  productId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01
+                  quantity: 2
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b02
+                  customerTierId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b03
+                  effectiveTimestamp: 2026-03-05 21:15:00+00:00
+                  currency: USD
         required: true
       responses:
         '200':
@@ -457,14 +662,30 @@ paths:
     post:
       tags:
       - Price Normalization
-      summary: Normalize pricing
-      description: Normalize and standardize pricing data across the system.
+      summary: Normalize Pricing Data
+      description: 'Normalizes and standardizes pricing data across the system; this operation is a declared placeholder that is not yet implemented.
+
+        Use this tool only to probe for the future normalization capability; use calculatePriceQuote instead for any real pricing work, since no normalization logic exists yet.
+
+        Preconditions: none; any authenticated caller is accepted.
+
+        Required inputs: none are read; the optional JSON body is accepted but ignored.
+
+        Emits a PRICE_NORMALIZATION_NORMALIZE event even though no normalization is performed and no state changes.
+
+        Returns 501 unconditionally until the operation is implemented.
+
+        '
       operationId: normalizePricing
       requestBody:
+        description: Optional free-form normalization payload; currently ignored because the endpoint is unimplemented.
         content:
           application/json:
             schema:
               type: object
+            examples:
+              Empty payload:
+                description: Empty payload
       responses:
         '501':
           description: Not yet implemented.
@@ -492,24 +713,55 @@ paths:
     post:
       tags:
       - Price Bulk Ingest API
-      summary: Bulk ingest records
-      description: Accepts a batch of domain records for bulk import. Returns per-record results.
-      operationId: bulkIngest
+      summary: Bulk Import Base Price Records
+      description: 'Bulk-imports base price (MSRP) records, appending an effective-dated price window per product and currency.
+
+        Use this tool for batch price loads from an upstream catalog; use calculatePriceQuote instead to read the price effective at a pricing instant, since quoting resolves these windows.
+
+        Preconditions: each record''s effectiveFrom must start after the product''s current window begins; re-submitting the current open window''s unchanged price is idempotent and returns the existing id.
+
+        Required inputs: jobId and locationId (UUIDs) and records (at least one), each record carrying productId (UUID string), msrp (decimal string), currency (ISO 4217 code), and effectiveFrom as an ISO-8601 instant such as 2026-03-01T00:00:00Z; operatorId is optional.
+
+        Emits a PRICE_BULK_INGEST event; a new window closes the previous open window at its effectiveFrom and rows are processed independently, so one bad row does not abort the batch.
+
+        Returns 200 with per-row results even when rows fail, marking failed rows with errorCode PRICE_INGEST_FAILED (including overlapping-window conflicts and unparseable values), and 400 when the batch envelope itself is invalid.
+
+        '
+      operationId: bulkIngestBasePrices
       requestBody:
+        description: Batch envelope of base-price records to ingest, scoped to a job and location.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BulkIngestRequestBasePriceBulkIngestRecord'
+            examples:
+              Single price window:
+                description: Single price window
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4d01
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4d02
+                  operatorId: user-jdoe
+                  records:
+                  - productId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01
+                    msrp: '125.50'
+                    currency: USD
+                    effectiveFrom: 2026-03-01 00:00:00+00:00
         required: true
       responses:
         '200':
-          description: Batch processed (check per-record success/failure in response)
+          description: Batch processed; check per-record success and failure results.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkIngestResponse'
         '400':
-          description: Invalid request payload
+          description: Invalid batch envelope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+        '403':
+          description: Insufficient permissions.
           content:
             application/json:
               schema:
@@ -523,9 +775,21 @@ paths:
     patch:
       tags:
       - Promotion Offers
-      summary: Deactivate promotion offer
-      description: Deactivates a promotion offer so it is no longer eligible for application.
-      operationId: deactivateOffer
+      summary: Deactivate Promotion Offer
+      description: 'Transitions an ACTIVE promotion offer to INACTIVE so its promo code is no longer accepted by applyPromotionOffer.
+
+        Use this tool to withdraw a live offer while keeping its history and rules; do not use deletePromotionEligibilityRule, which removes a single audience rule rather than the offer.
+
+        Preconditions: the offer must exist and currently be ACTIVE; DRAFT, INACTIVE, and EXPIRED offers cannot be deactivated.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits a PROMOTION_OFFER_DEACTIVATE event; the offer can later be re-enabled with activatePromotionOffer.
+
+        Returns 404 when the offer does not exist, and 422 when the offer is not currently ACTIVE.
+
+        '
+      operationId: deactivatePromotionOffer
       parameters:
       - name: id
         in: path
@@ -546,6 +810,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PromotionOfferResponse'
+        '422':
+          description: Promotion offer is not currently ACTIVE.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionOfferResponse'
         '403':
           description: Forbidden.
           content:
@@ -561,9 +831,21 @@ paths:
     patch:
       tags:
       - Promotion Offers
-      summary: Activate promotion offer
-      description: Activates a promotion offer so it becomes eligible for application.
-      operationId: activateOffer
+      summary: Activate Promotion Offer
+      description: 'Transitions a promotion offer to ACTIVE so applyPromotionOffer will accept its promo code within the validity window.
+
+        Use this tool to publish a DRAFT offer or re-enable an INACTIVE one; do not use createPromotionOffer, which creates a new offer that still starts in DRAFT.
+
+        Preconditions: the offer must exist, must not be EXPIRED, and its endDate must not already be in the past.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits a PROMOTION_OFFER_ACTIVATE event and sets the status to ACTIVE immediately.
+
+        Returns 404 when the offer does not exist, and 422 when the offer is EXPIRED or its end date has already passed.
+
+        '
+      operationId: activatePromotionOffer
       parameters:
       - name: id
         in: path
@@ -584,7 +866,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PromotionOfferResponse'
-        '409':
+        '422':
           description: Promotion offer cannot be activated in current state.
           content:
             application/json:
@@ -605,9 +887,21 @@ paths:
     get:
       tags:
       - Promotion Offers
-      summary: Get promotion offer by ID
-      description: Retrieves a promotion offer using its unique identifier.
-      operationId: getOfferById
+      summary: Get Promotion Offer By ID
+      description: 'Returns the full promotion offer, including status, discount policy, validity window, and usage counters.
+
+        Use this tool when the promotion offer''s UUID is already known; use getPromotionOfferByCode instead when only the customer-facing promo code is available.
+
+        Preconditions: the promotion offer must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no promotion offer exists for the supplied id.
+
+        '
+      operationId: getPromotionOfferById
       parameters:
       - name: id
         in: path
@@ -643,9 +937,21 @@ paths:
     get:
       tags:
       - Promotion Offers
-      summary: Get promotion offer by code
-      description: Retrieves a promotion offer using its promotion code.
-      operationId: getOfferByCode
+      summary: Get Promotion Offer By Code
+      description: 'Returns the promotion offer that owns the supplied customer-facing promo code.
+
+        Use this tool when only the promo code from marketing material is known; use getPromotionOfferById instead when the offer''s UUID is available.
+
+        Preconditions: an offer with exactly that promoCode must exist; the lookup is an exact match on the code.
+
+        Required inputs: promoCode (max 64 characters) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no promotion offer exists for the supplied code.
+
+        '
+      operationId: getPromotionOfferByCode
       parameters:
       - name: promoCode
         in: path
@@ -680,9 +986,21 @@ paths:
     get:
       tags:
       - Pricing Snapshots
-      summary: Get pricing snapshot by ID
-      description: Retrieves an immutable pricing snapshot using its snapshot identifier.
-      operationId: getSnapshot
+      summary: Get Pricing Snapshot By ID
+      description: 'Returns an immutable pricing snapshot that captured the prices, applied rules, and policy version of a past pricing decision.
+
+        Use this tool to audit or re-display exactly what was priced at capture time; do not use calculatePriceQuote, which computes a fresh price that may differ from the recorded one.
+
+        Preconditions: a snapshot with the supplied id must have been persisted by an earlier pricing flow.
+
+        Required inputs: snapshotId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; snapshots are immutable and this is a read-only projection.
+
+        Returns 404 with code SNAPSHOT_NOT_FOUND when no snapshot exists for the supplied id.
+
+        '
+      operationId: getPricingSnapshotById
       parameters:
       - name: snapshotId
         in: path
@@ -717,9 +1035,21 @@ paths:
     get:
       tags:
       - Restriction Rules
-      summary: Get a restriction rule by ID
-      description: Returns the active or inactive restriction rule identified by the supplied rule ID.
-      operationId: getRuleById
+      summary: Get A Restriction Rule By ID
+      description: 'Returns a single sale-restriction rule, active or inactive, identified by its rule id.
+
+        Use this tool when the rule id is already known, typically from an evaluation result''s ruleIds; use listRestrictionRules instead to browse the active rule set.
+
+        Preconditions: the rule must exist; inactive rules remain readable through this operation.
+
+        Required inputs: ruleId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no restriction rule exists for the supplied id.
+
+        '
+      operationId: getRestrictionRuleById
       parameters:
       - name: ruleId
         in: path
@@ -753,9 +1083,21 @@ paths:
     delete:
       tags:
       - Restriction Rules
-      summary: Deactivate a restriction rule
-      description: Deactivates the specified restriction rule so it no longer participates in price restriction evaluation.
-      operationId: deactivateRule
+      summary: Deactivate A Restriction Rule
+      description: 'Deactivates a sale-restriction rule so it no longer participates in restriction evaluation.
+
+        Use this tool to retire a standing restriction for everyone; do not use overridePriceRestriction, which leaves the rule active and exempts only a single transaction.
+
+        Preconditions: the rule must exist and still be active; deactivation is not idempotent, so repeating it fails.
+
+        Required inputs: ruleId (UUID) as a path parameter; there is no request body.
+
+        Emits a PRICE_RESTRICTION_RULE_DEACTIVATE event, sets active to false, and stamps effectiveTo with the current date.
+
+        Returns 404 when no restriction rule exists for the supplied id; calling it on an already inactive rule produces a server error rather than a no-op.
+
+        '
+      operationId: deactivateRestrictionRule
       parameters:
       - name: ruleId
         in: path
@@ -797,9 +1139,21 @@ paths:
     delete:
       tags:
       - Promotion Eligibility Rules
-      summary: Delete eligibility rule
-      description: Deletes an eligibility rule from the specified promotion offer.
-      operationId: deleteRule
+      summary: Delete Promotion Eligibility Rule
+      description: 'Deletes a single eligibility rule from a promotion offer, widening the promotion''s audience from the next evaluation onward.
+
+        Use this tool to remove one constraint while keeping the offer and its other rules; do not use deactivatePromotionOffer, which withdraws the entire offer rather than one rule.
+
+        Preconditions: a rule with ruleId must exist and belong to the promotion identified by promotionId.
+
+        Required inputs: promotionId (UUID) and ruleId (UUID) as path parameters; there is no request body.
+
+        Emits a PROMOTION_RULE_DELETE event; the deletion is permanent and cannot be undone.
+
+        Returns 404 when no rule with ruleId exists under that promotion, including when the rule belongs to a different offer.
+
+        '
+      operationId: deletePromotionEligibilityRule
       parameters:
       - name: promotionId
         in: path

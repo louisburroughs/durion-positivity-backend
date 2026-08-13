@@ -58,8 +58,20 @@ public class BackorderController {
             scopes = {"inventory:shortage:view"})
     @PreAuthorize("hasAuthority('inventory:shortage:view')")
     @Operation(
+            operationId = "listBackorders",
             summary = "List backorders",
-            description = "Lists backorders filtered by status, SKU, location, and workorder line",
+            description = """
+                    Lists backorders — unfulfilled workorder-line demand held open until availability covers it — \
+                    newest first.
+                    Use this tool to monitor open shortages awaiting stock; use getBackorder instead when the \
+                    backorderId is already known, and note backorders are opened by the shortage flows \
+                    (resolveShortage with BACKORDER), not by any direct create endpoint.
+                    Preconditions: none; an empty result is not an error.
+                    Required inputs: none — status (OPEN, RESOLVED or CANCELLED), sku, locationId and \
+                    workorderLineId are optional filters combined with AND.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty array when nothing matches.
+                    """,
             tags = {"Backorders"})
     @ApiResponse(
             responseCode = "200",
@@ -90,8 +102,20 @@ public class BackorderController {
             scopes = {"inventory:shortage:view"})
     @PreAuthorize("hasAuthority('inventory:shortage:view')")
     @Operation(
+            operationId = "getBackorder",
             summary = "Get backorder details",
-            description = "Retrieves one backorder",
+            description = """
+                    Returns one backorder with its shortage quantity, lifecycle status, resolution source and \
+                    timestamps.
+                    Use this tool when the backorderId is already known; use listBackorders instead to search by \
+                    status, SKU, site or workorder line.
+                    Preconditions: the backorder must exist.
+                    Required inputs: backorderId (UUID) path parameter; there is no request body.
+                    No events are emitted and no state changes; auto-resolution happens asynchronously when \
+                    inbound stock raises ATP at the backorder's site — oldest-priority-first, and only when the \
+                    full quantityShort fits the remaining ATP budget (whole-backorder resolution, no partials).
+                    Returns 404 when no backorder exists for the supplied id.
+                    """,
             tags = {"Backorders"})
     @ApiResponse(responseCode = "200", description = "Backorder found")
     @ApiResponse(

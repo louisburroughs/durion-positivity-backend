@@ -8,6 +8,8 @@ import com.positivity.people.internal.dto.TimePeriodDto;
 import com.positivity.people.internal.dto.TimekeepingEntryDto;
 import com.positivity.people.service.TimekeepingApprovalService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -34,8 +36,19 @@ public class TimekeepingApprovalController {
 
     @GetMapping("/approvals/people")
     @Operation(
-            summary = "List employees with timekeeping entries",
-            description = "Returns distinct employees who have at least one timekeeping entry.")
+            operationId = "listTimekeepingApprovalPeople",
+            summary = "List Employees With Timekeeping Entries",
+            description = """
+                    Lists the distinct employees that have at least one timekeeping entry, with display name and \
+                    employee number.
+                    Use this tool to build the person picker for pay-period approval; use listTimekeepingEntries \
+                    instead for one person's entries in a period.
+                    Preconditions: none; display names come from the person identity replica, which is eventually \
+                    consistent.
+                    Required inputs: none; there are no parameters and no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty list when no timekeeping entries exist.
+                    """)
     @ApiResponse(responseCode = "200", description = "List of employees")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -46,7 +59,20 @@ public class TimekeepingApprovalController {
     }
 
     @GetMapping("/time-periods")
-    @Operation(summary = "List time periods", description = "Returns all pay periods, optionally scoped to a tenant.")
+    @Operation(
+            operationId = "listTimePeriods",
+            summary = "List Pay Periods For Timekeeping Approval",
+            description = """
+                    Lists pay periods with their start and end dates and status, newest first when scoped to a \
+                    tenant.
+                    Use this tool to choose the period for approval screens; use listTimekeepingEntries instead for \
+                    the entries inside a chosen period.
+                    Preconditions: none; tenantId is an optional scope and omitting it returns all periods in \
+                    repository order.
+                    Required inputs: none; tenantId (UUID) is an optional query parameter.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty list when no pay periods exist.
+                    """)
     @ApiResponse(responseCode = "200", description = "List of time periods")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -58,9 +84,20 @@ public class TimekeepingApprovalController {
 
     @GetMapping("/timekeeping-entries")
     @Operation(
-            summary = "List timekeeping entries for a person in a period",
-            description =
-                    "Returns all timekeeping entries for the given person within the given time period's date range.")
+            operationId = "listTimekeepingEntries",
+            summary = "List Timekeeping Entries For Person And Period",
+            description = """
+                    Lists a person's timekeeping entries whose sessions fall entirely within the given pay period's \
+                    date range, evaluated in UTC.
+                    Use this tool to review entries before deciding a period; use getTimePeriodApproval instead for \
+                    just the status counts.
+                    Preconditions: the time period must exist; sessions straddling the period boundary are excluded \
+                    because both start and end must fall inside it.
+                    Required inputs: personId (UUID) and timePeriodId (UUID) query parameters; there is no request \
+                    body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when the time period does not exist.
+                    """)
     @ApiResponse(responseCode = "200", description = "List of timekeeping entries")
     @ApiResponse(responseCode = "404", description = "Time period not found")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -73,10 +110,18 @@ public class TimekeepingApprovalController {
     }
 
     @GetMapping("/time-period-approvals")
-    @Operation(
-            summary = "Get approval summary for a person in a period",
-            description =
-                    "Returns the approval status counts and overall status for the given person in the given period.")
+    @Operation(operationId = "getTimePeriodApproval", summary = "Get Time Period Approval Summary", description = """
+                    Summarises a person's timekeeping approval state for a pay period: total, pending, approved, and \
+                    rejected counts plus an overall status.
+                    Use this tool for a status badge or gate; use listTimekeepingEntries instead when the individual \
+                    entries are needed.
+                    Preconditions: the time period must exist; the overall status is PENDING_APPROVAL while any \
+                    entry is pending, else REJECTED if any entry was rejected, else APPROVED.
+                    Required inputs: personId (UUID) and timePeriodId (UUID) query parameters; there is no request \
+                    body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when the time period does not exist.
+                    """)
     @ApiResponse(responseCode = "200", description = "Approval summary")
     @ApiResponse(responseCode = "404", description = "Time period not found")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -89,10 +134,20 @@ public class TimekeepingApprovalController {
     }
 
     @PostMapping("/time-periods/{timePeriodId}/people/{personId}/approve")
-    @Operation(
-            summary = "Approve all pending timekeeping entries for a person in a period",
-            description =
-                    "Bulk-approves all PENDING_APPROVAL timekeeping entries for the given employee in the given period.")
+    @Operation(operationId = "approveTimePeriod", summary = "Approve All Pending Entries In Period", description = """
+                    Bulk-approves every PENDING_APPROVAL timekeeping entry for a person within a pay period's date \
+                    range.
+                    Use this tool for pay-period sign-off; do not use approveTimeEntriesBatch, which decides \
+                    individually selected time entries instead of a whole period.
+                    Preconditions: the time period must exist; only entries currently in PENDING_APPROVAL are \
+                    touched, so already decided entries are left as they are.
+                    Required inputs: timePeriodId (UUID) and personId (UUID) path parameters; there is no request \
+                    body.
+                    No events are emitted; entries are flipped to APPROVED in place and the response reports the \
+                    processed count.
+                    Returns 200 with processedCount 0 when nothing was pending, and 404 when the time period does \
+                    not exist.
+                    """)
     @ApiResponse(responseCode = "200", description = "Entries approved")
     @ApiResponse(responseCode = "404", description = "Time period not found")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -105,10 +160,19 @@ public class TimekeepingApprovalController {
     }
 
     @PostMapping("/time-periods/{timePeriodId}/people/{personId}/reject")
-    @Operation(
-            summary = "Reject all pending timekeeping entries for a person in a period",
-            description =
-                    "Bulk-rejects all PENDING_APPROVAL timekeeping entries for the given employee in the given period.")
+    @Operation(operationId = "rejectTimePeriod", summary = "Reject All Pending Entries In Period", description = """
+                    Bulk-rejects every PENDING_APPROVAL timekeeping entry for a person within a pay period, storing \
+                    the reason on each entry as its correctionReason.
+                    Use this tool to send a whole period back for correction; do not use rejectTimeEntriesBatch, \
+                    which rejects individually selected time entries.
+                    Preconditions: the time period must exist; only entries currently in PENDING_APPROVAL are \
+                    touched.
+                    Required inputs: timePeriodId (UUID) and personId (UUID) path parameters and a body with a \
+                    non-blank reason.
+                    No events are emitted; entries are flipped to REJECTED in place and the response reports the \
+                    processed count.
+                    Returns 400 when reason is blank, and 404 when the time period does not exist.
+                    """)
     @ApiResponse(responseCode = "200", description = "Entries rejected")
     @ApiResponse(responseCode = "400", description = "Reason is required")
     @ApiResponse(responseCode = "404", description = "Time period not found")
@@ -119,7 +183,19 @@ public class TimekeepingApprovalController {
     public ResponseEntity<TimePeriodDecisionResponse> rejectPeriod(
             @PathVariable UUID timePeriodId,
             @PathVariable UUID personId,
-            @RequestBody @Valid RejectTimePeriodRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Rejection justification applied as the correctionReason on every pending"
+                                    + " entry in the period.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Missing breaks", value = """
+                                                                    {"reason":"Missing break entries for two shifts"}
+                                                                    """)))
+                    @RequestBody
+                    @Valid
+                    RejectTimePeriodRequest request) {
         return ResponseEntity.ok(timekeepingApprovalService.rejectPeriod(timePeriodId, personId, request.getReason()));
     }
 }

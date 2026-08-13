@@ -59,8 +59,20 @@ paths:
     get:
       tags:
       - Technician Assignment API
-      summary: Get technician assignment
-      description: Retrieve the current technician assignment and full assignment history for a workorder.
+      summary: Get Current Technician Assignment
+      description: 'Returns the workorder''s current technician assignment together with the full assignment history and the workorder''s status.
+
+        Use this tool when checking who owns a workorder; do not use assignTechnician or reassignTechnician, which change the assignment rather than reading it.
+
+        Preconditions: the workorder must exist and have a current technician assignment.
+
+        Required inputs: workorderId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the workorder does not exist or when it has no current assignment.
+
+        '
       operationId: getTechnicianAssignment
       parameters:
       - name: workorderId
@@ -92,8 +104,20 @@ paths:
     put:
       tags:
       - Technician Assignment API
-      summary: Reassign workorder to different technician
-      description: Reassign a workorder to a different technician. Records reassignment reason and maintains history.
+      summary: Reassign Workorder to Different Technician
+      description: 'Reassigns a workorder to a different technician, retiring the current assignment with the given reason and creating a new current assignment that preserves the full history.
+
+        Use this tool when a workorder already has a technician and must change hands; do not use assignTechnician, which is for the initial assignment and records no reassignment reason.
+
+        Preconditions: the workorder must exist, be in APPROVED, ASSIGNED, or WORK_IN_PROGRESS status, and have a current technician assignment to reassign from.
+
+        Required inputs: workorderId (UUID) as a path parameter and newTechnicianId (UUID) in the body; reason and notes are optional, the reassignedByUserId body field is ignored in favor of the security context, and the Idempotency-Key header is accepted but not currently used.
+
+        Emits a WORKORDER_TECHNICIAN_REASSIGN event.
+
+        Returns 404 when the workorder does not exist, and 400 with the failure reason when there is no current assignment or the workorder status does not allow reassignment.
+
+        '
       operationId: reassignTechnician
       parameters:
       - name: workorderId
@@ -112,7 +136,7 @@ paths:
           type: string
         example: tech-reassign-550e8400-e29b-41d4-a716-446655440001
       requestBody:
-        description: Reassign technician request
+        description: Replacement technician plus the reason the workorder is changing hands.
         content:
           application/json:
             schema:
@@ -159,8 +183,20 @@ paths:
     post:
       tags:
       - Technician Assignment API
-      summary: Assign technician to workorder
-      description: Assign a technician to a work order. Transitions workorder to ASSIGNED status if currently APPROVED.
+      summary: Assign Technician to Workorder
+      description: 'Assigns a technician to a workorder as the current assignment, retiring any previous assignment into history and transitioning the workorder from APPROVED to ASSIGNED when applicable.
+
+        Use this tool for the first assignment on a workorder; do not use reassignTechnician, which requires an existing current assignment and records a reassignment reason.
+
+        Preconditions: the workorder must exist and be in APPROVED, ASSIGNED, or WORK_IN_PROGRESS status.
+
+        Required inputs: workorderId (UUID) as a path parameter and technicianId (UUID) in the body; notes are optional, the assignedByUserId body field is ignored in favor of the security context, and the Idempotency-Key header is accepted but not currently used to deduplicate.
+
+        Emits a WORKORDER_TECHNICIAN_ASSIGN event; an APPROVED workorder is transitioned to ASSIGNED with a recorded state transition.
+
+        Returns 404 when the workorder does not exist, and 400 with the failure reason when the workorder status does not allow assignment.
+
+        '
       operationId: assignTechnician
       parameters:
       - name: workorderId
@@ -179,7 +215,7 @@ paths:
           type: string
         example: tech-assign-550e8400-e29b-41d4-a716-446655440001
       requestBody:
-        description: Assign technician request
+        description: Technician to place on the workorder, with optional assignment notes.
         content:
           application/json:
             schema:
@@ -226,8 +262,20 @@ paths:
     put:
       tags:
       - Workorder Labor API
-      summary: Adjust labor hours
-      description: Manually adjust hours worked on a labor entry with a reason for audit trail.
+      summary: Adjust Labor Entry Hours
+      description: 'Manually overrides the hours worked on a labor entry, recording the adjustment reason and the adjusting user for the audit trail.
+
+        Use this tool to correct recorded hours after a timesheet review; do not use stopLaborSession, which computes hours from elapsed time when a session ends.
+
+        Preconditions: the labor entry must exist; the entry retains its original times, with the adjusted hours and reason stored alongside them.
+
+        Required inputs: workorderId and entryId (UUIDs) as path parameters, plus hoursWorked (decimal) and adjustmentReason in the body; an Idempotency-Key header makes retries return the already-adjusted entry.
+
+        Emits a WORKORDER_LABOR_ADJUST event.
+
+        Returns 404 when no labor entry exists for the id, and 400 when the hours value is rejected as invalid.
+
+        '
       operationId: adjustLaborHours
       parameters:
       - name: workorderId
@@ -254,7 +302,7 @@ paths:
           type: string
         example: labor-adjust-550e8400-e29b-41d4-a716-446655440100
       requestBody:
-        description: Adjust labor request
+        description: Corrected hours and the reason justifying the manual adjustment.
         content:
           application/json:
             schema:
@@ -300,9 +348,21 @@ paths:
     get:
       tags:
       - Approval Configuration API
-      summary: Get configuration by ID
-      description: Retrieve an approval configuration by its unique ID.
-      operationId: getConfigurationById
+      summary: Get Approval Configuration by Id
+      description: 'Returns a single approval configuration by its unique id.
+
+        Use this tool when the configuration id is already known; use getApplicableApprovalConfiguration instead to resolve which configuration governs a given location and customer.
+
+        Preconditions: the configuration must exist.
+
+        Required inputs: approvalId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no configuration exists for the id.
+
+        '
+      operationId: getApprovalConfiguration
       parameters:
       - name: approvalId
         in: path
@@ -333,9 +393,21 @@ paths:
     put:
       tags:
       - Approval Configuration API
-      summary: Update an approval configuration
-      description: Update an existing approval configuration.
-      operationId: updateConfiguration
+      summary: Update Approval Configuration
+      description: 'Replaces every field of an existing approval configuration with the values in the request, including nulling fields that are omitted.
+
+        Use this tool when changing an existing approval rule; do not use createApprovalConfiguration, which adds a new rule rather than replacing one.
+
+        Preconditions: the configuration must exist; this is a full replacement, so send all fields that should remain set.
+
+        Required inputs: approvalId (UUID) as a path parameter and approvalMethod (CLICK_CONFIRM, SIGNATURE, ELECTRONIC_SIGNATURE, or VERBAL_CONFIRMATION) in the body; locationId, customerId, declineExpiryDays, requireSignature, and priority are optional.
+
+        Emits a WORKORDER_APPROVAL_CONFIG_UPDATE event.
+
+        Returns 404 when the configuration does not exist and also when approvalMethod is not a valid value, because both surface as the same IllegalArgumentException in this operation.
+
+        '
+      operationId: updateApprovalConfiguration
       parameters:
       - name: approvalId
         in: path
@@ -346,11 +418,20 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
-        description: Updated configuration object
+        description: Full replacement values for the approval configuration.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ApprovalConfigurationRequest'
+            examples:
+              Switch to electronic signature:
+                description: Switch to electronic signature
+                value:
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61
+                  approvalMethod: ELECTRONIC_SIGNATURE
+                  declineExpiryDays: 7
+                  requireSignature: true
+                  priority: 10
         required: true
       responses:
         '200':
@@ -373,9 +454,21 @@ paths:
     delete:
       tags:
       - Approval Configuration API
-      summary: Delete an approval configuration
-      description: Delete a configuration by its unique ID.
-      operationId: deleteConfiguration
+      summary: Delete Approval Configuration
+      description: 'Deletes an approval configuration by id, after which resolution falls through to broader scopes or the global default.
+
+        Use this tool when retiring an approval rule; do not use updateApprovalConfiguration, which keeps the rule and changes its values.
+
+        Preconditions: none — deletion is idempotent, and deleting an id that does not exist is a silent no-op.
+
+        Required inputs: approvalId (UUID) as a path parameter; there is no request body.
+
+        Emits a WORKORDER_APPROVAL_CONFIG_DELETE event.
+
+        Returns 204 regardless of whether the configuration previously existed.
+
+        '
+      operationId: deleteApprovalConfiguration
       parameters:
       - name: approvalId
         in: path
@@ -399,9 +492,21 @@ paths:
     get:
       tags:
       - Work Order API
-      summary: Get all work orders
-      description: Retrieve a list of all work orders.
-      operationId: getAllWorkorders
+      summary: List All Workorders
+      description: 'Returns every workorder in the system as an unpaginated list, regardless of status or location.
+
+        Use this tool only for small datasets or admin views; use searchWorkorders instead for paginated, filtered lookup, and countWorkorders when only totals are needed.
+
+        Preconditions: none beyond the caller holding workorder:workorder:view.
+
+        Required inputs: none — there are no filters or pagination parameters.
+
+        Emits a WORKORDER_LIST audit event; no workorder state changes — this is a read-only projection.
+
+        Returns 200 with the full list, possibly empty.
+
+        '
+      operationId: listWorkorders
       responses:
         '200':
           description: List of work orders returned successfully.
@@ -419,8 +524,20 @@ paths:
     post:
       tags:
       - Work Order API
-      summary: Create a new work order
-      description: Add a new work order to the system. Supports idempotent creation via Idempotency-Key header to prevent duplicate workorders.
+      summary: Create a New Workorder
+      description: 'Creates a DRAFT workorder from an estimate, copying the estimate''s customer, location, and CRM references and generating a workorder number.
+
+        Use this tool when opening a workorder directly; do not use promoteEstimate, which is the estimate-side path that promotes an APPROVED estimate into a workorder.
+
+        Preconditions: the referenced estimate must exist; the location falls back to the caller''s primary location when the estimate carries none.
+
+        Required inputs: estimateId and customerId (UUIDs); an Idempotency-Key header is recommended — a repeated key returns the originally created workorder instead of a duplicate.
+
+        Emits a WORKORDER_CREATE event and marks the workorder fact changed for downstream replication.
+
+        Returns 200 with the created or replayed workorder, and 400 when the estimate cannot be found.
+
+        '
       operationId: createWorkorder
       parameters:
       - name: Idempotency-Key
@@ -431,7 +548,7 @@ paths:
           type: string
         example: workorder-create-550e8400-e29b-41d4-a716-446655440000
       requestBody:
-        description: Work order creation request
+        description: Estimate and customer the new workorder is created from.
         content:
           application/json:
             schema:
@@ -440,8 +557,8 @@ paths:
               createWorkorder:
                 description: createWorkorder
                 value:
-                  estimateId: 550e8400-e29b-41d4-a716-446655440001
-                  customerId: 550e8400-e29b-41d4-a716-446655440010
+                  estimateId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a91
+                  customerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a92
         required: true
       responses:
         '200':
@@ -458,9 +575,21 @@ paths:
     post:
       tags:
       - Substitute Link API
-      summary: Suggest workorder substitutes
-      description: Suggest substitute parts for a workorder. Provide a request body with partId to scope suggestions to that part's active substitute links. Without a part scope this currently returns an empty list; workorder-wide suggestions are not yet implemented.
-      operationId: suggestSubstitutes
+      summary: Suggest Substitute Parts for Workorder
+      description: 'Suggests substitute parts for a workorder by returning the active substitute links of the part named in the request, ordered by ascending priority.
+
+        Use this tool when a pick is short and a stand-in part is needed; do not use listSubstituteLinks, which is the catalog view keyed by product rather than a workorder suggestion.
+
+        Preconditions: suggestions require a partId scope — without a body or partId the result is currently an empty list, because workorder-wide suggestions are not implemented.
+
+        Required inputs: workorderId (UUID) as a path parameter; the body is optional and carries partId (UUID) to scope suggestions to that part''s links.
+
+        Emits a WORKORDER_SUBSTITUTE_SUGGEST audit event; no substitution is applied and no state changes — this is a read-only suggestion.
+
+        Returns 200 with the suggested links, empty when no partId is given or no active links exist.
+
+        '
+      operationId: suggestWorkorderSubstitutes
       parameters:
       - name: workorderId
         in: path
@@ -469,10 +598,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Optional scope naming the workorder part to suggest substitutes for.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SuggestSubstitutesRequest'
+            examples:
+              Scoped to a part:
+                description: Scoped to a part
+                value:
+                  partId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a33
       responses:
         '200':
           description: Substitute suggestions returned
@@ -490,9 +625,21 @@ paths:
     post:
       tags:
       - Operational Context
-      summary: Start work on workorder, locking operational context
-      description: Transitions the workorder into active execution and locks operational context to prevent further overrides.
-      operationId: startWork
+      summary: Start Workorder Execution and Lock Context
+      description: 'Transitions the workorder to WORK_IN_PROGRESS, stamps workStartedAt, assigns a new operational context version, and locks the context against further overrides.
+
+        Use this tool when the technician actually begins work; do not use overrideOperationalContext, which adjusts context and is only possible before this call.
+
+        Preconditions: the workorder must exist in APPROVED or ASSIGNED status, work must not already have started, and no change requests may be awaiting advisor review.
+
+        Required inputs: workorderId (UUID) as a path parameter; the body is optional and may carry a reason (defaults to "Work started") — the acting user is taken from the security context.
+
+        Emits a WORKORDER_START event, captures a state snapshot, and records the status transition.
+
+        Returns 400 when pending change requests block the start, 404 when no workorder exists for the id, and 409 when work has already started or the status is not start-eligible.
+
+        '
+      operationId: startWorkorder
       parameters:
       - name: workorderId
         in: path
@@ -501,10 +648,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Optional start metadata; reason is recorded on the state transition.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/StartWorkorderRequest'
+            examples:
+              Start with reason:
+                description: Start with reason
+                value:
+                  reason: Vehicle in bay, technician ready
       responses:
         '200':
           description: Work started, context locked
@@ -539,8 +692,20 @@ paths:
     post:
       tags:
       - Work Order API
-      summary: Complete a workorder service line
-      description: Mark a single service line as COMPLETED. Allowed from OPEN/READY_TO_EXECUTE/IN_PROGRESS; rejected for CANCELLED or PENDING_APPROVAL items.
+      summary: Complete a Workorder Service Line
+      description: 'Marks one workorder service line as COMPLETED, leaving the workorder''s own status untouched.
+
+        Use this tool to close individual service lines as work finishes; do not use completeWorkorder, which completes the whole workorder, or completePartItem, which closes a part line.
+
+        Preconditions: the service line must exist, belong to the given workorder, and not be in CANCELLED or PENDING_APPROVAL status; completing an already-COMPLETED line is an idempotent no-op.
+
+        Required inputs: workorderId and serviceLineId (UUIDs) as path parameters; there is no request body.
+
+        Emits a WORKORDER_SERVICE_ITEM_COMPLETE event.
+
+        Returns 404 when the line is missing or belongs to another workorder, and 400 when the line is CANCELLED or PENDING_APPROVAL.
+
+        '
       operationId: completeServiceItem
       parameters:
       - name: workorderId
@@ -585,8 +750,20 @@ paths:
     post:
       tags:
       - Workorder Labor API
-      summary: Start labor session
-      description: Start tracking labor on a specific service item. Only one active session allowed per service.
+      summary: Start Labor Session on Service
+      description: 'Starts a labor entry tracking a technician''s time against one workorder service line, stamping the start time and zero hours worked.
+
+        Use this tool when a technician begins billable labor on a specific service; do not use startWorkexecWorkSession, which is the payroll timekeeping clock rather than per-service labor tracking.
+
+        Preconditions: the workorder must be in ASSIGNED, WORK_IN_PROGRESS, AWAITING_PARTS, or AWAITING_APPROVAL status, the service must belong to that workorder, and the service must have no labor session still open.
+
+        Required inputs: workorderId and serviceId (UUIDs) as path parameters and technicianId (UUID) in the body; notes are optional, and an Idempotency-Key header makes retries return the original entry with 200 instead of 201.
+
+        Emits a WORKORDER_LABOR_START event.
+
+        Returns 201 with the new entry (200 on an idempotent replay), 404 when the workorder or service cannot be found, and 400 when a session is already active or the status disallows labor.
+
+        '
       operationId: startLaborSession
       parameters:
       - name: workorderId
@@ -613,7 +790,7 @@ paths:
           type: string
         example: labor-start-550e8400-e29b-41d4-a716-446655440001
       requestBody:
-        description: Start labor request
+        description: Technician performing the labor and optional starting notes.
         content:
           application/json:
             schema:
@@ -665,8 +842,20 @@ paths:
     post:
       tags:
       - Work Order API
-      summary: Reopen completed workorder
-      description: Controlled reopen for completed workorders. Requires elevated permission and mandatory reason.
+      summary: Reopen a Completed Workorder
+      description: 'Reopens a COMPLETED workorder in a controlled way: the finalized billable scope is superseded via a new snapshot, and the workorder is flagged isReopened with the actor, reason, and timestamp recorded — the status itself remains COMPLETED.
+
+        Use this tool when post-completion corrections are needed; do not use deleteWorkorder, which destroys the record instead of auditing a reopen.
+
+        Preconditions: the workorder must exist and be in COMPLETED status, and the caller must hold workorder:workorder:reopen_completed.
+
+        Required inputs: workorderId (UUID) as a path parameter and a non-blank reopenReason in the body; the acting user comes from the security context.
+
+        Emits a WORKORDER_REOPEN event and captures a BILLABLE_SCOPE_SUPERSEDED snapshot.
+
+        Returns 400 with the reason when the workorder is not COMPLETED or the reason is missing, and 404 when the workorder does not exist.
+
+        '
       operationId: reopenWorkorder
       parameters:
       - name: workorderId
@@ -678,7 +867,7 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
-        description: Reopen workorder request
+        description: Mandatory reason justifying the reopen of the completed workorder.
         content:
           application/json:
             schema:
@@ -717,9 +906,21 @@ paths:
     post:
       tags:
       - Workorder Picked Items
-      summary: Consume picked items into workorder
-      description: 'Queues asynchronous consumption of picked items (ADR-0044 #901): the response is 202 with per-item status PENDING; the inventory.consumption.recorded fact updates the pick replicas and subsequent picked-items reads observe the consumed quantities.'
-      operationId: consumePickedItems
+      summary: Consume Picked Items into Workorder
+      description: 'Queues asynchronous consumption of picked items into the workorder over the Kafka command feed per ADR-0044; each item is acknowledged with status PENDING, and the inventory consumption-recorded fact later updates the pick replicas.
+
+        Use this tool when staged picked parts are installed on the job; do not use consumeParts, which operates on workorder part lines outside the pick flow.
+
+        Preconditions: a pick list replica must exist for the workorder and every referenced pickTaskId must belong to it.
+
+        Required inputs: workorderId (UUID) as a path parameter and a non-empty items list, each entry carrying pickTaskId (UUID) and quantityToConsume (integer).
+
+        Emits a WORKORDER_PICKED_ITEMS_CONSUME event and publishes a consume command; callers must poll getPickedItems to observe the consumed quantities.
+
+        Returns 202 with per-item PENDING results, 404 when the pick list or a referenced pick task is missing, and 503 when the command feed is unavailable.
+
+        '
+      operationId: consumeWorkorderPickedItems
       parameters:
       - name: workorderId
         in: path
@@ -730,10 +931,18 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
+        description: Picked pick-task quantities to consume into the workorder.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ConsumePickedItemsRequest'
+            examples:
+              Consume one task:
+                description: Consume one task
+                value:
+                  items:
+                  - pickTaskId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4ab1
+                    quantityToConsume: 2
         required: true
       responses:
         '202':
@@ -769,9 +978,21 @@ paths:
     post:
       tags:
       - Workorder Pick Facade
-      summary: Resolve scan for pick task
-      description: Resolve a scanned item for a workorder pick task before confirming fulfillment
-      operationId: resolveScan
+      summary: Resolve Scan Against Pick Task
+      description: 'Checks a scanned SKU and location against a pick task''s expected SKU and location, returning matched plus a matchStatus of MATCHED, SKU_MISMATCH, LOCATION_MISMATCH, or NO_MATCH.
+
+        Use this tool to validate a barcode scan before confirmPickLine; it performs no confirmation itself, so do not treat a match as a recorded pick.
+
+        Preconditions: the pick task must exist on the workorder''s pick list replica.
+
+        Required inputs: workorderId and pickTaskId (UUIDs) as path parameters, plus scannedSkuId and scannedLocationId (UUIDs) in the body.
+
+        Emits a WORKORDER_PICK_FACADE_RESOLVE_SCAN audit event; no pick state changes — the check is purely evaluative.
+
+        Returns 404 when the workorder has no pick list or the pick task is not on it.
+
+        '
+      operationId: resolvePickScan
       parameters:
       - name: workorderId
         in: path
@@ -790,10 +1011,17 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       requestBody:
+        description: Scanned SKU and location to check against the pick task's expectation.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ResolveScanRequest'
+            examples:
+              Scan:
+                description: Scan
+                value:
+                  scannedSkuId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4aa1
+                  scannedLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4aa2
         required: true
       responses:
         '200':
@@ -829,8 +1057,20 @@ paths:
     post:
       tags:
       - Workorder Pick Facade
-      summary: Complete pick task
-      description: 'Queues asynchronous completion of a workorder pick task (ADR-0044 #901). Returns 202 with status PENDING while the command is in flight; an already-complete task is returned as-is with 200.'
+      summary: Complete a Workorder Pick Task
+      description: 'Queues asynchronous completion of a pick task by confirming its full required quantity over the Kafka command feed per ADR-0044; a task with nothing left to pick is returned as-is.
+
+        Use this tool to close out a pick task in one step; use confirmPickLine instead to record a partial picked quantity.
+
+        Preconditions: the pick task must exist on the workorder''s pick list replica.
+
+        Required inputs: workorderId and pickTaskId (UUIDs) as path parameters; the body is optional and may carry a completion reason.
+
+        Emits a WORKORDER_PICK_FACADE_COMPLETE_TASK event and publishes a pick-confirm command for the remaining quantity; callers must poll getPickTasks to observe the applied state.
+
+        Returns 202 with status PENDING while the command is in flight, 200 with the current state when the task is already complete, 404 when the pick list or task is missing, and 503 when the command feed is unavailable.
+
+        '
       operationId: completePickTask
       parameters:
       - name: workorderId
@@ -850,11 +1090,16 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       requestBody:
-        description: Completion details; omit or send {} if no reason is provided
+        description: Optional completion details; omit or send {} if no reason is provided.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CompletePickTaskRequest'
+            examples:
+              With reason:
+                description: With reason
+                value:
+                  reason: Staged at bay 3
       responses:
         '202':
           description: Completion queued; poll the pick tasks for the applied state (status PENDING).
@@ -889,8 +1134,20 @@ paths:
     post:
       tags:
       - Workorder Pick Facade
-      summary: Confirm pick line quantity
-      description: 'Queues asynchronous pick confirmation (ADR-0044 #901): the response is 202 with status PENDING; the inventory.pick-task.updated fact updates the pick replica and subsequent reads observe the confirmed quantity.'
+      summary: Confirm Pick Line Quantity
+      description: 'Queues asynchronous confirmation of a picked quantity on one pick line over the Kafka command feed per ADR-0044; the response carries status PENDING, and the inventory pick-task-updated fact later updates the local replica.
+
+        Use this tool after resolvePickScan validates the scan; do not use completePickTask, which confirms the full remaining required quantity in one step.
+
+        Preconditions: the pick task must exist on the workorder''s pick list replica, and pickLineId must equal pickTaskId in the current single-line model.
+
+        Required inputs: workorderId, pickTaskId, and pickLineId (UUIDs) as path parameters, plus quantityPicked (integer) in the body.
+
+        Emits a WORKORDER_PICK_FACADE_CONFIRM_LINE event and publishes a pick-confirm command; callers must poll getPickTasks to observe the applied quantity.
+
+        Returns 202 with status PENDING when the confirmation is queued, 400 when pickLineId does not match pickTaskId, 404 when the pick list or task is missing, and 503 when the command feed is unavailable.
+
+        '
       operationId: confirmPickLine
       parameters:
       - name: workorderId
@@ -918,10 +1175,16 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440002
       requestBody:
+        description: Quantity actually picked for the line being confirmed.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ConfirmPickLineRequest'
+            examples:
+              Confirm two units:
+                description: Confirm two units
+                value:
+                  quantityPicked: 2
         required: true
       responses:
         '202':
@@ -963,8 +1226,20 @@ paths:
     post:
       tags:
       - Work Order API
-      summary: Complete a workorder part
-      description: Mark a single part as COMPLETED. Allowed from OPEN/READY_TO_EXECUTE/IN_PROGRESS; rejected for CANCELLED or PENDING_APPROVAL items.
+      summary: Complete a Workorder Part Line
+      description: 'Marks one workorder part as COMPLETED and flags the workorder fact changed for downstream replication, leaving the workorder''s own status untouched.
+
+        Use this tool to close individual part lines as they are installed; do not use completeWorkorder, which completes the whole workorder, or completeServiceItem, which closes a service line.
+
+        Preconditions: the part must exist, belong to the given workorder directly or via its service line, and not be in CANCELLED or PENDING_APPROVAL status; completing an already-COMPLETED part is an idempotent no-op.
+
+        Required inputs: workorderId and partId (UUIDs) as path parameters; there is no request body.
+
+        Emits a WORKORDER_PART_ITEM_COMPLETE event.
+
+        Returns 404 when the part is missing or belongs to another workorder, and 400 when the part is CANCELLED or PENDING_APPROVAL.
+
+        '
       operationId: completePartItem
       parameters:
       - name: workorderId
@@ -1009,8 +1284,20 @@ paths:
     post:
       tags:
       - Workorder Part Adjustments
-      summary: Substitute part
-      description: Replace one part with another. Original part preserved for history.
+      summary: Substitute Part on Workorder
+      description: 'Substitutes one part line with a different part, preserving the original line for audit history, capturing a pricing snapshot, and recording a substitution adjustment event.
+
+        Use this tool when the planned part is replaced by an alternative; use suggestWorkorderSubstitutes first to find candidate parts, and do not use correctPartQuantity, which fixes quantities rather than parts.
+
+        Preconditions: the workorder and original part must exist, the original part must belong to the workorder and must not have any consumed quantity, and the substitute must differ from the original.
+
+        Required inputs: workorderId (UUID) as a path parameter, plus originalPartId and substitutePartId (UUIDs) and a reason in the body; notes are optional and an Idempotency-Key header deduplicates retries.
+
+        Emits a WORKORDER_PART_SUBSTITUTE event.
+
+        Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, and 400 when the part is already consumed, does not belong to the workorder, or the substitute equals the original.
+
+        '
       operationId: substitutePart
       parameters:
       - name: workorderId
@@ -1025,7 +1312,7 @@ paths:
         schema:
           type: string
       requestBody:
-        description: Substitute part request
+        description: Original part, replacement part, and the reason for the swap.
         content:
           application/json:
             schema:
@@ -1073,8 +1360,20 @@ paths:
     post:
       tags:
       - Workorder Parts Usage
-      summary: Return unused parts to inventory
-      description: Return unused parts after partial consumption or service completion
+      summary: Return Unused Parts to Inventory
+      description: 'Returns unused issued quantity of a part line to inventory, incrementing quantityReturned and writing a RETURN usage event.
+
+        Use this tool for the normal return of leftover stock after partial consumption; do not use returnUnusedPartQuantity, which is the adjustment-flow return that also records a reason.
+
+        Preconditions: the part must belong to the workorder, and the return cannot exceed the available quantity — issued minus consumed minus already returned.
+
+        Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID) and a positive quantity in the body; an Idempotency-Key header makes retries return the original usage event.
+
+        Emits a WORKORDER_PART_RETURN event and marks the workorder fact changed.
+
+        Returns 201 with the RETURN event, 400 when the quantity is not positive, exceeds the available quantity, or the part cannot be found, 404 when the workorder does not exist, and 409 when the part belongs to a different workorder.
+
+        '
       operationId: returnParts
       parameters:
       - name: workorderId
@@ -1089,7 +1388,7 @@ paths:
         schema:
           type: string
       requestBody:
-        description: Return part request
+        description: Part line and unused quantity going back to inventory.
         content:
           application/json:
             schema:
@@ -1129,9 +1428,21 @@ paths:
     post:
       tags:
       - Workorder Part Adjustments
-      summary: Return unused quantity
-      description: Return unused part quantity beyond normal return flow
-      operationId: returnUnusedQuantity
+      summary: Return Unused Part Quantity
+      description: 'Returns unused part quantity through the adjustment flow, recording a reasoned return adjustment event alongside the quantity change.
+
+        Use this tool when a return needs an explicit reason and audit trail; use returnParts instead for the plain usage-flow return without a reason.
+
+        Preconditions: the workorder and part must exist, the part must belong to the workorder, and the return cannot exceed the quantity still available on the line.
+
+        Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID), a positive quantity, and a reason in the body; notes are optional and an Idempotency-Key header deduplicates retries.
+
+        Emits a WORKORDER_PART_RETURN_UNUSED event.
+
+        Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, and 400 when the quantity is not positive, exceeds the available quantity, or the part does not belong to the workorder.
+
+        '
+      operationId: returnUnusedPartQuantity
       parameters:
       - name: workorderId
         in: path
@@ -1145,7 +1456,7 @@ paths:
         schema:
           type: string
       requestBody:
-        description: Return unused quantity request
+        description: Part line, quantity going back, and the reason for the reasoned return.
         content:
           application/json:
             schema:
@@ -1187,8 +1498,20 @@ paths:
     post:
       tags:
       - Workorder Parts Usage
-      summary: Issue parts to workorder
-      description: Issue parts from inventory, reserving them for consumption on the workorder
+      summary: Issue Parts to Workorder
+      description: 'Issues a quantity of a part line to the workorder, incrementing the line''s quantityIssued and recording an ISSUE usage event with the acting user.
+
+        Use this tool when stock is handed to the job; do not use consumeParts, which records actual installation against previously issued quantity.
+
+        Preconditions: the workorder and part line must exist, the part must belong to the workorder, and the caller must have an authenticated username.
+
+        Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID) and a positive quantity in the body; an Idempotency-Key header makes retries return the original usage event.
+
+        Emits a WORKORDER_PART_ISSUE event and marks the workorder fact changed for downstream replication.
+
+        Returns 201 with the ISSUE event, 400 when the quantity is not positive or the part cannot be found, 404 when the workorder does not exist, and 409 when the part belongs to a different workorder.
+
+        '
       operationId: issueParts
       parameters:
       - name: workorderId
@@ -1203,7 +1526,7 @@ paths:
         schema:
           type: string
       requestBody:
-        description: Issue part request
+        description: Part line and quantity being issued from inventory to the job.
         content:
           application/json:
             schema:
@@ -1249,8 +1572,20 @@ paths:
     post:
       tags:
       - Workorder Part Adjustments
-      summary: Correct part quantity
-      description: Administrative correction for data entry errors
+      summary: Correct Part Quantity
+      description: 'Applies an administrative correction to a part line''s quantity, recording the correction and its reason as an adjustment event for data-entry fixes.
+
+        Use this tool only to repair mistaken quantities; do not use consumeParts or returnParts, which record real physical movement of stock.
+
+        Preconditions: the workorder and part must exist and the part must belong to the workorder.
+
+        Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID), a positive newQuantity, and a reason in the body; notes are optional and an Idempotency-Key header deduplicates retries.
+
+        Emits a WORKORDER_PART_CORRECT event.
+
+        Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, and 400 when newQuantity is not positive or the part does not belong to the workorder.
+
+        '
       operationId: correctPartQuantity
       parameters:
       - name: workorderId
@@ -1265,7 +1600,7 @@ paths:
         schema:
           type: string
       requestBody:
-        description: Correct part quantity request
+        description: Part line, corrected quantity, and the reason for the administrative fix.
         content:
           application/json:
             schema:
@@ -1307,8 +1642,20 @@ paths:
     post:
       tags:
       - Workorder Parts Usage
-      summary: Consume parts on workorder
-      description: Record actual consumption of parts. Quantity consumed cannot exceed quantity issued.
+      summary: Record Part Consumption on Workorder
+      description: 'Records actual consumption of an issued part, incrementing the line''s quantityConsumed and writing a CONSUME usage event.
+
+        Use this tool when a part is actually installed on the vehicle; do not use issueParts, which only reserves quantity, or returnParts, which sends unused quantity back.
+
+        Preconditions: the part must belong to the workorder and cumulative consumption must not exceed the quantity already issued.
+
+        Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID) and a positive quantity in the body; an Idempotency-Key header makes retries return the original usage event.
+
+        Emits a WORKORDER_PART_CONSUME event and marks the workorder fact changed.
+
+        Returns 201 with the CONSUME event, 400 when the quantity is not positive, exceeds the issued quantity, or the part cannot be found, 404 when the workorder does not exist, and 409 when the part belongs to a different workorder.
+
+        '
       operationId: consumeParts
       parameters:
       - name: workorderId
@@ -1323,7 +1670,7 @@ paths:
         schema:
           type: string
       requestBody:
-        description: Consume part request
+        description: Part line and quantity actually consumed on the job.
         content:
           application/json:
             schema:
@@ -1363,8 +1710,20 @@ paths:
     post:
       tags:
       - Operational Context
-      summary: Manager override of operational context
-      description: Applies a manager-authorized override to operational context values before work starts; request is rejected once context is locked.
+      summary: Override Workorder Operational Context
+      description: 'Applies a manager-authorized override of the workorder''s operational context, replacing the location, assigned mechanics, and assigned resources (the first assigned resource becomes the bay) before work starts.
+
+        Use this tool when a manager must re-slot a workorder to a different bay, crew, or location prior to execution; do not use getOperationalContext, which only reads the current context.
+
+        Preconditions: the workorder must exist and work must not have started — once workStartedAt is set the context is locked and overrides are rejected.
+
+        Required inputs: workorderId (UUID) as a path parameter and a body with locationId (UUID, required); bayId, assignedMechanics, assignedResources, and constraints are optional, and constraints are echoed back but not persisted.
+
+        Emits a WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE event and marks the workorder fact changed for downstream replication.
+
+        Returns 404 when no workorder exists for the id, and 409 when work has already started and the context is locked.
+
+        '
       operationId: overrideOperationalContext
       parameters:
       - name: workorderId
@@ -1374,10 +1733,22 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Replacement operational context values — location, bay, mechanics, and resources.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/OperationalContextOverrideRequest'
+            examples:
+              Re-slot to another bay:
+                description: Re-slot to another bay
+                value:
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a21
+                  bayId: BAY-3
+                  assignedMechanics:
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a22
+                  assignedResources:
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a23
+                  constraints: []
         required: true
       responses:
         '200':
@@ -1407,8 +1778,20 @@ paths:
     post:
       tags:
       - Workorder Labor API
-      summary: Stop labor session
-      description: Stop an active labor session and calculate hours worked.
+      summary: Stop Active Labor Session
+      description: 'Stops an open labor entry, stamping the end time and computing hours worked from the elapsed session time.
+
+        Use this tool when a technician finishes labor on a service; do not use adjustLaborHours, which corrects the hours on an already-stopped entry.
+
+        Preconditions: the labor entry must exist and still be open — an entry with an end time cannot be stopped again.
+
+        Required inputs: workorderId and entryId (UUIDs) as path parameters; there is no request body, and an Idempotency-Key header makes retried stops return the already-stopped entry.
+
+        Emits a WORKORDER_LABOR_STOP event.
+
+        Returns 404 when no labor entry exists for the id, and 400 when the session is already stopped.
+
+        '
       operationId: stopLaborSession
       parameters:
       - name: workorderId
@@ -1468,9 +1851,21 @@ paths:
     post:
       tags:
       - Work Order API
-      summary: Request invoice generation from a completed workorder
-      description: 'Queues asynchronous invoice generation (ADR-0044 #900): the response is 202 with status PENDING and the invoiceId appears on the workorder once the invoice.events.v1 fact links it. Re-sending the same Idempotency-Key collapses to one generation. When the workorder is already invoiced, the linked invoice is returned with 200.'
-      operationId: generateInvoice
+      summary: Request Invoice Generation From Workorder
+      description: 'Queues asynchronous invoice generation for a completed workorder over the Kafka command feed; the invoiceId appears on the workorder later, once the invoicing domain''s fact links it back.
+
+        Use this tool after completeWorkorder succeeds; do not call it to fetch an invoice — poll getWorkorder for the linked invoiceId instead.
+
+        Preconditions: the workorder must exist and be in COMPLETED status, and the Kafka event feed must be enabled; an already-invoiced workorder short-circuits to its linked invoice.
+
+        Required inputs: workorderId (UUID) as a path parameter; an Idempotency-Key header collapses retries into one generation, defaulting to the workorderId itself.
+
+        Emits a WORKORDER_INVOICE_GENERATE event and publishes an invoice-creation command; callers must treat a PENDING status as queued rather than generated.
+
+        Returns 202 with status PENDING when generation is queued, 200 with the linked invoice on idempotent replay, 404 when the workorder does not exist, 409 when it is not COMPLETED, and 503 when the Kafka feed is disabled or the broker rejects the command.
+
+        '
+      operationId: generateWorkorderInvoice
       parameters:
       - name: workorderId
         in: path
@@ -1521,8 +1916,20 @@ paths:
     post:
       tags:
       - Work Order API
-      summary: Complete a work order
-      description: Complete a work order, transitioning it to COMPLETED status and emitting a WorkCompleted event.
+      summary: Complete a Workorder
+      description: 'Completes a workorder: outstanding OPEN, READY_TO_EXECUTE, and IN_PROGRESS items are auto-completed, an immutable billable-scope snapshot is captured, the status transitions to COMPLETED, and job-time facts are published for each closed labor entry.
+
+        Use this tool when all work is done; use getCompletionPreconditions first to see what would block completion, and use completeServiceItem or completePartItem instead to close individual lines.
+
+        Preconditions: the workorder must be in WORK_IN_PROGRESS, AWAITING_PARTS, AWAITING_APPROVAL, or READY_FOR_PICKUP status; PENDING_APPROVAL items are left untouched and can block completion.
+
+        Required inputs: workorderId (UUID) as a path parameter; completionNotes in the body is optional and the acting user comes from the security context.
+
+        Emits a WORKORDER_COMPLETE event and a WorkCompleted domain event carrying the final billable scope.
+
+        Returns 400 with the blocking reason when the status is not completion-eligible or the workorder is already COMPLETED or CANCELLED, and 404 when the workorder does not exist.
+
+        '
       operationId: completeWorkorder
       parameters:
       - name: workorderId
@@ -1534,7 +1941,7 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
-        description: Complete workorder request
+        description: Optional completion notes recorded on the finished workorder.
         content:
           application/json:
             schema:
@@ -1573,9 +1980,21 @@ paths:
     get:
       tags:
       - Change Request API
-      summary: Get all change requests for a work order
-      description: Retrieve all change requests associated with a specific work order
-      operationId: getChangeRequestsByWorkorder
+      summary: List Change Requests for Workorder
+      description: 'Returns every change request attached to a workorder, in all statuses from AWAITING_ADVISOR_REVIEW through APPROVED, DECLINED, CANCELLED, and APPROVED_WITH_EXCEPTION.
+
+        Use this tool when reviewing a workorder''s additional-work history; use getChangeRequest instead for one request by id.
+
+        Preconditions: none — an unknown workorderId simply yields an empty list.
+
+        Required inputs: workorderId (UUID) as a path parameter.
+
+        Emits a WORKORDER_CHANGE_REQUEST_LIST audit event; no change request state changes — this is a read-only projection.
+
+        Returns 200 with the list, possibly empty; no 404 is produced for unknown workorders.
+
+        '
+      operationId: listChangeRequests
       parameters:
       - name: workorderId
         in: path
@@ -1602,8 +2021,20 @@ paths:
     post:
       tags:
       - Change Request API
-      summary: Create a change request
-      description: Technician creates a request for additional work beyond authorized scope. Items are marked as PENDING_APPROVAL until advisor approves. Requires description and at least one service or part item. Supports idempotent creation via Idempotency-Key header to prevent duplicate change requests.
+      summary: Create Change Request for Additional Work
+      description: 'Creates a change request for work beyond the authorized scope, placing it in AWAITING_ADVISOR_REVIEW with its service and part items marked PENDING_APPROVAL.
+
+        Use this tool when a technician finds additional work mid-job; do not use approveChangeRequest or declineChangeRequest, which are the advisor''s decision steps on an existing request.
+
+        Preconditions: the workorder must exist and be in WORK_IN_PROGRESS status, and emergency exception requests must carry the required emergency documentation on their items.
+
+        Required inputs: workorderId (UUID) as a path parameter, a non-blank description, and at least one entry in services or parts; an Idempotency-Key header is recommended — a repeated key returns the originally created request instead of a duplicate.
+
+        Emits a WORKORDER_CHANGE_REQUEST_CREATE event and renders a supplemental estimate PDF via the documents service when items are present.
+
+        Returns 400 when the description or items are missing, the workorder is absent or not WORK_IN_PROGRESS, or emergency documentation is incomplete — all failures surface as 400 in this operation.
+
+        '
       operationId: createChangeRequest
       parameters:
       - name: workorderId
@@ -1622,7 +2053,7 @@ paths:
           type: string
         example: change-request-create-550e8400-e29b-41d4-a716-446655440000
       requestBody:
-        description: Change request details including items
+        description: 'Requested additional work: description plus the service and part items needing approval.'
         content:
           application/json:
             schema:
@@ -1631,8 +2062,13 @@ paths:
               createChangeRequest:
                 description: createChangeRequest
                 value:
-                  description: Customer requested additional diagnostics
-                  approvalGated: true
+                  description: Front brake pads worn to metal; replacement required
+                  services:
+                  - serviceEntityId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a71
+                    quantity: 1
+                  parts:
+                  - productEntityId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a72
+                    quantity: 2
         required: true
       responses:
         '200':
@@ -1662,8 +2098,20 @@ paths:
     post:
       tags:
       - Work Order API
-      summary: Approve a work order with customer signature
-      description: Transition work order to APPROVED status with customer signature capture. Work order can be approved from DRAFT status. Requires customer ID validation and signature data (base64-encoded image).
+      summary: Approve Workorder With Customer Signature
+      description: 'Approves a DRAFT workorder, transitioning it to APPROVED and storing the captured customer signature, signer name, and approval notes.
+
+        Use this tool for workorder-level customer authorization; do not use approveEstimate, which approves the estimate before a workorder exists, or approveChangeRequest, which approves mid-job additional work.
+
+        Preconditions: the workorder must exist, be in DRAFT status, and belong to the customerId in the request — a mismatched customer is rejected.
+
+        Required inputs: workorderId (UUID) as a path parameter and customerId (UUID) in the body; signatureData (base64 image), signerName, and notes are optional, and signatureMimeType defaults to image/png.
+
+        Emits a WORKORDER_APPROVE event and marks the workorder fact changed for downstream replication.
+
+        Returns 400 when the workorder is missing, the customer does not match, or the status is not DRAFT — all failures surface as 400 in this operation.
+
+        '
       operationId: approveWorkorder
       parameters:
       - name: workorderId
@@ -1675,7 +2123,7 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
-        description: Approval request with customer ID and signature capture
+        description: Approving customer's identity and captured signature artifacts.
         content:
           application/json:
             schema:
@@ -1718,9 +2166,21 @@ paths:
     post:
       tags:
       - Work Session API
-      summary: Stop a work session
-      description: Technician stops an active work session. Records end time and transitions the session to COMPLETED status.
-      operationId: stopWorkSession
+      summary: Stop an Active Work Session
+      description: 'Stops an IN_PROGRESS work session, transitioning it to COMPLETED and computing net worked seconds as elapsed time minus finished break segments.
+
+        Use this tool when a technician clocks off a task; do not use stopBreakSegment, which only ends a break while the session keeps running.
+
+        Preconditions: the session must exist, be IN_PROGRESS, and not be locked by payroll processing.
+
+        Required inputs: workSessionId (UUID) as a path parameter; the body''s mechanicId is optional and not used to determine the session.
+
+        Emits a WORKORDER_WORK_SESSION_STOP event carrying the net duration.
+
+        Returns 404 when no session exists for the id, and 409 when the session is not IN_PROGRESS or is locked.
+
+        '
+      operationId: stopWorkexecWorkSession
       parameters:
       - name: workSessionId
         in: path
@@ -1731,10 +2191,16 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
+        description: Stop confirmation payload; the session is identified by the path id.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/StopWorkSessionRequest'
+            examples:
+              Clock off:
+                description: Clock off
+                value:
+                  mechanicId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a51
         required: true
       responses:
         '200':
@@ -1764,9 +2230,21 @@ paths:
     post:
       tags:
       - Work Session API
-      summary: Start a break segment
-      description: Technician records the start of a break within an active work session.
-      operationId: addBreakSegment
+      summary: Start a Break Segment
+      description: 'Opens a break segment inside an active work session, recording the break start time so break minutes are excluded from the session''s net duration.
+
+        Use this tool when a technician pauses work; do not use stopWorkexecWorkSession, which ends the whole session rather than pausing it.
+
+        Preconditions: the session must exist, be IN_PROGRESS, not be locked, and have no other break segment still open.
+
+        Required inputs: workSessionId (UUID) as a path parameter; breakType (MEAL, REST, or OTHER) and notes are optional body fields.
+
+        Emits a WORKORDER_WORK_SESSION_BREAK_START event.
+
+        Returns 201 with the new break segment, 404 when the session does not exist, and 409 when the session is not IN_PROGRESS, is locked, or already has an open break.
+
+        '
+      operationId: startBreakSegment
       parameters:
       - name: workSessionId
         in: path
@@ -1777,10 +2255,17 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
+        description: Break details classifying the pause within the running session.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AddBreakSegmentRequest'
+            examples:
+              Lunch break:
+                description: Lunch break
+                value:
+                  breakType: MEAL
+                  notes: Lunch
         required: true
       responses:
         '201':
@@ -1810,8 +2295,20 @@ paths:
     post:
       tags:
       - Work Session API
-      summary: Stop a break segment
-      description: Technician records the end of a break segment within an active work session.
+      summary: Stop a Break Segment
+      description: 'Closes an open break segment within a work session, recording the break end time used to reduce the session''s net worked duration.
+
+        Use this tool when a technician resumes work after a pause; do not use stopWorkexecWorkSession, which ends the entire session.
+
+        Preconditions: the session and break segment must exist, the break must belong to that session and still be open, and the session must not be locked.
+
+        Required inputs: workSessionId (UUID) and breakSegmentId (UUID) as path parameters; there is no request body.
+
+        Emits a WORKORDER_WORK_SESSION_BREAK_STOP event.
+
+        Returns 404 when the session or break segment cannot be found, and 409 when the break is already stopped or the session is locked.
+
+        '
       operationId: stopBreakSegment
       parameters:
       - name: workSessionId
@@ -1858,14 +2355,35 @@ paths:
     post:
       tags:
       - Work Session API
-      summary: Start a work session
-      description: Technician starts a work session on a work order. Creates an IN_PROGRESS work session and records the start time.
-      operationId: startWorkSession
+      summary: Start a Technician Work Session
+      description: 'Creates an IN_PROGRESS work session binding a mechanic to a workorder task, stamping the start time from the server clock.
+
+        Use this tool when a technician clocks onto a task; do not use stopWorkexecWorkSession, which ends a running session, or addBreakSegment, which pauses one.
+
+        Preconditions: the workorder must exist, and the mechanic must have no other IN_PROGRESS session unless overlapping sessions are enabled by configuration, the caller holds timekeeping:overlap_override, and an overlapOverrideReason is supplied.
+
+        Required inputs: mechanicId, workOrderId, workOrderTaskId, and locationId (all UUIDs); resourceId and overlapOverrideReason are optional.
+
+        Emits a WORKORDER_WORK_SESSION_START event; any overlap override is recorded with the overriding user and timestamp.
+
+        Returns 201 with the new session, 404 when the workorder does not exist, and 409 when the mechanic already has an active session and no valid override applies.
+
+        '
+      operationId: startWorkexecWorkSession
       requestBody:
+        description: Session start details binding a mechanic to a workorder task and location.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/StartWorkSessionRequest'
+            examples:
+              Clock onto task:
+                description: Clock onto task
+                value:
+                  mechanicId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a51
+                  workOrderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a52
+                  workOrderTaskId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a53
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a54
         required: true
       responses:
         '201':
@@ -1889,8 +2407,20 @@ paths:
     post:
       tags:
       - Travel Segment API
-      summary: Stop a travel segment
-      description: Stop an active travel segment and record the final travel details
+      summary: Stop an Active Travel Segment
+      description: 'Stops an IN_PROGRESS travel segment, transitioning it to COMPLETED and computing the duration in whole minutes from the server clock.
+
+        Use this tool when a technician arrives and the travel leg ends; do not use submitTravelSegments, which batches finished segments for approval.
+
+        Preconditions: the segment must exist and be IN_PROGRESS; COMPLETED, SUBMITTED, or APPROVED segments cannot be stopped again.
+
+        Required inputs: travelSegmentId (UUID) as a path parameter; toLocationId in the body is optional and overrides the destination recorded at start.
+
+        Emits a WORKORDER_TRAVEL_SEGMENT_STOP event carrying the computed duration.
+
+        Returns 404 when no segment exists for the id, and 409 when the segment is not IN_PROGRESS.
+
+        '
       operationId: stopTravelSegment
       parameters:
       - name: travelSegmentId
@@ -1900,10 +2430,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Final travel details recorded when the segment ends.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/StopTravelSegmentRequest'
+            examples:
+              Arrived at customer:
+                description: Arrived at customer
+                value:
+                  toLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a45
         required: true
       responses:
         '200':
@@ -1921,9 +2457,21 @@ paths:
     post:
       tags:
       - Travel Segment API
-      summary: Create a post-approval adjustment for a travel segment
-      description: Create an adjustment for a previously recorded travel segment after approval
-      operationId: createAdjustment
+      summary: Create Post-Approval Travel Adjustment
+      description: 'Creates an adjustment record against an APPROVED travel segment, capturing corrected start and end times and a reason while leaving the original segment untouched.
+
+        Use this tool when approved travel times need correction after the fact; do not use stopTravelSegment or submitTravelSegments, which drive the normal pre-approval lifecycle.
+
+        Preconditions: the segment must exist and be in APPROVED status — adjustments cannot be created for IN_PROGRESS, COMPLETED, or SUBMITTED segments.
+
+        Required inputs: travelSegmentId (UUID) as a path parameter and a body with a non-blank adjustmentReason; adjustedStartAt and adjustedEndAt (ISO instants) are optional.
+
+        Emits a WORKORDER_TRAVEL_SEGMENT_ADJUSTMENT event; the adjusting user is recorded from the security context.
+
+        Returns 201 with the adjustment, 404 when no segment exists for the id, and 409 when the segment is not APPROVED.
+
+        '
+      operationId: createTravelSegmentAdjustment
       parameters:
       - name: travelSegmentId
         in: path
@@ -1932,10 +2480,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Corrected travel times and the reason for adjusting an approved segment.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateTravelSegmentAdjustmentRequest'
+            examples:
+              Trim end time:
+                description: Trim end time
+                value:
+                  adjustedStartAt: 2026-08-13 13:00:00+00:00
+                  adjustedEndAt: 2026-08-13 13:35:00+00:00
+                  adjustmentReason: Technician forgot to stop the segment at arrival
         required: true
       responses:
         '201':
@@ -1953,8 +2509,20 @@ paths:
     post:
       tags:
       - Travel Segment API
-      summary: Submit travel segments for a mobile work assignment
-      description: Submit recorded travel segments for a mobile work assignment for downstream processing
+      summary: Submit Travel Segments for Approval
+      description: 'Submits the calling technician''s IN_PROGRESS and COMPLETED travel segments for a mobile work assignment, transitioning them all to SUBMITTED for downstream approval.
+
+        Use this tool at end of day when travel is ready for review; do not use stopTravelSegment, which ends a single running leg without submitting it.
+
+        Preconditions: the security-context username must parse as the technician''s UUID, and at least one IN_PROGRESS or COMPLETED segment must exist for that technician on the assignment.
+
+        Required inputs: mobileWorkAssignmentId (UUID) as a path parameter and a body with workDate (ISO date); the body is validated but submission is keyed entirely on the path id and the caller''s identity.
+
+        Emits a WORKORDER_TRAVEL_SEGMENT_SUBMIT event.
+
+        Returns 200 with the submitted segments, 400 when the caller''s username is not a UUID, and 404 when no submittable segments exist for the assignment.
+
+        '
       operationId: submitTravelSegments
       parameters:
       - name: mobileWorkAssignmentId
@@ -1964,10 +2532,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Submission context for the day's travel segments.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SubmitTravelSegmentsRequest'
+            examples:
+              End of day:
+                description: End of day
+                value:
+                  workDate: 2026-08-13
+                  notes: All site visits complete
         required: true
       responses:
         '200':
@@ -1987,14 +2562,36 @@ paths:
     post:
       tags:
       - Travel Segment API
-      summary: Start a travel segment
-      description: Start a travel segment for a technician beginning travel related to work execution
+      summary: Start a Travel Segment
+      description: 'Starts an IN_PROGRESS travel segment for a mobile technician, stamping the start time from the server clock and recording who created it.
+
+        Use this tool when a technician begins travel tied to a mobile work assignment; do not use stopTravelSegment, which ends an already-running segment.
+
+        Preconditions: no IN_PROGRESS travel segment may exist for the same mobile work assignment, and when actedForPersonId is set an onBehalfReasonCode is mandatory.
+
+        Required inputs: mobileWorkAssignmentId (UUID), technicianId (UUID), and segmentType (DEPART_SHOP, ARRIVE_CUSTOMER_SITE, DEPART_CUSTOMER_SITE, ARRIVE_SHOP, TRAVEL_BETWEEN_SITES, or DEADHEAD); fromLocationId, toLocationId, workOrderId, actedForPersonId, and onBehalfReasonCode (TECHNICIAN_UNAVAILABLE, FORGOT_TO_CLOCK, DATA_ENTRY_ERROR) are optional.
+
+        Emits a WORKORDER_TRAVEL_SEGMENT_START event.
+
+        Returns 201 with the new segment, 400 when actedForPersonId is given without onBehalfReasonCode, and 409 when an active segment already exists for the assignment.
+
+        '
       operationId: startTravelSegment
       requestBody:
+        description: Travel segment start details identifying the assignment, technician, and leg.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/StartTravelSegmentRequest'
+            examples:
+              Depart shop:
+                description: Depart shop
+                value:
+                  mobileWorkAssignmentId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a41
+                  technicianId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a42
+                  segmentType: DEPART_SHOP
+                  fromLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a43
+                  workOrderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a44
         required: true
       responses:
         '201':
@@ -2012,8 +2609,20 @@ paths:
     post:
       tags:
       - Time Entry API
-      summary: Reject a time entry in SUBMITTED state
-      description: Reject a submitted time entry and record the rejection details for follow-up
+      summary: Reject a Submitted Time Entry
+      description: 'Rejects a SUBMITTED time entry, recording the rejection reason, the deciding user, and the decision timestamp for technician follow-up.
+
+        Use this tool when submitted hours are wrong and must be sent back; do not use approveTimeEntry, which accepts the entry as-is.
+
+        Preconditions: the time entry must exist and be in SUBMITTED status; entries already APPROVED or REJECTED cannot be re-decided.
+
+        Required inputs: timeEntryId (UUID) as a path parameter and a body with a non-blank rejectionReason; the deciding identity is taken from the security context.
+
+        Emits a WORKORDER_TIME_ENTRY_REJECTED event carrying the rejection reason.
+
+        Returns 404 when no time entry exists for the id, and 409 when the entry is not in SUBMITTED status.
+
+        '
       operationId: rejectTimeEntry
       parameters:
       - name: timeEntryId
@@ -2023,10 +2632,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Rejection details explaining why the submitted hours are being sent back.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RejectTimeEntryRequest'
+            examples:
+              Rejection:
+                description: Rejection
+                value:
+                  rejectionReason: Hours overlap an existing approved entry for the same day
         required: true
       responses:
         '200':
@@ -2044,8 +2659,20 @@ paths:
     post:
       tags:
       - Time Entry API
-      summary: Approve a time entry in SUBMITTED state
-      description: Approve a submitted time entry so it can move forward in the workorder timekeeping workflow
+      summary: Approve a Submitted Time Entry
+      description: 'Approves a SUBMITTED time entry, stamping the approving user and decision timestamp so the hours can flow onward in the workorder timekeeping workflow.
+
+        Use this tool when a supervisor accepts a technician''s submitted hours; do not use rejectTimeEntry, which marks the entry REJECTED with a reason instead.
+
+        Preconditions: the time entry must exist and be in SUBMITTED status; entries already APPROVED or REJECTED cannot be re-decided.
+
+        Required inputs: timeEntryId (UUID) as a path parameter; there is no request body, and the approver identity is taken from the security context.
+
+        Emits a WORKORDER_TIME_ENTRY_APPROVED event recording the decision.
+
+        Returns 404 when no time entry exists for the id, and 409 when the entry is not in SUBMITTED status.
+
+        '
       operationId: approveTimeEntry
       parameters:
       - name: timeEntryId
@@ -2070,14 +2697,34 @@ paths:
     post:
       tags:
       - Workorder Search
-      summary: Resolve workorder numbers
-      description: Batch-resolves a set of workorder ids to their human workorder numbers. Consumed server-side by sibling services that store only the workorder id and need the human number for finder/search enrichment.
-      operationId: resolveNumbers
+      summary: Resolve Workorder Ids to Numbers
+      description: 'Batch-resolves workorder ids to their human-readable workorder numbers for sibling services that store only the id.
+
+        Use this tool when known workorder ids need display numbers; do not use searchWorkorders, which is for discovering workorders by text query rather than resolving known ids.
+
+        Preconditions: none — nulls and duplicates in the id list are silently dropped, and ids with no matching workorder are omitted from the response rather than erroring.
+
+        Required inputs: a body with workorderIds, a non-empty list of UUIDs.
+
+        Emits a WORKORDER_NUMBER_RESOLVE audit event; no workorder state changes — this is a read-only projection.
+
+        Returns 200 with one pairing per found workorder, and 400 when workorderIds is missing or empty.
+
+        '
+      operationId: resolveWorkorderNumbers
       requestBody:
+        description: Batch of workorder ids to resolve to human workorder numbers.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/WorkorderNumberResolveRequest'
+            examples:
+              Two ids:
+                description: Two ids
+                value:
+                  workorderIds:
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a11
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a12
         required: true
       responses:
         '200':
@@ -2097,9 +2744,21 @@ paths:
     get:
       tags:
       - Estimate API
-      summary: Get all estimates
-      description: Retrieve a list of all estimates.
-      operationId: getAllEstimates
+      summary: List All Estimates
+      description: 'Returns every estimate in the system as an unpaginated list, in all statuses from DRAFT through APPROVED, DECLINED, and EXPIRED.
+
+        Use this tool only for small datasets or admin views; use searchEstimates instead for paginated, filtered lookup by query, customer, or vehicle.
+
+        Preconditions: none beyond the caller holding workorder:estimate:view.
+
+        Required inputs: none — there are no filters or pagination parameters.
+
+        Emits a WORKORDER_ESTIMATE_LIST audit event; no estimate state changes — this is a read-only projection.
+
+        Returns 200 with the full list, possibly empty.
+
+        '
+      operationId: listEstimates
       responses:
         '200':
           description: List of estimates returned successfully.
@@ -2117,8 +2776,20 @@ paths:
     post:
       tags:
       - Estimate API
-      summary: Create a new draft estimate
-      description: Create a new estimate in DRAFT status for a customer and vehicle. Requires ESTIMATE_CREATE permission. System will generate a unique estimate number and apply default values for location, currency, and tax region if not provided.
+      summary: Create a New Draft Estimate
+      description: 'Creates an estimate in DRAFT status for a customer and vehicle, generating a unique estimate number and applying defaults for location and currency when omitted.
+
+        Use this tool for a from-scratch estimate; do not use createEstimateFromAppointment, which seeds the estimate from a scheduled appointment and is idempotent on the appointment id.
+
+        Preconditions: none beyond the caller holding workorder:estimate:create; when financial fields are supplied, subtotal plus taxAmount must equal total and none may be negative.
+
+        Required inputs: customerId and vehicleId (UUIDs), crmPartyId, crmVehicleId, and crmContactIds; locationId, currencyUomId, and the financial fields are optional, and an Idempotency-Key header replays the originally created estimate.
+
+        Emits a WORKORDER_ESTIMATE_CREATE event.
+
+        Returns 201 with the estimate, 400 with code VALIDATION_ERROR when required fields are missing or negative, and 409 with code CONFLICT when totals are inconsistent or an integrity constraint fails.
+
+        '
       operationId: createEstimate
       parameters:
       - name: Idempotency-Key
@@ -2129,7 +2800,7 @@ paths:
           type: string
         example: estimate-create-550e8400-e29b-41d4-a716-446655440000
       requestBody:
-        description: Estimate creation request with customer and vehicle IDs
+        description: Customer, vehicle, and CRM references the draft estimate is opened for.
         content:
           application/json:
             schema:
@@ -2138,9 +2809,13 @@ paths:
               createEstimate:
                 description: createEstimate
                 value:
-                  customerId: 550e8400-e29b-41d4-a716-446655440010
-                  vehicleId: 550e8400-e29b-41d4-a716-446655440011
-                  locationId: 550e8400-e29b-41d4-a716-446655440020
+                  customerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4ac1
+                  vehicleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4ac2
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4ac3
+                  crmPartyId: party-1001
+                  crmVehicleId: veh-2002
+                  crmContactIds:
+                  - contact-3003
         required: true
       responses:
         '201':
@@ -2182,9 +2857,21 @@ paths:
     post:
       tags:
       - Estimate API
-      summary: Submit estimate for customer approval
-      description: 'Submit a DRAFT estimate for customer approval. Creates immutable snapshot and transitions to PENDING_APPROVAL state. Validates completeness (has customer, vehicle, line items, calculated totals). CAP:003 Issue #168 - Submit Estimate for Customer Approval'
-      operationId: submitForApproval
+      summary: Submit Estimate for Customer Approval
+      description: 'Submits a DRAFT estimate for customer approval, creating an immutable snapshot and transitioning it to PENDING_APPROVAL.
+
+        Use this tool when the draft is ready to present; do not use approveEstimate before submission, since approval requires PENDING_APPROVAL status, and calculateEstimateTotals should already have produced totals.
+
+        Preconditions: the estimate must be in DRAFT status and complete — a customer, a vehicle, at least one line item, and calculated totals are all required.
+
+        Required inputs: estimateId (UUID) as a path parameter; there is no request body, and the submitting user comes from the security context.
+
+        Emits a WORKORDER_ESTIMATE_SUBMIT event and persists a submission snapshot.
+
+        Returns 404 when the estimate does not exist, and 400 when it is not DRAFT or fails a completeness check.
+
+        '
+      operationId: submitEstimateForApproval
       parameters:
       - name: estimateId
         in: path
@@ -2222,8 +2909,20 @@ paths:
     post:
       tags:
       - Estimate API
-      summary: Create historical snapshot
-      description: Capture an immutable snapshot of the estimate's complete state (estimate + all line items) for audit trail and version history purposes.
+      summary: Create Estimate Historical Snapshot
+      description: 'Captures an immutable snapshot of the estimate''s complete state — the estimate plus all its line items — for audit trail and version history.
+
+        Use this tool to preserve state before a significant change; submitEstimateForApproval already snapshots automatically, so do not duplicate it around submission.
+
+        Preconditions: the estimate must exist; snapshots are additive and never modify the estimate itself.
+
+        Required inputs: estimateId (UUID) as a path parameter; notes is an optional query parameter explaining why the snapshot was taken.
+
+        Emits an ESTIMATE_SNAPSHOT_CREATE event.
+
+        Returns 404 when the estimate does not exist, and 409 when the snapshot cannot be serialized.
+
+        '
       operationId: createEstimateSnapshot
       parameters:
       - name: estimateId
@@ -2269,8 +2968,20 @@ paths:
     post:
       tags:
       - Estimate API
-      summary: Reopen a declined estimate
-      description: Transition a declined estimate back to DRAFT state. Can only be done within the configured expiry period.
+      summary: Reopen a Declined Estimate
+      description: 'Reopens a DECLINED estimate back to DRAFT, clearing the decline reason, decline timestamp, and expiry date.
+
+        Use this tool when a customer changes their mind after declining; do not use reopenWorkorder, which reopens a completed workorder rather than an estimate.
+
+        Preconditions: the estimate must be DECLINED and still within the declineExpiryDays window of its approval configuration — expired declines cannot be reopened.
+
+        Required inputs: estimateId (UUID) as a path parameter; there is no request body.
+
+        Emits a WORKORDER_ESTIMATE_REOPEN event and marks the estimate fact changed.
+
+        Returns 400 when the estimate is missing, not declined, or past its expiry window — all failures surface as 400 in this operation.
+
+        '
       operationId: reopenEstimate
       parameters:
       - name: estimateId
@@ -2309,9 +3020,21 @@ paths:
     post:
       tags:
       - Estimate API
-      summary: Promote approved estimate to workorder
-      description: 'Promote an approved estimate to a workorder. Validates preconditions: estimate must be APPROVED, not expired, have approved items, and not already promoted. Returns 409 ALREADY_PROMOTED with existingWorkorderId if estimate was previously promoted (idempotency). CAP:004 Story #26 - Create a workorder from approved estimate.'
-      operationId: promoteEstimateToWorkorder
+      summary: Promote Approved Estimate to Workorder
+      description: 'Promotes an APPROVED estimate into a new DRAFT workorder that inherits the estimate''s customer, location, and CRM references.
+
+        Use this tool after approveEstimate succeeds; do not use createWorkorder, which builds a workorder from an estimate id without the promotion validations.
+
+        Preconditions: the estimate must be APPROVED with a valid, unexpired approval, have approved items, and not already be promoted — a prior promotion is answered with the existing workorder instead of a duplicate.
+
+        Required inputs: estimateId (UUID) as a path parameter; an Idempotency-Key header collapses retries onto the originally created workorder.
+
+        Emits a WORKORDER_ESTIMATE_PROMOTE event.
+
+        Returns 200 with the workorder (also on ALREADY_PROMOTED replays that can resolve the existing workorder), 404 when the estimate does not exist, 409 when promotion validation fails, and 400 on invalid arguments.
+
+        '
+      operationId: promoteEstimate
       parameters:
       - name: estimateId
         in: path
@@ -2362,8 +3085,20 @@ paths:
     post:
       tags:
       - Estimate API
-      summary: Add line item to estimate
-      description: Add a part or labor line item to a draft estimate. Estimate must be in DRAFT status. For PART items, provide productId or description. For LABOR items, provide serviceId or description.
+      summary: Add Line Item to Estimate
+      description: 'Adds a PART or LABOR line item to a draft estimate with quantity, unit price, and optional tax code.
+
+        Use this tool while building the draft; do not use updateEstimateItem, which edits an existing line, and run calculateEstimateTotals afterwards to refresh totals.
+
+        Preconditions: the estimate must be in DRAFT status; PART items need a productId or description, and LABOR items need a serviceId or description.
+
+        Required inputs: estimateId (UUID) as a path parameter, plus itemType (PART or LABOR), quantity, and unitPrice in the body; description, taxCode, productId, and serviceId are conditional or optional.
+
+        Emits an ESTIMATE_ITEM_ADD event.
+
+        Returns 404 when the estimate does not exist, 400 on validation failures, and 409 when the estimate is not in DRAFT status.
+
+        '
       operationId: addEstimateItem
       parameters:
       - name: estimateId
@@ -2375,7 +3110,7 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
-        description: Line item details
+        description: Part or labor line being added to the draft estimate.
         content:
           application/json:
             schema:
@@ -2424,8 +3159,20 @@ paths:
     post:
       tags:
       - Estimate API
-      summary: Decline an estimate
-      description: Transition estimate to declined state. Estimate can be declined from DRAFT or APPROVED status.
+      summary: Decline an Estimate
+      description: 'Declines an estimate, setting DECLINED status with the decline reason and timestamp and stamping an expiry date from the applicable approval configuration''s declineExpiryDays.
+
+        Use this tool when the customer rejects the estimate; do not use reopenEstimate, which reverses a decline while the expiry window is still open.
+
+        Preconditions: the estimate must exist and be in DRAFT, PENDING_APPROVAL, or APPROVED status.
+
+        Required inputs: estimateId (UUID) as a path parameter; reason is an optional query parameter recorded as the decline reason.
+
+        Emits a WORKORDER_ESTIMATE_DECLINE event and marks the estimate fact changed.
+
+        Returns 400 when the estimate is missing or cannot be declined from its current status — both failures surface as 400 in this operation.
+
+        '
       operationId: declineEstimate
       parameters:
       - name: estimateId
@@ -2471,8 +3218,20 @@ paths:
     post:
       tags:
       - Estimate API
-      summary: Calculate taxes and totals
-      description: Calculate subtotal, tax amount, and total for an estimate based on its line items. Estimate must be in DRAFT status. Uses stub tax calculation (8.25% flat rate) pending pos-accounting integration.
+      summary: Calculate Estimate Taxes and Totals
+      description: 'Calculates and persists the estimate''s subtotal, tax amount, and total from its non-deleted line items, delegating tax to the tax service against the jurisdiction of the estimate''s location.
+
+        Use this tool after editing line items and before submitEstimateForApproval; do not use getEstimateSummary, which reads the stored figures without recalculating.
+
+        Preconditions: the estimate must be in DRAFT status; an estimate with no line items has its totals zeroed.
+
+        Required inputs: estimateId (UUID) as a path parameter; there is no request body.
+
+        Emits an ESTIMATE_CALCULATE event; when the tax service is unreachable the subtotal is summed locally, tax is stored as zero, and the estimate is flagged taxPending with no fallback rate applied.
+
+        Returns 404 when the estimate does not exist, and 409 when it is not in DRAFT status.
+
+        '
       operationId: calculateEstimateTotals
       parameters:
       - name: estimateId
@@ -2511,8 +3270,20 @@ paths:
     post:
       tags:
       - Estimate API
-      summary: Approve an estimate with customer signature
-      description: 'Transition estimate to approved state with customer signature capture. Estimate can be approved from DRAFT status. Requires customer ID validation and signature data (base64-encoded image). For commercial accounts with PO enforcement enabled, a purchase order number must be provided (CAP:092 Story #98).'
+      summary: Approve Estimate With Customer Signature
+      description: 'Approves a PENDING_APPROVAL estimate, transitioning it to APPROVED with the captured signature, signer, notes, optional purchase order, and optional selective line-item approvals.
+
+        Use this tool when the customer accepts the submitted estimate; do not use approveWorkorder, which authorizes a workorder rather than an estimate — submitEstimateForApproval must have run first, and promoteEstimate is the follow-up that turns the approval into a workorder.
+
+        Preconditions: the estimate must exist in PENDING_APPROVAL status and belong to the customerId in the request; commercial accounts with PO enforcement must supply a purchaseOrderNumber.
+
+        Required inputs: estimateId (UUID) as a path parameter and customerId (UUID) in the body; signatureData, signerName, notes, purchaseOrderNumber, and lineItemApprovals are optional, and signatureMimeType defaults to image/png.
+
+        Emits a WORKORDER_ESTIMATE_APPROVE event.
+
+        Returns 404 when the estimate does not exist, and 400 when the customer does not match, the status is not PENDING_APPROVAL, or a required purchase order is missing.
+
+        '
       operationId: approveEstimate
       parameters:
       - name: estimateId
@@ -2524,7 +3295,7 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
-        description: Approval request with customer ID, signature capture, and optional selective line item approvals
+        description: Approving customer's identity, signature artifacts, and optional line-item selections.
         content:
           application/json:
             schema:
@@ -2568,14 +3339,39 @@ paths:
     post:
       tags:
       - Estimates from Appointments
-      summary: Create draft estimate from appointment
-      description: 'Creates a new DRAFT estimate from an appointment. Idempotent: returns existing estimate if appointmentId already has one.'
+      summary: Create Draft Estimate From Appointment
+      description: 'Creates a DRAFT estimate seeded from a shop appointment, linking the appointment, customer, vehicle, and location ids onto the new estimate.
+
+        Use this tool when an appointment arrives and needs an estimate started; do not use createEstimate, which builds an estimate from scratch without an appointment link or idempotency guarantee.
+
+        Preconditions: none beyond authentication — the appointment id is not verified against the scheduling service, and an estimate already linked to the appointmentId short-circuits creation.
+
+        Required inputs: idempotencyKey, appointmentId, customerId, vehicleId, and locationId (all UUIDs); requestedServices is an optional list of free-text service descriptions.
+
+        Emits a WORKORDER_ESTIMATE_CREATE_FROM_APPOINTMENT event; the call is idempotent on appointmentId, so retries never create duplicates.
+
+        Returns 201 with created=true when a new estimate is persisted, and 200 with created=false and the existing estimateId when the appointment already has one.
+
+        '
       operationId: createEstimateFromAppointment
       requestBody:
+        description: Appointment reference and party identifiers used to seed the new draft estimate.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateEstimateFromAppointmentRequest'
+            examples:
+              From appointment:
+                description: From appointment
+                value:
+                  idempotencyKey: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                  appointmentId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                  customerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
+                  vehicleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a05
+                  requestedServices:
+                  - Front brake inspection
+                  - Oil change
         required: true
       responses:
         '201':
@@ -2616,9 +3412,21 @@ paths:
     post:
       tags:
       - Change Request API
-      summary: Apply emergency override
-      description: Manager applies emergency override to approve a change request with exception. Requires Manager role and a valid exception reason. Items move from PENDING_APPROVAL to READY_TO_EXECUTE status.
-      operationId: applyEmergencyOverride
+      summary: Apply Manager Emergency Override
+      description: 'Applies a manager''s emergency override to a change request awaiting advisor review, setting it to APPROVED_WITH_EXCEPTION, flagging it as an emergency exception, and moving its items to READY_TO_EXECUTE.
+
+        Use this tool only when safety-critical work must proceed without the normal approval artifact; do not use approveChangeRequest, which is the standard advisor approval.
+
+        Preconditions: the change request must exist in AWAITING_ADVISOR_REVIEW status, and the caller must hold workorder:change_request:emergency_override — the caller''s identity becomes the overriding manager of record.
+
+        Required inputs: changeId (UUID) as a path parameter and a non-blank exceptionReason; the managerId body field is ignored in favor of the security context.
+
+        Emits a WORKORDER_CHANGE_REQUEST_EMERGENCY_OVERRIDE event and persists an ApprovalRecord with the APPROVED_WITH_EXCEPTION resolution.
+
+        Returns 400 when the change request cannot be found, is not awaiting review, or the reason is missing — all failures surface as 400 in this operation.
+
+        '
+      operationId: applyChangeRequestEmergencyOverride
       parameters:
       - name: changeId
         in: path
@@ -2629,7 +3437,7 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
-        description: Emergency override details including manager ID and reason
+        description: Reason justifying the manager's emergency exception approval.
         content:
           application/json:
             schema:
@@ -2675,8 +3483,20 @@ paths:
     post:
       tags:
       - Change Request API
-      summary: Decline a change request
-      description: Service Advisor declines the change request. Items move from PENDING_APPROVAL to CANCELLED status (not billable). Approval note is required to record the decline decision.
+      summary: Decline a Change Request
+      description: 'Declines a change request awaiting advisor review, setting it to DECLINED, writing an immutable approval record, and moving its items from PENDING_APPROVAL to CANCELLED so they are not billable.
+
+        Use this tool when the customer refuses the additional work; do not use approveChangeRequest, which authorizes the work instead.
+
+        Preconditions: the change request must exist in AWAITING_ADVISOR_REVIEW status, and the caller must be an authenticated user whose identity becomes the decliner of record.
+
+        Required inputs: changeId (UUID) as a path parameter and a non-blank approvalNote recording the decline decision.
+
+        Emits a WORKORDER_CHANGE_REQUEST_DECLINE event; declined emergency items later require acknowledgeChangeRequestDenial before the workorder can close.
+
+        Returns 400 when the change request cannot be found, is not awaiting review, or the note is missing — all failures surface as 400 in this operation.
+
+        '
       operationId: declineChangeRequest
       parameters:
       - name: changeId
@@ -2688,7 +3508,7 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
-        description: Decline details including note
+        description: Advisor's note recording why the change request was declined.
         content:
           application/json:
             schema:
@@ -2727,8 +3547,20 @@ paths:
     post:
       tags:
       - Change Request API
-      summary: Approve a change request
-      description: Service Advisor approves the change request. Items move from PENDING_APPROVAL to READY_TO_EXECUTE status. Approval note is required as the approval artifact.
+      summary: Approve a Change Request
+      description: 'Approves a change request awaiting advisor review, setting it to APPROVED, writing an immutable approval record, and moving its items from PENDING_APPROVAL to READY_TO_EXECUTE.
+
+        Use this tool for a normal advisor approval; do not use applyChangeRequestEmergencyOverride, which is the manager''s exception path producing APPROVED_WITH_EXCEPTION.
+
+        Preconditions: the change request must exist in AWAITING_ADVISOR_REVIEW status, and the caller must be an authenticated user whose identity becomes the approver of record.
+
+        Required inputs: changeId (UUID) as a path parameter and a non-blank approvalNote as the approval artifact; the approvedBy body field is ignored in favor of the security context.
+
+        Emits a WORKORDER_CHANGE_REQUEST_APPROVE event and persists an ApprovalRecord audit row.
+
+        Returns 400 when the change request cannot be found, is not awaiting review, or the note is missing — all failures surface as 400 in this operation.
+
+        '
       operationId: approveChangeRequest
       parameters:
       - name: changeId
@@ -2740,7 +3572,7 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
-        description: Approval details including user ID and note
+        description: Advisor's approval note recorded as the approval artifact.
         content:
           application/json:
             schema:
@@ -2780,9 +3612,21 @@ paths:
     post:
       tags:
       - Change Request API
-      summary: Record customer denial acknowledgment
-      description: For declined emergency/safety items, record that customer acknowledged the denial. Required before closing the work order and returning the vehicle.
-      operationId: recordCustomerDenialAcknowledgment
+      summary: Record Customer Denial Acknowledgment
+      description: 'Records that the customer acknowledged the denial of a declined emergency or safety change request, marking every emergency-flagged service and part item on it as acknowledged.
+
+        Use this tool after a customer refuses safety-critical work so the vehicle can be released; use checkWorkorderCanClose instead to verify whether any acknowledgments are still outstanding.
+
+        Preconditions: the change request must exist, be flagged as an emergency or safety exception, and be in DECLINED status.
+
+        Required inputs: changeId (UUID) as a path parameter; there is no request body.
+
+        Emits a WORKORDER_CHANGE_REQUEST_DENIAL_ACKNOWLEDGE event.
+
+        Returns 204 on success, and 400 when the change request cannot be found, is not an emergency exception, or is not declined — all failures surface as 400 in this operation.
+
+        '
+      operationId: acknowledgeChangeRequestDenial
       parameters:
       - name: changeId
         in: path
@@ -2807,8 +3651,20 @@ paths:
     post:
       tags:
       - Workexec Time Tracking API
-      summary: Stop timers
-      description: Stop active timer entries for the authenticated mechanic
+      summary: Stop Authenticated Mechanic Timers
+      description: 'Stops every active timer the authenticated mechanic is tracked on or initiated, stamping the stop time and returning the closed entries with their durations.
+
+        Use this tool when a technician finishes timed work; do not use adjustLaborHours, which corrects hours on an entry after the fact.
+
+        Preconditions: at least one active timer must exist for the caller, either as the tracked technician or as the initiator of an on-behalf timer.
+
+        Required inputs: none — there is no request body, and identity comes from the security context.
+
+        Emits a WORKEXEC_TIMER_STOP event.
+
+        Returns 200 with the stopped entries, 409 with code NO_ACTIVE_TIMER when nothing is running, and 400 when the authenticated user id is missing or not a UUID.
+
+        '
       operationId: stopTimers
       responses:
         '200':
@@ -2838,8 +3694,20 @@ paths:
     post:
       tags:
       - Workexec Time Tracking API
-      summary: Start timer
-      description: Start a workexec timer entry for the authenticated mechanic
+      summary: Start Workexec Labor Timer
+      description: 'Starts a live labor timer on a workorder, attributing the tracked time to the requested technician, the current assignment, or the caller, and creating a service line when the workorder has none.
+
+        Use this tool for live time capture; do not use createLaborPerformed, which records an already-completed quantity of hours.
+
+        Preconditions: the workorder must be in APPROVED, ASSIGNED, WORK_IN_PROGRESS, AWAITING_PARTS, or AWAITING_APPROVAL status, and the tracked technician must have no timer already running; attributing to someone who is neither the caller nor the current assignee requires workorder:labor:add_on_behalf plus a reason.
+
+        Required inputs: workorderId (UUID); workorderItemId, laborCode, technicianId, and reason are optional, and an Idempotency-Key header replays the original timer with 200.
+
+        Emits a WORKEXEC_TIMER_START event.
+
+        Returns 201 on start (200 on replay), 404 when the workorder or workorder item is missing, 409 with TIMER_ALREADY_ACTIVE or INVALID_STATE on conflicts, 403 for unauthorized on-behalf attribution, and 400 when the caller''s user id is not a UUID or an on-behalf reason is missing.
+
+        '
       operationId: startTimer
       parameters:
       - name: Idempotency-Key
@@ -2850,11 +3718,18 @@ paths:
           type: string
         example: timer-start-550e8400-e29b-41d4-a716-446655440001
       requestBody:
-        description: Timer start payload
+        description: Workorder to time against, with optional item, labor code, and attribution target.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/WorkexecTimerStartRequest'
+            examples:
+              Start on workorder:
+                description: Start on workorder
+                value:
+                  workorderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a81
+                  workorderItemId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a83
+                  laborCode: DIAG
         required: true
       responses:
         '201':
@@ -2904,8 +3779,20 @@ paths:
     post:
       tags:
       - Workexec Time Tracking API
-      summary: Create labor performed entry
-      description: Create a labor-performed record with idempotency support
+      summary: Record Labor Performed Quantity
+      description: 'Records a completed quantity of labor hours against a workorder as a closed labor entry, back-dating the start time from performedAt by the reported quantity.
+
+        Use this tool when labor arrives as a finished quantity from another system; do not use startTimer and stopTimers, which capture live elapsed time instead of reported hours.
+
+        Preconditions: the workorder must exist and not be in a state blocked for labor posting, such as CANCELLED.
+
+        Required inputs: workorderId, technicianId, performedAt (ISO instant), labor.quantity (positive decimal), labor.unit (must be HOURS), source.system, and source.sourceReferenceId; the Idempotency-Key header is mandatory and a repeated key replays the original entry with 200 and an Idempotency-Replayed header.
+
+        Emits a WORKEXEC_LABOR_PERFORMED_CREATE event.
+
+        Returns 201 on creation (200 on replay), 404 when the workorder cannot be found, 409 with code WORKEXEC_CONFLICT_WORKORDER_STATE when the workorder state blocks posting, and 400 when the Idempotency-Key is missing, the unit is not HOURS, or the quantity is not positive.
+
+        '
       operationId: createLaborPerformed
       parameters:
       - name: Idempotency-Key
@@ -2923,13 +3810,24 @@ paths:
           type: string
         example: corr-12345
       requestBody:
-        description: Labor-performed payload
+        description: Completed labor quantity with its source-system provenance.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/WorkexecLaborPerformedRequest'
-            example:
-              workorderId: 550e8400-e29b-41d4-a716-446655440001
+            examples:
+              Reported hours:
+                description: Reported hours
+                value:
+                  workorderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a81
+                  technicianId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a82
+                  performedAt: 2026-08-13 16:30:00+00:00
+                  labor:
+                    quantity: 1.5
+                    unit: HOURS
+                  source:
+                    system: MOBILE_APP
+                    sourceReferenceId: job-4711
         required: true
       responses:
         '201':
@@ -2971,15 +3869,36 @@ paths:
     post:
       tags:
       - Approval Configuration API
-      summary: Create a new approval configuration
-      description: Add a new approval configuration.
-      operationId: createConfiguration
+      summary: Create Approval Configuration
+      description: 'Creates an approval configuration defining how approvals are captured for a location, a location-customer pair, or globally when both scoping ids are omitted.
+
+        Use this tool when introducing a new approval rule; do not use updateApprovalConfiguration, which modifies an existing configuration by id.
+
+        Preconditions: none — duplicates for the same scope are not rejected, and the most specific row wins at resolution time.
+
+        Required inputs: approvalMethod, one of CLICK_CONFIRM, SIGNATURE, ELECTRONIC_SIGNATURE, or VERBAL_CONFIRMATION; locationId, customerId, declineExpiryDays, requireSignature, and priority are optional.
+
+        Emits a WORKORDER_APPROVAL_CONFIG_CREATE event.
+
+        Returns 200 with the persisted configuration, and 400 when approvalMethod is not one of the accepted values.
+
+        '
+      operationId: createApprovalConfiguration
       requestBody:
-        description: Configuration object to be created
+        description: Approval capture rule to create, scoped by optional location and customer ids.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ApprovalConfigurationRequest'
+            examples:
+              Location signature rule:
+                description: Location signature rule
+                value:
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61
+                  approvalMethod: SIGNATURE
+                  declineExpiryDays: 14
+                  requireSignature: true
+                  priority: 10
         required: true
       responses:
         '200':
@@ -2997,9 +3916,21 @@ paths:
     get:
       tags:
       - Estimate API
-      summary: Get estimate by ID
-      description: Retrieve an estimate by its unique ID.
-      operationId: getEstimateById
+      summary: Get Estimate by Id
+      description: 'Returns one estimate with its status, customer, vehicle, financial totals, and approval-related fields.
+
+        Use this tool when the estimate id is known; use getEstimateSummary instead for the customer-facing grouped view, or searchEstimates to find estimates by text.
+
+        Preconditions: the estimate must exist.
+
+        Required inputs: estimateId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no estimate exists for the id.
+
+        '
+      operationId: getEstimate
       parameters:
       - name: estimateId
         in: path
@@ -3030,8 +3961,20 @@ paths:
     delete:
       tags:
       - Estimate API
-      summary: Delete an estimate
-      description: Delete an estimate by its unique ID.
+      summary: Delete an Estimate
+      description: 'Deletes an estimate row by id — a hard delete with no status guard, removing the estimate regardless of its lifecycle state.
+
+        Use this tool only for mistakenly created estimates; do not use declineEstimate, which records the customer''s rejection while preserving the record.
+
+        Preconditions: none are enforced — deletion is idempotent and deleting an unknown id is a silent no-op.
+
+        Required inputs: estimateId (UUID) as a path parameter; there is no request body.
+
+        Emits a WORKORDER_ESTIMATE_DELETE event.
+
+        Returns 204 regardless of whether the estimate previously existed.
+
+        '
       operationId: deleteEstimate
       parameters:
       - name: estimateId
@@ -3055,8 +3998,20 @@ paths:
     patch:
       tags:
       - Estimate API
-      summary: Patch estimate status
-      description: Patch the status of an estimate by applying an allowed workflow transition
+      summary: Patch Estimate Status
+      description: 'Applies a workflow transition to an estimate by target status: DECLINED delegates to the decline flow without a reason, and DRAFT delegates to the reopen flow — no other target is accepted.
+
+        Use this tool only for generic UI status toggles; prefer declineEstimate, which records a decline reason, and reopenEstimate rather than this generic patch.
+
+        Preconditions: the estimate must exist and the delegated transition''s own rules apply — decline requires DRAFT, PENDING_APPROVAL, or APPROVED status, and reopen requires DECLINED within the expiry window.
+
+        Required inputs: estimateId (UUID) as a path parameter and a JSON body whose status field is DECLINED or DRAFT.
+
+        Emits a WORKORDER_ESTIMATE_PATCH event.
+
+        Returns 400 with VALIDATION_ERROR when status is missing or not a known value, and 409 with CONFLICT when the target is unsupported or the transition is not allowed from the current state.
+
+        '
       operationId: patchEstimateStatus
       parameters:
       - name: estimateId
@@ -3066,10 +4021,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Patch document naming the target estimate status (DECLINED or DRAFT).
         content:
           application/json:
             schema:
               type: object
+            examples:
+              Decline via patch:
+                description: Decline via patch
+                value:
+                  status: DECLINED
         required: true
       responses:
         '200':
@@ -3099,8 +4060,20 @@ paths:
     delete:
       tags:
       - Estimate API
-      summary: Remove line item
-      description: Remove a line item from a draft estimate (soft delete). Estimate must be in DRAFT status.
+      summary: Remove Estimate Line Item
+      description: 'Removes a line item from a draft estimate as a soft delete, so the row is flagged deleted and excluded from future calculations rather than destroyed.
+
+        Use this tool to drop an unwanted line; do not use deleteEstimate, which hard-deletes the whole estimate.
+
+        Preconditions: the estimate must be in DRAFT status and the item must exist on that estimate.
+
+        Required inputs: estimateId and itemId (UUIDs) as path parameters; there is no request body.
+
+        Emits an ESTIMATE_ITEM_DELETE event; totals are not recalculated until calculateEstimateTotals runs.
+
+        Returns 404 when the estimate or item does not exist, and 409 when the estimate is not in DRAFT status.
+
+        '
       operationId: deleteEstimateItem
       parameters:
       - name: estimateId
@@ -3134,8 +4107,20 @@ paths:
     patch:
       tags:
       - Estimate API
-      summary: Update line item
-      description: Update an existing line item on a draft estimate. Estimate must be in DRAFT status. Only provided fields will be updated.
+      summary: Update Estimate Line Item
+      description: 'Updates an existing line item on a draft estimate, changing only the fields provided and leaving omitted fields untouched.
+
+        Use this tool to adjust a line''s description, quantity, price, or tax code; do not use addEstimateItem, which appends a new line, or deleteEstimateItem, which removes one.
+
+        Preconditions: the estimate must be in DRAFT status and the item must exist on that estimate.
+
+        Required inputs: estimateId and itemId (UUIDs) as path parameters; description, quantity, unitPrice, and taxCode are all optional body fields.
+
+        Emits an ESTIMATE_ITEM_UPDATE event; totals are not recalculated until calculateEstimateTotals runs.
+
+        Returns 404 when the estimate or item does not exist, 400 on validation failures, and 409 when the estimate is not in DRAFT status.
+
+        '
       operationId: updateEstimateItem
       parameters:
       - name: estimateId
@@ -3155,7 +4140,7 @@ paths:
           format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       requestBody:
-        description: Updated item fields
+        description: Fields to change on the line item; omitted fields stay as they are.
         content:
           application/json:
             schema:
@@ -3203,9 +4188,21 @@ paths:
     get:
       tags:
       - Work Order API
-      summary: Get work order by ID
-      description: Retrieve a work order by its unique ID.
-      operationId: getWorkorderById
+      summary: Get Workorder by Id
+      description: 'Returns the raw workorder record — status, customer, vehicle, estimate linkage, approval and completion fields — for one workorder id.
+
+        Use this tool when the plain record is enough; use getWorkorderDetail instead for the role-aware view with capability flags, labor totals, and conditional financials.
+
+        Preconditions: the workorder must exist.
+
+        Required inputs: workorderId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no workorder exists for the id.
+
+        '
+      operationId: getWorkorder
       parameters:
       - name: workorderId
         in: path
@@ -3236,8 +4233,20 @@ paths:
     delete:
       tags:
       - Work Order API
-      summary: Delete a work order
-      description: Delete a work order by its unique ID.
+      summary: Delete a Workorder
+      description: 'Deletes a workorder row by id, a hard delete with no status guard or soft-delete fallback.
+
+        Use this tool only to remove mistakenly created workorders; do not use completeWorkorder or reopenWorkorder, which drive the normal lifecycle without destroying history.
+
+        Preconditions: none are enforced — deletion is idempotent and deleting an unknown id is a silent no-op.
+
+        Required inputs: workorderId (UUID) as a path parameter; there is no request body.
+
+        Emits a WORKORDER_DELETE event.
+
+        Returns 204 regardless of whether the workorder previously existed.
+
+        '
       operationId: deleteWorkorder
       parameters:
       - name: workorderId
@@ -3261,9 +4270,21 @@ paths:
     get:
       tags:
       - Work Order API
-      summary: Get transition history
-      description: Retrieve the state transition history for a work order.
-      operationId: getTransitionHistory
+      summary: Get Workorder Transition History
+      description: 'Returns the workorder''s recorded state transitions — from-status, to-status, actor, reason, and timestamp for each lifecycle change.
+
+        Use this tool when auditing how a workorder reached its current status; use getWorkorderSnapshots instead for the captured point-in-time snapshots.
+
+        Preconditions: none — a workorder with no transitions yields an empty list.
+
+        Required inputs: workorderId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the transitions, possibly empty; no 404 is produced for unknown workorders.
+
+        '
+      operationId: getWorkorderTransitions
       parameters:
       - name: workorderId
         in: path
@@ -3290,9 +4311,21 @@ paths:
     get:
       tags:
       - Work Order API
-      summary: Get snapshot history
-      description: Retrieve the snapshot history for a work order.
-      operationId: getSnapshotHistory
+      summary: Get Workorder Snapshot History
+      description: 'Returns the workorder''s captured snapshots — immutable point-in-time records taken at lifecycle milestones such as work start, billable-scope finalization, and reopen.
+
+        Use this tool when reconstructing what a workorder looked like at a milestone; use getWorkorderTransitions instead for the plain status-change log.
+
+        Preconditions: none — a workorder with no snapshots yields an empty list.
+
+        Required inputs: workorderId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the snapshots, possibly empty; no 404 is produced for unknown workorders.
+
+        '
+      operationId: getWorkorderSnapshots
       parameters:
       - name: workorderId
         in: path
@@ -3319,8 +4352,20 @@ paths:
     get:
       tags:
       - Workorder Picked Items
-      summary: Get picked items for workorder
-      description: Retrieve the items already picked for a workorder before they are consumed
+      summary: Get Picked Items for Workorder
+      description: 'Returns the items already picked for a workorder from the local pick replica, showing picked and consumed quantities before installation.
+
+        Use this tool to see what is staged and available to consume; use consumeWorkorderPickedItems to actually record consumption, and getPickTasks for lines still being picked.
+
+        Preconditions: none — a workorder without a pick list yields an empty list rather than an error.
+
+        Required inputs: workorderId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only replica projection.
+
+        Returns 200 with the picked items, possibly empty.
+
+        '
       operationId: getPickedItems
       parameters:
       - name: workorderId
@@ -3355,9 +4400,21 @@ paths:
     get:
       tags:
       - Workorder Pick Facade
-      summary: Get pick list for workorder
-      description: Retrieve the pick list for a workorder so parts can be staged and fulfilled
-      operationId: getPickList
+      summary: Get Pick List for Workorder
+      description: 'Returns the workorder''s primary pick list header from the local inventory replica so parts can be staged and fulfilled.
+
+        Use this tool for the pick list summary; use getPickTasks instead for the individual pick lines that guide execution.
+
+        Preconditions: a pick list replica must already exist for the workorder, replicated from pos-inventory facts.
+
+        Required inputs: workorderId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only replica projection.
+
+        Returns 404 when no pick list exists for the workorder.
+
+        '
+      operationId: getWorkorderPickList
       parameters:
       - name: workorderId
         in: path
@@ -3395,8 +4452,20 @@ paths:
     get:
       tags:
       - Workorder Pick Facade
-      summary: Get pick tasks for workorder
-      description: Retrieve the pick tasks for a workorder to guide pick-list execution
+      summary: Get Pick Tasks for Workorder
+      description: 'Returns the pick tasks of the workorder''s primary pick list in sort order, each with its SKU, location, required and picked quantities, and status.
+
+        Use this tool to drive pick execution line by line; use getWorkorderPickList instead for the list header and getPickedItems for what has already been picked.
+
+        Preconditions: a pick list replica must already exist for the workorder.
+
+        Required inputs: workorderId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only replica projection.
+
+        Returns 404 when no pick list exists for the workorder.
+
+        '
       operationId: getPickTasks
       parameters:
       - name: workorderId
@@ -3437,9 +4506,21 @@ paths:
     get:
       tags:
       - Workorder Parts Usage
-      summary: Get parts usage history
-      description: Retrieve usage history (issue, consume, return events) for parts on the workorder
-      operationId: getUsageHistory
+      summary: Get Parts Usage History
+      description: 'Returns the ISSUE, CONSUME, and RETURN usage events for a workorder''s parts, either for the whole workorder or filtered to one part line.
+
+        Use this tool when auditing how part quantities moved; use getPartAdjustmentHistory instead for substitutions, corrections, and reasoned returns from the adjustment flow.
+
+        Preconditions: when partLineId is supplied, the part must belong to the workorder.
+
+        Required inputs: workorderId (UUID) as a path parameter; partLineId (UUID) is an optional query filter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the events, 400 when the filtered part cannot be found, 404 when the workorder does not exist, and 409 when the filtered part belongs to a different workorder.
+
+        '
+      operationId: getPartsUsageHistory
       parameters:
       - name: workorderId
         in: path
@@ -3479,9 +4560,21 @@ paths:
     get:
       tags:
       - Workorder Part Adjustments
-      summary: Get part adjustment history
-      description: Retrieve adjustment history (substitutions, returns, corrections) for parts on the workorder
-      operationId: getAdjustmentHistory
+      summary: Get Part Adjustment History
+      description: 'Returns the substitution, reasoned-return, and correction adjustment events for a workorder''s parts, newest first, either for the whole workorder or filtered to one part.
+
+        Use this tool when auditing part swaps and corrections; use getPartsUsageHistory instead for the plain issue, consume, and return quantity movements.
+
+        Preconditions: none — an unknown workorder or part simply yields an empty list, and the partId filter is not validated against the workorder in the path.
+
+        Required inputs: workorderId (UUID) as a path parameter; partId (UUID) is an optional query filter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the adjustment events, possibly empty.
+
+        '
+      operationId: getPartAdjustmentHistory
       parameters:
       - name: workorderId
         in: path
@@ -3521,8 +4614,20 @@ paths:
     get:
       tags:
       - Operational Context
-      summary: Get operational context for workorder
-      description: Returns the current operational context for a workorder, including flags and source data used to drive execution decisions.
+      summary: Get Workorder Operational Context
+      description: 'Returns the workorder''s current operational context — location, bay (derived from the assigned resource), assigned mechanics, assigned resources, and a locked flag that is true once work has started.
+
+        Use this tool when checking execution context before dispatch or override; do not use overrideOperationalContext, which mutates the context rather than reading it.
+
+        Preconditions: the workorder must exist; the context is served from the workorder''s own assignment state, not from the shop-management service.
+
+        Required inputs: workorderId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no workorder exists for the id.
+
+        '
       operationId: getOperationalContext
       parameters:
       - name: workorderId
@@ -3552,8 +4657,20 @@ paths:
     get:
       tags:
       - Workorder Labor API
-      summary: Get labor history
-      description: Retrieve all labor entries for a workorder, ordered newest first.
+      summary: Get Workorder Labor History
+      description: 'Returns every labor entry recorded against a workorder, ordered newest first, including open sessions, stopped sessions with computed hours, and manual adjustments.
+
+        Use this tool when reviewing time spent on a workorder; do not use getWorkorderDetail, which aggregates labor into per-service totals instead of listing entries.
+
+        Preconditions: none — an unknown workorderId simply yields an empty list.
+
+        Required inputs: workorderId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the entries, possibly empty; no 404 is produced for unknown workorders.
+
+        '
       operationId: getLaborHistory
       parameters:
       - name: workorderId
@@ -3590,8 +4707,20 @@ paths:
     get:
       tags:
       - Workorder Detail
-      summary: Get workorder detail with role-based visibility
-      description: Returns comprehensive workorder detail. Financial fields are conditionally included based on user authorities. Capability flags indicate which actions the user can perform.
+      summary: Get Workorder Detail With Visibility
+      description: 'Returns the comprehensive workorder detail view — services with labor totals, parts, current technician assignment, derived started/in-progress/completed flags, and capability flags for the calling user.
+
+        Use this tool when rendering a workorder screen tailored to the caller''s role; do not use getWorkorder, which returns the raw workorder without capability flags or authority-based field filtering.
+
+        Preconditions: the workorder must exist; financial fields (estimatedTotal, laborTotal, partsTotal) are included only when the caller''s authorities grant financial visibility.
+
+        Required inputs: workorderId (UUID) as a path parameter; authorities are read from the security context, not from parameters.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 400 with code INVALID_ARGUMENT when no workorder exists for the id — the not-found case surfaces as 400 rather than 404 in this operation.
+
+        '
       operationId: getWorkorderDetail
       parameters:
       - name: workorderId
@@ -3623,8 +4752,20 @@ paths:
     get:
       tags:
       - Work Order API
-      summary: Validate completion preconditions
-      description: Evaluate completion preconditions for a workorder and return checklist + blocking reasons.
+      summary: Evaluate Workorder Completion Preconditions
+      description: 'Evaluates whether a workorder can be completed, returning a canComplete flag, a checklist, blocking reasons, counts of unresolved approval-gated change requests and non-terminal items, the emergency-denial acknowledgment state, and whether billable items exist.
+
+        Use this tool before completeWorkorder to surface blockers without attempting the transition; do not use checkWorkorderCanClose, which checks only the emergency-denial acknowledgment dimension.
+
+        Preconditions: the workorder must exist.
+
+        Required inputs: workorderId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only evaluation.
+
+        Returns 404 when no workorder exists for the id.
+
+        '
       operationId: getCompletionPreconditions
       parameters:
       - name: workorderId
@@ -3657,9 +4798,21 @@ paths:
     get:
       tags:
       - Change Request API
-      summary: Check if work order can be closed
-      description: Verify all declined emergency/safety items have customer denial acknowledgment
-      operationId: canCloseWorkorder
+      summary: Check Workorder Close Eligibility
+      description: 'Checks whether a workorder can be closed with respect to declined emergency change requests, returning true only when every declined emergency or safety item has a customer denial acknowledgment.
+
+        Use this tool before completing a workorder that had declined safety work; use acknowledgeChangeRequestDenial to clear a blocking acknowledgment rather than re-polling this check.
+
+        Preconditions: none — a workorder with no declined emergency requests yields true.
+
+        Required inputs: workorderId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only check.
+
+        Returns 200 with a bare boolean body; no 404 is produced for unknown workorders.
+
+        '
+      operationId: checkWorkorderCanClose
       parameters:
       - name: workorderId
         in: path
@@ -3684,8 +4837,20 @@ paths:
     get:
       tags:
       - Workorder Search
-      summary: Search workorders
-      description: Paginated free-text search for workorders matching customer name or workorder id, optionally filtered by exact customer and/or vehicle.
+      summary: Search Workorders With Filters
+      description: 'Searches workorders by free-text query against customer display names or a literal workorder id, optionally narrowed by exact customerId and vehicleId filters, returning a page of rows enriched with customer name, vehicle label, and VIN.
+
+        Use this tool when finding workorders by customer or id fragments; use listWorkorders instead for an unfiltered listing, and resolveWorkorderNumbers to map known ids to human numbers.
+
+        Preconditions: customer-name matching depends on the local customer replica; at most 10 name-matched customers are considered per query.
+
+        Required inputs: none are mandatory — q defaults to an empty string and is treated as a workorder id when it parses as a UUID; page size defaults to 25.
+
+        Emits a WORKORDER_SEARCH audit event; no workorder state changes — this is a read-only projection.
+
+        Returns 200 with an empty page when nothing matches; no 404 is produced for empty results.
+
+        '
       operationId: searchWorkorders
       parameters:
       - name: q
@@ -3729,8 +4894,20 @@ paths:
     get:
       tags:
       - Estimate API
-      summary: Get estimate summary (customer-facing)
-      description: Retrieve a customer-facing summary of an estimate with grouped line items (parts and labor) and financial breakdown. Use the /{estimateId}/pdf endpoint to generate a PDF document.
+      summary: Get Customer-Facing Estimate Summary
+      description: 'Returns the customer-facing summary of an estimate with line items grouped into parts and labor plus the financial breakdown.
+
+        Use this tool for presentation to the customer; use getEstimate instead for the raw record, and generateEstimatePdf to render the same content as a PDF document.
+
+        Preconditions: the estimate must exist; totals reflect the last calculateEstimateTotals run.
+
+        Required inputs: estimateId (UUID) as a path parameter.
+
+        Emits an ESTIMATE_SUMMARY_VIEW audit event; no estimate state changes — this is a read-only projection.
+
+        Returns 404 when no estimate exists for the id.
+
+        '
       operationId: getEstimateSummary
       parameters:
       - name: estimateId
@@ -3763,8 +4940,20 @@ paths:
     get:
       tags:
       - Estimate API
-      summary: Generate estimate PDF
-      description: Generate a PDF document for an estimate containing header details, line items grouped by type (parts and labor), and financial totals. Rendered via pos-documents service.
+      summary: Generate Estimate PDF Document
+      description: 'Renders the estimate as a PDF via the pos-documents service, containing header details, line items grouped into parts and labor, and financial totals, returned as an attachment.
+
+        Use this tool when a printable or emailable document is needed; use getEstimateSummary instead for the same content as JSON.
+
+        Preconditions: the estimate must exist and the pos-documents service must be reachable.
+
+        Required inputs: estimateId (UUID) as a path parameter.
+
+        Emits an ESTIMATE_PDF_GENERATE audit event; no estimate state changes — the render is performed on demand and not stored.
+
+        Returns 404 when the estimate does not exist, and 502 when the document service fails to render the PDF.
+
+        '
       operationId: generateEstimatePdf
       parameters:
       - name: estimateId
@@ -3806,9 +4995,21 @@ paths:
     get:
       tags:
       - Estimate API
-      summary: Get estimates by shop
-      description: Retrieve all estimates for a specific shop.
-      operationId: getEstimatesByShop
+      summary: List Estimates for a Shop
+      description: 'Returns all estimates recorded against one shop location, unpaginated and in every status.
+
+        Use this tool when the caller''s route vocabulary says shop; it is a legacy alias of listEstimatesByLocation and returns identical results, so use listEstimatesByLocation instead in new integrations.
+
+        Preconditions: none — an unknown locationId simply yields an empty list.
+
+        Required inputs: locationId (UUID) as a path parameter.
+
+        Emits a WORKORDER_ESTIMATE_SEARCH_BY_SHOP audit event; no estimate state changes — this is a read-only projection.
+
+        Returns 200 with the estimates, possibly empty.
+
+        '
+      operationId: listEstimatesByShop
       parameters:
       - name: locationId
         in: path
@@ -3836,9 +5037,21 @@ paths:
     get:
       tags:
       - Estimate API
-      summary: Get estimates by location
-      description: Retrieve all estimates for a specific location.
-      operationId: getEstimatesByLocation
+      summary: List Estimates for a Location
+      description: 'Returns all estimates recorded against one location, unpaginated and in every status.
+
+        Use this tool for a location''s estimate book; do not use listEstimatesByShop, which is the legacy alias of this same lookup.
+
+        Preconditions: none — an unknown locationId simply yields an empty list.
+
+        Required inputs: locationId (UUID) as a path parameter.
+
+        Emits a WORKORDER_ESTIMATE_SEARCH_BY_LOCATION audit event; no estimate state changes — this is a read-only projection.
+
+        Returns 200 with the estimates, possibly empty.
+
+        '
+      operationId: listEstimatesByLocation
       parameters:
       - name: locationId
         in: path
@@ -3866,9 +5079,21 @@ paths:
     get:
       tags:
       - Estimate API
-      summary: Get estimates by customer
-      description: Retrieve all estimates for a specific customer.
-      operationId: getEstimatesByCustomer
+      summary: List Estimates for a Customer
+      description: 'Returns all estimates belonging to one customer, unpaginated and in every status.
+
+        Use this tool for a customer''s estimate history; use searchEstimates instead when pagination or a combined vehicle filter is needed.
+
+        Preconditions: none — an unknown customerId simply yields an empty list.
+
+        Required inputs: customerId (UUID) as a path parameter.
+
+        Emits a WORKORDER_ESTIMATE_SEARCH_BY_CUSTOMER audit event; no estimate state changes — this is a read-only projection.
+
+        Returns 200 with the estimates, possibly empty; no 404 is produced for unknown customers.
+
+        '
+      operationId: listEstimatesByCustomer
       parameters:
       - name: customerId
         in: path
@@ -3896,8 +5121,20 @@ paths:
     get:
       tags:
       - Work Order API
-      summary: Count work orders by status
-      description: Count work orders, optionally restricted to specific statuses or to open (non-terminal) work orders only. "Open" means any status except COMPLETED or CANCELLED. Returns a grand total plus a per-status breakdown, computed server-side without listing the work orders.
+      summary: Count Workorders by Status
+      description: 'Counts workorders server-side and returns a grand total plus a per-status breakdown without listing the rows.
+
+        Use this tool for dashboard tiles and status widgets; use listWorkorders or searchWorkorders instead when the actual workorder rows are needed.
+
+        Preconditions: none beyond the caller holding workorder:workorder:view.
+
+        Required inputs: none — status (repeatable, exact statuses) takes precedence over openOnly, which defaults to false and, when true, counts every status except COMPLETED and CANCELLED.
+
+        Emits a WORKORDER_COUNT audit event; no workorder state changes — this is a read-only aggregation.
+
+        Returns 200 with the counts, and 400 when a status value is not a valid WorkorderStatus.
+
+        '
       operationId: countWorkorders
       parameters:
       - name: openOnly
@@ -3941,9 +5178,21 @@ paths:
     get:
       tags:
       - Change Request API
-      summary: Get change request by ID
-      description: Retrieve details of a specific change request
-      operationId: getChangeRequestById
+      summary: Get Change Request by Id
+      description: 'Returns one change request with its status, description, emergency flags, approval details, and item associations.
+
+        Use this tool when the change request id is known; use listChangeRequests instead to see every change request on a workorder.
+
+        Preconditions: the change request must exist.
+
+        Required inputs: changeId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no change request exists for the id.
+
+        '
+      operationId: getChangeRequest
       parameters:
       - name: changeId
         in: path
@@ -3975,9 +5224,21 @@ paths:
     get:
       tags:
       - Approval Configuration API
-      summary: Get all approval configurations
-      description: Retrieve a list of all approval configurations.
-      operationId: getAllConfigurations
+      summary: List All Approval Configurations
+      description: 'Returns every approval configuration, covering location-specific, customer-specific, and global default rows that govern how estimate and workorder approvals are captured.
+
+        Use this tool when administering approval rules; use getApplicableApprovalConfiguration instead to resolve the single configuration that applies to one location and customer.
+
+        Preconditions: none beyond the caller holding workorder:approval_config:view.
+
+        Required inputs: none — there are no filters or pagination parameters.
+
+        Emits a WORKORDER_APPROVAL_CONFIG_LIST audit event; no configuration state changes — this is a read-only projection.
+
+        Returns 200 with the full list, possibly empty.
+
+        '
+      operationId: listApprovalConfigurations
       responses:
         '200':
           description: List of configurations returned successfully.
@@ -3996,9 +5257,21 @@ paths:
     get:
       tags:
       - WIP Dashboard
-      summary: List active WIP workorders
-      description: Returns a paginated list of workorders in active WIP statuses. When the caller holds workorder:wip:view_all_locations, results span all locations.
-      operationId: listWip
+      summary: List Active WIP Workorders
+      description: 'Returns a page of workorders in active work-in-progress statuses (APPROVED, ASSIGNED, WORK_IN_PROGRESS, AWAITING_PARTS, AWAITING_APPROVAL), enriched with customer and vehicle references.
+
+        Use this tool for the WIP status board; do not use getDispatchDashboard, which aggregates mechanics, bays, and conflicts for one date, and use getWipDetail for a single workorder''s status history.
+
+        Preconditions: multiLocation=true requires the caller to hold workorder:wip:view_all_locations; otherwise results are scoped to the given location.
+
+        Required inputs: locationId (UUID as a string) as a query parameter — ignored when multiLocation is true; multiLocation defaults to false and page size defaults to 25.
+
+        Emits a WORKORDER_WIP_LIST audit event; no workorder state changes — this is a read-only projection.
+
+        Returns 400 when locationId does not parse as a UUID, and 403 when multiLocation is requested without workorder:wip:view_all_locations.
+
+        '
+      operationId: listWipWorkorders
       parameters:
       - name: locationId
         in: query
@@ -4034,8 +5307,20 @@ paths:
     get:
       tags:
       - WIP Dashboard
-      summary: Get WIP detail for a workorder
-      description: Returns full WIP detail for a single workorder including status history.
+      summary: Get WIP Detail for Workorder
+      description: 'Returns the full work-in-progress detail for one workorder: current status, the complete status transition history with actors and reasons, blocking part numbers, and the currently assigned technician.
+
+        Use this tool when drilling into a single workorder from the WIP board; use listWipWorkorders instead for the paginated board itself.
+
+        Preconditions: the workorder must exist; it does not need to be in an active WIP status to be viewed.
+
+        Required inputs: workorderId (UUID) as a path parameter.
+
+        Emits a WORKORDER_WIP_VIEW audit event; no workorder state changes — this is a read-only projection.
+
+        Returns 400 with code INVALID_ARGUMENT when no workorder exists for the id — the not-found case surfaces as 400 rather than 404 in this operation.
+
+        '
       operationId: getWipDetail
       parameters:
       - name: workorderId
@@ -4061,9 +5346,21 @@ paths:
     get:
       tags:
       - Workexec Time Tracking API
-      summary: Get active timers
-      description: Retrieve active timer entries for the authenticated mechanic
-      operationId: getActiveTimerEntries
+      summary: Get Authenticated Mechanic Active Timers
+      description: 'Returns the authenticated mechanic''s currently running timer entries, each with its workorder, workorder item, labor code, and start time.
+
+        Use this tool to check whether a timer is already running before startTimer; do not use getJobTimeTotals, which aggregates completed time rather than live timers.
+
+        Preconditions: the authenticated user id in the security context must be a UUID — the mechanic is always the caller, never a parameter.
+
+        Required inputs: none; identity comes entirely from the security context.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 400 when the authenticated user id is missing or not a UUID, and 200 with an empty list when no timer is running.
+
+        '
+      operationId: getActiveTimers
       responses:
         '200':
           description: Active timers returned successfully
@@ -4086,8 +5383,20 @@ paths:
     get:
       tags:
       - Workexec Time Tracking API
-      summary: Get job time totals
-      description: Retrieve aggregated tracked hours for a date range, timezone, and optional location/technicians
+      summary: Get Aggregated Job Time Totals
+      description: 'Returns tracked job minutes aggregated per technician, location, and local calendar day over an inclusive date range interpreted in the supplied timezone.
+
+        Use this tool for payroll or utilization reporting across days; do not use getLaborHistory, which lists individual labor entries for one workorder.
+
+        Preconditions: none beyond the caller holding workorder:labor:view; totals derive from recorded labor entries.
+
+        Required inputs: startDate and endDate (ISO dates, endDate on or after startDate) and timezone (IANA name); locationId and technicianIds are optional filters.
+
+        No events are emitted and no state changes; this is a read-only aggregation.
+
+        Returns 400 when the timezone is invalid or endDate precedes startDate, and 200 with an empty list when no time was tracked in the range.
+
+        '
       operationId: getJobTimeTotals
       parameters:
       - name: startDate
@@ -4154,8 +5463,20 @@ paths:
     get:
       tags:
       - Estimate Search
-      summary: Search estimates
-      description: Paginated search for estimates filtered by optional customerId and/or vehicleId.
+      summary: Search Estimates With Filters
+      description: 'Searches estimates and returns a page of estimate summaries, either by free-text query or by exact customer and vehicle filters.
+
+        Use this tool when locating estimates by estimate number, customer name, estimate id, customer, or vehicle; use listEstimates instead for an unfiltered listing of every estimate.
+
+        Preconditions: none beyond the caller holding workorder:estimate:view; unmatched queries return an empty page rather than an error.
+
+        Required inputs: none are mandatory — a non-blank q takes precedence and causes customerId and vehicleId to be ignored; page size defaults to 25.
+
+        Emits a WORKORDER_ESTIMATE_SEARCH audit event; no estimate state changes — this is a read-only projection.
+
+        Returns 200 with an empty page when nothing matches; no 404 is produced for empty results.
+
+        '
       operationId: searchEstimates
       parameters:
       - name: q
@@ -4199,9 +5520,21 @@ paths:
     get:
       tags:
       - Daily Dispatch Board Dashboard
-      summary: Get daily dispatch dashboard
-      description: Returns workorder, mechanic, bay, and conflict data for the given location and date
-      operationId: getDashboard
+      summary: Get Daily Dispatch Board Dashboard
+      description: 'Returns the aggregated dispatch board for one location and one date: workorder summaries, mechanic statuses, bay statuses derived from workorder assignments, and detected scheduling conflicts.
+
+        Use this tool when rendering the shop''s daily dispatch board; do not use listWipWorkorders, which returns flat work-in-progress rows without mechanic, bay, or conflict aggregation.
+
+        Preconditions: the location must exist as a UUID-keyed location; mechanic availability comes from local people replicas, and a failed replica lookup sets dataQualityWarning to true instead of failing the call.
+
+        Required inputs: locationId (UUID as a string) as a query parameter; date (ISO date) is optional and defaults to today on the server clock.
+
+        Emits a WORKEXEC_DASHBOARD_TODAY_GET audit event; no workorder state changes — this is a read-only aggregation.
+
+        Returns 400 when locationId does not parse as a UUID, and 200 with empty panels when no workorders are scheduled for the date.
+
+        '
+      operationId: getDispatchDashboard
       parameters:
       - name: locationId
         in: query
@@ -4230,9 +5563,21 @@ paths:
     get:
       tags:
       - Approval Configuration API
-      summary: Get applicable configuration
-      description: Get the most specific configuration for a location and customer.
-      operationId: getApplicableConfiguration
+      summary: Resolve Applicable Approval Configuration
+      description: 'Resolves the most specific approval configuration for a location and customer, trying the location-plus-customer row first, then the location-wide row, then the global default with no location or customer.
+
+        Use this tool when deciding how an approval must be captured for a specific job; use getApprovalConfiguration instead when the configuration id is already known.
+
+        Preconditions: none — both filters are optional and narrower matches win.
+
+        Required inputs: locationId (UUID) and customerId (UUID) as optional query parameters.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no configuration matches at any specificity, in which case callers fall back to built-in defaults.
+
+        '
+      operationId: getApplicableApprovalConfiguration
       parameters:
       - name: locationId
         in: query

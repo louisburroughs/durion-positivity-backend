@@ -59,9 +59,22 @@ public class InventorySerialUnitController {
             scopes = {"inventory:on_hand:view"})
     @PreAuthorize("hasAuthority('inventory:on_hand:view')")
     @Operation(
+            operationId = "listSerialUnits",
             summary = "List serial units",
-            description = "Lists serial unit master records filtered by stock item, status, and serial number,"
-                    + " newest first",
+            description = """
+                    Lists serial unit master records newest first, optionally filtered by stock item, lifecycle \
+                    status and exact serial number — the warranty join point that resolves a part-return hold's \
+                    serial number to a stock record.
+                    Use this tool to discover a serialUnitId or resolve a serial number; use getSerialUnit instead \
+                    when the id is known, and use traceSerialUnit for the movement history.
+                    Preconditions: none; serial units are created and transitioned exclusively by the ledger \
+                    posting funnel, never through this API.
+                    Required inputs: none; stockItemId (catalog product id), status (IN_STOCK, ISSUED, RETURNED, \
+                    SCRAPPED) and serialNumber are optional query filters.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty array when nothing matches, so an empty result is not an error \
+                    condition.
+                    """,
             tags = {"Serial Units"})
     @ApiResponse(
             responseCode = "200",
@@ -99,9 +112,18 @@ public class InventorySerialUnitController {
             scopes = {"inventory:on_hand:view"})
     @PreAuthorize("hasAuthority('inventory:on_hand:view')")
     @Operation(
+            operationId = "getSerialUnit",
             summary = "Get serial unit",
-            description = "Retrieves one serial unit master record with its current status, location, lot linkage,"
-                    + " and consumption/workorder linkage",
+            description = """
+                    Returns one serial unit master record with its current status, location, lot linkage and \
+                    receipt, consumption and workorder linkages.
+                    Use this tool when the serialUnitId is already known; use listSerialUnits instead to search by \
+                    stock item, status or serial number, and use traceSerialUnit for the full movement chain.
+                    Preconditions: the serial unit must exist.
+                    Required inputs: serialUnitId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no serial unit exists for the supplied id.
+                    """,
             tags = {"Serial Units"})
     @ApiResponse(responseCode = "200", description = "Serial unit found")
     @ApiResponse(

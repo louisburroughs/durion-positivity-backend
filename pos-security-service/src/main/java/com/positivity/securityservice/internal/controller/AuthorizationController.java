@@ -34,8 +34,21 @@ public class AuthorizationController {
     @GetMapping("/authorization/decision")
     @PreAuthorize("hasAuthority('security:authorization:decide')")
     @Operation(
-            summary = "Get authorization decision",
-            description = "Returns allow or deny for a principal and permission key")
+            operationId = "getAuthorizationDecision",
+            summary = "Get Authorization Decision for a Principal",
+            description = """
+                    Returns an allow or deny decision for a principal identifier and permission key, evaluated \
+                    against the principal-role matrix populated by assignPrincipalRole.
+                    Use this tool for matrix-based checks keyed by principal string; use \
+                    getPersonAuthorizationDecision instead when the caller has a personId, and checkUserPermission \
+                    when it has a user UUID and location.
+                    Preconditions: the caller must hold security:authorization:decide; the principal needs no prior \
+                    registration.
+                    Required inputs: principalId and permission (domain:resource:action) as query parameters.
+                    No events are emitted and no state changes; this is a read-only evaluation.
+                    Returns 200 with decision allow or deny; an unknown principal or permission yields deny rather \
+                    than an error.
+                    """)
     @ApiResponse(responseCode = "200", description = "Authorization decision returned")
     @ApiResponse(responseCode = "403", description = "Forbidden: authorization decision permission required")
     public ResponseEntity<AuthorizationDecisionResponse> getDecision(
@@ -52,10 +65,20 @@ public class AuthorizationController {
     @GetMapping("/authorization/person-decision")
     @PreAuthorize("hasAuthority('security:authorization:decide')")
     @Operation(
-            summary = "Get authorization decision for a person",
-            description = "Returns allow or deny for the user backing the given personId and a permission key,"
-                    + " evaluated against that user's assigned roles. Used to verify an off-session approver"
-                    + " (e.g. a manager identified by employee number) holds a required permission.")
+            operationId = "getPersonAuthorizationDecision",
+            summary = "Get Authorization Decision for a Person",
+            description = """
+                    Returns an allow or deny decision for the user account linked to a personId, evaluated against \
+                    that user's directly assigned roles.
+                    Use this tool to verify an off-session approver, such as a manager identified by employee \
+                    number, holds a required permission; use getAuthorizationDecision instead for matrix principals.
+                    Preconditions: the caller must hold security:authorization:decide; a user should be linked to \
+                    the person via the user-person link projection.
+                    Required inputs: personId (UUID) and permission (domain:resource:action) as query parameters.
+                    No events are emitted and no state changes; this is a read-only evaluation.
+                    Returns 200 with decision allow or deny; a person with no linked user or without the permission \
+                    yields deny rather than an error.
+                    """)
     @ApiResponse(responseCode = "200", description = "Authorization decision returned")
     @ApiResponse(responseCode = "403", description = "Forbidden: authorization decision permission required")
     public ResponseEntity<AuthorizationDecisionResponse> getPersonDecision(

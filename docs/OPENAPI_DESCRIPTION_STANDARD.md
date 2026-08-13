@@ -174,7 +174,9 @@ public ResponseEntity<SupplierAccount> createSupplierAccount(
 Required:
 
 - `description` — what the body represents, one sentence. Not a repeat of the summary.
-- `required` — stated explicitly, even when true.
+- `required` — stated explicitly, even when false for a genuinely optional body. (Annotation-level
+  convention only: springdoc omits `required: false` from the generated spec because it is the
+  OpenAPI default, so the validator cannot check this on the spec.)
 - at least one `@ExampleObject` with a realistic, schema-valid value. Use UUID v7 shaped ids.
 
 The DTO's own `@Schema` field annotations are covered by ADR-0042 §5 and are not part of this
@@ -204,7 +206,6 @@ The checks, and the message each emits:
 | Error conditions | `description missing error conditions ("Returns <code> when ...")` |
 | Negative guidance | `description missing negative guidance ("do not use ..." / "... instead")` |
 | Request body description | `request body missing description (ADR-0042 §3)` |
-| Request body `required` | `request body missing explicit required flag (ADR-0042 §3)` |
 | Request body example | `request body missing example (ADR-0042 §3)` |
 
 Run the checks:

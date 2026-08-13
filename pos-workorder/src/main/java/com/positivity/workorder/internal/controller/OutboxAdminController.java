@@ -31,11 +31,21 @@ public class OutboxAdminController {
     @PostMapping("/v1/outbox/replay")
     @PreAuthorize("hasAuthority('workorder:events:replay')")
     @EmitEvent(id = "WORKORDER_OUTBOX_REPLAY", apiVersion = "1")
-    @Operation(
-            summary = "Re-emit published domain events",
-            description = "Marks already-published outbox events created at or after the given instant for"
-                    + " re-publication to Kafka. Used to seed a new consumer replica or repair drift"
-                    + " (ADR-0044). Consumers deduplicate by eventId, so replay is safe.")
+    @Operation(operationId = "replayOutboxEvents", summary = "Replay Published Outbox Events", description = """
+                    Marks already-published outbox events created at or after the given instant for \
+                    re-publication to Kafka, seeding a new consumer replica or repairing drift per ADR-0044.
+                    Use this tool for operational backfill of downstream replicas; do not use domain write \
+                    operations such as createWorkorder to regenerate events — replay re-emits the originals \
+                    instead of creating new state.
+                    Preconditions: the caller must hold workorder:events:replay, and only events already in \
+                    PUBLISHED state are re-queued.
+                    Required inputs: since (ISO-8601 instant) as an optional query parameter, defaulting to the \
+                    epoch, meaning replay everything.
+                    Emits a WORKORDER_OUTBOX_REPLAY audit event and re-queues matching outbox rows; consumers \
+                    deduplicate by eventId, so replay is safe to repeat.
+                    Returns 200 with the effective lower bound and the count of events re-queued, and 400 when \
+                    the since timestamp is malformed.
+                    """)
     @ApiResponse(responseCode = "200", description = "Replay queued; body reports how many events were re-queued")
     @ApiResponse(responseCode = "400", description = "Malformed 'since' timestamp")
     @ApiResponse(responseCode = "401", description = "Missing or invalid authentication")

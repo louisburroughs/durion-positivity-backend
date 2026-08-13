@@ -2,6 +2,8 @@ package com.positivity.price.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
@@ -22,14 +24,34 @@ public class PriceNormalizationController {
 
     private static final Logger log = LoggerFactory.getLogger(PriceNormalizationController.class);
 
-    @Operation(summary = "Normalize pricing", description = "Normalize and standardize pricing data across the system.")
+    @Operation(operationId = "normalizePricing", summary = "Normalize Pricing Data", description = """
+                    Normalizes and standardizes pricing data across the system; this operation is a declared \
+                    placeholder that is not yet implemented.
+                    Use this tool only to probe for the future normalization capability; use calculatePriceQuote \
+                    instead for any real pricing work, since no normalization logic exists yet.
+                    Preconditions: none; any authenticated caller is accepted.
+                    Required inputs: none are read; the optional JSON body is accepted but ignored.
+                    Emits a PRICE_NORMALIZATION_NORMALIZE event even though no normalization is performed and no state \
+                    changes.
+                    Returns 501 unconditionally until the operation is implemented.
+                    """)
     @ApiResponse(responseCode = "501", description = "Not yet implemented.")
     @ApiResponse(responseCode = "400", description = "Invalid request body.")
     @ApiResponse(responseCode = "500", description = "Internal server error.")
     @EmitEvent(id = "PRICE_NORMALIZATION_NORMALIZE", apiVersion = "1")
     @PreAuthorize("isAuthenticated()")
     @PostMapping("/normalize")
-    public ResponseEntity<Object> normalizePricing(@RequestBody(required = false) Object requestBody) {
+    public ResponseEntity<Object> normalizePricing(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Optional free-form normalization payload; currently ignored because the endpoint is unimplemented.",
+                            required = false,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Empty payload", value = "{}")))
+                    @RequestBody(required = false)
+                    Object requestBody) {
         log.info("POST /v1/price/normalize");
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
     }

@@ -59,9 +59,17 @@ public class TusUploadController {
 
     @RequestMapping(value = "/tus", method = RequestMethod.OPTIONS)
     @PreAuthorize("permitAll()")
-    @Operation(
-            summary = "TUS server capabilities",
-            description = "Returns supported TUS version, extensions, and max upload size. No authentication required.")
+    @Operation(operationId = "getTusCapabilities", summary = "Get TUS Server Capabilities", description = """
+                    Advertises the TUS resumable-upload capabilities of this server, namely protocol version 1.0.0, \
+                    the creation, termination and expiration extensions, and the maximum upload size.
+                    Use this tool during the tus client handshake to discover limits before creating an upload; do \
+                    not use it to check the progress of an existing upload, which is getTusUploadOffset.
+                    Preconditions: none; this endpoint requires no authentication.
+                    Required inputs: none; there are no parameters and no request body.
+                    No events are emitted and no state changes; the capabilities are returned in the Tus-Version, \
+                    Tus-Max-Size and Tus-Extension response headers.
+                    Returns 204 in all cases, with the capability data carried in headers rather than a body.
+                    """)
     @ApiResponse(responseCode = "204", description = "Server capabilities")
     public ResponseEntity<Void> options() {
         return ResponseEntity.noContent()
@@ -75,13 +83,25 @@ public class TusUploadController {
     @PostMapping("/bulk-jobs/{jobId}/tus")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_TUS_UPLOAD_CREATE", apiVersion = "1")
-    @Operation(
-            summary = "Create a resumable upload",
-            description = "Creates a new TUS upload scoped to a bulk load job. "
-                    + "Returns a Location header with the absolute upload URL for subsequent HEAD and PATCH "
-                    + "requests. The URL is reconstructed from the X-Forwarded-Proto/Host/Port/Prefix headers "
-                    + "supplied by the API gateway / reverse-proxy chain, so it reflects the public address "
-                    + "(including any proxy path prefix) rather than this service's internal one.")
+    @Operation(operationId = "createTusUpload", summary = "Create a Resumable Upload", description = """
+                    Creates a resumable TUS upload session scoped to a bulk load job and returns its absolute upload \
+                    URL in the Location header, rebuilt from the gateway's X-Forwarded headers so it reflects the \
+                    public address.
+                    Use this tool to start uploading a large file in chunks; use uploadJobFile instead when the \
+                    file is small enough for a single multipart request, and do not send file bytes here because \
+                    chunks go to appendTusUploadChunk.
+                    Preconditions: the caller must send a Tus-Resumable header of 1.0.0; the job id is recorded but \
+                    not validated here, so a wrong job id only fails later when the finished file is attached to \
+                    the job.
+                    Required inputs: Upload-Length header with the total file size in bytes (server maximum \
+                    536870912 by default), and optionally Upload-Metadata with a base64-encoded filename field, \
+                    without which the file is stored as upload.bin.
+                    Emits a BULK_LOADER_TUS_UPLOAD_CREATE event and creates an empty temp file; the session expires \
+                    after 24 hours by default (see the Upload-Expires header) and expired incomplete uploads are \
+                    cleaned up automatically.
+                    Returns 201 with Location, Upload-Offset and Upload-Expires headers, 412 when the Tus-Resumable \
+                    header is missing or not 1.0.0, and 413 when Upload-Length exceeds the server maximum.
+                    """)
     @ApiResponse(responseCode = "201", description = "Upload created")
     @ApiResponse(responseCode = "412", description = "Unsupported TUS version")
     @ApiResponse(responseCode = "413", description = "Upload-Length exceeds server maximum")
@@ -123,9 +143,19 @@ public class TusUploadController {
 
     @RequestMapping(value = "/tus/{uploadId}", method = RequestMethod.HEAD)
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
-    @Operation(
-            summary = "Get upload offset",
-            description = "Returns the current byte offset of a TUS upload for resumption.")
+    @Operation(operationId = "getTusUploadOffset", summary = "Get Current Upload Offset", description = """
+                    Returns the current byte offset of a TUS upload in the Upload-Offset response header so a client \
+                    can resume where the last transfer stopped.
+                    Use this tool after an interrupted transfer to learn where to resume; do not use \
+                    getTusCapabilities, which reports server-wide limits rather than per-upload progress.
+                    Preconditions: the upload session must exist and the caller must send a Tus-Resumable header \
+                    of 1.0.0.
+                    Required inputs: uploadId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; the response carries Upload-Offset, Upload-Length \
+                    and Upload-Expires headers with an empty body.
+                    Returns 404 when the upload does not exist, and 412 when the Tus-Resumable header is missing \
+                    or not 1.0.0.
+                    """)
     @ApiResponse(responseCode = "200", description = "Current upload offset")
     @ApiResponse(responseCode = "404", description = "Upload not found")
     @ApiResponse(responseCode = "412", description = "Unsupported TUS version")
@@ -149,11 +179,23 @@ public class TusUploadController {
     @PatchMapping("/tus/{uploadId}")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_TUS_UPLOAD_CHUNK_APPEND", apiVersion = "1")
-    @Operation(
-            summary = "Upload a chunk",
-            description = "Appends a byte range to an in-progress TUS upload. "
-                    + "Content-Type must be application/offset+octet-stream. "
-                    + "Upload-Offset must equal the current server-side offset.")
+    @Operation(operationId = "appendTusUploadChunk", summary = "Upload a Chunk", description = """
+                    Appends a contiguous byte range to an in-progress TUS upload and, when the final byte arrives, \
+                    moves the finished file into job storage.
+                    Use this tool repeatedly to stream the file in chunks after createTusUpload; do not guess the \
+                    offset after a failure, and call getTusUploadOffset instead to learn the server-side offset.
+                    Preconditions: the upload must exist, not be complete, and not be expired; the Upload-Offset \
+                    header must exactly equal the server's current offset.
+                    Required inputs: uploadId (UUID) as a path parameter, a Content-Type of \
+                    application/offset+octet-stream, Tus-Resumable, Upload-Offset and Content-Length headers, and \
+                    the raw chunk bytes as the request body.
+                    Emits a BULK_LOADER_TUS_UPLOAD_CHUNK_APPEND event; when the new offset reaches Upload-Length \
+                    the file is finalized into the job's storage and the job records the upload, moving a CREATED \
+                    job to UPLOADING (finalization fails with 404 when the job is gone or 409 when it is terminal).
+                    Returns 204 with the new Upload-Offset header on success, 409 when the offset does not match or \
+                    the upload is already complete, 410 when the upload has expired, 415 when the Content-Type is \
+                    wrong, 412 when the TUS version is unsupported, and 404 when the upload does not exist.
+                    """)
     @ApiResponse(responseCode = "204", description = "Chunk accepted, new offset returned")
     @ApiResponse(responseCode = "409", description = "Upload-Offset conflict")
     @ApiResponse(responseCode = "410", description = "Upload has expired")
@@ -187,7 +229,20 @@ public class TusUploadController {
     @DeleteMapping("/tus/{uploadId}")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_TUS_UPLOAD_CANCEL", apiVersion = "1")
-    @Operation(summary = "Cancel an upload", description = "Permanently deletes a TUS upload and its temporary file.")
+    @Operation(operationId = "cancelTusUpload", summary = "Cancel a Resumable Upload", description = """
+                    Cancels a TUS upload session, permanently deleting both the session record and its temporary \
+                    chunk file.
+                    Use this tool to abandon a partially transferred upload; do not use cancelBulkLoadJob, which \
+                    cancels the bulk load job itself rather than an upload session.
+                    Preconditions: the upload session must exist and the caller must send a Tus-Resumable header of \
+                    1.0.0; a completed upload whose file has already been attached to the job is not detached by \
+                    this call.
+                    Required inputs: uploadId (UUID) as a path parameter; there is no request body.
+                    Emits a BULK_LOADER_TUS_UPLOAD_CANCEL event and removes the temporary file; the deletion cannot \
+                    be undone and the upload URL becomes invalid.
+                    Returns 204 on success, 404 when the upload does not exist, and 412 when the Tus-Resumable \
+                    header is missing or not 1.0.0.
+                    """)
     @ApiResponse(responseCode = "204", description = "Upload deleted")
     @ApiResponse(responseCode = "404", description = "Upload not found")
     @ApiResponse(responseCode = "412", description = "Unsupported TUS version")

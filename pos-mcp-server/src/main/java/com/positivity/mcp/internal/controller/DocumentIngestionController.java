@@ -6,6 +6,8 @@ import com.positivity.mcp.service.DocumentIngestionJob;
 import com.positivity.mcp.service.DocumentIngestionJobStatus;
 import com.positivity.mcp.service.DocumentIngestionService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -42,12 +44,38 @@ public class DocumentIngestionController {
     @PreAuthorize("hasAuthority('" + McpPermissions.MCP_DOCUMENT_INGEST + "')")
     @EmitEvent(id = "MCP_DOCUMENT_INGEST", apiVersion = "1")
     @Operation(
-            summary = "Queue a document for ingestion into the RAG vector store",
-            description =
-                    "Submit a document for asynchronous ingestion into the RAG vector store. The request includes the document content and optional metadata. The response returns a job ID that can be used to track the ingestion status.",
+            operationId = "ingestDocument",
+            summary = "Queue a Document for RAG Ingestion",
+            description = """
+                    Queues a text document for asynchronous ingestion into the RAG vector store and returns a \
+                    trackable job.
+                    Use this tool to add reference content that chat agents can retrieve; do not use \
+                    getDocumentIngestionJob, which only reads the status of a job that was already queued.
+                    Preconditions: none beyond the mcp:document:ingest authority; the job is accepted and \
+                    persisted before any embedding work happens.
+                    Required inputs: content (non-blank raw text); metadata is an optional key-value map whose \
+                    document_id entry names the document — when absent a random identifier is generated.
+                    Emits a MCP_DOCUMENT_INGEST event and creates a PENDING job that is processed in the \
+                    background through RUNNING to SUCCEEDED or FAILED.
+                    Returns 202 with the job and a Location header pointing at the job-status resource; embedding \
+                    failures are reported on the job's errorMessage, not on this call.
+                    """,
             tags = {"Document Ingestion"})
     public ResponseEntity<DocumentIngestionJobResponse> ingestDocument(
-            @RequestBody @Valid @NonNull DocumentIngestionRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Raw document text to embed, with optional identifying metadata.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Policy document", value = """
+                                                                    {"content":"Refund policy: customers may return items within 30 days.",
+                                                                     "metadata":{"document_id":"policy-refunds","source":"manual"}}
+                                                                    """)))
+                    @RequestBody
+                    @Valid
+                    @NonNull
+                    DocumentIngestionRequest request) {
         DocumentIngestionJob job = documentIngestionService.submitDocument(request.content(), request.metadata());
         URI location = URI.create("/v1/mcp/documents/jobs/" + job.jobId());
         return ResponseEntity.accepted().location(location).body(DocumentIngestionJobResponse.from(job));
@@ -56,9 +84,19 @@ public class DocumentIngestionController {
     @GetMapping("/documents/jobs/{jobId}")
     @PreAuthorize("hasAuthority('" + McpPermissions.MCP_DOCUMENT_INGEST + "')")
     @Operation(
-            summary = "Get RAG document ingestion job status",
-            description =
-                    "Retrieve the status and details of an asynchronous document ingestion job using its job ID. The response includes the current status, timestamps, and any error messages if applicable.",
+            operationId = "getDocumentIngestionJob",
+            summary = "Get Document Ingestion Job Status",
+            description = """
+                    Returns the current status of an asynchronous RAG document ingestion job, including \
+                    timestamps, chunk count and any failure message.
+                    Use this tool to poll a job created by ingestDocument; do not use ingestDocument again to \
+                    check progress, since that queues a second ingestion instead.
+                    Preconditions: the job must exist for the supplied jobId returned by ingestDocument.
+                    Required inputs: jobId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with the job in state PENDING, RUNNING, SUCCEEDED or FAILED, and 404 when no job \
+                    exists for the id.
+                    """,
             tags = {"Document Ingestion"})
     public ResponseEntity<DocumentIngestionJobResponse> getIngestionJob(@PathVariable @NonNull UUID jobId) {
         return documentIngestionService

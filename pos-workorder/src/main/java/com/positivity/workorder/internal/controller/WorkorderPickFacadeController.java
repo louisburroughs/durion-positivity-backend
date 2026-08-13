@@ -47,9 +47,17 @@ public class WorkorderPickFacadeController {
             name = "bearerAuth",
             scopes = {"inventory:pick_list:view"})
     @PreAuthorize("hasAuthority('inventory:pick_list:view')")
-    @Operation(
-            summary = "Get pick list for workorder",
-            description = "Retrieve the pick list for a workorder so parts can be staged and fulfilled")
+    @Operation(operationId = "getWorkorderPickList", summary = "Get Pick List for Workorder", description = """
+                    Returns the workorder's primary pick list header from the local inventory replica so parts \
+                    can be staged and fulfilled.
+                    Use this tool for the pick list summary; use getPickTasks instead for the individual pick lines that \
+                    guide execution.
+                    Preconditions: a pick list replica must already exist for the workorder, replicated from \
+                    pos-inventory facts.
+                    Required inputs: workorderId (UUID) as a path parameter.
+                    No events are emitted and no state changes; this is a read-only replica projection.
+                    Returns 404 when no pick list exists for the workorder.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Pick list retrieved successfully",
@@ -62,7 +70,7 @@ public class WorkorderPickFacadeController {
             responseCode = "404",
             description = "Workorder not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<WorkorderPickListResponse> getPickList(
+    public ResponseEntity<WorkorderPickListResponse> getWorkorderPickList(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     @NonNull
@@ -77,9 +85,16 @@ public class WorkorderPickFacadeController {
             name = "bearerAuth",
             scopes = {"inventory:pick_list:view"})
     @PreAuthorize("hasAuthority('inventory:pick_list:view')")
-    @Operation(
-            summary = "Get pick tasks for workorder",
-            description = "Retrieve the pick tasks for a workorder to guide pick-list execution")
+    @Operation(operationId = "getPickTasks", summary = "Get Pick Tasks for Workorder", description = """
+                    Returns the pick tasks of the workorder's primary pick list in sort order, each with its \
+                    SKU, location, required and picked quantities, and status.
+                    Use this tool to drive pick execution line by line; use getWorkorderPickList instead for the list header and \
+                    getPickedItems for what has already been picked.
+                    Preconditions: a pick list replica must already exist for the workorder.
+                    Required inputs: workorderId (UUID) as a path parameter.
+                    No events are emitted and no state changes; this is a read-only replica projection.
+                    Returns 404 when no pick list exists for the workorder.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Pick tasks retrieved successfully",
@@ -111,9 +126,18 @@ public class WorkorderPickFacadeController {
             scopes = {"inventory:pick_list:execute"})
     @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
     @EmitEvent(id = "WORKORDER_PICK_FACADE_RESOLVE_SCAN", apiVersion = "1")
-    @Operation(
-            summary = "Resolve scan for pick task",
-            description = "Resolve a scanned item for a workorder pick task before confirming fulfillment")
+    @Operation(operationId = "resolvePickScan", summary = "Resolve Scan Against Pick Task", description = """
+                    Checks a scanned SKU and location against a pick task's expected SKU and location, returning \
+                    matched plus a matchStatus of MATCHED, SKU_MISMATCH, LOCATION_MISMATCH, or NO_MATCH.
+                    Use this tool to validate a barcode scan before confirmPickLine; it performs no confirmation \
+                    itself, so do not treat a match as a recorded pick.
+                    Preconditions: the pick task must exist on the workorder's pick list replica.
+                    Required inputs: workorderId and pickTaskId (UUIDs) as path parameters, plus scannedSkuId \
+                    and scannedLocationId (UUIDs) in the body.
+                    Emits a WORKORDER_PICK_FACADE_RESOLVE_SCAN audit event; no pick state changes — the check is \
+                    purely evaluative.
+                    Returns 404 when the workorder has no pick list or the pick task is not on it.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Scan resolved successfully",
@@ -140,8 +164,18 @@ public class WorkorderPickFacadeController {
                     @NonNull
                     UUID pickTaskId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Scanned SKU and location to check against the pick task's expectation.",
                             required = true,
-                            content = @Content(schema = @Schema(implementation = ResolveScanRequest.class)))
+                            content =
+                                    @Content(
+                                            schema = @Schema(implementation = ResolveScanRequest.class),
+                                            examples =
+                                                    @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                            name = "Scan",
+                                                            value = """
+                                                                    {"scannedSkuId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4aa1",
+                                                                     "scannedLocationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4aa2"}
+                                                                    """)))
                     @RequestBody
                     @Valid
                     ResolveScanRequest request) {
@@ -156,11 +190,22 @@ public class WorkorderPickFacadeController {
             scopes = {"inventory:pick_list:execute"})
     @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
     @EmitEvent(id = "WORKORDER_PICK_FACADE_CONFIRM_LINE", apiVersion = "1")
-    @Operation(
-            summary = "Confirm pick line quantity",
-            description = "Queues asynchronous pick confirmation (ADR-0044 #901): the response is 202 with "
-                    + "status PENDING; the inventory.pick-task.updated fact updates the pick replica and "
-                    + "subsequent reads observe the confirmed quantity.")
+    @Operation(operationId = "confirmPickLine", summary = "Confirm Pick Line Quantity", description = """
+                    Queues asynchronous confirmation of a picked quantity on one pick line over the Kafka \
+                    command feed per ADR-0044; the response carries status PENDING, and the inventory \
+                    pick-task-updated fact later updates the local replica.
+                    Use this tool after resolvePickScan validates the scan; do not use completePickTask, which \
+                    confirms the full remaining required quantity in one step.
+                    Preconditions: the pick task must exist on the workorder's pick list replica, and pickLineId \
+                    must equal pickTaskId in the current single-line model.
+                    Required inputs: workorderId, pickTaskId, and pickLineId (UUIDs) as path parameters, plus \
+                    quantityPicked (integer) in the body.
+                    Emits a WORKORDER_PICK_FACADE_CONFIRM_LINE event and publishes a pick-confirm command; \
+                    callers must poll getPickTasks to observe the applied quantity.
+                    Returns 202 with status PENDING when the confirmation is queued, 400 when pickLineId does \
+                    not match pickTaskId, 404 when the pick list or task is missing, and 503 when the command \
+                    feed is unavailable.
+                    """)
     @ApiResponse(
             responseCode = "202",
             description = "Confirmation queued; poll the pick tasks for the applied quantity (status PENDING).",
@@ -195,8 +240,15 @@ public class WorkorderPickFacadeController {
                     @NonNull
                     UUID pickLineId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Quantity actually picked for the line being confirmed.",
                             required = true,
-                            content = @Content(schema = @Schema(implementation = ConfirmPickLineRequest.class)))
+                            content =
+                                    @Content(
+                                            schema = @Schema(implementation = ConfirmPickLineRequest.class),
+                                            examples =
+                                                    @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                            name = "Confirm two units",
+                                                            value = "{\"quantityPicked\":2}")))
                     @RequestBody
                     @Valid
                     ConfirmPickLineRequest request) {
@@ -212,11 +264,20 @@ public class WorkorderPickFacadeController {
             scopes = {"inventory:pick_list:execute"})
     @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
     @EmitEvent(id = "WORKORDER_PICK_FACADE_COMPLETE_TASK", apiVersion = "1")
-    @Operation(
-            summary = "Complete pick task",
-            description = "Queues asynchronous completion of a workorder pick task (ADR-0044 #901). Returns "
-                    + "202 with status PENDING while the command is in flight; an already-complete task is "
-                    + "returned as-is with 200.")
+    @Operation(operationId = "completePickTask", summary = "Complete a Workorder Pick Task", description = """
+                    Queues asynchronous completion of a pick task by confirming its full required quantity over \
+                    the Kafka command feed per ADR-0044; a task with nothing left to pick is returned as-is.
+                    Use this tool to close out a pick task in one step; use confirmPickLine instead to record a \
+                    partial picked quantity.
+                    Preconditions: the pick task must exist on the workorder's pick list replica.
+                    Required inputs: workorderId and pickTaskId (UUIDs) as path parameters; the body is optional \
+                    and may carry a completion reason.
+                    Emits a WORKORDER_PICK_FACADE_COMPLETE_TASK event and publishes a pick-confirm command for \
+                    the remaining quantity; callers must poll getPickTasks to observe the applied state.
+                    Returns 202 with status PENDING while the command is in flight, 200 with the current state \
+                    when the task is already complete, 404 when the pick list or task is missing, and 503 when \
+                    the command feed is unavailable.
+                    """)
     @ApiResponse(
             responseCode = "202",
             description = "Completion queued; poll the pick tasks for the applied state (status PENDING).",
@@ -244,8 +305,14 @@ public class WorkorderPickFacadeController {
                     UUID pickTaskId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             required = false,
-                            description = "Completion details; omit or send {} if no reason is provided",
-                            content = @Content(schema = @Schema(implementation = CompletePickTaskRequest.class)))
+                            description = "Optional completion details; omit or send {} if no reason is provided.",
+                            content =
+                                    @Content(
+                                            schema = @Schema(implementation = CompletePickTaskRequest.class),
+                                            examples =
+                                                    @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                            name = "With reason",
+                                                            value = "{\"reason\":\"Staged at bay 3\"}")))
                     @RequestBody(required = false)
                     @Valid
                     CompletePickTaskRequest request) {

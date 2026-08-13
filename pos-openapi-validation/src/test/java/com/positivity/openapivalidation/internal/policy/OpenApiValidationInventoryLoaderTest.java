@@ -25,8 +25,12 @@ class OpenApiValidationInventoryLoaderTest {
         OpenApiValidationInventory inventory =
                 OpenApiValidationInventoryLoader.load(Path.of("src/test/resources/openapi/module-inventory.yaml"));
 
-        assertThat(inventory.policyFor("pos-accounting").annotationDepth())
+        // pos-api-gateway has no annotationDepth key, so it exercises the REPORT_ONLY default;
+        // every spec-producing module is explicitly STRICT since the #1263 rollout completed.
+        assertThat(inventory.policyFor("pos-api-gateway").annotationDepth())
                 .isEqualTo(OpenApiModulePolicy.DepthMode.REPORT_ONLY);
+        assertThat(inventory.policyFor("pos-accounting").annotationDepth())
+                .isEqualTo(OpenApiModulePolicy.DepthMode.STRICT);
         assertThat(inventory.policyFor("pos-tax").annotationDepth()).isEqualTo(OpenApiModulePolicy.DepthMode.STRICT);
         assertThat(inventory.policyFor("pos-supplier").annotationDepth())
                 .isEqualTo(OpenApiModulePolicy.DepthMode.STRICT);

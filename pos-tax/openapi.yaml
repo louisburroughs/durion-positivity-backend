@@ -749,11 +749,11 @@ components:
           type: string
         countryCode:
           type: string
-        postalCode:
-          type: string
         city:
           type: string
         stateCode:
+          type: string
+        postalCode:
           type: string
       required:
       - destinationAddress

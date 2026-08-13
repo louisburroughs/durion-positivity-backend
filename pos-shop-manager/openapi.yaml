@@ -27,8 +27,20 @@ paths:
     put:
       tags:
       - Appointments API
-      summary: Reschedule appointment
-      description: Reschedule an existing appointment
+      summary: Move an Appointment to a New Time Window
+      description: 'Moves an existing appointment to a new time window while preserving its resource, customer and service requests, recording the change in reschedule history and the appointment audit trail.
+
+        Use this tool when a booked appointment must change times; do not use cancelAppointment, which terminates the appointment instead of moving it, and do not use createAppointment for a visit that is not yet booked.
+
+        Preconditions: the appointment must exist and be in SCHEDULED, CHECKED_IN or WAITING_FOR_PARTS status; completed, cancelled and other statuses cannot be rescheduled.
+
+        Required inputs: newStartAt and newEndAt (UTC instants, newStartAt before newEndAt) and a reason code; rescheduleReasonNotes (max 1000 characters) is mandatory when reason is OTHER, and notifyCustomer defaults to true.
+
+        Emits a SHOPMGR_APPOINTMENT_RESCHEDULE event; a downstream workorder reschedule notification is additionally published only when the appointment carries a workorderLinkRef.
+
+        Returns 400 when the time window is invalid or notes are missing for reason OTHER, 404 when the appointment does not exist, and 409 when the appointment status does not permit rescheduling.
+
+        '
       operationId: rescheduleAppointment
       parameters:
       - name: appointmentId
@@ -38,10 +50,20 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: New time window with a mandatory reason code and optional notes recorded in the reschedule history.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RescheduleAppointmentRequest'
+            examples:
+              Customer-requested reschedule:
+                description: Customer-requested reschedule
+                value:
+                  newStartAt: 2026-06-19 08:00:00+00:00
+                  newEndAt: 2026-06-19 10:00:00+00:00
+                  reason: CUSTOMER_REQUEST
+                  rescheduleReasonNotes: Customer asked to move to Friday morning
+                  notifyCustomer: true
         required: true
       responses:
         '200':
@@ -55,19 +77,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AppointmentResponse'
+                $ref: '#/components/schemas/ApiError'
         '404':
           description: Appointment not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AppointmentResponse'
+                $ref: '#/components/schemas/ApiError'
         '409':
           description: Appointment state conflict — appointment is not in a reschedulable status.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AppointmentResponse'
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - appointments:reschedule
@@ -77,8 +99,20 @@ paths:
     post:
       tags:
       - Appointments API
-      summary: Create appointment
-      description: Create a new appointment
+      summary: Create a New Shop Appointment
+      description: 'Creates a shop appointment that reserves a time window for a customer''s vehicle at a location, optionally against a specific bay or mobile-unit resource and optionally linked to an originating estimate or work order.
+
+        Use this tool when booking new shop work; do not use rescheduleAppointment, which moves the time window of an appointment that already exists.
+
+        Preconditions: the customer and vehicle must exist in the local CRM replicas and the vehicle must belong to the customer; the requested window must not overlap another SCHEDULED appointment on the same resource at the location; when sourceType (ESTIMATE or WORK_ORDER) is set, sourceId is required, the source must be eligible for scheduling, and no appointment may already exist for that source.
+
+        Required inputs: crmCustomerId, crmVehicleId and locationId (UUIDs), startAt and endAt (UTC instants, startAt before endAt) and at least one serviceRequestIds entry; an optional Idempotency-Key header (non-blank, max 128 characters) makes retries safe and replays the original response only when the retried request matches the stored appointment''s scheduling fields.
+
+        Emits a SHOPMGR_APPOINTMENT_CREATE event and persists customer and vehicle snapshots on the appointment, which is created in SCHEDULED status.
+
+        Returns 400 when the slot is already booked, the idempotency key was reused with a different request, or sourceId is missing for a supplied sourceType; 404 when the customer or vehicle is unknown; 409 when the vehicle does not belong to the customer; and 422 when the source estimate or work order is not eligible for scheduling.
+
+        '
       operationId: createAppointment
       parameters:
       - name: Idempotency-Key
@@ -95,10 +129,25 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: 'Booking details for the appointment: customer, vehicle, location, time window, service requests and optional originating source document.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AppointmentCreateRequest'
+            examples:
+              Appointment from an estimate:
+                description: Appointment from an estimate
+                value:
+                  crmCustomerId: 01960003-0000-7000-8000-000000000001
+                  crmVehicleId: 01960003-0000-7000-8000-000000000002
+                  locationId: 01960003-0000-7000-8000-000000000003
+                  resourceId: BAY-04
+                  startAt: 2026-06-18 08:00:00+00:00
+                  endAt: 2026-06-18 10:00:00+00:00
+                  serviceRequestIds:
+                  - 01960003-0000-7000-8000-000000000004
+                  sourceType: ESTIMATE
+                  sourceId: EST-2026-000045
         required: true
       responses:
         '201':
@@ -112,13 +161,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AppointmentResponse'
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Customer or vehicle not found in the local CRM replicas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Vehicle does not belong to the supplied customer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '422':
           description: Source not eligible — estimate or work order cannot be scheduled (ineligible status).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AppointmentResponse'
+                $ref: '#/components/schemas/ApiError'
         '501':
           description: Not implemented.
           content:
@@ -136,9 +197,21 @@ paths:
     post:
       tags:
       - Conflict Override API
-      summary: Execute appointment conflict override
-      description: Executes a conflict override for the specified appointment when authorized.
-      operationId: executeOverride
+      summary: Override a Scheduling Conflict on an Appointment
+      description: 'Records a manager-authorized bypass of a detected scheduling conflict, flagging the appointment as conflict-overridden and persisting an immutable override record with the acting user and timestamp.
+
+        Use this tool when a blocking conflict on an appointment must be deliberately accepted; do not use createAssignment with override=true, which overrides assignment constraints while staffing, and do not use rescheduleAppointment, which resolves the conflict by moving the appointment instead.
+
+        Preconditions: the appointment must exist, and the caller must hold the shop:schedule:edit or appointments:reschedule authority.
+
+        Required inputs: appointmentId in the body matching the path parameter, and a non-blank overrideReason; conflictDetails is an optional JSON string describing the conflict being bypassed.
+
+        Emits a SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE event, sets the appointment''s conflict-override flag and stores the override record with the actor resolved from the security context.
+
+        Returns 400 when the path and body appointmentId differ, the overrideReason is blank, or the appointment cannot be resolved, and 403 when the caller lacks the required authority.
+
+        '
+      operationId: executeConflictOverride
       parameters:
       - name: appointmentId
         in: path
@@ -148,10 +221,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Override decision naming the appointment, the justification, and an optional description of the conflict being bypassed.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ConflictOverrideRequest'
+            examples:
+              Override for a waiting customer:
+                description: Override for a waiting customer
+                value:
+                  appointmentId: 01960003-0000-7000-8000-000000000001
+                  overrideReason: Customer waiting on-site
+                  conflictDetails: '{"type":"TECHNICIAN_DOUBLE_BOOKED","resourceId":"01960003-0000-7000-8000-000000000010"}'
         required: true
       responses:
         '201':
@@ -189,8 +270,20 @@ paths:
     get:
       tags:
       - Appointment Assignments
-      summary: List appointment assignments
-      description: Returns the current assignments associated with the specified appointment.
+      summary: List Assignments for an Appointment
+      description: 'Returns all assignments recorded for an appointment, including each mechanic''s role, the reserved resource, status and override flag.
+
+        Use this tool when reading the staffing of a known appointment; do not use createAssignment, which creates a new assignment, and use searchShopAudit for the historical change trail.
+
+        Preconditions: none beyond authorization; an unknown appointmentId is not rejected.
+
+        Required inputs: appointmentId (UUID) as a path parameter; there is no request body and no filtering.
+
+        Emits a SHOPMGR_ASSIGNMENT_LIST_FETCHED audit event; no state changes occur, this is a read-only projection.
+
+        Returns 200 with an empty list when the appointment has no assignments or does not exist; no 404 is raised for an unknown appointmentId.
+
+        '
       operationId: listAssignments
       parameters:
       - name: appointmentId
@@ -227,8 +320,20 @@ paths:
     post:
       tags:
       - Appointment Assignments
-      summary: Create appointment assignments
-      description: Creates assignments for the specified appointment using the requested mechanics or shop resources.
+      summary: Create Mechanic Assignments for an Appointment
+      description: 'Creates the mechanic assignment for a scheduled appointment in CONFIRMED status, linking one LEAD mechanic and optional ASSIST mechanics and optionally reserving a bay or mobile-unit resource.
+
+        Use this tool when staffing a booked appointment; do not use executeConflictOverride, which records a schedule-conflict bypass without assigning anyone, and use listAssignments to read what is already assigned.
+
+        Preconditions: the appointment must exist and be in SCHEDULED status, no CONFIRMED or IN_PROGRESS assignment may already exist for it, and every mechanicPersonId must resolve to a known mechanic.
+
+        Required inputs: mechanics with exactly one LEAD role (a single mechanic with a null role defaults to LEAD); resourceId and resourceType are optional, and override=true requires the shop:schedule:edit authority plus a non-blank overrideReason.
+
+        Emits a SHOPMGR_ASSIGNMENT_CREATED event and persists the assignment and its mechanic links.
+
+        Returns 400 when the appointment or a mechanic cannot be resolved, the LEAD constraint is violated, or overrideReason is blank with override=true, and 403 when override is requested without the shop:schedule:edit authority.
+
+        '
       operationId: createAssignment
       parameters:
       - name: appointmentId
@@ -239,10 +344,22 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Mechanics to assign with their roles plus an optional bay or mobile-unit resource; the appointmentId in the path takes precedence over the body.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateAssignmentRequest'
+            examples:
+              Single lead mechanic with a bay:
+                description: Single lead mechanic with a bay
+                value:
+                  appointmentId: 01960003-0000-7000-8000-000000000001
+                  mechanics:
+                  - mechanicPersonId: 01960003-0000-7000-8000-000000000010
+                    role: LEAD
+                  resourceId: 01960003-0000-7000-8000-000000000005
+                  resourceType: BAY
+                  override: false
         required: true
       responses:
         '201':
@@ -266,8 +383,20 @@ paths:
     get:
       tags:
       - Shop Audit
-      summary: Search shop audit trail
-      description: Searches the shop audit trail using filter criteria. At least one filter criterion is required.
+      summary: Search the Shop Audit Trail
+      description: 'Searches the immutable shop audit trail of schedule and assignment changes, returning matching entries in reverse-chronological order with actor, event type, change summary and reason.
+
+        Use this tool when investigating who changed a schedule or assignment and why; use getShopAuditEntry instead when the audit entry id is already known.
+
+        Preconditions: at least one filter criterion (workorderId, appointmentId, mechanicId, actorUserId, eventType or locationId) must be supplied; unbounded scans are rejected.
+
+        Required inputs: any combination of the filter fields plus optional fromDateTime and toDateTime, which default to the last 90 days ending now; eventType is one of SCHEDULE_CREATED, SCHEDULE_UPDATED, SCHEDULE_CANCELLED, ASSIGNMENT_CREATED or ASSIGNMENT_REMOVED.
+
+        No events are emitted and no state changes; this is a read-only projection of records retained for seven years.
+
+        Returns 400 when no filter criterion is provided.
+
+        '
       operationId: searchShopAudit
       parameters:
       - name: filter
@@ -305,8 +434,20 @@ paths:
     get:
       tags:
       - Shop Audit
-      summary: Get shop audit entry by ID
-      description: Returns a single shop audit entry by its UUID.
+      summary: Get a Shop Audit Entry by ID
+      description: 'Returns a single immutable shop audit entry, including actor, event type, change summary, change patch and reason fields.
+
+        Use this tool when the audit entry id is already known; use searchShopAudit instead to find entries by workorder, appointment, mechanic, actor, event type or location.
+
+        Preconditions: the audit entry must exist; entries are never updated or deleted once written.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no audit entry exists for the supplied id.
+
+        '
       operationId: getShopAuditEntry
       parameters:
       - name: id
@@ -343,8 +484,20 @@ paths:
     get:
       tags:
       - Technician API
-      summary: Get technician person details
-      description: Resolves the person identity (names, contact details) of a technician working at the given shop location from the local people-contact replica. Identity fields can trail the people-contact authority by the event-propagation delay.
+      summary: Get Person Details for a Technician
+      description: 'Resolves the person identity (names, emails, phone numbers) of a technician working at a shop location from the local people-contact replica.
+
+        Use this tool when displaying or contacting an assigned technician; use viewSchedule instead for the technician''s scheduled work.
+
+        Preconditions: a technician record must link the personId to the locationId; replica identity fields can trail the people-contact authority by the event-propagation delay.
+
+        Required inputs: locationId and personId (UUIDs) as path parameters; there is no request body.
+
+        Emits a SHOPMGR_TECHNICIAN_PERSON_GET audit event; no state changes occur, and when the replica row has not yet arrived the response carries only the person id with name and contact fields null.
+
+        Returns 404 when no technician links the person to the location.
+
+        '
       operationId: getTechnicianPerson
       parameters:
       - name: locationId
@@ -385,8 +538,20 @@ paths:
     get:
       tags:
       - Schedule API
-      summary: View schedule
-      description: Read-only schedule view for a location and date.
+      summary: View the Daily Schedule for a Location
+      description: 'Builds the read-only schedule board for one location and date, grouping appointments into resource lanes (bay, mobile unit, technician or UNASSIGNED) and marking overlaps of one minute or more within the same lane as BLOCKING conflicts.
+
+        Use this tool when rendering or inspecting a day''s shop schedule; use getAppointmentById instead when a single appointment id is already known.
+
+        Preconditions: the location must exist as a shop; the day window is computed in the shop''s configured timezone, falling back to UTC when none is configured.
+
+        Required inputs: locationId (UUID) and date (YYYY-MM-DD); resourceType and resourceId are optional filters, includeAvailabilityOverlay defaults to false, and range defaults to LOCATION_HOURS (06:00-18:00 local) with FULL_DAY covering midnight to midnight.
+
+        Emits a SHOPMGR_SCHEDULE_VIEW audit event; no state changes occur, and when the overlay is requested availabilityOverlayStatus reports AVAILABLE or UNAVAILABLE with an HR_SYSTEM_UNAVAILABLE warning when the staffing replica has no data for the location.
+
+        Returns 404 when the location is unknown or the resourceId filter matches no lane on that date.
+
+        '
       operationId: viewSchedule
       parameters:
       - name: locationId
@@ -470,17 +635,29 @@ paths:
     get:
       tags:
       - Appointments API
-      summary: Load appointment
-      description: Retrieve an appointment by ID
-      operationId: getAppointment
+      summary: Get an Appointment by Its ID
+      description: 'Returns the full appointment record, including status, time window, service request ids and the customer and vehicle snapshots captured at booking.
+
+        Use this tool when the appointment id is already known; use viewSchedule instead to browse appointments by location and date.
+
+        Preconditions: the appointment must exist; appointmentId must be a UUID in canonical text form.
+
+        Required inputs: appointmentId as a path parameter; there is no request body and no filtering.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 400 when appointmentId is not a valid UUID, and 404 when no appointment exists for the supplied id.
+
+        '
+      operationId: getAppointmentById
       parameters:
       - name: appointmentId
         in: path
-        description: Appointment ID
+        description: Appointment ID (UUID)
         required: true
         schema:
           type: string
-        example: appt-123
+        example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
       - name: X-Correlation-Id
         in: header
         description: Correlation ID for request tracing
@@ -495,12 +672,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          description: appointmentId is not a valid UUID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '404':
           description: Appointment not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AppointmentResponse'
+                $ref: '#/components/schemas/ApiError'
         '501':
           description: Not implemented.
           content:
@@ -518,8 +701,20 @@ paths:
     delete:
       tags:
       - Appointments API
-      summary: Cancel appointment
-      description: Cancel a scheduled appointment
+      summary: Cancel a Scheduled Appointment With Reason
+      description: 'Cancels a scheduled appointment, setting its status to CANCELLED with the supplied reason code and recording the cancellation in the appointment audit trail.
+
+        Use this tool when a booked visit will not happen; do not use rescheduleAppointment, which keeps the appointment alive at a new time.
+
+        Preconditions: the appointment must exist and be in SCHEDULED status; appointments that are already checked in, in progress, completed or cancelled are rejected.
+
+        Required inputs: cancellationReason (CUSTOMER_REQUEST, TECHNICIAN_UNAVAILABLE, WEATHER, VEHICLE_NOT_READY or OTHER); notes is optional free text up to 1000 characters.
+
+        Emits a SHOPMGR_APPOINTMENT_CANCEL event; a downstream workorder cancellation notification is additionally published only when the appointment carries a workorderLinkRef.
+
+        Returns 404 when the appointment does not exist, and 409 when the appointment is not in SCHEDULED status.
+
+        '
       operationId: cancelAppointment
       parameters:
       - name: appointmentId
@@ -529,10 +724,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Cancellation reason code and optional free-text notes stored on the appointment.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CancelAppointmentRequest'
+            examples:
+              Customer-requested cancellation:
+                description: Customer-requested cancellation
+                value:
+                  cancellationReason: CUSTOMER_REQUEST
+                  notes: Customer rescheduled to next week
         required: true
       responses:
         '200':
@@ -541,12 +743,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AppointmentResponse'
+        '404':
+          description: Appointment not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '409':
           description: Appointment state conflict.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AppointmentResponse'
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - appointments:cancel
@@ -596,6 +804,69 @@ components:
       - newEndAt
       - newStartAt
       - reason
+    ApiError:
+      type: object
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code
+          example: 404
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+        correlationId:
+          type: string
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fieldErrors:
+          type: array
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          items:
+            $ref: '#/components/schemas/FieldError'
+        referenceId:
+          type: string
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+        nextAction:
+          type: string
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+        supportAction:
+          type: string
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+    FieldError:
+      type: object
+      description: Validation error for a specific request field
+      properties:
+        field:
+          type: string
+          description: Field name
+          example: quantity
+        message:
+          type: string
+          description: Validation failure message
+          example: must be greater than 0
+      required:
+      - field
+      - message
     AppointmentResponse:
       type: object
       description: Response describing a created or retrieved appointment
@@ -676,7 +947,7 @@ components:
       - status
     AppointmentCreateRequest:
       type: object
-      description: Appointment creation request body
+      description: Request to create an appointment from an estimate or workorder source document
       properties:
         crmCustomerId:
           type: string
@@ -740,7 +1011,7 @@ components:
       - startAt
     ConflictOverrideRequest:
       type: object
-      description: Conflict override request payload
+      description: Request to bypass a scheduling conflict with manager permission
       properties:
         appointmentId:
           type: string
@@ -972,69 +1243,6 @@ components:
           format: date-time
           description: Inclusive end timestamp for date-time range filter
           example: 2026-12-31 23:59:59+00:00
-    ApiError:
-      type: object
-      description: Standard error response envelope returned by all Durion backend APIs
-      properties:
-        code:
-          type: string
-          description: Machine-readable error code
-          example: ORDER_NOT_FOUND
-        message:
-          type: string
-          description: Human-readable error message
-          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
-        status:
-          type: integer
-          format: int32
-          description: HTTP status code
-          example: 404
-        timestamp:
-          type: string
-          description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
-        correlationId:
-          type: string
-          description: Unique correlation ID for distributed request tracing
-          example: 550e8400-e29b-41d4-a716-446655440000
-        fieldErrors:
-          type: array
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
-          items:
-            $ref: '#/components/schemas/FieldError'
-        referenceId:
-          type: string
-          description: Workflow or review-case reference identifier, when applicable
-          example: REVIEW-2026-000123
-        nextAction:
-          type: string
-          description: Recommended next step for the caller, when applicable
-          example: Retry the request with a valid quantity
-        supportAction:
-          type: string
-          description: Support or admin investigation guidance, when applicable
-          example: Contact support with the correlation ID for assistance
-      required:
-      - code
-      - correlationId
-      - message
-      - status
-      - timestamp
-    FieldError:
-      type: object
-      description: Validation error for a specific request field
-      properties:
-        field:
-          type: string
-          description: Field name
-          example: quantity
-        message:
-          type: string
-          description: Validation failure message
-          example: must be greater than 0
-      required:
-      - field
-      - message
     ShopAuditEntryResponse:
       type: object
       description: Read-only shop audit trail entry recording a schedule or assignment change

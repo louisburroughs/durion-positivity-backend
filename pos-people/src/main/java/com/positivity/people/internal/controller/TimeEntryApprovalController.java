@@ -5,6 +5,8 @@ import com.positivity.people.internal.dto.TimeEntryDecisionBatchRequest;
 import com.positivity.people.internal.dto.TimeEntryDecisionResponse;
 import com.positivity.people.internal.dto.TimeEntryDecisionResult;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -27,8 +29,22 @@ public class TimeEntryApprovalController {
     private final com.positivity.people.service.TimeEntryService timeEntryService;
 
     @Operation(
-            summary = "Batch approve time entries",
-            description = "Approve multiple time entries. pos-people is authoritative for approval execution.")
+            operationId = "approveTimeEntriesBatch",
+            summary = "Batch Approve Submitted Time Entries",
+            description = """
+                    Approves a batch of time entries, marking each SUBMITTED or PENDING_APPROVAL entry APPROVED and \
+                    stamping the approver and approval time; pos-people is authoritative for approval execution.
+                    Use this tool for supervisor approval of individually selected time entries; do not use \
+                    rejectTimeEntriesBatch, which rejects them, and do not use approveTimePeriod, which approves a \
+                    whole pay period per person.
+                    Preconditions: each entry must exist and be in SUBMITTED or PENDING_APPROVAL status, and the \
+                    caller needs the people:timeEntry:approve authority for individual entries to succeed.
+                    Required inputs: decisions, a non-empty list of objects each carrying timeEntryId (UUID string); \
+                    an optional X-Correlation-Id header is recorded in the audit trail.
+                    Emits a PEOPLE_TIME_ENTRY_APPROVE event and writes an audit row per decision.
+                    Returns 200 with a per-entry result list (failure codes NOT_FOUND, ENTRY_NOT_PENDING, FORBIDDEN) \
+                    rather than failing the whole batch, and 400 when the decisions list is missing or empty.
+                    """)
     @ApiResponse(responseCode = "200", description = "Time entries approved successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request - decisions required")
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_APPROVE", apiVersion = "1")
@@ -38,7 +54,21 @@ public class TimeEntryApprovalController {
             scopes = {"people:timeEntry:approve"})
     @PreAuthorize("hasAuthority('people:timeEntry:approve')")
     public ResponseEntity<Object> approveTimeEntries(
-            @RequestBody @Valid TimeEntryDecisionBatchRequest request,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Batch of approval decisions, one element per time entry to approve; rejectionReason is ignored here.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Approve two entries", value = """
+                                                                    {"decisions":[
+                                                                      {"timeEntryId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"},
+                                                                      {"timeEntryId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c"}]}
+                                                                    """)))
+                    @RequestBody
+                    @Valid
+                    TimeEntryDecisionBatchRequest request,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
 
         List<String> ids = request.getDecisions().stream()
@@ -52,8 +82,23 @@ public class TimeEntryApprovalController {
     }
 
     @Operation(
-            summary = "Batch reject time entries",
-            description = "Reject multiple time entries. rejectionReason is required for each decision.")
+            operationId = "rejectTimeEntriesBatch",
+            summary = "Batch Reject Submitted Time Entries",
+            description = """
+                    Rejects a batch of time entries, marking each SUBMITTED or PENDING_APPROVAL entry REJECTED with \
+                    the supplied reason stored on the entry.
+                    Use this tool to send individually selected entries back with a reason; do not use \
+                    approveTimeEntriesBatch, which approves them, and do not use rejectTimePeriod, which rejects a \
+                    whole pay period per person.
+                    Preconditions: each entry must exist and be in SUBMITTED or PENDING_APPROVAL status, and the \
+                    caller needs the people:timeEntry:reject authority for individual entries to succeed.
+                    Required inputs: decisions, a non-empty list where every element carries timeEntryId and a \
+                    non-blank rejectionReason; one missing reason fails the entire request before any entry is \
+                    touched.
+                    Emits a PEOPLE_TIME_ENTRY_REJECT event and writes an audit row per decision.
+                    Returns 200 with a per-entry result list (failure codes NOT_FOUND, ENTRY_NOT_PENDING, \
+                    FORBIDDEN), and 400 when any decision lacks a rejectionReason.
+                    """)
     @ApiResponse(responseCode = "200", description = "Time entries rejected successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request - rejectionReason required for all decisions")
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_REJECT", apiVersion = "1")
@@ -63,7 +108,21 @@ public class TimeEntryApprovalController {
             scopes = {"people:timeEntry:reject"})
     @PreAuthorize("hasAuthority('people:timeEntry:reject')")
     public ResponseEntity<Object> rejectTimeEntries(
-            @RequestBody @Valid TimeEntryDecisionBatchRequest request,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Batch of rejection decisions; every element must carry a non-blank rejectionReason.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Reject one entry", value = """
+                                                                    {"decisions":[
+                                                                      {"timeEntryId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                       "rejectionReason":"Incomplete work details"}]}
+                                                                    """)))
+                    @RequestBody
+                    @Valid
+                    TimeEntryDecisionBatchRequest request,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
 
         // Extract rejection reasons map and pass to service

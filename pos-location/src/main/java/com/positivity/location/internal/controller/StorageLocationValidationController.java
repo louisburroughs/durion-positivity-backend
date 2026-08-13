@@ -31,8 +31,19 @@ public class StorageLocationValidationController {
 
     @GetMapping("/{storageLocationId}/validation")
     @Operation(
-            summary = "Validate storage location reference",
-            description = "Returns existence, active status, and site ownership for a storage location ID.")
+            operationId = "validateStorageLocation",
+            summary = "Validate Storage Location Reference State",
+            description = """
+                    Returns existence, active status, owning site id and maximum unit capacity for a storage \
+                    location id without requiring the site to be known.
+                    Use this tool for inter-service reference validation before storing a storageLocationId; use \
+                    getStorageLocation instead when the full record is needed and the site id is known.
+                    Preconditions: none; unknown ids are a valid input.
+                    Required inputs: storageLocationId (UUID) as a path parameter.
+                    Emits a LOCATION_STORAGE_LOCATION_VALIDATE event; no state changes.
+                    Returns 200 always, with exists=false and a null siteId when the id is unknown, and 400 when \
+                    the path value is not a valid UUID.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Validation payload returned"),

@@ -14,6 +14,7 @@ import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -83,8 +84,20 @@ public class JournalEntryController {
             scopes = {"accounting:je:view"})
     @PreAuthorize("hasAuthority('accounting:je:view')")
     @Operation(
-            summary = "List journal entries",
-            description = "Retrieve paginated journal entries, optionally filtered by exact posted-entry number.",
+            operationId = "listJournalEntries",
+            summary = "List Journal Entries",
+            description = """
+                    Lists journal entries of every status as a paginated projection, optionally filtered by \
+                    the exact posted-entry number.
+                    Use this tool when browsing or searching entries; do not use getJournalEntry, which \
+                    retrieves one entry by its known id.
+                    Preconditions: none beyond the caller holding accounting:je:view.
+                    Required inputs: none; page defaults to 0, size to 20, sort to createdAt descending, and \
+                    entryNumber (format JE-{YYYYMM}-{seq}, assigned only at posting) is an optional exact-match \
+                    filter that never matches unposted entries.
+                    Emits an ACCOUNTING_JOURNAL_ENTRY_LIST audit event; no accounting state changes.
+                    Returns 400 when the sort property is not one of the supported fields.
+                    """,
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "200", description = "Journal entries listed")
     @ApiResponse(responseCode = "400", description = "Unsupported sort property or direction")
@@ -132,8 +145,19 @@ public class JournalEntryController {
             scopes = {"accounting:je:view"})
     @PreAuthorize("hasAuthority('accounting:je:view')")
     @Operation(
-            summary = "Get journal entry",
-            description = "Retrieve a journal entry by identifier.",
+            operationId = "getJournalEntry",
+            summary = "Get Journal Entry",
+            description = """
+                    Returns one journal entry with its lines, status (DRAFT, POSTED or REVERSED), entry type \
+                    and posting metadata.
+                    Use this tool when the journal entry id is already known; use listJournalEntries instead \
+                    when searching by entry number or browsing.
+                    Preconditions: the journal entry must exist.
+                    Required inputs: journalEntryId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 400 with code VALIDATION_ERROR when no journal entry exists for the supplied id \
+                    (this module maps entry not-found to 400, not 404).
+                    """,
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "200", description = "Journal entry returned")
     @ApiResponse(responseCode = "404", description = "Journal entry not found")
@@ -150,8 +174,19 @@ public class JournalEntryController {
             scopes = {"accounting:je:view"})
     @PreAuthorize("hasAuthority('accounting:je:view')")
     @Operation(
-            summary = "Get journal traceability",
-            description = "Trace a journal entry across related records.",
+            operationId = "getJournalEntryTraceability",
+            summary = "Get Journal Entry Traceability",
+            description = """
+                    Returns the traceability chain for a journal entry: its source event, posting rule set and \
+                    version, and any reversal relationships.
+                    Use this tool when auditing where an entry came from; use getJournalEntry instead for the \
+                    entry's lines and amounts.
+                    Preconditions: the journal entry must exist; system-generated entries carry source-event \
+                    links while manual entries may not.
+                    Required inputs: journalEntryId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 400 with code VALIDATION_ERROR when no journal entry exists for the supplied id.
+                    """,
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "200", description = "Journal traceability returned")
     @ApiResponse(responseCode = "404", description = "Journal entry not found")
@@ -168,14 +203,48 @@ public class JournalEntryController {
             scopes = {"accounting:je:create"})
     @PreAuthorize("hasAuthority('accounting:je:create')")
     @Operation(
-            summary = "Create journal entry",
-            description = "Create a new journal entry.",
+            operationId = "createJournalEntry",
+            summary = "Create Journal Entry",
+            description = """
+                    Creates a balanced journal entry in DRAFT status; nothing hits the general ledger until \
+                    the entry is posted.
+                    Use this tool to stage a manual entry for review; do not use postJournalEntry, which \
+                    finalizes an existing draft, and note that system event-driven entries are created by the \
+                    posting engine, not this operation.
+                    Preconditions: total debits must equal total credits across the lines, and every \
+                    glAccountId must reference a GL account active on the transaction date.
+                    Required inputs: transactionDate and at least one line with glAccountId (UUID) and a \
+                    debitAmount or creditAmount; description (max 500), sourceEventId, sourceEventType and \
+                    dimensions are optional.
+                    Emits an ACCOUNTING_JOURNAL_ENTRY_CREATE event; GL balances are unchanged until posting.
+                    Returns 400 when the entry is unbalanced or a GL account is missing or inactive on the \
+                    transaction date.
+                    """,
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "201", description = "Journal entry created")
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_CREATE", apiVersion = "1")
     public ResponseEntity<JournalEntryResponse> createJournalEntry(
-            @Valid @RequestBody JournalEntryCreateRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Draft journal entry with balanced debit and credit lines.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Balanced two-line entry", value = """
+                                                                    {"transactionDate":"2026-08-13T00:00:00",
+                                                                     "description":"Record cash sale",
+                                                                     "lines":[
+                                                                       {"glAccountId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                        "debitAmount":125.00,
+                                                                        "description":"Cash"},
+                                                                       {"glAccountId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+                                                                        "creditAmount":125.00,
+                                                                        "description":"Sales revenue"}]}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    JournalEntryCreateRequest request) {
         log.debug("Creating journal entry: {}", request.getDescription());
         var entity = JournalEntryMapper.toEntity(request);
         var created = journalEntryService.createJournalEntry(entity);
@@ -188,15 +257,46 @@ public class JournalEntryController {
             scopes = {"accounting:je:create"})
     @PreAuthorize("hasAuthority('accounting:je:create')")
     @Operation(
-            summary = "Update journal entry",
-            description = "Update an existing journal entry.",
+            operationId = "updateJournalEntry",
+            summary = "Update Journal Entry",
+            description = """
+                    Replaces the description and lines of a journal entry that is still in DRAFT status; \
+                    posted entries are immutable.
+                    Use this tool to correct a draft before posting; do not use it on a POSTED entry, which \
+                    only reverseJournalEntry can back out.
+                    Preconditions: the entry must exist in DRAFT status, and the replacement lines must \
+                    remain balanced.
+                    Required inputs: journalEntryId (UUID) as a path parameter plus the full replacement body \
+                    (same shape as createJournalEntry); supplied lines replace the existing line set wholesale.
+                    Emits an ACCOUNTING_JOURNAL_ENTRY_UPDATE event; GL balances are unchanged because drafts \
+                    are not yet in the ledger.
+                    Returns 409 when the entry is no longer DRAFT, and 400 when the updated entry is \
+                    unbalanced or the entry id does not exist.
+                    """,
             tags = {"Journal Entries"})
     @ApiResponse(responseCode = "200", description = "Journal entry updated")
     @ApiResponse(responseCode = "404", description = "Journal entry not found")
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_UPDATE", apiVersion = "1")
     public ResponseEntity<JournalEntryResponse> updateJournalEntry(
             @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,
-            @Valid @RequestBody JournalEntryCreateRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Replacement description and balanced line set for the draft entry.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Corrected draft", value = """
+                                                                    {"transactionDate":"2026-08-13T00:00:00",
+                                                                     "description":"Corrected cash sale amount",
+                                                                     "lines":[
+                                                                       {"glAccountId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                        "debitAmount":130.00},
+                                                                       {"glAccountId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+                                                                        "creditAmount":130.00}]}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    JournalEntryCreateRequest request) {
         log.debug("Updating journal entry: {}", journalEntryId);
         var updates = JournalEntryMapper.toEntity(request);
         var updated = journalEntryService.updateJournalEntry(journalEntryId, updates);
@@ -209,22 +309,26 @@ public class JournalEntryController {
             scopes = {"accounting:je:post"})
     @PreAuthorize("hasAuthority('accounting:je:post')")
     @Operation(
-            summary = "Post journal entry",
             operationId = "postJournalEntry",
-            description = "Posts a DRAFT journal entry to the general ledger (DRAFT → POSTED), assigning its"
-                    + " entryNumber and updating GL balances; the entry is immutable afterwards — use"
-                    + " reverseJournalEntry to back it out."
-                    + " Preconditions: the entry must exist, be in DRAFT status, and be balanced."
-                    + " The request body is OPTIONAL: omit it entirely for a normal post. The entry's"
-                    + " transaction date is checked against the accounting-period gate (story B2): a date"
-                    + " strictly before the org-level hard-lock date is rejected unconditionally with 422"
-                    + " PERIOD_HARD_LOCKED (never overridable); a date in a CLOSED period is rejected with 422"
-                    + " PERIOD_CLOSED unless the caller holds accounting:period:override AND supplies a"
-                    + " non-blank overrideJustification in the body, in which case the posting proceeds and"
-                    + " the override is audit-logged."
-                    + " Emits ACCOUNTING_JOURNAL_ENTRY_POST and returns the posted entry."
-                    + " Returns 409 ENTRY_ALREADY_POSTED if the entry is already POSTED or REVERSED, and 422"
-                    + " UNBALANCED_ENTRY if debits do not equal credits.",
+            summary = "Post Journal Entry",
+            description = """
+                    Posts a DRAFT journal entry to the general ledger (DRAFT to POSTED), assigning its \
+                    entryNumber (JE-{YYYYMM}-{seq}) and updating GL balances; the entry is immutable \
+                    afterwards.
+                    Use this tool to finalize a balanced draft; do not use reverseJournalEntry, which backs \
+                    out an entry that is already POSTED.
+                    Preconditions: the entry must exist in DRAFT status, debits must equal credits, every \
+                    line's GL account must be active on the transaction date, and the transaction date must \
+                    clear the accounting-period gate.
+                    Required inputs: journalEntryId (UUID) as a path parameter; the body is optional and \
+                    carries only overrideJustification (max 500 chars), which together with the \
+                    accounting:period:override permission allows posting into a CLOSED period with the \
+                    override audit-logged; a date before the org hard-lock date is never overridable.
+                    Emits an ACCOUNTING_JOURNAL_ENTRY_POST event and returns the posted entry.
+                    Returns 409 ENTRY_ALREADY_POSTED when the entry is already POSTED or REVERSED, 422 \
+                    UNBALANCED_ENTRY when debits do not equal credits, 422 PERIOD_CLOSED or \
+                    PERIOD_HARD_LOCKED for period-gate failures, and 400 when no entry exists for the id.
+                    """,
             tags = {"Journal Entries"})
     @ApiResponse(
             responseCode = "200",
@@ -253,7 +357,21 @@ public class JournalEntryController {
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_POST", apiVersion = "1")
     public ResponseEntity<JournalEntryResponse> postJournalEntry(
             @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,
-            @Valid @RequestBody(required = false) JournalEntryPostRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Optional closed-period override justification; omit the body for a normal post.",
+                            required = false,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Closed-period override",
+                                                            value =
+                                                                    "{\"overrideJustification\":\"Late vendor accrual approved by controller\"}")))
+                    @Valid
+                    @RequestBody(required = false)
+                    JournalEntryPostRequest request) {
         log.info("Posting journal entry: {}", journalEntryId);
         String overrideJustification = request != null ? request.getOverrideJustification() : null;
         var posted = journalEntryService.postJournalEntry(journalEntryId, overrideJustification);
@@ -266,27 +384,27 @@ public class JournalEntryController {
             scopes = {"accounting:je:reverse"})
     @PreAuthorize("hasAuthority('accounting:je:reverse')")
     @Operation(
-            summary = "Reverse journal entry",
             operationId = "reverseJournalEntry",
-            description = "Reverses a POSTED journal entry by creating and immediately posting an inverse entry"
-                    + " (debits and credits swapped) with its own entryNumber, and transitioning the original"
-                    + " POSTED → REVERSED. Use this tool to back out an incorrect posted entry; do NOT use it"
-                    + " on DRAFT entries — delete or edit those instead."
-                    + " Preconditions: the entry must exist and be in POSTED status."
-                    + " Required input: a non-blank reason, recorded on the reversal entry and in the audit"
-                    + " trail. Optional input: reversalDate — when omitted, it defaults to the original entry's"
-                    + " transaction date if that period is OPEN, otherwise to today; the resolved date must fall"
-                    + " in an OPEN accounting period."
-                    + " Period gate (story B2): a resolved date strictly before the org-level hard-lock date"
-                    + " is rejected unconditionally with 422 PERIOD_HARD_LOCKED (never overridable); a date in"
-                    + " a CLOSED period is rejected with 422 PERIOD_CLOSED unless the caller holds"
-                    + " accounting:period:override AND supplies a non-blank overrideJustification, in which"
-                    + " case the reversal posts into the closed period and the override is audit-logged."
-                    + " Emits ACCOUNTING_JOURNAL_ENTRY_REVERSE and returns the reversal entry."
-                    + " Returns 409 JE_ALREADY_REVERSED if the entry was already reversed (including a lost"
-                    + " concurrent-reversal race), 409 JE_NOT_POSTED if it is DRAFT/PENDING, and 422"
-                    + " PERIOD_CLOSED if the reversal date falls in a CLOSED period without a valid override —"
-                    + " pick an open-period date, supply an override, or reopen the period before retrying.",
+            summary = "Reverse Journal Entry",
+            description = """
+                    Reverses a POSTED journal entry by creating and immediately posting an inverse entry \
+                    (debits and credits swapped) with its own entryNumber, transitioning the original POSTED \
+                    to REVERSED.
+                    Use this tool to back out an incorrect posted entry; do not use it on DRAFT entries, \
+                    which updateJournalEntry can still edit, and do not use postJournalEntry, which finalizes \
+                    drafts.
+                    Preconditions: the entry must exist in POSTED status, and the resolved reversal date must \
+                    clear the accounting-period gate.
+                    Required inputs: a non-blank reason (recorded on the reversal entry and audit trail); \
+                    reversalDate is optional and defaults to the original transaction date when that period is \
+                    OPEN, otherwise today; overrideJustification with the accounting:period:override \
+                    permission allows reversing into a CLOSED period, but never before the hard-lock date.
+                    Emits an ACCOUNTING_JOURNAL_ENTRY_REVERSE event and returns the posted reversal entry.
+                    Returns 409 JE_ALREADY_REVERSED when the entry was already reversed (including a lost \
+                    concurrent-reversal race), 409 JE_NOT_POSTED when it is DRAFT or PENDING, 422 \
+                    PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures, and 400 when the reason is \
+                    blank or the entry does not exist.
+                    """,
             tags = {"Journal Entries"})
     @ApiResponse(
             responseCode = "200",
@@ -315,7 +433,21 @@ public class JournalEntryController {
     @EmitEvent(id = "ACCOUNTING_JOURNAL_ENTRY_REVERSE", apiVersion = "1")
     public ResponseEntity<JournalEntryResponse> reverseJournalEntry(
             @Parameter(description = "Journal entry identifier") @PathVariable UUID journalEntryId,
-            @Valid @RequestBody JournalEntryReversalRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Reversal reason with optional reversal date and closed-period override justification.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(name = "Reverse with explicit date", value = """
+                                                                    {"reason":"Duplicate posting of invoice INV-1042",
+                                                                     "reversalDate":"2026-08-13"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    JournalEntryReversalRequest request) {
         log.info("Reversing journal entry: {}", journalEntryId);
         var reversed = journalEntryService.reverseJournalEntry(
                 journalEntryId, request.getReason(), request.getReversalDate(), request.getOverrideJustification());

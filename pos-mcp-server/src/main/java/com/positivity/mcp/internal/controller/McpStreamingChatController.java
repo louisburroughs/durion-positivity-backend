@@ -47,9 +47,21 @@ public class McpStreamingChatController {
     }
 
     @Operation(
-            summary = "Execute MCP streaming chat - returns SSE token stream",
-            description =
-                    "Executes a streaming chat message and returns a stream of tokens as Server-Sent Events (SSE). Each token is sent as an individual SSE with event type 'chat'.",
+            operationId = "streamMcpChat",
+            summary = "Stream an MCP Chat Turn Over SSE",
+            description = """
+                    Executes a chat message against the caller's permission-scoped assistant agent and streams the \
+                    response as Server-Sent Events, one token per event with event type chat.
+                    Use this tool when the client renders tokens incrementally as they are generated; do not use \
+                    executeMcpChat, which blocks until the full response is complete.
+                    Preconditions: the agent's tool set is selected from the caller's granted permission codes and \
+                    active workflow state, so the same message can produce different results for different callers.
+                    Required inputs: message (non-blank text); the client must accept the text/event-stream media \
+                    type.
+                    Emits a MCP_CHAT_STREAM_EXECUTE event; the agent may invoke permission-gated tools, RAG \
+                    retrieval and web search while streaming.
+                    Returns 200 with an SSE token stream, and 429 when the caller's chat rate limit is exceeded.
+                    """,
             responses = {
                 @ApiResponse(
                         responseCode = "200",
@@ -66,7 +78,20 @@ public class McpStreamingChatController {
     @PreAuthorize("hasAuthority('" + McpPermissions.MCP_CHAT_STREAM + "')")
     @EmitEvent(id = "MCP_CHAT_STREAM_EXECUTE", apiVersion = "1")
     public Flux<ServerSentEvent<String>> streamChat(
-            @RequestBody @Valid @NonNull StreamChatRequest request,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Single user chat message whose answer is streamed back token by token.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                            examples =
+                                                    @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                            name = "Streaming chat message",
+                                                            value = "{\"message\":\"Summarize yesterday's sales\"}")))
+                    @RequestBody
+                    @Valid
+                    @NonNull
+                    StreamChatRequest request,
             @CurrentSecurityContext(expression = "authentication") @NonNull Authentication authentication) {
 
         CurrentUserContext currentUserContext = currentUserContextResolver.resolve(authentication);

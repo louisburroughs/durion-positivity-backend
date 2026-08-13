@@ -39,9 +39,18 @@ public class UserRoleController {
             name = "bearerAuth",
             scopes = {"security:role:assign"})
     @PreAuthorize("hasAuthority('security:role:assign')")
-    @Operation(
-            summary = "Assign a role to a user",
-            description = "Creates an effective role assignment linking the specified user to the specified role.")
+    @Operation(operationId = "assignUserRole", summary = "Assign a Role to a User", description = """
+                    Creates a GLOBAL-scoped role assignment linking a user to a role, effective immediately with no \
+                    end date.
+                    Use this tool for the common unscoped grant; do not use createRoleAssignment, which supports \
+                    LOCATION scope and effective date windows, and do not use assignPrincipalRole, which targets \
+                    the string-keyed RBAC principal matrix.
+                    Preconditions: the caller must hold security:role:assign and both the user and role must exist; \
+                    no overlap check is performed here, so repeated calls create duplicate assignments.
+                    Required inputs: userId and roleId (UUIDs) as path parameters; there is no request body.
+                    Emits a SECURITY_USER_ROLE_ASSIGN event and writes a RoleAssignedToUser audit record.
+                    Returns 404 when the user or role does not exist.
+                    """)
     public ResponseEntity<Void> assignRoleToUser(@PathVariable UUID userId, @PathVariable UUID roleId) {
         roleManagementService.assignRoleToUser(userId, roleId);
         return ResponseEntity.status(HttpStatus.CREATED).build();
@@ -56,9 +65,17 @@ public class UserRoleController {
             name = "bearerAuth",
             scopes = {"security:role:assign"})
     @PreAuthorize("hasAuthority('security:role:assign')")
-    @Operation(
-            summary = "Revoke a role from a user",
-            description = "Removes the effective assignment of the specified role from the specified user.")
+    @Operation(operationId = "revokeUserRole", summary = "Revoke a Role From a User", description = """
+                    Ends the first currently effective assignment of a role for a user by setting its end date to \
+                    now, preserving the row for history.
+                    Use this tool for the common immediate revocation; do not use revokeRoleAssignment, which \
+                    targets a specific assignment id and supports past or future end dates.
+                    Preconditions: the caller must hold security:role:assign, the user and role must exist, and at \
+                    least one effective assignment must link them.
+                    Required inputs: userId and roleId (UUIDs) as path parameters; there is no request body.
+                    Emits a SECURITY_USER_ROLE_REVOKE event and writes a RoleRevokedFromUser audit record.
+                    Returns 404 when the user or role does not exist, or when no active assignment links them.
+                    """)
     public ResponseEntity<Void> revokeRoleFromUser(@PathVariable UUID userId, @PathVariable UUID roleId) {
         roleManagementService.revokeRoleFromUser(userId, roleId);
         return ResponseEntity.noContent().build();
@@ -72,7 +89,15 @@ public class UserRoleController {
             name = "bearerAuth",
             scopes = {"security:permission:view"})
     @PreAuthorize("hasAuthority('security:permission:view')")
-    @Operation(summary = "Get user permissions", description = "Returns all effective permissions for a user")
+    @Operation(operationId = "getUserPermissions", summary = "Get a User's Effective Permissions", description = """
+                    Returns the union of permissions granted through a user's currently effective role assignments.
+                    Use this tool for a user's flattened effective permission set; use listUserRoleAssignments \
+                    instead to see the assignments and scopes behind it.
+                    Preconditions: the caller must hold security:permission:view and the user must exist.
+                    Required inputs: userId (UUID) as a path parameter.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when the user does not exist.
+                    """)
     public ResponseEntity<Set<PermissionDto>> getUserPermissions(@PathVariable UUID userId) {
         return ResponseEntity.ok(roleManagementService.getUserPermissions(userId));
     }

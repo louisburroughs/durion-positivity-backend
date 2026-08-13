@@ -12,6 +12,7 @@ import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -56,9 +57,20 @@ public class PurchaseSuggestionController {
     @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "')")
     @Operation(
             operationId = "listPurchaseSuggestions",
-            summary = "List purchase suggestions",
-            description =
-                    "Lists purchase suggestions, optionally filtered by status, SKU, and destination" + " location.",
+            summary = "List Purchase Suggestions",
+            description = """
+                    Returns a page of replenishment purchase suggestions, newest first, with their lifecycle \
+                    status, suggested quantity, vendor and pricing snapshot.
+                    Use this tool to discover suggestionIds or review what the replenishment scan proposed; use \
+                    getPurchaseSuggestion instead when the id is already known.
+                    Preconditions: none; suggestions are created only by the replenishment scan, so an empty page \
+                    means the scan proposed nothing matching the filters.
+                    Required inputs: none; status (SUGGESTED, ACCEPTED, CONVERTED or DISMISSED), sku and \
+                    locationId are optional filters, and the page size defaults to 20.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 400 when status is not a known lifecycle value, and 200 with an empty page when \
+                    nothing matches.
+                    """,
             tags = {"Purchase Suggestions"})
     @ApiResponse(
             responseCode = "200",
@@ -88,8 +100,17 @@ public class PurchaseSuggestionController {
     @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "')")
     @Operation(
             operationId = "getPurchaseSuggestion",
-            summary = "Get purchase suggestion",
-            description = "Retrieves one purchase suggestion by identifier.",
+            summary = "Get Purchase Suggestion",
+            description = """
+                    Returns one purchase suggestion with its status, suggested quantity, vendor reference, feed \
+                    price and, when converted, the created purchase order id.
+                    Use this tool when the suggestionId is already known; use listPurchaseSuggestions instead to \
+                    search by status, SKU or destination location.
+                    Preconditions: the purchase suggestion must exist.
+                    Required inputs: suggestionId (UUIDv7) path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no purchase suggestion exists for the supplied id.
+                    """,
             tags = {"Purchase Suggestions"})
     @ApiResponse(
             responseCode = "200",
@@ -120,10 +141,21 @@ public class PurchaseSuggestionController {
     @EmitEvent(id = "INVENTORY_PURCHASE_SUGGESTION_ACCEPT", apiVersion = "1")
     @Operation(
             operationId = "acceptPurchaseSuggestion",
-            summary = "Accept a purchase suggestion",
-            description = "Human-mandatory accept gate (plan D-3): transitions SUGGESTED → ACCEPTED, making the"
-                    + " suggestion eligible for conversion into a DRAFT purchase order. The replenishment scan"
-                    + " never accepts suggestions.",
+            summary = "Accept Purchase Suggestion",
+            description = """
+                    Accepts a purchase suggestion, moving it from SUGGESTED to ACCEPTED as the human-mandatory \
+                    gate the replenishment scan never crosses on its own.
+                    Use this tool when a reviewer approves proposed replenishment; do not use \
+                    convertPurchaseSuggestions before acceptance, and use dismissPurchaseSuggestion instead to \
+                    reject the proposal.
+                    Preconditions: the suggestion must exist and be in SUGGESTED status.
+                    Required inputs: suggestionId (UUIDv7) path parameter; there is no request body.
+                    Emits an INVENTORY_PURCHASE_SUGGESTION_ACCEPT event; no purchase order is created and no \
+                    spend is committed, that happens only through convertPurchaseSuggestions and the PO approval \
+                    workflow.
+                    Returns 404 when the suggestion does not exist, and 409 when it is not SUGGESTED because it \
+                    was already accepted, converted or dismissed.
+                    """,
             tags = {"Purchase Suggestions"})
     @ApiResponse(
             responseCode = "200",
@@ -160,9 +192,21 @@ public class PurchaseSuggestionController {
     @EmitEvent(id = "INVENTORY_PURCHASE_SUGGESTION_DISMISS", apiVersion = "1")
     @Operation(
             operationId = "dismissPurchaseSuggestion",
-            summary = "Dismiss a purchase suggestion",
-            description = "Dismisses a SUGGESTED or ACCEPTED suggestion with a mandatory reason. Dismissal is"
-                    + " terminal and per-instance; suppressing future suggestions is the policy snooze's job.",
+            summary = "Dismiss Purchase Suggestion",
+            description = """
+                    Dismisses a purchase suggestion with a recorded reason, moving it to the terminal DISMISSED \
+                    status.
+                    Use this tool to reject one specific proposal; dismissal is per-instance, so use the \
+                    replenishment policy snooze instead to suppress future suggestions for the SKU, and do not \
+                    use acceptPurchaseSuggestion, which approves the proposal.
+                    Preconditions: the suggestion must exist and be in SUGGESTED or ACCEPTED status.
+                    Required inputs: suggestionId (UUIDv7) path parameter and a body with reason, non-blank and \
+                    at most 255 characters.
+                    Emits an INVENTORY_PURCHASE_SUGGESTION_DISMISS event and stores the dismissal reason on the \
+                    suggestion; the replenishment scan may still raise a new suggestion later.
+                    Returns 404 when the suggestion does not exist, 409 when it is already CONVERTED or \
+                    DISMISSED, and 400 when the reason is missing or blank.
+                    """,
             tags = {"Purchase Suggestions"})
     @ApiResponse(
             responseCode = "200",
@@ -189,7 +233,19 @@ public class PurchaseSuggestionController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PurchaseSuggestionResponse> dismissPurchaseSuggestion(
             @Parameter(description = "Purchase suggestion identifier", required = true) @PathVariable UUID suggestionId,
-            @Valid @RequestBody DismissPurchaseSuggestionRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Why this suggestion is being rejected; recorded on the suggestion.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = DismissPurchaseSuggestionRequest.class),
+                                            examples = @ExampleObject(name = "Dismissal with reason", value = """
+                                                                    {"reason":"Vendor contract under renegotiation"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    DismissPurchaseSuggestionRequest request) {
         String actorUserId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
         return ResponseEntity.ok(
@@ -205,11 +261,25 @@ public class PurchaseSuggestionController {
     @EmitEvent(id = "INVENTORY_PURCHASE_SUGGESTION_CONVERT", apiVersion = "1")
     @Operation(
             operationId = "convertPurchaseSuggestions",
-            summary = "Convert accepted purchase suggestions into a DRAFT purchase order",
-            description = "Creates ONE multi-line DRAFT purchase order from ACCEPTED suggestions sharing a"
-                    + " single vendor, then stamps each suggestion CONVERTED. The DRAFT order still passes the"
-                    + " existing purchase order approval workflow — conversion never approves spend. Requires"
-                    + " BOTH inventory:replenishment:manage AND inventory:purchase_order:create.",
+            summary = "Convert Purchase Suggestions To Purchase Order",
+            description = """
+                    Converts ACCEPTED purchase suggestions into one multi-line DRAFT purchase order, stamping \
+                    each suggestion CONVERTED with the created order's id; a line is keyed in the vendor's pack \
+                    UoM when the suggestion captured a pack size the quantity divides evenly by.
+                    Use this tool after acceptPurchaseSuggestion to turn approved replenishment into an order; do \
+                    not use createPurchaseOrder, the manual path that ignores suggestions, and note that \
+                    conversion never approves spend, so approvePurchaseOrder must still run on the DRAFT order.
+                    Preconditions: every listed suggestion must exist, be ACCEPTED, carry a vendor reference and \
+                    a feed unit cost, all must share one vendor, and all must resolve to a single ship-to site.
+                    Required inputs: suggestionIds (non-empty list of UUIDs); duplicates are collapsed, and the \
+                    caller needs both inventory:replenishment:manage and inventory:purchase_order:create.
+                    Emits an INVENTORY_PURCHASE_SUGGESTION_CONVERT event and creates the DRAFT order through the \
+                    standard purchase order path, with the latest expected date among the suggestions as the \
+                    expected delivery date.
+                    Returns 404 when a listed suggestion does not exist, 422 when a suggestion is not ACCEPTED, \
+                    lacks a vendor or unit cost, or the suggestions mix vendors or ship-to sites, and 400 when \
+                    suggestionIds is empty.
+                    """,
             tags = {"Purchase Suggestions"})
     @ApiResponse(
             responseCode = "201",
@@ -236,7 +306,23 @@ public class PurchaseSuggestionController {
                     + " vendors or ship-to sites, or a suggestion lacks a vendor or feed price",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ConvertPurchaseSuggestionsResponse> convertPurchaseSuggestions(
-            @Valid @RequestBody ConvertPurchaseSuggestionsRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "The ACCEPTED suggestions to fold into a single DRAFT purchase order; all must"
+                                            + " share one vendor.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = ConvertPurchaseSuggestionsRequest.class),
+                                            examples =
+                                                    @ExampleObject(name = "Two suggestions, one vendor", value = """
+                                                                    {"suggestionIds":["018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a30",
+                                                                      "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a31"]}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    ConvertPurchaseSuggestionsRequest request) {
         String actorUserId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
         ConvertPurchaseSuggestionsResponse response =

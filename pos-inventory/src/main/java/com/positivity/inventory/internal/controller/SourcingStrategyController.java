@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -46,10 +47,19 @@ public class SourcingStrategyController {
             scopes = {"inventory:location:admin"})
     @PreAuthorize("hasAuthority('inventory:location:admin')")
     @Operation(
+            operationId = "listSourcingStrategyConfigs",
             summary = "List sourcing strategy configurations",
-            description = "Lists all sourcing strategy configuration rows (active and inactive), ordered by scope."
-                    + " Resolution precedence at decision time is SKU_CATEGORY, then SITE, then DEFAULT, then the"
-                    + " platform default FIFO.",
+            description = """
+                    Lists every sourcing-strategy configuration row, active and inactive, ordered by scope type \
+                    then scope value.
+                    Use this tool to inspect removal-strategy configuration; use upsertSourcingStrategyConfig \
+                    instead to change a scope, and deactivateSourcingStrategyConfig instead to retire one.
+                    Preconditions: none; at most one row exists per scope.
+                    Required inputs: none, and there is no paging or filtering.
+                    Emits an INVENTORY_SOURCING_STRATEGY_LIST audit event; no configuration is changed.
+                    Returns 200 with an empty array when nothing is configured, in which case decision-time \
+                    resolution falls through SKU_CATEGORY, SITE and DEFAULT to the platform default FIFO.
+                    """,
             tags = {"Sourcing Strategies"})
     @ApiResponse(
             responseCode = "200",
@@ -75,9 +85,26 @@ public class SourcingStrategyController {
             scopes = {"inventory:location:admin"})
     @PreAuthorize("hasAuthority('inventory:location:admin')")
     @Operation(
+            operationId = "upsertSourcingStrategyConfig",
             summary = "Upsert sourcing strategy configuration",
-            description = "Creates or updates the sourcing strategy for one scope (SKU_CATEGORY, SITE, or DEFAULT)"
-                    + " and reactivates it. At most one row exists per scope.",
+            description = """
+                    Creates or updates the sourcing strategy for one scope and reactivates the row; at most one \
+                    row exists per scopeType and scopeValue pair.
+                    Use this tool to set FIFO, FEFO, PROXIMITY or HIGHEST_STOCK at a scope; do not use \
+                    deactivateSourcingStrategyConfig to change a strategy — an upsert on an inactive row \
+                    reactivates it with the new strategy.
+                    Preconditions: none beyond scope-value shape; note that FEFO falls back to FIFO while the SKU \
+                    has no lot-expiry data, PROXIMITY falls back to FIFO when a decision has no reference \
+                    location, and SKU_CATEGORY rows are stored but unresolvable until the catalog replica carries \
+                    categories.
+                    Required inputs: scopeType (SKU_CATEGORY, SITE or DEFAULT) and strategy; scopeValue must be \
+                    the category string for SKU_CATEGORY, the site UUID as text for SITE, and must be omitted for \
+                    DEFAULT.
+                    Emits an INVENTORY_SOURCING_STRATEGY_UPSERT event; the change affects subsequent sourcing \
+                    decisions immediately.
+                    Returns 400 when scopeValue is missing for SITE or SKU_CATEGORY, is not a UUID for SITE, or is \
+                    present for DEFAULT.
+                    """,
             tags = {"Sourcing Strategies"})
     @ApiResponse(
             responseCode = "200",
@@ -95,7 +122,20 @@ public class SourcingStrategyController {
             description = "User lacks required permission",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<SourcingStrategyConfigResponse> upsertConfig(
-            @Valid @RequestBody SourcingStrategyConfigRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The scope being configured and the sourcing strategy to apply at it.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Proximity at one site", value = """
+                                                                    {"scopeType":"SITE",
+                                                                     "scopeValue":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10",
+                                                                     "strategy":"PROXIMITY"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    SourcingStrategyConfigRequest request) {
         return ResponseEntity.ok(sourcingStrategyConfigService.upsertConfig(request));
     }
 
@@ -106,9 +146,21 @@ public class SourcingStrategyController {
             scopes = {"inventory:location:admin"})
     @PreAuthorize("hasAuthority('inventory:location:admin')")
     @Operation(
+            operationId = "deactivateSourcingStrategyConfig",
             summary = "Deactivate sourcing strategy configuration",
-            description = "Soft delete: marks the configuration row inactive so it stops participating in strategy"
-                    + " resolution; the row is never removed.",
+            description = """
+                    Deactivates one sourcing-strategy configuration row so it stops participating in strategy \
+                    resolution; this is a soft delete and the row is never removed.
+                    Use this tool to retire a scope override and fall back to the next precedence level; do not \
+                    use upsertSourcingStrategyConfig with a different strategy when the intent is to remove the \
+                    override entirely.
+                    Preconditions: the configuration row must exist; deactivating an already inactive row is a \
+                    no-op that returns the row.
+                    Required inputs: configId (UUID) path parameter; there is no request body.
+                    Emits an INVENTORY_SOURCING_STRATEGY_DEACTIVATE event; subsequent decisions fall back to SITE, \
+                    DEFAULT or the platform default FIFO.
+                    Returns 404 when no configuration exists for the supplied id.
+                    """,
             tags = {"Sourcing Strategies"})
     @ApiResponse(
             responseCode = "200",

@@ -47,11 +47,21 @@ public class ShopAuditController {
      */
     @GetMapping
     @PreAuthorize("hasAnyAuthority('shop:schedule:view', 'appointments:view')")
-    @Operation(
-            operationId = "searchShopAudit",
-            summary = "Search shop audit trail",
-            description =
-                    "Searches the shop audit trail using filter criteria. At least one filter criterion is required.")
+    @Operation(operationId = "searchShopAudit", summary = "Search the Shop Audit Trail", description = """
+                    Searches the immutable shop audit trail of schedule and assignment changes, returning matching \
+                    entries in reverse-chronological order with actor, event type, change summary and reason.
+                    Use this tool when investigating who changed a schedule or assignment and why; use \
+                    getShopAuditEntry instead when the audit entry id is already known.
+                    Preconditions: at least one filter criterion (workorderId, appointmentId, mechanicId, \
+                    actorUserId, eventType or locationId) must be supplied; unbounded scans are rejected.
+                    Required inputs: any combination of the filter fields plus optional fromDateTime and \
+                    toDateTime, which default to the last 90 days ending now; eventType is one of \
+                    SCHEDULE_CREATED, SCHEDULE_UPDATED, SCHEDULE_CANCELLED, ASSIGNMENT_CREATED or \
+                    ASSIGNMENT_REMOVED.
+                    No events are emitted and no state changes; this is a read-only projection of records retained \
+                    for seven years.
+                    Returns 400 when no filter criterion is provided.
+                    """)
     @ApiResponse(responseCode = "200", description = "Audit entries returned")
     @ApiResponse(
             responseCode = "400",
@@ -73,10 +83,16 @@ public class ShopAuditController {
      */
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('shop:schedule:view', 'appointments:view')")
-    @Operation(
-            operationId = "getShopAuditEntry",
-            summary = "Get shop audit entry by ID",
-            description = "Returns a single shop audit entry by its UUID.")
+    @Operation(operationId = "getShopAuditEntry", summary = "Get a Shop Audit Entry by ID", description = """
+                    Returns a single immutable shop audit entry, including actor, event type, change summary, \
+                    change patch and reason fields.
+                    Use this tool when the audit entry id is already known; use searchShopAudit instead to find \
+                    entries by workorder, appointment, mechanic, actor, event type or location.
+                    Preconditions: the audit entry must exist; entries are never updated or deleted once written.
+                    Required inputs: id (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no audit entry exists for the supplied id.
+                    """)
     @ApiResponse(responseCode = "200", description = "Audit entry returned")
     @ApiResponse(
             responseCode = "403",

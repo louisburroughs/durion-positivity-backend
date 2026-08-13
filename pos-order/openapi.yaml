@@ -25,9 +25,21 @@ paths:
     put:
       tags:
       - Sales Orders
-      summary: Update a sales order cart item quantity
-      description: Update the quantity for an existing sales order line item in a cart.
-      operationId: updateItemQuantity
+      summary: Update a Cart Item Quantity
+      description: 'Updates the quantity of an existing line on a DRAFT sales order cart and recomputes order totals.
+
+        Use this tool to change how many units a line sells; do not use removeCartItem, which deletes the line entirely, and do not use addCartItem, which creates a new line.
+
+        Preconditions: the order must exist and be DRAFT, and the line must exist on that order.
+
+        Required inputs: orderId and lineId as path UUIDs, and quantity (minimum 1) in the body.
+
+        Emits an ORDER_CART_ITEM_UPDATE event, recomputes order totals, and marks tax stale.
+
+        Returns 404 when the order or line does not exist, and 409 when the order is not DRAFT.
+
+        '
+      operationId: updateCartItemQuantity
       parameters:
       - name: orderId
         in: path
@@ -42,10 +54,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The new quantity for the line.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateItemRequest'
+            examples:
+              Set quantity:
+                description: Set quantity
+                value:
+                  quantity: 3
         required: true
       responses:
         '200':
@@ -61,9 +79,21 @@ paths:
     delete:
       tags:
       - Sales Orders
-      summary: Remove an item from a sales order cart
-      description: Remove a line item from an existing sales order cart.
-      operationId: removeItem
+      summary: Remove an Item from a Cart
+      description: 'Removes a line item from a DRAFT sales order cart and recomputes the remaining totals.
+
+        Use this tool to take a line off the sale entirely; do not use updateCartItemQuantity, which keeps the line and changes its quantity.
+
+        Preconditions: the order must exist and be DRAFT; a lineId that is not on the order is silently ignored rather than rejected.
+
+        Required inputs: orderId and lineId as path UUIDs; there is no request body.
+
+        Emits an ORDER_CART_ITEM_REMOVE event, recomputes order totals, and marks tax stale.
+
+        Returns 204 on success, 404 when the order does not exist, and 409 when the order is not DRAFT.
+
+        '
+      operationId: removeCartItem
       parameters:
       - name: orderId
         in: path
@@ -88,8 +118,20 @@ paths:
     put:
       tags:
       - Sales Orders
-      summary: Apply an order-level discount
-      description: Apply or replace the order-level discount (PERCENT or AMOUNT), allocated pro-rata across lines. DRAFT orders only.
+      summary: Apply an Order-Level Discount
+      description: 'Applies or replaces the single order-level discount on a DRAFT cart, allocated pro-rata across lines when totals are recomputed.
+
+        Use this tool for a whole-order concession; do not use applyPriceOverride, which changes one line''s unit price through the price-override approval workflow.
+
+        Preconditions: the order must exist and be DRAFT.
+
+        Required inputs: type (PERCENT or AMOUNT) and a positive value — a PERCENT value must not exceed 100; reasonCode is optional.
+
+        Emits an ORDER_CART_DISCOUNT_APPLY event, recomputes order totals, and marks tax stale.
+
+        Returns 404 when the order does not exist, 409 when the order is not DRAFT, and 422 when the type or value is invalid.
+
+        '
       operationId: applyOrderDiscount
       parameters:
       - name: orderId
@@ -99,10 +141,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The order-level discount to set, replacing any existing one.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/OrderDiscountRequest'
+            examples:
+              Ten percent goodwill:
+                description: Ten percent goodwill
+                value:
+                  type: PERCENT
+                  value: 10
+                  reasonCode: GOODWILL_ADJUSTMENT
         required: true
       responses:
         '200':
@@ -118,8 +168,20 @@ paths:
     delete:
       tags:
       - Sales Orders
-      summary: Remove the order-level discount
-      description: Clear any order-level discount and recompute totals. DRAFT orders only.
+      summary: Remove the Order-Level Discount
+      description: 'Clears any order-level discount from a DRAFT cart and recomputes totals.
+
+        Use this tool to withdraw a whole-order concession; do not use applyOrderDiscount, which sets or replaces the discount.
+
+        Preconditions: the order must exist and be DRAFT; clearing a cart that has no discount succeeds.
+
+        Required inputs: orderId (UUID) as a path parameter; there is no request body.
+
+        Emits an ORDER_CART_DISCOUNT_REMOVE event, recomputes order totals, and marks tax stale.
+
+        Returns 404 when the order does not exist, and 409 when the order is not DRAFT.
+
+        '
       operationId: clearOrderDiscount
       parameters:
       - name: orderId
@@ -143,8 +205,20 @@ paths:
     get:
       tags:
       - Returns
-      summary: List returns for an original order
-      description: Lists return orders created from the specified original order.
+      summary: List Returns for an Original Order
+      description: 'Lists every return order created from one original sales order, newest first.
+
+        Use this tool to review a sale''s return history; use getReturn instead when the return order id is known, or listReturnableLines to see what can still come back.
+
+        Preconditions: none — an original order with no returns simply yields an empty list, and the original order''s existence is not checked.
+
+        Required inputs: originalOrderId (UUID) as a query parameter; there is no request body.
+
+        Emits an ORDER_RETURN_LIST audit event; no state changes — this is a read-only projection.
+
+        Returns 200 with a possibly empty list; there are no business error conditions beyond authorization.
+
+        '
       operationId: listReturns
       parameters:
       - name: originalOrderId
@@ -169,8 +243,20 @@ paths:
     post:
       tags:
       - Returns
-      summary: Create a return against a completed order
-      description: 'Idempotency-Key header supported: a replayed key returns the original return. Over-cap requests return 422 listing each line''s returnableQty.'
+      summary: Create a Return Against a Completed Order
+      description: 'Creates a return order against one COMPLETED sales order, capping each line at its un-refunded remainder (row-locked so concurrent returns serialize) and computing a pro-rata, tax-included refund per line.
+
+        Use this tool to take goods back after a completed sale; do not use cancelOrder or voidOrder, which abandon an order before completion, and check listReturnableLines first to see each line''s remaining returnable quantity.
+
+        Preconditions: the original order must be COMPLETED, every line must be returnable (workorder consumed lines without an imported returnable flag are not), and each sold line may appear at most once in the request.
+
+        Required inputs: originalOrderId (UUID), refundMethod (ORIGINAL_TENDER, STORE_CREDIT or ON_ACCOUNT_CREDIT), and at least one line with originalOrderLineId, a positive returnQty, and condition (RESTOCK, SCRAP or WARRANTY); reasonCode, per-line serialNumbers, and the Idempotency-Key header (replays return the original return) are optional.
+
+        Emits an ORDER_RETURN_CREATE event; a refund total above the approval threshold (default 250.00, configurable via pos.order.return.approval-threshold) parks the return at PENDING_APPROVAL, otherwise it starts at RETURN_REQUESTED ready for processReturn.
+
+        Returns 201 on creation (idempotent replays included), 404 when the original order does not exist, 409 when the original order is not COMPLETED, and 422 when a line exceeds its returnable remainder (each offending line''s returnableQty is listed in fieldErrors), a WARRANTY-condition line must route to pos-warranty, or the lines are duplicated, unknown, or invalid.
+
+        '
       operationId: createReturn
       parameters:
       - name: Idempotency-Key
@@ -180,10 +266,22 @@ paths:
         schema:
           type: string
       requestBody:
+        description: 'The return: source order, refund method, and the lines coming back.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateReturnRequest'
+            examples:
+              Single-line restock return:
+                description: Single-line restock return
+                value:
+                  originalOrderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                  refundMethod: ORIGINAL_TENDER
+                  reasonCode: DEFECTIVE
+                  lines:
+                  - originalOrderLineId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                    returnQty: 1
+                    condition: RESTOCK
         required: true
       responses:
         '200':
@@ -200,8 +298,20 @@ paths:
     post:
       tags:
       - Returns
-      summary: Retry a return saga after a refund failure
-      description: Retries return processing for a return currently in a retryable failed state.
+      summary: Retry a Failed Return Refund
+      description: 'Re-runs the return refund saga for a return parked at REFUND_FAILED, using the same per-intent idempotency so already-reversed payments are never refunded twice.
+
+        Use this tool after fixing the cause of a refund failure; do not use processReturn, which only accepts a return in RETURN_REQUESTED.
+
+        Preconditions: the return must be in REFUND_FAILED; an already COMPLETED return is an idempotent no-op.
+
+        Required inputs: returnOrderId (UUID) as a path parameter; there is no request body.
+
+        Emits an ORDER_RETURN_RETRY event and, on success, publishes the order.order.returned fact that drives the pos-inventory restock of RESTOCK lines.
+
+        Returns 200 when the retry completes (or the return was already COMPLETED), 404 when the return does not exist, and 409 when the status is not REFUND_FAILED or the refund fails again.
+
+        '
       operationId: retryReturn
       parameters:
       - name: returnOrderId
@@ -225,8 +335,20 @@ paths:
     post:
       tags:
       - Returns
-      summary: Reject a pending return
-      description: Rejects a pending return with a provided rejection reason.
+      summary: Reject a Pending Return
+      description: 'Rejects a PENDING_APPROVAL return with a recorded reason, moving it to the terminal REJECTED state and releasing its quantities back to the per-line returnable cap.
+
+        Use this tool to decline an over-threshold return; do not use approveReturn, which releases it into the refund saga instead.
+
+        Preconditions: the return order must exist and be in PENDING_APPROVAL.
+
+        Required inputs: returnOrderId (UUID) as a path parameter and reason in the body.
+
+        Emits an ORDER_RETURN_REJECT event; no refund is issued and no stock moves.
+
+        Returns 404 when the return does not exist, and 409 when the return is not in PENDING_APPROVAL.
+
+        '
       operationId: rejectReturn
       parameters:
       - name: returnOrderId
@@ -236,10 +358,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The business reason the return is being declined.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RejectReturnRequest'
+            examples:
+              Rejection:
+                description: Rejection
+                value:
+                  reason: Refund exceeds policy for this item
         required: true
       responses:
         '200':
@@ -256,8 +384,20 @@ paths:
     post:
       tags:
       - Returns
-      summary: Run the return orchestration saga (refund + restock signal)
-      description: 'From RETURN_REQUESTED: issues the refund and emits order.order.returned. A refund failure parks the return at REFUND_FAILED before any stock movement.'
+      summary: Run the Return Refund Saga
+      description: 'Runs the return orchestration saga from RETURN_REQUESTED: issues the refund (ORIGINAL_TENDER reverses the original order''s settled payments through pos-invoice up to the refund total; STORE_CREDIT and ON_ACCOUNT_CREDIT record the credit intent and require a customer on the return), then completes the return.
+
+        Use this tool to execute an approved or under-threshold return; do not use retryReturn, which only re-drives a return already parked at REFUND_FAILED.
+
+        Preconditions: the return must be in RETURN_REQUESTED (an already COMPLETED return is an idempotent no-op), and an ORIGINAL_TENDER refund needs an invoice and sufficient settled tender on the original order.
+
+        Required inputs: returnOrderId (UUID) as a path parameter; there is no request body.
+
+        Emits an ORDER_RETURN_PROCESS event and publishes an order.order.returned fact after completion, which pos-inventory consumes to restock RESTOCK-condition lines (SCRAP lines are skipped); a refund failure parks the return at REFUND_FAILED before any stock signal.
+
+        Returns 200 when the saga completes (or the return was already COMPLETED), 404 when the return does not exist, and 409 when the status is not RETURN_REQUESTED or the refund leg fails.
+
+        '
       operationId: processReturn
       parameters:
       - name: returnOrderId
@@ -281,8 +421,20 @@ paths:
     post:
       tags:
       - Returns
-      summary: Approve a pending return
-      description: Approves a pending return so it can continue through the return workflow.
+      summary: Approve a Pending Return
+      description: 'Approves a PENDING_APPROVAL return, stamping the approver and moving it to RETURN_REQUESTED so the refund saga can run.
+
+        Use this tool for returns whose refund total exceeded the approval threshold; do not use processReturn, which executes the refund and only accepts a return already in RETURN_REQUESTED.
+
+        Preconditions: the return order must exist and be in PENDING_APPROVAL.
+
+        Required inputs: returnOrderId (UUID) as a path parameter; there is no request body — the approver is taken from the security context.
+
+        Emits an ORDER_RETURN_APPROVE event; no refund or stock movement happens yet.
+
+        Returns 404 when the return does not exist, and 409 when the return is not in PENDING_APPROVAL.
+
+        '
       operationId: approveReturn
       parameters:
       - name: returnOrderId
@@ -306,8 +458,20 @@ paths:
     post:
       tags:
       - Sales Orders
-      summary: Void an unsettled order
-      description: 'Terminal void of a PENDING_PAYMENT order before any settlement: cancels the fronting pos-invoice invoice and transitions the order to VOIDED. Rejected with 409 when settled payments exist (use the cancellation flow) or from any other status (drafts are cancelled, not voided).'
+      summary: Void an Unsettled Order
+      description: 'Voids a PENDING_PAYMENT order before any settlement: cancels the fronting pos-invoice invoice and transitions the order to VOIDED, rolling the void back if the invoice cancel fails.
+
+        Use this tool to abandon a checked-out order that has taken no money; do not use cancelOrder, which runs the cancellation saga for DRAFT and QUOTED orders and reverses settled payments.
+
+        Preconditions: the order must be PENDING_PAYMENT with no settled payment records; voiding an already VOIDED order is an idempotent no-op.
+
+        Required inputs: orderId (UUID) as a path parameter; the body is optional and carries only a free-text reason.
+
+        Emits an ORDER_VOID event.
+
+        Returns 200 on success or an already-voided no-op, 404 when the order does not exist, 409 when settled payments exist (route through cancelOrder) or the status is not PENDING_PAYMENT, and 503 when the invoicing service is unreachable.
+
+        '
       operationId: voidOrder
       parameters:
       - name: orderId
@@ -317,10 +481,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Optional void context; the body may be omitted entirely.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/VoidOrderRequest'
+            examples:
+              Void with reason:
+                description: Void with reason
+                value:
+                  reason: Customer walked away before payment
       responses:
         '200':
           description: OK
@@ -336,9 +506,21 @@ paths:
     post:
       tags:
       - Sales Orders
-      summary: Check out a sales order
-      description: 'Freeze the cart and take it to PENDING_PAYMENT: validates lines/customer/availability, performs the final reprice and tax computation, and creates the fronting invoice at pos-invoice. The Idempotency-Key header is required; a replayed key returns the checked-out order with 200. Settlement completion is asynchronous — the order completes when payment events settle the balance to zero.'
-      operationId: checkout
+      summary: Check Out a Sales Order
+      description: 'Freezes a DRAFT or QUOTED cart into PENDING_PAYMENT: revalidates availability and serial capture, runs the final reprice and tax computation, and synchronously creates the fronting invoice at pos-invoice, rolling the whole checkout back if invoice creation fails.
+
+        Use this tool when the customer is ready to pay; do not use quoteCart, which produces a resumable quote, and do not use voidOrder, which abandons an order already in PENDING_PAYMENT.
+
+        Preconditions: the cart must be non-empty with customer validation not PENDING, every line must have sufficient inventory, serial-tracked lines must carry one serial per unit (lot-tracked at least one), and ON_ACCOUNT additionally requires the order:order:charge_on_account permission and a VALIDATED commercial customer with payment terms and no credit hold.
+
+        Required inputs: the Idempotency-Key header; the body is optional with tenderType DEFAULT or ON_ACCOUNT — DEFAULT settles asynchronously via payment events that complete the order when the balance reaches zero, while ON_ACCOUNT settles against the AR invoice and completes the order immediately.
+
+        Emits an ORDER_CHECKOUT event; an ON_ACCOUNT checkout also records a settled ON_ACCOUNT ledger entry and publishes an order-completed fact.
+
+        Returns 201 on checkout, 200 when the same Idempotency-Key replays the checked-out order, 409 when the key belongs to a different order or the status does not allow checkout, 422 when the cart is empty, customer validation is pending, availability or serial capture is insufficient, or on-account eligibility fails, and 503 when the tax or invoicing service is unreachable.
+
+        '
+      operationId: checkoutOrder
       parameters:
       - name: orderId
         in: path
@@ -353,10 +535,16 @@ paths:
         schema:
           type: string
       requestBody:
+        description: Optional checkout options; omit the body entirely for default tender.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CheckoutRequest'
+            examples:
+              On-account tender:
+                description: On-account tender
+                value:
+                  tenderType: ON_ACCOUNT
       responses:
         '200':
           description: OK
@@ -372,14 +560,35 @@ paths:
     post:
       tags:
       - Register Sessions
-      summary: Open a register session
-      description: Opens a new register session for the provided terminal, location, and clerk context.
-      operationId: openSession
+      summary: Open a Register Session
+      description: 'Opens an OPEN register (drawer) session on a terminal; sales orders created on the terminal while it is open bind to it, and it supplies their location by default.
+
+        Use this tool at the start of a drawer shift; do not use recordCashMovement, which requires a session that is already open.
+
+        Preconditions: the terminal must have no session in OPEN or CLOSING — one drawer per terminal.
+
+        Required inputs: terminalId and openedByClerkId; openingFloat defaults to the terminal''s previous counted close (else zero) when omitted, and locationId defaults from the terminal''s previous session.
+
+        Emits an ORDER_SESSION_OPEN event.
+
+        Returns 201 with the new session, and 409 when the terminal already has an active session.
+
+        '
+      operationId: openRegisterSession
       requestBody:
+        description: The terminal, clerk, and optional opening-float context for the shift.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/OpenSessionRequest'
+            examples:
+              Morning open:
+                description: Morning open
+                value:
+                  terminalId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60
+                  openedByClerkId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a50
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a90
+                  openingFloat: 150.0
         required: true
       responses:
         '200':
@@ -396,9 +605,21 @@ paths:
     post:
       tags:
       - Register Sessions
-      summary: Confirm a register session close
-      description: Snapshots theoretical cash, computes over/short, and moves the session to CLOSED. An over/short beyond the authorized difference limit requires order:session:approve_variance.
-      operationId: confirmClose
+      summary: Confirm a Register Session Close
+      description: 'Finalizes a CLOSING register session: snapshots theoretical cash (opening float plus net CASH settlements plus signed cash movements), computes the over/short against the counted drawer, and moves the session to CLOSED.
+
+        Use this tool to finish the close after the count; do not use beginSessionClose, which records the count and must run first.
+
+        Preconditions: the session must be in CLOSING, and no order on the session may have re-entered PENDING_PAYMENT since the count began.
+
+        Required inputs: sessionId (UUID) as a path parameter; there is no request body — an over/short beyond the authorized difference limit (default 5.00, configurable via pos.order.session.authorized-difference-limit) additionally requires the order:session:approve_variance permission.
+
+        Emits an ORDER_SESSION_CONFIRM_CLOSE event and publishes a register-session-closed fact carrying per-tender totals and the reconciliation figures.
+
+        Returns 200 with the CLOSED session, 403 when the variance exceeds the limit without the approval permission, 404 when the session does not exist, and 409 when the session is not in CLOSING or an order is still awaiting payment.
+
+        '
+      operationId: confirmSessionClose
       parameters:
       - name: sessionId
         in: path
@@ -421,8 +642,20 @@ paths:
     get:
       tags:
       - Register Sessions
-      summary: List a session's cash movements
-      description: Lists all recorded cash movements for the specified register session.
+      summary: List a Session's Cash Movements
+      description: 'Lists every recorded cash movement for a register session in the order they occurred.
+
+        Use this tool to review drawer ins and outs; use getSessionXReport instead for the aggregated mid-day figures that include tender totals and theoretical cash.
+
+        Preconditions: the session must exist.
+
+        Required inputs: sessionId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with a possibly empty list, and 404 when the session does not exist.
+
+        '
       operationId: listCashMovements
       parameters:
       - name: sessionId
@@ -447,8 +680,20 @@ paths:
     post:
       tags:
       - Register Sessions
-      summary: Record a drawer cash movement
-      description: Records a cash in/out drawer movement against the specified register session.
+      summary: Record a Drawer Cash Movement
+      description: 'Records a PAID_IN or PAID_OUT cash movement against an OPEN register session; movements feed the theoretical-cash calculation at close.
+
+        Use this tool for non-sale drawer cash such as petty cash or bank drops; do not use beginSessionClose, which records the final counted drawer instead.
+
+        Preconditions: the session must exist and be OPEN — movements are rejected once closing has begun.
+
+        Required inputs: movementType (PAID_IN or PAID_OUT), a positive amount, reason, and clerkId.
+
+        Emits an ORDER_SESSION_CASH_MOVEMENT event.
+
+        Returns 201 with the recorded movement, 404 when the session does not exist, 409 when the session is not OPEN, and 422 when the amount is not positive or the movement type is unknown.
+
+        '
       operationId: recordCashMovement
       parameters:
       - name: sessionId
@@ -458,10 +703,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: 'The cash movement: direction, positive amount, reason, and clerk.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CashMovementRequest'
+            examples:
+              Petty cash out:
+                description: Petty cash out
+                value:
+                  movementType: PAID_OUT
+                  amount: 40.0
+                  reason: petty cash to office
+                  clerkId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a50
         required: true
       responses:
         '200':
@@ -478,9 +732,21 @@ paths:
     post:
       tags:
       - Register Sessions
-      summary: Begin closing a register session
-      description: Records the counted cash and moves the session to CLOSING. Blocked while any of its orders are in PENDING_PAYMENT.
-      operationId: beginClose
+      summary: Begin Closing a Register Session
+      description: 'Records the physically counted drawer cash and moves the register session to CLOSING, freezing the terminal against new orders.
+
+        Use this tool to start the drawer count at end of shift; do not use confirmSessionClose, which finalizes a session already in CLOSING.
+
+        Preconditions: the session must exist, must not already be CLOSED, and none of its orders may be in PENDING_PAYMENT.
+
+        Required inputs: countedCash (zero or greater) in the body and sessionId (UUID) as a path parameter.
+
+        Emits an ORDER_SESSION_BEGIN_CLOSE event.
+
+        Returns 200 with the CLOSING session, 404 when the session does not exist, and 409 when the session is already closed or an order on the session is still awaiting payment.
+
+        '
+      operationId: beginSessionClose
       parameters:
       - name: sessionId
         in: path
@@ -489,10 +755,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The physically counted drawer cash at the start of the close.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BeginCloseRequest'
+            examples:
+              Counted drawer:
+                description: Counted drawer
+                value:
+                  countedCash: 310.0
         required: true
       responses:
         '200':
@@ -509,9 +781,21 @@ paths:
     get:
       tags:
       - Price Overrides
-      summary: Get price overrides
-      description: Retrieve price overrides by order ID, status, or date range. At least one filter parameter is required.
-      operationId: getOverridesByOrder
+      summary: Search Price Overrides
+      description: 'Searches price overrides by order id, status, or creation-date range; exactly one filter dimension is applied, with orderId taking precedence over status, which takes precedence over the date range.
+
+        Use this tool to find overrides matching a filter; use getPriceOverride instead when the override id is known, or listPendingPriceOverrides for the approval work queue.
+
+        Preconditions: at least one filter must be supplied, and a date-range search requires both startDate and endDate.
+
+        Required inputs: one of orderId (UUID string), status (an override status such as PENDING_APPROVAL, APPROVED or REJECTED), or startDate plus endDate as ISO-8601 date-times.
+
+        Emits an ORDER_PRICE_OVERRIDE_SEARCH audit event; no state changes.
+
+        Returns 200 with a possibly empty list, 400 when no filter is supplied or orderId is not a UUID, and 422 when status is not a valid override status name.
+
+        '
+      operationId: searchPriceOverrides
       parameters:
       - name: orderId
         in: query
@@ -564,14 +848,39 @@ paths:
     post:
       tags:
       - Price Overrides
-      summary: Apply price override
-      description: Apply a price override to an order line. May require approval based on override amount.
+      summary: Apply a Price Override
+      description: 'Applies a price override to a single DRAFT order line, auto-approving and repricing the line immediately when the discount is below the approval thresholds (10 percent and 50.00), and otherwise parking it at PENDING_APPROVAL for a manager.
+
+        Use this tool for a one-line price concession; do not use applyOrderDiscount, which spreads a discount pro-rata across the whole order, and do not use approvePriceOverride, which resolves an override that already exists.
+
+        Preconditions: the order must exist and be DRAFT, the order line must exist, and overridePrice must be between zero and originalPrice inclusive.
+
+        Required inputs: orderId, orderLineId, and productId as UUID strings, originalPrice, overridePrice, and reasonCode (for example PRICE_MATCH or GOODWILL_ADJUSTMENT); justification and idempotencyKey are optional, and a replayed key returns the existing override.
+
+        Emits an ORDER_PRICE_OVERRIDE_APPLY event; an auto-approved override immediately rewrites the line''s unit price, recomputes the order subtotal, and publishes a commission-impact fact.
+
+        Returns 201 with status APPROVED or PENDING_APPROVAL, 400 when an id or reasonCode cannot be parsed, 409 when the idempotency key was used with a different payload, and 422 when the order or line cannot be found, the order is not DRAFT, or the override price is negative or above the original.
+
+        '
       operationId: applyPriceOverride
       requestBody:
+        description: 'The line-level override: original and overridden price with an audit reason.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ApplyPriceOverrideRequest'
+            examples:
+              Price match:
+                description: Price match
+                value:
+                  orderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                  orderLineId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                  productId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
+                  originalPrice: 49.99
+                  overridePrice: 39.99
+                  reasonCode: PRICE_MATCH
+                  justification: Competitor price match per store policy
+                  idempotencyKey: req-abc123
         required: true
       responses:
         '201':
@@ -601,8 +910,20 @@ paths:
     post:
       tags:
       - Price Overrides
-      summary: Reject price override
-      description: Reject a pending price override with a reason.
+      summary: Reject a Price Override
+      description: 'Rejects a PENDING_APPROVAL price override, marking it REJECTED with the supplied reason and recording a rejection audit row with the reviewer''s resolved role.
+
+        Use this tool to decline a pending override; do not use approvePriceOverride, which grants it instead.
+
+        Preconditions: the override must exist and be in PENDING_APPROVAL; a rejected override is terminal and never touches the order line''s price.
+
+        Required inputs: overrideId (UUID) as a path parameter and reason in the body; comments are optional, and the reviewer identity and role come from the security context.
+
+        Emits an ORDER_PRICE_OVERRIDE_REJECT event; no commission-impact fact is published for a rejection.
+
+        Returns 404 when the override does not exist, and 422 when the override is not in PENDING_APPROVAL.
+
+        '
       operationId: rejectPriceOverride
       parameters:
       - name: overrideId
@@ -614,10 +935,17 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       requestBody:
+        description: The rejection reason plus optional reviewer commentary.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RejectPriceOverrideRequest'
+            examples:
+              Rejection with reason:
+                description: Rejection with reason
+                value:
+                  reason: Outside approved discount threshold
+                  comments: Discount exceeds policy limit for this product
         required: true
       responses:
         '200':
@@ -653,8 +981,20 @@ paths:
     post:
       tags:
       - Price Overrides
-      summary: Approve price override
-      description: Approve a pending price override. Validates approver permission level.
+      summary: Approve a Price Override
+      description: 'Approves a PENDING_APPROVAL price override, marking it APPROVED and recording an approval audit row with the reviewer''s role resolved from the caller''s granted roles.
+
+        Use this tool to grant a pending override; do not use rejectPriceOverride, which declines it, and do not use applyPriceOverride, which creates a new override.
+
+        Preconditions: the override must exist and be in PENDING_APPROVAL.
+
+        Required inputs: overrideId (UUID) as a path parameter; the body carries only optional reviewer comments — the approver identity and role come from the security context, not the body.
+
+        Emits an ORDER_PRICE_OVERRIDE_APPROVE event and publishes a commission-impact fact; note that the approval itself does not rewrite the order line''s unit price — the line reprice happens only on the auto-approved apply path.
+
+        Returns 404 when the override does not exist, and 422 when the override is not in PENDING_APPROVAL.
+
+        '
       operationId: approvePriceOverride
       parameters:
       - name: overrideId
@@ -666,10 +1006,16 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       requestBody:
+        description: Optional reviewer commentary recorded on the approval audit row.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ApprovePriceOverrideRequest'
+            examples:
+              Approval with comment:
+                description: Approval with comment
+                value:
+                  comments: Approved per store manager discretion
         required: true
       responses:
         '200':
@@ -705,8 +1051,20 @@ paths:
     get:
       tags:
       - Sales Orders
-      summary: List sales order carts
-      description: List carts filtered by clerk, terminal, and/or status — the draft-parking/resume surface. Line items are omitted from list results.
+      summary: List Sales Order Carts
+      description: 'Lists sales order carts filtered by clerk, terminal, and status — the draft-parking and resume surface; line items are omitted from list results.
+
+        Use this tool when searching for carts to resume or review; use getOrder instead when the order id is already known and full line detail is needed.
+
+        Preconditions: none beyond an authenticated caller with order view permission.
+
+        Required inputs: none — clerkId, terminalId, and status (a status name such as DRAFT) are optional filters; page defaults to 0 and size defaults to 20, capped at 100.
+
+        Emits an ORDER_CART_LIST audit event; no order state changes.
+
+        Returns 200 with a possibly empty page, and 422 when status is not a valid order status name.
+
+        '
       operationId: listCarts
       parameters:
       - name: clerkId
@@ -757,8 +1115,20 @@ paths:
     post:
       tags:
       - Sales Orders
-      summary: Create a sales order cart
-      description: 'Create a new sales order cart for a customer, terminal, and optional vehicle context. Supports the Idempotency-Key header: a replayed key returns the original cart with 200 instead of creating a duplicate; a replayed key with a different payload returns 409.'
+      summary: Create a Sales Order Cart
+      description: 'Creates a DRAFT sales order cart bound to a clerk and terminal, with optional customer, vehicle, and deposit-source context; a register session open on the terminal binds the cart to it and supplies the location when locationId is omitted.
+
+        Use this tool to start a new sale at the counter; do not use addCartItem, which adds line items to a cart that already exists.
+
+        Preconditions: the terminal must not have a register session in CLOSING, the customer and vehicle must exist in CRM when supplied, and a location must be resolvable from the request or the open session.
+
+        Required inputs: clerkId and terminalId; customerId and vehicleId are optional UUID strings, depositSourceType (ESTIMATE, WORKORDER or ORDER) and depositSourceId must be supplied together, and the optional Idempotency-Key header makes creation replay-safe.
+
+        Emits an ORDER_CART_CREATE event and records the initial DRAFT status-history row.
+
+        Returns 201 on creation, 200 when a replayed Idempotency-Key returns the original cart, 409 when the key was previously used with a different payload, and 422 when the customer or vehicle cannot be validated, the location cannot be resolved, or the terminal''s session is being closed.
+
+        '
       operationId: createCart
       parameters:
       - name: Idempotency-Key
@@ -768,10 +1138,21 @@ paths:
         schema:
           type: string
       requestBody:
+        description: 'Cart-creation context: who is selling, where, and for whom.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateCartRequest'
+            examples:
+              Counter cart with customer:
+                description: Counter cart with customer
+                value:
+                  clerkId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a50
+                  terminalId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a90
+                  customerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+                  vehicleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a80
+                  label: blue F-150 waiting on customer
         required: true
       responses:
         '200':
@@ -788,9 +1169,21 @@ paths:
     post:
       tags:
       - Sales Orders
-      summary: Convert a cart to a counter quote
-      description: 'Final reprice + tax computation, then DRAFT → QUOTED with a validity horizon. Counter quotes only: workorder-linked orders are quoted via pos-workorder estimates and are rejected here (spec Q3).'
-      operationId: quote
+      summary: Convert a Cart to a Counter Quote
+      description: 'Converts a DRAFT counter cart to QUOTED by running a final reprice and authoritative tax computation and stamping a validity horizon (default P7D, configurable via pos.order.quote.validity).
+
+        Use this tool to hand the customer a priced, resumable counter quote; do not use checkoutOrder, which freezes the cart for payment, and note that workorder-linked orders are quoted via pos-workorder estimates and are rejected here.
+
+        Preconditions: the order must be DRAFT with at least one line, must not reference a workorder directly or through imported lines, and pricing must be reachable for every non-manual, non-source line.
+
+        Required inputs: orderId (UUID) as a path parameter; there is no request body.
+
+        Emits an ORDER_CART_QUOTE event.
+
+        Returns 404 when the order does not exist, 409 when the status does not allow the transition, 422 when the cart is empty, workorder-linked, or pricing is unavailable, and 503 when the tax service cannot be reached.
+
+        '
+      operationId: quoteCart
       parameters:
       - name: orderId
         in: path
@@ -813,8 +1206,20 @@ paths:
     post:
       tags:
       - Sales Orders
-      summary: Reopen a counter quote
-      description: 'QUOTED → DRAFT: clears the validity horizon, best-effort reprices, and marks tax stale.'
+      summary: Reopen a Counter Quote
+      description: 'Reopens a QUOTED counter quote back to DRAFT, clearing the validity horizon so the cart can be edited again.
+
+        Use this tool to resume editing a quoted cart; do not use quoteCart, which moves the cart in the opposite direction from DRAFT to QUOTED.
+
+        Preconditions: the order must be QUOTED.
+
+        Required inputs: orderId (UUID) as a path parameter; there is no request body.
+
+        Emits an ORDER_CART_QUOTE_REOPEN event and best-effort reprices the lines — an unavailable pricing service keeps the old prices, and totals are recomputed with tax marked stale.
+
+        Returns 404 when the order does not exist, and 409 when the order is not QUOTED.
+
+        '
       operationId: reopenQuote
       parameters:
       - name: orderId
@@ -838,9 +1243,21 @@ paths:
     post:
       tags:
       - Sales Orders
-      summary: Add an item to a sales order cart
-      description: 'Add a line item to an existing sales order cart using SKU, quantity, and optional pricing context. A client-supplied lineUuid makes the call replay-safe: a replay with a known lineUuid updates the existing line instead of duplicating it.'
-      operationId: addItem
+      summary: Add an Item to a Cart
+      description: 'Adds a line item to a DRAFT sales order cart, pricing it through the pricing service unless a permissioned manual price is supplied, and marking the line AVAILABLE or BACKORDER from an inventory availability check.
+
+        Use this tool to put a SKU on an existing cart; do not use updateCartItemQuantity, which only changes the quantity of a line already on the cart.
+
+        Preconditions: the order must exist and be DRAFT, and a manual price requires the order:line:enter_manual_price permission.
+
+        Required inputs: itemSku and quantity (minimum 1); manualPrice, reasonCode, notes, and serialNumbers (never more than quantity) are optional, and a client-supplied lineUuid makes the call replay-safe — a replay with a known lineUuid updates that line''s quantity instead of duplicating it.
+
+        Emits an ORDER_CART_ITEM_ADD event, recomputes order totals, and marks tax stale.
+
+        Returns 400 when the SKU is unknown, 404 when the order does not exist, 409 when the order is not DRAFT or the lineUuid was previously used for a different SKU, and 422 when pricing is unavailable or serialNumbers exceed the quantity.
+
+        '
+      operationId: addCartItem
       parameters:
       - name: orderId
         in: path
@@ -849,10 +1266,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: 'The line item to add: SKU, quantity, and optional pricing context.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AddItemRequest'
+            examples:
+              Priced line with replay identity:
+                description: Priced line with replay identity
+                value:
+                  itemSku: SKU-OIL-5W30-1L
+                  quantity: 2
+                  lineUuid: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4aaa
+                  customerNote: Front wipers only
         required: true
       responses:
         '200':
@@ -869,8 +1295,20 @@ paths:
     post:
       tags:
       - Order Cancellation
-      summary: Cancel order
-      description: Initiate cancellation for a sales order cart using the supplied cancellation context.
+      summary: Cancel a Sales Order
+      description: 'Runs the order cancellation saga: transitions the order through CANCEL_REQUESTED, cancels a linked workorder at pos-workexec when workOrderId is supplied, reverses every net-settled payment as refunds through pos-invoice, and finishes at CANCELLED, publishing an order-cancelled fact.
+
+        Use this tool for DRAFT or QUOTED orders and to re-drive CANCEL_FAILED_WORKEXEC or CANCEL_FAILED_BILLING orders from the start; do not use voidOrder, which is the terminal void for an unsettled PENDING_PAYMENT order, and do not use retryOrderCancellation, which re-runs only the billing leg from CANCEL_FAILED_BILLING.
+
+        Preconditions: the order must be DRAFT, QUOTED, CANCEL_FAILED_WORKEXEC or CANCEL_FAILED_BILLING, and settled payments require an invoice reference to refund against.
+
+        Required inputs: cancellationReason; workOrderId is optional and triggers the workorder-cancellation leg, and idempotencyKey is optional (one is generated when absent) — replaying it against an already CANCELLED order returns the original result.
+
+        Emits an ORDER_CART_CANCEL_REQUEST event; refunds are idempotent per payment intent at pos-invoice, and a failed leg parks the order at CANCEL_FAILED_WORKEXEC or CANCEL_FAILED_BILLING.
+
+        Returns 201 when the cancellation completes (or already had for the replayed key), 404 when the order does not exist, and 409 when the current status is not cancellable or a workorder or payment-reversal leg fails.
+
+        '
       operationId: cancelOrder
       parameters:
       - name: orderId
@@ -880,10 +1318,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: 'Cancellation context: the business reason plus optional workorder linkage and replay key.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CancelOrderRequest'
+            examples:
+              Cancel with workorder:
+                description: Cancel with workorder
+                value:
+                  cancellationReason: Customer changed their mind
+                  workOrderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
+                  idempotencyKey: cancel-req-abc123
         required: true
       responses:
         '201':
@@ -925,9 +1371,21 @@ paths:
     post:
       tags:
       - Order Cancellation
-      summary: Retry failed cancellation
-      description: Retry a previously failed order cancellation using the original idempotency key.
-      operationId: retryCancellation
+      summary: Retry a Failed Cancellation
+      description: 'Retries the billing leg of a failed order cancellation, re-running the settled-payment reversals and completing the transition to CANCELLED.
+
+        Use this tool after a cancellation parked at CANCEL_FAILED_BILLING; do not use cancelOrder, which starts the saga from the beginning and re-checks the workorder leg as well.
+
+        Preconditions: the order must be in CANCEL_FAILED_BILLING.
+
+        Required inputs: orderId (UUID) as a path parameter and idempotencyKey as a query parameter — the original cancellation key, from which per-intent refund idempotency at pos-invoice is derived.
+
+        Emits an ORDER_CART_CANCEL_RETRY event; a retry that fails again transitions the order to CANCEL_REQUIRES_MANUAL_REVIEW and publishes a review-required fact instead of looping.
+
+        Returns 200 when the cancellation completes on retry, 404 when the order does not exist, and 409 when the order is not in CANCEL_FAILED_BILLING or the reversal fails again.
+
+        '
+      operationId: retryOrderCancellation
       parameters:
       - name: orderId
         in: path
@@ -974,9 +1432,21 @@ paths:
     patch:
       tags:
       - Sales Orders
-      summary: Link a source to a sales order
-      description: Associate an external source reference with an existing sales order cart.
-      operationId: linkSource
+      summary: Link a Source Document to an Order
+      description: 'Imports the line items of a source document (an ESTIMATE or WORKORDER) into a DRAFT cart, merging into same-SKU same-price lines where possible; imported source prices are contractual and are never repriced.
+
+        Use this tool to pull approved estimate or workorder lines onto a sale; do not use addCartItem, which adds individually priced counter lines.
+
+        Preconditions: the order must be DRAFT, a WORKORDER source requires a customer already on the cart, and source lines already linked to the cart are skipped, making the call replay-safe.
+
+        Required inputs: sourceType (ESTIMATE or WORKORDER) and sourceId, both in the body.
+
+        Emits an ORDER_LINK_SOURCE event, recomputes order totals, and marks tax stale.
+
+        Returns 404 when the order does not exist, 409 when the order is not DRAFT, and 422 when the sourceType is unknown or a WORKORDER link is attempted without a customer on the cart.
+
+        '
+      operationId: linkOrderSource
       parameters:
       - name: orderId
         in: path
@@ -985,10 +1455,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The source document whose lines are imported into the cart.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LinkSourceRequest'
+            examples:
+              Workorder link:
+                description: Workorder link
+                value:
+                  sourceType: WORKORDER
+                  sourceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
         required: true
       responses:
         '200':
@@ -1005,8 +1482,20 @@ paths:
     get:
       tags:
       - Returns
-      summary: Get a return by id
-      description: Fetches a return order by return order identifier.
+      summary: Get a Return by Id
+      description: 'Returns a return order with its status, refund method and total, failure reason when present, and per-line quantities and refunds.
+
+        Use this tool when the return order id is already known; use listReturns instead to find every return created from an original order.
+
+        Preconditions: the return order must exist.
+
+        Required inputs: returnOrderId (UUID) as a path parameter; there is no request body.
+
+        Emits an ORDER_RETURN_GET audit event; no state changes — this is a read-only projection.
+
+        Returns 404 when no return order exists for the supplied id.
+
+        '
       operationId: getReturn
       parameters:
       - name: returnOrderId
@@ -1030,9 +1519,21 @@ paths:
     get:
       tags:
       - Returns
-      summary: Per-line returnable quantities for a completed order
-      description: Returns each completed-order line with its currently returnable quantity.
-      operationId: returnableLines
+      summary: List Returnable Lines for an Order
+      description: 'Returns each line of a COMPLETED order with its sold quantity, already-returned quantity, remaining returnable quantity, and returnable flag.
+
+        Use this tool before createReturn to size a valid return; do not use listReturns, which lists return orders already created rather than remaining capacity.
+
+        Preconditions: the order must exist and be COMPLETED; workorder-consumed lines without an imported returnable flag report zero returnable quantity.
+
+        Required inputs: orderId (UUID) as a query parameter; there is no request body.
+
+        Emits an ORDER_RETURN_RETURNABLE audit event; no state changes — this is a read-only projection.
+
+        Returns 404 when the order does not exist, and 409 when the order is not COMPLETED.
+
+        '
+      operationId: listReturnableLines
       parameters:
       - name: orderId
         in: query
@@ -1057,9 +1558,21 @@ paths:
     get:
       tags:
       - Register Sessions
-      summary: Get a register session by id
-      description: Retrieves register session details and balances for the given session id.
-      operationId: getSession
+      summary: Get a Register Session
+      description: 'Returns a register session with its status, opening float, counted and theoretical cash, over/short, and lifecycle timestamps.
+
+        Use this tool when the session id is already known; use getCurrentRegisterSession instead to resolve the active session from a terminal id.
+
+        Preconditions: the session must exist.
+
+        Required inputs: sessionId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no register session exists for the supplied id.
+
+        '
+      operationId: getRegisterSession
       parameters:
       - name: sessionId
         in: path
@@ -1082,9 +1595,21 @@ paths:
     get:
       tags:
       - Register Sessions
-      summary: Z-report (close summary)
-      description: Returns the end-of-session close summary, including totals and variance metrics.
-      operationId: zReport
+      summary: Z-Report for a Register Session
+      description: 'Returns the Z-report close summary for a register session, including per-tender totals, cash movements, theoretical cash, counted cash, and the over/short variance.
+
+        Use this tool for the end-of-session summary after close; use getSessionXReport instead for interim mid-shift figures.
+
+        Preconditions: the session must exist; the report reflects the session''s current ledger, so it is authoritative once the session is CLOSED.
+
+        Required inputs: sessionId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only report projection.
+
+        Returns 404 when no register session exists for the supplied id.
+
+        '
+      operationId: getSessionZReport
       parameters:
       - name: sessionId
         in: path
@@ -1107,9 +1632,21 @@ paths:
     get:
       tags:
       - Register Sessions
-      summary: X-report (mid-day figures for an open session)
-      description: Returns an interim session report for an open or in-progress register session.
-      operationId: xReport
+      summary: X-Report for a Register Session
+      description: 'Returns an interim X-report for a register session: opening float, per-tender totals, cash settlements, cash movements, theoretical cash, and over/short when a count has been recorded.
+
+        Use this tool for mid-shift figures while the session is open; use getSessionZReport instead for the end-of-session close summary.
+
+        Preconditions: the session must exist; figures are computed live from the session''s current ledger.
+
+        Required inputs: sessionId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only report projection.
+
+        Returns 404 when no register session exists for the supplied id.
+
+        '
+      operationId: getSessionXReport
       parameters:
       - name: sessionId
         in: path
@@ -1132,9 +1669,21 @@ paths:
     get:
       tags:
       - Register Sessions
-      summary: Get the current open session for a terminal
-      description: Returns the OPEN (or CLOSING) session on the terminal, or 204 if none is open.
-      operationId: currentSession
+      summary: Get the Current Session for a Terminal
+      description: 'Returns the active register session on a terminal, preferring an OPEN session and falling back to one in CLOSING.
+
+        Use this tool to resolve which drawer a terminal is on; use getRegisterSession instead when the session id is already known.
+
+        Preconditions: none — a terminal without an active session is a normal outcome.
+
+        Required inputs: terminalId as a query parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the OPEN or CLOSING session, and 204 when the terminal has no active session.
+
+        '
+      operationId: getCurrentRegisterSession
       parameters:
       - name: terminalId
         in: query
@@ -1156,9 +1705,21 @@ paths:
     get:
       tags:
       - Price Overrides
-      summary: Get price override
-      description: Retrieve a specific price override by ID.
-      operationId: getOverride
+      summary: Get a Price Override
+      description: 'Returns one price override with its prices, discount figures, status, audit actors, and lifecycle timestamps.
+
+        Use this tool when the override id is already known; use searchPriceOverrides instead to find overrides by order, status, or date range.
+
+        Preconditions: the override must exist.
+
+        Required inputs: overrideId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no price override exists for the supplied id.
+
+        '
+      operationId: getPriceOverride
       parameters:
       - name: overrideId
         in: path
@@ -1190,9 +1751,21 @@ paths:
     get:
       tags:
       - Price Overrides
-      summary: Get pending approvals
-      description: Retrieve all price overrides awaiting approval.
-      operationId: getPendingApprovals
+      summary: List Pending Price Override Approvals
+      description: 'Lists every price override sitting in PENDING_APPROVAL — the manager approval work queue.
+
+        Use this tool to fetch what needs a decision; use approvePriceOverride or rejectPriceOverride to act on an entry, and searchPriceOverrides instead for historical or filtered queries.
+
+        Preconditions: none beyond the order:price_override:approve permission.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        Emits an ORDER_PRICE_OVERRIDE_LIST_PENDING audit event; no state changes.
+
+        Returns 200 with a possibly empty list; there are no business error conditions beyond authorization.
+
+        '
+      operationId: listPendingPriceOverrides
       responses:
         '200':
           description: Pending overrides retrieved
@@ -1211,8 +1784,20 @@ paths:
     get:
       tags:
       - Sales Orders
-      summary: Get a sales order by ID
-      description: Retrieve a sales order cart and its current line items by identifier.
+      summary: Get a Sales Order by Id
+      description: 'Returns a sales order with its current line items, totals, status, invoice references, and payment balances.
+
+        Use this tool when the order id is already known; use listCarts instead to search by clerk, terminal or status.
+
+        Preconditions: the order must exist.
+
+        Required inputs: orderId (UUID) as a path parameter; there is no request body and no filtering.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no sales order exists for the supplied id.
+
+        '
       operationId: getOrder
       parameters:
       - name: orderId

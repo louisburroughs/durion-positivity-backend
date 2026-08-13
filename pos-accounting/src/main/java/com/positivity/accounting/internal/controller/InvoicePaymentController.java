@@ -12,6 +12,7 @@ import com.positivity.shared.dto.InvoiceGenerationResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -67,8 +68,19 @@ public class InvoicePaymentController {
     @GetMapping("/v1/accounting/invoice/{invoiceId}/status")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(
-            summary = "Get invoice status",
-            description = "Retrieve current payment status for an invoice.",
+            operationId = "getInvoiceStatus",
+            summary = "Get Invoice Payment Status",
+            description = """
+                    Returns the current payment status of an invoice as tracked by the accounting module's \
+                    invoice replica.
+                    Use this tool to check whether an invoice is open, partially paid or paid before applying \
+                    payments or credits; do not use applyPayment, which changes the status.
+                    Preconditions: the invoice must be known to the accounting module.
+                    Required inputs: invoiceId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when the invoice is not found, and 400 when the identifier is rejected by \
+                    the status service.
+                    """,
             tags = {"Invoice Payments"})
     @ApiResponse(
             responseCode = "200",
@@ -100,8 +112,21 @@ public class InvoicePaymentController {
     @PostMapping("/v1/accounting/invoice/invoices")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(
-            summary = "Regenerate invoice from workorder",
-            description = "Regenerate an invoice from a workorder.",
+            operationId = "regenerateInvoiceFromWorkorder",
+            summary = "Regenerate Invoice From Workorder",
+            description = """
+                    Requests regeneration of an invoice from a completed workorder, either synchronously or \
+                    via the asynchronous command path.
+                    Use this tool when an invoice must be rebuilt from its source workorder; do not use \
+                    getInvoiceStatus, which only reads the current payment status.
+                    Preconditions: the workorder must exist and be in COMPLETED state.
+                    Required inputs: workorderId (UUID); idempotencyKey is optional and de-duplicates \
+                    repeated regeneration commands.
+                    Emits an ACCOUNTING_INVOICE_REGENERATE event; on the async path the call returns \
+                    202 with status PENDING and the invoice arrives later via invoice.events.v1.
+                    Returns 202 when the command is accepted asynchronously, 404 when the workorder is not \
+                    found, 409 when it is not COMPLETED, and 503 when the workorder service is unavailable.
+                    """,
             tags = {"Invoice Payments"})
     @ApiResponse(responseCode = "200", description = "Invoice regenerated")
     @ApiResponse(
@@ -112,7 +137,19 @@ public class InvoicePaymentController {
     @ApiResponse(responseCode = "503", description = "Workorder service unavailable")
     @EmitEvent(id = "ACCOUNTING_INVOICE_REGENERATE", apiVersion = "1")
     public ResponseEntity<InvoiceGenerationResponse> regenerateInvoiceFromWorkorder(
-            @Valid @RequestBody RegenerateInvoiceFromWorkorderRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Workorder to rebuild the invoice from, with an optional idempotency key.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Regenerate invoice", value = """
+                                                                    {"workorderId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "idempotencyKey":"regen-2026-08-13-001"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    RegenerateInvoiceFromWorkorderRequest request) {
 
         InvoiceGenerationResponse response = invoiceRegenerationService.regenerateInvoiceFromWorkorder(
                 request.getWorkorderId(), request.getIdempotencyKey());
@@ -125,13 +162,26 @@ public class InvoicePaymentController {
     @GetMapping("/v1/accounting/invoice/rules/{customerId}")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(
-            summary = "Get billing rules",
-            description = "Retrieve billing rules for a customer.",
+            operationId = "getAccountingBillingRules",
+            summary = "Get Customer Billing Rules",
+            description = """
+                    Returns the billing rule references configured for a customer, fetched from the customer \
+                    service.
+                    Use this tool to inspect how a customer is billed before generating or regenerating \
+                    invoices; do not use regenerateInvoiceFromWorkorder, which performs the regeneration \
+                    itself.
+                    Preconditions: the customer must exist in the customer service.
+                    Required inputs: customerId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection over a \
+                    cross-service call.
+                    Returns 404 when the customer is not found, and 503 when the customer service is \
+                    unavailable.
+                    """,
             tags = {"Invoice Payments"})
     @ApiResponse(responseCode = "200", description = "Billing rules returned")
     @ApiResponse(responseCode = "404", description = "Customer not found")
     @ApiResponse(responseCode = "503", description = "Customer service unavailable")
-    public ResponseEntity<BillingRuleRefResponse> getBillingRules(
+    public ResponseEntity<BillingRuleRefResponse> getAccountingBillingRules(
             @Parameter(description = "Customer identifier") @PathVariable UUID customerId) {
         log.info("Fetching billing rules for customer {}", customerId);
         BillingRuleRefResponse rules = billingRulesService.getBillingRules(customerId);

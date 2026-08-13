@@ -37,10 +37,21 @@ public class CrmVehiclesController {
 
     private final CrmVehicleService crmVehicleService;
 
-    @Operation(
-            summary = "List vehicles for customer",
-            description = "Retrieve all vehicle summaries (vehicleId, VIN, make/model/year) associated with a customer."
-                    + " Returns the vehicle UUIDs the frontend needs to build estimates for a given Durion customer.")
+    @Operation(operationId = "listVehiclesForCustomer", summary = "List Customer Vehicles", description = """
+                    Returns the vehicle summaries (vehicleId, VIN, make, model, year) associated with a \
+                    customer, resolved from the party's VIN set against the local ext_vehicle replica of \
+                    pos-vehicle-inventory.
+                    Use this tool when the vehicle UUIDs for a known customer are needed, for example to \
+                    build an estimate; use getVehicleForCustomer instead for one vehicle's full record, and \
+                    note vehicle writes go to pos-vehicle-inventory, not this module.
+                    Preconditions: the customer must exist as a person or commercial party; VINs whose \
+                    vehicle events have not yet been replicated are silently dropped from the list.
+                    Required inputs: customerId (UUID, the party id) as a path parameter; there is no \
+                    request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no party exists for the supplied customerId, and 200 with an empty \
+                    list when the customer owns no resolvable vehicles.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -77,7 +88,19 @@ public class CrmVehiclesController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @Operation(summary = "Get vehicle for customer", description = "Retrieve a specific vehicle for a given customer")
+    @Operation(operationId = "getVehicleForCustomer", summary = "Get Customer Vehicle", description = """
+                    Returns one vehicle's record from the local ext_vehicle replica, verified to belong to \
+                    the named customer through the party's VIN association.
+                    Use this tool when both the customer and vehicle ids are known; use \
+                    listVehiclesForCustomer instead to discover which vehicles a customer owns.
+                    Preconditions: the customer must exist, the vehicle must exist in the replica, and the \
+                    vehicle must be associated with that customer.
+                    Required inputs: customerId and vehicleId (UUIDs) as path parameters; there is no \
+                    request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when the customer, the vehicle, or the ownership association cannot be \
+                    resolved.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(

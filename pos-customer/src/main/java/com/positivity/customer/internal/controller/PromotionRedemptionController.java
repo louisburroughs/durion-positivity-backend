@@ -7,6 +7,7 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -35,7 +36,24 @@ public class PromotionRedemptionController {
         this.promotionRedemptionService = promotionRedemptionService;
     }
 
-    @Operation(summary = "Record promotion redemption", description = "Record a promotion redemption idempotently")
+    @Operation(operationId = "recordPromotionRedemption", summary = "Record Promotion Redemption", description = """
+                    Records that a promotion was redeemed on a workorder, increments the promotion's usage \
+                    counter, and stamps the recording user; the pair of promotionId and workorderId is the \
+                    idempotency key.
+                    Use this tool when a discount is actually applied at checkout or invoicing; use \
+                    listPromotionRedemptionsByCustomer instead to read what a customer has redeemed.
+                    Preconditions: no redemption may already exist for the same promotionId and workorderId \
+                    pair; the referenced promotion, customer, and workorder ids are recorded as supplied \
+                    without cross-service validation.
+                    Required inputs: promotionId, customerId, and workorderId (UUIDs), discountAmount, \
+                    discountType (max 50), and promotionCode (max 100); invoiceId, campaignCode, and \
+                    redemptionTimestamp (defaulting to now) are optional, and recordedOverLimit defaults to \
+                    false and switches the stored status to RECORDED_OVER_LIMIT.
+                    Emits a PROMOTION_REDEMPTION_RECORD event and publishes a redemption-recorded fact for \
+                    every redemption so marketing keeps a non-attributed baseline.
+                    Returns 409 when the promotion has already been redeemed on that workorder, and 400 \
+                    when a required field is missing.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -55,14 +73,43 @@ public class PromotionRedemptionController {
     @PreAuthorize("hasAuthority('crm:promotion_redemption:record')")
     @EmitEvent(id = "PROMOTION_REDEMPTION_RECORD", apiVersion = "1")
     public ResponseEntity<PromotionRedemptionResponse> recordRedemption(
-            @Valid @RequestBody RecordRedemptionRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "The redemption to record, keyed for idempotency by promotionId and workorderId.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Coupon redemption", value = """
+                                                                    {"promotionId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a62",
+                                                                     "customerId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "workorderId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a63",
+                                                                     "discountAmount":25.00,
+                                                                     "discountType":"FIXED_AMOUNT",
+                                                                     "promotionCode":"SPRING25",
+                                                                     "campaignCode":"SPRING-2026"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    RecordRedemptionRequest request) {
         PromotionRedemptionResponse response = promotionRedemptionService.recordRedemption(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @Operation(
-            summary = "Get redemptions by customer",
-            description = "Retrieve all recorded redemptions for a customer")
+            operationId = "listPromotionRedemptionsByCustomer",
+            summary = "List Customer Promotion Redemptions",
+            description = """
+                    Returns every promotion redemption recorded for one customer, including discount \
+                    amounts, codes, statuses, and timestamps.
+                    Use this tool when reviewing a customer's redemption history, for example to enforce \
+                    per-customer limits; use recordPromotionRedemption instead to record a new redemption.
+                    Preconditions: none; an unknown customerId yields an empty list rather than an error.
+                    Required inputs: customerId (UUID) as a path parameter; there is no request body.
+                    Emits a PROMOTION_REDEMPTION_LIST audit event; no state changes occur.
+                    Returns 200 with an empty list rather than an error when the customer has no \
+                    redemptions.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Promotion redemptions returned",

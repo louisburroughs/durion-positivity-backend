@@ -55,8 +55,20 @@ paths:
     get:
       tags:
       - Customer API
-      summary: Get customer by ID
-      description: Retrieve a customer by their unique ID.
+      summary: Get Customer By Id
+      description: 'Returns one customer as a flat CustomerDTO, checking commercial parties first and falling back to person parties.
+
+        Use this tool for the legacy flat customer view; use getParty or getSnapshotByParty instead for the richer party projections.
+
+        Preconditions: a commercial or person party must exist for the supplied id.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when neither a commercial nor a person party exists for the supplied id.
+
+        '
       operationId: getCustomerById
       parameters:
       - name: id
@@ -88,8 +100,20 @@ paths:
     put:
       tags:
       - Customer API
-      summary: Update an existing customer
-      description: Update the details of an existing customer.
+      summary: Update Customer Record
+      description: 'Updates an existing customer''s flat record, with the body''s customerType selecting whether the commercial or person store is searched for the id.
+
+        Use this tool only for the legacy flat customer API; the customerType in the body must match the store the customer actually lives in, or the lookup misses, so do not use it to change a customer from PERSON to COMMERCIAL.
+
+        Preconditions: a party of the type named by customerType must exist for the supplied id.
+
+        Required inputs: id (UUID) as a path parameter and the CustomerDTO body including customerType; only fields present in the DTO mapping are applied.
+
+        Emits a CUSTOMER_CUSTOMER_UPDATE event and publishes a party-changed customer fact.
+
+        Returns 404 when no party of the selected type exists for the supplied id.
+
+        '
       operationId: updateCustomer
       parameters:
       - name: id
@@ -101,10 +125,19 @@ paths:
           format: uuid
         example: 123e4567-e89b-12d3-a456-426614174000
       requestBody:
+        description: The revised customer fields; customerType must name the store the customer already lives in.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CustomerDTO'
+            examples:
+              Update address:
+                description: Update address
+                value:
+                  firstName: Dana
+                  lastName: Ortiz
+                  customerType: PERSON
+                  primaryAddress: 200 Lavaca St, Austin, TX 78701
         required: true
       responses:
         '200':
@@ -127,8 +160,20 @@ paths:
     delete:
       tags:
       - Customer API
-      summary: Delete a customer
-      description: Delete a customer by their unique ID.
+      summary: Delete Customer Record
+      description: 'Hard-deletes a customer row, trying the commercial store first and then the person store, and publishes a party-deleted fact for the removed record.
+
+        Use this tool only when a customer record must be physically removed; do not use it for duplicates — use mergeParties instead, whose MERGED status preserves history, since this deletion is not reversible.
+
+        Preconditions: a commercial or person party must exist for the supplied id.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits a CUSTOMER_CUSTOMER_DELETE event and publishes a party-deleted customer fact.
+
+        Returns 404 when neither store holds a party for the supplied id.
+
+        '
       operationId: deleteCustomer
       parameters:
       - name: id
@@ -153,8 +198,20 @@ paths:
     get:
       tags:
       - CRM Tags
-      summary: Get tag
-      description: Retrieve a single tag by id
+      summary: Get Tag By Id
+      description: 'Returns one catalog tag with its name, category, color, active flag, and assignment count.
+
+        Use this tool when the tag id is already known; use listTags instead to browse the catalog.
+
+        Preconditions: the tag must exist in the catalog.
+
+        Required inputs: tagId (UUID) as a path parameter; there is no request body.
+
+        Emits a CRM_TAG_GET audit event; no state changes occur.
+
+        Returns 404 when no tag exists for the supplied tagId.
+
+        '
       operationId: getTag
       parameters:
       - name: tagId
@@ -182,8 +239,20 @@ paths:
     put:
       tags:
       - CRM Tags
-      summary: Update tag
-      description: Rename, recolour, recategorize, or retire a tag
+      summary: Update Catalog Tag
+      description: 'Renames, recolours, recategorizes, or retires a catalog tag; setting active false stops new assignments while keeping existing ones.
+
+        Use this tool when changing how a tag looks or retiring it; use deleteTag instead to remove the tag and every assignment of it.
+
+        Preconditions: the tag must exist, and the new name must not collide with another tag case-insensitively.
+
+        Required inputs: tagId (UUID) as a path parameter and name in the body; category, color, and active are optional.
+
+        Emits a CRM_TAG_UPDATE event; existing assignments are untouched.
+
+        Returns 404 when the tag does not exist, and 409 when the new name is already taken.
+
+        '
       operationId: updateTag
       parameters:
       - name: tagId
@@ -193,10 +262,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The revised tag attributes; omitted optional fields are cleared or left defaulted.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpsertPartyTagRequest'
+            examples:
+              Retire tag:
+                description: Retire tag
+                value:
+                  name: Fleet VIP
+                  category: Loyalty
+                  active: false
         required: true
       responses:
         '200':
@@ -219,8 +296,20 @@ paths:
     delete:
       tags:
       - CRM Tags
-      summary: Delete tag
-      description: Remove a tag from the catalog along with every assignment of it
+      summary: Delete Catalog Tag
+      description: 'Removes a tag from the catalog together with every assignment of it on every party.
+
+        Use this tool only when the tag and its history should disappear entirely; use updateTag with active false instead to retire a tag while keeping existing assignments.
+
+        Preconditions: the tag must exist; deletion is not reversible.
+
+        Required inputs: tagId (UUID) as a path parameter; there is no request body.
+
+        Emits a CRM_TAG_DELETE event; all assignment rows for the tag are removed.
+
+        Returns 404 when no tag exists for the supplied tagId.
+
+        '
       operationId: deleteTag
       parameters:
       - name: tagId
@@ -245,9 +334,21 @@ paths:
     get:
       tags:
       - CRM Segments
-      summary: Get segment
-      description: Retrieve a segment definition by id
-      operationId: get
+      summary: Get Segment Definition
+      description: 'Returns one segment''s definition, including its type, audience type, predicate for DYNAMIC segments, active flag, and member count.
+
+        Use this tool when the segment id is already known; use listSegments instead to browse segments, and resolveSegment to compute who currently matches.
+
+        Preconditions: the segment must exist.
+
+        Required inputs: segmentId (UUID) as a path parameter; there is no request body.
+
+        Emits a CRM_SEGMENT_GET audit event; no state changes occur.
+
+        Returns 404 when no segment exists for the supplied segmentId.
+
+        '
+      operationId: getSegment
       parameters:
       - name: segmentId
         in: path
@@ -274,9 +375,21 @@ paths:
     put:
       tags:
       - CRM Segments
-      summary: Update segment
-      description: Update a segment's name, description, predicate, or active flag. Type and audience type are immutable.
-      operationId: update
+      summary: Update Audience Segment
+      description: 'Updates a segment''s name, description, predicate, or active flag; type and audienceType are immutable after creation because switching kinds would strand pinned members or a predicate.
+
+        Use this tool when refining an existing segment; use createSegment instead when a different type or audience type is needed.
+
+        Preconditions: the segment must exist, the new name must not collide with another segment case-insensitively, and the submitted type and audienceType must equal the stored values.
+
+        Required inputs: segmentId (UUID) as a path parameter plus the full upsert body with name, audienceType, and type restated; predicate rules follow the segment''s type and active is optional.
+
+        Emits a CRM_SEGMENT_UPDATE event and republishes the segment definition.
+
+        Returns 404 when the segment does not exist, 409 when the name is taken, and 422 when type or audienceType differ from the stored segment or the predicate is invalid.
+
+        '
+      operationId: updateSegment
       parameters:
       - name: segmentId
         in: path
@@ -285,10 +398,25 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The revised segment definition; type and audienceType must match the stored segment.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpsertSegmentRequest'
+            examples:
+              Rename and deactivate:
+                description: Rename and deactivate
+                value:
+                  name: Gold-tier accounts (retired)
+                  audienceType: COMMERCIAL
+                  type: DYNAMIC
+                  predicate:
+                    nodeType: COMPARISON
+                    attribute: party.accountTier
+                    operator: IN
+                    values:
+                    - GOLD
+                  active: false
         required: true
       responses:
         '200':
@@ -313,9 +441,21 @@ paths:
     delete:
       tags:
       - CRM Segments
-      summary: Delete segment
-      description: Delete a segment and its pinned membership
-      operationId: delete
+      summary: Delete Audience Segment
+      description: 'Deletes a segment and all of its pinned membership rows permanently.
+
+        Use this tool when a segment is no longer wanted at all; use updateSegment with active false instead to retire a segment while keeping its definition.
+
+        Preconditions: the segment must exist; deletion is not reversible.
+
+        Required inputs: segmentId (UUID) as a path parameter; there is no request body.
+
+        Emits a CRM_SEGMENT_DELETE event and publishes a deletion notice so consumers drop the segment.
+
+        Returns 404 when no segment exists for the supplied segmentId.
+
+        '
+      operationId: deleteSegment
       parameters:
       - name: segmentId
         in: path
@@ -339,9 +479,21 @@ paths:
     get:
       tags:
       - CRM Marketing Consent
-      summary: Get marketing consent
-      description: Per-channel marketing consent plus the effective send eligibility for each channel
-      operationId: getConsent
+      summary: Get Marketing Consent Summary
+      description: 'Returns a party''s per-channel marketing consent (EMAIL and SMS, each OPT_IN, OPT_OUT, or UNSET) together with the account gate, quiet hours, monthly send cap, and the resolved send eligibility per channel.
+
+        Use this tool when reviewing a party''s full consent state; use resolveMarketingEligibility instead when only a single allow or deny decision for one channel is needed.
+
+        Preconditions: the party must exist as either a commercial or person party.
+
+        Required inputs: partyId (UUID) as a path parameter; there is no request body.
+
+        Emits a CRM_MARKETING_CONSENT_GET audit event; no state changes occur.
+
+        Returns 404 when no party exists for the supplied partyId.
+
+        '
+      operationId: getMarketingConsent
       parameters:
       - name: partyId
         in: path
@@ -368,9 +520,21 @@ paths:
     put:
       tags:
       - CRM Marketing Consent
-      summary: Update marketing consent
-      description: Update per-channel marketing consent. Only channels present in the request change; each change writes one immutable consent-audit entry.
-      operationId: updateConsent
+      summary: Update Marketing Consent
+      description: 'Updates a party''s per-channel marketing consent; only channels present in the request change, and each actual change appends one immutable consent-audit entry attributed to the calling user.
+
+        Use this tool when a party grants or withdraws marketing consent; do not use setAccountMarketingGate, which is the account-level hard gate overriding all contact consent, and do not use upsertCommunicationPreferences, which stores transactional channel preferences rather than marketing consent.
+
+        Preconditions: the party must exist as either a commercial or person party; re-submitting an unchanged value is an idempotent no-op that writes no audit row.
+
+        Required inputs: partyId (UUID) as a path parameter; marketingEmailConsent and marketingSmsConsent take OPT_IN, OPT_OUT, or UNSET, source defaults to CSR, and optOutReason, quietHoursStart, quietHoursEnd, and maxMarketingSendsPerMonth are optional.
+
+        Emits a CRM_MARKETING_CONSENT_UPDATE event and republishes the resolved eligibility decision for both channels so downstream consumers never hold a stale allow.
+
+        Returns 404 when no party exists for the supplied partyId.
+
+        '
+      operationId: updateMarketingConsent
       parameters:
       - name: partyId
         in: path
@@ -379,10 +543,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Partial consent update; only the channels and settings present in the body are changed.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateMarketingConsentRequest'
+            examples:
+              Email opt-out via CSR:
+                description: Email opt-out via CSR
+                value:
+                  marketingEmailConsent: OPT_OUT
+                  optOutReason: NOT_INTERESTED
+                  source: CSR
         required: true
       responses:
         '200':
@@ -404,9 +576,21 @@ paths:
     put:
       tags:
       - CRM Marketing Consent
-      summary: Set account marketing gate
-      description: Set or clear the commercial-account hard gate. When set, no marketing reaches the account on any channel regardless of individual contact consent.
-      operationId: setAccountGate
+      summary: Set Account Marketing Gate
+      description: 'Sets or clears the commercial-account marketing hard gate; while set, no marketing reaches the account on any channel regardless of individual contact consent.
+
+        Use this tool when an entire commercial account must be excluded from marketing; do not use updateMarketingConsent, which changes one party''s per-channel consent and cannot override the gate.
+
+        Preconditions: the party must exist as a commercial party; person parties have no account gate, and setting the gate to its current value is an idempotent no-op.
+
+        Required inputs: partyId (UUID) as a path parameter and optOut (boolean) as a query parameter, where true engages the gate and false clears it; there is no request body.
+
+        Emits a CRM_MARKETING_ACCOUNT_GATE_SET event, and when the gate actually flips it republishes the resolved eligibility decisions for both channels.
+
+        Returns 404 when no commercial party exists for the supplied partyId.
+
+        '
+      operationId: setAccountMarketingGate
       parameters:
       - name: partyId
         in: path
@@ -439,8 +623,20 @@ paths:
     put:
       tags:
       - CRM Contacts
-      summary: Update contact roles
-      description: Assign or update role assignments for a specific contact within a party
+      summary: Update Contact Role Assignments
+      description: 'Replaces the full set of role assignments for one contact on a commercial account; existing assignments for that contact are deleted and the submitted list is written in their place.
+
+        Use this tool when changing what a known contact does for an account; use getContactsWithRoles instead to read current assignments, and note that submitting an empty roles list removes the contact''s roles entirely.
+
+        Preconditions: the commercial party and the contact person must both exist; assigning a role as primary automatically demotes any existing primary contact for that role.
+
+        Required inputs: partyId and contactId (UUIDs) as path parameters, plus roles, a list where each entry has roleCode (BILLING, PAYMENT_AUTHORIZER, OPERATIONS, PRIMARY_BUSINESS_CONTACT, or TECHNICAL) and an optional isPrimary flag defaulting to false.
+
+        Emits a CRM_CONTACT_ROLES_UPDATE event; assignments are rewritten in place.
+
+        Returns 404 when the party or contact person cannot be found, and 400 when a roleCode is not a recognized role.
+
+        '
       operationId: updateContactRoles
       parameters:
       - name: partyId
@@ -458,10 +654,20 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The complete replacement set of role assignments for this contact on the account.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateContactRolesRequest'
+            examples:
+              Primary billing contact:
+                description: Primary billing contact
+                value:
+                  roles:
+                  - roleCode: BILLING
+                    isPrimary: true
+                  - roleCode: OPERATIONS
+                    isPrimary: false
         required: true
       responses:
         '200':
@@ -485,9 +691,21 @@ paths:
     put:
       tags:
       - CRM Inquiries
-      summary: Update inquiry status
-      description: Move an inquiry to CONTACTED or CLOSED. CONVERTED is reached by converting it.
-      operationId: updateStatus
+      summary: Update Inquiry Status
+      description: 'Moves an inquiry through its lifecycle to CONTACTED or CLOSED, optionally recording a resolution note.
+
+        Use this tool for ordinary status progression; do not use it to reach CONVERTED, which is only reachable through convertInquiry because conversion creates or links a party.
+
+        Preconditions: the inquiry must exist and the transition must be legal — NEW may move to CONTACTED or CLOSED, CONTACTED may move to CLOSED, and CONVERTED and CLOSED are terminal.
+
+        Required inputs: inquiryId (UUID) as a path parameter and status (CONTACTED or CLOSED) as a required query parameter; resolutionNote is optional and there is no request body.
+
+        Emits a CRM_INQUIRY_STATUS_UPDATE event; only the inquiry record changes.
+
+        Returns 404 when the inquiry does not exist, and 422 when CONVERTED is requested directly or the transition is illegal from the current status.
+
+        '
+      operationId: updateInquiryStatus
       parameters:
       - name: inquiryId
         in: path
@@ -532,9 +750,21 @@ paths:
     put:
       tags:
       - CRM Inquiries
-      summary: Assign inquiry
-      description: Assign or unassign an inquiry
-      operationId: assign
+      summary: Assign Inquiry
+      description: 'Assigns an inquiry to a staff member for follow-through, or returns it to the shared queue when assignedTo is omitted.
+
+        Use this tool when routing a triaged inquiry to an owner; do not use updateInquiryStatus, which moves the lifecycle state rather than ownership.
+
+        Preconditions: the inquiry must exist; assignment is allowed in any status.
+
+        Required inputs: inquiryId (UUID) as a path parameter; assignedTo is an optional query parameter whose omission unassigns the inquiry, and there is no request body.
+
+        Emits a CRM_INQUIRY_ASSIGN event; only the inquiry''s assignee changes.
+
+        Returns 404 when no inquiry exists for the supplied inquiryId.
+
+        '
+      operationId: assignInquiry
       parameters:
       - name: inquiryId
         in: path
@@ -567,9 +797,21 @@ paths:
     put:
       tags:
       - CRM Follow-ups
-      summary: Assign follow-up
-      description: Assign or unassign a follow-up task
-      operationId: assign_1
+      summary: Assign Follow-Up Task
+      description: 'Assigns an open follow-up task to a CSR, or returns it to the shared queue when assignedTo is omitted.
+
+        Use this tool when routing queue work to a specific person; do not use completeFollowUpTask or dismissFollowUpTask, which close the task rather than route it.
+
+        Preconditions: the task must exist and still be OPEN; closed tasks cannot be modified and a new follow-up must be raised instead.
+
+        Required inputs: taskId (UUID) as a path parameter; assignedTo is an optional query parameter whose omission unassigns the task, and there is no request body.
+
+        Emits a CRM_FOLLOWUP_ASSIGN event; only the task''s assignee changes.
+
+        Returns 404 when the task does not exist, and 422 when the task is already DONE or DISMISSED.
+
+        '
+      operationId: assignFollowUpTask
       parameters:
       - name: taskId
         in: path
@@ -604,8 +846,20 @@ paths:
     put:
       tags:
       - CRM Party Relationships
-      summary: Designate primary billing contact
-      description: Sets a relationship as the primary billing contact, demoting any existing primary
+      summary: Designate Primary Billing Contact
+      description: 'Promotes an existing relationship to be the account''s primary billing contact, atomically demoting any current primary.
+
+        Use this tool when the billing contact changes on an account; do not use createPartyRelationship, which is for a person not yet related to the account and can set the flag at creation time.
+
+        Preconditions: the relationship must exist, must belong to the account in the path, must carry the BILLING role, and must be active as of today.
+
+        Required inputs: partyId and relationshipId (UUIDs) as path parameters; there is no request body.
+
+        Emits a CRM_RELATIONSHIP_PRIMARY_BILLING_UPDATE event; the previous primary, if any, is demoted in the same transaction.
+
+        Returns 404 when the relationship does not exist, and 400 when it belongs to a different party, lacks the BILLING role, or is no longer active.
+
+        '
       operationId: designatePrimaryBillingContact
       parameters:
       - name: partyId
@@ -642,9 +896,21 @@ paths:
     put:
       tags:
       - CRM Accounts
-      summary: Upsert billing rules for a party
-      description: Create or update the billing rules configuration for a commercial party.
-      operationId: upsertBillingRules
+      summary: Upsert Party Billing Rules
+      description: 'Creates or replaces the embedded billing-rules configuration on a commercial party, covering PO requirement, tax exemption, credit hold, auto-pay, payment terms, credit limit, currency, and invoice delivery method.
+
+        Use this tool when configuring how a commercial account is billed; do not use createCrmCommercialAccount, which only sets billingTermsId at creation and cannot change billing flags afterwards.
+
+        Preconditions: a commercial party must exist for the supplied partyId; the whole rules block is replaced on every call rather than patched field by field.
+
+        Required inputs: partyId (UUID) as a path parameter; boolean flags poRequired, taxExempt, creditHold, and autoPayEnabled default to false when omitted, and paymentTerms, creditLimit, currency, and invoiceDeliveryMethod (EMAIL, MAIL, PORTAL) are optional.
+
+        Emits a CUSTOMER_BILLING_RULES_UPSERT event; the rules are stored on the party record itself.
+
+        Returns 404 when no commercial party exists for the supplied partyId.
+
+        '
+      operationId: upsertPartyBillingRules
       parameters:
       - name: partyId
         in: path
@@ -655,10 +921,24 @@ paths:
           format: uuid
         example: f47ac10b-58cc-4372-a567-0e02b2c3d479
       requestBody:
+        description: Complete billing-rules configuration that replaces the party's current rules block.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpsertBillingRulesRequest'
+            examples:
+              Net-30 with PO:
+                description: Net-30 with PO
+                value:
+                  paymentTerms: NET_30
+                  creditLimit: 25000.0
+                  currency: USD
+                  taxExempt: false
+                  poRequired: true
+                  creditHold: false
+                  autoPayEnabled: false
+                  invoiceDeliveryMethod: EMAIL
+                  billingAddressId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
         required: true
       responses:
         '200':
@@ -682,14 +962,38 @@ paths:
     post:
       tags:
       - Promotion Redemptions
-      summary: Record promotion redemption
-      description: Record a promotion redemption idempotently
-      operationId: recordRedemption
+      summary: Record Promotion Redemption
+      description: 'Records that a promotion was redeemed on a workorder, increments the promotion''s usage counter, and stamps the recording user; the pair of promotionId and workorderId is the idempotency key.
+
+        Use this tool when a discount is actually applied at checkout or invoicing; use listPromotionRedemptionsByCustomer instead to read what a customer has redeemed.
+
+        Preconditions: no redemption may already exist for the same promotionId and workorderId pair; the referenced promotion, customer, and workorder ids are recorded as supplied without cross-service validation.
+
+        Required inputs: promotionId, customerId, and workorderId (UUIDs), discountAmount, discountType (max 50), and promotionCode (max 100); invoiceId, campaignCode, and redemptionTimestamp (defaulting to now) are optional, and recordedOverLimit defaults to false and switches the stored status to RECORDED_OVER_LIMIT.
+
+        Emits a PROMOTION_REDEMPTION_RECORD event and publishes a redemption-recorded fact for every redemption so marketing keeps a non-attributed baseline.
+
+        Returns 409 when the promotion has already been redeemed on that workorder, and 400 when a required field is missing.
+
+        '
+      operationId: recordPromotionRedemption
       requestBody:
+        description: The redemption to record, keyed for idempotency by promotionId and workorderId.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RecordRedemptionRequest'
+            examples:
+              Coupon redemption:
+                description: Coupon redemption
+                value:
+                  promotionId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a62
+                  customerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  workorderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a63
+                  discountAmount: 25.0
+                  discountType: FIXED_AMOUNT
+                  promotionCode: SPRING25
+                  campaignCode: SPRING-2026
         required: true
       responses:
         '201':
@@ -711,14 +1015,41 @@ paths:
     post:
       tags:
       - Customer Bulk Ingest API
-      summary: Bulk ingest records
-      description: Accepts a batch of domain records for bulk import. Returns per-record results.
-      operationId: bulkIngest
+      summary: Bulk Ingest Customer Records
+      description: 'Imports a batch of individual customer records, creating each one through the same path as createCrmPerson so canonical identities land in pos-people, and reports a per-row success or failure result without aborting the batch.
+
+        Use this tool for migrations and file imports of individuals; do not use createCrmPerson row by row for large loads, and note this path cannot create commercial accounts.
+
+        Preconditions: none beyond authorization; rows that fail validation are reported with errorCode CUSTOMER_INGEST_FAILED while the rest of the batch proceeds.
+
+        Required inputs: jobId (UUID), locationId (UUID), and a non-empty records list where each record has firstName and lastName (each max 100) and optionally email, phoneNumber, primaryAddress, and customerNumber; preferredContactMethod is derived as EMAIL when an email is present and PHONE_CALL otherwise, and operatorId falls back to the security context when absent or not a UUID.
+
+        Emits a CUSTOMER_BULK_INGEST event, and each successful row publishes a party-changed customer fact and writes contact points to pos-people.
+
+        Returns 200 with per-row results including failures, and 400 when jobId, locationId, or the records list is missing or empty.
+
+        '
+      operationId: bulkIngestCustomers
       requestBody:
+        description: The ingest job envelope with the batch of customer records to import.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BulkIngestRequestCustomerBulkIngestRecord'
+            examples:
+              Two-record batch:
+                description: Two-record batch
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a64
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a65
+                  operatorId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a66
+                  records:
+                  - firstName: Dana
+                    lastName: Ortiz
+                    email: dana.ortiz@example.com
+                  - firstName: Sam
+                    lastName: Rivera
+                    phoneNumber: '+15125550143'
         required: true
       responses:
         '200':
@@ -742,9 +1073,21 @@ paths:
     get:
       tags:
       - Customer API
-      summary: Get all customers
-      description: Retrieve a paginated list of customers by type (PERSON or COMMERCIAL). Defaults to PERSON customers if no type specified. When a name and/or email filter is supplied, performs a server-side search instead of an unfiltered listing (scalable typeahead).
-      operationId: getAllCustomers
+      summary: List Customers By Type
+      description: 'Returns a page of customers of one party type, switching to a server-side typeahead search when a name or email filter is supplied.
+
+        Use this tool for the legacy flat customer listing keyed by customerType; use browseParties instead for the unified directory that merges commercial and individual customers in one result.
+
+        Preconditions: none; an empty page is returned when nothing matches.
+
+        Required inputs: none; customerType defaults to PERSON and accepts PERSON or COMMERCIAL, name and email are optional case-insensitive filters, and paging defaults to page 0, size 20, sorted by customerNumber.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty page rather than an error when no customer matches.
+
+        '
+      operationId: listCustomers
       parameters:
       - name: customerType
         in: query
@@ -789,14 +1132,35 @@ paths:
     post:
       tags:
       - Customer API
-      summary: Create a new customer
-      description: Add a new customer to the system.
+      summary: Create Customer Record
+      description: 'Creates a customer from a flat CustomerDTO, routed by customerType to either the commercial or person party store.
+
+        Use this tool only for the legacy flat customer API; use createCrmCommercialAccount instead for commercial onboarding with duplicate checking, and createCrmPerson for individuals so the canonical identity lands in pos-people.
+
+        Preconditions: none beyond authorization; no duplicate detection is performed.
+
+        Required inputs: firstName and lastName (each max 100); customerType selects the store, where COMMERCIAL routes to the commercial service and anything else creates a person party, and customerNumber, primaryAddress, and vehicleVins are optional.
+
+        Emits a CUSTOMER_CUSTOMER_CREATE event and publishes a party-changed customer fact.
+
+        Returns 201 with the stored customer on success; field validation is not enforced on this legacy path, so a malformed JSON body producing 400 is the only rejection.
+
+        '
       operationId: createCustomer
       requestBody:
+        description: The flat customer record to store; customerType routes it to the commercial or person store.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CustomerDTO'
+            examples:
+              Individual customer:
+                description: Individual customer
+                value:
+                  firstName: Dana
+                  lastName: Ortiz
+                  customerType: PERSON
+                  primaryAddress: 100 Congress Ave, Austin, TX 78701
         required: true
       responses:
         '201':
@@ -814,8 +1178,20 @@ paths:
     get:
       tags:
       - CRM Tags
-      summary: List tags
-      description: List the CRM tag catalog with assignment counts
+      summary: List Tag Catalog
+      description: 'Returns the CRM tag catalog with each tag''s category, color, active flag, and assignment count.
+
+        Use this tool when browsing available tags before assigning one; use listPartyTags instead to see which tags a specific party carries.
+
+        Preconditions: none; inactive tags are omitted unless explicitly requested.
+
+        Required inputs: none; includeInactive defaults to false, and there is no request body.
+
+        Emits a CRM_TAG_LIST audit event; no state changes occur.
+
+        Returns 200 with an empty list rather than an error when the catalog is empty.
+
+        '
       operationId: listTags
       parameters:
       - name: includeInactive
@@ -843,14 +1219,35 @@ paths:
     post:
       tags:
       - CRM Tags
-      summary: Create tag
-      description: Add a new tag to the CRM tag catalog
+      summary: Create Catalog Tag
+      description: 'Adds a new tag to the CRM tag catalog for later assignment to parties.
+
+        Use this tool when a new label is needed; do not use assignTagToParty, which attaches an existing catalog tag to a party.
+
+        Preconditions: no existing tag may already use the same name case-insensitively.
+
+        Required inputs: name (non-blank, max 100); category, color, and active (default true) are optional.
+
+        Emits a CRM_TAG_CREATE event; the tag becomes immediately assignable when active.
+
+        Returns 409 when a tag with the same name already exists, and 400 when name is blank.
+
+        '
       operationId: createTag
       requestBody:
+        description: The new tag's name and optional presentation attributes.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpsertPartyTagRequest'
+            examples:
+              Fleet VIP tag:
+                description: Fleet VIP tag
+                value:
+                  name: Fleet VIP
+                  category: Loyalty
+                  color: '#D4AF37'
+                  active: true
         required: true
       responses:
         '201':
@@ -874,9 +1271,21 @@ paths:
     get:
       tags:
       - CRM Suppression
-      summary: List suppression entries
-      description: List suppressed addresses, newest first
-      operationId: list
+      summary: List Suppression Entries
+      description: 'Returns hard-suppressed marketing addresses newest first, showing only a masked address hint and the normalized hash — raw addresses are never stored or returned.
+
+        Use this tool when reviewing the suppression list; use checkAddressSuppression instead to test one specific address before a send.
+
+        Preconditions: none; an empty page is returned when nothing matches.
+
+        Required inputs: none; channel optionally filters on EMAIL or SMS, page defaults to 0, and size defaults to 50 clamped between 1 and 200.
+
+        Emits a CRM_SUPPRESSION_LIST audit event; no state changes occur.
+
+        Returns 200 with an empty page rather than an error when the list is empty.
+
+        '
+      operationId: listSuppressionEntries
       parameters:
       - name: channel
         in: query
@@ -917,14 +1326,36 @@ paths:
     post:
       tags:
       - CRM Suppression
-      summary: Suppress an address
-      description: 'Hard-block an address from marketing. Idempotent: re-adding returns the existing entry.'
-      operationId: add
+      summary: Suppress Marketing Address
+      description: 'Hard-blocks an address from marketing on one channel, storing only a normalized hash and a masked hint of the address.
+
+        Use this tool for bounce feeds, spam complaints, and legal do-not-contact requests; do not use updateMarketingConsent, which records a party''s choice and can be reversed by the party, whereas suppression outranks consent entirely.
+
+        Preconditions: none; the call is idempotent, and re-adding an already-suppressed address returns the existing entry without touching the audit trail.
+
+        Required inputs: channel (EMAIL or SMS), address (raw, max 320 characters), and reason (HARD_BOUNCE, SPAM_COMPLAINT, LEGAL_DNC, MANUAL, or UNSUBSCRIBE_LINK); partyId is optional and source defaults to CSR.
+
+        Emits a CRM_SUPPRESSION_ADD event and publishes a suppression-changed fact when a new entry is actually created.
+
+        Returns 400 when channel, address, or reason is missing, and 201 with the existing entry when the address was already suppressed.
+
+        '
+      operationId: addSuppressionEntry
       requestBody:
+        description: The address to hard-block, the channel it applies to, and why it is being suppressed.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AddSuppressionRequest'
+            examples:
+              Hard bounce:
+                description: Hard bounce
+                value:
+                  channel: EMAIL
+                  address: bounced@example.com
+                  partyId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  reason: HARD_BOUNCE
+                  source: SYSTEM
         required: true
       responses:
         '201':
@@ -946,9 +1377,21 @@ paths:
     get:
       tags:
       - CRM Segments
-      summary: List segments
-      description: List saved segments, optionally filtered by audience type
-      operationId: list_1
+      summary: List Audience Segments
+      description: 'Returns all saved audience segments with their type, audience type, active flag, and member counts, optionally filtered by audience type.
+
+        Use this tool when browsing or picking a segment; use getSegment instead when the segment id is already known.
+
+        Preconditions: none; an empty list is returned when no segment matches.
+
+        Required inputs: none; audienceType optionally filters on COMMERCIAL or INDIVIDUAL, and there is no request body.
+
+        Emits a CRM_SEGMENT_LIST audit event; no state changes occur.
+
+        Returns 200 with an empty list rather than an error when no segments exist.
+
+        '
+      operationId: listSegments
       parameters:
       - name: audienceType
         in: query
@@ -977,14 +1420,43 @@ paths:
     post:
       tags:
       - CRM Segments
-      summary: Create segment
-      description: Create a static or dynamic segment. Dynamic predicates are validated against the attribute catalog.
-      operationId: create
+      summary: Create Audience Segment
+      description: 'Creates a saved audience segment, either STATIC with an explicitly pinned member list or DYNAMIC with a predicate validated against the attribute catalog.
+
+        Use this tool when defining a new audience; do not use updateSegment, which modifies an existing segment and cannot change its type or audience type.
+
+        Preconditions: no existing segment may already use the same name case-insensitively; a DYNAMIC segment must carry a predicate and a STATIC one must not.
+
+        Required inputs: name (max 150), audienceType (COMMERCIAL or INDIVIDUAL), and type (STATIC or DYNAMIC); description, predicate, and active are optional.
+
+        Emits a CRM_SEGMENT_CREATE event and publishes the segment definition to consumers.
+
+        Returns 409 when the name is already taken, and 422 when the predicate is missing on a DYNAMIC segment, present on a STATIC one, or references attributes outside the catalog.
+
+        '
+      operationId: createSegment
       requestBody:
+        description: The segment definition; DYNAMIC segments carry a predicate tree over catalog attributes, STATIC ones do not.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpsertSegmentRequest'
+            examples:
+              Dynamic gold-tier segment:
+                description: Dynamic gold-tier segment
+                value:
+                  name: Gold-tier commercial accounts
+                  description: Commercial parties at GOLD tier or above
+                  audienceType: COMMERCIAL
+                  type: DYNAMIC
+                  predicate:
+                    nodeType: COMPARISON
+                    attribute: party.accountTier
+                    operator: IN
+                    values:
+                    - GOLD
+                    - PLATINUM
+                    - ENTERPRISE
         required: true
       responses:
         '201':
@@ -1008,9 +1480,21 @@ paths:
     post:
       tags:
       - CRM Segments
-      summary: Resolve segment
-      description: Resolve a segment to a match count, an optional per-channel eligible count, and a masked sample
-      operationId: resolve
+      summary: Resolve Segment Audience
+      description: 'Resolves a segment to its current match count, an optional per-channel eligible count that folds in consent and suppression, and a masked sample of members; the full recipient list is never returned, so the preview cannot become a bulk PII export.
+
+        Use this tool when previewing an audience before a campaign; use getSegment instead for the stored definition without computing membership.
+
+        Preconditions: the segment must exist; eligible counts are computed only when a channel is supplied.
+
+        Required inputs: segmentId (UUID) as a path parameter; channel (EMAIL or SMS) is optional, and sampleSize defaults to 10 and is clamped to the server''s maximum.
+
+        Emits a CRM_SEGMENT_RESOLVE audit event; no state changes occur.
+
+        Returns 404 when no segment exists for the supplied segmentId, and 200 with a truncated flag when the match list was capped during resolution.
+
+        '
+      operationId: resolveSegment
       parameters:
       - name: segmentId
         in: path
@@ -1053,9 +1537,21 @@ paths:
     post:
       tags:
       - CRM Segments
-      summary: Pin members
-      description: Add parties to a static segment; already-present parties are ignored
-      operationId: addMembers
+      summary: Pin Segment Members
+      description: 'Pins parties onto a STATIC segment''s member list, recording who added them and when; parties already in the segment are silently skipped.
+
+        Use this tool when curating a hand-picked audience; do not use it on a DYNAMIC segment, whose membership is computed from its predicate by resolveSegment.
+
+        Preconditions: the segment must exist and be STATIC.
+
+        Required inputs: segmentId (UUID) as a path parameter and partyIds, a non-empty list of up to 5000 UUIDs; duplicates in the list are collapsed.
+
+        Emits a CRM_SEGMENT_MEMBERS_ADD event; only new membership rows are written.
+
+        Returns 404 when the segment does not exist, and 422 when the segment is DYNAMIC.
+
+        '
+      operationId: addSegmentMembers
       parameters:
       - name: segmentId
         in: path
@@ -1064,10 +1560,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The party ids to pin onto the static segment's member list.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SegmentMembersRequest'
+            examples:
+              Pin two parties:
+                description: Pin two parties
+                value:
+                  partyIds:
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
         required: true
       responses:
         '200':
@@ -1091,14 +1595,38 @@ paths:
     post:
       tags:
       - CRM Public Inquiry
-      summary: Submit an inquiry
-      description: Public, unauthenticated capture of a service or fleet-quote request. Rate-limited per submitter; returns only a reference id.
-      operationId: submit
+      summary: Submit Public Inquiry
+      description: 'Accepts an anonymous service or fleet-quote inquiry from the public web form, rate-limited per hashed submitter fingerprint, and returns only a reference id and NEW status so the endpoint cannot be used to enumerate existing customers.
+
+        Use this tool only for the unauthenticated public form when the deployment has enabled it via pos.customer.inquiry.public.enabled; do not use captureInquiry here, which is the authenticated staff path and is not rate-limited.
+
+        Preconditions: the public-inquiry feature flag must be enabled and the submitter must be under the per-source rate ceiling; the raw source address is never stored, only a truncated SHA-256 fingerprint.
+
+        Required inputs: channel, audienceType (COMMERCIAL or INDIVIDUAL), contactName, and at least one of email or phone; message and interest fields are optional.
+
+        Emits a CRM_PUBLIC_INQUIRY_SUBMIT event and persists the inquiry in NEW status, unassigned in the shared triage queue.
+
+        Returns 429 when the submitter has exceeded the rate limit, and 400 when required fields are missing or neither email nor phone is supplied.
+
+        '
+      operationId: submitPublicInquiry
       requestBody:
+        description: The public web-form inquiry, carrying who is asking and how to reach them.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SubmitInquiryRequest'
+            examples:
+              Web-form service inquiry:
+                description: Web-form service inquiry
+                value:
+                  channel: WEB_FORM
+                  audienceType: INDIVIDUAL
+                  contactName: Sam Rivera
+                  email: sam.rivera@example.com
+                  vehicleOfInterest: 2018 Honda CR-V
+                  serviceOfInterest: Timing belt replacement
+                  message: Looking for a quote and earliest availability
         required: true
       responses:
         '202':
@@ -1115,8 +1643,20 @@ paths:
     get:
       tags:
       - CRM Persons
-      summary: Search persons
-      description: Searches for persons matching the specified criteria
+      summary: Search Individual Persons
+      description: 'Searches individual customers by delegating the text query to pos-people, which matches first name, last name, primary email, and username, and returns only persons that also have a local CRM person-party.
+
+        Use this tool when locating an individual by name or email; use getPerson instead when the person id is already known, and note phone search is best-effort only because pos-people does not index phone numbers.
+
+        Preconditions: at least one of name, email, or phone should be supplied; when all are blank an empty list is returned without searching.
+
+        Required inputs: none individually; the first non-blank of name, email, and phone becomes the query, limit defaults to 20, and offset defaults to 0.
+
+        Emits a CRM_PERSON_SEARCH audit event; no state changes occur.
+
+        Returns 200 with an empty list rather than an error when nothing matches or the offset is beyond the result set.
+
+        '
       operationId: searchPersons
       parameters:
       - name: name
@@ -1186,14 +1726,41 @@ paths:
     post:
       tags:
       - CRM Persons
-      summary: Create a new person
-      description: Creates an individual person record in the CRM system
-      operationId: createPerson
+      summary: Create Individual Person Record
+      description: 'Creates an individual customer: the canonical person identity is resolved or created in pos-people (the source of truth for names and contact points), and a thin person-party link with a generated CUST-PER customer number is stored locally.
+
+        Use this tool when onboarding an individual customer; do not use createCrmCommercialAccount, which creates an organization, and note that if the identity already has a local person-party the existing record is returned instead of a duplicate.
+
+        Preconditions: none beyond authorization; contact points are validated before any identity is created so an invalid email persists nothing.
+
+        Required inputs: firstName, lastName, and preferredContactMethod (EMAIL, PHONE_CALL, SMS, or NONE); emails and phones are optional lists whose entries carry a value and an isPrimary flag, phone type defaults to PHONE_MOBILE, and emails are stored lowercase.
+
+        Emits a CRM_PERSON_CREATE event, publishes a party-changed customer fact, and writes the contact points to pos-people.
+
+        Returns 400 when firstName, lastName, or preferredContactMethod is missing or an email value is malformed.
+
+        '
+      operationId: createCrmPerson
       requestBody:
+        description: The individual's name, preferred contact method, and contact points to register.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreatePersonRequest'
+            examples:
+              Individual with email and mobile:
+                description: Individual with email and mobile
+                value:
+                  firstName: Dana
+                  lastName: Ortiz
+                  preferredContactMethod: EMAIL
+                  emails:
+                  - value: dana.ortiz@example.com
+                    isPrimary: true
+                  phones:
+                  - value: '+15125550142'
+                    type: PHONE_MOBILE
+                    isPrimary: true
         required: true
       responses:
         '201':
@@ -1229,8 +1796,20 @@ paths:
     get:
       tags:
       - CRM Tags
-      summary: List party tags
-      description: List the tags currently attached to a party
+      summary: List Party Tag Assignments
+      description: 'Returns the tags currently attached to one party, with who assigned each tag, when, and through which source.
+
+        Use this tool when reviewing a party''s labels; use listTags instead for the full catalog of assignable tags.
+
+        Preconditions: none; an unknown partyId yields an empty list rather than an error.
+
+        Required inputs: partyId (UUID) as a path parameter; there is no request body.
+
+        Emits a CRM_PARTY_TAG_LIST audit event; no state changes occur.
+
+        Returns 200 with an empty list rather than an error when the party has no tags.
+
+        '
       operationId: listPartyTags
       parameters:
       - name: partyId
@@ -1258,9 +1837,21 @@ paths:
     post:
       tags:
       - CRM Tags
-      summary: Assign tag to party
-      description: 'Attach a tag to a party. Idempotent: re-assigning returns the existing assignment.'
-      operationId: assignTag
+      summary: Assign Tag To Party
+      description: 'Attaches a catalog tag to a party, recording the assigning user, timestamp, and source.
+
+        Use this tool when labeling a party; do not use createTag, which adds a new tag to the catalog without attaching it to anyone.
+
+        Preconditions: the tag must exist and, for a new assignment, be active; the call is idempotent, and re-assigning an already-attached tag returns the existing assignment even when the tag has since been retired.
+
+        Required inputs: partyId (UUID) as a path parameter and tagId (UUID) in the body; source defaults to MANUAL and accepts MANUAL, CAMPAIGN, IMPORT, or RULE.
+
+        Emits a CRM_PARTY_TAG_ASSIGN event and publishes a party-tag-changed fact when a new assignment is created.
+
+        Returns 404 when the tag does not exist, and 400 when the tag is inactive and not already assigned.
+
+        '
+      operationId: assignTagToParty
       parameters:
       - name: partyId
         in: path
@@ -1269,10 +1860,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The catalog tag to attach to the party and how the assignment originated.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AssignPartyTagRequest'
+            examples:
+              Manual assignment:
+                description: Manual assignment
+                value:
+                  tagId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61
+                  source: MANUAL
         required: true
       responses:
         '200':
@@ -1296,9 +1894,21 @@ paths:
     get:
       tags:
       - CRM Interactions
-      summary: List party interactions
-      description: Interaction history for a party, newest first, optionally filtered by type
-      operationId: list_2
+      summary: List Party Interaction Timeline
+      description: 'Returns a party''s interaction timeline newest first, unifying campaign sends, CSR touches, and workorder notes, with interaction bodies passed through redaction before they are returned.
+
+        Use this tool when reviewing a party''s touch history; do not use recordInteraction, which appends a new entry to the timeline instead of reading it.
+
+        Preconditions: none; an unknown partyId simply yields an empty page rather than an error.
+
+        Required inputs: partyId (UUID) as a path parameter; type optionally filters to one of CAMPAIGN_SEND, EMAIL, SMS, CALL, FOLLOW_UP, NOTE, or WORKORDER_NOTE, page defaults to 0, and size defaults to 50 with a clamp between 1 and 200.
+
+        Emits a CRM_INTERACTION_LIST audit event; no state changes occur.
+
+        Returns 200 with an empty page rather than an error when the party has no interactions.
+
+        '
+      operationId: listPartyInteractions
       parameters:
       - name: partyId
         in: path
@@ -1350,9 +1960,21 @@ paths:
     post:
       tags:
       - CRM Interactions
-      summary: Record an interaction
-      description: Record a CSR-initiated touch (call, email, note) on a party's timeline
-      operationId: record
+      summary: Record Party Interaction
+      description: 'Records a CSR-initiated touch such as a call, email, or note on a party''s interaction timeline, stamping the acting username from the security context.
+
+        Use this tool when logging a manual customer touch; do not use listPartyInteractions, which reads the timeline, and note that campaign and workorder interactions are ingested from events rather than through this endpoint.
+
+        Preconditions: none are checked against the party; the interaction is stored against the supplied partyId as-is.
+
+        Required inputs: partyId (UUID) as a path parameter and type (CAMPAIGN_SEND, EMAIL, SMS, CALL, FOLLOW_UP, NOTE, or WORKORDER_NOTE) in the body; direction defaults to OUTBOUND, occurredAt defaults to now, and channel accepts EMAIL or SMS.
+
+        Emits a CRM_INTERACTION_RECORD event and persists the interaction row.
+
+        Returns 400 when type is missing or subject, summary, or body exceed their length limits.
+
+        '
+      operationId: recordInteraction
       parameters:
       - name: partyId
         in: path
@@ -1361,10 +1983,20 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The CSR touch to append to the party's timeline, typed by interaction kind and optional channel.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RecordInteractionRequest'
+            examples:
+              Follow-up call note:
+                description: Follow-up call note
+                value:
+                  type: CALL
+                  direction: OUTBOUND
+                  subject: Brake job follow-up
+                  summary: Customer satisfied, will book alignment next month
+                  occurredAt: 2026-08-10 15:30:00+00:00
         required: true
       responses:
         '201':
@@ -1386,9 +2018,21 @@ paths:
     get:
       tags:
       - CRM Follow-ups
-      summary: List party follow-ups
-      description: Follow-up tasks raised against a party
-      operationId: listForParty
+      summary: List Party Follow-Up Tasks
+      description: 'Returns the follow-up tasks raised against one party, ordered by due date then creation time, optionally filtered by status.
+
+        Use this tool when reviewing outstanding work for a specific customer; use getFollowUpQueue instead for the cross-party CSR work queue.
+
+        Preconditions: none; an unknown partyId yields an empty page rather than an error.
+
+        Required inputs: partyId (UUID) as a path parameter; status optionally filters on OPEN, DONE, or DISMISSED, page defaults to 0, and size defaults to 50 clamped between 1 and 200.
+
+        Emits a CRM_FOLLOWUP_LIST audit event; no state changes occur.
+
+        Returns 200 with an empty page rather than an error when the party has no follow-ups.
+
+        '
+      operationId: listPartyFollowUps
       parameters:
       - name: partyId
         in: path
@@ -1436,9 +2080,21 @@ paths:
     post:
       tags:
       - CRM Follow-ups
-      summary: Raise follow-up task
-      description: Raise a follow-up task against a party
-      operationId: create_1
+      summary: Raise Follow-Up Task
+      description: 'Raises a new OPEN follow-up task against a party, recording the creating user from the security context.
+
+        Use this tool when a customer needs a future touch such as a declined-service or service-due follow-up; do not use completeFollowUpTask or dismissFollowUpTask, which close an existing task.
+
+        Preconditions: the party must exist as either a commercial or person party.
+
+        Required inputs: partyId (UUID) as a path parameter and type in the body (DECLINED_SERVICE_FOLLOWUP, SERVICE_DUE_REMINDER, FLEET_CHECKIN, CAMPAIGN_RESPONSE, or GENERAL); vehicleId, dueDate, assignedTo, reason, sourceWorkorderId, and notes are optional, and an omitted assignedTo leaves the task in the shared queue.
+
+        Emits a CRM_FOLLOWUP_CREATE event and persists the task with status OPEN.
+
+        Returns 404 when no party exists for the supplied partyId, and 400 when type is missing.
+
+        '
+      operationId: createFollowUpTask
       parameters:
       - name: partyId
         in: path
@@ -1447,10 +2103,20 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The follow-up work to schedule against the party, typed by follow-up kind.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateFollowUpTaskRequest'
+            examples:
+              Declined-service follow-up:
+                description: Declined-service follow-up
+                value:
+                  type: DECLINED_SERVICE_FOLLOWUP
+                  vehicleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e
+                  dueDate: 2026-09-01
+                  reason: Declined rear brake pads at last visit
+                  notes: 'Quote given: $420 parts and labor'
         required: true
       responses:
         '201':
@@ -1472,8 +2138,20 @@ paths:
     get:
       tags:
       - CRM Communication Preferences
-      summary: Get communication preferences
-      description: Retrieve communication preferences and consent flags for a party
+      summary: Get Communication Preferences
+      description: 'Returns the persisted communication preferences and consent flags for a party, covering email, SMS, phone, and marketing channels plus the free-form consent flag map.
+
+        Use this tool when reading a party''s current contact-channel opt-ins; do not use getAccountCommunicationPreferences, a legacy accounts-scoped stub that only returns N/A placeholders.
+
+        Preconditions: the party must exist as either a commercial or person party; a party with no stored preference record is reported with every channel defaulted to OPT_OUT and version 0.
+
+        Required inputs: partyId (UUID) as a path parameter; there is no request body.
+
+        Emits a CRM_COMMUNICATION_PREFERENCES_GET audit event; no state changes occur.
+
+        Returns 404 when no party exists for the supplied partyId.
+
+        '
       operationId: getCommunicationPreferences
       parameters:
       - name: partyId
@@ -1502,8 +2180,20 @@ paths:
     post:
       tags:
       - CRM Communication Preferences
-      summary: Create or update communication preferences
-      description: Set or update communication preferences and consent flags for a party
+      summary: Upsert Communication Preferences
+      description: 'Creates or updates the persisted communication-preference record for a party, replacing channel preferences, consent flags, and the preferences note.
+
+        Use this tool when recording a party''s contact-channel opt-in or opt-out choices; do not use upsertAccountCommunicationPreferences, a legacy accounts-scoped stub that does not persist anything.
+
+        Preconditions: the party must exist as either a commercial or person party.
+
+        Required inputs: partyId (UUID) as a path parameter and a JSON body; omitted emailPreference, smsPreference, phonePreference, or marketingPreference values default to OPT_OUT, and updateSource defaults to APP.
+
+        Emits a CRM_COMMUNICATION_PREFERENCES_UPSERT event and writes the preference record, reporting operationType CREATED or UPDATED with a new version.
+
+        Returns 404 when no party exists for the supplied partyId.
+
+        '
       operationId: upsertCommunicationPreferences
       parameters:
       - name: partyId
@@ -1514,10 +2204,24 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Channel preferences, consent flags, and audit source to store for the party; omitted channels default to OPT_OUT.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpsertCommunicationPreferencesRequest'
+            examples:
+              Email opt-in with consent flags:
+                description: Email opt-in with consent flags
+                value:
+                  emailPreference: OPT_IN
+                  smsPreference: OPT_OUT
+                  phonePreference: OPT_OUT
+                  marketingPreference: OPT_IN
+                  consentFlags:
+                    serviceReminders: true
+                    promotions: false
+                  preferencesNote: Customer asked for email only
+                  updateSource: ADMIN
         required: true
       responses:
         '200':
@@ -1541,9 +2245,21 @@ paths:
     get:
       tags:
       - CRM Inquiries
-      summary: List inquiries
-      description: Inbound inquiries, newest first
-      operationId: list_3
+      summary: List Inbound Inquiries
+      description: 'Returns inbound service and fleet-quote inquiries newest first, optionally filtered by lifecycle status.
+
+        Use this tool when triaging the inquiry queue; use getInquiry instead when the inquiry id is already known.
+
+        Preconditions: none; an empty page is returned when nothing matches.
+
+        Required inputs: none; status optionally filters on NEW, CONTACTED, CONVERTED, or CLOSED, page defaults to 0, and size defaults to 50 clamped between 1 and 200.
+
+        Emits a CRM_INQUIRY_LIST audit event; no state changes occur.
+
+        Returns 200 with an empty page rather than an error when no inquiry matches.
+
+        '
+      operationId: listInquiries
       parameters:
       - name: status
         in: query
@@ -1586,14 +2302,38 @@ paths:
     post:
       tags:
       - CRM Inquiries
-      summary: Capture inquiry
-      description: Record an inquiry taken by phone, walk-in, or referral
-      operationId: capture
+      summary: Capture Staff-Taken Inquiry
+      description: 'Records an inbound inquiry taken by staff over phone, walk-in, email, or referral, creating it in NEW status and deliberately unassigned so it lands in the shared queue.
+
+        Use this tool for staff-entered inquiries on the authenticated API; do not use submitPublicInquiry, which is the anonymous rate-limited public web-form path.
+
+        Preconditions: none beyond authorization; no party needs to exist yet.
+
+        Required inputs: channel (WEB_FORM, PHONE, WALK_IN, EMAIL, REFERRAL, or CAMPAIGN), audienceType (COMMERCIAL or INDIVIDUAL), contactName, and at least one of email or phone; organizationName, vehicleOfInterest, serviceOfInterest, message, and campaignCode are optional.
+
+        Emits a CRM_INQUIRY_CAPTURE event and persists the inquiry.
+
+        Returns 400 when required fields are missing or when neither email nor phone is supplied, since an unreachable enquirer cannot be actioned.
+
+        '
+      operationId: captureInquiry
       requestBody:
+        description: The inquiry as taken by staff, including how it arrived and how to reach the enquirer.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SubmitInquiryRequest'
+            examples:
+              Phone fleet inquiry:
+                description: Phone fleet inquiry
+                value:
+                  channel: PHONE
+                  audienceType: COMMERCIAL
+                  contactName: Dana Ortiz
+                  organizationName: Ortiz Landscaping
+                  email: dana@ortizlandscaping.example
+                  phone: +1-512-555-0142
+                  serviceOfInterest: Fleet maintenance quote for 6 trucks
         required: true
       responses:
         '201':
@@ -1615,9 +2355,21 @@ paths:
     post:
       tags:
       - CRM Inquiries
-      summary: Convert inquiry
-      description: Turn the inquiry into a PROSPECT party, or link it to an existing party when the enquirer is already known
-      operationId: convert
+      summary: Convert Inquiry To Party
+      description: 'Converts an inquiry into CRM state: a commercial inquiry with no existingPartyId creates a new commercial party in lifecycle stage PROSPECT, while supplying existingPartyId links the inquiry to that party instead; either way the inquiry becomes CONVERTED.
+
+        Use this tool when an enquirer becomes a prospect or is recognized as an existing customer; do not use updateInquiryStatus, which rejects CONVERTED as a direct status change.
+
+        Preconditions: the inquiry must exist in an open status (NEW or CONTACTED); an INDIVIDUAL-audience inquiry can only be converted by linking an existing party, because creating a person party requires a verified identity in pos-people-contact.
+
+        Required inputs: inquiryId (UUID) as a path parameter; existingPartyId (UUID) is an optional query parameter naming a known party to link, and there is no request body.
+
+        Emits a CRM_INQUIRY_CONVERT event; a new PROSPECT commercial party may be created and the inquiry is stamped with the resulting partyId.
+
+        Returns 404 when the inquiry or the supplied existingPartyId cannot be found, and 422 when the inquiry is already CONVERTED or CLOSED, or when an individual inquiry has no party to link.
+
+        '
+      operationId: convertInquiry
       parameters:
       - name: inquiryId
         in: path
@@ -1653,9 +2405,21 @@ paths:
     post:
       tags:
       - CRM Follow-ups
-      summary: Dismiss follow-up
-      description: Close a follow-up as deliberately not pursued, recording why
-      operationId: dismiss
+      summary: Dismiss Follow-Up Task
+      description: 'Closes an open follow-up task as DISMISSED, recording why it is deliberately not being pursued.
+
+        Use this tool when a follow-up should be abandoned, for example because the customer already returned; use completeFollowUpTask instead when the touch was actually made.
+
+        Preconditions: the task must exist and still be OPEN; dismissal is final and a new task must be raised to revisit the customer.
+
+        Required inputs: taskId (UUID) as a path parameter and outcome (non-blank, max 500) in the body explaining the dismissal; booking references are accepted but normally absent.
+
+        Emits a CRM_FOLLOWUP_DISMISS event and stamps closedAt and closedBy on the task.
+
+        Returns 404 when the task does not exist, 422 when it is already DONE or DISMISSED, and 400 when outcome is blank.
+
+        '
+      operationId: dismissFollowUpTask
       parameters:
       - name: taskId
         in: path
@@ -1664,10 +2428,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The reason this follow-up is being closed without being pursued.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CloseFollowUpTaskRequest'
+            examples:
+              No longer relevant:
+                description: No longer relevant
+                value:
+                  outcome: Vehicle was sold; service no longer needed
         required: true
       responses:
         '200':
@@ -1691,9 +2461,21 @@ paths:
     post:
       tags:
       - CRM Follow-ups
-      summary: Complete follow-up
-      description: Close a follow-up as worked, recording the outcome and any resulting booking
-      operationId: complete
+      summary: Complete Follow-Up Task
+      description: 'Closes an open follow-up task as DONE, recording the outcome and any workorder or appointment that resulted from the touch.
+
+        Use this tool when the follow-up was actually worked; use dismissFollowUpTask instead when the task is being deliberately abandoned without contact.
+
+        Preconditions: the task must exist and still be OPEN; a closed task cannot be reopened, so a new follow-up must be raised to try again.
+
+        Required inputs: taskId (UUID) as a path parameter and outcome (non-blank, max 500) in the body; bookedWorkorderId and bookedAppointmentId are optional booking references.
+
+        Emits a CRM_FOLLOWUP_COMPLETE event and stamps closedAt and closedBy on the task.
+
+        Returns 404 when the task does not exist, 422 when it is already DONE or DISMISSED, and 400 when outcome is blank.
+
+        '
+      operationId: completeFollowUpTask
       parameters:
       - name: taskId
         in: path
@@ -1702,10 +2484,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The worked outcome of the follow-up and any booking it produced.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CloseFollowUpTaskRequest'
+            examples:
+              Booked the declined work:
+                description: Booked the declined work
+                value:
+                  outcome: Customer booked rear brake job for next week
+                  bookedWorkorderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5f
         required: true
       responses:
         '200':
@@ -1729,9 +2518,21 @@ paths:
     post:
       tags:
       - CRM Party Relationships
-      summary: Create a party relationship
-      description: Creates a relationship between a commercial account and an individual person
-      operationId: createRelationship
+      summary: Create Party Relationship
+      description: 'Creates a dated relationship that links an individual person to a commercial account in one or more roles, optionally marking the person as the primary billing contact.
+
+        Use this tool when associating a known person with a commercial account; do not use updateContactRoles, which manages the separate contact-role assignment model, and do not use createCrmPerson, which creates the person record itself.
+
+        Preconditions: the commercial party and the person must both exist, and no active relationship may already cover the same party, person, and role for today''s date; isPrimaryBillingContact requires the BILLING role in the same request.
+
+        Required inputs: partyId (UUID) as a path parameter, plus personId (UUID), roles (one or more of APPROVER, BILLING, PRIMARY_CONTACT, DRIVER, TECHNICAL), and effectiveStartDate; effectiveEndDate and isPrimaryBillingContact (default false) are optional.
+
+        Emits a CRM_RELATIONSHIP_CREATE event, atomically demotes any existing primary billing contact when one is designated, and re-emits the person''s identity fact.
+
+        Returns 404 when the party or person cannot be found, 409 when an overlapping active relationship already exists for a requested role, and 400 when isPrimaryBillingContact is set without the BILLING role.
+
+        '
+      operationId: createPartyRelationship
       parameters:
       - name: partyId
         in: path
@@ -1741,10 +2542,21 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The person, roles, and effective dates of the relationship being established with the account.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreatePartyRelationshipRequest'
+            examples:
+              Primary billing contact:
+                description: Primary billing contact
+                value:
+                  personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60
+                  roles:
+                  - BILLING
+                  - PRIMARY_CONTACT
+                  isPrimaryBillingContact: true
+                  effectiveStartDate: 2026-08-13
         required: true
       responses:
         '201':
@@ -1792,14 +2604,37 @@ paths:
     post:
       tags:
       - CRM Accounts
-      summary: Resolve account tier
-      description: Resolve or compute the account tier based on business rules
+      summary: Resolve Account Tier
+      description: 'Computes the recommended tier for a commercial account from annual revenue, active contract count, and account age thresholds, and optionally applies it to the account.
+
+        Use this tool when a tier recommendation or recalculation is needed; do not use getAccountTier, which only reads the stored tier without recomputing it.
+
+        Preconditions: a commercial party must exist for the accountId; when applyTier is true, a manual tier override on the account blocks application unless forceRecalculation is also true.
+
+        Required inputs: accountId (UUID string); annualRevenue, activeContractCount, and accountAgeMonths are optional scoring inputs, and applyTier and forceRecalculation both default to false, so the default call is a dry run.
+
+        Emits a CUSTOMER_ACCOUNT_TIER_RESOLVE event; when the tier is applied the account record is updated with assignedBy SYSTEM and a customer fact is republished.
+
+        Returns 404 when the account does not exist or the accountId is not a valid UUID.
+
+        '
       operationId: resolveAccountTier
       requestBody:
+        description: Tier scoring inputs for one account, plus flags controlling whether the resolved tier is applied.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ResolveAccountTierRequest'
+            examples:
+              Dry-run resolution:
+                description: Dry-run resolution
+                value:
+                  accountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  annualRevenue: 275000
+                  activeContractCount: 3
+                  accountAgeMonths: 18
+                  applyTier: false
+                  forceRecalculation: false
         required: true
       responses:
         '200':
@@ -1823,8 +2658,20 @@ paths:
     get:
       tags:
       - CRM Accounts
-      summary: Browse parties
-      description: Browse parties with paging and sorting. The service sorts by legalName ascending by default, appends partyId ascending as a stable tie-breaker whenever the requested sort list does not explicitly include partyId, and applies case-insensitive legalName sorting.
+      summary: Browse Customer Directory
+      description: 'Returns a paged customer directory that unifies commercial parties and standalone individual customers, with person names and contact points resolved from pos-people.
+
+        Use this tool when listing or typeahead-filtering customers by name, status, party type, or customer number; do not use searchParties, which filters commercial parties only by structured criteria, and use getParty instead when the party id is already known.
+
+        Preconditions: none; an empty page is returned when nothing matches, and a pos-people outage degrades person names to null rather than failing the request.
+
+        Required inputs: none; page defaults to 0 with size 20, the name filter matches legal name, display name, or customer number case-insensitively, status matches ACTIVE, INACTIVE, ON_HOLD, or MERGED, sortField is name (default) or customerNumber, and sortOrder is asc (default) or desc with partyId as a stable tie-breaker.
+
+        Emits a CUSTOMER_PARTY_BROWSE audit event; no state changes occur.
+
+        Returns 200 with an empty results array rather than an error when no party matches the filters.
+
+        '
       operationId: browseParties
       parameters:
       - name: pageable
@@ -1886,14 +2733,38 @@ paths:
     post:
       tags:
       - CRM Accounts
-      summary: Create commercial account
-      description: Create a new commercial party/account in the CRM system
-      operationId: createCommercialAccount
+      summary: Create Commercial Account
+      description: 'Creates a commercial party record with status ACTIVE and a generated customer number of the form CUST-XXXXXXXX.
+
+        Use this tool when onboarding a new commercial customer; do not use searchParties or checkPartyDuplicates, which only look up existing parties, and run checkPartyDuplicates first to avoid creating a duplicate, because no uniqueness check is applied here.
+
+        Preconditions: none beyond authorization; the service performs no duplicate detection on legalName.
+
+        Required inputs: legalName (non-blank, max 255); partyType defaults to COMMERCIAL and must be PERSON, COMMERCIAL, or UNKNOWN when supplied; displayName, taxId, billingTermsId, and externalIdentifiers are optional.
+
+        Emits a CUSTOMER_PARTY_CREATE event and publishes a party-changed customer fact.
+
+        Returns 400 when legalName is missing or blank, or when partyType is not a recognized value.
+
+        '
+      operationId: createCrmCommercialAccount
       requestBody:
+        description: Commercial party to create; legalName is the only mandatory field and no duplicate check is applied.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateCommercialAccountRequest'
+            examples:
+              New commercial account:
+                description: New commercial account
+                value:
+                  legalName: Acme Fleet Services LLC
+                  displayName: Acme Fleet
+                  taxId: 12-3456789
+                  partyType: COMMERCIAL
+                  externalIdentifiers:
+                    ERP: AC-1001
+        required: true
       responses:
         '201':
           description: Account created successfully
@@ -1914,14 +2785,34 @@ paths:
     post:
       tags:
       - CRM Accounts
-      summary: Resolve party display names
-      description: Batch-resolve party ids to display names. Consumed server-side by sibling services (e.g. pos-invoice) that store only the party id and need the display name to enrich finder/search rows. Unknown or unresolvable ids are omitted from the response.
+      summary: Resolve Party Display Names
+      description: 'Batch-resolves party ids to display names for both commercial and person parties, for sibling services such as pos-invoice that store only the party id.
+
+        Use this tool when enriching rows that already carry party ids; do not use getParty, which returns the full identity projection for a single party per call.
+
+        Preconditions: none; unknown or unresolvable ids are silently omitted from the response rather than causing an error.
+
+        Required inputs: partyIds, a non-empty list of up to 200 UUIDs; null entries and duplicates are dropped before resolution.
+
+        Emits a CUSTOMER_PARTY_RESOLVE audit event; no state changes occur.
+
+        Returns 400 when partyIds is empty or exceeds 200 entries, and 200 with a possibly shorter list than requested when some ids cannot be resolved.
+
+        '
       operationId: resolvePartyNames
       requestBody:
+        description: Batch of party ids whose display names should be resolved.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PartyNameResolveRequest'
+            examples:
+              Two-party batch:
+                description: Two-party batch
+                value:
+                  partyIds:
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
         required: true
       responses:
         '200':
@@ -1945,8 +2836,20 @@ paths:
     post:
       tags:
       - CRM Accounts
-      summary: Create vehicle for party
-      description: Associate a new vehicle with a party/customer
+      summary: Associate Vehicle With Party
+      description: 'Associates a vehicle VIN with a commercial party by appending it to the party''s owned VIN list.
+
+        Use this tool when recording that a commercial account operates a vehicle; do not use it to change vehicle details, and note the VIN list is account-level rather than a full vehicle record.
+
+        Preconditions: a commercial party must exist for the supplied partyId, and the VIN must not already be associated with that party.
+
+        Required inputs: partyId (UUID) as a path parameter and vinNumber (max 17 characters) in the body; unitNumber, description, licensePlate, and licensePlateRegion are optional.
+
+        Emits a CUSTOMER_VEHICLE_CREATE event and republishes the party-changed customer fact.
+
+        Returns 404 when the party does not exist, 409 when the VIN is already associated with the party, and 400 when vinNumber is missing or blank.
+
+        '
       operationId: createVehicleForParty
       parameters:
       - name: partyId
@@ -1957,10 +2860,21 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Vehicle identification to associate with the party, keyed by VIN.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateVehicleForPartyRequest'
+            examples:
+              Fleet truck:
+                description: Fleet truck
+                value:
+                  vinNumber: 1FTFW1ET5DFC10312
+                  unitNumber: TRK-42
+                  description: 2019 Ford F-150 service truck
+                  licensePlate: ABC1234
+                  licensePlateRegion: TX
+        required: true
       responses:
         '201':
           description: Vehicle created successfully
@@ -1983,8 +2897,20 @@ paths:
     post:
       tags:
       - CRM Accounts
-      summary: Merge parties
-      description: Merge multiple parties into a single party record
+      summary: Merge Duplicate Commercial Parties
+      description: 'Merges one duplicate commercial party into a surviving party: relationships are reassigned to the survivor, external identifiers and vehicle VINs are copied over, and the losing party''s status is set to MERGED.
+
+        Use this tool when checkPartyDuplicates has confirmed two records represent the same customer; do not use createCrmCommercialAccount to work around duplicates, and note the merge is not reversible through this API.
+
+        Preconditions: both the surviving party (path) and losing party (body) must exist as commercial parties and must be different records.
+
+        Required inputs: partyId of the survivor as a path parameter, plus losingPartyId (UUID string) and a justification of up to 1000 characters in the body.
+
+        Emits a CUSTOMER_PARTY_MERGE event and republishes customer facts for both parties and for contacts whose account linkage moved.
+
+        Returns 404 when either party cannot be found, and 400 when losingPartyId or justification is missing, losingPartyId is not a valid UUID, or both ids refer to the same party.
+
+        '
       operationId: mergeParties
       parameters:
       - name: partyId
@@ -1995,10 +2921,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Identifies the losing party to fold into the survivor and records the audit justification for the merge.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/MergePartiesRequest'
+            examples:
+              Merge duplicate:
+                description: Merge duplicate
+                value:
+                  losingPartyId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  justification: Duplicate created during fleet onboarding import
+        required: true
       responses:
         '200':
           description: Parties merged successfully
@@ -2021,9 +2955,21 @@ paths:
     get:
       tags:
       - CRM Accounts
-      summary: Get communication preferences
-      description: Retrieve communication preferences and consent flags for a party
-      operationId: getCommunicationPreferences_1
+      summary: Get Account Communication Preferences
+      description: 'Returns a legacy account-scoped communication-preference projection for a commercial party in which every channel currently reports the placeholder value N/A.
+
+        Use this tool only for the legacy accounts-scoped path; use getCommunicationPreferences instead, which reads the persisted per-party preference record with real channel values and consent flags.
+
+        Preconditions: a commercial party must exist for the supplied partyId.
+
+        Required inputs: partyId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no commercial party exists for the supplied partyId.
+
+        '
+      operationId: getAccountCommunicationPreferences
       parameters:
       - name: partyId
         in: path
@@ -2051,9 +2997,21 @@ paths:
     post:
       tags:
       - CRM Accounts
-      summary: Create or update communication preferences
-      description: Set or update communication preferences and consent flags for a party
-      operationId: upsertCommunicationPreferences_1
+      summary: Upsert Account Communication Preferences
+      description: 'Acknowledges an account-scoped communication-preference submission for a commercial party without persisting any preference values; this legacy path only validates the party and returns SUCCESS.
+
+        Use this tool only for the legacy accounts-scoped path; use upsertCommunicationPreferences instead, which actually stores channel preferences and consent flags per party.
+
+        Preconditions: a commercial party must exist for the supplied partyId.
+
+        Required inputs: partyId (UUID) as a path parameter and a non-null JSON body; the preference fields themselves are accepted but not stored.
+
+        Emits a CUSTOMER_COMMUNICATION_PREFERENCE_UPSERT audit event; no preference record is written.
+
+        Returns 404 when no commercial party exists for the supplied partyId, and 400 when the request body is missing.
+
+        '
+      operationId: upsertAccountCommunicationPreferences
       parameters:
       - name: partyId
         in: path
@@ -2063,10 +3021,20 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Channel preference values acknowledged by this legacy endpoint; the values are validated but not stored.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpsertCommunicationPreferencesRequest'
+            examples:
+              Opt-in email only:
+                description: Opt-in email only
+                value:
+                  emailPreference: OPT_IN
+                  smsPreference: OPT_OUT
+                  phonePreference: OPT_OUT
+                  updateSource: ADMIN
+        required: true
       responses:
         '200':
           description: Preferences updated successfully
@@ -2089,14 +3057,34 @@ paths:
     post:
       tags:
       - CRM Accounts
-      summary: Search parties
-      description: Search for parties based on various criteria
+      summary: Search Commercial Parties
+      description: 'Searches commercial party records by structured criteria such as name, tax id, party type, and status, returning all matches in a single unpaged result set.
+
+        Use this tool when filtering commercial parties by structured attributes like taxId; use browseParties instead for the paged, unified directory that also includes individual customers, and checkPartyDuplicates for pre-create duplicate detection by legal name.
+
+        Preconditions: none; an omitted or empty body matches every commercial party.
+
+        Required inputs: none; name, email, phone, taxId, partyType, and status are all optional filters, and the pageNumber and pageSize fields are accepted but not applied, so the full match list is always returned.
+
+        Emits a CUSTOMER_PARTY_SEARCH audit event; no state changes occur.
+
+        Returns 200 with an empty results array rather than an error when no party matches.
+
+        '
       operationId: searchParties
       requestBody:
+        description: Optional structured filter criteria; every supplied field narrows the match and an empty body matches all commercial parties.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SearchPartiesRequest'
+            examples:
+              Filter by name and status:
+                description: Filter by name and status
+                value:
+                  name: Acme
+                  partyType: COMMERCIAL
+                  status: ACTIVE
       responses:
         '200':
           description: Search results returned
@@ -2117,9 +3105,21 @@ paths:
     get:
       tags:
       - Promotion Redemptions
-      summary: Get redemptions by customer
-      description: Retrieve all recorded redemptions for a customer
-      operationId: getRedemptionsByCustomer
+      summary: List Customer Promotion Redemptions
+      description: 'Returns every promotion redemption recorded for one customer, including discount amounts, codes, statuses, and timestamps.
+
+        Use this tool when reviewing a customer''s redemption history, for example to enforce per-customer limits; use recordPromotionRedemption instead to record a new redemption.
+
+        Preconditions: none; an unknown customerId yields an empty list rather than an error.
+
+        Required inputs: customerId (UUID) as a path parameter; there is no request body.
+
+        Emits a PROMOTION_REDEMPTION_LIST audit event; no state changes occur.
+
+        Returns 200 with an empty list rather than an error when the customer has no redemptions.
+
+        '
+      operationId: listPromotionRedemptionsByCustomer
       parameters:
       - name: customerId
         in: path
@@ -2147,9 +3147,21 @@ paths:
     get:
       tags:
       - Customer Requirements
-      summary: Check whether a customer meets requirements
-      description: Returns true when the customer is active and, for commercial parties, not on credit hold.
-      operationId: requirementsMet
+      summary: Check Customer Requirements Met
+      description: 'Evaluates whether a customer is eligible for customer-facing workflows: the party must have ACTIVE status, and a commercial party must additionally not be on credit hold.
+
+        Use this tool as a gate before starting orders or workorders for a customer; use getPartyBillingRules instead to see the underlying credit-hold configuration.
+
+        Preconditions: a commercial or person party must exist for the supplied id.
+
+        Required inputs: id (UUID, the party id) as a path parameter; there is no request body.
+
+        Emits a CUSTOMER_REQUIREMENTS_MET_GET audit event; no state changes occur.
+
+        Returns 404 when no party exists for the supplied id, and 200 with a bare boolean verdict otherwise.
+
+        '
+      operationId: checkCustomerRequirementsMet
       parameters:
       - name: id
         in: path
@@ -2180,8 +3192,20 @@ paths:
     get:
       tags:
       - CRM Vehicles
-      summary: List vehicles for customer
-      description: Retrieve all vehicle summaries (vehicleId, VIN, make/model/year) associated with a customer. Returns the vehicle UUIDs the frontend needs to build estimates for a given Durion customer.
+      summary: List Customer Vehicles
+      description: 'Returns the vehicle summaries (vehicleId, VIN, make, model, year) associated with a customer, resolved from the party''s VIN set against the local ext_vehicle replica of pos-vehicle-inventory.
+
+        Use this tool when the vehicle UUIDs for a known customer are needed, for example to build an estimate; use getVehicleForCustomer instead for one vehicle''s full record, and note vehicle writes go to pos-vehicle-inventory, not this module.
+
+        Preconditions: the customer must exist as a person or commercial party; VINs whose vehicle events have not yet been replicated are silently dropped from the list.
+
+        Required inputs: customerId (UUID, the party id) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no party exists for the supplied customerId, and 200 with an empty list when the customer owns no resolvable vehicles.
+
+        '
       operationId: listVehiclesForCustomer
       parameters:
       - name: customerId
@@ -2213,9 +3237,21 @@ paths:
     get:
       tags:
       - CRM Vehicles
-      summary: Get vehicle for customer
-      description: Retrieve a specific vehicle for a given customer
-      operationId: getVehiclesForCustomer
+      summary: Get Customer Vehicle
+      description: 'Returns one vehicle''s record from the local ext_vehicle replica, verified to belong to the named customer through the party''s VIN association.
+
+        Use this tool when both the customer and vehicle ids are known; use listVehiclesForCustomer instead to discover which vehicles a customer owns.
+
+        Preconditions: the customer must exist, the vehicle must exist in the replica, and the vehicle must be associated with that customer.
+
+        Required inputs: customerId and vehicleId (UUIDs) as path parameters; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the customer, the vehicle, or the ownership association cannot be resolved.
+
+        '
+      operationId: getVehicleForCustomer
       parameters:
       - name: customerId
         in: path
@@ -2251,9 +3287,21 @@ paths:
     get:
       tags:
       - CRM Suppression
-      summary: Check address suppression
-      description: Whether a raw address is currently blocked on a channel. Used by send pipelines.
-      operationId: check
+      summary: Check Address Suppression
+      description: 'Reports whether a raw address is currently hard-blocked on a channel by normalizing and hashing it and looking the hash up in the suppression list.
+
+        Use this tool from send pipelines immediately before dispatch; use resolveMarketingEligibility instead for the full party-level decision that also folds in consent and the account gate.
+
+        Preconditions: none; suppression outranks consent, so a true result must block the send regardless of opt-in state.
+
+        Required inputs: channel (EMAIL or SMS) and address (the raw address to test) as required query parameters; the raw address is used only for hashing and never stored.
+
+        Emits a CRM_SUPPRESSION_CHECK audit event; no state changes occur.
+
+        Returns 200 with a bare boolean body, true when the address is suppressed on that channel and false otherwise.
+
+        '
+      operationId: checkAddressSuppression
       parameters:
       - name: channel
         in: query
@@ -2286,9 +3334,21 @@ paths:
     get:
       tags:
       - CRM Snapshots
-      summary: Fetch snapshot by vehicle
-      description: Returns party snapshot based on vehicle ownership
-      operationId: fetchByVehicle
+      summary: Get CRM Snapshot By Vehicle
+      description: 'Returns the CRM snapshot of the commercial party that owns a vehicle, resolved through the vehicle-to-party association replicated from vehicle events.
+
+        Use this tool when only a vehicle id is known, for example at service check-in; use getSnapshotByParty instead when the party id is already known.
+
+        Preconditions: the vehicle must be associated with a commercial party in the local replica; recently registered vehicles may not have been replicated yet.
+
+        Required inputs: vehicleId (UUID) as a path parameter; there is no request body.
+
+        Emits a CRM_SNAPSHOT_VEHICLE_RETRIEVE audit event; no state changes occur.
+
+        Returns 404 when no owning party can be resolved for the supplied vehicleId.
+
+        '
+      operationId: getSnapshotByVehicle
       parameters:
       - name: vehicleId
         in: path
@@ -2317,9 +3377,21 @@ paths:
     get:
       tags:
       - CRM Snapshots
-      summary: Fetch snapshot by party
-      description: Returns complete party snapshot with accounts, contacts, vehicles
-      operationId: fetchByParty
+      summary: Get CRM Snapshot By Party
+      description: 'Returns a consolidated CRM snapshot for a party — account summary, contacts, vehicle summaries, and preferences — assembled for commercial or person parties and served from a cache when a fresh copy exists.
+
+        Use this tool when a caller needs the whole customer picture in one call; use getParty instead for just the identity fields, and getSnapshotByVehicle when only a vehicle id is known.
+
+        Preconditions: a commercial or person party must exist for the supplied partyId.
+
+        Required inputs: partyId (UUID) as a path parameter; there is no request body, and the snapshotMetadata.source field reports CACHE or CRM_API depending on where the data came from.
+
+        Emits a CRM_SNAPSHOT_PARTY_RETRIEVE audit event; the snapshot cache may be populated but no domain state changes.
+
+        Returns 404 when neither a commercial nor a person party exists for the supplied partyId.
+
+        '
+      operationId: getSnapshotByParty
       parameters:
       - name: partyId
         in: path
@@ -2348,9 +3420,21 @@ paths:
     get:
       tags:
       - CRM Snapshots
-      summary: Get billing rules for a commercial party
-      description: Returns the billing rule reference for a commercial party. Returns default billing rules when the party has no explicitly configured rules. Enforcement of these rules is the responsibility of downstream services.
-      operationId: getBillingRules
+      summary: Get Party Billing Rules
+      description: 'Returns the billing-rules reference for a party, falling back to default rules when a commercial party has no explicitly configured rules and for person parties, which have no configurable rules; enforcement of the rules belongs to downstream services.
+
+        Use this tool when reading how an account should be billed; use upsertPartyBillingRules instead to change the configuration.
+
+        Preconditions: a commercial or person party must exist for the supplied partyId.
+
+        Required inputs: partyId (UUID) as a path parameter; there is no request body.
+
+        Emits a CRM_SNAPSHOT_BILLING_RULES_GET audit event; no state changes occur.
+
+        Returns 404 when no party exists for the supplied partyId, and 200 with defaults rather than an error when rules were never configured.
+
+        '
+      operationId: getPartyBillingRules
       parameters:
       - name: partyId
         in: path
@@ -2387,9 +3471,21 @@ paths:
     get:
       tags:
       - CRM Segments
-      summary: List the segment attribute catalog
-      description: Every whitelisted attribute a dynamic predicate may reference, with operand kind, allowed operators, and description
-      operationId: attributeCatalog
+      summary: List Segment Attribute Catalog
+      description: 'Returns the whitelist of attributes a dynamic segment predicate may reference, each with its operand kind, allowed operators, and description.
+
+        Use this tool before createSegment or updateSegment to build a valid DYNAMIC predicate; do not use listSegments, which lists saved segments rather than the predicate vocabulary.
+
+        Preconditions: none; the catalog is fixed in code per audience type.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        Emits a CRM_SEGMENT_ATTRIBUTES audit event; no state changes occur.
+
+        Returns 200 with the full catalog in every successful call; there are no business error responses.
+
+        '
+      operationId: listSegmentAttributes
       responses:
         '200':
           description: Attribute catalog returned
@@ -2410,8 +3506,20 @@ paths:
     get:
       tags:
       - CRM Persons
-      summary: Get a person by ID
-      description: Retrieves an individual person record by their unique identifier
+      summary: Get Person By Id
+      description: 'Returns the CRM view of an individual person by their canonical pos-people person id, including their customer number and preferred contact method.
+
+        Use this tool when the person id is already known; use searchPersons instead when locating a person by name or email.
+
+        Preconditions: a local person-party link must exist for the canonical person id.
+
+        Required inputs: personId (UUID, the canonical pos-people id) as a path parameter; there is no request body.
+
+        Emits a CRM_PERSON_GET audit event; no state changes occur.
+
+        Returns 404 when no person-party exists for the supplied personId.
+
+        '
       operationId: getPerson
       parameters:
       - name: personId
@@ -2455,9 +3563,21 @@ paths:
     get:
       tags:
       - CRM Marketing Consent
-      summary: Resolve send eligibility
-      description: Fold the account gate, governing contact consent, and suppression into a single allow/deny decision for one channel
-      operationId: resolveEligibility
+      summary: Resolve Marketing Send Eligibility
+      description: 'Resolves a single allow-or-deny marketing send decision for one party and channel by folding together the account gate, the governing party''s consent, and the suppression list, where suppression is a hard block layered on top of an opt-in.
+
+        Use this tool immediately before sending marketing to a party; use getMarketingConsent instead when the full consent summary rather than one decision is needed.
+
+        Preconditions: none; unknown parties resolve to a deny decision rather than an error.
+
+        Required inputs: partyId (UUID) as a path parameter and channel (EMAIL or SMS) as a required query parameter.
+
+        Emits a CRM_MARKETING_ELIGIBILITY_GET audit event; no state changes occur.
+
+        Returns 200 with allowed false and a reason code such as SUPPRESSED when the send must not happen, and 400 when channel is not EMAIL or SMS.
+
+        '
+      operationId: resolveMarketingEligibility
       parameters:
       - name: partyId
         in: path
@@ -2491,8 +3611,20 @@ paths:
     get:
       tags:
       - CRM Contacts
-      summary: Get contacts with roles
-      description: Retrieve all contacts for a party including their role assignments
+      summary: Get Party Contacts With Roles
+      description: 'Returns every contact person assigned a role on a commercial account, with names, emails, and phones resolved from pos-people and each contact''s role assignments and primary flags.
+
+        Use this tool when listing who represents a commercial account and in what capacity; do not use updateContactRoles, which rewrites one contact''s role assignments.
+
+        Preconditions: a commercial party must exist for the supplied partyId; a pos-people outage degrades contact names and contact points to null rather than failing.
+
+        Required inputs: partyId (UUID) as a path parameter; there is no request body.
+
+        Emits a CRM_CONTACTS_LIST audit event; no state changes occur.
+
+        Returns 404 when no commercial party exists for the supplied partyId, and 200 with an empty contacts list when the account has no role assignments.
+
+        '
       operationId: getContactsWithRoles
       parameters:
       - name: partyId
@@ -2522,8 +3654,20 @@ paths:
     get:
       tags:
       - CRM Marketing Consent
-      summary: Get consent history
-      description: Append-only marketing-consent audit trail for a party, newest first
+      summary: Get Consent Audit History
+      description: 'Returns the append-only marketing-consent audit trail for a party, newest first, with one entry per actual consent change recording the channel, old and new values, reason, source, and acting user.
+
+        Use this tool when auditing how a party''s consent reached its current state; use getMarketingConsent instead for the current consent summary and eligibility.
+
+        Preconditions: none; a party with no recorded consent changes yields an empty page rather than an error.
+
+        Required inputs: partyId (UUID) as a path parameter; page defaults to 0 and size defaults to 50 with a clamp between 1 and 200.
+
+        No events are emitted by the consent trail itself beyond the CRM_CONSENT_HISTORY_GET audit event this read emits; no state changes occur.
+
+        Returns 200 with an empty page rather than an error when no history exists.
+
+        '
       operationId: getConsentHistory
       parameters:
       - name: partyId
@@ -2564,9 +3708,21 @@ paths:
     get:
       tags:
       - CRM Inquiries
-      summary: Get inquiry
-      description: Retrieve a single inquiry
-      operationId: get_1
+      summary: Get Inquiry
+      description: 'Returns one inbound inquiry with its channel, audience type, contact details, interest fields, status, assignee, and any linked party.
+
+        Use this tool when the inquiry id is already known; use listInquiries instead to find inquiries by status.
+
+        Preconditions: the inquiry must exist.
+
+        Required inputs: inquiryId (UUID) as a path parameter; there is no request body.
+
+        Emits a CRM_INQUIRY_GET audit event; no state changes occur.
+
+        Returns 404 when no inquiry exists for the supplied inquiryId.
+
+        '
+      operationId: getInquiry
       parameters:
       - name: inquiryId
         in: path
@@ -2594,9 +3750,21 @@ paths:
     get:
       tags:
       - CRM Follow-ups
-      summary: Follow-up queue
-      description: The CSR work queue, ordered by due date. All filters are optional.
-      operationId: queue
+      summary: Get Follow-Up Work Queue
+      description: 'Returns the CSR follow-up work queue across all parties, ordered by due date, optionally filtered by status, assignee, and task type.
+
+        Use this tool when working the shared queue of outstanding follow-ups; use listPartyFollowUps instead to see tasks raised against one specific party.
+
+        Preconditions: none; an empty page is returned when no task matches the filters.
+
+        Required inputs: none; status filters on OPEN, DONE, or DISMISSED, type filters on DECLINED_SERVICE_FOLLOWUP, SERVICE_DUE_REMINDER, FLEET_CHECKIN, CAMPAIGN_RESPONSE, or GENERAL, page defaults to 0, and size defaults to 50 clamped between 1 and 200.
+
+        Emits a CRM_FOLLOWUP_QUEUE audit event; no state changes occur.
+
+        Returns 200 with an empty page rather than an error when the queue is clear.
+
+        '
+      operationId: getFollowUpQueue
       parameters:
       - name: status
         in: query
@@ -2655,9 +3823,21 @@ paths:
     get:
       tags:
       - CRM Follow-ups
-      summary: Get follow-up task
-      description: Retrieve a single follow-up task
-      operationId: get_2
+      summary: Get Follow-Up Task
+      description: 'Returns one follow-up task with its party, vehicle, type, due date, assignee, status, and any recorded outcome and booking references.
+
+        Use this tool when the task id is already known; use getFollowUpQueue instead to discover tasks by status, assignee, or type.
+
+        Preconditions: the follow-up task must exist.
+
+        Required inputs: taskId (UUID) as a path parameter; there is no request body.
+
+        Emits a CRM_FOLLOWUP_GET audit event; no state changes occur.
+
+        Returns 404 when no follow-up task exists for the supplied taskId.
+
+        '
+      operationId: getFollowUpTask
       parameters:
       - name: taskId
         in: path
@@ -2685,9 +3865,21 @@ paths:
     get:
       tags:
       - CRM Party Relationships
-      summary: Get contacts for a commercial account
-      description: Retrieves all individuals associated with a commercial account with their roles
-      operationId: getContacts
+      summary: Get Commercial Account Contacts
+      description: 'Returns the individuals related to a commercial account through party relationships, with their roles, primary-billing flag, effective dates, and status.
+
+        Use this tool when listing who is associated with an account through the relationship model; use getContactsWithRoles instead for the contact-role assignment view of the same account.
+
+        Preconditions: the commercial party must exist.
+
+        Required inputs: partyId (UUID) as a path parameter; roles optionally filters on APPROVER, BILLING, PRIMARY_CONTACT, DRIVER, or TECHNICAL, and status optionally filters on ACTIVE or INACTIVE.
+
+        Emits a CRM_ACCOUNT_CONTACTS_GET audit event; no state changes occur.
+
+        Returns 404 when no commercial party exists for the supplied partyId.
+
+        '
+      operationId: getCommercialAccountContacts
       parameters:
       - name: partyId
         in: path
@@ -2751,8 +3943,20 @@ paths:
     get:
       tags:
       - CRM Accounts
-      summary: List billing terms
-      description: Returns the reference list of all available billing terms. This is a static reference endpoint; it does not vary per party or account.
+      summary: List Billing Term Options
+      description: 'Returns the static reference list of billing term options: NET_30, NET_60, NET_90, COD, and PREPAID, each with a display label and net-day count.
+
+        Use this tool when populating a billing-terms dropdown before createCrmCommercialAccount or upsertPartyBillingRules; do not use upsertPartyBillingRules to discover valid terms, which writes configuration rather than listing options.
+
+        Preconditions: none; the list is compiled into the service and identical for every caller.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        No events are emitted and no state changes; this is a read-only reference lookup.
+
+        Returns 200 with the full five-entry list in every successful call; there are no business error responses.
+
+        '
       operationId: listBillingTerms
       responses:
         '200':
@@ -2788,9 +3992,21 @@ paths:
     get:
       tags:
       - CRM Person-Link Reconciliation
-      summary: Reconcile person links
-      description: Verify every person_party.person_id resolves to a pos-people person (ADR-0015 I1).
-      operationId: reconcile
+      summary: Reconcile Person Links
+      description: 'Produces an integrity report verifying that every person_party.person_id in this module resolves to a canonical person in pos-people, the precondition for keeping person_party as a thin link under ADR-0015.
+
+        Use this tool for admin integrity checks after imports or migrations; do not use searchPersons, which looks up individual customers rather than auditing link health.
+
+        Preconditions: pos-people must be reachable to resolve the links being verified.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        No events are emitted and no state changes; the report is computed on demand and nothing is repaired automatically.
+
+        Returns 200 with the reconciliation report, including any person ids that failed to resolve.
+
+        '
+      operationId: reconcilePersonLinks
       responses:
         '200':
           description: Reconciliation report returned
@@ -2804,8 +4020,20 @@ paths:
     get:
       tags:
       - CRM Accounts
-      summary: Get account tier
-      description: Retrieve the tier level for a specific account
+      summary: Get Account Tier
+      description: 'Returns the currently assigned tier for a commercial account, including who assigned it, when, and whether a manual override is active; unassigned accounts report STANDARD.
+
+        Use this tool when the stored tier of a known commercial account is needed; do not use resolveAccountTier, which recomputes a recommended tier from revenue and contract inputs.
+
+        Preconditions: a commercial party must exist for the accountId; person parties have no tier.
+
+        Required inputs: accountId (UUID) as a path parameter; there is no request body.
+
+        Emits a CUSTOMER_ACCOUNT_TIER_GET audit event; no state changes occur.
+
+        Returns 404 when no commercial account exists for the supplied accountId.
+
+        '
       operationId: getAccountTier
       parameters:
       - name: accountId
@@ -2835,8 +4063,20 @@ paths:
     get:
       tags:
       - CRM Accounts
-      summary: Get party details
-      description: Retrieve details for a specific party by ID
+      summary: Get Party Details
+      description: 'Returns the identity projection of a single party, resolving commercial parties first and falling back to person parties, whose display name is resolved from the person directory.
+
+        Use this tool when a party id is already known; use browseParties or searchParties instead when locating a party by name, status, or customer number.
+
+        Preconditions: a commercial or person party must exist for the supplied partyId.
+
+        Required inputs: partyId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when neither a commercial nor a person party exists for the supplied partyId.
+
+        '
       operationId: getParty
       parameters:
       - name: partyId
@@ -2866,8 +4106,20 @@ paths:
     get:
       tags:
       - CRM Accounts
-      summary: Check for duplicate commercial parties
-      description: Search for existing parties with a similar legal name to detect potential duplicates before creating a new commercial account.
+      summary: Check Commercial Party Duplicates
+      description: 'Checks for existing commercial parties whose legal name contains the supplied name, flagging case-insensitive exact matches as EXACT with score 1.0 and other containment matches as FUZZY with score 0.7.
+
+        Use this tool before createCrmCommercialAccount to avoid creating a duplicate customer; do not use searchParties for this, which does not classify match strength or surface an exactMatchPartyId.
+
+        Preconditions: none; the check reads existing commercial parties only.
+
+        Required inputs: legalName as a query parameter with at least 2 non-whitespace characters; there is no request body.
+
+        Emits a CUSTOMER_PARTY_DUPLICATE_CHECK audit event; no state changes occur.
+
+        Returns 400 when legalName is blank or shorter than 2 characters after trimming, and 200 with duplicatesFound false when no similar party exists.
+
+        '
       operationId: checkPartyDuplicates
       parameters:
       - name: legalName
@@ -2899,9 +4151,21 @@ paths:
     delete:
       tags:
       - CRM Suppression
-      summary: Lift a suppression
-      description: Remove a suppression entry
-      operationId: remove
+      summary: Lift Address Suppression
+      description: 'Removes one suppression entry, allowing marketing to reach the address again subject to normal consent rules.
+
+        Use this tool when an address was suppressed in error or a legal block is lifted; do not use updateMarketingConsent for this, which cannot override a suppression entry.
+
+        Preconditions: the suppression entry must exist.
+
+        Required inputs: suppressionId (UUID) as a path parameter; there is no request body.
+
+        Emits a CRM_SUPPRESSION_REMOVE event and publishes a suppression-changed fact so consumers stop blocking the address.
+
+        Returns 404 when no suppression entry exists for the supplied suppressionId.
+
+        '
+      operationId: removeSuppressionEntry
       parameters:
       - name: suppressionId
         in: path
@@ -2925,9 +4189,21 @@ paths:
     delete:
       tags:
       - CRM Segments
-      summary: Unpin member
-      description: Remove a party from a static segment
-      operationId: removeMember
+      summary: Unpin Segment Member
+      description: 'Removes one party from a static segment''s pinned member list.
+
+        Use this tool when a hand-picked party should leave the audience; do not use deleteSegment, which removes the whole segment and every member with it.
+
+        Preconditions: none are enforced; removing a party that is not a member, or naming an unknown segment, is a silent no-op.
+
+        Required inputs: segmentId and partyId (UUIDs) as path parameters; there is no request body.
+
+        Emits a CRM_SEGMENT_MEMBER_REMOVE event; at most one membership row is deleted.
+
+        Returns 204 in every authorized call, including when nothing was actually removed.
+
+        '
+      operationId: removeSegmentMember
       parameters:
       - name: segmentId
         in: path
@@ -2955,9 +4231,21 @@ paths:
     delete:
       tags:
       - CRM Tags
-      summary: Remove tag from party
-      description: 'Detach a tag from a party. Idempotent: removing an absent tag succeeds.'
-      operationId: removeTag
+      summary: Remove Tag From Party
+      description: 'Detaches a tag from a party while leaving the tag itself in the catalog.
+
+        Use this tool when a label no longer applies to a party; use deleteTag instead to remove the tag from the catalog and every party at once.
+
+        Preconditions: none; removing a tag that is not assigned is an idempotent no-op.
+
+        Required inputs: partyId and tagId (UUIDs) as path parameters; there is no request body.
+
+        Emits a CRM_PARTY_TAG_REMOVE event and publishes a party-tag-changed fact when an assignment was actually removed.
+
+        Returns 204 in every authorized call, including when nothing was assigned.
+
+        '
+      operationId: removeTagFromParty
       parameters:
       - name: partyId
         in: path
@@ -2985,9 +4273,21 @@ paths:
     delete:
       tags:
       - CRM Party Relationships
-      summary: Deactivate a party relationship
-      description: Soft-deletes a relationship by setting its effective end date
-      operationId: deactivateRelationship
+      summary: Deactivate Party Relationship
+      description: 'Soft-deletes a relationship between a person and a commercial account by setting its effective end date to today; the historical record is retained.
+
+        Use this tool when a person no longer represents the account; do not use createPartyRelationship to fix a wrong assignment without first deactivating the old one, since overlapping active roles are rejected.
+
+        Preconditions: the relationship must exist; the partyId in the path is not validated against the relationship on this operation.
+
+        Required inputs: partyId and relationshipId (UUIDs) as path parameters; there is no request body.
+
+        Emits a CRM_RELATIONSHIP_DEACTIVATE event and re-emits the person''s identity fact because their account linkage changed.
+
+        Returns 404 when no relationship exists for the supplied relationshipId.
+
+        '
+      operationId: deactivatePartyRelationship
       parameters:
       - name: partyId
         in: path
@@ -3021,7 +4321,7 @@ components:
   schemas:
     CustomerDTO:
       type: object
-      description: Customer object to be created
+      description: Customer data transfer object for API operations
       properties:
         id:
           type: string
@@ -3485,7 +4785,7 @@ components:
       - roleCode
     UpdateContactRolesRequest:
       type: object
-      description: Role assignment request
+      description: Request to update the set of role assignments for a contact
       properties:
         version:
           type: string
@@ -4679,7 +5979,7 @@ components:
       - type
     UpsertCommunicationPreferencesRequest:
       type: object
-      description: Communication preferences to set
+      description: Request to upsert communication preferences and consent flags for a party
       properties:
         version:
           type: string
@@ -4886,7 +6186,7 @@ components:
       - roles
     ResolveAccountTierRequest:
       type: object
-      description: Tier resolution request
+      description: Request to compute account tier based on business rules
       properties:
         accountId:
           type: string
@@ -4977,7 +6277,7 @@ components:
       - tierApplied
     CreateCommercialAccountRequest:
       type: object
-      description: Commercial account creation request
+      description: Request to create a commercial account (party)
       properties:
         legalName:
           type: string
@@ -5153,7 +6453,7 @@ components:
       - partyId
     CreateVehicleForPartyRequest:
       type: object
-      description: Vehicle creation request
+      description: Request to create a vehicle record for a party
       properties:
         vinNumber:
           type: string
@@ -5235,7 +6535,7 @@ components:
       - vehicleId
     MergePartiesRequest:
       type: object
-      description: Merge request with source party IDs
+      description: Request to merge a duplicate (losing) party into a survivor party
       properties:
         survivorPartyId:
           type: string
@@ -5294,7 +6594,7 @@ components:
       - survivorPartyId
     SearchPartiesRequest:
       type: object
-      description: Search criteria
+      description: Request to search parties with optional filters and pagination
       properties:
         name:
           type: string

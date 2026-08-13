@@ -9,6 +9,10 @@ import com.positivity.bulkloader.service.FileStorageService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.GatewaySecurityConstants;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.SchemaProperty;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.io.IOException;
@@ -17,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -50,12 +55,56 @@ public class FileUploadController {
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_FILE_UPLOAD", apiVersion = "1")
     @Operation(
-            summary = "Upload a file for a bulk load job",
-            description =
-                    "Uploads a file for the specified bulk load job. The file is stored and associated with the job for later processing. "
-                            + "The job must be in CREATED or UPLOADING state. Multiple files can be uploaded, but only the latest file will be processed.")
+            operationId = "uploadJobFile",
+            summary = "Upload a File for Bulk Load Job",
+            description = """
+                    Uploads the source data file for a bulk load job as a single multipart request, stores it, and \
+                    runs content detection to propose column mappings.
+                    Use this tool for files small enough to send in one request; use createTusUpload instead for \
+                    large files that need resumable, chunked upload.
+                    Preconditions: the job must exist, belong to the authenticated operator, and not be in a \
+                    terminal state (COMPLETED, CANCELLED or FAILED); a CREATED job moves to UPLOADING.
+                    Required inputs: a multipart form part named file; formats understood by content detection are \
+                    csv, tsv, txt, psv, xlsx, xlsm, xls, json, xml, yaml and yml, with the first row or record \
+                    treated as the column headers.
+                    Emits a BULK_LOADER_FILE_UPLOAD event and persists suggested column mappings from detection; \
+                    when detection fails the upload still succeeds with a null detection field in the response, and \
+                    re-uploading replaces the file to be processed because only the latest upload is used.
+                    Returns 404 when the job does not exist for the authenticated operator, and 409 when the job is \
+                    already in a terminal state.
+                    """,
+            requestBody =
+                    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Multipart form with a single part named file carrying the source data file to import.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "multipart/form-data",
+                                            schemaProperties =
+                                                    @SchemaProperty(
+                                                            name = "file",
+                                                            schema = @Schema(type = "string", format = "binary")),
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "CSV upload",
+                                                            value =
+                                                                    "file=@products-2026-01.csv (binary content; first row is the header row)"))))
     @ApiResponse(responseCode = "200", description = "File uploaded and content detected")
-    @ApiResponse(responseCode = "404", description = "Job not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Job not found",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Job is in a terminal state and cannot accept uploads",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<FileUploadResponse> uploadFile(
             @PathVariable @NonNull UUID jobId, @RequestParam("file") @NonNull MultipartFile file) throws IOException {
         String operatorId = currentOperatorId();
@@ -92,14 +141,42 @@ public class FileUploadController {
     @PostMapping("/{jobId}/process")
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_JOB_START", apiVersion = "1")
-    @Operation(
-            summary = "Launch a bulk load job for processing",
-            description =
-                    "Starts Spring Batch execution for the specified bulk load job and transitions it to PROCESSING. "
-                            + "The job must be in CREATED, UPLOADING, or MAPPING_REVIEW state and must already have a persisted upload and locationId.")
+    @Operation(operationId = "startJobProcessing", summary = "Launch a Bulk Load Job", description = """
+                    Starts asynchronous Spring Batch processing for a bulk load job and transitions it to PROCESSING.
+                    Use this tool once the uploaded file is persisted and the mappings are acceptable; do not treat \
+                    the 200 response as import completion, and poll getBulkLoadJob instead because the batch run \
+                    continues in the background.
+                    Preconditions: the job must belong to the authenticated operator, be in CREATED, UPLOADING or \
+                    MAPPING_REVIEW state, and already have both a persisted uploaded file and a locationId assigned.
+                    Required inputs: jobId (UUID) as a path parameter; there is no request body, and the caller's \
+                    Authorization bearer token is forwarded to downstream domain services for the row-level writes.
+                    Emits a BULK_LOADER_JOB_START event, launches the Spring Batch job, and stamps startedAt; row \
+                    counters on the job update as chunks are processed.
+                    Returns 404 when the job does not exist, 403 when it belongs to another operator, and 409 when \
+                    the state is not launchable or the uploaded file or locationId is missing.
+                    """)
     @ApiResponse(responseCode = "200", description = "Job transitioned to PROCESSING")
-    @ApiResponse(responseCode = "404", description = "Job not found")
-    @ApiResponse(responseCode = "409", description = "Invalid state transition")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Job does not belong to the authenticated operator",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Job not found",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Invalid state transition",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<BulkLoadJobResponse> startProcessing(@PathVariable @NonNull UUID jobId) {
         String operatorId = currentOperatorId();
         bulkLoadJobService.startProcessing(jobId, operatorId, currentAuthorizationHeader());

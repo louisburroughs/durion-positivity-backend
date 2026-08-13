@@ -69,8 +69,19 @@ public class FinancialReportingController {
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "REPORT_INCOME_STATEMENT_GENERATE", apiVersion = "1")
     @Operation(
+            operationId = "generateIncomeStatement",
             summary = "Generate Income Statement",
-            description = "Generate Profit & Loss report for a date range with revenue, expenses, and net income",
+            description = """
+                    Generates the Profit and Loss statement for a date range, aggregating POSTED journal \
+                    activity into revenue, expense and net-income lines.
+                    Use this tool for period profitability; do not use generateBalanceSheet, which is the \
+                    point-in-time financial position, and use drilldownToAccounts to expand a statement line.
+                    Preconditions: none; a period with no POSTED activity yields zeroed lines.
+                    Required inputs: startDate and endDate (ISO dates) as query parameters, with endDate on \
+                    or after startDate.
+                    Emits a REPORT_INCOME_STATEMENT_GENERATE audit event; no state changes.
+                    Returns 400 when the end date is before the start date.
+                    """,
             tags = {"Financial Reporting"})
     @ApiResponse(
             responseCode = "200",
@@ -112,8 +123,19 @@ public class FinancialReportingController {
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "REPORT_BALANCE_SHEET_GENERATE", apiVersion = "1")
     @Operation(
+            operationId = "generateBalanceSheet",
             summary = "Generate Balance Sheet",
-            description = "Generate Balance Sheet as of a specific date with assets, liabilities, and equity",
+            description = """
+                    Generates the Balance Sheet as of a specific date, presenting assets, liabilities and \
+                    equity from POSTED journal activity.
+                    Use this tool for financial position at a point in time; do not use \
+                    generateIncomeStatement, which covers activity over a period, and use \
+                    generateTrialBalance for the raw per-account debit and credit proof.
+                    Preconditions: none; a date with no POSTED activity yields zeroed sections.
+                    Required inputs: asOfDate (ISO date) as a query parameter.
+                    Emits a REPORT_BALANCE_SHEET_GENERATE audit event; no state changes.
+                    Returns 400 when the asOfDate is missing or malformed.
+                    """,
             tags = {"Financial Reporting"})
     @ApiResponse(
             responseCode = "200",
@@ -140,9 +162,19 @@ public class FinancialReportingController {
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "REPORT_TRIAL_BALANCE_GENERATE", apiVersion = "1")
     @Operation(
+            operationId = "generateTrialBalance",
             summary = "Generate Trial Balance",
-            description =
-                    "Generate Trial Balance as of a specific date: per-account debit/credit/balance rows from POSTED journal lines, grand totals proving sum(debit) == sum(credit), and an entry-number gap-check footnote per monthly sequence scope",
+            description = """
+                    Generates the Trial Balance as of a specific date: per-account debit, credit and balance \
+                    rows from POSTED journal lines, grand totals proving total debits equal total credits, \
+                    and an entry-number gap-check footnote per monthly sequence scope.
+                    Use this tool to prove ledger integrity before period close; do not use \
+                    generateBalanceSheet, which classifies balances into statement sections.
+                    Preconditions: none; rows are empty when no POSTED data exists as of the date.
+                    Required inputs: asOf (ISO date) as a query parameter.
+                    Emits a REPORT_TRIAL_BALANCE_GENERATE audit event; no state changes.
+                    Returns 400 when the asOf date is missing or malformed.
+                    """,
             tags = {"Financial Reporting"})
     @ApiResponse(
             responseCode = "200",
@@ -181,8 +213,21 @@ public class FinancialReportingController {
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "REPORT_DRILLDOWN_ACCOUNTS", apiVersion = "1")
     @Operation(
-            summary = "Drilldown to Accounts",
-            description = "Show which GL accounts contribute to a specific statement line",
+            operationId = "drilldownToAccounts",
+            summary = "Drilldown To Accounts",
+            description = """
+                    Shows which GL accounts contribute to a specific financial-statement line over a date \
+                    range, with each account's contribution amount.
+                    Use this tool to expand one line of an income statement or balance sheet; do not use \
+                    drilldownToJournalLines, which is the next level down from an account to its source \
+                    entries.
+                    Preconditions: the statementLineCode must follow the uppercase-and-underscores format \
+                    (e.g. REVENUE_SALES).
+                    Required inputs: statementLineCode as a path parameter plus startDate and endDate (ISO \
+                    dates), with endDate on or after startDate.
+                    Emits a REPORT_DRILLDOWN_ACCOUNTS audit event; no state changes.
+                    Returns 400 when the code format is invalid or the end date precedes the start date.
+                    """,
             tags = {"Financial Reporting"})
     @ApiResponse(
             responseCode = "200",
@@ -235,8 +280,19 @@ public class FinancialReportingController {
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "REPORT_DRILLDOWN_JOURNAL_LINES", apiVersion = "1")
     @Operation(
-            summary = "Drilldown to Journal Lines",
-            description = "Show source journal entries contributing to a GL account balance",
+            operationId = "drilldownToJournalLines",
+            summary = "Drilldown To Journal Lines",
+            description = """
+                    Shows the source journal lines contributing to a GL account's balance over a date range, \
+                    completing the statement-to-transaction audit path.
+                    Use this tool after drilldownToAccounts has identified the account of interest; use \
+                    getJournalEntry instead to open a full entry from a returned line.
+                    Preconditions: the accountId path parameter must be a UUID.
+                    Required inputs: accountId (UUID) as a path parameter plus startDate and endDate (ISO \
+                    dates), with endDate on or after startDate.
+                    Emits a REPORT_DRILLDOWN_JOURNAL_LINES audit event; no state changes.
+                    Returns 400 when the account id is not a UUID or the end date precedes the start date.
+                    """,
             tags = {"Financial Reporting"})
     @ApiResponse(
             responseCode = "200",
@@ -296,9 +352,20 @@ public class FinancialReportingController {
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "REPORT_GENERAL_LEDGER_GENERATE", apiVersion = "1")
     @Operation(
+            operationId = "generateGeneralLedger",
             summary = "Generate General Ledger",
-            description =
-                    "Generate a General Ledger report for a date range: per-account chronological POSTED journal lines with a running balance, opening/closing balances, and grand totals. Optionally filter to a single account.",
+            description = """
+                    Generates the General Ledger report for a date range: per-account chronological POSTED \
+                    journal lines with a running balance, opening and closing balances, and grand totals.
+                    Use this tool for full ledger detail over a period; do not use generateTrialBalance, \
+                    which shows only closing balances per account, and use drilldownToJournalLines for a \
+                    single account slice.
+                    Preconditions: none; sections are empty when no POSTED activity exists.
+                    Required inputs: startDate and endDate (ISO dates), with endDate on or after startDate; \
+                    accountId (UUID) is optional and restricts the report to one account.
+                    Emits a REPORT_GENERAL_LEDGER_GENERATE audit event; no state changes.
+                    Returns 400 when the account id is not a UUID or the end date precedes the start date.
+                    """,
             tags = {"Financial Reporting"})
     @ApiResponse(
             responseCode = "200",
@@ -355,9 +422,18 @@ public class FinancialReportingController {
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "REPORT_AGED_RECEIVABLES_GENERATE", apiVersion = "1")
     @Operation(
+            operationId = "generateAgedReceivables",
             summary = "Generate Aged Receivables",
-            description =
-                    "Generate the Aged Receivables report as of a date: per-customer open invoice balances bucketed by days past due (0-30 / 31-60 / 61-90 / 90+) with grand totals.",
+            description = """
+                    Generates the Aged Receivables report as of a date: per-customer open invoice balances \
+                    bucketed by days past due (0-30, 31-60, 61-90, 90+) with grand totals.
+                    Use this tool to review customer collection exposure; do not use generateAgedPayables, \
+                    which is the vendor-side mirror of this report.
+                    Preconditions: none; rows are empty when no open receivables exist.
+                    Required inputs: asOfDate (ISO date) as a query parameter.
+                    Emits a REPORT_AGED_RECEIVABLES_GENERATE audit event; no state changes.
+                    Returns 400 when the asOfDate is missing or malformed.
+                    """,
             tags = {"Financial Reporting"})
     @ApiResponse(
             responseCode = "200",
@@ -396,9 +472,19 @@ public class FinancialReportingController {
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "REPORT_AGED_PAYABLES_GENERATE", apiVersion = "1")
     @Operation(
+            operationId = "generateAgedPayables",
             summary = "Generate Aged Payables",
-            description =
-                    "Generate the Aged Payables report as of a date: per-vendor open vendor-bill balances bucketed by days past due (0-30 / 31-60 / 61-90 / 90+) with grand totals.",
+            description = """
+                    Generates the Aged Payables report as of a date: per-vendor open vendor-bill balances \
+                    bucketed by days past due (0-30, 31-60, 61-90, 90+) with grand totals.
+                    Use this tool to review what is owed to vendors and how overdue it is; do not use \
+                    generateAgedReceivables, which is the customer-side mirror, and use listApBills to pick \
+                    individual bills for payment.
+                    Preconditions: none; rows are empty when no open payables exist.
+                    Required inputs: asOfDate (ISO date) as a query parameter.
+                    Emits a REPORT_AGED_PAYABLES_GENERATE audit event; no state changes.
+                    Returns 400 when the asOfDate is missing or malformed.
+                    """,
             tags = {"Financial Reporting"})
     @ApiResponse(
             responseCode = "200",
@@ -438,9 +524,21 @@ public class FinancialReportingController {
     @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
     @EmitEvent(id = "REPORT_TAX_LIABILITY_GENERATE", apiVersion = "1")
     @Operation(
-            summary = "Generate Sales-Tax Liability report",
-            description =
-                    "Generate the reconciliation-grade sales-tax liability report for a date range: per-jurisdiction (state/county/city/special) taxable base, exempt base with reasons, gross tax collected, POSTED credit-memo reversals netted pro-rata, and net tax; plus a GL-drift column reconciling total net tax against the Sales-Tax Payable (2200) account activity. Accrual basis: invoice tax bucketed by finalization period, credits by posting period.",
+            operationId = "generateTaxLiabilityReport",
+            summary = "Generate Sales-Tax Liability Report",
+            description = """
+                    Generates the reconciliation-grade sales-tax liability report for a date range: \
+                    per-jurisdiction (state, county, city, special) taxable base, exempt base with reasons, \
+                    gross tax collected, POSTED credit-memo reversals netted pro-rata, and net tax, plus a \
+                    GL-drift column reconciling total net tax against Sales-Tax Payable (2200) activity.
+                    Use this tool for filing-period review on the accrual basis, where invoice tax buckets by \
+                    finalization period and credits by posting period; do not use createTaxLiabilitySnapshot, \
+                    which freezes a closed period's figures for filing.
+                    Preconditions: none; rows are empty when no in-period tax exists.
+                    Required inputs: startDate and endDate (ISO dates), with endDate on or after startDate.
+                    Emits a REPORT_TAX_LIABILITY_GENERATE audit event; no state changes.
+                    Returns 400 when the end date is before the start date.
+                    """,
             tags = {"Financial Reporting"})
     @ApiResponse(
             responseCode = "200",

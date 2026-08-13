@@ -29,8 +29,20 @@ paths:
     get:
       tags:
       - Billing Rules
-      summary: Get billing rules for a party/customer
-      description: Retrieve the current billing rules configuration for a commercial account
+      summary: Get Billing Rules for a Party
+      description: 'Returns the billing rules configured for a commercial account party: purchase-order requirement, payment terms code, invoice delivery method, and invoice grouping strategy.
+
+        Use this tool when the billing configuration of a known party is needed before invoicing; do not use upsertBillingRules, which creates or replaces the configuration.
+
+        Preconditions: a billing rules record must already exist for the party, created explicitly or defaulted when the commercial account was provisioned.
+
+        Required inputs: partyId (UUID) as a path parameter; there is no request body.
+
+        Emits a BILLING_RULES_GET audit event; no state changes — this is a read-only projection.
+
+        Returns 404 when no billing rules are configured for the party, and 400 with an empty body when partyId is not a well-formed UUID.
+
+        '
       operationId: getBillingRules
       parameters:
       - name: partyId
@@ -59,8 +71,20 @@ paths:
     put:
       tags:
       - Billing Rules
-      summary: Create or update billing rules
-      description: Idempotent upsert of billing rules for a commercial account
+      summary: Create or Update Billing Rules
+      description: 'Creates or replaces the billing rules for a commercial account party in one idempotent upsert keyed on the path partyId, which overrides any partyId carried in the body.
+
+        Use this tool when configuring how a party is invoiced; use getBillingRules instead to read the current configuration without changing it.
+
+        Preconditions: paymentTermsCode must belong to the validated vocabulary (DUE_ON_RECEIPT, NET_10, NET_15, NET_30, NET_45, NET_60); a missing record is created and an existing one is updated in place.
+
+        Required inputs: partyId (UUID path), purchaseOrderRequired (boolean), paymentTermsCode, invoiceDeliveryMethod (EMAIL, PORTAL, MAIL) and invoiceGroupingStrategy (PER_WORKORDER, PER_VEHICLE, SINGLE_INVOICE); updatedBy is taken from the security context, never from the body.
+
+        Emits a BILLING_RULES_UPSERT event and publishes a billing-rules-updated notification; due dates of already-finalized invoices are never recomputed from a terms change.
+
+        Returns 201 when the record is created, 200 when an existing record is updated, and 400 with an empty body when partyId is not a well-formed UUID.
+
+        '
       operationId: upsertBillingRules
       parameters:
       - name: partyId
@@ -69,10 +93,20 @@ paths:
         schema:
           type: string
       requestBody:
+        description: Billing rules configuration to store for the party.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BillingRulesDTO'
+            examples:
+              Net-30 emailed per-workorder invoicing:
+                description: Net-30 emailed per-workorder invoicing
+                value:
+                  partyId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  purchaseOrderRequired: true
+                  paymentTermsCode: NET_30
+                  invoiceDeliveryMethod: EMAIL
+                  invoiceGroupingStrategy: PER_WORKORDER
         required: true
       responses:
         '200':
@@ -102,14 +136,36 @@ paths:
     post:
       tags:
       - StandaloneRefund
-      summary: Record standalone refund for a customer party
-      description: Record a refund anchored to a customer party when no invoice exists in the system; the disbursement itself happens out of band
-      operationId: refundPartyStandalone
+      summary: Record Standalone Party Refund
+      description: 'Records a refund anchored directly to a customer party when no invoice exists in this system, such as a vendor-paid warranty settlement on a predecessor-system sale; the cash disbursement itself happens out of band.
+
+        Use this tool only when there is no invoice to anchor to; use createStandaloneInvoiceRefund instead when an invoice is on file, and refundPayment when the captured payment itself exists.
+
+        Preconditions: the caller needs the finance-only ISSUE_MANUAL_REFUND authority; because there is no invoice, no refundable-amount cap applies.
+
+        Required inputs: partyId (non-blank, max 64 characters), amount (positive) and reason (a RefundReason); notes and externalReference are optional, and a retry replaying the same externalReference among the party''s purely party-anchored records returns the existing record.
+
+        Emits an INVOICE_PARTY_STANDALONE_REFUND event and stores a COMPLETED refund record anchored to the party; no gateway call is made.
+
+        Returns 201 with the refund record, and 400 when partyId is blank.
+
+        '
+      operationId: createStandalonePartyRefund
       requestBody:
+        description: Out-of-band refund to record against a customer party with no invoice on file.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PartyStandaloneRefundRequest'
+            examples:
+              Vendor-paid settlement:
+                description: Vendor-paid settlement
+                value:
+                  partyId: party-000123
+                  amount: 25.0
+                  reason: CUSTOMER_RETURN
+                  notes: Vendor-paid warranty settlement, no invoice on file
+                  externalReference: WC-2026-000042
         required: true
       responses:
         '201':
@@ -132,14 +188,41 @@ paths:
     post:
       tags:
       - Invoice
-      summary: Create invoice
-      description: Create invoice draft from completed workorder data
+      summary: Create Invoice Draft from Workorder
+      description: 'Creates a DRAFT invoice from completed workorder data, pricing the supplied line items, calculating draft tax against the shop location''s jurisdiction, and assigning the permanent invoice number immediately.
+
+        Use this tool for workorder billing; do not use createInvoiceFromOrder, which fronts a sales order at counter-sale checkout with order-authoritative totals.
+
+        Preconditions: the workorder must be complete enough to bill; the call is idempotent on workorderId — a replay returns the workorder''s existing invoice instead of creating a duplicate.
+
+        Required inputs: workorderId (UUID); estimateId, approvalId, locationId, customerId, idempotencyKey and lineItems (description, quantity, unitPrice, amount, optional type) are optional, and a missing lineItems list produces an empty zero-subtotal draft.
+
+        Emits an INVOICE_CREATE event, persists the per-line tax breakdown, and publishes an invoice-updated notification.
+
+        Returns 201 with the invoice (existing or new), and 400 when workorderId is missing.
+
+        '
       operationId: createInvoice
       requestBody:
+        description: Workorder billing data the invoice draft is built from.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/InvoiceCreationRequest'
+            examples:
+              Workorder invoice draft:
+                description: Workorder invoice draft
+                value:
+                  workorderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a30
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a31
+                  customerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a32
+                  idempotencyKey: inv-create-wo-1234
+                  lineItems:
+                  - description: Brake pad replacement
+                    quantity: 2.0
+                    unitPrice: 45.0
+                    amount: 90.0
+                    type: LABOR
         required: true
       responses:
         '201':
@@ -157,8 +240,20 @@ paths:
     post:
       tags:
       - Invoice
-      summary: Revert finalized invoice
-      description: 'Revert a FINALIZED invoice back to DRAFT within 24h of finalization and before GL posting (Story #13, AC6)'
+      summary: Revert Finalized Invoice to Draft
+      description: 'Reverts a FINALIZED invoice back to DRAFT within 24 hours of finalization, before GL posting has made it immutable, and voids the provider tax document committed at finalization.
+
+        Use this tool to correct a wrongly finalized invoice; do not use cancelInvoice, which terminally cancels a DRAFT invoice on the order-void path.
+
+        Preconditions: the invoice must be FINALIZED (POSTED is immutable), less than 24 hours must have elapsed since finalizedAt, and callers without invoice:finalize:override (or a manager/admin role) must supply a valid elevation token from elevateManagerApproval as managerApprovalCode.
+
+        Required inputs: invoiceId (UUID) as a path parameter plus managerApprovalCode and a reason in the body; the reverting actor and approving manager are captured for audit.
+
+        Emits an INVOICE_DRAFT_REVERT event, publishes an invoice-updated notification, and issues a tax void toward pos-tax for the reverted document.
+
+        Returns 200 with the DRAFT invoice, 404 when the invoice does not exist, 409 when it is POSTED, not FINALIZED, or the 24-hour window has expired, and 400 when the approval code is blank, invalid, or expired.
+
+        '
       operationId: revertInvoice
       parameters:
       - name: invoiceId
@@ -168,10 +263,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Manager approval and business reason authorizing the reversion.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RevertRequest'
+            examples:
+              Revert with approval:
+                description: Revert with approval
+                value:
+                  managerApprovalCode: MGR-ELEV-TOKEN-abc123
+                  reason: Incorrect line item billed
         required: true
       responses:
         '200':
@@ -190,9 +292,21 @@ paths:
     get:
       tags:
       - PaymentReversal
-      summary: List refunds for an invoice
-      description: Return every refund record anchored to the invoice — payment-intent refunds whose intent belongs to the invoice and standalone invoice-anchored refunds alike — for warranty settlement reconciliation
-      operationId: listRefunds
+      summary: List Refunds for an Invoice
+      description: 'Returns every refund record anchored to the invoice — refunds of captured payment intents and standalone invoice-anchored refunds alike — for warranty-settlement reconciliation.
+
+        Use this tool to reconcile what has already been returned before issuing another refund; do not use refundPayment or createStandaloneInvoiceRefund, which create refunds rather than list them.
+
+        Preconditions: the invoice must exist; the caller needs the invoice:manage authority.
+
+        Required inputs: invoiceId (UUID) as a path parameter; there is no request body or filtering.
+
+        Emits an INVOICE_REFUND_LIST audit event; no state changes — this is a read-only projection.
+
+        Returns 404 when no invoice exists for the supplied id.
+
+        '
+      operationId: listInvoiceRefunds
       parameters:
       - name: invoiceId
         in: path
@@ -224,9 +338,21 @@ paths:
     post:
       tags:
       - StandaloneRefund
-      summary: Record standalone refund for an invoice
-      description: Record a refund against an invoice whose original payment is not in the system; the disbursement itself happens out of band
-      operationId: refundInvoiceStandalone
+      summary: Record Standalone Invoice Refund
+      description: 'Records a refund against an invoice whose original payment is not in this system — predecessor-system sales, pre-deploy invoices, vendor-paid warranty work — while the cash disbursement itself happens out of band (till, check, or vendor payment).
+
+        Use this tool only when no captured payment intent exists to refund; do not use refundPayment, which reverses a CAPTURED gateway payment, and use createStandalonePartyRefund instead when no invoice is on file at all.
+
+        Preconditions: the invoice must exist, the caller needs the finance-only ISSUE_MANUAL_REFUND authority, and cumulative refunds across payment-anchored and standalone records may not exceed the invoice total.
+
+        Required inputs: amount (positive) and reason (a RefundReason such as CUSTOMER_RETURN); notes and externalReference are optional, and a retry replaying the same externalReference returns the existing record instead of double-recording.
+
+        Emits an INVOICE_STANDALONE_REFUND event and stores a COMPLETED refund record anchored to the invoice; no gateway call is made.
+
+        Returns 201 with the refund record, 404 when the invoice does not exist, and 422 when the amount exceeds the invoice''s remaining refundable balance.
+
+        '
+      operationId: createStandaloneInvoiceRefund
       parameters:
       - name: invoiceId
         in: path
@@ -235,10 +361,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Out-of-band refund to record against the invoice.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/StandaloneRefundRequest'
+            examples:
+              Walk-in warranty refund:
+                description: Walk-in warranty refund
+                value:
+                  amount: 25.0
+                  reason: CUSTOMER_RETURN
+                  notes: Walk-in warranty claim on a predecessor-system cash sale
+                  externalReference: WC-2026-000042
         required: true
       responses:
         '201':
@@ -267,8 +402,20 @@ paths:
     post:
       tags:
       - Receipt
-      summary: Generate invoice receipt
-      description: Generate a receipt for an invoice payment using the requested terminal and template
+      summary: Generate Receipt for Invoice Payment
+      description: 'Generates a receipt record for an invoice payment, assigning a unique reference built from the invoice number, a UTC timestamp and a per-invoice sequence, with the cashier taken from the security context.
+
+        Use this tool once per payment after tender; do not use reprintReceipt, which duplicates a receipt that already exists.
+
+        Preconditions: the invoice and payment intent must exist, the intent must belong to the invoice, and the caller needs the GENERATE_RECEIPT authority.
+
+        Required inputs: paymentIntentId (UUID), terminalId, templateId and templateVersion.
+
+        Emits an INVOICE_RECEIPT_GENERATE event and stores the receipt in GENERATED status with a zero reprint count; the receipt also becomes a downloadable artifact of the invoice.
+
+        Returns 201 with the receipt reference, 404 when the invoice or payment intent does not exist or the intent belongs to a different invoice, and 403 when the GENERATE_RECEIPT authority is missing.
+
+        '
       operationId: generateReceipt
       parameters:
       - name: invoiceId
@@ -278,10 +425,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Payment, terminal and template identifying what the receipt documents.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/GenerateReceiptRequest'
+            examples:
+              Counter receipt:
+                description: Counter receipt
+                value:
+                  paymentIntentId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60
+                  terminalId: TERM-001
+                  templateId: RECEIPT_DEFAULT
+                  templateVersion: '1'
         required: true
       responses:
         '201':
@@ -304,8 +460,20 @@ paths:
     post:
       tags:
       - Receipt
-      summary: Reprint invoice receipt
-      description: Create a reprint of an existing receipt and record the reason for the reprint
+      summary: Reprint an Existing Receipt
+      description: 'Records a reprint of an existing receipt, incrementing its reprint count and capturing the reason and the reprinting actor for audit.
+
+        Use this tool when a customer needs a duplicate copy; do not use generateReceipt, which creates a new receipt for a payment that has none yet.
+
+        Preconditions: the receipt must exist, and its reprint count must be below 5 unless the caller holds the SUPERVISOR_OVERRIDE authority.
+
+        Required inputs: receiptId (UUID) as a path parameter and a non-blank reason in the body.
+
+        Emits an INVOICE_RECEIPT_REPRINT event and updates the receipt''s reprint count, last reprint reason and last reprinted-by.
+
+        Returns 200 with the receipt, 404 when the receipt does not exist, and 409 when the reprint limit of 5 is exceeded without a supervisor override.
+
+        '
       operationId: reprintReceipt
       parameters:
       - name: invoiceId
@@ -321,10 +489,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Business reason the duplicate copy is being produced.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ReprintReceiptRequest'
+            examples:
+              Duplicate copy:
+                description: Duplicate copy
+                value:
+                  reason: Customer requested a duplicate copy
         required: true
       responses:
         '200':
@@ -353,9 +527,21 @@ paths:
     post:
       tags:
       - Receipt
-      summary: Record printed receipt delivery
-      description: Record the delivery status for a printed receipt associated with an invoice
-      operationId: recordPrintDelivery
+      summary: Record Printed Receipt Delivery Status
+      description: 'Records the outcome of printing a receipt at the terminal, stamping the receipt''s delivery method as PRINT with the reported status; the physical printing itself happens client-side, not here.
+
+        Use this tool after the terminal reports its print result; do not use recordReceiptEmailDelivery, which records an email delivery attempt with its recipient address.
+
+        Preconditions: the receipt must already exist via generateReceipt.
+
+        Required inputs: receiptId (UUID) as a path parameter and status (SUCCESS or FAILED) in the body.
+
+        Emits an INVOICE_RECEIPT_PRINT_DELIVERY event and overwrites the receipt''s delivery method and status.
+
+        Returns 200 with an empty body on success, and 404 when the receipt does not exist.
+
+        '
+      operationId: recordReceiptPrintDelivery
       parameters:
       - name: invoiceId
         in: path
@@ -370,10 +556,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Print outcome reported by the terminal.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PrintDeliveryRequest'
+            examples:
+              Successful print:
+                description: Successful print
+                value:
+                  status: SUCCESS
         required: true
       responses:
         '200':
@@ -388,9 +580,21 @@ paths:
     post:
       tags:
       - Receipt
-      summary: Email invoice receipt
-      description: Send an invoice receipt by email and record the delivery status for the attempt
-      operationId: sendEmailReceipt
+      summary: Record Emailed Receipt Delivery Status
+      description: 'Records the outcome of emailing a receipt to a customer, stamping the receipt''s delivery method as EMAIL with the recipient address and the reported status; this endpoint records the attempt rather than dispatching the email itself.
+
+        Use this tool after an email delivery attempt completes; do not use recordReceiptPrintDelivery, which records a terminal print outcome.
+
+        Preconditions: the receipt must already exist via generateReceipt.
+
+        Required inputs: receiptId (UUID) as a path parameter plus emailAddress and status (SUCCESS or FAILED) in the body.
+
+        Emits an INVOICE_RECEIPT_EMAIL_DELIVERY event and overwrites the receipt''s delivery method, address and status.
+
+        Returns 200 with an empty body on success, and 404 when the receipt does not exist.
+
+        '
+      operationId: recordReceiptEmailDelivery
       parameters:
       - name: invoiceId
         in: path
@@ -405,10 +609,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Recipient address and outcome of the email delivery attempt.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/EmailDeliveryRequest'
+            examples:
+              Successful email:
+                description: Successful email
+                value:
+                  emailAddress: customer@example.com
+                  status: SUCCESS
         required: true
       responses:
         '200':
@@ -423,8 +634,20 @@ paths:
     post:
       tags:
       - Payment
-      summary: Initiate card payment
-      description: Initiate a SALE_CAPTURE or AUTH_ONLY card payment against an invoice
+      summary: Initiate Card Payment on Invoice
+      description: 'Initiates a card payment against an invoice through the payment gateway, creating a payment intent that is CAPTURED immediately (SALE_CAPTURE) or left AUTHORIZED as a hold (AUTH_ONLY).
+
+        Use this tool to take card tender; do not use capturePayment, which settles an existing AUTH_ONLY hold rather than starting a new payment.
+
+        Preconditions: the invoice must exist; the caller needs the PROCESS_PAYMENT authority, plus OVERRIDE_PAYMENT_LIMIT when the amount exceeds 500.00 and SELECT_PAYMENT_FLOW to choose AUTH_ONLY.
+
+        Required inputs: paymentFlow (SALE_CAPTURE or AUTH_ONLY), amount (positive), idempotencyKey and paymentToken (tokenised card reference, never a PAN); a replayed idempotencyKey with an identical payload returns the existing intent instead of charging twice.
+
+        Emits an INVOICE_PAYMENT_INITIATE event and records the gateway result on the intent.
+
+        Returns 201 with the intent, 404 when the invoice does not exist, 409 when the idempotencyKey was already used with a different payload, 422 when the gateway declines, and 403 when a required payment authority is missing.
+
+        '
       operationId: initiatePayment
       parameters:
       - name: invoiceId
@@ -434,10 +657,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: 'Card tender details: flow, amount, idempotency key and tokenised card reference.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/InitiatePaymentRequest'
+            examples:
+              One-step sale capture:
+                description: One-step sale capture
+                value:
+                  paymentFlow: SALE_CAPTURE
+                  amount: 149.99
+                  idempotencyKey: idem-018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a50
+                  paymentToken: tok_1NXyZ2eZvKYlo2Cabc12345
         required: true
       responses:
         '201':
@@ -478,8 +710,20 @@ paths:
     post:
       tags:
       - PaymentReversal
-      summary: Void authorized payment
-      description: Void a previously authorized invoice payment before it is captured
+      summary: Void Authorized Payment Hold
+      description: 'Voids a previously authorized invoice payment hold at the gateway before it is captured, releasing the customer''s funds without any money movement.
+
+        Use this tool on an AUTHORIZED hold; do not use refundPayment, which returns funds from a payment that was already CAPTURED.
+
+        Preconditions: the payment intent must belong to the invoice and be AUTHORIZED, the caller needs the VOID_PAYMENT authority, and less than 24 hours may have elapsed since authorization unless the caller also holds SUPERVISOR_OVERRIDE.
+
+        Required inputs: reason (CUSTOMER_REQUEST, DUPLICATE_AUTHORIZATION, ENTRY_ERROR, FRAUD_PREVENTION, MANAGER_DISCRETION or OTHER); notes are optional free text.
+
+        Emits an INVOICE_PAYMENT_VOID event, moves the intent to VOIDED, and publishes a payment-voided notification.
+
+        Returns 200 with an empty body on success, 404 when the intent does not exist under the invoice, 409 when the intent is not AUTHORIZED, 422 when the 24-hour void window has expired, and 500 when the gateway rejects the void.
+
+        '
       operationId: voidPayment
       parameters:
       - name: invoiceId
@@ -495,10 +739,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Reason and optional notes explaining why the authorization is released.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/VoidPaymentRequest'
+            examples:
+              Customer cancelled:
+                description: Customer cancelled
+                value:
+                  reason: CUSTOMER_REQUEST
+                  notes: Customer cancelled before pickup
         required: true
       responses:
         '200':
@@ -517,8 +768,20 @@ paths:
     post:
       tags:
       - PaymentReversal
-      summary: Refund captured payment
-      description: Create a refund for a captured invoice payment and record the refund details
+      summary: Refund a Captured Payment
+      description: 'Refunds all or part of a CAPTURED invoice payment through the gateway and records the refund against the payment intent.
+
+        Use this tool when the original card payment lives in this system; do not use voidPayment, which releases an uncaptured hold, and use createStandaloneInvoiceRefund instead when the original payment is not on file.
+
+        Preconditions: the payment intent must belong to the invoice and be CAPTURED, the caller needs the REFUND_PAYMENT authority, less than 180 days may have elapsed since capture unless the caller holds SUPERVISOR_OVERRIDE, and cumulative refunds may not exceed the captured amount.
+
+        Required inputs: amount (positive) and reason (a RefundReason such as CUSTOMER_RETURN or SERVICE_ERROR); notes and externalReference are optional, and a retry replaying the same externalReference returns the existing refund instead of paying twice.
+
+        Emits an INVOICE_PAYMENT_REFUND event and publishes a payment-refunded notification on success; a gateway failure is persisted as a FAILED refund record, so callers must read the returned status rather than treating 201 as completed.
+
+        Returns 201 with the refund record, 404 when the intent does not exist under the invoice, 409 when the intent is not CAPTURED, and 422 when the 180-day window has expired or the amount exceeds the remaining refundable balance.
+
+        '
       operationId: refundPayment
       parameters:
       - name: invoiceId
@@ -534,10 +797,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Refund amount, business reason and optional external correlation for the captured payment.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RefundPaymentRequest'
+            examples:
+              Partial return refund:
+                description: Partial return refund
+                value:
+                  amount: 25.0
+                  reason: CUSTOMER_RETURN
+                  notes: Returned damaged part
+                  externalReference: WC-2026-000042
         required: true
       responses:
         '201':
@@ -572,8 +844,20 @@ paths:
     post:
       tags:
       - Payment
-      summary: Capture authorized payment hold
-      description: Capture all or part of a previously authorized invoice payment hold
+      summary: Capture Authorized Payment Hold
+      description: 'Captures all or part of a previously authorized AUTH_ONLY payment hold at the gateway; when the captured amount is below the authorized amount, the remainder of the hold is voided.
+
+        Use this tool to settle an existing AUTHORIZED intent; do not use initiatePayment, which starts a new payment, and use voidPayment instead to release the hold without taking funds.
+
+        Preconditions: the payment intent must belong to the invoice and be in AUTHORIZED status; the caller needs the MANUAL_CAPTURE authority.
+
+        Required inputs: amount (positive, up to the authorized amount) and captureIdempotencyKey, which is forwarded to the gateway so a retried capture settles at most once.
+
+        Emits an INVOICE_PAYMENT_CAPTURE event; the intent moves to CAPTURED on success or CAPTURE_FAILED on decline, and an ambiguous gateway response is resolved by a status inquiry before failing.
+
+        Returns 200 with the captured intent, 404 when the intent does not exist under the invoice, 409 when the intent is not AUTHORIZED, 422 when the gateway declines the capture, and 403 when the MANUAL_CAPTURE authority is missing.
+
+        '
       operationId: capturePayment
       parameters:
       - name: invoiceId
@@ -589,10 +873,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Amount to settle from the authorized hold and the capture idempotency key.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CaptureAmountRequest'
+            examples:
+              Partial capture:
+                description: Partial capture
+                value:
+                  amount: 89.99
+                  captureIdempotencyKey: capture-018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a51
         required: true
       responses:
         '200':
@@ -621,8 +912,20 @@ paths:
     post:
       tags:
       - Invoice
-      summary: Finalize invoice
-      description: 'Transition invoice from DRAFT to FINALIZED; enforces permission matrix and emits InvoiceFinalized event for async GL posting (Story #13)'
+      summary: Finalize a Draft Invoice
+      description: 'Transitions an invoice from DRAFT to FINALIZED: runs the committable tax calculation, freezes tax, totals, payment terms and due date, then commits the provider tax document.
+
+        Use this tool when the sale is ready to issue; do not use revertInvoice, which undoes a finalization, and mint the managerApprovalCode with elevateManagerApproval when one is needed.
+
+        Preconditions: the invoice must be DRAFT with tax already calculated; callers without invoice:finalize:override (or a manager/admin role) need a valid elevation token as managerApprovalCode when the stored total exceeds 500.00.
+
+        Required inputs: invoiceId (UUID) as a path parameter; managerApprovalCode and overrideReason in the body are optional below the cap and for override holders.
+
+        Emits an INVOICE_FINALIZED event and publishes the async accounting event that drives GL posting; the tax commit tolerates a provider outage by recording PENDING_COMMIT in pos-tax for the re-commit job, and is skipped entirely when nothing is taxable.
+
+        Returns 200 with the finalized invoice, 404 when the invoice does not exist, 409 when the invoice is not DRAFT or tax has not been calculated, and 400 when a required managerApprovalCode is missing, invalid, or expired.
+
+        '
       operationId: finalizeInvoice
       parameters:
       - name: invoiceId
@@ -632,10 +935,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Optional manager-approval material for finalizations above the amount cap.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/FinalizationRequest'
+            examples:
+              Finalize with manager approval:
+                description: Finalize with manager approval
+                value:
+                  managerApprovalCode: MGR-ELEV-TOKEN-abc123
+                  overrideReason: Customer pre-approved by branch manager
         required: true
       responses:
         '200':
@@ -654,8 +964,20 @@ paths:
     post:
       tags:
       - Invoice
-      summary: Cancel a draft invoice
-      description: Terminal cancel of a DRAFT invoice before any money moved (order-void path). Rejected with 409 when the invoice has left DRAFT or carries an authorized/captured payment. Idempotent — cancelling a CANCELLED invoice returns 200.
+      summary: Cancel a Draft Invoice
+      description: 'Cancels a DRAFT invoice terminally before any money has moved, the invoice-side effect of an order void.
+
+        Use this tool when an order is voided before tender; do not use revertInvoice, which returns a FINALIZED invoice to DRAFT, and do not use it when payments exist — reverse those first through voidPayment or refundPayment (order cancellation saga).
+
+        Preconditions: the invoice must still be DRAFT and must carry no AUTHORIZED or CAPTURED payment intent; cancelling an already CANCELLED invoice is an idempotent no-op.
+
+        Required inputs: invoiceId (UUID) as a path parameter; there is no request body.
+
+        Emits an INVOICE_CANCEL event and sets the invoice status to CANCELLED.
+
+        Returns 200 when cancelled or already cancelled, 409 when the invoice has left DRAFT or carries an authorized/captured payment, and 404 when the invoice does not exist.
+
+        '
       operationId: cancelInvoice
       parameters:
       - name: invoiceId
@@ -686,9 +1008,21 @@ paths:
     post:
       tags:
       - invoice-artifact-controller
-      summary: Create a short-lived download token for an invoice artifact
-      description: Issues a short-lived signed token bound to the invoice and artifact. The token is presented to the public download endpoint so a browser can fetch the file via a direct link.
-      operationId: createDownloadToken
+      summary: Create Artifact Download Token
+      description: 'Issues a short-lived signed token bound to one invoice artifact, so a browser can fetch the PDF through the public download link without an Authorization header.
+
+        Use this tool after listInvoiceArtifacts has supplied an artifactRefId; do not use downloadInvoiceArtifact without a token — it rejects unsigned requests.
+
+        Preconditions: the invoice must exist and the artifact reference must belong to that invoice (an invoice ref must match the path invoice, a receipt ref must be one of its receipts).
+
+        Required inputs: invoiceId (UUID) and artifactRefId (opaque reference from listInvoiceArtifacts) as path parameters; there is no request body.
+
+        No events are emitted and no record is stored; the token is stateless, signed, and expires after 300 seconds by default (invoice.artifacts.token-ttl-seconds).
+
+        Returns 404 when the invoice does not exist or the artifact does not belong to it.
+
+        '
+      operationId: createArtifactDownloadToken
       parameters:
       - name: invoiceId
         in: path
@@ -722,9 +1056,21 @@ paths:
     post:
       tags:
       - Invoice
-      summary: Apply invoice adjustment
-      description: Apply discount, fee, correction, or warranty credit to a draft invoice
-      operationId: applyAdjustment
+      summary: Apply Adjustment to Draft Invoice
+      description: 'Applies a monetary adjustment (DISCOUNT, FEE, CORRECTION, or WARRANTY credit) to a DRAFT invoice and recalculates its tax and total.
+
+        Use this tool while the invoice is still DRAFT; do not use it after finalization — tax and totals freeze there, so revertInvoice must return the invoice to DRAFT first.
+
+        Preconditions: the invoice must exist and be in DRAFT status; a retry supplying the same type and externalReference replays idempotently, returning the invoice without double-crediting.
+
+        Required inputs: type, amount (greater than zero), reason, and authorizedBy; externalReference is optional and correlates the adjustment to an external record such as a warranty settlement.
+
+        Emits an INVOICE_ADJUSTMENT_APPLY event, replaces the persisted per-line tax breakdown, and publishes an invoice-updated notification.
+
+        Returns 200 with the recalculated invoice, 404 when the invoice does not exist, 409 when the invoice has left DRAFT, and 400 when the type, amount, reason, or authorizedBy is missing or the amount is not positive.
+
+        '
+      operationId: applyInvoiceAdjustment
       parameters:
       - name: invoiceId
         in: path
@@ -733,10 +1079,20 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Adjustment to add to the draft invoice, with its business justification.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AdjustmentRequest'
+            examples:
+              Warranty credit:
+                description: Warranty credit
+                value:
+                  type: WARRANTY
+                  amount: 25.0
+                  reason: Warranty settlement credit
+                  authorizedBy: jdoe
+                  externalReference: WC-2026-000042
         required: true
       responses:
         '200':
@@ -754,14 +1110,45 @@ paths:
     post:
       tags:
       - Invoice
-      summary: Create invoice from a sales order
-      description: Create the invoice fronting a sales order at checkout (counter sale). Idempotent on orderId — a replay returns the existing invoice with 200. When workorderId is present and a workorder invoice already exists, that invoice is returned for tender instead of creating a duplicate.
+      summary: Create Invoice from Sales Order
+      description: 'Creates the DRAFT invoice fronting a sales order at counter-sale checkout, recording the order''s already-priced subtotal, tax and total verbatim — pos-order and pos-tax are authoritative, so nothing is re-priced here.
+
+        Use this tool at order checkout; do not use createInvoice, which builds and prices a draft from workorder data.
+
+        Preconditions: the order must carry final totals and at least one line; the call is idempotent on orderId, and when workorderId is set an existing workorder invoice is returned for tender instead of creating a duplicate.
+
+        Required inputs: orderId (UUID), subtotal, taxAmount, totalAmount (non-negative) and lines; customerId, locationId and the deposit fields are optional, but depositSourceType and depositSourceId become mandatory when depositAmount is set.
+
+        Emits an INVOICE_CREATE_FROM_ORDER event; a deposit take also registers a deposit credit (idempotent on orderId), and a workorder settlement draws down available deposit credits, reported as depositApplied.
+
+        Returns 201 when a new invoice is created, 200 when an existing invoice is returned (orderId replay or workorder dedupe), and 400 when totals are missing or negative, lines are empty, or deposit fields are inconsistent.
+
+        '
       operationId: createInvoiceFromOrder
       requestBody:
+        description: Sales order snapshot — authoritative totals and sold lines — the invoice records.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/OrderInvoiceCreationRequest'
+            examples:
+              Counter sale:
+                description: Counter sale
+                value:
+                  orderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a40
+                  customerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a41
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a42
+                  subtotal: 120.0
+                  taxAmount: 9.6
+                  totalAmount: 129.6
+                  lines:
+                  - orderLineId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a43
+                    description: Brake pad set
+                    quantity: 2
+                    unitPrice: 45.0
+                    amount: 90.0
+                    taxAmount: 7.2
+                    type: PART
         required: true
       responses:
         '201':
@@ -785,9 +1172,21 @@ paths:
     get:
       tags:
       - Deposit Credits
-      summary: List deposit credits held against a source document
-      description: Lists all deposit credits associated with the given source type and source id.
-      operationId: listBySource
+      summary: List Deposit Credits by Source
+      description: 'Lists every deposit credit held against one source document, identified by its type and id.
+
+        Use this tool when checking what down-payments a settlement can draw on; use getDepositCredit instead when a specific depositCreditId is already known.
+
+        Preconditions: none — an unknown or credit-free source returns an empty list rather than an error.
+
+        Required inputs: sourceType query parameter (ESTIMATE, WORKORDER or ORDER, case-insensitive) and sourceId (UUID) query parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 422 when sourceType is not one of the known values.
+
+        '
+      operationId: listDepositCreditsBySource
       parameters:
       - name: sourceType
         in: query
@@ -816,14 +1215,37 @@ paths:
     post:
       tags:
       - Deposit Credits
-      summary: Register a deposit credit taken by a sales order
-      description: Creates a deposit credit record tied to the provided source transaction.
-      operationId: createDeposit
+      summary: Register a Deposit Credit
+      description: 'Creates an AVAILABLE deposit credit for a down-payment taken at pos-order checkout, holding the amount against its source document until a settlement invoice draws it down.
+
+        Use this tool when a deposit was tendered against an estimate, workorder, or order; do not use refundDepositCredit, which returns a credit''s remaining balance when the source is cancelled.
+
+        Preconditions: none beyond a priced source document — the call is idempotent on orderId, so a replay for an order that already registered a credit returns the existing record unchanged.
+
+        Required inputs: orderId (UUID, idempotency anchor), sourceType (ESTIMATE, WORKORDER or ORDER), sourceId (UUID) and amount (positive); partyId is optional and currencyCode defaults to USD.
+
+        Emits an INVOICE_DEPOSIT_CREATE event; no invoice records are touched until settlement applies the credit.
+
+        Returns 201 with the credit (existing or new), and 422 when the amount is not positive or the sourceType is not a known value.
+
+        '
+      operationId: createDepositCredit
       requestBody:
+        description: Deposit taken at checkout to register as a credit against its source document.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateDepositRequest'
+            examples:
+              Workorder down-payment:
+                description: Workorder down-payment
+                value:
+                  orderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  sourceType: WORKORDER
+                  sourceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a11
+                  partyId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a12
+                  amount: 200.0
+                  currencyCode: USD
         required: true
       responses:
         '200':
@@ -840,9 +1262,21 @@ paths:
     post:
       tags:
       - Deposit Credits
-      summary: Refund a deposit credit's remaining balance
-      description: Used when the deposit's source is cancelled after the deposit was taken (spec R7.4).
-      operationId: refundDeposit
+      summary: Refund a Deposit Credit Balance
+      description: 'Zeroes the remaining balance of a deposit credit and marks it REFUNDED, recording that the deposit is returned because its source document was cancelled after the deposit was taken.
+
+        Use this tool on source cancellation (spec R7.4); do not use createDepositCredit, which registers a new deposit, and note the cash disbursement itself is not performed here.
+
+        Preconditions: the deposit credit must exist; a credit already REFUNDED is left unchanged, so the call is idempotent.
+
+        Required inputs: depositCreditId (UUID) as a path parameter; the reason query parameter is optional and defaults to "source cancelled"; there is no request body.
+
+        Emits an INVOICE_DEPOSIT_REFUND event and sets the credit''s status to REFUNDED with a zero remaining balance.
+
+        Returns 200 with the refunded credit, and 404 when no deposit credit exists for the supplied id.
+
+        '
+      operationId: refundDepositCredit
       parameters:
       - name: depositCreditId
         in: path
@@ -870,14 +1304,33 @@ paths:
     post:
       tags:
       - Billing Authorization
-      summary: Mint a manager-approval elevation token
-      description: Verifies the named manager (by employee number) holds invoice:finalize:override and mints a short-lived token scoped to the given invoice, returned as the managerApprovalCode for finalize.
-      operationId: elevate
+      summary: Mint Manager-Approval Elevation Token
+      description: 'Mints a short-lived elevation token scoped to one invoice after verifying that the named manager is an ACTIVE employee holding the invoice:finalize:override authority.
+
+        Use this tool when an actor with invoice:finalize but not invoice:finalize:override needs a managerApprovalCode for finalizeInvoice or revertInvoice; do not use finalizeInvoice directly without a token when the invoice total exceeds the 500.00 service-advisor cap.
+
+        Preconditions: the manager''s employee number must resolve to an ACTIVE person in the local employee replica and that person must hold invoice:finalize:override.
+
+        Required inputs: managerEmployeeNumber and invoiceId (UUID); the token is bound to that invoice only and expires after five minutes by default (invoice.elevation.token-ttl-seconds).
+
+        No events are emitted; the token is signed and stateless, and the grant is audit-logged with the approving manager''s person id.
+
+        Returns 200 with the token and its expiry, and 401 with an empty body when the employee number is unknown or inactive or the person lacks the override authority.
+
+        '
+      operationId: elevateManagerApproval
       requestBody:
+        description: Manager identification and the invoice the elevation token will authorize.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ElevateRequest'
+            examples:
+              Elevation for one invoice:
+                description: Elevation for one invoice
+                value:
+                  managerEmployeeNumber: EMP-0001
+                  invoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a20
         required: true
       responses:
         '200':
@@ -907,8 +1360,20 @@ paths:
     get:
       tags:
       - Invoice
-      summary: Get invoice
-      description: Get invoice details
+      summary: Get Invoice Details
+      description: 'Returns the full invoice detail — status, line items, adjustments, totals, tax breakdown, due date and the resolved workorder number.
+
+        Use this tool when the invoiceId is already known; use searchInvoices instead when locating an invoice by number, customer name or workorder number.
+
+        Preconditions: the invoice must exist.
+
+        Required inputs: invoiceId (UUID) as a path parameter; there is no request body.
+
+        Emits an INVOICE_GET audit event; no state changes — this is a read-only projection.
+
+        Returns 404 when no invoice exists for the supplied id.
+
+        '
       operationId: getInvoice
       parameters:
       - name: invoiceId
@@ -933,9 +1398,21 @@ paths:
     get:
       tags:
       - invoice-artifact-controller
-      summary: List the downloadable artifacts (documents) for an invoice
-      description: Returns the documents available for the invoice (the invoice itself and any receipts) as opaque, URL-safe artifact references with suggested file names and MIME types.
-      operationId: listArtifacts
+      summary: List Downloadable Invoice Artifacts
+      description: 'Returns the downloadable documents for an invoice — always the invoice document itself, plus one entry per generated receipt — as opaque URL-safe artifact references with suggested file names and application/pdf MIME types.
+
+        Use this tool to discover artifactRefId values before minting a download token; do not use downloadInvoiceArtifact directly, which requires a signed token from createArtifactDownloadToken.
+
+        Preconditions: the invoice must exist; receipts appear only after generateReceipt has created them.
+
+        Required inputs: invoiceId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no invoice exists for the supplied id.
+
+        '
+      operationId: listInvoiceArtifacts
       parameters:
       - name: invoiceId
         in: path
@@ -968,9 +1445,21 @@ paths:
     get:
       tags:
       - invoice-artifact-download-controller
-      summary: Download an invoice artifact as PDF using a signed download token
-      description: Streams the artifact as application/pdf. Public endpoint authorized solely by the signed download token (query parameter); intended for browser direct-download links.
-      operationId: download
+      summary: Download Invoice Artifact as PDF
+      description: 'Streams an invoice or receipt artifact as an application/pdf attachment, rendering it on demand through the document service.
+
+        Use this tool (or a browser direct link) with a token minted by createArtifactDownloadToken; do not call it with a bearer token alone — the endpoint is public and authorized solely by the signed download token.
+
+        Preconditions: a valid unexpired download token bound to exactly this invoiceId and artifactRefId, and the artifact must still belong to the invoice.
+
+        Required inputs: invoiceId (UUID) and artifactRefId as path parameters plus the token query parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only render of the stored document data.
+
+        Returns 403 when the token is missing, malformed, expired, or bound to a different artifact, and 404 when the invoice or artifact cannot be resolved.
+
+        '
+      operationId: downloadInvoiceArtifact
       parameters:
       - name: invoiceId
         in: path
@@ -1014,8 +1503,20 @@ paths:
     get:
       tags:
       - Invoice Search
-      summary: Search invoices
-      description: Paginated free-text search for invoices matching the invoice number, customer name, or workorder number.
+      summary: Search Invoices by Free Text
+      description: 'Searches invoices by a free-text term matched against the invoice number, the customer name (resolved via the customer service), or the workorder number, returning a page of finder rows.
+
+        Use this tool to locate an invoice when its id is unknown; use getInvoice instead once the invoiceId is known, and searchInvoiceLines for line-level warranty correlation.
+
+        Preconditions: none — but a blank or missing q short-circuits to an empty page rather than listing all invoices.
+
+        Required inputs: q (free-text term) plus optional page, size and sort parameters; size defaults to 25, is hard-capped at 50, and the default sort is createdAt descending.
+
+        Emits an INVOICE_SEARCH audit event; no state changes — this is a read-only projection.
+
+        Returns 400 when pagination parameters are malformed.
+
+        '
       operationId: searchInvoices
       parameters:
       - name: q
@@ -1057,8 +1558,20 @@ paths:
     get:
       tags:
       - Invoice Search
-      summary: Search invoice line items by customer party
-      description: Returns invoice line items belonging to the given customer party, optionally narrowed by a SKU/description term, flattened with the owning invoice's number, status, and creation time. Newest invoice first, bounded to the newest 200 lines. Built for warranty-claim correlation.
+      summary: Search Invoice Lines by Party
+      description: 'Returns invoice line items belonging to one customer party, flattened with the owning invoice''s number, status and creation time, newest invoice first and bounded to the newest 200 lines; built for warranty-claim origin-line correlation.
+
+        Use this tool to find the invoice line a warranty claim originates from; use searchInvoices instead for invoice-level free-text search.
+
+        Preconditions: none — an unknown party simply returns an empty list.
+
+        Required inputs: partyId (UUID) query parameter; q is an optional SKU or description term narrowing the lines.
+
+        Emits an INVOICE_ITEM_SEARCH audit event; no state changes — this is a read-only projection.
+
+        Returns 400 when partyId is missing or malformed.
+
+        '
       operationId: searchInvoiceLines
       parameters:
       - name: partyId
@@ -1104,9 +1617,21 @@ paths:
     get:
       tags:
       - Deposit Credits
-      summary: Get a deposit credit by id
-      description: Retrieves a single deposit credit by its identifier.
-      operationId: getDeposit
+      summary: Get a Deposit Credit
+      description: 'Returns a single deposit credit with its status (AVAILABLE, PARTIALLY_APPLIED, FULLY_APPLIED or REFUNDED), original amount and remaining balance.
+
+        Use this tool when the depositCreditId is already known; use listDepositCreditsBySource instead to find the credits held against an estimate, workorder or order.
+
+        Preconditions: the deposit credit must exist.
+
+        Required inputs: depositCreditId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no deposit credit exists for the supplied id.
+
+        '
+      operationId: getDepositCredit
       parameters:
       - name: depositCreditId
         in: path

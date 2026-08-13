@@ -9,6 +9,7 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -53,9 +54,19 @@ public class CrmContactsController {
      * GET /v1/crm/parties/{partyId}/contacts
      * Requires: CONTACT_VIEW permission
      */
-    @Operation(
-            summary = "Get contacts with roles",
-            description = "Retrieve all contacts for a party including their role assignments")
+    @Operation(operationId = "getContactsWithRoles", summary = "Get Party Contacts With Roles", description = """
+                    Returns every contact person assigned a role on a commercial account, with names, \
+                    emails, and phones resolved from pos-people and each contact's role assignments and \
+                    primary flags.
+                    Use this tool when listing who represents a commercial account and in what capacity; do \
+                    not use updateContactRoles, which rewrites one contact's role assignments.
+                    Preconditions: a commercial party must exist for the supplied partyId; a pos-people \
+                    outage degrades contact names and contact points to null rather than failing.
+                    Required inputs: partyId (UUID) as a path parameter; there is no request body.
+                    Emits a CRM_CONTACTS_LIST audit event; no state changes occur.
+                    Returns 404 when no commercial party exists for the supplied partyId, and 200 with an \
+                    empty contacts list when the account has no role assignments.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -92,9 +103,23 @@ public class CrmContactsController {
      * PUT /v1/crm/parties/{partyId}/contacts/{contactId}/roles
      * Requires: CONTACT_ROLE_ASSIGN permission
      */
-    @Operation(
-            summary = "Update contact roles",
-            description = "Assign or update role assignments for a specific contact within a party")
+    @Operation(operationId = "updateContactRoles", summary = "Update Contact Role Assignments", description = """
+                    Replaces the full set of role assignments for one contact on a commercial account; \
+                    existing assignments for that contact are deleted and the submitted list is written in \
+                    their place.
+                    Use this tool when changing what a known contact does for an account; use \
+                    getContactsWithRoles instead to read current assignments, and note that submitting an \
+                    empty roles list removes the contact's roles entirely.
+                    Preconditions: the commercial party and the contact person must both exist; assigning a \
+                    role as primary automatically demotes any existing primary contact for that role.
+                    Required inputs: partyId and contactId (UUIDs) as path parameters, plus roles, a list \
+                    where each entry has roleCode (BILLING, PAYMENT_AUTHORIZER, OPERATIONS, \
+                    PRIMARY_BUSINESS_CONTACT, or TECHNICAL) and an optional isPrimary flag defaulting to \
+                    false.
+                    Emits a CRM_CONTACT_ROLES_UPDATE event; assignments are rewritten in place.
+                    Returns 404 when the party or contact person cannot be found, and 400 when a roleCode is \
+                    not a recognized role.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -117,7 +142,19 @@ public class CrmContactsController {
     public ResponseEntity<UpdateContactRolesResponse> updateContactRoles(
             @Parameter(description = "Party ID", required = true) @PathVariable @NonNull UUID partyId,
             @Parameter(description = "Contact ID", required = true) @PathVariable @NonNull UUID contactId,
-            @Parameter(description = "Role assignment request", required = true) @RequestBody @NonNull
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "The complete replacement set of role assignments for this contact on the account.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Primary billing contact", value = """
+                                                                    {"roles":[{"roleCode":"BILLING","isPrimary":true},
+                                                                              {"roleCode":"OPERATIONS","isPrimary":false}]}
+                                                                    """)))
+                    @RequestBody
+                    @NonNull
                     UpdateContactRolesRequest request) {
 
         try {

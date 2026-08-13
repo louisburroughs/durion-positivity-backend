@@ -9,6 +9,7 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -65,8 +66,23 @@ public class VendorBillController {
             scopes = {"accounting:ap:pay"})
     @PreAuthorize("hasAuthority('accounting:ap:pay')")
     @Operation(
-            summary = "Create vendor bill from goods received event",
-            description = "Creates a vendor bill from an inbound goods-received event payload",
+            operationId = "createVendorBillFromGoodsReceived",
+            summary = "Create Vendor Bill From Goods Received",
+            description = """
+                    Creates a vendor bill in PENDING_RECEIPT_MATCH status from a goods-received event, \
+                    totaling the received line items and syncing the vendor into the AP vendor directory.
+                    Use this tool when goods arrive against a purchase order; do not use matchVendorInvoice, \
+                    which is the later step that matches the vendor's invoice against this pending bill.
+                    Preconditions: none; a duplicate eventId is ignored and the existing bill is returned \
+                    instead of creating a second one.
+                    Required inputs: eventId, organizationId, purchaseOrderId and vendorId (UUIDs), \
+                    receivedDate, and lineItems each with productId, description, quantity and unitPrice; \
+                    vendorName and dimensions are optional.
+                    Emits an ACCOUNTING_VENDOR_BILL_CREATE event; a vendor-directory sync failure is logged \
+                    and never fails bill creation.
+                    Returns 201 with the created (or already-existing) bill, and 400 when the payload fails \
+                    validation.
+                    """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "201",
@@ -74,7 +90,29 @@ public class VendorBillController {
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request payload")
     public ResponseEntity<VendorBillResponse> createBillFromGoodsReceivedEvent(
-            @NonNull @Valid @RequestBody GoodsReceivedEvent event) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Goods-received event payload that seeds a pending vendor bill.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Goods received", value = """
+                                                                    {"eventId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "organizationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+                                                                     "purchaseOrderId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d",
+                                                                     "vendorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e",
+                                                                     "vendorName":"Acme Parts Co",
+                                                                     "receivedDate":"2026-08-13T09:30:00",
+                                                                     "lineItems":[
+                                                                       {"productId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5f",
+                                                                        "description":"Brake pads",
+                                                                        "quantity":10,
+                                                                        "unitPrice":24.99}]}
+                                                                    """)))
+                    @NonNull
+                    @Valid
+                    @RequestBody
+                    GoodsReceivedEvent event) {
         log.info(
                 "Received request to create vendor bill from goods received event | eventId={} | vendorId={}",
                 event.getEventId(),
@@ -100,8 +138,25 @@ public class VendorBillController {
             scopes = {"accounting:ap:pay"})
     @PreAuthorize("hasAuthority('accounting:ap:pay')")
     @Operation(
-            summary = "Match vendor invoice",
-            description = "Performs matching for a received vendor invoice and creates/updates bill state",
+            operationId = "matchVendorInvoice",
+            summary = "Match Vendor Invoice",
+            description = """
+                    Runs the three-way match of a received vendor invoice against pending goods-received \
+                    bills: a HIGH_CONFIDENCE match with consistent quantities and prices auto-approves the \
+                    bill, while a discrepancy, a MEDIUM confidence score or an AMBIGUOUS match parks it in \
+                    MATCH_EXCEPTION.
+                    Use this tool when a vendor invoice arrives; do not use \
+                    createVendorBillFromGoodsReceived, which records the receipt, and use \
+                    resolveVendorBillMatchException or selectVendorBillMatchCandidate to clear exceptions.
+                    Preconditions: a bill in PENDING_RECEIPT_MATCH must exist for the vendor; an ambiguous \
+                    outcome persists scored candidates for later operator selection.
+                    Required inputs: eventId, organizationId and vendorId (UUIDs), invoiceReference, \
+                    invoiceDate and lineItems; dueDate is optional.
+                    Emits an ACCOUNTING_VENDOR_BILL_MATCH event; the returned bill's status conveys the \
+                    outcome (APPROVED or MATCH_EXCEPTION), so callers must inspect it rather than assume \
+                    approval.
+                    Returns 400 when no pending receipt matches the invoice or the payload fails validation.
+                    """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "201",
@@ -109,7 +164,29 @@ public class VendorBillController {
             content = @Content(schema = @Schema(implementation = VendorBillResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request payload")
     public ResponseEntity<VendorBillResponse> matchVendorInvoice(
-            @NonNull @Valid @RequestBody VendorInvoiceReceivedEvent event) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Vendor invoice payload to three-way match against pending receipt bills.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Vendor invoice received", value = """
+                                                                    {"eventId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60",
+                                                                     "organizationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+                                                                     "vendorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e",
+                                                                     "invoiceReference":"INV-88421",
+                                                                     "invoiceDate":"2026-08-12T00:00:00",
+                                                                     "dueDate":"2026-09-11T00:00:00",
+                                                                     "lineItems":[
+                                                                       {"productId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5f",
+                                                                        "description":"Brake pads",
+                                                                        "quantity":10,
+                                                                        "unitPrice":24.99}]}
+                                                                    """)))
+                    @NonNull
+                    @Valid
+                    @RequestBody
+                    VendorInvoiceReceivedEvent event) {
         log.info(
                 "Received request to perform three-way match | eventId={} | invoiceRef={}",
                 event.getEventId(),
@@ -136,8 +213,22 @@ public class VendorBillController {
             scopes = {"accounting:ap:pay"})
     @PreAuthorize("hasAuthority('accounting:ap:pay')")
     @Operation(
-            summary = "Resolve bill match exception",
-            description = "Resolves a matching exception with action ACCEPT, VOID, or CORRECT",
+            operationId = "resolveVendorBillMatchException",
+            summary = "Resolve Vendor Bill Match Exception",
+            description = """
+                    Resolves a vendor bill parked in MATCH_EXCEPTION with an operator decision: ACCEPT \
+                    approves the bill despite the discrepancy, VOID rejects it, and CORRECT sends it back for \
+                    correction.
+                    Use this tool for quantity, price or medium-confidence exceptions on one identified bill; \
+                    do not use selectVendorBillMatchCandidate, which resolves an ambiguous match by picking \
+                    among several candidate bills.
+                    Preconditions: the bill must exist and be in MATCH_EXCEPTION status.
+                    Required inputs: billId (UUID) as a path parameter, resolutionAction (ACCEPT, VOID or \
+                    CORRECT), reason and operatorId, all recorded for audit.
+                    Emits an ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE event.
+                    Returns 400 when the bill is not found, is not in MATCH_EXCEPTION status, or the action \
+                    is not one of ACCEPT, VOID or CORRECT.
+                    """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "200",
@@ -149,7 +240,21 @@ public class VendorBillController {
                     @NonNull
                     @PathVariable
                     UUID billId,
-            @NonNull @Valid @RequestBody ExceptionResolutionRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Operator decision (ACCEPT, VOID or CORRECT) with the audit reason.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Accept variance", value = """
+                                                                    {"resolutionAction":"ACCEPT",
+                                                                     "reason":"Invoice variance approved by manager",
+                                                                     "operatorId":"manager-001"}
+                                                                    """)))
+                    @NonNull
+                    @Valid
+                    @RequestBody
+                    ExceptionResolutionRequest request) {
         log.info(
                 "Received request to resolve match exception | billId={} | action={}",
                 billId,
@@ -176,8 +281,18 @@ public class VendorBillController {
             scopes = {"accounting:ap:view"})
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(
-            summary = "Get vendor bill by id",
-            description = "Retrieves a vendor bill by its unique identifier",
+            operationId = "getVendorBillById",
+            summary = "Get Vendor Bill By Id",
+            description = """
+                    Returns one vendor bill with its status, amounts, match metadata and approval history.
+                    Use this tool when the bill id is already known; use getVendorBillByOriginEventId \
+                    instead when only the goods-received event id is available, or listApBills to browse \
+                    APPROVED bills.
+                    Preconditions: the vendor bill must exist.
+                    Required inputs: billId (UUID) as a path parameter; there is no request body.
+                    Emits an ACCOUNTING_VENDOR_BILL_GET audit event; no state changes.
+                    Returns 404 when no vendor bill exists for the supplied id.
+                    """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "200",
@@ -212,8 +327,19 @@ public class VendorBillController {
             scopes = {"accounting:ap:view"})
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(
-            summary = "Get vendor bill by origin event id",
-            description = "Retrieves a vendor bill by origin goods-received event identifier",
+            operationId = "getVendorBillByOriginEventId",
+            summary = "Get Vendor Bill By Origin Event",
+            description = """
+                    Returns the vendor bill created from a specific goods-received event, using the event id \
+                    recorded at bill creation.
+                    Use this tool to check whether a goods-received event was already billed, for example \
+                    before replaying it; use getVendorBillById instead when the bill id is known.
+                    Preconditions: a bill must have been created from the event.
+                    Required inputs: eventId (UUID of the origin GoodsReceivedEvent) as a path parameter; \
+                    there is no request body.
+                    Emits an ACCOUNTING_VENDOR_BILL_GET_BY_EVENT audit event; no state changes.
+                    Returns 404 when no vendor bill originates from the supplied event id.
+                    """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "200",
@@ -248,8 +374,21 @@ public class VendorBillController {
             scopes = {"accounting:ap:view"})
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(
-            summary = "List match candidates",
-            description = "Lists unresolved match candidates for an ambiguous invoice event",
+            operationId = "listVendorBillMatchCandidates",
+            summary = "List Vendor Bill Match Candidates",
+            description = """
+                    Lists the unresolved, scored candidate bills persisted when an invoice match came back \
+                    AMBIGUOUS, ordered by score descending.
+                    Use this tool to review the choices before calling selectVendorBillMatchCandidate; do \
+                    not use resolveVendorBillMatchException, which handles single-bill discrepancies rather \
+                    than ambiguity.
+                    Preconditions: a matchVendorInvoice call for this invoice event must have produced an \
+                    AMBIGUOUS outcome.
+                    Required inputs: invoiceEventId (UUID of the triggering invoice event) as a path \
+                    parameter; there is no request body.
+                    Emits an ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATES_LIST audit event; no state changes.
+                    Returns 200 with an empty list when no unresolved candidates exist for the event.
+                    """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "200",
@@ -282,8 +421,20 @@ public class VendorBillController {
             scopes = {"accounting:ap:pay"})
     @PreAuthorize("hasAuthority('accounting:ap:pay')")
     @Operation(
-            summary = "Select match candidate",
-            description = "Selects a candidate and approves corresponding vendor bill flow",
+            operationId = "selectVendorBillMatchCandidate",
+            summary = "Select Vendor Bill Match Candidate",
+            description = """
+                    Selects one candidate from an ambiguous invoice match, approving the corresponding \
+                    vendor bill and marking the candidate set resolved.
+                    Use this tool after reviewing listVendorBillMatchCandidates; do not use \
+                    resolveVendorBillMatchException, which handles discrepancy exceptions on a single bill.
+                    Preconditions: the candidate must exist and must not already be resolved.
+                    Required inputs: candidateId (UUID) as a path parameter and operatorId in the body, \
+                    recorded as the approver.
+                    Emits an ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATE_SELECT event.
+                    Returns 400 when the candidate is missing or already resolved (mapped as \
+                    VALIDATION_ERROR, not 404).
+                    """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
             responseCode = "200",
@@ -295,7 +446,20 @@ public class VendorBillController {
                     @NonNull
                     @PathVariable
                     UUID candidateId,
-            @NonNull @Valid @RequestBody CandidateSelectionRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Operator making the candidate selection, recorded as the approver.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Select candidate",
+                                                            value = "{\"operatorId\":\"advisor-001\"}")))
+                    @NonNull
+                    @Valid
+                    @RequestBody
+                    CandidateSelectionRequest request) {
         log.info(
                 "Received request to select match candidate | candidateId={} | operator={}",
                 candidateId,

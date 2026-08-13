@@ -8,6 +8,8 @@ import com.positivity.people.internal.dto.WorkSessionSubmitRequest;
 import com.positivity.people.service.WorkSessionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -29,33 +31,89 @@ public class WorkSessionController {
 
     private final WorkSessionService workSessionService;
 
-    @Operation(summary = "Start work session", description = "Create/start a work session for a person.")
+    @Operation(operationId = "startWorkSession", summary = "Start A Work Session For Person", description = """
+                    Starts a new ACTIVE work session for a person, stamping the start time from the server clock and \
+                    the actor from the security context.
+                    Use this tool when a person clocks in for the day; do not use startWorkSessionBreak, which \
+                    pauses an already running session.
+                    Preconditions: the person must exist in the identity replica, and the person must have no \
+                    session that is still open.
+                    Required inputs: personId (UUID) in the body; the body's actor field is ignored, because the \
+                    recorded actor is always the authenticated username.
+                    Emits a PEOPLE_WORK_SESSION_START event.
+                    Returns 404 when the person is unknown, and 409 when an active session already exists for the \
+                    person, including under concurrent start races.
+                    """)
     @ApiResponse(responseCode = "200", description = "Work session started successfully.")
     @EmitEvent(id = "PEOPLE_WORK_SESSION_START", apiVersion = "1")
     @PostMapping("/start")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<WorkSessionDto> startWorkSession(
-            @Parameter(description = "Work session start request body") @Valid @RequestBody @NonNull
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Identifies the person clocking in; the actor field is ignored in favour of"
+                                    + " the authenticated username.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Clock in", value = """
+                                                                    {"personId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
                     WorkSessionRequest request) {
         log.info("Starting work session for personId(mask)={}", maskForLog(request.getPersonId()));
         WorkSessionDto response = workSessionService.startSession(request.getPersonId());
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Stop work session", description = "Stop an active work session.")
+    @Operation(operationId = "stopWorkSession", summary = "Stop An Active Work Session", description = """
+                    Stops a person's open work session, setting status ENDED and closing any break still open at the \
+                    same timestamp.
+                    Use this tool when a person clocks out; do not use submitWorkSession, which sends an already \
+                    ENDED session for approval.
+                    Preconditions: the person must have an open session; sessions are keyed by person here, not by \
+                    session id.
+                    Required inputs: personId (UUID) in the body; the body's actor field is ignored in favour of the \
+                    authenticated username.
+                    Emits a PEOPLE_WORK_SESSION_STOP event.
+                    Returns 404 when no active session exists for the person.
+                    """)
     @ApiResponse(responseCode = "200", description = "Work session stopped successfully.")
     @EmitEvent(id = "PEOPLE_WORK_SESSION_STOP", apiVersion = "1")
     @PostMapping("/stop")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<WorkSessionDto> stopWorkSession(
-            @Parameter(description = "Work session stop request body") @Valid @RequestBody @NonNull
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Identifies the person clocking out; the open session is found by person"
+                                    + " id, not session id.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Clock out", value = """
+                                                                    {"personId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
                     WorkSessionRequest request) {
         log.info("Stopping work session for personId(mask)={}", maskForLog(request.getPersonId()));
         WorkSessionDto response = workSessionService.stopSession(request.getPersonId());
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Start work session break", description = "Start a break within an active work session.")
+    @Operation(operationId = "startWorkSessionBreak", summary = "Start A Break In Work Session", description = """
+                    Starts a break inside an active work session, stamping the start time from the server clock.
+                    Use this tool when a person pauses work; do not use stopWorkSession, which ends the whole \
+                    session rather than pausing it.
+                    Preconditions: the session must exist and still be open, and no break may already be open on it.
+                    Required inputs: the work session id (UUID) as the path parameter; there is no request body.
+                    Emits a PEOPLE_WORK_SESSION_BREAK_START event.
+                    Returns 404 when no open session exists for the id, and 409 when a break is already open, \
+                    including under concurrent break-start races.
+                    """)
     @ApiResponse(responseCode = "200", description = "Break started successfully.")
     @ApiResponse(responseCode = "404", description = "Work session not found.")
     @EmitEvent(id = "PEOPLE_WORK_SESSION_BREAK_START", apiVersion = "1")
@@ -71,9 +129,20 @@ public class WorkSessionController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Stop work session break", description = "End a break within a work session.")
+    @Operation(operationId = "stopWorkSessionBreak", summary = "Stop The Open Work Session Break", description = """
+                    Ends the open break on a work session, stamping the end time from the server clock.
+                    Use this tool when a person returns from a break; do not use stopWorkSession, which ends the \
+                    session and auto-closes any open break itself.
+                    Preconditions: the session must have an open break with no recorded end time.
+                    Required inputs: the work session id (UUID) as the path parameter; there is no request body.
+                    Emits a PEOPLE_WORK_SESSION_BREAK_STOP event.
+                    Returns 409 when no open break exists for the session, including when the session id itself is \
+                    unknown.
+                    """)
     @ApiResponse(responseCode = "200", description = "Break stopped successfully.")
-    @ApiResponse(responseCode = "404", description = "Work session or break not found.")
+    @ApiResponse(
+            responseCode = "409",
+            description = "No open break exists for the session, including when the session id itself is unknown.")
     @EmitEvent(id = "PEOPLE_WORK_SESSION_BREAK_STOP", apiVersion = "1")
     @PostMapping("/{id}/breaks/stop")
     @PreAuthorize("isAuthenticated()")
@@ -87,9 +156,18 @@ public class WorkSessionController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(
-            summary = "Submit work session",
-            description = "Submit an ended work session with its billable and break totals for approval.")
+    @Operation(operationId = "submitWorkSession", summary = "Submit An Ended Work Session", description = """
+                    Submits an ENDED work session for approval, recording billable and break minute totals and \
+                    marking the session SUBMITTED.
+                    Use this tool after stopWorkSession has ended the session; do not use approveTimeEntriesBatch, \
+                    which decides time entries, not work sessions.
+                    Preconditions: the session must exist and be in ENDED status; ACTIVE or already SUBMITTED \
+                    sessions are rejected.
+                    Required inputs: the work session id (UUID) path parameter and a body with billableMinutes and \
+                    breakMinutes (both zero or greater) and submittedAt (ISO-8601 instant).
+                    Emits a PEOPLE_WORK_SESSION_SUBMIT event.
+                    Returns 404 when the session does not exist, and 409 when the session is not in ENDED status.
+                    """)
     @ApiResponse(responseCode = "200", description = "Work session submitted successfully.")
     @ApiResponse(responseCode = "404", description = "Work session not found.")
     @ApiResponse(responseCode = "409", description = "Work session is not in a submittable state.")
@@ -101,7 +179,20 @@ public class WorkSessionController {
                     @PathVariable
                     @NonNull
                     UUID id,
-            @Parameter(description = "Work session submit request body") @Valid @RequestBody @NonNull
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Billable and break minute totals plus the submission timestamp for the"
+                                    + " ended session.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Full day with lunch break", value = """
+                                                                    {"billableMinutes":480,"breakMinutes":30,
+                                                                     "submittedAt":"2026-02-16T17:00:00Z"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
                     WorkSessionSubmitRequest request) {
         log.info("Submitting work session ID(mask): {}", maskForLog(id));
         WorkSessionDto response = workSessionService.submitSession(id, request);

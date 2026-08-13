@@ -7,6 +7,8 @@ import com.positivity.accounting.service.APPaymentService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -65,10 +67,25 @@ public class APPaymentController {
     @PostMapping("/payments")
     @EmitEvent(id = "AP_PAYMENT_EXECUTE", apiVersion = "1")
     @Operation(
-            summary = "Execute vendor payment",
-            description = "Execute a vendor payment with optional explicit allocations to bills. "
-                    + "Idempotent using paymentRef: same ref + same payload returns existing payment; "
-                    + "same ref + different payload yields 409 conflict.",
+            operationId = "executeApPayment",
+            summary = "Execute Vendor Payment",
+            description = """
+                    Executes an AP vendor payment through the payment gateway, optionally allocating it \
+                    across approved vendor bills, and posts the corresponding GL entries.
+                    Use this tool to pay a vendor; do not use applyPayment, which is the AR-side application \
+                    of customer payments to invoices, and use listApBills first to find APPROVED bills to \
+                    allocate against.
+                    Preconditions: every allocated bill must exist, be APPROVED and belong to the vendor, \
+                    and the allocation total must not exceed the gross amount.
+                    Required inputs: vendorId (UUID), grossAmount (min 0.01), currency (3-char ISO code), \
+                    paymentRef (max 100 chars, the idempotency key) and paymentMethod (e.g. ACH, CHECK); \
+                    feeAmount, netAmount, paymentSource, memo and explicit allocations are optional.
+                    Emits an AP_PAYMENT_EXECUTE event; the call is idempotent on paymentRef, replaying the \
+                    same ref with the same payload as a 200 instead of paying twice.
+                    Returns 200 on an idempotent replay, 409 IDEMPOTENCY_CONFLICT when the paymentRef exists \
+                    with a different payload, 400 when a bill is missing, unapproved or over-allocated, and \
+                    500 PAYMENT_GATEWAY_FAILURE when the gateway cannot be reached.
+                    """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Idempotent replay: existing payment returned")
     @ApiResponse(responseCode = "201", description = "Payment executed successfully (new payment created)")
@@ -80,7 +97,31 @@ public class APPaymentController {
             scopes = {"accounting:ap:pay"})
     @PreAuthorize("hasAuthority('accounting:ap:pay')")
     public @NonNull ResponseEntity<APPaymentResponse> executePayment(
-            @Valid @RequestBody @NonNull ExecuteAPPaymentRequest request, Authentication authentication) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Vendor payment instruction with idempotency key and optional bill allocations.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "ACH payment allocated to one bill",
+                                                            value = """
+                                                                    {"vendorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "grossAmount":250.00,
+                                                                     "currency":"USD",
+                                                                     "paymentRef":"ap-pay-2026-08-13-007",
+                                                                     "paymentMethod":"ACH",
+                                                                     "allocations":[
+                                                                       {"vendorBillId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+                                                                        "appliedAmount":250.00}]}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    ExecuteAPPaymentRequest request,
+            Authentication authentication) {
 
         String currentUser = authentication != null ? authentication.getName() : "system";
         log.info(
@@ -104,8 +145,17 @@ public class APPaymentController {
 
     @GetMapping("/payments/{paymentId}")
     @Operation(
-            summary = "Get payment details",
-            description = "Retrieve AP payment details including allocations and GL posting status.",
+            operationId = "getApPayment",
+            summary = "Get AP Payment Details",
+            description = """
+                    Returns one AP payment with its bill allocations and GL posting status.
+                    Use this tool when the payment id is already known; use getApPaymentByRef instead when \
+                    only the idempotency reference is available.
+                    Preconditions: the payment must exist.
+                    Required inputs: paymentId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no AP payment exists for the supplied id.
+                    """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Payment found")
     @ApiResponse(responseCode = "404", description = "Payment not found")
@@ -127,8 +177,19 @@ public class APPaymentController {
 
     @GetMapping("/payments/by-ref/{paymentRef}")
     @Operation(
-            summary = "Get payment by reference",
-            description = "Retrieve AP payment details by paymentRef (idempotency key).",
+            operationId = "getApPaymentByRef",
+            summary = "Get AP Payment By Reference",
+            description = """
+                    Returns one AP payment looked up by its paymentRef, the caller-chosen idempotency key \
+                    supplied at execution time.
+                    Use this tool to check whether a payment reference was already executed before retrying \
+                    executeApPayment; use getApPayment instead when the payment UUID is known.
+                    Preconditions: a payment must have been executed with this paymentRef.
+                    Required inputs: paymentRef (1-100 chars, no newlines) as a path parameter; there is no \
+                    request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no AP payment exists for the supplied reference.
+                    """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Payment found")
     @ApiResponse(responseCode = "404", description = "Payment not found")
@@ -155,10 +216,19 @@ public class APPaymentController {
 
     @GetMapping("/bills")
     @Operation(
-            summary = "List eligible vendor bills",
             operationId = "listApBills",
-            description =
-                    "Get eligible vendor bills for payment (status = APPROVED). Bills are ordered by due date (oldest first, nulls last), then bill date, then bill ID. Sort order is server-controlled.",
+            summary = "List Eligible Vendor Bills",
+            description = """
+                    Lists vendor bills eligible for payment, meaning those in APPROVED status, ordered by due \
+                    date oldest first with nulls last, then bill date, then bill id.
+                    Use this tool to pick bills before calling executeApPayment; do not use \
+                    listVendorBills on the vendor-bill API, which returns bills of every status.
+                    Preconditions: none; the sort order is server-controlled and cannot be overridden.
+                    Required inputs: none; vendorId (UUID) is an optional filter and page size defaults \
+                    to 20.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 400 when the vendor id is malformed.
+                    """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Bills retrieved successfully")
     @ApiResponse(responseCode = "400", description = "Invalid vendor ID")

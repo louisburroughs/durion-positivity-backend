@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -65,10 +66,32 @@ public class ScrapController {
             scopes = {"inventory:scrap:create"})
     @PreAuthorize("hasAuthority('inventory:scrap:create')")
     @Operation(
+            operationId = "createScrap",
             summary = "Create scrap document",
-            description = "Creates a scrap (write-off) document. Below the configured value thresholds the scrap"
-                    + " is auto-approved and posted as SCRAP_OUT in the same transaction; above them (or when"
-                    + " no cost is derivable) it enters PENDING_APPROVAL.",
+            description = """
+                    Creates a scrap (write-off) document for stock at a location and evaluates its value — \
+                    quantity times the latest-receipt cost snapshot — against the configured approval thresholds: \
+                    below all thresholds it is AUTO_APPROVED and its SCRAP_OUT ledger entry posts in the same \
+                    transaction, while above them, or when no cost is derivable, it enters PENDING_APPROVAL.
+                    Use this tool to write off damaged, expired or lost stock; do not use \
+                    createCycleCountAdjustment, which settles a counted variance rather than a deliberate \
+                    write-off.
+                    Preconditions: the caller must be an authenticated user; a LOT-tracked SKU must name an \
+                    existing ACTIVE lot, and the auto-approve posting requires sufficient on-hand at the posting \
+                    location (the storage location when given, else the location) unless an authorized \
+                    negative-stock override is passed.
+                    Required inputs: stockItemId, quantity (positive), locationId and reasonCode (DAMAGED, \
+                    EXPIRED, LOST, RECALLED, CONTAMINATED, WARRANTY_DESTROYED or OTHER — OTHER requires notes); \
+                    storageLocationId, lotNumber, workorderId and attachmentReference are optional, and \
+                    shouldReplenish and negativeStockOverride default to false.
+                    Emits an INVENTORY_SCRAP_CREATE event, and a posted scrap additionally emits a ScrapPostedV1 \
+                    fact, reduces on-hand immediately, and triggers a best-effort replenishment evaluation when \
+                    shouldReplenish is true.
+                    Returns 400 when reasonCode is OTHER without notes, 403 when negativeStockOverride is \
+                    requested without inventory:adjustment:override, and 422 for insufficient on-hand \
+                    (SCRAP_INSUFFICIENT_STOCK) or lot violations (LOT_NUMBER_REQUIRED, LOT_UNKNOWN, \
+                    LOT_NOT_AVAILABLE).
+                    """,
             tags = {"Scraps"})
     @ApiResponse(responseCode = "201", description = "Scrap created (AUTO_APPROVED/POSTED or PENDING_APPROVAL)")
     @ApiResponse(
@@ -93,7 +116,26 @@ public class ScrapController {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<ScrapResponse> createScrap(@Valid @RequestBody CreateScrapRequest request) {
+    public ResponseEntity<ScrapResponse> createScrap(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Stock write-off to record: what is scrapped, where, how much, and why.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Damaged stock write-off", value = """
+                                                                    {"stockItemId":"OIL-5W30-5QT",
+                                                                     "quantity":3,
+                                                                     "locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "storageLocationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+                                                                     "reasonCode":"DAMAGED",
+                                                                     "notes":"Dropped during putaway, casing cracked",
+                                                                     "shouldReplenish":false,
+                                                                     "negativeStockOverride":false}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    CreateScrapRequest request) {
         log.info("Received request to scrap {} of {}", request.getQuantity(), request.getStockItemId());
         return ResponseEntity.status(HttpStatus.CREATED).body(scrapService.createScrap(request));
     }
@@ -112,8 +154,25 @@ public class ScrapController {
             scopes = {"inventory:scrap:approve"})
     @PreAuthorize("hasAuthority('inventory:scrap:approve')")
     @Operation(
+            operationId = "approveScrap",
             summary = "Approve scrap",
-            description = "Approves a pending scrap and posts its SCRAP_OUT entry to the inventory ledger",
+            description = """
+                    Approves a PENDING_APPROVAL scrap and posts its SCRAP_OUT entry to the inventory ledger, \
+                    reducing on-hand at the posting location and emitting a ScrapPostedV1 fact.
+                    Use this tool after reviewing an above-threshold or unknown-value scrap; do not use \
+                    rejectScrap, which discards it without touching inventory.
+                    Preconditions: the scrap must exist and be in PENDING_APPROVAL status, and sufficient on-hand \
+                    must exist at the posting location unless an authorized negative-stock override is passed — an \
+                    insufficient-stock rejection rolls back and the scrap stays PENDING_APPROVAL.
+                    Required inputs: scrapId (UUID) path parameter; the body carries only negativeStockOverride \
+                    (default false), honored only when the caller holds inventory:adjustment:override; the \
+                    approving actor comes from the authenticated context.
+                    Emits an INVENTORY_SCRAP_APPROVE event plus the ScrapPostedV1 fact on the posting, and a scrap \
+                    created with shouldReplenish triggers a best-effort replenishment evaluation.
+                    Returns 404 when the scrap does not exist, 409 when it is not PENDING_APPROVAL, 403 when the \
+                    override is requested without the permission, and 422 (SCRAP_INSUFFICIENT_STOCK) when on-hand \
+                    is insufficient — reconcile via cycle count or adjustment, or use an authorized override.
+                    """,
             tags = {"Scraps"})
     @ApiResponse(responseCode = "200", description = "Scrap approved and posted")
     @ApiResponse(
@@ -148,7 +207,19 @@ public class ScrapController {
                             schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ScrapResponse> approveScrap(
             @Parameter(description = "Scrap document ID", required = true) @PathVariable UUID scrapId,
-            @Valid @RequestBody ApproveScrapRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Approval context; only the optional negative-stock override travels in"
+                                    + " the body.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Approval without override", value = """
+                                                                    {"negativeStockOverride":false}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    ApproveScrapRequest request) {
         log.info("Received request to approve scrap {}", scrapId);
         return ResponseEntity.ok(scrapService.approveScrap(scrapId, request));
     }
@@ -167,8 +238,20 @@ public class ScrapController {
             scopes = {"inventory:scrap:approve"})
     @PreAuthorize("hasAuthority('inventory:scrap:approve')")
     @Operation(
+            operationId = "rejectScrap",
             summary = "Reject scrap",
-            description = "Rejects a pending scrap with a reason. No inventory changes are made.",
+            description = """
+                    Rejects a PENDING_APPROVAL scrap with a recorded reason; no ledger posting or on-hand change \
+                    is made and the document moves to the terminal REJECTED status.
+                    Use this tool when the write-off should not happen (for example the part was recovered); do \
+                    not use approveScrap, which posts the SCRAP_OUT entry.
+                    Preconditions: the scrap must exist and be in PENDING_APPROVAL status; the rejecting actor is \
+                    taken from the authenticated context, not the body.
+                    Required inputs: scrapId (UUID) path parameter and rejectionReason (non-blank, max 1000 \
+                    characters) in the body.
+                    Emits an INVENTORY_SCRAP_REJECT event; inventory is untouched.
+                    Returns 404 when the scrap does not exist, and 409 when it is not in PENDING_APPROVAL status.
+                    """,
             tags = {"Scraps"})
     @ApiResponse(responseCode = "200", description = "Scrap rejected")
     @ApiResponse(
@@ -187,7 +270,18 @@ public class ScrapController {
                             schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ScrapResponse> rejectScrap(
             @Parameter(description = "Scrap document ID", required = true) @PathVariable UUID scrapId,
-            @Valid @RequestBody RejectScrapRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Rejection context recording why the write-off is discarded.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Rejection", value = """
+                                                                    {"rejectionReason":"Part was recovered and restocked"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    RejectScrapRequest request) {
         log.info("Received request to reject scrap {}", scrapId);
         return ResponseEntity.ok(scrapService.rejectScrap(scrapId, request));
     }
@@ -204,8 +298,18 @@ public class ScrapController {
             scopes = {"inventory:scrap:view", "inventory:scrap:approve"})
     @PreAuthorize("hasAnyAuthority('inventory:scrap:view','inventory:scrap:approve')")
     @Operation(
+            operationId = "getScrap",
             summary = "Get scrap details",
-            description = "Retrieves one scrap document",
+            description = """
+                    Returns one scrap document with its quantity, cost snapshot and source, approval tier, \
+                    lifecycle status and ledger-entry linkage.
+                    Use this tool when the scrapId is already known; use listScraps instead to search by reason, \
+                    status, location or date range.
+                    Preconditions: the scrap must exist.
+                    Required inputs: scrapId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no scrap exists for the supplied id.
+                    """,
             tags = {"Scraps"})
     @ApiResponse(responseCode = "200", description = "Scrap found")
     @ApiResponse(
@@ -236,8 +340,21 @@ public class ScrapController {
             scopes = {"inventory:scrap:view", "inventory:scrap:approve"})
     @PreAuthorize("hasAnyAuthority('inventory:scrap:view','inventory:scrap:approve')")
     @Operation(
+            operationId = "listScraps",
             summary = "List scraps",
-            description = "Lists scrap documents filtered by reason, status, location, and creation-date range",
+            description = """
+                    Returns scrap documents, newest first, optionally filtered by reason code, lifecycle status, \
+                    location, and an inclusive creation-time range.
+                    Use this tool to find pending approvals or audit write-off history; use getScrap instead when \
+                    the scrapId is already known.
+                    Preconditions: none.
+                    Required inputs: reasonCode, status, locationId, createdFrom and createdTo (ISO-8601 \
+                    instants) are all optional query parameters; there is no paging — the full match set is \
+                    returned.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty array when no scraps match, so an empty result is not an error \
+                    condition.
+                    """,
             tags = {"Scraps"})
     @ApiResponse(
             responseCode = "200",
