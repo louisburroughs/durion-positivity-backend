@@ -16,10 +16,13 @@
     <description>Helper library for document template registration and rendering requests</description>
 
     <properties>
-        <!-- Coverage ratchet (plan Phase 4): measured 74.0% line / 35.2% branch.
-             Floors sit ~5 points under to catch regression without failing on noise. -->
-        <jacoco.line.min>0.68</jacoco.line.min>
-        <jacoco.branch.min>0.30</jacoco.branch.min>
+        <!-- Coverage ratchet: measured 95.7% line / 90.0% branch after the duplicate
+             com.positivity.documents.helper tree was removed (#1274). The line floor sits
+             ~5 points under the measurement; the branch floor sits a full branch under it
+             because the module only has 10 branches in total, so a single one is worth 10
+             points and a tighter floor would fail on noise. -->
+        <jacoco.line.min>0.90</jacoco.line.min>
+        <jacoco.branch.min>0.80</jacoco.branch.min>
     </properties>
 
     <dependencies>
@@ -41,7 +44,7 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- Resilience4j for Retry and Circuit Breaker -->
+        <!-- Resilience4j for Retry (DocumentServiceClient) -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-spring-boot4</artifactId>
@@ -49,10 +52,6 @@
         <dependency>
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-retry</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.github.resilience4j</groupId>
-            <artifactId>resilience4j-circuitbreaker</artifactId>
         </dependency>
 
         <!-- JSpecify for @NonNull annotations -->
