@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One recorded read of an exchange payload — ADR-0050 §7's "who read which exchange, when".
@@ -21,6 +22,8 @@ import org.jspecify.annotations.NonNull;
  * @param accessedAt when the read happened
  * @param accessKind what was reached; only payload reads are recorded
  * @param payloadOutcome what the read yielded — including the failed and empty cases
+ * @param correlationId correlation id of the request that caused the read; {@code null} only on rows
+ *     recorded before inbound correlation existed (pre-V6)
  */
 @Schema(description = "One recorded read of an exchange payload: who read which exchange, when (ADR-0050 §7).")
 public record ExchangeAuditAccessView(
@@ -62,7 +65,15 @@ public record ExchangeAuditAccessView(
 
         @Schema(description = "What the read yielded, including the failed and empty cases.", example = "DECRYPTED")
         @NonNull
-        AuditPayloadOutcome payloadOutcome) {
+        AuditPayloadOutcome payloadOutcome,
+
+        @Schema(
+                description = "Correlation id of the request that caused the read, reused from the caller's"
+                        + " X-Correlation-Id header (or generated when absent). Null only for access records"
+                        + " written before inbound correlation existed.",
+                example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a90")
+        @Nullable
+        String correlationId) {
 
     public ExchangeAuditAccessView {
         Objects.requireNonNull(auditAccessId, "auditAccessId must not be null");

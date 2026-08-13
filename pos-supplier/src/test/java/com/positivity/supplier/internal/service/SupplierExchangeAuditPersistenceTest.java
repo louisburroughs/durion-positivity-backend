@@ -345,6 +345,40 @@ class SupplierExchangeAuditPersistenceTest {
                     .isEqualTo(READER);
             assertThat(recorded.getPayloadOutcome()).isEqualTo(AuditPayloadOutcome.DECRYPTED);
             assertThat(recorded.getAccessedAt()).isEqualTo(Instant.parse("2026-08-11T14:22:07.412Z"));
+            assertThat(recorded.getCorrelationId())
+                    .as("outside any ambient scope the recorder still stamps a generated id; null is"
+                            + " reserved for rows predating V6")
+                    .isNotBlank();
+        }
+
+        @Test
+        void recordsTheAmbientCorrelationIdSoAReadTracesToTheRequestThatCausedIt() {
+            // Issue #1264: in production SupplierCorrelationFilter opens this scope from the inbound
+            // X-Correlation-Id header, which is exactly how an access row joins the operator request.
+            UUID id = seedExchange(PayloadCaptureLevel.FULL, REQUEST_DOC, RESPONSE_DOC);
+
+            com.positivity.supplier.internal.audit.SupplierCorrelationContext.withCorrelationId(
+                    "operator-request-77", () -> auditService.readPayload(id));
+
+            AuditAccessEntity recorded = transactionTemplate.execute(
+                    status -> accessRepository.findAll().getFirst());
+            assertThat(recorded.getCorrelationId()).isEqualTo("operator-request-77");
+        }
+
+        @Test
+        void anOversizedAmbientCorrelationIdIsTruncatedRatherThanFailingTheRead() {
+            // The recorder fails CLOSED, so without truncation an oversized client header would fail the
+            // access insert and with it the read itself -- a client-controlled denial of access to
+            // evidence. The column must never be the validation boundary.
+            UUID id = seedExchange(PayloadCaptureLevel.FULL, REQUEST_DOC, RESPONSE_DOC);
+            String oversized = "c".repeat(400);
+
+            com.positivity.supplier.internal.audit.SupplierCorrelationContext.withCorrelationId(
+                    oversized, () -> auditService.readPayload(id));
+
+            AuditAccessEntity recorded = transactionTemplate.execute(
+                    status -> accessRepository.findAll().getFirst());
+            assertThat(recorded.getCorrelationId()).hasSize(100).isEqualTo(oversized.substring(0, 100));
         }
 
         @Test

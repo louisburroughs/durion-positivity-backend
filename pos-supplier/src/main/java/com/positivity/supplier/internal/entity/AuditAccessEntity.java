@@ -44,7 +44,8 @@ import lombok.NoArgsConstructor;
         indexes = {
             @Index(name = "idx_saccess_exchange", columnList = "exchange_audit_id"),
             @Index(name = "idx_saccess_actor_time", columnList = "accessed_by, accessed_at"),
-            @Index(name = "idx_saccess_accessed_at", columnList = "accessed_at")
+            @Index(name = "idx_saccess_accessed_at", columnList = "accessed_at"),
+            @Index(name = "idx_saccess_correlation", columnList = "correlation_id")
         })
 public class AuditAccessEntity {
 
@@ -80,4 +81,12 @@ public class AuditAccessEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "payload_outcome", nullable = false, updatable = false, length = 32)
     private AuditPayloadOutcome payloadOutcome;
+
+    /**
+     * Correlation id of the request (or scheduled page) that caused this read, reused from the ambient
+     * {@code SupplierCorrelationContext} scope that {@code SupplierCorrelationFilter} opens per request.
+     * Nullable only because rows predating V6 genuinely captured none; the recorder always writes one.
+     */
+    @Column(name = "correlation_id", updatable = false, length = 100)
+    private String correlationId;
 }

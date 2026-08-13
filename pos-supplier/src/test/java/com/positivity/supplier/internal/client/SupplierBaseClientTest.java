@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.client;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.supplier.internal.audit.SupplierCorrelationContext;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.ProtocolVersion;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;

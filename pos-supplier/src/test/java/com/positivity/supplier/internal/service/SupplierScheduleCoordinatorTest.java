@@ -271,6 +271,35 @@ class SupplierScheduleCoordinatorTest {
     }
 
     @Test
+    void eachPageRunsUnderItsOwnFreshCorrelationScope() {
+        // Issue #1264: scheduled exchanges must trace to a run rather than appearing uncaused. The page
+        // is the transactional unit, so its exchanges share one id -- and successive pages get distinct
+        // ids, so a reprocessed page after a lost lease is honestly a new correlation.
+        String runA = SupplierScheduleCoordinator.newOwnerToken();
+        coordinator.tryClaim(bindingId, runA);
+        java.util.List<String> pageCorrelations = new java.util.ArrayList<>();
+
+        coordinator.runPage(bindingId, runA, () -> {
+            pageCorrelations.add(com.positivity.supplier.internal.audit.SupplierCorrelationContext.current()
+                    .orElseThrow());
+            return Instant.parse("2026-08-11T01:00:00Z");
+        });
+        coordinator.runPage(bindingId, runA, () -> {
+            pageCorrelations.add(com.positivity.supplier.internal.audit.SupplierCorrelationContext.current()
+                    .orElseThrow());
+            return WINDOW_END;
+        });
+
+        assertThat(pageCorrelations)
+                .hasSize(2)
+                .doesNotHaveDuplicates()
+                .allSatisfy(id -> assertThat(id).isNotBlank());
+        assertThat(com.positivity.supplier.internal.audit.SupplierCorrelationContext.current())
+                .as("the scope must not leak past the page onto the scheduler thread")
+                .isEmpty();
+    }
+
+    @Test
     void aPageMustReportTheWindowItCompleted() {
         String runA = SupplierScheduleCoordinator.newOwnerToken();
         coordinator.tryClaim(bindingId, runA);

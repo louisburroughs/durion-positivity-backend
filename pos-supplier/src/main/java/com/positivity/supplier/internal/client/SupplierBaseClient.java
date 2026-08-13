@@ -1,5 +1,6 @@
 package com.positivity.supplier.internal.client;
 
+import com.positivity.supplier.internal.audit.SupplierCorrelationContext;
 import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.enums.RetryBackoff;

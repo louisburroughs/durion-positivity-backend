@@ -1,5 +1,6 @@
 package com.positivity.supplier.internal.service;
 
+import com.positivity.supplier.internal.audit.SupplierCorrelationContext;
 import com.positivity.supplier.internal.repository.SupplierScheduleLeaseRepository;
 import java.time.Instant;
 import java.util.Objects;
@@ -93,6 +94,10 @@ public class SupplierScheduleCoordinator {
      * attempted, and a zero-row result aborts the transaction. That way a stolen lease rolls the page
      * back rather than leaving it applied without a checkpoint.
      *
+     * <p>Each page also runs under a fresh {@link SupplierCorrelationContext} scope, so the vendor
+     * exchanges of one page share one correlation id in the audit trail and a scheduled run no longer
+     * appears uncaused (issue #1264).
+     *
      * @param bindingId the binding being processed
      * @param ownerToken this run's token
      * @param page the work for one page; returns the end of the window it completed
@@ -100,14 +105,23 @@ public class SupplierScheduleCoordinator {
      */
     @Transactional(propagation = Propagation.REQUIRED)
     public void runPage(@NonNull UUID bindingId, @NonNull String ownerToken, @NonNull SchedulePage page) {
-        Instant completedWindowEnd = page.process();
-        Objects.requireNonNull(completedWindowEnd, "a page must report the window end it completed");
+        // A fresh correlation scope per page, deliberately ignoring any ambient one: the page is the
+        // transactional unit, so its exchanges share one id and trace to one another, and a page
+        // reprocessed after a lost lease is honestly a new correlation rather than impersonating the
+        // attempt that rolled back. Scheduler threads have no inbound request, so without this every
+        // exchange of a scheduled run would generate its own unrelated id and the run would appear
+        // uncaused in the audit trail.
+        try (SupplierCorrelationContext.CorrelationScope scope = SupplierCorrelationContext.open(null)) {
+            log.debug("Running schedule page for binding {} under correlation {}", bindingId, scope.correlationId());
+            Instant completedWindowEnd = page.process();
+            Objects.requireNonNull(completedWindowEnd, "a page must report the window end it completed");
 
-        int advanced = leaseRepository.advanceCheckpoint(bindingId, ownerToken, completedWindowEnd);
-        if (advanced != 1) {
-            // Raising rolls back the page too, which is the point: the new owner will reprocess this
-            // window from the last committed checkpoint, so the work is done exactly once.
-            throw new LeaseLostException(bindingId, ownerToken);
+            int advanced = leaseRepository.advanceCheckpoint(bindingId, ownerToken, completedWindowEnd);
+            if (advanced != 1) {
+                // Raising rolls back the page too, which is the point: the new owner will reprocess this
+                // window from the last committed checkpoint, so the work is done exactly once.
+                throw new LeaseLostException(bindingId, ownerToken);
+            }
         }
     }
 

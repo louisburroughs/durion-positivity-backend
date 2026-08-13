@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.supplier.internal.audit.SupplierCorrelationContext;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.entity.AuditAccessEntity;
 import com.positivity.supplier.internal.enums.AuditAccessKind;
@@ -105,10 +106,16 @@ public class AuditAccessRecorder {
                 .accessedAt(Instant.now(clock))
                 .accessKind(AuditAccessKind.PAYLOAD_READ)
                 .payloadOutcome(payloadOutcome)
-                // No correlation id, deliberately: SupplierCorrelationContext scopes an OUTBOUND vendor
-                // exchange and is not in flight during an inbound audit read, so reading it here would
-                // record null on every row and misrepresent that as "no correlation". See the V4 migration
-                // for the omission and the follow-up it names.
+                // The request that caused this read: SupplierCorrelationFilter opens a scope for every
+                // inbound request (V4 omitted this column because nothing did; V6 reinstates it now that
+                // something does). currentOrGenerate, not current(): a caller outside any scope still gets
+                // a recorded id rather than a null that would misread as "pre-V6 row".
+                //
+                // Truncated to the column width because the value is caller-influenced (reused from the
+                // inbound X-Correlation-Id header) and this recorder fails CLOSED -- an untruncated
+                // oversized header would fail this insert and with it the payload read itself, letting a
+                // client's header shape deny access to evidence. The column is not the validation boundary.
+                .correlationId(truncate(SupplierCorrelationContext.currentOrGenerate(), 100))
                 .build();
 
         // saveAndFlush, not save: flushing here surfaces a constraint or connectivity failure NOW,
@@ -116,5 +123,10 @@ public class AuditAccessRecorder {
         // the serializer. Failing late would still roll back, but the payload would already have been
         // read into the response object.
         accessRepository.saveAndFlush(row);
+    }
+
+    @NonNull
+    private static String truncate(@NonNull String value, int max) {
+        return value.length() <= max ? value : value.substring(0, max);
     }
 }
