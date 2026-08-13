@@ -899,7 +899,7 @@ paths:
       summary: Upsert Party Billing Rules
       description: 'Creates or replaces the embedded billing-rules configuration on a commercial party, covering PO requirement, tax exemption, credit hold, auto-pay, payment terms, credit limit, currency, and invoice delivery method.
 
-        Use this tool when configuring how a commercial account is billed; do not use createCommercialAccount, which only sets billingTermsId at creation and cannot change billing flags afterwards.
+        Use this tool when configuring how a commercial account is billed; do not use createCrmCommercialAccount, which only sets billingTermsId at creation and cannot change billing flags afterwards.
 
         Preconditions: a commercial party must exist for the supplied partyId; the whole rules block is replaced on every call rather than patched field by field.
 
@@ -910,7 +910,7 @@ paths:
         Returns 404 when no commercial party exists for the supplied partyId.
 
         '
-      operationId: upsertBillingRules
+      operationId: upsertPartyBillingRules
       parameters:
       - name: partyId
         in: path
@@ -1016,9 +1016,9 @@ paths:
       tags:
       - Customer Bulk Ingest API
       summary: Bulk Ingest Customer Records
-      description: 'Imports a batch of individual customer records, creating each one through the same path as createPerson so canonical identities land in pos-people, and reports a per-row success or failure result without aborting the batch.
+      description: 'Imports a batch of individual customer records, creating each one through the same path as createCrmPerson so canonical identities land in pos-people, and reports a per-row success or failure result without aborting the batch.
 
-        Use this tool for migrations and file imports of individuals; do not use createPerson row by row for large loads, and note this path cannot create commercial accounts.
+        Use this tool for migrations and file imports of individuals; do not use createCrmPerson row by row for large loads, and note this path cannot create commercial accounts.
 
         Preconditions: none beyond authorization; rows that fail validation are reported with errorCode CUSTOMER_INGEST_FAILED while the rest of the batch proceeds.
 
@@ -1135,7 +1135,7 @@ paths:
       summary: Create Customer Record
       description: 'Creates a customer from a flat CustomerDTO, routed by customerType to either the commercial or person party store.
 
-        Use this tool only for the legacy flat customer API; use createCommercialAccount instead for commercial onboarding with duplicate checking, and createPerson for individuals so the canonical identity lands in pos-people.
+        Use this tool only for the legacy flat customer API; use createCrmCommercialAccount instead for commercial onboarding with duplicate checking, and createCrmPerson for individuals so the canonical identity lands in pos-people.
 
         Preconditions: none beyond authorization; no duplicate detection is performed.
 
@@ -1729,7 +1729,7 @@ paths:
       summary: Create Individual Person Record
       description: 'Creates an individual customer: the canonical person identity is resolved or created in pos-people (the source of truth for names and contact points), and a thin person-party link with a generated CUST-PER customer number is stored locally.
 
-        Use this tool when onboarding an individual customer; do not use createCommercialAccount, which creates an organization, and note that if the identity already has a local person-party the existing record is returned instead of a duplicate.
+        Use this tool when onboarding an individual customer; do not use createCrmCommercialAccount, which creates an organization, and note that if the identity already has a local person-party the existing record is returned instead of a duplicate.
 
         Preconditions: none beyond authorization; contact points are validated before any identity is created so an invalid email persists nothing.
 
@@ -1740,7 +1740,7 @@ paths:
         Returns 400 when firstName, lastName, or preferredContactMethod is missing or an email value is malformed.
 
         '
-      operationId: createPerson
+      operationId: createCrmPerson
       requestBody:
         description: The individual's name, preferred contact method, and contact points to register.
         content:
@@ -2521,7 +2521,7 @@ paths:
       summary: Create Party Relationship
       description: 'Creates a dated relationship that links an individual person to a commercial account in one or more roles, optionally marking the person as the primary billing contact.
 
-        Use this tool when associating a known person with a commercial account; do not use updateContactRoles, which manages the separate contact-role assignment model, and do not use createPerson, which creates the person record itself.
+        Use this tool when associating a known person with a commercial account; do not use updateContactRoles, which manages the separate contact-role assignment model, and do not use createCrmPerson, which creates the person record itself.
 
         Preconditions: the commercial party and the person must both exist, and no active relationship may already cover the same party, person, and role for today''s date; isPrimaryBillingContact requires the BILLING role in the same request.
 
@@ -2747,7 +2747,7 @@ paths:
         Returns 400 when legalName is missing or blank, or when partyType is not a recognized value.
 
         '
-      operationId: createCommercialAccount
+      operationId: createCrmCommercialAccount
       requestBody:
         description: Commercial party to create; legalName is the only mandatory field and no duplicate check is applied.
         content:
@@ -2900,7 +2900,7 @@ paths:
       summary: Merge Duplicate Commercial Parties
       description: 'Merges one duplicate commercial party into a surviving party: relationships are reassigned to the survivor, external identifiers and vehicle VINs are copied over, and the losing party''s status is set to MERGED.
 
-        Use this tool when checkPartyDuplicates has confirmed two records represent the same customer; do not use createCommercialAccount to work around duplicates, and note the merge is not reversible through this API.
+        Use this tool when checkPartyDuplicates has confirmed two records represent the same customer; do not use createCrmCommercialAccount to work around duplicates, and note the merge is not reversible through this API.
 
         Preconditions: both the surviving party (path) and losing party (body) must exist as commercial parties and must be different records.
 
@@ -3150,7 +3150,7 @@ paths:
       summary: Check Customer Requirements Met
       description: 'Evaluates whether a customer is eligible for customer-facing workflows: the party must have ACTIVE status, and a commercial party must additionally not be on credit hold.
 
-        Use this tool as a gate before starting orders or workorders for a customer; use getBillingRules instead to see the underlying credit-hold configuration.
+        Use this tool as a gate before starting orders or workorders for a customer; use getPartyBillingRules instead to see the underlying credit-hold configuration.
 
         Preconditions: a commercial or person party must exist for the supplied id.
 
@@ -3423,7 +3423,7 @@ paths:
       summary: Get Party Billing Rules
       description: 'Returns the billing-rules reference for a party, falling back to default rules when a commercial party has no explicitly configured rules and for person parties, which have no configurable rules; enforcement of the rules belongs to downstream services.
 
-        Use this tool when reading how an account should be billed; use upsertBillingRules instead to change the configuration.
+        Use this tool when reading how an account should be billed; use upsertPartyBillingRules instead to change the configuration.
 
         Preconditions: a commercial or person party must exist for the supplied partyId.
 
@@ -3434,7 +3434,7 @@ paths:
         Returns 404 when no party exists for the supplied partyId, and 200 with defaults rather than an error when rules were never configured.
 
         '
-      operationId: getBillingRules
+      operationId: getPartyBillingRules
       parameters:
       - name: partyId
         in: path
@@ -3946,7 +3946,7 @@ paths:
       summary: List Billing Term Options
       description: 'Returns the static reference list of billing term options: NET_30, NET_60, NET_90, COD, and PREPAID, each with a display label and net-day count.
 
-        Use this tool when populating a billing-terms dropdown before createCommercialAccount or upsertBillingRules; do not use upsertBillingRules to discover valid terms, which writes configuration rather than listing options.
+        Use this tool when populating a billing-terms dropdown before createCrmCommercialAccount or upsertPartyBillingRules; do not use upsertPartyBillingRules to discover valid terms, which writes configuration rather than listing options.
 
         Preconditions: none; the list is compiled into the service and identical for every caller.
 
@@ -4109,7 +4109,7 @@ paths:
       summary: Check Commercial Party Duplicates
       description: 'Checks for existing commercial parties whose legal name contains the supplied name, flagging case-insensitive exact matches as EXACT with score 1.0 and other containment matches as FUZZY with score 0.7.
 
-        Use this tool before createCommercialAccount to avoid creating a duplicate customer; do not use searchParties for this, which does not classify match strength or surface an exactMatchPartyId.
+        Use this tool before createCrmCommercialAccount to avoid creating a duplicate customer; do not use searchParties for this, which does not classify match strength or surface an exactMatchPartyId.
 
         Preconditions: none; the check reads existing commercial parties only.
 

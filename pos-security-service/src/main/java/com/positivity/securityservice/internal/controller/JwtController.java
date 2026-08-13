@@ -137,8 +137,9 @@ public class JwtController {
      * @return token pair response containing both tokens
      */
     @Operation(operationId = "issueTokenPair", summary = "Issue Privileged JWT Token Pair", description = """
-                    Issues a JWT access token (1-hour) and refresh token (7-day) for an existing user's username on \
-                    behalf of a trusted internal caller, embedding uid, roles, perm_bits, and perm_ver claims.
+                    Privileged internal endpoint that issues a JWT access token (1-hour) and refresh token (7-day) \
+                    for an existing user's username on behalf of a trusted internal caller, embedding uid, roles, \
+                    perm_bits, and perm_ver claims.
                     Use this tool when an internal caller needs a refreshable session for an existing user; do not \
                     use issueInternalToken, which returns only a single access token, and do not use loginUser, \
                     which requires the user's password.

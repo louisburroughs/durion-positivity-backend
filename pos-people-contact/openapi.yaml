@@ -657,7 +657,7 @@ paths:
       summary: Assign a Role to a Person
       description: 'Assigns a role to a person by delegating to pos-security through the person''s linked user account, optionally scoped to one location and bounded by a date window.
 
-        Use this tool to grant access; do not use revokeRoleAssignment, which ends an assignment that already exists.
+        Use this tool to grant access; do not use revokePersonRoleAssignment, which ends an assignment that already exists.
 
         Preconditions: the person must have an active user-person link resolving to a pos-security user, and the roleCode must exist in pos-security.
 
@@ -1184,7 +1184,7 @@ paths:
         Returns 204 on success, and 404 when the person has no user link, the security user cannot be resolved, or pos-security has no matching assignment.
 
         '
-      operationId: revokeRoleAssignment
+      operationId: revokePersonRoleAssignment
       parameters:
       - name: personUuid
         in: path
@@ -1230,7 +1230,7 @@ paths:
       summary: Unlink User from Person Record
       description: 'Removes the link between a security user and its person record, leaving both the user account and the person untouched.
 
-        Use this tool to sever a login from an identity, including before deletePerson on a person that still has linked users; do not use revokeRoleAssignment, which removes a single role rather than the whole link.
+        Use this tool to sever a login from an identity, including before deletePerson on a person that still has linked users; do not use revokePersonRoleAssignment, which removes a single role rather than the whole link.
 
         Preconditions: a user-person link must exist for the username.
 

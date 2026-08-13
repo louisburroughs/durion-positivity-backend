@@ -73,12 +73,12 @@ public class CrmPersonController {
             scopes = {"crm:person:create"})
     @PreAuthorize("hasAuthority('crm:person:create')")
     @EmitEvent(id = "CRM_PERSON_CREATE", apiVersion = "1")
-    @Operation(operationId = "createPerson", summary = "Create Individual Person Record", description = """
+    @Operation(operationId = "createCrmPerson", summary = "Create Individual Person Record", description = """
                     Creates an individual customer: the canonical person identity is resolved or created in \
                     pos-people (the source of truth for names and contact points), and a thin person-party \
                     link with a generated CUST-PER customer number is stored locally.
                     Use this tool when onboarding an individual customer; do not use \
-                    createCommercialAccount, which creates an organization, and note that if the identity \
+                    createCrmCommercialAccount, which creates an organization, and note that if the identity \
                     already has a local person-party the existing record is returned instead of a duplicate.
                     Preconditions: none beyond authorization; contact points are validated before any \
                     identity is created so an invalid email persists nothing.
@@ -97,7 +97,7 @@ public class CrmPersonController {
     @ApiResponse(responseCode = "400", description = "Invalid request - validation failed")
     @ApiResponse(responseCode = "401", description = "Unauthorized")
     @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
-    public ResponseEntity<CreatePersonResponse> createPerson(
+    public ResponseEntity<CreatePersonResponse> createCrmPerson(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
                                     "The individual's name, preferred contact method, and contact points to register.",

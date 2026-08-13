@@ -162,7 +162,7 @@ public class InvoicePaymentController {
     @GetMapping("/v1/accounting/invoice/rules/{customerId}")
     @PreAuthorize("hasAuthority('accounting:ap:view')")
     @Operation(
-            operationId = "getBillingRules",
+            operationId = "getAccountingBillingRules",
             summary = "Get Customer Billing Rules",
             description = """
                     Returns the billing rule references configured for a customer, fetched from the customer \
@@ -181,7 +181,7 @@ public class InvoicePaymentController {
     @ApiResponse(responseCode = "200", description = "Billing rules returned")
     @ApiResponse(responseCode = "404", description = "Customer not found")
     @ApiResponse(responseCode = "503", description = "Customer service unavailable")
-    public ResponseEntity<BillingRuleRefResponse> getBillingRules(
+    public ResponseEntity<BillingRuleRefResponse> getAccountingBillingRules(
             @Parameter(description = "Customer identifier") @PathVariable UUID customerId) {
         log.info("Fetching billing rules for customer {}", customerId);
         BillingRuleRefResponse rules = billingRulesService.getBillingRules(customerId);

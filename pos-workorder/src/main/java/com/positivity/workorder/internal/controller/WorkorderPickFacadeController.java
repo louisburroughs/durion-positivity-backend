@@ -47,7 +47,7 @@ public class WorkorderPickFacadeController {
             name = "bearerAuth",
             scopes = {"inventory:pick_list:view"})
     @PreAuthorize("hasAuthority('inventory:pick_list:view')")
-    @Operation(operationId = "getPickList", summary = "Get Pick List for Workorder", description = """
+    @Operation(operationId = "getWorkorderPickList", summary = "Get Pick List for Workorder", description = """
                     Returns the workorder's primary pick list header from the local inventory replica so parts \
                     can be staged and fulfilled.
                     Use this tool for the pick list summary; use getPickTasks instead for the individual pick lines that \
@@ -70,7 +70,7 @@ public class WorkorderPickFacadeController {
             responseCode = "404",
             description = "Workorder not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<WorkorderPickListResponse> getPickList(
+    public ResponseEntity<WorkorderPickListResponse> getWorkorderPickList(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     @NonNull
@@ -88,7 +88,7 @@ public class WorkorderPickFacadeController {
     @Operation(operationId = "getPickTasks", summary = "Get Pick Tasks for Workorder", description = """
                     Returns the pick tasks of the workorder's primary pick list in sort order, each with its \
                     SKU, location, required and picked quantities, and status.
-                    Use this tool to drive pick execution line by line; use getPickList instead for the list header and \
+                    Use this tool to drive pick execution line by line; use getWorkorderPickList instead for the list header and \
                     getPickedItems for what has already been picked.
                     Preconditions: a pick list replica must already exist for the workorder.
                     Required inputs: workorderId (UUID) as a path parameter.

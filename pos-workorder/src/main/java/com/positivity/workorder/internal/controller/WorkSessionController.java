@@ -31,10 +31,10 @@ public class WorkSessionController {
 
     private final WorkSessionService workSessionService;
 
-    @Operation(operationId = "startWorkSession", summary = "Start a Technician Work Session", description = """
+    @Operation(operationId = "startWorkexecWorkSession", summary = "Start a Technician Work Session", description = """
                     Creates an IN_PROGRESS work session binding a mechanic to a workorder task, stamping the \
                     start time from the server clock.
-                    Use this tool when a technician clocks onto a task; do not use stopWorkSession, which ends a \
+                    Use this tool when a technician clocks onto a task; do not use stopWorkexecWorkSession, which ends a \
                     running session, or addBreakSegment, which pauses one.
                     Preconditions: the workorder must exist, and the mechanic must have no other IN_PROGRESS \
                     session unless overlapping sessions are enabled by configuration, the caller holds \
@@ -56,7 +56,7 @@ public class WorkSessionController {
             name = "bearerAuth",
             scopes = {"timekeeping:work_session:create"})
     @PreAuthorize("hasAuthority('timekeeping:work_session:create')")
-    public ResponseEntity<WorkSessionResponse> startWorkSession(
+    public ResponseEntity<WorkSessionResponse> startWorkexecWorkSession(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Session start details binding a mechanic to a workorder task and location.",
                             required = true,
@@ -79,7 +79,7 @@ public class WorkSessionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @Operation(operationId = "stopWorkSession", summary = "Stop an Active Work Session", description = """
+    @Operation(operationId = "stopWorkexecWorkSession", summary = "Stop an Active Work Session", description = """
                     Stops an IN_PROGRESS work session, transitioning it to COMPLETED and computing net worked \
                     seconds as elapsed time minus finished break segments.
                     Use this tool when a technician clocks off a task; do not use stopBreakSegment, which only \
@@ -101,7 +101,7 @@ public class WorkSessionController {
             name = "bearerAuth",
             scopes = {"timekeeping:work_session:stop"})
     @PreAuthorize("hasAuthority('timekeeping:work_session:stop')")
-    public ResponseEntity<WorkSessionResponse> stopWorkSession(
+    public ResponseEntity<WorkSessionResponse> stopWorkexecWorkSession(
             @Parameter(description = "ID of the work session to stop", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     UUID workSessionId,
@@ -127,7 +127,7 @@ public class WorkSessionController {
     @Operation(operationId = "startBreakSegment", summary = "Start a Break Segment", description = """
                     Opens a break segment inside an active work session, recording the break start time so break \
                     minutes are excluded from the session's net duration.
-                    Use this tool when a technician pauses work; do not use stopWorkSession, which ends the whole \
+                    Use this tool when a technician pauses work; do not use stopWorkexecWorkSession, which ends the whole \
                     session rather than pausing it.
                     Preconditions: the session must exist, be IN_PROGRESS, not be locked, and have no other break \
                     segment still open.
@@ -172,7 +172,7 @@ public class WorkSessionController {
     @Operation(operationId = "stopBreakSegment", summary = "Stop a Break Segment", description = """
                     Closes an open break segment within a work session, recording the break end time used to \
                     reduce the session's net worked duration.
-                    Use this tool when a technician resumes work after a pause; do not use stopWorkSession, \
+                    Use this tool when a technician resumes work after a pause; do not use stopWorkexecWorkSession, \
                     which ends the entire session.
                     Preconditions: the session and break segment must exist, the break must belong to that \
                     session and still be open, and the session must not be locked.

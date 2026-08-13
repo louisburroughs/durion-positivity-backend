@@ -149,7 +149,7 @@ public class UserPersonLinkController {
                     Removes the link between a security user and its person record, leaving both the user \
                     account and the person untouched.
                     Use this tool to sever a login from an identity, including before deletePerson on a person \
-                    that still has linked users; do not use revokeRoleAssignment, which removes a single role \
+                    that still has linked users; do not use revokePersonRoleAssignment, which removes a single role \
                     rather than the whole link.
                     Preconditions: a user-person link must exist for the username.
                     Required inputs: username as a path parameter; there is no request body.

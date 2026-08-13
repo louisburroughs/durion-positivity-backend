@@ -46,8 +46,8 @@ public class CrmBillingTermsController {
     @Operation(operationId = "listBillingTerms", summary = "List Billing Term Options", description = """
                     Returns the static reference list of billing term options: NET_30, NET_60, NET_90, COD, \
                     and PREPAID, each with a display label and net-day count.
-                    Use this tool when populating a billing-terms dropdown before createCommercialAccount or \
-                    upsertBillingRules; do not use upsertBillingRules to discover valid terms, which writes \
+                    Use this tool when populating a billing-terms dropdown before createCrmCommercialAccount or \
+                    upsertPartyBillingRules; do not use upsertPartyBillingRules to discover valid terms, which writes \
                     configuration rather than listing options.
                     Preconditions: none; the list is compiled into the service and identical for every caller.
                     Required inputs: none; there are no parameters and no request body.

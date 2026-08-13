@@ -98,7 +98,7 @@ public class PersonAccessController {
     @Operation(operationId = "assignRoleToPerson", summary = "Assign a Role to a Person", description = """
                     Assigns a role to a person by delegating to pos-security through the person's linked user \
                     account, optionally scoped to one location and bounded by a date window.
-                    Use this tool to grant access; do not use revokeRoleAssignment, which ends an assignment \
+                    Use this tool to grant access; do not use revokePersonRoleAssignment, which ends an assignment \
                     that already exists.
                     Preconditions: the person must have an active user-person link resolving to a pos-security \
                     user, and the roleCode must exist in pos-security.
@@ -170,7 +170,10 @@ public class PersonAccessController {
 
     @DeleteMapping("/{personUuid}/access/assignments/{roleCode}")
     @EmitEvent(id = "PEOPLE_CONTACT_ACCESS_ASSIGNMENT_REVOKE", apiVersion = "1")
-    @Operation(operationId = "revokeRoleAssignment", summary = "Revoke Role Assignment from Person", description = """
+    @Operation(
+            operationId = "revokePersonRoleAssignment",
+            summary = "Revoke Role Assignment from Person",
+            description = """
                     Revokes one of a person's role assignments by delegating to pos-security through the \
                     person's linked user account.
                     Use this tool to end access granted with assignRoleToPerson; do not use \

@@ -85,11 +85,11 @@ public class CrmSnapshotController {
                 : ResponseEntity.notFound().build();
     }
 
-    @Operation(operationId = "getBillingRules", summary = "Get Party Billing Rules", description = """
+    @Operation(operationId = "getPartyBillingRules", summary = "Get Party Billing Rules", description = """
                     Returns the billing-rules reference for a party, falling back to default rules when a \
                     commercial party has no explicitly configured rules and for person parties, which have \
                     no configurable rules; enforcement of the rules belongs to downstream services.
-                    Use this tool when reading how an account should be billed; use upsertBillingRules \
+                    Use this tool when reading how an account should be billed; use upsertPartyBillingRules \
                     instead to change the configuration.
                     Preconditions: a commercial or person party must exist for the supplied partyId.
                     Required inputs: partyId (UUID) as a path parameter; there is no request body.
@@ -106,7 +106,7 @@ public class CrmSnapshotController {
     @GetMapping("/party/{partyId}/billing-rules")
     @PreAuthorize("hasAuthority('crm:party:view')")
     @EmitEvent(id = "CRM_SNAPSHOT_BILLING_RULES_GET", apiVersion = "1")
-    public ResponseEntity<BillingRuleRef> getBillingRules(
+    public ResponseEntity<BillingRuleRef> getPartyBillingRules(
             @Parameter(description = "Party ID (UUID)") @PathVariable UUID partyId) {
         BillingRuleRef rules = partyOps.getBillingRulesForParty(partyId);
         if (rules == null) {

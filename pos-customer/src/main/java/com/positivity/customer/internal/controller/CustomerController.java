@@ -122,8 +122,8 @@ public class CustomerController {
     @Operation(operationId = "createCustomer", summary = "Create Customer Record", description = """
                     Creates a customer from a flat CustomerDTO, routed by customerType to either the \
                     commercial or person party store.
-                    Use this tool only for the legacy flat customer API; use createCommercialAccount \
-                    instead for commercial onboarding with duplicate checking, and createPerson for \
+                    Use this tool only for the legacy flat customer API; use createCrmCommercialAccount \
+                    instead for commercial onboarding with duplicate checking, and createCrmPerson for \
                     individuals so the canonical identity lands in pos-people.
                     Preconditions: none beyond authorization; no duplicate detection is performed.
                     Required inputs: firstName and lastName (each max 100); customerType selects the store, \

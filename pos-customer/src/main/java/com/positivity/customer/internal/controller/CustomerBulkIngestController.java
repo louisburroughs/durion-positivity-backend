@@ -47,9 +47,9 @@ public class CustomerBulkIngestController extends AbstractBulkIngestController<C
             summary = "Bulk Ingest Customer Records",
             description = """
                     Imports a batch of individual customer records, creating each one through the same path \
-                    as createPerson so canonical identities land in pos-people, and reports a per-row \
+                    as createCrmPerson so canonical identities land in pos-people, and reports a per-row \
                     success or failure result without aborting the batch.
-                    Use this tool for migrations and file imports of individuals; do not use createPerson \
+                    Use this tool for migrations and file imports of individuals; do not use createCrmPerson \
                     row by row for large loads, and note this path cannot create commercial accounts.
                     Preconditions: none beyond authorization; rows that fail validation are reported with \
                     errorCode CUSTOMER_INGEST_FAILED while the rest of the batch proceeds.

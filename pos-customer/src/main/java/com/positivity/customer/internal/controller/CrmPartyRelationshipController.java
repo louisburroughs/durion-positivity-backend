@@ -89,7 +89,7 @@ public class CrmPartyRelationshipController {
                     one or more roles, optionally marking the person as the primary billing contact.
                     Use this tool when associating a known person with a commercial account; do not use \
                     updateContactRoles, which manages the separate contact-role assignment model, and do not \
-                    use createPerson, which creates the person record itself.
+                    use createCrmPerson, which creates the person record itself.
                     Preconditions: the commercial party and the person must both exist, and no active \
                     relationship may already cover the same party, person, and role for today's date; \
                     isPrimaryBillingContact requires the BILLING role in the same request.

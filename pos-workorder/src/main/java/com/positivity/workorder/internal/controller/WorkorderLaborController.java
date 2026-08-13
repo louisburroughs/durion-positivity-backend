@@ -59,7 +59,7 @@ public class WorkorderLaborController {
                     Starts a labor entry tracking a technician's time against one workorder service line, \
                     stamping the start time and zero hours worked.
                     Use this tool when a technician begins billable labor on a specific service; do not use \
-                    startWorkSession, which is the payroll timekeeping clock rather than per-service labor \
+                    startWorkexecWorkSession, which is the payroll timekeeping clock rather than per-service labor \
                     tracking.
                     Preconditions: the workorder must be in ASSIGNED, WORK_IN_PROGRESS, AWAITING_PARTS, or \
                     AWAITING_APPROVAL status, the service must belong to that workorder, and the service must \

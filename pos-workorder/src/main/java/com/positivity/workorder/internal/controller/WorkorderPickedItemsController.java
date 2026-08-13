@@ -47,7 +47,7 @@ public class WorkorderPickedItemsController {
     @Operation(operationId = "getPickedItems", summary = "Get Picked Items for Workorder", description = """
                     Returns the items already picked for a workorder from the local pick replica, showing picked \
                     and consumed quantities before installation.
-                    Use this tool to see what is staged and available to consume; use consumePickedItems to \
+                    Use this tool to see what is staged and available to consume; use consumeWorkorderPickedItems to \
                     actually record consumption, and getPickTasks for lines still being picked.
                     Preconditions: none — a workorder without a pick list yields an empty list rather than an \
                     error.
@@ -82,7 +82,10 @@ public class WorkorderPickedItemsController {
             scopes = {"workorder:parts:consume"})
     @PreAuthorize("hasAuthority('workorder:parts:consume')")
     @EmitEvent(id = "WORKORDER_PICKED_ITEMS_CONSUME", apiVersion = "1")
-    @Operation(operationId = "consumePickedItems", summary = "Consume Picked Items into Workorder", description = """
+    @Operation(
+            operationId = "consumeWorkorderPickedItems",
+            summary = "Consume Picked Items into Workorder",
+            description = """
                     Queues asynchronous consumption of picked items into the workorder over the Kafka command \
                     feed per ADR-0044; each item is acknowledged with status PENDING, and the inventory \
                     consumption-recorded fact later updates the pick replicas.
@@ -113,7 +116,7 @@ public class WorkorderPickedItemsController {
             responseCode = "404",
             description = "Workorder not found",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<ConsumePickedItemsResponse> consumePickedItems(
+    public ResponseEntity<ConsumePickedItemsResponse> consumeWorkorderPickedItems(
             @Parameter(description = "Workorder ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     @NonNull

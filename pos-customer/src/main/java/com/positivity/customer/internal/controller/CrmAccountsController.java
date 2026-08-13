@@ -173,7 +173,7 @@ public class CrmAccountsController {
 
     // --- Party/Commercial Account Management (Issue #176) ---
 
-    @Operation(operationId = "createCommercialAccount", summary = "Create Commercial Account", description = """
+    @Operation(operationId = "createCrmCommercialAccount", summary = "Create Commercial Account", description = """
                     Creates a commercial party record with status ACTIVE and a generated customer number of the \
                     form CUST-XXXXXXXX.
                     Use this tool when onboarding a new commercial customer; do not use searchParties or \
@@ -205,7 +205,7 @@ public class CrmAccountsController {
             scopes = {CrmPermissionRegistry.PARTY_CREATE})
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_CREATE + "')")
     @EmitEvent(id = "CUSTOMER_PARTY_CREATE", apiVersion = "1")
-    public ResponseEntity<CreateCommercialAccountResponse> createCommercialAccount(
+    public ResponseEntity<CreateCommercialAccountResponse> createCrmCommercialAccount(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
                                     "Commercial party to create; legalName is the only mandatory field and no duplicate check is applied.",
@@ -222,7 +222,7 @@ public class CrmAccountsController {
                                                                     """)))
                     @RequestBody(required = false)
                     CreateCommercialAccountRequest body) {
-        log.info("createCommercialAccount");
+        log.info("createCrmCommercialAccount");
         CreateCommercialAccountResponse response = partyService.createCommercialAccount(body);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -438,7 +438,7 @@ public class CrmAccountsController {
                     to the survivor, external identifiers and vehicle VINs are copied over, and the losing \
                     party's status is set to MERGED.
                     Use this tool when checkPartyDuplicates has confirmed two records represent the same \
-                    customer; do not use createCommercialAccount to work around duplicates, and note the merge \
+                    customer; do not use createCrmCommercialAccount to work around duplicates, and note the merge \
                     is not reversible through this API.
                     Preconditions: both the surviving party (path) and losing party (body) must exist as \
                     commercial parties and must be different records.
@@ -654,7 +654,7 @@ public class CrmAccountsController {
                     Checks for existing commercial parties whose legal name contains the supplied name, \
                     flagging case-insensitive exact matches as EXACT with score 1.0 and other containment \
                     matches as FUZZY with score 0.7.
-                    Use this tool before createCommercialAccount to avoid creating a duplicate customer; do \
+                    Use this tool before createCrmCommercialAccount to avoid creating a duplicate customer; do \
                     not use searchParties for this, which does not classify match strength or surface an \
                     exactMatchPartyId.
                     Preconditions: none; the check reads existing commercial parties only.
@@ -698,12 +698,12 @@ public class CrmAccountsController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(operationId = "upsertBillingRules", summary = "Upsert Party Billing Rules", description = """
+    @Operation(operationId = "upsertPartyBillingRules", summary = "Upsert Party Billing Rules", description = """
                     Creates or replaces the embedded billing-rules configuration on a commercial party, \
                     covering PO requirement, tax exemption, credit hold, auto-pay, payment terms, credit \
                     limit, currency, and invoice delivery method.
                     Use this tool when configuring how a commercial account is billed; do not use \
-                    createCommercialAccount, which only sets billingTermsId at creation and cannot change \
+                    createCrmCommercialAccount, which only sets billingTermsId at creation and cannot change \
                     billing flags afterwards.
                     Preconditions: a commercial party must exist for the supplied partyId; the whole rules \
                     block is replaced on every call rather than patched field by field.
@@ -733,7 +733,7 @@ public class CrmAccountsController {
             scopes = {CrmPermissionRegistry.BILLING_RULES_EDIT})
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.BILLING_RULES_EDIT + "')")
     @EmitEvent(id = "CUSTOMER_BILLING_RULES_UPSERT", apiVersion = "1")
-    public ResponseEntity<BillingRuleRef> upsertBillingRules(
+    public ResponseEntity<BillingRuleRef> upsertPartyBillingRules(
             @Parameter(description = "Party ID", required = true, example = "f47ac10b-58cc-4372-a567-0e02b2c3d479")
                     @PathVariable
                     UUID partyId,

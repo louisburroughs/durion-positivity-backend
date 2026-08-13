@@ -53,7 +53,7 @@ public class PaymentApplicationController {
             scopes = {"accounting:ap:pay"})
     @PreAuthorize("hasAuthority('accounting:ap:pay')")
     @Operation(
-            operationId = "voidPayment",
+            operationId = "voidPaymentApplication",
             summary = "Void Payment",
             description = """
                     Voids a receivable payment that has not been applied to any invoice, zeroing its \
@@ -73,7 +73,7 @@ public class PaymentApplicationController {
     @ApiResponse(responseCode = "404", description = "Payment not found")
     @ApiResponse(responseCode = "409", description = "Payment already applied; reverse applications first")
     @EmitEvent(id = "ACCOUNTING_PAYMENT_VOID", apiVersion = "1")
-    public ResponseEntity<Void> voidPayment(
+    public ResponseEntity<Void> voidPaymentApplication(
             @Parameter(description = "Payment identifier") @PathVariable UUID paymentId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Optional and ignored; send an empty object or omit the body entirely.",
@@ -102,7 +102,7 @@ public class PaymentApplicationController {
                     each invoice's balance and the payment's unapplied amount.
                     Use this tool to back out a whole applied payment, which is also the required path for \
                     multi-invoice applications; do not use reversePaymentApplication, which reverses one \
-                    single-invoice application, and do not use voidPayment, which only handles never-applied \
+                    single-invoice application, and do not use voidPaymentApplication, which only handles never-applied \
                     payments.
                     Preconditions: the payment must exist and have at least one application; \
                     already-reversed applications are skipped rather than double-reversed.

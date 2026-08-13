@@ -753,7 +753,7 @@ paths:
       summary: Start Labor Session on Service
       description: 'Starts a labor entry tracking a technician''s time against one workorder service line, stamping the start time and zero hours worked.
 
-        Use this tool when a technician begins billable labor on a specific service; do not use startWorkSession, which is the payroll timekeeping clock rather than per-service labor tracking.
+        Use this tool when a technician begins billable labor on a specific service; do not use startWorkexecWorkSession, which is the payroll timekeeping clock rather than per-service labor tracking.
 
         Preconditions: the workorder must be in ASSIGNED, WORK_IN_PROGRESS, AWAITING_PARTS, or AWAITING_APPROVAL status, the service must belong to that workorder, and the service must have no labor session still open.
 
@@ -920,7 +920,7 @@ paths:
         Returns 202 with per-item PENDING results, 404 when the pick list or a referenced pick task is missing, and 503 when the command feed is unavailable.
 
         '
-      operationId: consumePickedItems
+      operationId: consumeWorkorderPickedItems
       parameters:
       - name: workorderId
         in: path
@@ -2180,7 +2180,7 @@ paths:
         Returns 404 when no session exists for the id, and 409 when the session is not IN_PROGRESS or is locked.
 
         '
-      operationId: stopWorkSession
+      operationId: stopWorkexecWorkSession
       parameters:
       - name: workSessionId
         in: path
@@ -2233,7 +2233,7 @@ paths:
       summary: Start a Break Segment
       description: 'Opens a break segment inside an active work session, recording the break start time so break minutes are excluded from the session''s net duration.
 
-        Use this tool when a technician pauses work; do not use stopWorkSession, which ends the whole session rather than pausing it.
+        Use this tool when a technician pauses work; do not use stopWorkexecWorkSession, which ends the whole session rather than pausing it.
 
         Preconditions: the session must exist, be IN_PROGRESS, not be locked, and have no other break segment still open.
 
@@ -2298,7 +2298,7 @@ paths:
       summary: Stop a Break Segment
       description: 'Closes an open break segment within a work session, recording the break end time used to reduce the session''s net worked duration.
 
-        Use this tool when a technician resumes work after a pause; do not use stopWorkSession, which ends the entire session.
+        Use this tool when a technician resumes work after a pause; do not use stopWorkexecWorkSession, which ends the entire session.
 
         Preconditions: the session and break segment must exist, the break must belong to that session and still be open, and the session must not be locked.
 
@@ -2358,7 +2358,7 @@ paths:
       summary: Start a Technician Work Session
       description: 'Creates an IN_PROGRESS work session binding a mechanic to a workorder task, stamping the start time from the server clock.
 
-        Use this tool when a technician clocks onto a task; do not use stopWorkSession, which ends a running session, or addBreakSegment, which pauses one.
+        Use this tool when a technician clocks onto a task; do not use stopWorkexecWorkSession, which ends a running session, or addBreakSegment, which pauses one.
 
         Preconditions: the workorder must exist, and the mechanic must have no other IN_PROGRESS session unless overlapping sessions are enabled by configuration, the caller holds timekeeping:overlap_override, and an overlapOverrideReason is supplied.
 
@@ -2369,7 +2369,7 @@ paths:
         Returns 201 with the new session, 404 when the workorder does not exist, and 409 when the mechanic already has an active session and no valid override applies.
 
         '
-      operationId: startWorkSession
+      operationId: startWorkexecWorkSession
       requestBody:
         description: Session start details binding a mechanic to a workorder task and location.
         content:
@@ -4355,7 +4355,7 @@ paths:
       summary: Get Picked Items for Workorder
       description: 'Returns the items already picked for a workorder from the local pick replica, showing picked and consumed quantities before installation.
 
-        Use this tool to see what is staged and available to consume; use consumePickedItems to actually record consumption, and getPickTasks for lines still being picked.
+        Use this tool to see what is staged and available to consume; use consumeWorkorderPickedItems to actually record consumption, and getPickTasks for lines still being picked.
 
         Preconditions: none — a workorder without a pick list yields an empty list rather than an error.
 
@@ -4414,7 +4414,7 @@ paths:
         Returns 404 when no pick list exists for the workorder.
 
         '
-      operationId: getPickList
+      operationId: getWorkorderPickList
       parameters:
       - name: workorderId
         in: path
@@ -4455,7 +4455,7 @@ paths:
       summary: Get Pick Tasks for Workorder
       description: 'Returns the pick tasks of the workorder''s primary pick list in sort order, each with its SKU, location, required and picked quantities, and status.
 
-        Use this tool to drive pick execution line by line; use getPickList instead for the list header and getPickedItems for what has already been picked.
+        Use this tool to drive pick execution line by line; use getWorkorderPickList instead for the list header and getPickedItems for what has already been picked.
 
         Preconditions: a pick list replica must already exist for the workorder.
 

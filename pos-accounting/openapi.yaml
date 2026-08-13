@@ -2469,7 +2469,7 @@ paths:
         Returns 404 when the payment is not found, 409 when invoice applications already exist (reverse those first), and 204 with no body on success.
 
         '
-      operationId: voidPayment
+      operationId: voidPaymentApplication
       parameters:
       - name: paymentId
         in: path
@@ -2506,7 +2506,7 @@ paths:
       summary: Reverse Payment
       description: 'Reverses every application of a receivable payment as new compensating records, restoring each invoice''s balance and the payment''s unapplied amount.
 
-        Use this tool to back out a whole applied payment, which is also the required path for multi-invoice applications; do not use reversePaymentApplication, which reverses one single-invoice application, and do not use voidPayment, which only handles never-applied payments.
+        Use this tool to back out a whole applied payment, which is also the required path for multi-invoice applications; do not use reversePaymentApplication, which reverses one single-invoice application, and do not use voidPaymentApplication, which only handles never-applied payments.
 
         Preconditions: the payment must exist and have at least one application; already-reversed applications are skipped rather than double-reversed.
 
@@ -6382,7 +6382,7 @@ paths:
         Returns 404 when the customer is not found, and 503 when the customer service is unavailable.
 
         '
-      operationId: getBillingRules
+      operationId: getAccountingBillingRules
       parameters:
       - name: customerId
         in: path
