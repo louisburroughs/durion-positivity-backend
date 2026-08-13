@@ -12,6 +12,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.positivity.nhtsa.internal.entity.Make;
 import com.positivity.nhtsa.internal.entity.Manufacturer;
 import com.positivity.nhtsa.internal.entity.Model;
+import com.positivity.nhtsa.internal.entity.VehicleType;
 import com.positivity.nhtsa.internal.entity.VehicleVariable;
 import com.positivity.nhtsa.internal.repository.MakeRepository;
 import com.positivity.nhtsa.internal.repository.ManufacturerRepository;
@@ -51,14 +52,14 @@ import org.springframework.web.client.RestClient;
  * Two behaviours are worth knowing before editing this service:
  *
  * <ul>
- * <li><b>{@code isCacheExpired} computes the opposite of its name</b> — it really
- * answers "is still fresh". Three of the six call sites account for that and
- * behave correctly; the other three negate it and therefore serve the cache only
- * once it is stale, hitting vPIC on every request while it is warm. That is a
- * live bug, pinned by {@link #vehicleVariableCacheIsInverted()} and filed as
- * issue #1265. Fixing it means correcting the method name and all six call sites
- * together — and the same inverted helper was copied into
- * pos-vehicle-reference-carapi, where both call sites happen to be consistent.</li>
+ * <li><b>All six methods gate on {@code isCacheFresh}, unnegated</b> — the helper
+ * answers "are these rows still inside the 24-hour window", so every call site
+ * reads {@code if (!cached.isEmpty() && isCacheFresh(...)) return cached;}. It
+ * used to be named {@code isCacheExpired} while computing the opposite, and three
+ * of the six call sites negated it on top of that: those three called vPIC on
+ * every request while the cache was warm and then froze once it went stale
+ * (issue #1265). Keep the name and the call sites agreeing — a helper whose name
+ * inverts its body is what made half this service silently uncached.</li>
  * <li><b>NHTSA ids are hashed into UUIDs</b> via
  * {@code UUID.nameUUIDFromBytes("make-" + id)}, so the same vPIC record always
  * maps to the same primary key and a refetch updates rather than duplicates.
@@ -242,41 +243,82 @@ class VehicleReferenceServiceTest {
     }
 
     @Test
-    @DisplayName("BUG: the vehicle-variable cache is inverted — a fresh cache refetches from vPIC")
-    void vehicleVariableCacheIsInverted() {
+    @DisplayName("serves cached vehicle variables without calling vPIC while fresh")
+    void vehicleVariableCacheIsServedWhileFresh() {
         VehicleVariable cachedVar = new VehicleVariable();
         cachedVar.setId(UUID.randomUUID());
         cachedVar.setName("Body Class");
         cachedVar.setCacheTimestamp(fresh());
         when(vehicleVariableRepository.findAll()).thenReturn(List.of(cachedVar));
+
+        assertThat(service.getVehicleVariables())
+                .singleElement()
+                .extracting(VehicleVariable::getName)
+                .isEqualTo("Body Class");
+
+        // Regression guard for issue #1265: this call site used to negate a helper that was
+        // itself inverted, so an hour-old cache still went out to vPIC — and rewrote every
+        // row, making a read a database write too. No HTTP expectation is registered, so any
+        // outbound call fails this test.
+        server.verify();
+        verify(vehicleVariableRepository, never()).deleteAll();
+    }
+
+    @Test
+    @DisplayName("refetches vehicle variables once the cache falls outside the 24h window")
+    void staleVehicleVariablesRefetched() {
+        VehicleVariable cachedVar = new VehicleVariable();
+        cachedVar.setId(UUID.randomUUID());
+        cachedVar.setName("Body Class");
+        cachedVar.setCacheTimestamp(stale());
+        when(vehicleVariableRepository.findAll()).thenReturn(List.of(cachedVar));
         server.expect(requestTo(BASE + "/GetVehicleVariableList?format=json"))
                 .andRespond(withSuccess("""
-                        {"Results":[{"ID":5,"Name":"Body Class"}]}""", MediaType.APPLICATION_JSON));
+                        {"Results":[{"ID":5,"Name":"Body Class","Description":"Sedan, SUV, ..."}]}""", MediaType.APPLICATION_JSON));
 
         service.getVehicleVariables();
 
-        // Documents current behaviour, not desired behaviour. isCacheExpired() actually
-        // answers "is still fresh"; three of this service's six methods
-        // (getVehicleVariables, getVehicleVariableValues, getVehicleTypesForMake) then negate
-        // it, so they return the cache only once it is STALE and hit vPIC on every request
-        // while it is warm — the exact opposite of the intent, against a public API with no
-        // SLA. The other three call sites omit the negation and behave correctly. Tracked as
-        // issue #1265. The registered expectation above is the assertion: an outbound call happened
-        // despite an hour-old cache. Fixing it means correcting the method name and
-        // all six call sites together.
+        // The other half of #1265: with the double inversion this branch was unreachable once
+        // the cache aged past 24h, so the rows froze at whatever vPIC last returned.
+        org.mockito.ArgumentCaptor<VehicleVariable> captor = org.mockito.ArgumentCaptor.forClass(VehicleVariable.class);
+        verify(vehicleVariableRepository).save(captor.capture());
+        assertThat(captor.getValue().getName()).isEqualTo("Body Class");
+        assertThat(captor.getValue().getCacheTimestamp()).isEqualTo(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
         server.verify();
     }
 
     @Test
-    @DisplayName("the three non-negated methods do serve a fresh cache without calling vPIC")
-    void nonNegatedMethodsCacheCorrectly() {
-        when(manufacturerRepository.findAll()).thenReturn(List.of(manufacturer(fresh())));
+    @DisplayName("serves cached vehicle types per make without calling vPIC while fresh")
+    void vehicleTypeCacheIsServedWhileFresh() {
+        VehicleType cachedType = new VehicleType();
+        cachedType.setId(UUID.randomUUID());
+        cachedType.setVehicleTypeName("Passenger Car");
+        cachedType.setCacheTimestamp(fresh());
+        when(makeRepository.findById(MAKE_ID)).thenReturn(Optional.of(make(fresh())));
+        when(vehicleTypeRepository.findByMakeId(MAKE_ID)).thenReturn(List.of(cachedType));
 
+        assertThat(service.getVehicleTypesForMake(MAKE_ID))
+                .singleElement()
+                .extracting(VehicleType::getVehicleTypeName)
+                .isEqualTo("Passenger Car");
+
+        // Third of the three call sites corrected by #1265.
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("treats a row with no cache timestamp as needing a refetch")
+    void nullTimestampRefetches() {
+        when(manufacturerRepository.findAll()).thenReturn(List.of(manufacturer(null)));
+        server.expect(requestTo(BASE + "/getallmanufacturers?format=json"))
+                .andRespond(withSuccess("""
+                        {"Results":[{"Mfr_ID":988,"Mfr_CommonName":"HONDA"}]}""", MediaType.APPLICATION_JSON));
+
+        // An unstamped row cannot be shown to be fresh, so it must not be trusted — the
+        // freshness check has to fail closed, not open.
         service.getManufacturers();
 
-        // Same helper, no negation at the call site: no HTTP expectation is registered, so
-        // any outbound call would fail this test. This is the contrast that shows the bug
-        // above is a call-site inconsistency rather than a broken helper.
+        verify(manufacturerRepository).save(any());
         server.verify();
     }
 }

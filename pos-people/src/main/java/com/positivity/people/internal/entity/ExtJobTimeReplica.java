@@ -17,7 +17,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
- * Read-only job-time replica fed by {@code workorder.job_time.recorded.v1} facts
+ * Read-only job-time replica fed by {@code workorder.job-time.recorded.v1} facts
  * (ADR-0044 §6, #875). One row per finalized labor entry of a completed workorder; the
  * attendance-discrepancy report aggregates minutes per technician/location/local-date from
  * {@code endAtUtc} using the caller's timezone.

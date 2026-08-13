@@ -139,7 +139,11 @@ public class ServiceCompletionFactPublisher {
                 completedAt,
                 serviceTotal.add(partTotal),
                 performed);
-        writer.publish(WorkorderServiceCompletedV1.EVENT_TYPE, workorder.getId().toString(), payload);
+        writer.publish(
+                WorkorderServiceCompletedV1.EVENT_TYPE,
+                WorkorderServiceCompletedV1.SCHEMA_VERSION,
+                workorder.getId(),
+                payload);
     }
 
     private void publishDeclines(
@@ -160,7 +164,10 @@ public class ServiceCompletionFactPublisher {
                     completedAt);
             // Keyed by the workorder id so a workorder's facts stay ordered on one partition.
             writer.publish(
-                    WorkorderServiceLineDeclinedV1.EVENT_TYPE, workorder.getId().toString(), payload);
+                    WorkorderServiceLineDeclinedV1.EVENT_TYPE,
+                    WorkorderServiceLineDeclinedV1.SCHEMA_VERSION,
+                    workorder.getId(),
+                    payload);
         }
     }
 

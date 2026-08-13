@@ -9,6 +9,7 @@ MVNW="./mvnw"
 PROFILE="openapi"
 PHASE="verify"
 SKIP_FLAGS=(-DskipTests -DskipITs)
+JACOCO_FLAGS=(-Djacoco.skip=true)
 MODULE_TIMEOUT_SECONDS=420
 DRY_RUN=false
 AGGREGATE_OPENAPI=true
@@ -60,6 +61,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --run-tests)
       SKIP_FLAGS=()
+      JACOCO_FLAGS=()
       shift
       ;;
     --timeout)
@@ -262,7 +264,7 @@ echo "Validation mode: $VALIDATION_MODE"
 echo
 
 module_list=$(IFS=,; echo "${MODULES[*]}")
-bootstrap_cmd=("$MVNW" "-pl" "$module_list" "-am" -DskipTests -DskipITs install)
+bootstrap_cmd=("$MVNW" "-pl" "$module_list" "-am" "${JACOCO_FLAGS[@]}" -DskipTests -DskipITs install)
 echo "Installing reactor artifacts in the local Maven repository..."
 echo "${bootstrap_cmd[*]}"
 if [[ "$DRY_RUN" == false ]]; then
@@ -324,7 +326,7 @@ for module in "${MODULES[@]}"; do
   kill_port_if_held "$JMX_PORT"
   CURRENT_MODULE="$module"
 
-  cmd=("$MVNW" "-pl" "$module" "-P$PROFILE" "${SKIP_FLAGS[@]}" "$PHASE")
+  cmd=("$MVNW" "-pl" "$module" "-P$PROFILE" "${SKIP_FLAGS[@]}" "${JACOCO_FLAGS[@]}" "$PHASE")
   echo "==> $module"
   echo "${cmd[*]}"
   if [[ "$DRY_RUN" == false ]]; then

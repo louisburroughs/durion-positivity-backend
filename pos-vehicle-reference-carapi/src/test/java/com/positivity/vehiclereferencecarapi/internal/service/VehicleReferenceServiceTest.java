@@ -40,11 +40,11 @@ import org.springframework.web.client.RestClient;
  * slow and a way to get throttled.
  *
  * <p>
- * <b>Read {@link #cacheIsServedWhileFresh()} before changing
- * {@code isCacheExpired}.</b> That method computes the opposite of its name, and
- * its one call site is inverted to match, so the net behaviour is correct. The
- * two mistakes cancel; fixing either alone breaks the cache. See the comment on
- * that test.
+ * Both methods gate on {@code isCacheFresh}, unnegated. That helper was formerly
+ * named {@code isCacheExpired} while computing the opposite — correct here only
+ * because both call sites happened to be inverted to match, and outright broken
+ * in the pos-vehicle-reference-nhtsa copy (issue #1265). Keep the name and the
+ * call sites agreeing.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -101,14 +101,6 @@ class VehicleReferenceServiceTest {
         // that is the assertion: a fresh cache must not hit the rate-limited third party.
         server.verify();
         verify(makeRepository, never()).deleteAll();
-
-        // NOTE for anyone "fixing" isCacheExpired: it returns true when the cache is FRESH
-        // (it negates isBefore, so it really answers "is still valid"), and the call site
-        // reads `if (!cached.isEmpty() && isCacheExpired(...)) return cached;`. Inverted name,
-        // inverted usage, correct net behaviour — which this test pins. Correcting the method
-        // alone flips the call site's meaning and the service would refetch every request
-        // while the cache is good, and serve stale rows once it is not. The nhtsa copy of this
-        // helper does not cancel out at three of its six call sites — see issue #1265.
     }
 
     @Test

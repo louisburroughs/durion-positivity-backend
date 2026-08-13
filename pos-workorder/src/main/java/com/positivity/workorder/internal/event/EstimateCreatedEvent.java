@@ -19,6 +19,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class EstimateCreatedEvent {
 
+    /** Payload schema version carried on the outbox envelope; bump with the payload shape. */
+    public static final int SCHEMA_VERSION = 1;
+
     /**
      * ID of the newly created Estimate
      */

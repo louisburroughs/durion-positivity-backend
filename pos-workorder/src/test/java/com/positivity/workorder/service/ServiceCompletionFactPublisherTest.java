@@ -2,6 +2,7 @@ package com.positivity.workorder.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -140,7 +141,11 @@ class ServiceCompletionFactPublisherTest {
 
         ArgumentCaptor<Object> completed = ArgumentCaptor.forClass(Object.class);
         verify(writer, times(1))
-                .publish(eq(WorkorderServiceCompletedV1.EVENT_TYPE), eq(workorderId.toString()), completed.capture());
+                .publish(
+                        eq(WorkorderServiceCompletedV1.EVENT_TYPE),
+                        eq(WorkorderServiceCompletedV1.SCHEMA_VERSION),
+                        eq(workorderId),
+                        completed.capture());
         WorkorderServiceCompletedV1 completionFact = (WorkorderServiceCompletedV1) completed.getValue();
         assertThat(completionFact.partyId()).isEqualTo(partyId);
         assertThat(completionFact.vehicleId()).isEqualTo(vehicleId);
@@ -153,7 +158,8 @@ class ServiceCompletionFactPublisherTest {
         verify(writer, times(1))
                 .publish(
                         eq(WorkorderServiceLineDeclinedV1.EVENT_TYPE),
-                        eq(workorderId.toString()),
+                        eq(WorkorderServiceLineDeclinedV1.SCHEMA_VERSION),
+                        eq(workorderId),
                         declinedFact.capture());
         WorkorderServiceLineDeclinedV1 fact = (WorkorderServiceLineDeclinedV1) declinedFact.getValue();
         assertThat(fact.description()).isEqualTo("Brake pads");
@@ -180,8 +186,8 @@ class ServiceCompletionFactPublisherTest {
         publisher.markCompleted(workorderId);
         fireBeforeCommit();
 
-        verify(writer, times(1)).publish(eq(WorkorderServiceCompletedV1.EVENT_TYPE), any(), any());
-        verify(writer, never()).publish(eq(WorkorderServiceLineDeclinedV1.EVENT_TYPE), any(), any());
+        verify(writer, times(1)).publish(eq(WorkorderServiceCompletedV1.EVENT_TYPE), anyInt(), any(), any());
+        verify(writer, never()).publish(eq(WorkorderServiceLineDeclinedV1.EVENT_TYPE), anyInt(), any(), any());
     }
 
     @Test
@@ -192,6 +198,6 @@ class ServiceCompletionFactPublisherTest {
         publisher.markCompleted(UUID.randomUUID());
         fireBeforeCommit();
 
-        verify(writer, never()).publish(any(), any(), any());
+        verify(writer, never()).publish(any(), anyInt(), any(), any());
     }
 }

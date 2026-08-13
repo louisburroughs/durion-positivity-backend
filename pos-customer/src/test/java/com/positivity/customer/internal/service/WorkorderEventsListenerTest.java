@@ -63,7 +63,7 @@ class WorkorderEventsListenerTest {
 
     private String declinedEvent(String eventId) {
         return """
-                {"eventId":"%s","eventType":"workorder.service_line.declined.v1","sourceService":"pos-workorder",
+                {"eventId":"%s","eventType":"workorder.service-line.declined.v1","sourceService":"pos-workorder",
                  "payload":{"workorderId":"%s","workorderNumber":"WO-2026-1001","workorderLineId":"%s",
                             "partyId":"%s","vehicleId":"%s","description":"Brake pads",
                             "declineReason":"Defer to next visit","declinedAt":"2026-07-20T10:00:00Z"}}
