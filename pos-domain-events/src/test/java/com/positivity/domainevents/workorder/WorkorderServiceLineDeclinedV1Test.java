@@ -42,7 +42,7 @@ class WorkorderServiceLineDeclinedV1Test {
 
         assertThat(back).isEqualTo(evt);
         assertThat(back.declineReason()).isEqualTo("Customer will defer to next visit");
-        assertThat(WorkorderServiceLineDeclinedV1.EVENT_TYPE).isEqualTo("workorder.service_line.declined.v1");
+        assertThat(WorkorderServiceLineDeclinedV1.EVENT_TYPE).isEqualTo("workorder.service-line.declined.v1");
     }
 
     @Test

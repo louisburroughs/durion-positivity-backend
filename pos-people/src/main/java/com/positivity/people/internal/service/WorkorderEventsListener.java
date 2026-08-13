@@ -22,7 +22,7 @@ import tools.jackson.databind.ObjectMapper;
  * Consumes {@code workorder.events.v1} into the {@code ext_workorder_job_time} replica
  * (ADR-0044 §6, #875), replacing the retired synchronous {@code WorkexecJobTimeClient}.
  *
- * <p>Only {@code workorder.job_time.recorded.v1} is handled; other workorder facts are ignored.
+ * <p>Only {@code workorder.job-time.recorded.v1} is handled; other workorder facts are ignored.
  * Idempotent via {@code processed_events} in the upsert transaction; re-completions of a
  * reopened workorder re-emit entries and the upsert (keyed by laborEntryId) is last-write-wins.
  */

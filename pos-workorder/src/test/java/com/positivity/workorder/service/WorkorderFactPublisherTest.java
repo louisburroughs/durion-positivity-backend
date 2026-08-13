@@ -2,6 +2,7 @@ package com.positivity.workorder.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -92,7 +93,11 @@ class WorkorderFactPublisherTest {
 
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
         verify(writer, times(1))
-                .publish(eq(WorkorderUpdatedV1.EVENT_TYPE), eq(workorderId.toString()), payloadCaptor.capture());
+                .publish(
+                        eq(WorkorderUpdatedV1.EVENT_TYPE),
+                        eq(WorkorderUpdatedV1.SCHEMA_VERSION),
+                        eq(workorderId),
+                        payloadCaptor.capture());
         WorkorderUpdatedV1 fact = (WorkorderUpdatedV1) payloadCaptor.getValue();
         assertThat(fact.workorderNumber()).isEqualTo("WO-2026-1001");
         assertThat(fact.status()).isEqualTo("WORK_IN_PROGRESS");
@@ -108,6 +113,6 @@ class WorkorderFactPublisherTest {
         publisher.markChanged(UUID.randomUUID());
         fireBeforeCommit();
 
-        verify(writer, never()).publish(any(), any(), any());
+        verify(writer, never()).publish(any(), anyInt(), any(), any());
     }
 }

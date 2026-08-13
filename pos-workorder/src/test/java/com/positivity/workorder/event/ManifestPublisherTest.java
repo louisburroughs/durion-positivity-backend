@@ -226,7 +226,7 @@ class ManifestPublisherTest {
     void skipsMalformedRows() {
         OutboxEvent good = row(
                 eventIdAt(WINDOW_START.plusSeconds(60), 1),
-                "workorder.work_session.started.v1",
+                "workorder.work-session.started.v1",
                 WINDOW_START.plusSeconds(60));
         OutboxEvent badJson = OutboxEvent.builder()
                 .id(UUID.randomUUID())

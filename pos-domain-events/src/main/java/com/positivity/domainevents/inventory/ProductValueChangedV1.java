@@ -11,7 +11,7 @@ import org.jspecify.annotations.Nullable;
  * {@code product.value} / manual {@code stock.valuation.layer} analog).
  *
  * <p>Published by pos-inventory on {@code inventory.events.v1} with
- * {@code eventType = "inventory.product_value.changed"} — one fact per applied revaluation (this is
+ * {@code eventType = "inventory.product-value.changed"} — one fact per applied revaluation (this is
  * an occurrence, not a snapshot: it is never re-emitted). pos-accounting consumes it to post the
  * revaluation journal entry for the value delta.
  *
@@ -48,7 +48,7 @@ public record ProductValueChangedV1(
         @NonNull String actor,
         @NonNull Instant occurredAt) {
 
-    public static final String EVENT_TYPE = "inventory.product_value.changed";
+    public static final String EVENT_TYPE = "inventory.product-value.changed";
     public static final int SCHEMA_VERSION = 1;
 
     public ProductValueChangedV1 {

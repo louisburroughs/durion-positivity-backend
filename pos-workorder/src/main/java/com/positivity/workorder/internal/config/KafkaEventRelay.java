@@ -34,45 +34,60 @@ public class KafkaEventRelay {
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onWorkSessionStarted(WorkSessionStartedEvent event) {
         producer.publish(
-                "workorder.work_session.started.v1", event.workSessionId().toString(), event);
+                "workorder.work-session.started.v1",
+                WorkSessionStartedEvent.SCHEMA_VERSION,
+                event.workSessionId(),
+                event);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onWorkSessionStopped(WorkSessionStoppedEvent event) {
         producer.publish(
-                "workorder.work_session.stopped.v1", event.workSessionId().toString(), event);
+                "workorder.work-session.stopped.v1",
+                WorkSessionStoppedEvent.SCHEMA_VERSION,
+                event.workSessionId(),
+                event);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onTravelSegmentStarted(TravelSegmentStartedEvent event) {
         producer.publish(
-                "workorder.travel_segment.started.v1", event.travelSegmentId().toString(), event);
+                "workorder.travel-segment.started.v1",
+                TravelSegmentStartedEvent.SCHEMA_VERSION,
+                event.travelSegmentId(),
+                event);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onTravelSegmentStopped(TravelSegmentStoppedEvent event) {
         producer.publish(
-                "workorder.travel_segment.stopped.v1", event.travelSegmentId().toString(), event);
+                "workorder.travel-segment.stopped.v1",
+                TravelSegmentStoppedEvent.SCHEMA_VERSION,
+                event.travelSegmentId(),
+                event);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onJobTimeRecorded(JobTimeRecordedV1 event) {
-        producer.publish(JobTimeRecordedV1.EVENT_TYPE, event.laborEntryId().toString(), event);
+        producer.publish(JobTimeRecordedV1.EVENT_TYPE, JobTimeRecordedV1.SCHEMA_VERSION, event.laborEntryId(), event);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onTimeEntryApproved(TimeEntryApprovedEvent event) {
-        producer.publish("workorder.time_entry.approved.v1", event.timeEntryId().toString(), event);
+        producer.publish(
+                "workorder.time-entry.approved.v1", TimeEntryApprovedEvent.SCHEMA_VERSION, event.timeEntryId(), event);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onTimeEntryRejected(TimeEntryRejectedEvent event) {
-        producer.publish("workorder.time_entry.rejected.v1", event.timeEntryId().toString(), event);
+        producer.publish(
+                "workorder.time-entry.rejected.v1", TimeEntryRejectedEvent.SCHEMA_VERSION, event.timeEntryId(), event);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onEstimateCreated(EstimateCreatedEvent event) {
-        producer.publish("workorder.estimate.created.v1", event.getEstimateId().toString(), event);
+        producer.publish(
+                "workorder.estimate.created.v1", EstimateCreatedEvent.SCHEMA_VERSION, event.getEstimateId(), event);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
@@ -83,6 +98,7 @@ public class KafkaEventRelay {
                     event.getEstimateId());
             return;
         }
-        producer.publish("workorder.estimate.revised.v1", event.getWorkorderId().toString(), event);
+        producer.publish(
+                "workorder.estimate.revised.v1", EstimateRevisedEvent.SCHEMA_VERSION, event.getWorkorderId(), event);
     }
 }

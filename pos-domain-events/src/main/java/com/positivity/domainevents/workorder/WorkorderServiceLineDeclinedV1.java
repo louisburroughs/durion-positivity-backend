@@ -10,7 +10,7 @@ import org.jspecify.annotations.Nullable;
  * open question O-7).
  *
  * <p>Published by pos-workorder on {@code workorder.events.v1} with
- * {@code eventType = "workorder.service_line.declined.v1"} — one fact per declined service line,
+ * {@code eventType = "workorder.service-line.declined.v1"} — one fact per declined service line,
  * emitted at workorder completion (a declined recommendation, promoted onto the workorder from
  * the estimate, carries its rejection reason). pos-customer raises exactly one
  * {@code DECLINED_SERVICE_FOLLOWUP} task per fact and exposes a "declined service in last N days"
@@ -39,7 +39,7 @@ public record WorkorderServiceLineDeclinedV1(
         @Nullable String declineReason,
         @NonNull Instant declinedAt) {
 
-    public static final String EVENT_TYPE = "workorder.service_line.declined.v1";
+    public static final String EVENT_TYPE = "workorder.service-line.declined.v1";
     public static final int SCHEMA_VERSION = 1;
 
     public WorkorderServiceLineDeclinedV1 {

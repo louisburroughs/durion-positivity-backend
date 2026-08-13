@@ -6,7 +6,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Payload for {@code workorder.job_time.recorded.v1} on {@code workorder.events.v1}
+ * Payload for {@code workorder.job-time.recorded.v1} on {@code workorder.events.v1}
  * (ADR-0044 §6, #875).
  *
  * <p>Published by pos-workorder when a workorder completes: one fact per finalized labor entry,
@@ -27,6 +27,6 @@ public record JobTimeRecordedV1(
         @NonNull Instant endAtUtc,
         int minutes) {
 
-    public static final String EVENT_TYPE = "workorder.job_time.recorded.v1";
+    public static final String EVENT_TYPE = "workorder.job-time.recorded.v1";
     public static final int SCHEMA_VERSION = 1;
 }
