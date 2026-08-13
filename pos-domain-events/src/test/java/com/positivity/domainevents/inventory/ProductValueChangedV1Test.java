@@ -15,7 +15,7 @@ class ProductValueChangedV1Test {
 
     @Test
     void carriesSchemaIdentity() {
-        assertThat(ProductValueChangedV1.EVENT_TYPE).isEqualTo("inventory.product_value.changed");
+        assertThat(ProductValueChangedV1.EVENT_TYPE).isEqualTo("inventory.product-value.changed");
         assertThat(ProductValueChangedV1.SCHEMA_VERSION).isEqualTo(1);
     }
 

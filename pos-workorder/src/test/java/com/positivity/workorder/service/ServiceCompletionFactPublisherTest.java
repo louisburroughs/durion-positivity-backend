@@ -144,7 +144,7 @@ class ServiceCompletionFactPublisherTest {
                 .publish(
                         eq(WorkorderServiceCompletedV1.EVENT_TYPE),
                         eq(WorkorderServiceCompletedV1.SCHEMA_VERSION),
-                        eq(workorderId.toString()),
+                        eq(workorderId),
                         completed.capture());
         WorkorderServiceCompletedV1 completionFact = (WorkorderServiceCompletedV1) completed.getValue();
         assertThat(completionFact.partyId()).isEqualTo(partyId);
@@ -159,7 +159,7 @@ class ServiceCompletionFactPublisherTest {
                 .publish(
                         eq(WorkorderServiceLineDeclinedV1.EVENT_TYPE),
                         eq(WorkorderServiceLineDeclinedV1.SCHEMA_VERSION),
-                        eq(workorderId.toString()),
+                        eq(workorderId),
                         declinedFact.capture());
         WorkorderServiceLineDeclinedV1 fact = (WorkorderServiceLineDeclinedV1) declinedFact.getValue();
         assertThat(fact.description()).isEqualTo("Brake pads");

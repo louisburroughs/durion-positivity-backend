@@ -13,7 +13,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +33,11 @@ import tools.jackson.databind.json.JsonMapper;
 @DataJpaTest(properties = {"workorder.kafka.enabled=true", "spring.flyway.enabled=false"})
 @Import(OutboxEventWriter.class)
 class OutboxEventWriterIntegrationTest {
+
+    private static final Instant EVENT_TIME = Instant.parse("2026-07-08T12:00:00Z");
+    private static final UUID SAMPLE_ID = UUID.fromString("01980001-0000-7000-8000-000000000001");
+    private static final UUID MECHANIC_ID = UUID.fromString("01980001-0000-7000-8000-000000000002");
+    private static final UUID WORKORDER_ID = UUID.fromString("01980001-0000-7000-8000-000000000003");
 
     @TestConfiguration
     static class Config {
@@ -57,10 +62,10 @@ class OutboxEventWriterIntegrationTest {
     @DisplayName("Outbox row is persisted when the business transaction commits")
     void persistsRowOnCommit() {
         writer.publish(
-                "workorder.work_session.started.v1",
+                "workorder.work-session.started.v1",
                 WorkSessionStartedEvent.SCHEMA_VERSION,
-                "wo-key-1",
-                Map.of("workorderId", "wo-1"));
+                SAMPLE_ID,
+                workSessionStarted());
         TestTransaction.flagForCommit();
         TestTransaction.end();
 
@@ -68,13 +73,14 @@ class OutboxEventWriterIntegrationTest {
         assertThat(rows).hasSize(1);
         OutboxEvent row = rows.getFirst();
         assertThat(row.getTopic()).isEqualTo("workorder.events.v1");
-        assertThat(row.getRecordKey()).isEqualTo("wo-key-1");
+        assertThat(row.getRecordKey()).isEqualTo(SAMPLE_ID.toString());
         assertThat(row.getPublishedAt()).isNull();
         assertThat(row.getCreatedAt()).isEqualTo(Instant.parse("2026-07-08T12:00:00Z"));
-        // Wire format unchanged from the previous direct producer (pos-customer consumer contract).
+        // Every field the previous direct producer emitted, under the same name (pos-customer
+        // consumer contract), plus schemaVersion — the envelope change in #1286 is additive.
         assertThat(row.getPayload())
                 .contains("\"eventId\"")
-                .contains("\"eventType\":\"workorder.work_session.started.v1\"")
+                .contains("\"eventType\":\"workorder.work-session.started.v1\"")
                 .contains("\"schemaVersion\":1")
                 .contains("\"occurredAtUtc\"")
                 .contains("\"sourceService\":\"pos-workorder\"")
@@ -87,10 +93,10 @@ class OutboxEventWriterIntegrationTest {
     @DisplayName("No outbox row survives when the business transaction rolls back")
     void discardsRowOnRollback() {
         writer.publish(
-                "workorder.work_session.stopped.v1",
+                "workorder.work-session.stopped.v1",
                 WorkSessionStoppedEvent.SCHEMA_VERSION,
-                "wo-key-2",
-                Map.of("workorderId", "wo-2"));
+                SAMPLE_ID,
+                new WorkSessionStoppedEvent(SAMPLE_ID, MECHANIC_ID, EVENT_TIME, 3600));
         TestTransaction.flagForRollback();
         TestTransaction.end();
 
@@ -103,7 +109,8 @@ class OutboxEventWriterIntegrationTest {
         // Mirrors the DomainEventEnvelope guard. This envelope is hand-built (#1286), so nothing
         // else would stop a 0 from reaching consumers as a legitimate-looking version.
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> writer.publish("workorder.work_session.started.v1", 0, "wo-key-4", Map.of()))
+                .isThrownBy(
+                        () -> writer.publish("workorder.work-session.started.v1", 0, SAMPLE_ID, workSessionStarted()))
                 .withMessageContaining("schemaVersion must be >= 1");
     }
 
@@ -114,9 +121,14 @@ class OutboxEventWriterIntegrationTest {
 
         assertThatExceptionOfType(IllegalTransactionStateException.class)
                 .isThrownBy(() -> writer.publish(
-                        "workorder.time_entry.approved.v1",
+                        "workorder.time-entry.approved.v1",
                         TimeEntryApprovedEvent.SCHEMA_VERSION,
-                        "wo-key-3",
-                        Map.of()));
+                        SAMPLE_ID,
+                        new TimeEntryApprovedEvent(SAMPLE_ID, WORKORDER_ID, "user-1", EVENT_TIME)));
+    }
+
+    /** The payload type whose SCHEMA_VERSION the publish calls above pass — kept in step. */
+    private static WorkSessionStartedEvent workSessionStarted() {
+        return new WorkSessionStartedEvent(SAMPLE_ID, MECHANIC_ID, EVENT_TIME);
     }
 }

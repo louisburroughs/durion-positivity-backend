@@ -162,10 +162,20 @@ class DomainEventContractTest {
         String type = (String) eventType.getField("EVENT_TYPE").get(null);
 
         assertThat(type).as("%s.EVENT_TYPE", eventType.getSimpleName()).isNotBlank();
-        // Dotted lowercase, hyphens allowed inside any segment (e.g. people-contact.user-person-link.updated). These
-        // strings are matched by
-        // consumers as literals, so a stray capital or space is a fact nobody receives.
-        assertThat(type).as("%s.EVENT_TYPE shape", eventType.getSimpleName()).matches("[a-z0-9_-]+(\\.[a-z0-9_-]+)+");
+
+        // Checked against the envelope itself rather than a regex copied from it. The two drifted
+        // once: this test allowed underscores, DomainEventEnvelope did not, and
+        // inventory.product_value.changed sat in the gap — every ProductValueChangedV1 threw at
+        // construction and was swallowed by its publisher's catch-all, so the fact was silently
+        // dropped in production and no consumer ever saw one (#1289). A regex cannot catch that;
+        // only the real constructor can.
+        assertThatCode(() -> new DomainEventEnvelope<>(
+                        SAMPLE_UUID, type, 1, SAMPLE_UUID, 0L, SAMPLE_INSTANT, "pos-sample", null, null, "payload"))
+                .as(
+                        "%s.EVENT_TYPE (%s) is rejected by DomainEventEnvelope, so publishing it throws."
+                                + " Event types are dotted lowercase with hyphens, never underscores.",
+                        eventType.getSimpleName(), type)
+                .doesNotThrowAnyException();
     }
 
     @ParameterizedTest(name = "{0}")

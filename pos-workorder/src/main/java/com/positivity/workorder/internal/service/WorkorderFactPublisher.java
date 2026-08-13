@@ -102,8 +102,7 @@ public class WorkorderFactPublisher {
                     services,
                     workorder.getCreatedAt(),
                     workorder.getUpdatedAt());
-            writer.publish(
-                    WorkorderUpdatedV1.EVENT_TYPE, WorkorderUpdatedV1.SCHEMA_VERSION, workorderId.toString(), payload);
+            writer.publish(WorkorderUpdatedV1.EVENT_TYPE, WorkorderUpdatedV1.SCHEMA_VERSION, workorderId, payload);
         }
     }
 

@@ -95,8 +95,7 @@ public class EstimateFactPublisher {
                     items,
                     estimate.getCreatedAt(),
                     estimate.getUpdatedAt());
-            writer.publish(
-                    EstimateUpdatedV1.EVENT_TYPE, EstimateUpdatedV1.SCHEMA_VERSION, estimateId.toString(), payload);
+            writer.publish(EstimateUpdatedV1.EVENT_TYPE, EstimateUpdatedV1.SCHEMA_VERSION, estimateId, payload);
         }
     }
 

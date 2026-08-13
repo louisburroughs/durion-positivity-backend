@@ -96,7 +96,7 @@ class WorkorderFactPublisherTest {
                 .publish(
                         eq(WorkorderUpdatedV1.EVENT_TYPE),
                         eq(WorkorderUpdatedV1.SCHEMA_VERSION),
-                        eq(workorderId.toString()),
+                        eq(workorderId),
                         payloadCaptor.capture());
         WorkorderUpdatedV1 fact = (WorkorderUpdatedV1) payloadCaptor.getValue();
         assertThat(fact.workorderNumber()).isEqualTo("WO-2026-1001");

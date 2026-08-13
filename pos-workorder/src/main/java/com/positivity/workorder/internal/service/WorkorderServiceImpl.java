@@ -674,7 +674,7 @@ public class WorkorderServiceImpl implements WorkorderService {
     }
 
     /**
-     * One {@code workorder.job_time.recorded.v1} fact per finalized labor entry (ADR-0044 §6,
+     * One {@code workorder.job-time.recorded.v1} fact per finalized labor entry (ADR-0044 §6,
      * #875): pos-people replaces its synchronous job-time-totals lookup with a replica fed by
      * these facts. Published inside the completion transaction; the Kafka relay writes them to
      * the outbox BEFORE_COMMIT, so facts exist iff the completion committed. Re-completions

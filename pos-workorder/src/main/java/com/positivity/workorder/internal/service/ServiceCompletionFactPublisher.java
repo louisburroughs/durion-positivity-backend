@@ -142,7 +142,7 @@ public class ServiceCompletionFactPublisher {
         writer.publish(
                 WorkorderServiceCompletedV1.EVENT_TYPE,
                 WorkorderServiceCompletedV1.SCHEMA_VERSION,
-                workorder.getId().toString(),
+                workorder.getId(),
                 payload);
     }
 
@@ -166,7 +166,7 @@ public class ServiceCompletionFactPublisher {
             writer.publish(
                     WorkorderServiceLineDeclinedV1.EVENT_TYPE,
                     WorkorderServiceLineDeclinedV1.SCHEMA_VERSION,
-                    workorder.getId().toString(),
+                    workorder.getId(),
                     payload);
         }
     }

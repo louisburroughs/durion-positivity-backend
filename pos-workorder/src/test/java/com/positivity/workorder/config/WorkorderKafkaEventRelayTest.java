@@ -32,9 +32,9 @@ class WorkorderKafkaEventRelayTest {
 
         verify(producer)
                 .publish(
-                        "workorder.work_session.started.v1",
+                        "workorder.work-session.started.v1",
                         WorkSessionStartedEvent.SCHEMA_VERSION,
-                        event.workSessionId().toString(),
+                        event.workSessionId(),
                         event);
     }
 

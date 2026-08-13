@@ -34,7 +34,7 @@ import tools.jackson.databind.ObjectMapper;
  * <ul>
  *   <li>{@code workorder.service.completed.v1} → a {@link ServiceHistory} row, powering
  *       last-service-age and service-due segment predicates.
- *   <li>{@code workorder.service_line.declined.v1} → exactly one {@code DECLINED_SERVICE_FOLLOWUP}
+ *   <li>{@code workorder.service-line.declined.v1} → exactly one {@code DECLINED_SERVICE_FOLLOWUP}
  *       {@link FollowUpTask}, and the declined-service segment predicate.
  * </ul>
  *
