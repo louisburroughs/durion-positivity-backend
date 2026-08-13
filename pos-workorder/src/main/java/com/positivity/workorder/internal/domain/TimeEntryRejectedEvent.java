@@ -5,4 +5,8 @@ import java.util.UUID;
 
 /** Domain event published when a time entry is rejected. */
 public record TimeEntryRejectedEvent(
-        UUID timeEntryId, UUID workOrderId, String rejectedByUserId, Instant decisionAtUtc, String rejectionReason) {}
+        UUID timeEntryId, UUID workOrderId, String rejectedByUserId, Instant decisionAtUtc, String rejectionReason) {
+
+    /** Payload schema version carried on the outbox envelope; bump with the payload shape. */
+    public static final int SCHEMA_VERSION = 1;
+}

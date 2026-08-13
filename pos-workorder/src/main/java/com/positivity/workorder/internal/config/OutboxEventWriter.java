@@ -25,9 +25,17 @@ import tools.jackson.databind.ObjectMapper;
  * business state change committed. {@link OutboxPublisher} drains the table to Kafka with
  * at-least-once delivery.
  *
- * <p>The JSON envelope shape (eventId, eventType, occurredAtUtc, sourceService, payload) is
- * unchanged from the previous producer, so existing consumers (pos-customer's workorder event
- * handler) keep working.
+ * <p>The JSON envelope shape is (eventId, eventType, schemaVersion, occurredAtUtc,
+ * aggregateVersion, sourceService, payload). Every field the original producer emitted is still
+ * emitted under the same name, so existing consumers (pos-customer's workorder event handler)
+ * keep working; {@code schemaVersion} was added by #1286 and is additive.
+ *
+ * <p>This module hand-builds the envelope instead of using {@link
+ * com.positivity.domainevents.DomainEventEnvelope} like the other thirteen modules, because that
+ * type rejects underscores in the event type and several of this module's live types contain them
+ * ({@code workorder.job_time.recorded.v1}, {@code workorder.work_session.started.v1}, …).
+ * Reconciling the two means renaming those types, which is a breaking change for every consumer
+ * that matches them as literals — see #1286.
  */
 @Slf4j
 @Component
@@ -46,24 +54,37 @@ public class OutboxEventWriter {
     /**
      * Queue a domain event for publication as part of the current transaction. Must be called
      * inside the business transaction ({@code MANDATORY}) — that is the whole point of the outbox.
+     *
+     * <p>{@code schemaVersion} must come from a constant on the payload type rather than a literal
+     * at the call site, so the number moves with the payload it describes (#1279). Payloads that
+     * have a {@code pos-domain-events} record pass that record's {@code SCHEMA_VERSION}; the
+     * module-internal payload types declare their own.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void publish(@NonNull String eventType, @NonNull String key, @NonNull Object payload) {
+    public void publish(@NonNull String eventType, int schemaVersion, @NonNull String key, @NonNull Object payload) {
+        if (schemaVersion < 1) {
+            throw new IllegalArgumentException("schemaVersion must be >= 1 but was: " + schemaVersion);
+        }
         OutboxEvent event = OutboxEvent.builder()
                 .topic(eventsTopic)
                 .recordKey(key)
-                .payload(serializeEnvelope(eventType, payload))
+                .payload(serializeEnvelope(eventType, schemaVersion, payload))
                 .createdAt(Instant.now(clock))
                 .build();
         outboxEventRepository.save(event);
         log.debug("Queued outbox event type={} topic={} key={}", eventType, eventsTopic, key);
     }
 
-    private String serializeEnvelope(String eventType, Object payload) {
+    private String serializeEnvelope(String eventType, int schemaVersion, Object payload) {
         Instant occurredAt = Instant.now(clock);
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("eventId", UUIDv7Generator.generate().toString());
         envelope.put("eventType", eventType);
+        // Which payload shape this is. Additive: the existing consumers read this envelope as a
+        // JsonNode tree and pull fields by name, so a key they do not know is ignored. Kept as a
+        // plain map rather than DomainEventEnvelope because that type rejects the underscores in
+        // several of this module's event types (see #1286).
+        envelope.put("schemaVersion", schemaVersion);
         envelope.put("occurredAtUtc", occurredAt);
         // Emission-timestamp LWW hint for replica stale guards (ADR-0044 §6, #897) — additive,
         // legacy consumers of this envelope ignore it.
