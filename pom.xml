@@ -368,6 +368,10 @@
 		<sonar.organization>louisburroughs</sonar.organization>
 		<!-- Coverage ratchet defaults (plan Phase 4). Overridden per module in each
 		     module pom; 0.00 here means "unguarded" for modules that set nothing. -->
+		<!-- Fail the build on the first module that misses its floor. Set false to let the
+		     reactor finish and report every offender at once — see the overnight coverage
+		     job in .github/workflows/ci.yml. -->
+		<jacoco.check.haltOnFailure>true</jacoco.check.haltOnFailure>
 		<jacoco.line.min>0.00</jacoco.line.min>
 		<jacoco.branch.min>0.00</jacoco.branch.min>
 		<!-- Test runtime tuning -->
@@ -547,7 +551,7 @@
 							<goal>check</goal>
 						</goals>
 						<configuration>
-							<haltOnFailure>true</haltOnFailure>
+							<haltOnFailure>${jacoco.check.haltOnFailure}</haltOnFailure>
 							<rules>
 								<rule>
 									<element>BUNDLE</element>
