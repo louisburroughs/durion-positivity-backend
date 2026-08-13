@@ -21,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -90,8 +91,20 @@ public class FileUploadController {
                                                             value =
                                                                     "file=@products-2026-01.csv (binary content; first row is the header row)"))))
     @ApiResponse(responseCode = "200", description = "File uploaded and content detected")
-    @ApiResponse(responseCode = "404", description = "Job not found")
-    @ApiResponse(responseCode = "409", description = "Job is in a terminal state and cannot accept uploads")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Job not found",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Job is in a terminal state and cannot accept uploads",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<FileUploadResponse> uploadFile(
             @PathVariable @NonNull UUID jobId, @RequestParam("file") @NonNull MultipartFile file) throws IOException {
         String operatorId = currentOperatorId();
@@ -143,9 +156,27 @@ public class FileUploadController {
                     the state is not launchable or the uploaded file or locationId is missing.
                     """)
     @ApiResponse(responseCode = "200", description = "Job transitioned to PROCESSING")
-    @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
-    @ApiResponse(responseCode = "404", description = "Job not found")
-    @ApiResponse(responseCode = "409", description = "Invalid state transition")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Job does not belong to the authenticated operator",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Job not found",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Invalid state transition",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<BulkLoadJobResponse> startProcessing(@PathVariable @NonNull UUID jobId) {
         String operatorId = currentOperatorId();
         bulkLoadJobService.startProcessing(jobId, operatorId, currentAuthorizationHeader());

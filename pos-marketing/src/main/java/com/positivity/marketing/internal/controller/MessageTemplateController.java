@@ -7,6 +7,7 @@ import com.positivity.marketing.internal.enums.AudienceType;
 import com.positivity.marketing.internal.enums.CampaignChannel;
 import com.positivity.marketing.internal.security.MarketingPermissionRegistry;
 import com.positivity.marketing.service.MessageTemplateService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -76,7 +77,10 @@ public class MessageTemplateController {
                                 array =
                                         @ArraySchema(
                                                 schema = @Schema(implementation = MessageTemplateResponse.class)))),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping
     @SecurityRequirement(
@@ -106,8 +110,14 @@ public class MessageTemplateController {
                 responseCode = "200",
                 description = "Template returned",
                 content = @Content(schema = @Schema(implementation = MessageTemplateResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Template not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Template not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/{templateId}")
     @SecurityRequirement(
@@ -142,12 +152,18 @@ public class MessageTemplateController {
                 responseCode = "201",
                 description = "Template created",
                 content = @Content(schema = @Schema(implementation = MessageTemplateResponse.class))),
-        @ApiResponse(responseCode = "409", description = "Template name already exists", content = @Content),
+        @ApiResponse(
+                responseCode = "409",
+                description = "Template name already exists",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
         @ApiResponse(
                 responseCode = "422",
                 description = "Invalid token, missing subject, or SMS body over the segment limit",
-                content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping
     @SecurityRequirement(
@@ -194,13 +210,22 @@ public class MessageTemplateController {
                 responseCode = "200",
                 description = "Template updated",
                 content = @Content(schema = @Schema(implementation = MessageTemplateResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Template not found", content = @Content),
-        @ApiResponse(responseCode = "409", description = "Template name already exists", content = @Content),
+        @ApiResponse(
+                responseCode = "404",
+                description = "Template not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description = "Template name already exists",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
         @ApiResponse(
                 responseCode = "422",
                 description = "Invalid token, or an immutable field was changed",
-                content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PutMapping("/{templateId}")
     @SecurityRequirement(
@@ -242,9 +267,18 @@ public class MessageTemplateController {
                     """)
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Template deleted", content = @Content),
-        @ApiResponse(responseCode = "404", description = "Template not found", content = @Content),
-        @ApiResponse(responseCode = "422", description = "Template is attached to a campaign", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Template not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "422",
+                description = "Template is attached to a campaign",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @DeleteMapping("/{templateId}")
     @SecurityRequirement(

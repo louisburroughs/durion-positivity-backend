@@ -10,6 +10,7 @@ import com.positivity.marketing.internal.enums.CampaignStatus;
 import com.positivity.marketing.internal.security.MarketingPermissionRegistry;
 import com.positivity.marketing.service.CampaignSendService;
 import com.positivity.marketing.service.CampaignService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -88,7 +89,10 @@ public class CampaignController {
                         @Content(
                                 mediaType = "application/json",
                                 array = @ArraySchema(schema = @Schema(implementation = CampaignResponse.class)))),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping
     @SecurityRequirement(
@@ -118,8 +122,14 @@ public class CampaignController {
                 responseCode = "200",
                 description = "Campaign returned",
                 content = @Content(schema = @Schema(implementation = CampaignResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Campaign not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Campaign not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/{campaignId}")
     @SecurityRequirement(
@@ -151,9 +161,18 @@ public class CampaignController {
                 responseCode = "201",
                 description = "Campaign created",
                 content = @Content(schema = @Schema(implementation = CampaignResponse.class))),
-        @ApiResponse(responseCode = "409", description = "Campaign code already exists", content = @Content),
-        @ApiResponse(responseCode = "422", description = "Campaign definition is inconsistent", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "409",
+                description = "Campaign code already exists",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "422",
+                description = "Campaign definition is inconsistent",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping
     @SecurityRequirement(
@@ -202,13 +221,22 @@ public class CampaignController {
                 responseCode = "200",
                 description = "Campaign updated",
                 content = @Content(schema = @Schema(implementation = CampaignResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Campaign not found", content = @Content),
-        @ApiResponse(responseCode = "409", description = "Campaign code already exists", content = @Content),
+        @ApiResponse(
+                responseCode = "404",
+                description = "Campaign not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description = "Campaign code already exists",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
         @ApiResponse(
                 responseCode = "422",
                 description = "Campaign is no longer editable, or an immutable field was changed",
-                content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PutMapping("/{campaignId}")
     @SecurityRequirement(
@@ -256,10 +284,19 @@ public class CampaignController {
                 responseCode = "200",
                 description = "Preview returned",
                 content = @Content(schema = @Schema(implementation = AudiencePreviewResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Campaign not found", content = @Content),
-        @ApiResponse(responseCode = "422", description = "Campaign has no segment bound", content = @Content),
+        @ApiResponse(
+                responseCode = "404",
+                description = "Campaign not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "422",
+                description = "Campaign has no segment bound",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
         @ApiResponse(responseCode = "503", description = "pos-customer unavailable", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/{campaignId}/audience-preview")
     @SecurityRequirement(
@@ -291,9 +328,18 @@ public class CampaignController {
                 responseCode = "200",
                 description = "Campaign scheduled",
                 content = @Content(schema = @Schema(implementation = CampaignResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Campaign not found", content = @Content),
-        @ApiResponse(responseCode = "422", description = "Campaign is not ready to schedule", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Campaign not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "422",
+                description = "Campaign is not ready to schedule",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/{campaignId}/schedule")
     @SecurityRequirement(
@@ -322,9 +368,18 @@ public class CampaignController {
                 responseCode = "200",
                 description = "Campaign paused",
                 content = @Content(schema = @Schema(implementation = CampaignResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Campaign not found", content = @Content),
-        @ApiResponse(responseCode = "422", description = "Illegal lifecycle transition", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Campaign not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "422",
+                description = "Illegal lifecycle transition",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/{campaignId}/pause")
     @SecurityRequirement(
@@ -353,9 +408,18 @@ public class CampaignController {
                 responseCode = "200",
                 description = "Campaign resumed",
                 content = @Content(schema = @Schema(implementation = CampaignResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Campaign not found", content = @Content),
-        @ApiResponse(responseCode = "422", description = "Illegal lifecycle transition", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Campaign not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "422",
+                description = "Illegal lifecycle transition",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/{campaignId}/resume")
     @SecurityRequirement(
@@ -384,9 +448,18 @@ public class CampaignController {
                 responseCode = "200",
                 description = "Campaign cancelled",
                 content = @Content(schema = @Schema(implementation = CampaignResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Campaign not found", content = @Content),
-        @ApiResponse(responseCode = "422", description = "Illegal lifecycle transition", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Campaign not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "422",
+                description = "Illegal lifecycle transition",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/{campaignId}/cancel")
     @SecurityRequirement(
@@ -417,10 +490,19 @@ public class CampaignController {
                     """)
     @ApiResponses({
         @ApiResponse(responseCode = "202", description = "Dispatch accepted"),
-        @ApiResponse(responseCode = "404", description = "Campaign not found", content = @Content),
-        @ApiResponse(responseCode = "422", description = "Campaign is not in a dispatchable state", content = @Content),
+        @ApiResponse(
+                responseCode = "404",
+                description = "Campaign not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "422",
+                description = "Campaign is not in a dispatchable state",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
         @ApiResponse(responseCode = "503", description = "pos-customer unavailable", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @PostMapping("/{campaignId}/send")
     @SecurityRequirement(
@@ -451,7 +533,10 @@ public class CampaignController {
                 responseCode = "200",
                 description = "Send records returned",
                 content = @Content(schema = @Schema(implementation = PagedResponse.class))),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/{campaignId}/sends")
     @SecurityRequirement(

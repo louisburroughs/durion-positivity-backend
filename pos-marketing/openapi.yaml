@@ -52,8 +52,16 @@ paths:
                 $ref: '#/components/schemas/MessageTemplateResponse'
         '404':
           description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:template:view
@@ -109,12 +117,28 @@ paths:
                 $ref: '#/components/schemas/MessageTemplateResponse'
         '404':
           description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '409':
           description: Template name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '422':
           description: Invalid token, or an immutable field was changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:template:manage
@@ -150,10 +174,22 @@ paths:
           description: Template deleted
         '404':
           description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '422':
           description: Template is attached to a campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:template:manage
@@ -194,8 +230,16 @@ paths:
                 $ref: '#/components/schemas/CampaignResponse'
         '404':
           description: Campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:campaign:view
@@ -263,12 +307,28 @@ paths:
                 $ref: '#/components/schemas/CampaignResponse'
         '404':
           description: Campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '409':
           description: Campaign code already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '422':
           description: Campaign is no longer editable, or an immutable field was changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:campaign:edit
@@ -321,6 +381,10 @@ paths:
                   $ref: '#/components/schemas/MessageTemplateResponse'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:template:view
@@ -369,10 +433,22 @@ paths:
                 $ref: '#/components/schemas/MessageTemplateResponse'
         '409':
           description: Template name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '422':
           description: Invalid token, missing subject, or SMS body over the segment limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:template:manage
@@ -428,6 +504,10 @@ paths:
                   $ref: '#/components/schemas/CampaignResponse'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:campaign:view
@@ -488,10 +568,22 @@ paths:
                 $ref: '#/components/schemas/CampaignResponse'
         '409':
           description: Campaign code already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '422':
           description: Campaign definition is inconsistent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:campaign:create
@@ -532,12 +624,24 @@ paths:
                 type: object
         '404':
           description: Campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '422':
           description: Campaign is not in a dispatchable state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '503':
           description: pos-customer unavailable
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:campaign:send
@@ -578,10 +682,22 @@ paths:
                 $ref: '#/components/schemas/CampaignResponse'
         '404':
           description: Campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '422':
           description: Campaign is not ready to schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:campaign:schedule
@@ -622,10 +738,22 @@ paths:
                 $ref: '#/components/schemas/CampaignResponse'
         '404':
           description: Campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '422':
           description: Illegal lifecycle transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:campaign:manage
@@ -666,10 +794,22 @@ paths:
                 $ref: '#/components/schemas/CampaignResponse'
         '404':
           description: Campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '422':
           description: Illegal lifecycle transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:campaign:manage
@@ -710,10 +850,22 @@ paths:
                 $ref: '#/components/schemas/CampaignResponse'
         '404':
           description: Campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '422':
           description: Illegal lifecycle transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:campaign:manage
@@ -754,12 +906,24 @@ paths:
                 $ref: '#/components/schemas/AudiencePreviewResponse'
         '404':
           description: Campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '422':
           description: Campaign has no segment bound
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '503':
           description: pos-customer unavailable
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:campaign:view
@@ -800,8 +964,16 @@ paths:
                 $ref: '#/components/schemas/ProgramStatsResponse'
         '404':
           description: Campaign program not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:stats:view
@@ -842,8 +1014,16 @@ paths:
                 $ref: '#/components/schemas/CampaignStatsResponse'
         '404':
           description: Campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:stats:view
@@ -898,6 +1078,10 @@ paths:
                 $ref: '#/components/schemas/PagedResponse'
         '403':
           description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:campaign:view
@@ -993,6 +1177,69 @@ components:
       - channel
       - name
       - templateId
+    ApiError:
+      type: object
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code
+          example: 404
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+        correlationId:
+          type: string
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fieldErrors:
+          type: array
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          items:
+            $ref: '#/components/schemas/FieldError'
+        referenceId:
+          type: string
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+        nextAction:
+          type: string
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+        supportAction:
+          type: string
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+    FieldError:
+      type: object
+      description: Validation error for a specific request field
+      properties:
+        field:
+          type: string
+          description: Field name
+          example: quantity
+        message:
+          type: string
+          description: Validation failure message
+          example: must be greater than 0
+      required:
+      - field
+      - message
     UpsertCampaignRequest:
       type: object
       description: Request to create or update a marketing campaign

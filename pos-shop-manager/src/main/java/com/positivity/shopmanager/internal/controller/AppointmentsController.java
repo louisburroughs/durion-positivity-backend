@@ -1,6 +1,7 @@
 package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
 import com.positivity.shopmanager.internal.dto.CancelAppointmentRequest;
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -64,12 +66,20 @@ public class AppointmentsController {
     @ApiResponse(
             responseCode = "400",
             description =
-                    "Validation or conflict error — requested slot is unavailable, duplicate source appointment, or request fields are invalid.")
-    @ApiResponse(responseCode = "404", description = "Customer or vehicle not found in the local CRM replicas.")
-    @ApiResponse(responseCode = "409", description = "Vehicle does not belong to the supplied customer.")
+                    "Validation or conflict error — requested slot is unavailable, duplicate source appointment, or request fields are invalid.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Customer or vehicle not found in the local CRM replicas.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Vehicle does not belong to the supplied customer.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "Source not eligible — estimate or work order cannot be scheduled (ineligible status).")
+            description = "Source not eligible — estimate or work order cannot be scheduled (ineligible status).",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "501", description = "Not implemented.")
     @EmitEvent(id = "SHOPMGR_APPOINTMENT_CREATE", apiVersion = "1")
     @PostMapping("/appointments")
@@ -131,8 +141,14 @@ public class AppointmentsController {
                     supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Appointment retrieved successfully.")
-    @ApiResponse(responseCode = "400", description = "appointmentId is not a valid UUID.")
-    @ApiResponse(responseCode = "404", description = "Appointment not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "appointmentId is not a valid UUID.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Appointment not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "501", description = "Not implemented.")
     @GetMapping("/appointments/{appointmentId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -177,11 +193,16 @@ public class AppointmentsController {
     @ApiResponse(
             responseCode = "400",
             description =
-                    "Validation error — invalid times, missing mandatory fields, or blank notes required for OTHER reason.")
-    @ApiResponse(responseCode = "404", description = "Appointment not found.")
+                    "Validation error — invalid times, missing mandatory fields, or blank notes required for OTHER reason.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Appointment not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Appointment state conflict — appointment is not in a reschedulable status.")
+            description = "Appointment state conflict — appointment is not in a reschedulable status.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PutMapping("/appointments/{appointmentId}/reschedule")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -231,8 +252,14 @@ public class AppointmentsController {
                     SCHEDULED status.
                     """)
     @ApiResponse(responseCode = "200", description = "Appointment cancelled successfully.")
-    @ApiResponse(responseCode = "404", description = "Appointment not found.")
-    @ApiResponse(responseCode = "409", description = "Appointment state conflict.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Appointment not found.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Appointment state conflict.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @DeleteMapping("/appointments/{appointmentId}/cancel")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

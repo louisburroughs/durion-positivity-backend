@@ -7,6 +7,7 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -15,6 +16,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -52,8 +54,20 @@ public class ColumnMappingController {
                     Returns 404 when the job does not exist, and 403 when the job belongs to another operator.
                     """)
     @ApiResponse(responseCode = "200", description = "Mappings returned")
-    @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
-    @ApiResponse(responseCode = "404", description = "Job not found")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Job does not belong to the authenticated operator",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Job not found",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<List<ColumnMappingResponse>> getMappings(@PathVariable @NonNull UUID jobId) {
         String operatorId = currentOperatorId();
         return ResponseEntity.ok(columnMappingService.getMappingsForJob(jobId, operatorId));
@@ -81,8 +95,20 @@ public class ColumnMappingController {
                     Returns 404 when the job does not exist, and 403 when the job belongs to another operator.
                     """)
     @ApiResponse(responseCode = "200", description = "Mappings approved")
-    @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
-    @ApiResponse(responseCode = "404", description = "Job not found")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Job does not belong to the authenticated operator",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Job not found",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<List<ColumnMappingResponse>> approveMappings(
             @PathVariable @NonNull UUID jobId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

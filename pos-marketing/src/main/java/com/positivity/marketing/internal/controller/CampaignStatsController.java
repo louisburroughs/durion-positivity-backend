@@ -5,6 +5,7 @@ import com.positivity.marketing.internal.dto.CampaignStatsResponse;
 import com.positivity.marketing.internal.dto.ProgramStatsResponse;
 import com.positivity.marketing.internal.security.MarketingPermissionRegistry;
 import com.positivity.marketing.service.CampaignStatsService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -52,8 +53,14 @@ public class CampaignStatsController {
                 responseCode = "200",
                 description = "Stats returned",
                 content = @Content(schema = @Schema(implementation = CampaignStatsResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Campaign not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Campaign not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/campaigns/{campaignId}/stats")
     @SecurityRequirement(
@@ -82,8 +89,14 @@ public class CampaignStatsController {
                 responseCode = "200",
                 description = "Program stats returned",
                 content = @Content(schema = @Schema(implementation = ProgramStatsResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Campaign program not found", content = @Content),
-        @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions", content = @Content)
+        @ApiResponse(
+                responseCode = "404",
+                description = "Campaign program not found",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "Forbidden - insufficient permissions",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/programs/{campaignProgramId}/stats")
     @SecurityRequirement(

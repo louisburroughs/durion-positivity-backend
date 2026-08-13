@@ -59,19 +59,15 @@ paths:
         '403':
           description: Job does not belong to the authenticated operator
           content:
-            application/json:
+            application/problem+json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ColumnMappingResponse'
+                $ref: '#/components/schemas/ProblemDetail'
         '404':
           description: Job not found
           content:
-            application/json:
+            application/problem+json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ColumnMappingResponse'
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -131,19 +127,15 @@ paths:
         '403':
           description: Job does not belong to the authenticated operator
           content:
-            application/json:
+            application/problem+json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ColumnMappingResponse'
+                $ref: '#/components/schemas/ProblemDetail'
         '404':
           description: Job not found
           content:
-            application/json:
+            application/problem+json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ColumnMappingResponse'
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -290,15 +282,15 @@ paths:
         '404':
           description: Job not found
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/FileUploadResponse'
+                $ref: '#/components/schemas/ProblemDetail'
         '409':
           description: Job is in a terminal state and cannot accept uploads
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/FileUploadResponse'
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -453,21 +445,21 @@ paths:
         '403':
           description: Job does not belong to the authenticated operator
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
+                $ref: '#/components/schemas/ProblemDetail'
         '404':
           description: Job not found
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
+                $ref: '#/components/schemas/ProblemDetail'
         '409':
           description: Invalid state transition
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -527,27 +519,27 @@ paths:
         '400':
           description: Invalid correction request
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/BulkCorrectionResponse'
+                $ref: '#/components/schemas/ProblemDetail'
         '403':
           description: Job does not belong to the authenticated operator
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/BulkCorrectionResponse'
+                $ref: '#/components/schemas/ProblemDetail'
         '404':
           description: Job not found
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/BulkCorrectionResponse'
+                $ref: '#/components/schemas/ProblemDetail'
         '409':
           description: Job is not in a state that accepts corrections
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/BulkCorrectionResponse'
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -606,27 +598,27 @@ paths:
         '400':
           description: Invalid correction request
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/CorrectionResultDto'
+                $ref: '#/components/schemas/ProblemDetail'
         '403':
           description: Job does not belong to the authenticated operator
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/CorrectionResultDto'
+                $ref: '#/components/schemas/ProblemDetail'
         '404':
           description: Job not found
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/CorrectionResultDto'
+                $ref: '#/components/schemas/ProblemDetail'
         '409':
           description: Job is not in a state that accepts corrections
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/CorrectionResultDto'
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -955,17 +947,15 @@ paths:
         '403':
           description: Job does not belong to the authenticated operator
           content:
-            application/json:
+            application/problem+json:
               schema:
-                type: string
-                format: binary
+                $ref: '#/components/schemas/ProblemDetail'
         '404':
           description: Job not found
           content:
-            application/json:
+            application/problem+json:
               schema:
-                type: string
-                format: binary
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -1010,19 +1000,15 @@ paths:
         '403':
           description: Job does not belong to the authenticated operator
           content:
-            application/json:
+            application/problem+json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/AuditRecordResponse'
+                $ref: '#/components/schemas/ProblemDetail'
         '404':
           description: Job not found
           content:
-            application/json:
+            application/problem+json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/AuditRecordResponse'
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
@@ -1065,6 +1051,24 @@ components:
       required:
       - sourceColumn
       - targetField
+    ProblemDetail:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        properties:
+          type: object
     ColumnMappingResponse:
       type: object
       description: Inferred or user-overridden mapping from a source column to a target field
