@@ -36,7 +36,7 @@ public class VehicleReferenceService {
 
     public List<CarApiMake> getMakes() {
         List<CarApiMake> cached = makeRepository.findAll();
-        if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = carApiBaseUrl + "/makes";
@@ -61,7 +61,7 @@ public class VehicleReferenceService {
 
     public List<CarApiModel> getModelsByMakeId(UUID makeId) {
         List<CarApiModel> cached = modelRepository.findByMakeId(makeId);
-        if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = carApiBaseUrl + "/models?make_id=" + makeId;
@@ -85,7 +85,12 @@ public class VehicleReferenceService {
         }
     }
 
-    private boolean isCacheExpired(LocalDateTime cacheTimestamp) {
+    /**
+     * Returns {@code true} while the cached rows are still inside the 24-hour
+     * window, i.e. while they may be served without calling CarAPI. A {@code null}
+     * timestamp cannot be shown to be fresh, so it is treated as needing a refetch.
+     */
+    private boolean isCacheFresh(LocalDateTime cacheTimestamp) {
         return cacheTimestamp != null && !cacheTimestamp.plus(CACHE_EXPIRY).isBefore(LocalDateTime.now(clock));
     }
 }

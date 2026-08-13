@@ -35,7 +35,7 @@ public class VehicleReferenceService {
 
     public List<VehicleVariable> getVehicleVariables() {
         List<VehicleVariable> cached = vehicleVariableRepository.findAll();
-        if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleVariableList?format=json";
@@ -59,7 +59,7 @@ public class VehicleReferenceService {
 
     public List<VehicleVariableValue> getVehicleVariableValues(UUID variableId) {
         List<VehicleVariableValue> cached = vehicleVariableValueRepository.findByVariable_Id(variableId);
-        if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleVariableValuesList/" + variableId + "?format=json";
@@ -84,7 +84,7 @@ public class VehicleReferenceService {
 
     public List<Manufacturer> getManufacturers() {
         List<Manufacturer> cached = manufacturerRepository.findAll();
-        if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/getallmanufacturers?format=json";
@@ -113,7 +113,7 @@ public class VehicleReferenceService {
                 .findById(manufacturerId)
                 .orElseThrow(() -> new IllegalArgumentException("Manufacturer not found with ID: " + manufacturerId));
         List<Make> cached = makeRepository.findByManufacturerId(manufacturerId);
-        if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetMakeForManufacturer/" + manufacturerId + "?format=json";
@@ -143,7 +143,7 @@ public class VehicleReferenceService {
                 .findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
         List<Model> cached = modelRepository.findByMakeId(makeId);
-        if (!cached.isEmpty() && isCacheExpired(cached.getFirst().getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetModelsForMakeId/" + makeId + "?format=json";
@@ -173,7 +173,7 @@ public class VehicleReferenceService {
                 .findById(makeId)
                 .orElseThrow(() -> new IllegalArgumentException("Make not found with ID: " + makeId));
         List<VehicleType> cached = vehicleTypeRepository.findByMakeId(makeId);
-        if (!cached.isEmpty() && !isCacheExpired(cached.getFirst().getCacheTimestamp())) {
+        if (!cached.isEmpty() && isCacheFresh(cached.getFirst().getCacheTimestamp())) {
             return cached;
         }
         String url = NHTSA_API_BASE + "/GetVehicleTypesForMakeId/" + makeId + "?format=json";
@@ -196,7 +196,12 @@ public class VehicleReferenceService {
         return vehicleTypeRepository.findByMakeId(makeId);
     }
 
-    private boolean isCacheExpired(LocalDateTime cacheTimestamp) {
+    /**
+     * Returns {@code true} while the cached rows are still inside the 24-hour
+     * window, i.e. while they may be served without calling vPIC. A {@code null}
+     * timestamp cannot be shown to be fresh, so it is treated as needing a refetch.
+     */
+    private boolean isCacheFresh(LocalDateTime cacheTimestamp) {
         return cacheTimestamp != null && !cacheTimestamp.plus(CACHE_EXPIRY).isBefore(LocalDateTime.now(clock));
     }
 }
