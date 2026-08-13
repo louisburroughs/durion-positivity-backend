@@ -27,6 +27,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -68,8 +69,22 @@ public class ProductController {
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
     @PostMapping("/pricing/guardrail-policies")
     @Operation(
-            summary = "Upsert location guardrail policy",
-            description = "Creates or updates the active LOCATION guardrail policy used by price overrides.")
+            operationId = "upsertLocationGuardrailPolicy",
+            summary = "Upsert Location Guardrail Policy",
+            description = """
+            Creates or updates the LOCATION-scoped guardrail policy that createLocationPriceOverride enforces \
+            for discount, margin and auto-approval limits.
+            Use this tool to set pricing guardrails for a location before overrides are created there; do not \
+            use createLocationPriceOverride, which applies a price and is rejected until a policy exists.
+            Preconditions: none; when a policy already exists for the scopeId its limits are overwritten, \
+            otherwise a new policy row is created.
+            Required inputs: scopeId (the location UUID), minMarginPercent, maxDiscountPercent and \
+            autoApprovalThresholdPercent, all mandatory.
+            Emits a CATALOG_GUARDRAIL_POLICY_UPSERT event; existing overrides are not re-evaluated, the new \
+            limits apply only to overrides created afterwards.
+            Returns 400 when any of the four fields is missing; the 200 response body carries only the \
+            locationId, not the stored limits.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Guardrail policy upserted",
@@ -80,7 +95,23 @@ public class ProductController {
     @ApiResponse(responseCode = "400", description = "Invalid policy payload")
     @EmitEvent(id = "CATALOG_GUARDRAIL_POLICY_UPSERT", apiVersion = "1")
     public ResponseEntity<LocationPriceOverrideResponseDto> upsertLocationGuardrailPolicy(
-            @Valid @RequestBody GuardrailPolicyUpsertRequestDto request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Guardrail limits for one location: minimum margin, maximum discount and"
+                                    + " the discount threshold under which overrides auto-approve.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = GuardrailPolicyUpsertRequestDto.class),
+                                            examples = @ExampleObject(name = "Location policy", value = """
+                                                                    {"scopeId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "minMarginPercent":15.0,
+                                                                     "maxDiscountPercent":25.0,
+                                                                     "autoApprovalThresholdPercent":10.0}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    GuardrailPolicyUpsertRequestDto request) {
         return ResponseEntity.ok(locationPriceOverrideService.upsertLocationGuardrailPolicy(request));
     }
 
@@ -90,9 +121,25 @@ public class ProductController {
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
     @PostMapping("/pricing/location-overrides")
     @Operation(
-            summary = "Create location price override",
-            description =
-                    "Creates a location-specific price override and enforces guardrails for margin and discount limits.")
+            operationId = "createLocationPriceOverride",
+            summary = "Create Location Price Override",
+            description = """
+            Creates a location-specific price override for one product, enforcing the location's guardrail \
+            policy; discounts at or below the auto-approval threshold activate immediately, larger discounts \
+            are stored as PENDING_APPROVAL with an approval request assigned to a deterministic approver.
+            Use this tool to discount a product at one location; do not use upsertLocationGuardrailPolicy, \
+            which sets the limits themselves, and use approveLocationPriceOverride to activate a pending one.
+            Preconditions: the product must exist and a LOCATION guardrail policy must already exist for the \
+            locationId; any currently ACTIVE override for the same location and product is set INACTIVE.
+            Required inputs: locationId, productId, createdByUserId (UUIDs), positive basePrice and \
+            overridePrice with overridePrice not exceeding basePrice; cost is optional and enables the \
+            margin check when present.
+            Emits a CATALOG_LOCATION_OVERRIDE_CREATE event and invalidates the product-detail cache for that \
+            location.
+            Returns 404 when the product does not exist, and 400 when no guardrail policy exists for the \
+            location, the discount exceeds maxDiscountPercent, or the margin falls below minMarginPercent; \
+            callers must read the returned status to learn whether the override is ACTIVE or PENDING_APPROVAL.
+            """)
     @ApiResponse(
             responseCode = "201",
             description = "Override created",
@@ -104,7 +151,26 @@ public class ProductController {
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @EmitEvent(id = "CATALOG_LOCATION_OVERRIDE_CREATE", apiVersion = "1")
     public ResponseEntity<LocationPriceOverrideResponseDto> createLocationPriceOverride(
-            @Valid @RequestBody LocationPriceOverrideCreateRequestDto request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Override pricing for one product at one location; cost is optional and"
+                                    + " enables the minimum-margin guardrail check.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema =
+                                                    @Schema(
+                                                            implementation =
+                                                                    LocationPriceOverrideCreateRequestDto.class),
+                                            examples = @ExampleObject(name = "Discounted price", value = """
+                                                                    {"locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "productId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+                                                                     "createdByUserId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d",
+                                                                     "basePrice":100.00,"cost":60.00,"overridePrice":92.50}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    LocationPriceOverrideCreateRequestDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(locationPriceOverrideService.createOverride(request));
     }
 
@@ -113,9 +179,19 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
     @GetMapping("/pricing/effective-price/{locationId}/{productId}")
-    @Operation(
-            summary = "Get effective location price",
-            description = "Resolves effective price using precedence: ACTIVE override first, otherwise base price.")
+    @Operation(operationId = "getEffectiveLocationPrice", summary = "Get Effective Location Price", description = """
+            Resolves the price a location currently charges for a product from its override records: the newest \
+            ACTIVE override wins, otherwise a PENDING_APPROVAL override reports its basePrice as the effective \
+            price with status PENDING_APPROVAL.
+            Use this tool to check what an override has done to a product's price at one location; do not use \
+            getProductDetailView, which returns the full consolidated pricing and availability view.
+            Preconditions: at least one ACTIVE or PENDING_APPROVAL override must exist for the pair; a product \
+            with no override history at the location has no answer here.
+            Required inputs: locationId and productId (UUIDs) as path parameters; there is no request body.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 404 when no ACTIVE or PENDING_APPROVAL override exists for the location and product pair, \
+            even if the product itself exists.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Effective price returned",
@@ -136,8 +212,22 @@ public class ProductController {
             scopes = {"ROLE_ADMIN", "pricing:override:approve"})
     @PostMapping("/pricing/location-overrides/{overrideId}/approve")
     @Operation(
-            summary = "Approve pending location price override",
-            description = "Approves a pending override and activates it as the effective location price.")
+            operationId = "approveLocationPriceOverride",
+            summary = "Approve Pending Price Override",
+            description = """
+            Approves a PENDING_APPROVAL location price override, setting it ACTIVE and closing its approval \
+            request as APPROVED.
+            Use this tool to grant a pending override; do not use rejectLocationPriceOverride, which \
+            terminally declines it instead.
+            Preconditions: the override must exist, be in PENDING_APPROVAL status, have an open approval \
+            request, and the supplied version must match the override's current version.
+            Required inputs: overrideId (UUID) path parameter plus version (long) and actorUserId (UUID) in \
+            the body; rejection fields are ignored on approval.
+            Emits a CATALOG_LOCATION_OVERRIDE_APPROVE event and invalidates the product-detail cache for the \
+            override's location.
+            Returns 404 when the override or its approval request cannot be found, 400 when the override is \
+            not in PENDING_APPROVAL status, and 409 when the supplied version does not match the current one.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Override approved",
@@ -151,7 +241,24 @@ public class ProductController {
     @EmitEvent(id = "CATALOG_LOCATION_OVERRIDE_APPROVE", apiVersion = "1")
     public ResponseEntity<LocationPriceOverrideResponseDto> approveLocationPriceOverride(
             @Parameter(description = "Override ID", required = true) @PathVariable UUID overrideId,
-            @Valid @RequestBody LocationPriceOverrideDecisionRequestDto request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Approval decision carrying the acting user and the override's current"
+                                    + " version for optimistic-lock verification.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema =
+                                                    @Schema(
+                                                            implementation =
+                                                                    LocationPriceOverrideDecisionRequestDto.class),
+                                            examples = @ExampleObject(name = "Approve", value = """
+                                                                    {"version":0,
+                                                                     "actorUserId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    LocationPriceOverrideDecisionRequestDto request) {
         return ResponseEntity.ok(locationPriceOverrideService.approveOverride(overrideId, request));
     }
 
@@ -161,8 +268,23 @@ public class ProductController {
             scopes = {"ROLE_ADMIN", "pricing:override:approve"})
     @PostMapping("/pricing/location-overrides/{overrideId}/reject")
     @Operation(
-            summary = "Reject pending location price override",
-            description = "Rejects a pending override, persists rejection metadata, and marks the request as terminal.")
+            operationId = "rejectLocationPriceOverride",
+            summary = "Reject Pending Price Override",
+            description = """
+            Rejects a PENDING_APPROVAL location price override, recording who rejected it and why, and closing \
+            its approval request as REJECTED; the decision is terminal, a rejected override cannot be revived.
+            Use this tool to decline a pending override; do not use approveLocationPriceOverride, which \
+            activates it instead.
+            Preconditions: the override must exist, be in PENDING_APPROVAL status, have an open approval \
+            request, and the supplied version must match the override's current version.
+            Required inputs: overrideId (UUID) path parameter plus version (long), actorUserId (UUID), and \
+            non-blank rejectionReasonCode and rejectionNotes in the body.
+            Emits a CATALOG_LOCATION_OVERRIDE_REJECT event and invalidates the product-detail cache for the \
+            override's location.
+            Returns 404 when the override or its approval request cannot be found, 400 when the override is \
+            not in PENDING_APPROVAL status or the rejection reason or notes are blank, and 409 when the \
+            supplied version does not match the current one.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Override rejected",
@@ -176,7 +298,26 @@ public class ProductController {
     @EmitEvent(id = "CATALOG_LOCATION_OVERRIDE_REJECT", apiVersion = "1")
     public ResponseEntity<LocationPriceOverrideResponseDto> rejectLocationPriceOverride(
             @Parameter(description = "Override ID", required = true) @PathVariable UUID overrideId,
-            @Valid @RequestBody LocationPriceOverrideDecisionRequestDto request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Rejection decision carrying the acting user, the override's current"
+                                    + " version, and a mandatory reason code with notes.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema =
+                                                    @Schema(
+                                                            implementation =
+                                                                    LocationPriceOverrideDecisionRequestDto.class),
+                                            examples = @ExampleObject(name = "Reject below margin", value = """
+                                                                    {"version":0,
+                                                                     "actorUserId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "rejectionReasonCode":"MARGIN_TOO_LOW",
+                                                                     "rejectionNotes":"Margin would fall below store target"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    LocationPriceOverrideDecisionRequestDto request) {
         return ResponseEntity.ok(locationPriceOverrideService.rejectOverride(overrideId, request));
     }
 
@@ -185,13 +326,20 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
     @GetMapping("/search")
-    @Operation(
-            summary = "Search catalog products",
-            description =
-                    "Cursor-based product search with optional free-text query and exact filters for brand, category, and SKU. "
-                            + "Pass detailed=true to enrich each row inline with lifecycle state + effective instant and the "
-                            + "product's active MSRP (amount, currency, effective window), resolved server-side in a single "
-                            + "request. Products without an active MSRP return null price fields.")
+    @Operation(operationId = "searchCatalogProducts", summary = "Search Catalog Products", description = """
+            Searches products with an optional free-text query over name and description plus exact \
+            case-insensitive filters for brand, category and SKU, paged by an opaque cursor.
+            Use this tool to find products by partial text or filters; use getProductById instead when the id \
+            is known, and listProductsByName only for exact whole-name matches.
+            Preconditions: none; a malformed or missing cursor silently restarts at the first page rather \
+            than failing.
+            Required inputs: all parameters are optional; limit defaults to 20 and is clamped to 1-100, and \
+            detailed defaults to false — pass detailed=true to enrich each row with lifecycle state, its \
+            effective instant and the active MSRP, with null price fields for products lacking an active MSRP.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 200 with an empty items array when nothing matches, so an empty result is not an error \
+            condition.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Search results",
@@ -233,9 +381,21 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
     @PostMapping
-    @Operation(
-            summary = "Create product master record",
-            description = "Creates a product master record with immutable SKU and uniqueness checks.")
+    @Operation(operationId = "createProduct", summary = "Create Product Master Record", description = """
+            Creates a product master record with an immutable SKU, status ACTIVE, and uniqueness enforced on \
+            SKU and on the manufacturerId plus mpn pair.
+            Use this tool for governed product-master entry; do not use createCatalogItem, which is the \
+            lightweight catalog-item path with no duplicate checks, and do not use bulkIngestCatalogProducts, \
+            which loads many products in one call.
+            Preconditions: no product may already use the SKU (case-insensitive), and when manufacturerId is \
+            supplied no product may already pair it with the same mpn; a supplied categoryId must resolve.
+            Required inputs: name, description, unitOfMeasure, sku and mpn, all non-blank; manufacturerId, \
+            categoryId, upc and attributes are optional, and a upc also becomes the productCode with type UPC.
+            Emits a CATALOG_PRODUCT_CREATED event, publishes a product fact for downstream replicas, and \
+            invalidates the product-detail cache.
+            Returns 409 when the SKU or the manufacturerId plus mpn pair already exists, and 400 when the \
+            supplied categoryId does not resolve.
+            """)
     @ApiResponse(
             responseCode = "201",
             description = "Product created",
@@ -243,7 +403,28 @@ public class ProductController {
     @ApiResponse(responseCode = "400", description = "Validation error")
     @ApiResponse(responseCode = "409", description = "Business conflict")
     @EmitEvent(id = "CATALOG_PRODUCT_CREATED", apiVersion = "1")
-    public ResponseEntity<ProductDto> createProduct(@Valid @RequestBody ProductCreateRequestDto request) {
+    public ResponseEntity<ProductDto> createProduct(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Product master data to register; sku becomes immutable after creation and"
+                                    + " upc, when supplied, also becomes the productCode.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = ProductCreateRequestDto.class),
+                                            examples = @ExampleObject(name = "New tire product", value = """
+                                                                    {"name":"All-Terrain Tire 265/70R17",
+                                                                     "description":"All-terrain light truck tire, 265/70R17",
+                                                                     "unitOfMeasure":"EA",
+                                                                     "sku":"TIRE-AT-2657017",
+                                                                     "mpn":"AT3-26570R17",
+                                                                     "upc":"036121960222",
+                                                                     "manufacturerId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "categoryId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    ProductCreateRequestDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(productMasterDataService.createProduct(request));
     }
 
@@ -252,9 +433,21 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
     @PutMapping("/{productId}")
-    @Operation(
-            summary = "Update product master record",
-            description = "Updates mutable product master fields. SKU is immutable.")
+    @Operation(operationId = "updateProduct", summary = "Update Product Master Record", description = """
+            Replaces the mutable master-data fields of a product — name, description, unit of measure, \
+            manufacturer, category, UPC and attributes — while the SKU stays immutable.
+            Use this tool to correct product master data; do not use updateProductLifecycle, which changes \
+            selling state, and do not use updateProductTrackingLevel, which changes stock tracking.
+            Preconditions: the product must exist, and a sku field in the body must either be omitted or \
+            match the stored SKU exactly.
+            Required inputs: productId (UUID) path parameter plus non-blank name, description, unitOfMeasure \
+            and mpn; omitted optional fields such as upc and categoryId are cleared, not preserved.
+            Emits a CATALOG_PRODUCT_UPDATED event, publishes a product fact for downstream replicas, and \
+            invalidates the product-detail cache.
+            Returns 404 when the product does not exist, 400 when the body tries to change the SKU or names a \
+            categoryId that does not resolve, and 409 when the manufacturerId plus mpn pair collides with \
+            another product.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Product updated",
@@ -265,7 +458,28 @@ public class ProductController {
     @EmitEvent(id = "CATALOG_PRODUCT_UPDATED", apiVersion = "1")
     public ResponseEntity<ProductDto> updateProduct(
             @Parameter(description = "ID of the product to update", required = true) @PathVariable UUID productId,
-            @Valid @RequestBody ProductUpdateRequestDto request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Replacement master-data fields; sku may be omitted or must equal the"
+                                    + " stored value, and omitted optional fields are cleared.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = ProductUpdateRequestDto.class),
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Correct description and category",
+                                                            value = """
+                                                                    {"name":"All-Terrain Tire 265/70R17",
+                                                                     "description":"All-terrain LT tire, 265/70R17, load range E",
+                                                                     "unitOfMeasure":"EA",
+                                                                     "mpn":"AT3-26570R17",
+                                                                     "upc":"036121960222",
+                                                                     "categoryId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    ProductUpdateRequestDto request) {
         return ResponseEntity.ok(productMasterDataService.updateProduct(productId, request));
     }
 
@@ -274,10 +488,19 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
     @PutMapping("/{productId}/tracking-level")
-    @Operation(
-            summary = "Set product tracking level",
-            description = "Sets the product's stock tracking level (NONE, LOT, or SERIAL; default NONE) and"
-                    + " re-emits the product contract event for downstream replicas.")
+    @Operation(operationId = "updateProductTrackingLevel", summary = "Set Product Tracking Level", description = """
+            Sets the product's stock tracking level to NONE, LOT or SERIAL, controlling whether inventory \
+            tracks the product per lot or per serial number.
+            Use this tool when a product's tracking granularity changes; do not use updateProduct, which \
+            replaces master-data fields and does not touch the tracking level.
+            Preconditions: the product must exist; no transition rules apply between levels.
+            Required inputs: productId (UUID) path parameter and trackingLevel in the body, one of NONE, LOT \
+            or SERIAL.
+            Emits a CATALOG_PRODUCT_TRACKING_LEVEL_UPDATE event, re-publishes the product fact so downstream \
+            replicas pick up the new level, and invalidates the product-detail cache.
+            Returns 404 when the product does not exist, and 400 when trackingLevel is missing or not a \
+            valid enum value.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Tracking level updated",
@@ -287,7 +510,22 @@ public class ProductController {
     @EmitEvent(id = "CATALOG_PRODUCT_TRACKING_LEVEL_UPDATE", apiVersion = "1")
     public ResponseEntity<ProductDto> updateTrackingLevel(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId,
-            @Valid @RequestBody ProductTrackingLevelUpdateRequestDto request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The stock tracking granularity to apply to the product.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema =
+                                                    @Schema(
+                                                            implementation =
+                                                                    ProductTrackingLevelUpdateRequestDto.class),
+                                            examples = @ExampleObject(name = "Track by serial number", value = """
+                                                                    {"trackingLevel":"SERIAL"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    ProductTrackingLevelUpdateRequestDto request) {
         return ResponseEntity.ok(productMasterDataService.updateTrackingLevel(productId, request));
     }
 
@@ -296,7 +534,16 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
     @GetMapping("/{productId}")
-    @Operation(summary = "Get a product by ID", description = "Retrieves a specific product by its unique ID.")
+    @Operation(operationId = "getProductById", summary = "Get a Product by ID", description = """
+            Returns the full product record including identity codes, manufacturer data, category, dimensions, \
+            tracking level and lifecycle state.
+            Use this tool when the productId is already known; use searchCatalogProducts instead to find \
+            products by text or filters.
+            Preconditions: the product must exist.
+            Required inputs: productId (UUID) as a path parameter; there is no request body.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 404 when no product exists for the supplied id.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Successfully retrieved product",
@@ -315,7 +562,16 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
     @GetMapping("/name/{name}")
-    @Operation(summary = "Get products by name", description = "Retrieves a list of products matching the given name.")
+    @Operation(operationId = "listProductsByName", summary = "List Products by Exact Name", description = """
+            Returns every product whose name equals the supplied value exactly; this is a whole-name match, \
+            not a substring search.
+            Use this tool only when the exact product name is known; use searchCatalogProducts instead for \
+            partial text, brand, category or SKU matching.
+            Preconditions: none; an empty result simply means no product carries that exact name.
+            Required inputs: name as a path parameter; there is no paging and no request body.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 200 with an empty array when nothing matches, so an empty result is not an error condition.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Successfully retrieved products",
@@ -330,10 +586,18 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
     @GetMapping("/{productId}/detail")
-    @Operation(
-            summary = "Get product details with pricing and availability",
-            description =
-                    "Retrieves a consolidated view of product information including catalog data, location-specific pricing, and availability. Implements graceful degradation and returns partial data when non-critical services are unavailable.")
+    @Operation(operationId = "getProductDetailView", summary = "Get Product Detail With Pricing", description = """
+            Returns a consolidated product view for one location: catalog data, location-specific pricing, \
+            availability and lead time, with a confidence indicator describing how complete the data is.
+            Use this tool for a sales-facing view of one product at one store; use getProductById instead for \
+            raw master data, and getEffectiveLocationPrice for the override-derived price alone.
+            Preconditions: the product must exist; pricing and availability sources may be degraded, in which \
+            case partial data is returned rather than an error.
+            Required inputs: productId (UUID) path parameter and location_id (UUID) query parameter.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 404 when the product does not exist, and 400 when location_id is missing or malformed; a \
+            200 may still carry partial data, so callers should inspect the confidence field.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Successfully retrieved product details (may be partial if some services unavailable)",
@@ -371,9 +635,18 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
     @GetMapping("/services/search")
-    @Operation(
-            summary = "Search catalog services",
-            description = "Free-text substring search over service names for typeahead selection.")
+    @Operation(operationId = "searchCatalogServices", summary = "Search Catalog Services", description = """
+            Searches services by a case-insensitive substring of the service name, ordered by name, sized for \
+            typeahead selection.
+            Use this tool to find a serviceId by partial name; use getServiceById instead when the id is \
+            known, and listServicesByName for exact whole-name matches.
+            Preconditions: none; a blank or missing q returns an empty list rather than all services.
+            Required inputs: q as the substring to match; limit is optional, defaults to 20 and is clamped \
+            to 1-100.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 200 with an empty array when q is blank or nothing matches, so an empty result is not an \
+            error condition.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Matching services",
@@ -398,7 +671,15 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
     @GetMapping("/services/{serviceId}")
-    @Operation(summary = "Get a service by ID", description = "Retrieves a specific service by its unique ID.")
+    @Operation(operationId = "getServiceById", summary = "Get a Service by ID", description = """
+            Returns one catalog service record with its name, short description and long description.
+            Use this tool when the serviceId is already known; use searchCatalogServices instead to find \
+            services by partial name.
+            Preconditions: the service must exist.
+            Required inputs: serviceId (UUID) as a path parameter; there is no request body.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 404 when no service exists for the supplied id.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Successfully retrieved service",
@@ -417,7 +698,16 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
     @GetMapping("/services/name/{name}")
-    @Operation(summary = "Get services by name", description = "Retrieves a list of services matching the given name.")
+    @Operation(operationId = "listServicesByName", summary = "List Services by Exact Name", description = """
+            Returns every catalog service whose name equals the supplied value exactly; this is a whole-name \
+            match, not a substring search.
+            Use this tool only when the exact service name is known; use searchCatalogServices instead for \
+            partial, typeahead-style matching.
+            Preconditions: none; an empty result simply means no service carries that exact name.
+            Required inputs: name as a path parameter; there is no paging and no request body.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 200 with an empty array when nothing matches, so an empty result is not an error condition.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Successfully retrieved services",
@@ -433,8 +723,18 @@ public class ProductController {
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
     @GetMapping("/noninventory/{productId}")
     @Operation(
-            summary = "Get a non-inventory product by ID",
-            description = "Retrieves a specific non-inventory product by its unique ID.")
+            operationId = "getNonInventoryProductById",
+            summary = "Get Non-Inventory Product by ID",
+            description = """
+            Returns one non-inventory product — an item sold without stock tracking, such as a fee or shop \
+            supply — with its name and descriptions.
+            Use this tool when the id is already known; use listNonInventoryProductsByName instead to find \
+            non-inventory products by exact name.
+            Preconditions: the non-inventory product must exist.
+            Required inputs: productId (UUID) as a path parameter; there is no request body.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 404 when no non-inventory product exists for the supplied id.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Successfully retrieved non-inventory product",
@@ -457,8 +757,18 @@ public class ProductController {
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
     @GetMapping("/noninventory/name/{name}")
     @Operation(
-            summary = "Get non-inventory products by name",
-            description = "Retrieves a list of non-inventory products matching the given name.")
+            operationId = "listNonInventoryProductsByName",
+            summary = "List Non-Inventory Products by Name",
+            description = """
+            Returns every non-inventory product whose name equals the supplied value exactly; this is a \
+            whole-name match, not a substring search.
+            Use this tool only when the exact name is known; use getNonInventoryProductById instead when the \
+            id is available, since there is no substring search for non-inventory products.
+            Preconditions: none; an empty result simply means no non-inventory product carries that exact name.
+            Required inputs: name as a path parameter; there is no paging and no request body.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 200 with an empty array when nothing matches, so an empty result is not an error condition.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Successfully retrieved non-inventory products",
@@ -476,9 +786,17 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW", "product:lifecycle:update"})
     @GetMapping("/{productId}/lifecycle")
-    @Operation(
-            summary = "Get product lifecycle state",
-            description = "Retrieves lifecycle state and replacement suggestions for a product.")
+    @Operation(operationId = "getProductLifecycle", summary = "Get Product Lifecycle State", description = """
+            Returns a product's lifecycle state — ACTIVE, INACTIVE or DISCONTINUED, defaulting to ACTIVE when \
+            never set — together with its effective instant, last-change audit fields and ordered replacement \
+            options.
+            Use this tool to inspect selling state before a transition; do not use updateProductLifecycle, \
+            which changes the state, and use listProductReplacements when only the replacements are needed.
+            Preconditions: the product must exist.
+            Required inputs: productId (UUID) as a path parameter; there is no request body.
+            Emits a CATALOG_PRODUCT_LIFECYCLE_GET audit event; no state changes.
+            Returns 404 when no product exists for the supplied id.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Successfully retrieved lifecycle state",
@@ -498,7 +816,19 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW", "product:lifecycle:update"})
     @GetMapping("/{productId}/replacements")
-    @Operation(summary = "List replacement products", description = "Returns replacement options for a product.")
+    @Operation(operationId = "listProductReplacements", summary = "List Replacement Products", description = """
+            Returns the non-deleted replacement options recorded for a product, ordered by priority, each \
+            with its replacement product id, notes and effective instant.
+            Use this tool to see what supersedes a discontinued product; do not use addProductReplacement, \
+            which records a new option, and use getPartSubstitutes to resolve the full substitute product \
+            records instead of the option rows.
+            Preconditions: the product must exist; replacements are normally present only on DISCONTINUED \
+            products.
+            Required inputs: productId (UUID) as a path parameter; there is no request body.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 404 when no product exists for the supplied id, and 200 with an empty array when the \
+            product has no replacements.
+            """)
     @ApiResponse(responseCode = "200", description = "Replacements listed")
     public ResponseEntity<List<ProductLifecycleResponse.ReplacementOption>> getReplacements(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId) {
@@ -510,9 +840,24 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT", "product:lifecycle:update"})
     @PutMapping("/{productId}/lifecycle")
-    @Operation(
-            summary = "Set product lifecycle state",
-            description = "Sets lifecycle state to ACTIVE, INACTIVE, or DISCONTINUED with effective date semantics.")
+    @Operation(operationId = "updateProductLifecycle", summary = "Set Product Lifecycle State", description = """
+            Transitions a product's lifecycle state to ACTIVE, INACTIVE or DISCONTINUED with an effective \
+            instant; discontinuation is one-way, a DISCONTINUED product can never be reactivated and callers \
+            must record a replacement via addProductReplacement instead.
+            Use this tool to change selling state; do not use updateProduct, which edits master data, and do \
+            not use deleteCatalogItem, which removes the row outright.
+            Preconditions: the product must exist and must not already be in the requested state; any \
+            transition into DISCONTINUED requires the product:lifecycle:override_discontinued authority and a \
+            non-blank overrideReason.
+            Required inputs: productId (UUID) path parameter plus lifecycleState and either effectiveAt \
+            (instant) or effectiveDate (date, resolved to UTC start of day); effectiveAt more than two \
+            seconds in the past is rejected.
+            Emits a CATALOG_PRODUCT_LIFECYCLE_UPDATE event, publishes a product fact for downstream replicas, \
+            and invalidates the product-detail cache.
+            Returns 404 when the product does not exist, 409 when attempting to leave DISCONTINUED, 403 when \
+            the discontinued-override authority is missing, and 400 when the state is unchanged, the \
+            effective time is absent or in the past, or overrideReason is missing for a discontinuation.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Lifecycle state updated successfully",
@@ -527,7 +872,21 @@ public class ProductController {
     @EmitEvent(id = "CATALOG_PRODUCT_LIFECYCLE_UPDATE", apiVersion = "1")
     public ResponseEntity<ProductLifecycleResponse> setLifecycleState(
             @Parameter(description = "ID of the product", required = true) @PathVariable UUID productId,
-            @RequestBody ProductLifecycleUpdateRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Target lifecycle state and when it takes effect; overrideReason is"
+                                    + " mandatory for transitions into DISCONTINUED.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = ProductLifecycleUpdateRequest.class),
+                                            examples = @ExampleObject(name = "Discontinue at year end", value = """
+                                                                    {"lifecycleState":"DISCONTINUED",
+                                                                     "effectiveDate":"2026-12-31",
+                                                                     "overrideReason":"Manufacturer ended production"}
+                                                                    """)))
+                    @RequestBody
+                    ProductLifecycleUpdateRequest request) {
         return ResponseEntity.ok(productLifecycleService.updateLifecycle(productId, request));
     }
 
@@ -536,16 +895,42 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT", "product:lifecycle:update"})
     @PostMapping("/{productId}/replacements")
-    @Operation(
-            summary = "Add replacement product",
-            description = "Adds a replacement suggestion to a discontinued product.")
+    @Operation(operationId = "addProductReplacement", summary = "Add Replacement Product", description = """
+            Records a replacement suggestion on a discontinued product, pointing buyers at the product that \
+            supersedes it, ordered among other options by priorityOrder.
+            Use this tool after discontinuing a product via updateProductLifecycle; do not use \
+            listProductReplacements, which only reads the recorded options.
+            Preconditions: the original product must exist and be in lifecycle state DISCONTINUED, and the \
+            replacement product must itself exist and differ from the original.
+            Required inputs: productId (UUID) path parameter plus replacementProductId (UUID) and \
+            priorityOrder greater than zero; notes are optional and effectiveAt defaults to now when omitted.
+            Emits a CATALOG_PRODUCT_REPLACEMENT_ADD event and invalidates the product-detail cache for the \
+            original product.
+            Returns 404 when the original or replacement product does not exist, 409 when the original \
+            product is not DISCONTINUED, and 400 when the replacement equals the original or priorityOrder \
+            is not positive.
+            """)
     @ApiResponse(responseCode = "201", description = "Replacement added successfully")
     @ApiResponse(responseCode = "400", description = "Validation error")
     @ApiResponse(responseCode = "404", description = "Product not found")
     @EmitEvent(id = "CATALOG_PRODUCT_REPLACEMENT_ADD", apiVersion = "1")
     public ResponseEntity<ProductLifecycleResponse.ReplacementOption> addReplacementProduct(
             @Parameter(description = "ID of discontinued product", required = true) @PathVariable UUID productId,
-            @RequestBody ProductReplacementRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Replacement suggestion pointing at the superseding product, with its"
+                                    + " ranking among other options.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = ProductReplacementRequest.class),
+                                            examples = @ExampleObject(name = "Primary replacement", value = """
+                                                                    {"replacementProductId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "priorityOrder":1,
+                                                                     "notes":"Direct successor model"}
+                                                                    """)))
+                    @RequestBody
+                    ProductReplacementRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(productLifecycleService.addReplacement(productId, request));
     }
@@ -555,9 +940,18 @@ public class ProductController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
     @GetMapping("/{productId}/substitutes")
-    @Operation(
-            summary = "Get substitute parts",
-            description = "Returns list of substitute parts for a given productId.")
+    @Operation(operationId = "getPartSubstitutes", summary = "Get Substitute Parts", description = """
+            Returns the full product records of a product's recorded replacements, resolved from its \
+            replacement options in priority order with duplicates and dangling references dropped.
+            Use this tool when selling and a substitute product's details are needed directly; use \
+            listProductReplacements instead for the raw option rows with priority and notes.
+            Preconditions: the product must exist; substitutes appear only after replacements were recorded \
+            via addProductReplacement.
+            Required inputs: productId (UUID) as a path parameter; there is no request body.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 404 when no product exists for the supplied id, and 200 with an empty array when no \
+            replacement products resolve.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Substitute parts returned",

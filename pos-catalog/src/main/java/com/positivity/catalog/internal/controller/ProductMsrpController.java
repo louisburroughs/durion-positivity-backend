@@ -9,6 +9,7 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -45,7 +46,22 @@ public class ProductMsrpController {
             name = "bearerAuth",
             scopes = {"catalog:msrp:write"})
     @PostMapping
-    @Operation(summary = "Create MSRP", description = "Creates a product MSRP record with effective date constraints.")
+    @Operation(operationId = "createProductMsrp", summary = "Create Product MSRP", description = """
+            Creates an MSRP record for a product with an effective date window; amounts are stored at four \
+            decimal places and the currency is normalised to upper case.
+            Use this tool to schedule a new list price period; do not use updateProductMsrp, which edits an \
+            existing record, and note that only one open-ended record (no effectiveEndDate) may exist per \
+            product.
+            Preconditions: the product must exist, the new window must not overlap any existing MSRP window, \
+            and no other open-ended record may exist when effectiveEndDate is omitted.
+            Required inputs: productId (UUID) path parameter plus a positive amount, a 3-letter ISO currency \
+            and effectiveStartDate; effectiveEndDate and createdByUserId are optional.
+            Emits a CATALOG_MSRP_CREATE event; the record participates in active-MSRP resolution and \
+            resolveProductPrice fallback from its start date.
+            Returns 404 when the product does not exist, 409 when the dates overlap an existing record, and \
+            400 when the amount is not positive, the currency is not a 3-letter code, the window is \
+            inverted, or a second open-ended record is attempted.
+            """)
     @ApiResponse(
             responseCode = "201",
             description = "MSRP created",
@@ -56,7 +72,22 @@ public class ProductMsrpController {
     @EmitEvent(id = "CATALOG_MSRP_CREATE", apiVersion = "1")
     public ResponseEntity<ProductMsrpDto> createMsrp(
             @Parameter(required = true) @PathVariable UUID productId,
-            @Valid @RequestBody CreateMsrpRequestDto request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "New MSRP window: amount, ISO currency and effective dates; omit"
+                                    + " effectiveEndDate for an open-ended price.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = CreateMsrpRequestDto.class),
+                                            examples = @ExampleObject(name = "Open-ended MSRP", value = """
+                                                                    {"amount":149.9900,"currency":"USD",
+                                                                     "effectiveStartDate":"2026-09-01",
+                                                                     "createdByUserId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    CreateMsrpRequestDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(productMsrpService.createMsrp(productId, request));
     }
 
@@ -65,7 +96,21 @@ public class ProductMsrpController {
             name = "bearerAuth",
             scopes = {"catalog:msrp:write"})
     @PutMapping("/{msrpId}")
-    @Operation(summary = "Update MSRP", description = "Updates a non-historical MSRP record.")
+    @Operation(operationId = "updateProductMsrp", summary = "Update Product MSRP", description = """
+            Rewrites a current or future MSRP record's amount, currency and effective window; records whose \
+            window already ended are immutable history.
+            Use this tool to correct or reschedule an existing record; do not use createProductMsrp, which \
+            adds a new window alongside the existing ones.
+            Preconditions: the record must exist, belong to the given product, and not have an \
+            effectiveEndDate in the past; a version in the body must match the record's current version, and \
+            the new window must not overlap other records.
+            Required inputs: productId and msrpId (UUIDs) path parameters plus a positive amount, a 3-letter \
+            ISO currency and effectiveStartDate; version is optional but recommended.
+            Emits a CATALOG_MSRP_UPDATE event; active-MSRP resolution reflects the change immediately.
+            Returns 404 when the record does not exist under that product, 409 when the version mismatches \
+            or the dates overlap another record, and 400 when the record is historical or the amount, \
+            currency or window is invalid.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "MSRP updated",
@@ -78,7 +123,25 @@ public class ProductMsrpController {
     public ResponseEntity<ProductMsrpDto> updateMsrp(
             @Parameter(required = true) @PathVariable UUID productId,
             @Parameter(required = true) @PathVariable UUID msrpId,
-            @Valid @RequestBody UpdateMsrpRequestDto request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Replacement amount, currency and effective window for the record;"
+                                    + " include version to guard against concurrent edits.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = UpdateMsrpRequestDto.class),
+                                            examples =
+                                                    @ExampleObject(name = "Reprice with version guard", value = """
+                                                                    {"amount":139.9900,"currency":"USD",
+                                                                     "effectiveStartDate":"2026-09-01",
+                                                                     "effectiveEndDate":"2026-12-31",
+                                                                     "createdByUserId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "version":0}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    UpdateMsrpRequestDto request) {
         return ResponseEntity.ok(productMsrpService.updateMsrp(productId, msrpId, request));
     }
 
@@ -87,7 +150,16 @@ public class ProductMsrpController {
             name = "bearerAuth",
             scopes = {"catalog:msrp:read"})
     @GetMapping("/active")
-    @Operation(summary = "Get active MSRP", description = "Returns MSRP active for the provided asOf date (or today).")
+    @Operation(operationId = "getActiveProductMsrp", summary = "Get Active Product MSRP", description = """
+            Returns the single MSRP record whose effective window covers the requested date.
+            Use this tool to read the list price in force on a date; use listProductMsrpHistory instead to \
+            see every past and scheduled record.
+            Preconditions: the product must exist and an MSRP window must cover the date.
+            Required inputs: productId (UUID) path parameter; asOf is an optional ISO date defaulting to \
+            today.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 404 when the product does not exist or no MSRP window covers the requested date.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Active MSRP returned",
@@ -108,7 +180,17 @@ public class ProductMsrpController {
             name = "bearerAuth",
             scopes = {"catalog:msrp:read"})
     @GetMapping
-    @Operation(summary = "List MSRP history", description = "Returns all MSRP records for a product.")
+    @Operation(operationId = "listProductMsrpHistory", summary = "List Product MSRP History", description = """
+            Returns every MSRP record for a product — past, current and scheduled — ordered by effective \
+            start date, newest first.
+            Use this tool to audit price history or find an msrpId to edit; use getActiveProductMsrp instead \
+            for just the record in force on a date.
+            Preconditions: the product must exist.
+            Required inputs: productId (UUID) as a path parameter; there is no filtering or paging.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 404 when the product does not exist, and 200 with an empty array when it has no MSRP \
+            records.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "MSRP records returned",

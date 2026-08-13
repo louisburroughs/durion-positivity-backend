@@ -14,6 +14,7 @@ import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -56,9 +57,18 @@ public class AuditController {
     @EmitEvent(id = "SECURITY_AUDIT_EVENT_CREATE", apiVersion = "1")
     @PostMapping("/events")
     @PreAuthorize("hasAuthority('security:audit:create')")
-    @Operation(
-            summary = "Create audit event",
-            description = "Creates an immutable audit event record and returns the generated event identifier.")
+    @Operation(operationId = "createAuditEvent", summary = "Record an Immutable Audit Event", description = """
+                    Records an immutable audit event and returns the generated event id and server timestamp.
+                    Use this tool to persist a write-once audit fact; do not use createPricingSnapshot, which \
+                    records a pricing rule trace, and note that updates and deletes of audit events are rejected \
+                    with 405 by design.
+                    Preconditions: the caller must hold security:audit:create; the actor is resolved server-side \
+                    from the security context, so any actorId in the body is ignored.
+                    Required inputs: eventType, entityId, entityType, oldValue, and newValue (empty strings are \
+                    accepted, null is not); context is optional and stored as serialized JSON.
+                    Emits a SECURITY_AUDIT_EVENT_CREATE event; the stored record can never be modified or deleted.
+                    Returns 400 when any required field is missing or a value cannot be serialized to JSON.
+                    """)
     @ApiResponse(
             responseCode = "201",
             description = "Audit event created",
@@ -71,7 +81,24 @@ public class AuditController {
             responseCode = "403",
             description = "Insufficient authority",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<AuditEventCreatedResponse> createEvent(@RequestBody @NonNull AuditLogEventRequest request) {
+    public ResponseEntity<AuditEventCreatedResponse> createEvent(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The audit fact to record: what changed, on which entity, from and to what.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Role change event", value = """
+                                                                    {"eventType":"ROLE_ASSIGNED",
+                                                                     "entityId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "entityType":"USER",
+                                                                     "oldValue":"",
+                                                                     "newValue":"SHOP_MGR",
+                                                                     "context":{"reason":"onboarding"}}
+                                                                    """)))
+                    @RequestBody
+                    @NonNull
+                    AuditLogEventRequest request) {
         AuditLogEventDto created = auditEventService.createEvent(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(AuditEventCreatedResponse.builder()
@@ -82,9 +109,15 @@ public class AuditController {
 
     @GetMapping("/events/{eventId}")
     @PreAuthorize("hasAuthority('security:audit:view')")
-    @Operation(
-            summary = "Get audit event",
-            description = "Returns a previously recorded audit event by its event identifier.")
+    @Operation(operationId = "getAuditEvent", summary = "Get One Audit Event by Id", description = """
+                    Returns a previously recorded audit event by its event id.
+                    Use this tool when the event id is known; use searchAuditEvents instead to filter by time \
+                    window, actor, event type, or aggregate.
+                    Preconditions: the caller must hold security:audit:view and the event must exist.
+                    Required inputs: eventId (UUID) as a path parameter.
+                    No events are emitted and no state changes; audit records are immutable.
+                    Returns 404 when no audit event exists for the supplied id.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Audit event returned successfully",
@@ -103,10 +136,19 @@ public class AuditController {
 
     @GetMapping("/events")
     @PreAuthorize("hasAuthority('security:audit:view')")
-    @Operation(
-            operationId = "searchAuditEvents",
-            summary = "Search audit events",
-            description = "Searches audit events using rich filter criteria with pagination support.")
+    @Operation(operationId = "searchAuditEvents", summary = "Search Audit Events With Filters", description = """
+                    Searches audit events with pagination, filtering by time window, actor, event type, and \
+                    aggregate identifier.
+                    Use this tool to query the audit trail; use getAuditEvent instead when the event id is known, \
+                    and requestAuditExport for bulk extraction as a file.
+                    Preconditions: the caller must hold security:audit:view; when both bounds are given, fromDate \
+                    must be strictly before toDate (fromDate inclusive, toDate exclusive).
+                    Required inputs: none are mandatory; fromDate, toDate, actorId, eventType, and aggregateId are \
+                    applied as filters, while workorderId, movementId, productId, sku, correlationId, reasonCode, \
+                    pageToken, and locationIds are accepted for contract compatibility but not yet applied.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 400 when fromDate is not before toDate or a parameter fails type conversion.
+                    """)
     @ApiResponse(responseCode = "200", description = "Audit events returned successfully")
     @ApiResponse(
             responseCode = "400",
@@ -180,9 +222,17 @@ public class AuditController {
 
     @DeleteMapping("/events/**")
     @PreAuthorize("hasAuthority('security:audit:create')")
-    @Operation(
-            summary = "Delete audit events not allowed",
-            description = "Audit events are immutable and cannot be deleted once recorded.")
+    @Operation(operationId = "rejectAuditEventDelete", summary = "Reject Audit Event Deletion", description = """
+                    Rejects every attempt to delete audit events, unconditionally answering 405 Method Not Allowed.
+                    Use this tool never; audit events are write-once, so use createAuditEvent to record facts and \
+                    searchAuditEvents to read them instead.
+                    Preconditions: none that permit success; the operation fails by design for any path under the \
+                    audit events resource.
+                    Required inputs: none are honored; the request is rejected regardless of path or payload.
+                    No events are emitted and no state changes; the endpoint exists only to make immutability \
+                    explicit.
+                    Returns 405 in all cases.
+                    """)
     @ApiResponse(responseCode = "405", description = "Method not allowed for immutable audit events")
     public ResponseEntity<Void> deleteNotAllowed() {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build();
@@ -190,9 +240,17 @@ public class AuditController {
 
     @PutMapping("/events/**")
     @PreAuthorize("hasAuthority('security:audit:create')")
-    @Operation(
-            summary = "Update audit events not allowed",
-            description = "Audit events are immutable and cannot be modified after creation.")
+    @Operation(operationId = "rejectAuditEventUpdate", summary = "Reject Audit Event Modification", description = """
+                    Rejects every attempt to modify audit events, unconditionally answering 405 Method Not Allowed.
+                    Use this tool never; audit events are write-once, so record a new fact with createAuditEvent \
+                    instead of editing an existing one.
+                    Preconditions: none that permit success; the operation fails by design for any path under the \
+                    audit events resource.
+                    Required inputs: none are honored; the request is rejected regardless of path or payload.
+                    No events are emitted and no state changes; the endpoint exists only to make immutability \
+                    explicit.
+                    Returns 405 in all cases.
+                    """)
     @ApiResponse(responseCode = "405", description = "Method not allowed for immutable audit events")
     public ResponseEntity<Void> updateNotAllowed() {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build();
@@ -202,15 +260,46 @@ public class AuditController {
     @PostMapping("/pricing-snapshots")
     @PreAuthorize("hasAuthority('security:audit:create')")
     @Operation(
-            summary = "Create pricing snapshot",
-            description = "Creates an immutable pricing snapshot record for later audit and traceability.")
+            operationId = "createPricingSnapshot",
+            summary = "Record an Immutable Pricing Snapshot",
+            description = """
+                    Records an immutable pricing snapshot with its ordered rule-evaluation trace and returns the \
+                    generated snapshot id.
+                    Use this tool to preserve how a price was computed for later audit; do not use \
+                    createAuditEvent, which records generic entity-change events without a rule trace.
+                    Preconditions: the caller must hold security:audit:create; the snapshot is write-once and \
+                    cannot be modified afterwards.
+                    Required inputs: quoteContext, finalPrice, and evaluationSteps, where every step needs ruleId, \
+                    status, inputs, and outputs; evaluationSteps may be an empty list but not null.
+                    Emits a SECURITY_AUDIT_PRICING_SNAPSHOT_CREATE event.
+                    Returns 400 when quoteContext, finalPrice, evaluationSteps, or any per-step field is missing, \
+                    or when a JSON field cannot be serialized.
+                    """)
     @ApiResponse(responseCode = "201", description = "Pricing snapshot created")
     @ApiResponse(
             responseCode = "400",
             description = "Invalid pricing snapshot payload",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PricingSnapshotCreatedResponse> createPricingSnapshot(
-            @RequestBody @NonNull PricingSnapshotRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The evaluated quote context, final price, and rule trace to preserve.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(name = "Snapshot with one rule step", value = """
+                                                                    {"quoteContext":{"sku":"BRAKE-PAD-001","quantity":2},
+                                                                     "finalPrice":129.99,
+                                                                     "evaluationSteps":[
+                                                                       {"ruleId":"MSRP_BASE",
+                                                                        "status":"APPLIED",
+                                                                        "inputs":{"listPrice":149.99},
+                                                                        "outputs":{"price":129.99}}]}
+                                                                    """)))
+                    @RequestBody
+                    @NonNull
+                    PricingSnapshotRequest request) {
         PricingSnapshotDto created = pricingSnapshotService.createSnapshot(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(PricingSnapshotCreatedResponse.builder()
@@ -220,9 +309,16 @@ public class AuditController {
 
     @GetMapping("/pricing-snapshots/{snapshotId}")
     @PreAuthorize("hasAuthority('security:audit:view')")
-    @Operation(
-            summary = "Get pricing snapshot",
-            description = "Returns an immutable pricing snapshot by its snapshot identifier.")
+    @Operation(operationId = "getPricingSnapshot", summary = "Get One Pricing Snapshot by Id", description = """
+                    Returns an immutable pricing snapshot with its rule-evaluation steps ordered by rule id.
+                    Use this tool when the snapshot id is known; use searchAuditEvents instead for general audit \
+                    queries, since snapshots have no search endpoint.
+                    Preconditions: the caller must hold security:audit:view and the snapshot must exist.
+                    Required inputs: snapshotId (UUID) as a path parameter.
+                    No events are emitted and no state changes; snapshots are read-only after creation.
+                    Returns 400 with INVALID_REQUEST, not 404, when no snapshot exists for the supplied id; callers \
+                    must treat that 400 as a miss.
+                    """)
     @ApiResponse(responseCode = "200", description = "Pricing snapshot returned successfully")
     @ApiResponse(
             responseCode = "404",

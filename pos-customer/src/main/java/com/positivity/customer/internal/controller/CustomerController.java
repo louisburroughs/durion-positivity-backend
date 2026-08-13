@@ -8,6 +8,8 @@ import com.positivity.customer.service.CustomerService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
@@ -43,12 +45,19 @@ public class CustomerController {
         this.personService = personService;
     }
 
-    @Operation(
-            summary = "Get all customers",
-            description =
-                    "Retrieve a paginated list of customers by type (PERSON or COMMERCIAL). Defaults to PERSON customers"
-                            + " if no type specified. When a name and/or email filter is supplied, performs a"
-                            + " server-side search instead of an unfiltered listing (scalable typeahead).")
+    @Operation(operationId = "listCustomers", summary = "List Customers By Type", description = """
+                    Returns a page of customers of one party type, switching to a server-side typeahead \
+                    search when a name or email filter is supplied.
+                    Use this tool for the legacy flat customer listing keyed by customerType; use \
+                    browseParties instead for the unified directory that merges commercial and individual \
+                    customers in one result.
+                    Preconditions: none; an empty page is returned when nothing matches.
+                    Required inputs: none; customerType defaults to PERSON and accepts PERSON or \
+                    COMMERCIAL, name and email are optional case-insensitive filters, and paging defaults \
+                    to page 0, size 20, sorted by customerNumber.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty page rather than an error when no customer matches.
+                    """)
     @ApiResponse(responseCode = "200", description = "Page of customers returned successfully.")
     @GetMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -80,7 +89,16 @@ public class CustomerController {
         return service.getAllCustomers(pageable);
     }
 
-    @Operation(summary = "Get customer by ID", description = "Retrieve a customer by their unique ID.")
+    @Operation(operationId = "getCustomerById", summary = "Get Customer By Id", description = """
+                    Returns one customer as a flat CustomerDTO, checking commercial parties first and \
+                    falling back to person parties.
+                    Use this tool for the legacy flat customer view; use getParty or getSnapshotByParty \
+                    instead for the richer party projections.
+                    Preconditions: a commercial or person party must exist for the supplied id.
+                    Required inputs: id (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when neither a commercial nor a person party exists for the supplied id.
+                    """)
     @ApiResponse(responseCode = "200", description = "Customer found and returned.")
     @ApiResponse(responseCode = "404", description = "Customer not found.")
     @GetMapping("/{id}")
@@ -101,7 +119,20 @@ public class CustomerController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @Operation(summary = "Create a new customer", description = "Add a new customer to the system.")
+    @Operation(operationId = "createCustomer", summary = "Create Customer Record", description = """
+                    Creates a customer from a flat CustomerDTO, routed by customerType to either the \
+                    commercial or person party store.
+                    Use this tool only for the legacy flat customer API; use createCommercialAccount \
+                    instead for commercial onboarding with duplicate checking, and createPerson for \
+                    individuals so the canonical identity lands in pos-people.
+                    Preconditions: none beyond authorization; no duplicate detection is performed.
+                    Required inputs: firstName and lastName (each max 100); customerType selects the store, \
+                    where COMMERCIAL routes to the commercial service and anything else creates a person \
+                    party, and customerNumber, primaryAddress, and vehicleVins are optional.
+                    Emits a CUSTOMER_CUSTOMER_CREATE event and publishes a party-changed customer fact.
+                    Returns 201 with the stored customer on success; field validation is not enforced on \
+                    this legacy path, so a malformed JSON body producing 400 is the only rejection.
+                    """)
     @ApiResponse(responseCode = "201", description = "Customer created successfully.")
     @PostMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -110,7 +141,21 @@ public class CustomerController {
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_CREATE + "')")
     @EmitEvent(id = "CUSTOMER_CUSTOMER_CREATE", apiVersion = "1")
     public ResponseEntity<CustomerDTO> createCustomer(
-            @Parameter(description = "Customer object to be created") @RequestBody CustomerDTO customer) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "The flat customer record to store; customerType routes it to the commercial or person store.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Individual customer", value = """
+                                                                    {"firstName":"Dana",
+                                                                     "lastName":"Ortiz",
+                                                                     "customerType":"PERSON",
+                                                                     "primaryAddress":"100 Congress Ave, Austin, TX 78701"}
+                                                                    """)))
+                    @RequestBody
+                    CustomerDTO customer) {
         log.info("Creating new customer: {}", customer);
         CustomerService service =
                 COMMERCIAL.equalsIgnoreCase(customer.getCustomerType()) ? commercialService : personService;
@@ -118,7 +163,18 @@ public class CustomerController {
         return ResponseEntity.status(201).body(saved);
     }
 
-    @Operation(summary = "Update an existing customer", description = "Update the details of an existing customer.")
+    @Operation(operationId = "updateCustomer", summary = "Update Customer Record", description = """
+                    Updates an existing customer's flat record, with the body's customerType selecting \
+                    whether the commercial or person store is searched for the id.
+                    Use this tool only for the legacy flat customer API; the customerType in the body must \
+                    match the store the customer actually lives in, or the lookup misses, so do not use it \
+                    to change a customer from PERSON to COMMERCIAL.
+                    Preconditions: a party of the type named by customerType must exist for the supplied id.
+                    Required inputs: id (UUID) as a path parameter and the CustomerDTO body including \
+                    customerType; only fields present in the DTO mapping are applied.
+                    Emits a CUSTOMER_CUSTOMER_UPDATE event and publishes a party-changed customer fact.
+                    Returns 404 when no party of the selected type exists for the supplied id.
+                    """)
     @ApiResponse(responseCode = "200", description = "Customer updated successfully.")
     @ApiResponse(responseCode = "404", description = "Customer not found.")
     @PutMapping("/{id}")
@@ -131,7 +187,21 @@ public class CustomerController {
             @Parameter(description = "ID of the customer to update", example = "123e4567-e89b-12d3-a456-426614174000")
                     @PathVariable
                     UUID id,
-            @Parameter(description = "Updated customer object") @RequestBody CustomerDTO customer) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "The revised customer fields; customerType must name the store the customer already lives in.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Update address", value = """
+                                                                    {"firstName":"Dana",
+                                                                     "lastName":"Ortiz",
+                                                                     "customerType":"PERSON",
+                                                                     "primaryAddress":"200 Lavaca St, Austin, TX 78701"}
+                                                                    """)))
+                    @RequestBody
+                    CustomerDTO customer) {
         log.info("Updating customer with id: {}", id);
         CustomerService service =
                 COMMERCIAL.equalsIgnoreCase(customer.getCustomerType()) ? commercialService : personService;
@@ -140,7 +210,17 @@ public class CustomerController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @Operation(summary = "Delete a customer", description = "Delete a customer by their unique ID.")
+    @Operation(operationId = "deleteCustomer", summary = "Delete Customer Record", description = """
+                    Hard-deletes a customer row, trying the commercial store first and then the person \
+                    store, and publishes a party-deleted fact for the removed record.
+                    Use this tool only when a customer record must be physically removed; do not use it for \
+                    duplicates — use mergeParties instead, whose MERGED status preserves history, since this \
+                    deletion is not reversible.
+                    Preconditions: a commercial or person party must exist for the supplied id.
+                    Required inputs: id (UUID) as a path parameter; there is no request body.
+                    Emits a CUSTOMER_CUSTOMER_DELETE event and publishes a party-deleted customer fact.
+                    Returns 404 when neither store holds a party for the supplied id.
+                    """)
     @ApiResponse(responseCode = "204", description = "Customer deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Customer not found.")
     @DeleteMapping("/{id}")

@@ -9,6 +9,7 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -83,9 +84,24 @@ public class CrmPartyRelationshipController {
             scopes = {"crm:relationship:create"})
     @PreAuthorize("hasAuthority('crm:relationship:create')")
     @EmitEvent(id = "CRM_RELATIONSHIP_CREATE", apiVersion = "1")
-    @Operation(
-            summary = "Create a party relationship",
-            description = "Creates a relationship between a commercial account and an individual person")
+    @Operation(operationId = "createPartyRelationship", summary = "Create Party Relationship", description = """
+                    Creates a dated relationship that links an individual person to a commercial account in \
+                    one or more roles, optionally marking the person as the primary billing contact.
+                    Use this tool when associating a known person with a commercial account; do not use \
+                    updateContactRoles, which manages the separate contact-role assignment model, and do not \
+                    use createPerson, which creates the person record itself.
+                    Preconditions: the commercial party and the person must both exist, and no active \
+                    relationship may already cover the same party, person, and role for today's date; \
+                    isPrimaryBillingContact requires the BILLING role in the same request.
+                    Required inputs: partyId (UUID) as a path parameter, plus personId (UUID), roles (one or \
+                    more of APPROVER, BILLING, PRIMARY_CONTACT, DRIVER, TECHNICAL), and effectiveStartDate; \
+                    effectiveEndDate and isPrimaryBillingContact (default false) are optional.
+                    Emits a CRM_RELATIONSHIP_CREATE event, atomically demotes any existing primary billing \
+                    contact when one is designated, and re-emits the person's identity fact.
+                    Returns 404 when the party or person cannot be found, 409 when an overlapping active \
+                    relationship already exists for a requested role, and 400 when isPrimaryBillingContact \
+                    is set without the BILLING role.
+                    """)
     @ApiResponse(
             responseCode = "201",
             description = "Relationship created successfully",
@@ -97,7 +113,22 @@ public class CrmPartyRelationshipController {
     @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
     public ResponseEntity<CreatePartyRelationshipResponse> createRelationship(
             @Parameter(description = "The commercial account party ID") @PathVariable UUID partyId,
-            @Valid @RequestBody CreatePartyRelationshipRequest request,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "The person, roles, and effective dates of the relationship being established with the account.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Primary billing contact", value = """
+                                                                    {"personId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60",
+                                                                     "roles":["BILLING","PRIMARY_CONTACT"],
+                                                                     "isPrimaryBillingContact":true,
+                                                                     "effectiveStartDate":"2026-08-13"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    CreatePartyRelationshipRequest request,
             Principal principal) {
 
         log.info(
@@ -132,8 +163,21 @@ public class CrmPartyRelationshipController {
     @PreAuthorize("hasAuthority('crm:relationship:read')")
     @EmitEvent(id = "CRM_ACCOUNT_CONTACTS_GET", apiVersion = "1")
     @Operation(
-            summary = "Get contacts for a commercial account",
-            description = "Retrieves all individuals associated with a commercial account with their roles")
+            operationId = "getCommercialAccountContacts",
+            summary = "Get Commercial Account Contacts",
+            description = """
+                    Returns the individuals related to a commercial account through party relationships, \
+                    with their roles, primary-billing flag, effective dates, and status.
+                    Use this tool when listing who is associated with an account through the relationship \
+                    model; use getContactsWithRoles instead for the contact-role assignment view of the \
+                    same account.
+                    Preconditions: the commercial party must exist.
+                    Required inputs: partyId (UUID) as a path parameter; roles optionally filters on \
+                    APPROVER, BILLING, PRIMARY_CONTACT, DRIVER, or TECHNICAL, and status optionally filters \
+                    on ACTIVE or INACTIVE.
+                    Emits a CRM_ACCOUNT_CONTACTS_GET audit event; no state changes occur.
+                    Returns 404 when no commercial party exists for the supplied partyId.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Contacts retrieved successfully",
@@ -175,8 +219,23 @@ public class CrmPartyRelationshipController {
     @PreAuthorize("hasAuthority('crm:relationship:update')")
     @EmitEvent(id = "CRM_RELATIONSHIP_PRIMARY_BILLING_UPDATE", apiVersion = "1")
     @Operation(
-            summary = "Designate primary billing contact",
-            description = "Sets a relationship as the primary billing contact, demoting any existing primary")
+            operationId = "designatePrimaryBillingContact",
+            summary = "Designate Primary Billing Contact",
+            description = """
+                    Promotes an existing relationship to be the account's primary billing contact, \
+                    atomically demoting any current primary.
+                    Use this tool when the billing contact changes on an account; do not use \
+                    createPartyRelationship, which is for a person not yet related to the account and can \
+                    set the flag at creation time.
+                    Preconditions: the relationship must exist, must belong to the account in the path, \
+                    must carry the BILLING role, and must be active as of today.
+                    Required inputs: partyId and relationshipId (UUIDs) as path parameters; there is no \
+                    request body.
+                    Emits a CRM_RELATIONSHIP_PRIMARY_BILLING_UPDATE event; the previous primary, if any, is \
+                    demoted in the same transaction.
+                    Returns 404 when the relationship does not exist, and 400 when it belongs to a \
+                    different party, lacks the BILLING role, or is no longer active.
+                    """)
     @ApiResponse(responseCode = "204", description = "Primary billing contact updated")
     @ApiResponse(responseCode = "400", description = "Invalid request - relationship must have BILLING role")
     @ApiResponse(responseCode = "404", description = "Relationship not found")
@@ -215,8 +274,22 @@ public class CrmPartyRelationshipController {
     @PreAuthorize("hasAuthority('crm:relationship:delete')")
     @EmitEvent(id = "CRM_RELATIONSHIP_DEACTIVATE", apiVersion = "1")
     @Operation(
-            summary = "Deactivate a party relationship",
-            description = "Soft-deletes a relationship by setting its effective end date")
+            operationId = "deactivatePartyRelationship",
+            summary = "Deactivate Party Relationship",
+            description = """
+                    Soft-deletes a relationship between a person and a commercial account by setting its \
+                    effective end date to today; the historical record is retained.
+                    Use this tool when a person no longer represents the account; do not use \
+                    createPartyRelationship to fix a wrong assignment without first deactivating the old \
+                    one, since overlapping active roles are rejected.
+                    Preconditions: the relationship must exist; the partyId in the path is not validated \
+                    against the relationship on this operation.
+                    Required inputs: partyId and relationshipId (UUIDs) as path parameters; there is no \
+                    request body.
+                    Emits a CRM_RELATIONSHIP_DEACTIVATE event and re-emits the person's identity fact \
+                    because their account linkage changed.
+                    Returns 404 when no relationship exists for the supplied relationshipId.
+                    """)
     @ApiResponse(responseCode = "204", description = "Relationship deactivated")
     @ApiResponse(responseCode = "404", description = "Relationship not found")
     @ApiResponse(responseCode = "401", description = "Unauthorized")

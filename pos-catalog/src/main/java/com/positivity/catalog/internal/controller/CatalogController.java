@@ -6,6 +6,7 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -37,7 +38,15 @@ public class CatalogController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
     @GetMapping("/{catalogId}")
-    @Operation(summary = "Get a catalog by ID", description = "Retrieves a specific catalog by its unique ID.")
+    @Operation(operationId = "getCatalogById", summary = "Get a Catalog by ID", description = """
+            Returns one named catalog with the ids of the products, services and non-inventory products it groups.
+            Use this tool when the catalogId is already known; use listCatalogsByName instead to find catalogs by \
+            a name fragment.
+            Preconditions: the catalog must exist.
+            Required inputs: catalogId (UUID) as a path parameter; there is no request body.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 404 when no catalog exists for the supplied id.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Successfully retrieved catalog",
@@ -56,7 +65,15 @@ public class CatalogController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
     @GetMapping("/name/{name}")
-    @Operation(summary = "Get catalogs by name", description = "Retrieves a list of catalogs matching the given name.")
+    @Operation(operationId = "listCatalogsByName", summary = "List Catalogs by Name", description = """
+            Returns every catalog whose name contains the supplied fragment, matched case-insensitively.
+            Use this tool to discover a catalogId by name; use getCatalogById instead when the id is already known.
+            Preconditions: none; an empty result simply means no catalog name contains the fragment.
+            Required inputs: name (path parameter) as a case-insensitive substring; there is no paging and no \
+            request body.
+            No events are emitted and no state changes; this is a read-only projection.
+            Returns 200 with an empty array when nothing matches, so an empty result is not an error condition.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Successfully retrieved catalogs",
@@ -71,7 +88,18 @@ public class CatalogController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
     @PostMapping
-    @Operation(summary = "Add a new catalog", description = "Adds a new catalog.")
+    @Operation(operationId = "createCatalog", summary = "Create a New Catalog", description = """
+            Creates a named catalog that groups existing products, services and non-inventory products for \
+            presentation; the catalog does not own the items, it only references them.
+            Use this tool to define a new grouping; do not use updateCatalog, which replaces a catalog that \
+            already exists, and do not use createCatalogItem, which creates the underlying items themselves.
+            Preconditions: any ids listed in productIds, serviceIds or nonInventoryProductIds should already \
+            exist; ids that do not resolve are silently dropped from the stored catalog rather than rejected.
+            Required inputs: name; description and the three id lists are optional and default to empty.
+            Emits a CATALOG_CATALOG_CREATE event; no product, service or non-inventory records are modified.
+            Returns 201 with the stored catalog, whose id lists reflect only the references that resolved, so \
+            callers should compare them against what was sent.
+            """)
     @ApiResponse(
             responseCode = "201",
             description = "Catalog created successfully",
@@ -80,9 +108,22 @@ public class CatalogController {
     @EmitEvent(id = "CATALOG_CATALOG_CREATE", apiVersion = "1")
     public ResponseEntity<CatalogDto> addCatalog(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Catalog object to be added",
+                            description =
+                                    "Catalog to create: a name plus optional lists of existing product, service and"
+                                            + " non-inventory product ids to group.",
                             required = true,
-                            content = @Content(schema = @Schema(implementation = CatalogDto.class)))
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = CatalogDto.class),
+                                            examples = @ExampleObject(name = "Catalog with two products", value = """
+                                                                    {"name":"Winter Tires",
+                                                                     "description":"Seasonal winter tire lineup",
+                                                                     "productIds":["018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                                   "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c"],
+                                                                     "serviceIds":[],
+                                                                     "nonInventoryProductIds":[]}
+                                                                    """)))
                     @RequestBody
                     CatalogDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(catalogService.addCatalog(request));
@@ -93,7 +134,18 @@ public class CatalogController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
     @PutMapping("/{catalogId}")
-    @Operation(summary = "Update an existing catalog", description = "Updates an existing catalog.")
+    @Operation(operationId = "updateCatalog", summary = "Update an Existing Catalog", description = """
+            Replaces a catalog's name, description and full membership lists with the supplied values; this is a \
+            full replacement, not a merge, so omitted item ids are removed from the catalog.
+            Use this tool to rename a catalog or change which items it groups; do not use createCatalog, which \
+            adds a new catalog, and do not use updateCatalogItem, which edits the items themselves.
+            Preconditions: the catalog must exist; ids in the three membership lists that do not resolve are \
+            silently dropped rather than rejected.
+            Required inputs: catalogId (UUID) path parameter and the complete replacement body including name; \
+            an omitted id list clears that membership.
+            Emits a CATALOG_CATALOG_UPDATE event; the referenced items themselves are not modified.
+            Returns 404 when no catalog exists for the supplied id.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "Catalog updated successfully",
@@ -104,9 +156,21 @@ public class CatalogController {
     public ResponseEntity<CatalogDto> updateCatalog(
             @Parameter(description = "ID of the catalog to update") @PathVariable UUID catalogId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Updated catalog object",
+                            description = "Complete replacement state for the catalog; membership lists overwrite the"
+                                    + " existing ones rather than merging.",
                             required = true,
-                            content = @Content(schema = @Schema(implementation = CatalogDto.class)))
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = CatalogDto.class),
+                                            examples =
+                                                    @ExampleObject(name = "Rename and reduce membership", value = """
+                                                                    {"name":"All-Season Tires",
+                                                                     "description":"Renamed lineup",
+                                                                     "productIds":["018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"],
+                                                                     "serviceIds":[],
+                                                                     "nonInventoryProductIds":[]}
+                                                                    """)))
                     @RequestBody
                     CatalogDto request) {
         return catalogService
@@ -120,7 +184,17 @@ public class CatalogController {
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_DELETE"})
     @DeleteMapping("/{catalogId}")
-    @Operation(summary = "Delete a catalog", description = "Deletes a catalog by its ID.")
+    @Operation(operationId = "deleteCatalog", summary = "Delete a Catalog", description = """
+            Permanently deletes a catalog grouping; the products, services and non-inventory products it \
+            referenced are untouched and remain available.
+            Use this tool to retire a grouping that is no longer needed; do not use deleteCatalogItem, which \
+            deletes the underlying items themselves.
+            Preconditions: the catalog must exist; there is no soft delete or archive state, so the row is \
+            removed outright.
+            Required inputs: catalogId (UUID) as a path parameter; there is no request body.
+            Emits a CATALOG_CATALOG_DELETE event; member items are not cascaded.
+            Returns 204 when the catalog is removed, and 404 when no catalog exists for the supplied id.
+            """)
     @ApiResponse(responseCode = "204", description = "Catalog deleted successfully")
     @ApiResponse(responseCode = "404", description = "Catalog not found")
     @EmitEvent(id = "CATALOG_CATALOG_DELETE", apiVersion = "1")

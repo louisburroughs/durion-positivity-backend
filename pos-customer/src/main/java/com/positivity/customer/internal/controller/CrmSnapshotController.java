@@ -45,9 +45,22 @@ public class CrmSnapshotController {
         this.vehicleOps = vehicleOps;
     }
 
-    @Operation(
-            summary = "Fetch snapshot by party",
-            description = "Returns complete party snapshot with accounts, contacts, vehicles")
+    @Operation(operationId = "getSnapshotByParty", summary = "Get CRM Snapshot By Party", description = """
+                    Returns a consolidated CRM snapshot for a party — account summary, contacts, vehicle \
+                    summaries, and preferences — assembled for commercial or person parties and served from \
+                    a cache when a fresh copy exists.
+                    Use this tool when a caller needs the whole customer picture in one call; use getParty \
+                    instead for just the identity fields, and getSnapshotByVehicle when only a vehicle id \
+                    is known.
+                    Preconditions: a commercial or person party must exist for the supplied partyId.
+                    Required inputs: partyId (UUID) as a path parameter; there is no request body, and the \
+                    snapshotMetadata.source field reports CACHE or CRM_API depending on where the data came \
+                    from.
+                    Emits a CRM_SNAPSHOT_PARTY_RETRIEVE audit event; the snapshot cache may be populated \
+                    but no domain state changes.
+                    Returns 404 when neither a commercial nor a person party exists for the supplied \
+                    partyId.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -72,12 +85,18 @@ public class CrmSnapshotController {
                 : ResponseEntity.notFound().build();
     }
 
-    @Operation(
-            operationId = "getBillingRules",
-            summary = "Get billing rules for a commercial party",
-            description = "Returns the billing rule reference for a commercial party. "
-                    + "Returns default billing rules when the party has no explicitly configured rules. "
-                    + "Enforcement of these rules is the responsibility of downstream services.")
+    @Operation(operationId = "getBillingRules", summary = "Get Party Billing Rules", description = """
+                    Returns the billing-rules reference for a party, falling back to default rules when a \
+                    commercial party has no explicitly configured rules and for person parties, which have \
+                    no configurable rules; enforcement of the rules belongs to downstream services.
+                    Use this tool when reading how an account should be billed; use upsertBillingRules \
+                    instead to change the configuration.
+                    Preconditions: a commercial or person party must exist for the supplied partyId.
+                    Required inputs: partyId (UUID) as a path parameter; there is no request body.
+                    Emits a CRM_SNAPSHOT_BILLING_RULES_GET audit event; no state changes occur.
+                    Returns 404 when no party exists for the supplied partyId, and 200 with defaults rather \
+                    than an error when rules were never configured.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Billing rules returned"),
@@ -96,7 +115,17 @@ public class CrmSnapshotController {
         return ResponseEntity.ok(rules);
     }
 
-    @Operation(summary = "Fetch snapshot by vehicle", description = "Returns party snapshot based on vehicle ownership")
+    @Operation(operationId = "getSnapshotByVehicle", summary = "Get CRM Snapshot By Vehicle", description = """
+                    Returns the CRM snapshot of the commercial party that owns a vehicle, resolved through \
+                    the vehicle-to-party association replicated from vehicle events.
+                    Use this tool when only a vehicle id is known, for example at service check-in; use \
+                    getSnapshotByParty instead when the party id is already known.
+                    Preconditions: the vehicle must be associated with a commercial party in the local \
+                    replica; recently registered vehicles may not have been replicated yet.
+                    Required inputs: vehicleId (UUID) as a path parameter; there is no request body.
+                    Emits a CRM_SNAPSHOT_VEHICLE_RETRIEVE audit event; no state changes occur.
+                    Returns 404 when no owning party can be resolved for the supplied vehicleId.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(

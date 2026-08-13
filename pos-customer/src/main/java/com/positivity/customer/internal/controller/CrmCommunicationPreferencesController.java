@@ -9,6 +9,7 @@ import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -56,8 +57,21 @@ public class CrmCommunicationPreferencesController {
      * Requires: CONTACT_PREFERENCE_VIEW permission
      */
     @Operation(
-            summary = "Get communication preferences",
-            description = "Retrieve communication preferences and consent flags for a party")
+            operationId = "getCommunicationPreferences",
+            summary = "Get Communication Preferences",
+            description = """
+                    Returns the persisted communication preferences and consent flags for a party, covering \
+                    email, SMS, phone, and marketing channels plus the free-form consent flag map.
+                    Use this tool when reading a party's current contact-channel opt-ins; do not use \
+                    getAccountCommunicationPreferences, a legacy accounts-scoped stub that only returns N/A \
+                    placeholders.
+                    Preconditions: the party must exist as either a commercial or person party; a party with \
+                    no stored preference record is reported with every channel defaulted to OPT_OUT and \
+                    version 0.
+                    Required inputs: partyId (UUID) as a path parameter; there is no request body.
+                    Emits a CRM_COMMUNICATION_PREFERENCES_GET audit event; no state changes occur.
+                    Returns 404 when no party exists for the supplied partyId.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -96,8 +110,22 @@ public class CrmCommunicationPreferencesController {
      * Requires: CONTACT_PREFERENCE_EDIT permission
      */
     @Operation(
-            summary = "Create or update communication preferences",
-            description = "Set or update communication preferences and consent flags for a party")
+            operationId = "upsertCommunicationPreferences",
+            summary = "Upsert Communication Preferences",
+            description = """
+                    Creates or updates the persisted communication-preference record for a party, replacing \
+                    channel preferences, consent flags, and the preferences note.
+                    Use this tool when recording a party's contact-channel opt-in or opt-out choices; do not \
+                    use upsertAccountCommunicationPreferences, a legacy accounts-scoped stub that does not \
+                    persist anything.
+                    Preconditions: the party must exist as either a commercial or person party.
+                    Required inputs: partyId (UUID) as a path parameter and a JSON body; omitted \
+                    emailPreference, smsPreference, phonePreference, or marketingPreference values default to \
+                    OPT_OUT, and updateSource defaults to APP.
+                    Emits a CRM_COMMUNICATION_PREFERENCES_UPSERT event and writes the preference record, \
+                    reporting operationType CREATED or UPDATED with a new version.
+                    Returns 404 when no party exists for the supplied partyId.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -124,7 +152,27 @@ public class CrmCommunicationPreferencesController {
     @EmitEvent(id = "CRM_COMMUNICATION_PREFERENCES_UPSERT", apiVersion = "1")
     public ResponseEntity<UpsertCommunicationPreferencesResponse> upsertCommunicationPreferences(
             @Parameter(description = "Party ID", required = true) @PathVariable @NonNull UUID partyId,
-            @Parameter(description = "Communication preferences to set", required = true) @RequestBody @NonNull
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Channel preferences, consent flags, and audit source to store for the party; omitted channels default to OPT_OUT.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Email opt-in with consent flags",
+                                                            value = """
+                                                                    {"emailPreference":"OPT_IN",
+                                                                     "smsPreference":"OPT_OUT",
+                                                                     "phonePreference":"OPT_OUT",
+                                                                     "marketingPreference":"OPT_IN",
+                                                                     "consentFlags":{"serviceReminders":true,"promotions":false},
+                                                                     "preferencesNote":"Customer asked for email only",
+                                                                     "updateSource":"ADMIN"}
+                                                                    """)))
+                    @RequestBody
+                    @NonNull
                     UpsertCommunicationPreferencesRequest request) {
 
         try {

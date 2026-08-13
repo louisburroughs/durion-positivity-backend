@@ -39,8 +39,20 @@ paths:
     get:
       tags:
       - Products API
-      summary: Get a product by ID
-      description: Retrieves a specific product by its unique ID.
+      summary: Get a Product by ID
+      description: 'Returns the full product record including identity codes, manufacturer data, category, dimensions, tracking level and lifecycle state.
+
+        Use this tool when the productId is already known; use searchCatalogProducts instead to find products by text or filters.
+
+        Preconditions: the product must exist.
+
+        Required inputs: productId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no product exists for the supplied id.
+
+        '
       operationId: getProductById
       parameters:
       - name: productId
@@ -70,8 +82,20 @@ paths:
     put:
       tags:
       - Products API
-      summary: Update product master record
-      description: Updates mutable product master fields. SKU is immutable.
+      summary: Update Product Master Record
+      description: 'Replaces the mutable master-data fields of a product — name, description, unit of measure, manufacturer, category, UPC and attributes — while the SKU stays immutable.
+
+        Use this tool to correct product master data; do not use updateProductLifecycle, which changes selling state, and do not use updateProductTrackingLevel, which changes stock tracking.
+
+        Preconditions: the product must exist, and a sku field in the body must either be omitted or match the stored SKU exactly.
+
+        Required inputs: productId (UUID) path parameter plus non-blank name, description, unitOfMeasure and mpn; omitted optional fields such as upc and categoryId are cleared, not preserved.
+
+        Emits a CATALOG_PRODUCT_UPDATED event, publishes a product fact for downstream replicas, and invalidates the product-detail cache.
+
+        Returns 404 when the product does not exist, 400 when the body tries to change the SKU or names a categoryId that does not resolve, and 409 when the manufacturerId plus mpn pair collides with another product.
+
+        '
       operationId: updateProduct
       parameters:
       - name: productId
@@ -82,10 +106,21 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Replacement master-data fields; sku may be omitted or must equal the stored value, and omitted optional fields are cleared.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ProductUpdateRequestDto'
+            examples:
+              Correct description and category:
+                description: Correct description and category
+                value:
+                  name: All-Terrain Tire 265/70R17
+                  description: All-terrain LT tire, 265/70R17, load range E
+                  unitOfMeasure: EA
+                  mpn: AT3-26570R17
+                  upc: 036121960222
+                  categoryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
         required: true
       responses:
         '200':
@@ -120,8 +155,20 @@ paths:
     put:
       tags:
       - Product UoM API
-      summary: Update product UoM conversion
-      description: Updates factor, precision scale, and optionally the UoM role. The UoM code is immutable. Re-emits the product contract event.
+      summary: Update Product UoM Conversion
+      description: 'Updates the conversion factor, precision scale and optionally the type of one product UoM entry; the UoM code itself is immutable.
+
+        Use this tool to correct a factor or reclassify an entry; do not use addProductUom, which adds a new code, or deleteProductUom, which removes one.
+
+        Preconditions: the product must exist and the UoM entry must belong to it; changing the type to BASE requires factorToBase exactly 1, and omitting uomType keeps the current type.
+
+        Required inputs: productId and uomId (UUIDs) path parameters plus a positive factorToBase; uomType and precisionScale are optional.
+
+        Emits a CATALOG_PRODUCT_UOM_UPDATE event and re-publishes the product fact with a bumped aggregate version so downstream replicas refresh.
+
+        Returns 404 when the product or the UoM entry does not exist under that product, and 400 when factorToBase is not positive or a BASE entry''s factor is not 1.
+
+        '
       operationId: updateProductUom
       parameters:
       - name: productId
@@ -139,10 +186,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Replacement factor and precision for the entry; uomType is optional and keeps the current role when omitted.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ProductUomUpdateRequestDto'
+            examples:
+              Correct pack factor:
+                description: Correct pack factor
+                value:
+                  uomType: PACK
+                  factorToBase: 24
+                  precisionScale: 0
         required: true
       responses:
         '200':
@@ -170,8 +225,20 @@ paths:
     delete:
       tags:
       - Product UoM API
-      summary: Delete product UoM conversion
-      description: Removes a UoM from the product's conversion set and re-emits the product contract event.
+      summary: Delete Product UoM Conversion
+      description: 'Removes one unit-of-measure entry from a product''s conversion set permanently; there is no soft delete.
+
+        Use this tool when a purchase or pack unit no longer applies to the product; do not use updateProductUom, which changes an entry''s factor or type while keeping it.
+
+        Preconditions: the product must exist and the UoM entry must belong to it; no guard prevents deleting the BASE entry, so callers must not orphan the conversion set.
+
+        Required inputs: productId and uomId (UUIDs) as path parameters; there is no request body.
+
+        Emits a CATALOG_PRODUCT_UOM_DELETE event and re-publishes the product fact with a bumped aggregate version so downstream replicas refresh.
+
+        Returns 204 on success, and 404 when the product or the UoM entry does not exist under that product.
+
+        '
       operationId: deleteProductUom
       parameters:
       - name: productId
@@ -201,9 +268,21 @@ paths:
     put:
       tags:
       - Products API
-      summary: Set product tracking level
-      description: Sets the product's stock tracking level (NONE, LOT, or SERIAL; default NONE) and re-emits the product contract event for downstream replicas.
-      operationId: updateTrackingLevel
+      summary: Set Product Tracking Level
+      description: 'Sets the product''s stock tracking level to NONE, LOT or SERIAL, controlling whether inventory tracks the product per lot or per serial number.
+
+        Use this tool when a product''s tracking granularity changes; do not use updateProduct, which replaces master-data fields and does not touch the tracking level.
+
+        Preconditions: the product must exist; no transition rules apply between levels.
+
+        Required inputs: productId (UUID) path parameter and trackingLevel in the body, one of NONE, LOT or SERIAL.
+
+        Emits a CATALOG_PRODUCT_TRACKING_LEVEL_UPDATE event, re-publishes the product fact so downstream replicas pick up the new level, and invalidates the product-detail cache.
+
+        Returns 404 when the product does not exist, and 400 when trackingLevel is missing or not a valid enum value.
+
+        '
+      operationId: updateProductTrackingLevel
       parameters:
       - name: productId
         in: path
@@ -213,10 +292,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The stock tracking granularity to apply to the product.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ProductTrackingLevelUpdateRequestDto'
+            examples:
+              Track by serial number:
+                description: Track by serial number
+                value:
+                  trackingLevel: SERIAL
         required: true
       responses:
         '200':
@@ -245,9 +330,21 @@ paths:
     put:
       tags:
       - Product MSRP API
-      summary: Update MSRP
-      description: Updates a non-historical MSRP record.
-      operationId: updateMsrp
+      summary: Update Product MSRP
+      description: 'Rewrites a current or future MSRP record''s amount, currency and effective window; records whose window already ended are immutable history.
+
+        Use this tool to correct or reschedule an existing record; do not use createProductMsrp, which adds a new window alongside the existing ones.
+
+        Preconditions: the record must exist, belong to the given product, and not have an effectiveEndDate in the past; a version in the body must match the record''s current version, and the new window must not overlap other records.
+
+        Required inputs: productId and msrpId (UUIDs) path parameters plus a positive amount, a 3-letter ISO currency and effectiveStartDate; version is optional but recommended.
+
+        Emits a CATALOG_MSRP_UPDATE event; active-MSRP resolution reflects the change immediately.
+
+        Returns 404 when the record does not exist under that product, 409 when the version mismatches or the dates overlap another record, and 400 when the record is historical or the amount, currency or window is invalid.
+
+        '
+      operationId: updateProductMsrp
       parameters:
       - name: productId
         in: path
@@ -262,10 +359,21 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Replacement amount, currency and effective window for the record; include version to guard against concurrent edits.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateMsrpRequestDto'
+            examples:
+              Reprice with version guard:
+                description: Reprice with version guard
+                value:
+                  amount: 139.99
+                  currency: USD
+                  effectiveStartDate: 2026-09-01
+                  effectiveEndDate: 2026-12-31
+                  createdByUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  version: 0
         required: true
       responses:
         '200':
@@ -307,8 +415,20 @@ paths:
     get:
       tags:
       - Products API
-      summary: Get product lifecycle state
-      description: Retrieves lifecycle state and replacement suggestions for a product.
+      summary: Get Product Lifecycle State
+      description: 'Returns a product''s lifecycle state — ACTIVE, INACTIVE or DISCONTINUED, defaulting to ACTIVE when never set — together with its effective instant, last-change audit fields and ordered replacement options.
+
+        Use this tool to inspect selling state before a transition; do not use updateProductLifecycle, which changes the state, and use listProductReplacements when only the replacements are needed.
+
+        Preconditions: the product must exist.
+
+        Required inputs: productId (UUID) as a path parameter; there is no request body.
+
+        Emits a CATALOG_PRODUCT_LIFECYCLE_GET audit event; no state changes.
+
+        Returns 404 when no product exists for the supplied id.
+
+        '
       operationId: getProductLifecycle
       parameters:
       - name: productId
@@ -341,9 +461,21 @@ paths:
     put:
       tags:
       - Products API
-      summary: Set product lifecycle state
-      description: Sets lifecycle state to ACTIVE, INACTIVE, or DISCONTINUED with effective date semantics.
-      operationId: setLifecycleState
+      summary: Set Product Lifecycle State
+      description: 'Transitions a product''s lifecycle state to ACTIVE, INACTIVE or DISCONTINUED with an effective instant; discontinuation is one-way, a DISCONTINUED product can never be reactivated and callers must record a replacement via addProductReplacement instead.
+
+        Use this tool to change selling state; do not use updateProduct, which edits master data, and do not use deleteCatalogItem, which removes the row outright.
+
+        Preconditions: the product must exist and must not already be in the requested state; any transition into DISCONTINUED requires the product:lifecycle:override_discontinued authority and a non-blank overrideReason.
+
+        Required inputs: productId (UUID) path parameter plus lifecycleState and either effectiveAt (instant) or effectiveDate (date, resolved to UTC start of day); effectiveAt more than two seconds in the past is rejected.
+
+        Emits a CATALOG_PRODUCT_LIFECYCLE_UPDATE event, publishes a product fact for downstream replicas, and invalidates the product-detail cache.
+
+        Returns 404 when the product does not exist, 409 when attempting to leave DISCONTINUED, 403 when the discontinued-override authority is missing, and 400 when the state is unchanged, the effective time is absent or in the past, or overrideReason is missing for a discontinuation.
+
+        '
+      operationId: updateProductLifecycle
       parameters:
       - name: productId
         in: path
@@ -353,10 +485,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Target lifecycle state and when it takes effect; overrideReason is mandatory for transitions into DISCONTINUED.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ProductLifecycleUpdateRequest'
+            examples:
+              Discontinue at year end:
+                description: Discontinue at year end
+                value:
+                  lifecycleState: DISCONTINUED
+                  effectiveDate: 2026-12-31
+                  overrideReason: Manufacturer ended production
         required: true
       responses:
         '200':
@@ -400,8 +540,20 @@ paths:
     get:
       tags:
       - UOM Conversion API
-      summary: Get conversion
-      description: Retrieves a unit-of-measure conversion by its ID.
+      summary: Get UoM Conversion by ID
+      description: 'Returns one unit-of-measure conversion with its from and to codes, factor and active flag; inactive conversions are returned here even though listUomConversions hides them.
+
+        Use this tool when the conversion id is already known; use listUomConversions instead to browse the active table.
+
+        Preconditions: the conversion must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no conversion exists for the supplied id.
+
+        '
       operationId: getUomConversionById
       parameters:
       - name: id
@@ -431,8 +583,20 @@ paths:
     put:
       tags:
       - UOM Conversion API
-      summary: Update conversion factor
-      description: Updates the conversion factor and mutable fields for an existing conversion.
+      summary: Update UoM Conversion Factor
+      description: 'Updates the factor of an existing unit-of-measure conversion; the from and to codes are immutable, so redefining a pair means deactivating this conversion and creating a new one.
+
+        Use this tool to correct a factor; do not use createUomConversion, which adds a new pair, or deactivateUomConversion, which retires one.
+
+        Preconditions: the conversion must exist; a self-conversion must keep factor 1.
+
+        Required inputs: id (UUID) path parameter and a positive conversionFactor in the body, stored at six decimal places.
+
+        Emits a CATALOG_UOM_CONVERSION_UPDATE event; derived inverse factors reflect the change immediately.
+
+        Returns 404 when no conversion exists for the supplied id, and 400 when the factor is not positive or a self-conversion factor is not 1.
+
+        '
       operationId: updateUomConversion
       parameters:
       - name: id
@@ -443,10 +607,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The corrected conversion factor for the existing from/to pair.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UomConversionUpdateRequestDto'
+            examples:
+              Correct factor:
+                description: Correct factor
+                value:
+                  conversionFactor: 24
         required: true
       responses:
         '200':
@@ -474,8 +644,20 @@ paths:
     delete:
       tags:
       - UOM Conversion API
-      summary: Deactivate conversion
-      description: Deactivates a conversion so it is excluded from active conversion results.
+      summary: Deactivate UoM Conversion
+      description: 'Marks a unit-of-measure conversion inactive so it disappears from listUomConversions and from factor lookups; the row is kept and remains readable by id.
+
+        Use this tool to retire a conversion pair; do not use updateUomConversion, which changes the factor while keeping it active — there is no reactivation endpoint, so recreate the pair with createUomConversion if it is needed again.
+
+        Preconditions: the conversion must exist; deactivating an already inactive conversion succeeds idempotently.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits a CATALOG_UOM_CONVERSION_DEACTIVATE event; product-level UoM sets are unaffected.
+
+        Returns 204 on success, and 404 when no conversion exists for the supplied id.
+
+        '
       operationId: deactivateUomConversion
       parameters:
       - name: id
@@ -498,9 +680,21 @@ paths:
     get:
       tags:
       - Supplier Item Cost API
-      summary: Get supplier cost structure
-      description: Returns the supplier item cost structure identified by the supplied cost structure ID.
-      operationId: getCostStructure
+      summary: Get Supplier Cost Structure
+      description: 'Returns one supplier item cost structure with its base cost and volume tiers sorted by minimum quantity.
+
+        Use this tool when the cost structure id is already known; use listSupplierItemCosts instead to find structures by itemId or supplierId.
+
+        Preconditions: the cost structure must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no cost structure exists for the supplied id.
+
+        '
+      operationId: getSupplierItemCost
       parameters:
       - name: id
         in: path
@@ -529,9 +723,21 @@ paths:
     put:
       tags:
       - Supplier Item Cost API
-      summary: Update supplier cost structure
-      description: Updates the supplier item cost structure identified by the supplied cost structure ID.
-      operationId: updateCostStructure
+      summary: Update Supplier Cost Structure
+      description: 'Replaces a supplier item cost structure wholesale — supplier, item, currency, base cost and the entire tier list are overwritten with the submitted values.
+
+        Use this tool to reprice or re-tier an existing structure; do not use createSupplierItemCost, which adds a structure for a pair that has none yet.
+
+        Preconditions: the structure must exist, and repointing it at a different supplier and item pair must not collide with another structure for that pair; tiers follow the same contiguity rules as creation.
+
+        Required inputs: id (UUID) path parameter plus supplierId, itemId and a 3-letter currencyCode; the tier list submitted replaces the previous one entirely.
+
+        Emits a CATALOG_SUPPLIER_COST_UPDATE event; no item or catalog pricing records are touched.
+
+        Returns 404 when no cost structure exists for the supplied id, 409 when the supplier and item pair collides with another structure, and 400 when the currency code or tier structure is invalid.
+
+        '
+      operationId: updateSupplierItemCost
       parameters:
       - name: id
         in: path
@@ -540,10 +746,22 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Full replacement of the structure; the submitted tier list overwrites the stored tiers entirely.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SupplierItemCostUpdateRequestDto'
+            examples:
+              Reprice base cost:
+                description: Reprice base cost
+                value:
+                  supplierId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  itemId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  currencyCode: USD
+                  baseCost: 11.0
+                  tiers:
+                  - minQuantity: 1
+                    unitCost: 11.0
         required: true
       responses:
         '200':
@@ -566,9 +784,21 @@ paths:
     delete:
       tags:
       - Supplier Item Cost API
-      summary: Delete supplier cost structure
-      description: Deletes the supplier item cost structure identified by the supplied cost structure ID.
-      operationId: deleteCostStructure
+      summary: Delete Supplier Cost Structure
+      description: 'Permanently deletes a supplier item cost structure and its volume tiers; there is no soft delete or history.
+
+        Use this tool when a supplier no longer offers the item; use updateSupplierItemCost instead to change prices while keeping the structure.
+
+        Preconditions: the cost structure must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits a CATALOG_SUPPLIER_COST_DELETE event; item costs recorded elsewhere are unaffected.
+
+        Returns 204 on success, and 404 when no cost structure exists for the supplied id.
+
+        '
+      operationId: deleteSupplierItemCost
       parameters:
       - name: id
         in: path
@@ -590,8 +820,20 @@ paths:
     get:
       tags:
       - Price Book API
-      summary: Get price book
-      description: Retrieves a price book by ID, including its configuration metadata.
+      summary: Get Price Book
+      description: 'Returns one price book with its name, scope, default flag, status and optimistic-lock version.
+
+        Use this tool when the priceBookId is already known; use listPriceBookRules instead to inspect the rules it contains, since there is no endpoint that lists price books.
+
+        Preconditions: the price book must exist.
+
+        Required inputs: priceBookId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no price book exists for the supplied id.
+
+        '
       operationId: getPriceBook
       parameters:
       - name: priceBookId
@@ -621,8 +863,20 @@ paths:
     put:
       tags:
       - Price Book API
-      summary: Update price book
-      description: Updates mutable fields of an existing price book.
+      summary: Update Price Book
+      description: 'Updates a price book''s name, scope and scopeId, and optionally its default flag and status; isDefault and status are left unchanged when omitted, unlike the other fields which are replaced.
+
+        Use this tool to rename, re-scope, deactivate or promote a book; do not use updatePriceBookRule, which edits an individual rule inside the book.
+
+        Preconditions: the price book must exist.
+
+        Required inputs: priceBookId (UUID) path parameter plus name and scope; scopeId is mandatory for LOCATION and CUSTOMER_TIER scopes.
+
+        Emits a CATALOG_PRICE_BOOK_UPDATE event; the book''s rules are untouched.
+
+        Returns 404 when no price book exists for the supplied id, and 400 when name is blank, scope is missing, or scopeId is absent for a LOCATION or CUSTOMER_TIER scope.
+
+        '
       operationId: updatePriceBook
       parameters:
       - name: priceBookId
@@ -632,10 +886,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Replacement name, scope and scopeId; isDefault and status only change when present in the body.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PriceBookCreateRequestDto'
+            examples:
+              Deactivate a book:
+                description: Deactivate a book
+                value:
+                  name: Downtown Store Pricing
+                  scope: LOCATION
+                  scopeId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  status: INACTIVE
         required: true
       responses:
         '200':
@@ -659,9 +922,21 @@ paths:
     put:
       tags:
       - Price Book API
-      summary: Update price book rule
-      description: Updates an existing pricing rule in a price book.
-      operationId: updateRule
+      summary: Update Price Book Rule
+      description: 'Replaces the target, pricing logic, condition, priority and effective window of an existing price book rule, keeping its status.
+
+        Use this tool to change a rule in place; do not use deactivatePriceBookRule, which retires the rule, and do not use createPriceBookRule, which adds a new one.
+
+        Preconditions: the rule must exist and belong to the given price book; a version supplied in the body must match the rule''s current version, and the change must not conflict with another rule''s overlapping window.
+
+        Required inputs: priceBookId and ruleId (UUIDs) path parameters plus targetType, pricingLogic, effectiveStartAt and createdByUserId; version is optional but recommended for optimistic locking.
+
+        Emits a CATALOG_PRICE_BOOK_RULE_UPDATE event; resolution reflects the new values immediately.
+
+        Returns 404 when the rule does not exist under that price book, 409 when the version mismatches or the change conflicts with an existing rule in overlapping dates, and 400 when required fields are missing or invalid.
+
+        '
+      operationId: updatePriceBookRule
       parameters:
       - name: priceBookId
         in: path
@@ -676,10 +951,22 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Replacement rule values; include version to guard against concurrent edits of the same rule.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PriceBookRuleCreateRequestDto'
+            examples:
+              Reprice with version guard:
+                description: Reprice with version guard
+                value:
+                  targetType: SKU
+                  targetId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  pricingLogic: '{"amounts":{"USD":"119.99"},"defaultCurrency":"USD"}'
+                  priority: 10
+                  effectiveStartAt: 2026-09-01 00:00:00+00:00
+                  createdByUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  version: 0
         required: true
       responses:
         '200':
@@ -702,9 +989,21 @@ paths:
     delete:
       tags:
       - Price Book API
-      summary: Deactivate price book rule
-      description: Deactivates a price book rule so it is no longer considered in price resolution.
-      operationId: deactivateRule
+      summary: Deactivate Price Book Rule
+      description: 'Sets a price book rule''s status to INACTIVE so price resolution stops considering it; the rule row is kept, not deleted.
+
+        Use this tool to retire a rule; do not use updatePriceBookRule, which changes its values while leaving it active — there is no endpoint to reactivate a rule, so treat this as one-way.
+
+        Preconditions: the rule must exist and belong to the given price book.
+
+        Required inputs: priceBookId and ruleId (UUIDs) as path parameters; there is no request body.
+
+        Emits a CATALOG_PRICE_BOOK_RULE_DEACTIVATE event; subsequent resolveProductPrice calls no longer match the rule.
+
+        Returns 204 on success, and 404 when the rule does not exist under that price book.
+
+        '
+      operationId: deactivatePriceBookRule
       parameters:
       - name: priceBookId
         in: path
@@ -730,9 +1029,21 @@ paths:
     put:
       tags:
       - Item Cost API
-      summary: Update standard item cost
-      description: Updates the standard cost for the specified item and returns the refreshed item cost values.
-      operationId: updateStandardCost
+      summary: Update Standard Item Cost
+      description: 'Sets the standard cost of an item to a new value, rounding it to four decimal places, and writes an audit entry recording the old value, new value, actor and reason.
+
+        Use this tool for a deliberate manual cost change; do not use getItemCosts, which only reads the current values — last and average cost cannot be set here, they move only from purchase-order receipt events.
+
+        Preconditions: none; an item with no cost record yet gets one initialised with zero quantity on hand, so this call never fails on a missing item.
+
+        Required inputs: itemId (UUID) path parameter plus a positive newCost and a non-blank reasonCode in the body.
+
+        Emits a CATALOG_ITEM_COST_STANDARD_UPDATE event and appends a MANUAL audit row.
+
+        Returns 400 when newCost is missing or not positive, or when reasonCode is blank.
+
+        '
+      operationId: updateStandardItemCost
       parameters:
       - name: itemId
         in: path
@@ -741,10 +1052,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The new standard cost and the business reason for changing it.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateStandardCostRequestDto'
+            examples:
+              Annual cost revision:
+                description: Annual cost revision
+                value:
+                  newCost: 42.5
+                  reasonCode: ANNUAL_REVIEW
         required: true
       responses:
         '200':
@@ -770,8 +1088,20 @@ paths:
     get:
       tags:
       - Catalog API
-      summary: Get a catalog by ID
-      description: Retrieves a specific catalog by its unique ID.
+      summary: Get a Catalog by ID
+      description: 'Returns one named catalog with the ids of the products, services and non-inventory products it groups.
+
+        Use this tool when the catalogId is already known; use listCatalogsByName instead to find catalogs by a name fragment.
+
+        Preconditions: the catalog must exist.
+
+        Required inputs: catalogId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no catalog exists for the supplied id.
+
+        '
       operationId: getCatalogById
       parameters:
       - name: catalogId
@@ -801,8 +1131,20 @@ paths:
     put:
       tags:
       - Catalog API
-      summary: Update an existing catalog
-      description: Updates an existing catalog.
+      summary: Update an Existing Catalog
+      description: 'Replaces a catalog''s name, description and full membership lists with the supplied values; this is a full replacement, not a merge, so omitted item ids are removed from the catalog.
+
+        Use this tool to rename a catalog or change which items it groups; do not use createCatalog, which adds a new catalog, and do not use updateCatalogItem, which edits the items themselves.
+
+        Preconditions: the catalog must exist; ids in the three membership lists that do not resolve are silently dropped rather than rejected.
+
+        Required inputs: catalogId (UUID) path parameter and the complete replacement body including name; an omitted id list clears that membership.
+
+        Emits a CATALOG_CATALOG_UPDATE event; the referenced items themselves are not modified.
+
+        Returns 404 when no catalog exists for the supplied id.
+
+        '
       operationId: updateCatalog
       parameters:
       - name: catalogId
@@ -813,11 +1155,21 @@ paths:
           type: string
           format: uuid
       requestBody:
-        description: Updated catalog object
+        description: Complete replacement state for the catalog; membership lists overwrite the existing ones rather than merging.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CatalogDto'
+            examples:
+              Rename and reduce membership:
+                description: Rename and reduce membership
+                value:
+                  name: All-Season Tires
+                  description: Renamed lineup
+                  productIds:
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  serviceIds: []
+                  nonInventoryProductIds: []
         required: true
       responses:
         '200':
@@ -845,8 +1197,20 @@ paths:
     delete:
       tags:
       - Catalog API
-      summary: Delete a catalog
-      description: Deletes a catalog by its ID.
+      summary: Delete a Catalog
+      description: 'Permanently deletes a catalog grouping; the products, services and non-inventory products it referenced are untouched and remain available.
+
+        Use this tool to retire a grouping that is no longer needed; do not use deleteCatalogItem, which deletes the underlying items themselves.
+
+        Preconditions: the catalog must exist; there is no soft delete or archive state, so the row is removed outright.
+
+        Required inputs: catalogId (UUID) as a path parameter; there is no request body.
+
+        Emits a CATALOG_CATALOG_DELETE event; member items are not cascaded.
+
+        Returns 204 when the catalog is removed, and 404 when no catalog exists for the supplied id.
+
+        '
       operationId: deleteCatalog
       parameters:
       - name: catalogId
@@ -869,8 +1233,20 @@ paths:
     put:
       tags:
       - Catalog Items API
-      summary: Update an existing catalog item
-      description: Updates an existing product, service, or non-inventory product in the catalog.
+      summary: Update an Existing Catalog Item
+      description: 'Replaces a catalog item of the given type with the supplied state; fields omitted from the body are overwritten with null, so this is a full replacement, not a patch.
+
+        Use this tool to edit an item created through createCatalogItem; do not use updateProduct, which is the product-master path that protects SKU immutability — this endpoint applies no such guard.
+
+        Preconditions: an item of the given type must exist under the supplied id; the type determines which repository is consulted, so a product id passed with type service resolves to 404.
+
+        Required inputs: type (product, service or noninventory, case-insensitive), catalogId (UUID) and the complete replacement body.
+
+        Emits a CATALOG_ITEM_UPDATE event; no catalog groupings are touched.
+
+        Returns 404 when no item of that type exists for the supplied id, and 400 when the type is not one of the three supported values.
+
+        '
       operationId: updateCatalogItem
       parameters:
       - name: type
@@ -887,10 +1263,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Complete replacement state for the item; omitted fields are cleared because the update overwrites the whole row.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CatalogItemRequestDto'
+            examples:
+              Rename a service:
+                description: Rename a service
+                value:
+                  name: Tire Rotation and Balance
+                  shortDescription: Rotate and balance four tires
+                  longDescription: Rotate all four tires and balance each wheel
         required: true
       responses:
         '200':
@@ -918,8 +1302,20 @@ paths:
     delete:
       tags:
       - Catalog Items API
-      summary: Delete a catalog item
-      description: Deletes a product, service, or non-inventory product from the catalog by its ID.
+      summary: Delete a Catalog Item
+      description: 'Permanently deletes a product, service or non-inventory product row by id; this is a hard delete with no archive state.
+
+        Use this tool to remove an item outright; use updateProductLifecycle instead when a product should stop selling but keep its history, and use deleteCatalog to remove a grouping rather than its items.
+
+        Preconditions: an item of the given type must exist under the supplied id.
+
+        Required inputs: type (product, service or noninventory, case-insensitive) and catalogId (UUID) as path parameters; there is no request body.
+
+        Emits a CATALOG_ITEM_DELETE event; catalogs that referenced the item are not rewritten by this call.
+
+        Returns 204 when the item is removed, 404 when no item of that type exists for the supplied id, and 400 when the type is not one of the three supported values.
+
+        '
       operationId: deleteCatalogItem
       parameters:
       - name: type
@@ -950,14 +1346,39 @@ paths:
     post:
       tags:
       - Products API
-      summary: Create product master record
-      description: Creates a product master record with immutable SKU and uniqueness checks.
+      summary: Create Product Master Record
+      description: 'Creates a product master record with an immutable SKU, status ACTIVE, and uniqueness enforced on SKU and on the manufacturerId plus mpn pair.
+
+        Use this tool for governed product-master entry; do not use createCatalogItem, which is the lightweight catalog-item path with no duplicate checks, and do not use bulkIngestCatalogProducts, which loads many products in one call.
+
+        Preconditions: no product may already use the SKU (case-insensitive), and when manufacturerId is supplied no product may already pair it with the same mpn; a supplied categoryId must resolve.
+
+        Required inputs: name, description, unitOfMeasure, sku and mpn, all non-blank; manufacturerId, categoryId, upc and attributes are optional, and a upc also becomes the productCode with type UPC.
+
+        Emits a CATALOG_PRODUCT_CREATED event, publishes a product fact for downstream replicas, and invalidates the product-detail cache.
+
+        Returns 409 when the SKU or the manufacturerId plus mpn pair already exists, and 400 when the supplied categoryId does not resolve.
+
+        '
       operationId: createProduct
       requestBody:
+        description: Product master data to register; sku becomes immutable after creation and upc, when supplied, also becomes the productCode.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ProductCreateRequestDto'
+            examples:
+              New tire product:
+                description: New tire product
+                value:
+                  name: All-Terrain Tire 265/70R17
+                  description: All-terrain light truck tire, 265/70R17
+                  unitOfMeasure: EA
+                  sku: TIRE-AT-2657017
+                  mpn: AT3-26570R17
+                  upc: 036121960222
+                  manufacturerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  categoryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
         required: true
       responses:
         '201':
@@ -986,8 +1407,20 @@ paths:
     get:
       tags:
       - Product UoM API
-      summary: List product UoM conversions
-      description: Returns the product's UoM conversion set ordered by UoM code.
+      summary: List Product UoM Conversions
+      description: 'Returns the product''s unit-of-measure conversion set ordered by UoM code, each entry carrying its type, factor to base and precision scale.
+
+        Use this tool to read a product''s unit conversions; use listUomConversions instead for the global, product-independent conversion table.
+
+        Preconditions: the product must exist.
+
+        Required inputs: productId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the product does not exist, and 200 with an empty array when the product defines no UoM entries.
+
+        '
       operationId: listProductUoms
       parameters:
       - name: productId
@@ -1021,8 +1454,20 @@ paths:
     post:
       tags:
       - Product UoM API
-      summary: Add product UoM conversion
-      description: Adds a purchase/pack (or base) UoM with its conversion factor to the product's base UoM and a precision scale. Re-emits the product contract event.
+      summary: Add Product UoM Conversion
+      description: 'Adds a unit-of-measure entry to a product''s conversion set, binding a UoM code to its factor relative to the product''s base unit; the code is normalised to upper case and the factor stored at six decimal places.
+
+        Use this tool to define how a purchase or pack unit converts for one product; do not use createUomConversion, which defines global cross-unit conversions not tied to a product.
+
+        Preconditions: the product must exist and must not already define the UoM code; a BASE-type entry must carry factorToBase exactly 1.
+
+        Required inputs: productId (UUID) path parameter plus uomCode, uomType (BASE, PURCHASE or PACK) and a positive factorToBase; precisionScale is optional.
+
+        Emits a CATALOG_PRODUCT_UOM_CREATE event and re-publishes the product fact with a bumped aggregate version so downstream replicas refresh.
+
+        Returns 404 when the product does not exist, 409 when the UoM code is already defined for the product, and 400 when factorToBase is not positive or a BASE entry''s factor is not 1.
+
+        '
       operationId: addProductUom
       parameters:
       - name: productId
@@ -1033,10 +1478,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: 'UoM entry to add: the code, its role for this product, and how many base units one such unit represents.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ProductUomCreateRequestDto'
+            examples:
+              Case of twelve:
+                description: Case of twelve
+                value:
+                  uomCode: CS12
+                  uomType: PACK
+                  factorToBase: 12
+                  precisionScale: 0
         required: true
       responses:
         '201':
@@ -1071,9 +1525,21 @@ paths:
     get:
       tags:
       - Products API
-      summary: List replacement products
-      description: Returns replacement options for a product.
-      operationId: getReplacements
+      summary: List Replacement Products
+      description: 'Returns the non-deleted replacement options recorded for a product, ordered by priority, each with its replacement product id, notes and effective instant.
+
+        Use this tool to see what supersedes a discontinued product; do not use addProductReplacement, which records a new option, and use getPartSubstitutes to resolve the full substitute product records instead of the option rows.
+
+        Preconditions: the product must exist; replacements are normally present only on DISCONTINUED products.
+
+        Required inputs: productId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no product exists for the supplied id, and 200 with an empty array when the product has no replacements.
+
+        '
+      operationId: listProductReplacements
       parameters:
       - name: productId
         in: path
@@ -1101,9 +1567,21 @@ paths:
     post:
       tags:
       - Products API
-      summary: Add replacement product
-      description: Adds a replacement suggestion to a discontinued product.
-      operationId: addReplacementProduct
+      summary: Add Replacement Product
+      description: 'Records a replacement suggestion on a discontinued product, pointing buyers at the product that supersedes it, ordered among other options by priorityOrder.
+
+        Use this tool after discontinuing a product via updateProductLifecycle; do not use listProductReplacements, which only reads the recorded options.
+
+        Preconditions: the original product must exist and be in lifecycle state DISCONTINUED, and the replacement product must itself exist and differ from the original.
+
+        Required inputs: productId (UUID) path parameter plus replacementProductId (UUID) and priorityOrder greater than zero; notes are optional and effectiveAt defaults to now when omitted.
+
+        Emits a CATALOG_PRODUCT_REPLACEMENT_ADD event and invalidates the product-detail cache for the original product.
+
+        Returns 404 when the original or replacement product does not exist, 409 when the original product is not DISCONTINUED, and 400 when the replacement equals the original or priorityOrder is not positive.
+
+        '
+      operationId: addProductReplacement
       parameters:
       - name: productId
         in: path
@@ -1113,10 +1591,18 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Replacement suggestion pointing at the superseding product, with its ranking among other options.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ProductReplacementRequest'
+            examples:
+              Primary replacement:
+                description: Primary replacement
+                value:
+                  replacementProductId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  priorityOrder: 1
+                  notes: Direct successor model
         required: true
       responses:
         '201':
@@ -1148,9 +1634,21 @@ paths:
     get:
       tags:
       - Product MSRP API
-      summary: List MSRP history
-      description: Returns all MSRP records for a product.
-      operationId: listMsrp
+      summary: List Product MSRP History
+      description: 'Returns every MSRP record for a product — past, current and scheduled — ordered by effective start date, newest first.
+
+        Use this tool to audit price history or find an msrpId to edit; use getActiveProductMsrp instead for just the record in force on a date.
+
+        Preconditions: the product must exist.
+
+        Required inputs: productId (UUID) as a path parameter; there is no filtering or paging.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the product does not exist, and 200 with an empty array when it has no MSRP records.
+
+        '
+      operationId: listProductMsrpHistory
       parameters:
       - name: productId
         in: path
@@ -1173,9 +1671,21 @@ paths:
     post:
       tags:
       - Product MSRP API
-      summary: Create MSRP
-      description: Creates a product MSRP record with effective date constraints.
-      operationId: createMsrp
+      summary: Create Product MSRP
+      description: 'Creates an MSRP record for a product with an effective date window; amounts are stored at four decimal places and the currency is normalised to upper case.
+
+        Use this tool to schedule a new list price period; do not use updateProductMsrp, which edits an existing record, and note that only one open-ended record (no effectiveEndDate) may exist per product.
+
+        Preconditions: the product must exist, the new window must not overlap any existing MSRP window, and no other open-ended record may exist when effectiveEndDate is omitted.
+
+        Required inputs: productId (UUID) path parameter plus a positive amount, a 3-letter ISO currency and effectiveStartDate; effectiveEndDate and createdByUserId are optional.
+
+        Emits a CATALOG_MSRP_CREATE event; the record participates in active-MSRP resolution and resolveProductPrice fallback from its start date.
+
+        Returns 404 when the product does not exist, 409 when the dates overlap an existing record, and 400 when the amount is not positive, the currency is not a 3-letter code, the window is inverted, or a second open-ended record is attempted.
+
+        '
+      operationId: createProductMsrp
       parameters:
       - name: productId
         in: path
@@ -1184,10 +1694,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: 'New MSRP window: amount, ISO currency and effective dates; omit effectiveEndDate for an open-ended price.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateMsrpRequestDto'
+            examples:
+              Open-ended MSRP:
+                description: Open-ended MSRP
+                value:
+                  amount: 149.99
+                  currency: USD
+                  effectiveStartDate: 2026-09-01
+                  createdByUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
         required: true
       responses:
         '201':
@@ -1223,8 +1742,20 @@ paths:
     get:
       tags:
       - UOM Conversion API
-      summary: List active conversions
-      description: Returns all active unit-of-measure conversion records.
+      summary: List Active UoM Conversions
+      description: 'Returns every active unit-of-measure conversion in the global table; deactivated conversions are excluded.
+
+        Use this tool to survey available conversions or find a conversion id; use getUomConversionById instead when the id is already known, and listProductUoms for a product''s own unit set.
+
+        Preconditions: none; the list is unfiltered and unpaged.
+
+        Required inputs: none, and there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty array when no active conversions exist, so an empty result is not an error condition.
+
+        '
       operationId: listUomConversions
       responses:
         '200':
@@ -1242,14 +1773,35 @@ paths:
     post:
       tags:
       - UOM Conversion API
-      summary: Create UOM conversion
-      description: Creates a new unit-of-measure conversion record.
+      summary: Create UoM Conversion
+      description: 'Creates a global, directional unit-of-measure conversion stating how many target units one source unit represents; codes are normalised to upper case and the factor stored at six decimal places.
+
+        Use this tool for conversions that apply across the whole catalog; do not use addProductUom, which defines a conversion for a single product''s own unit set.
+
+        Preconditions: no active conversion may already exist for the same from and to code pair; a self-conversion (same code both sides) must carry factor 1.
+
+        Required inputs: fromUomCode, toUomCode and a positive conversionFactor; createdBy is optional.
+
+        Emits a CATALOG_UOM_CONVERSION_CREATE event; the reverse direction is derived at read time, not stored.
+
+        Returns 409 when an active conversion already exists for the pair, and 400 when either code is blank, the factor is not positive, or a self-conversion factor is not 1.
+
+        '
       operationId: createUomConversion
       requestBody:
+        description: Directional conversion pair with the factor of target units per one source unit.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UomConversionCreateRequestDto'
+            examples:
+              Case to each:
+                description: Case to each
+                value:
+                  fromUomCode: CS
+                  toUomCode: EA
+                  conversionFactor: 12
+                  createdBy: catalog-admin
         required: true
       responses:
         '201':
@@ -1272,14 +1824,41 @@ paths:
     post:
       tags:
       - Supplier Item Cost API
-      summary: Create supplier cost structure
-      description: Creates a supplier-specific item cost structure with the submitted supplier, item, and tier details.
-      operationId: createCostStructure
+      summary: Create Supplier Cost Structure
+      description: 'Creates the cost structure one supplier charges for one item: a base cost plus optional volume tiers, unique per supplier and item pair.
+
+        Use this tool to record supplier purchasing costs; do not use updateStandardItemCost, which sets the item''s internal standard cost, and use updateSupplierItemCost to change a structure that already exists.
+
+        Preconditions: no cost structure may already exist for the supplier and item pair; tiers, when supplied, must start at minQuantity 1, be contiguous and non-overlapping, and only the final tier may leave maxQuantity null, which it must.
+
+        Required inputs: supplierId (UUID), itemId (UUID) and a 3-letter currencyCode; baseCost is optional but cannot be negative, and each tier needs minQuantity and a positive unitCost.
+
+        Emits a CATALOG_SUPPLIER_COST_CREATE event; no item or catalog pricing records are touched.
+
+        Returns 409 when a structure already exists for the supplier and item pair, and 400 when the currency code is invalid or the tier structure violates the contiguity rules.
+
+        '
+      operationId: createSupplierItemCost
       requestBody:
+        description: 'Cost structure for one supplier and item pair: base cost plus contiguous volume tiers whose final tier is open-ended.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SupplierItemCostCreateRequestDto'
+            examples:
+              Two-tier structure:
+                description: Two-tier structure
+                value:
+                  supplierId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  itemId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  currencyCode: USD
+                  baseCost: 10.5
+                  tiers:
+                  - minQuantity: 1
+                    maxQuantity: 49
+                    unitCost: 10.5
+                  - minQuantity: 50
+                    unitCost: 9.25
         required: true
       responses:
         '201':
@@ -1309,8 +1888,20 @@ paths:
     get:
       tags:
       - Substitution Group API
-      summary: List substitution groups
-      description: Returns all substitution groups with their member product ids.
+      summary: List Substitution Groups
+      description: 'Returns every substitution group with its name, notes and member product ids ordered by when each member joined.
+
+        Use this tool to discover a groupId or survey interchangeability sets; use getSubstitutionGroup instead when the id is already known.
+
+        Preconditions: none; the list is unfiltered and unpaged.
+
+        Required inputs: none, and there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty array when no groups exist, so an empty result is not an error condition.
+
+        '
       operationId: listSubstitutionGroups
       responses:
         '200':
@@ -1328,14 +1919,33 @@ paths:
     post:
       tags:
       - Substitution Group API
-      summary: Create substitution group
-      description: Creates an empty substitution group; add members afterwards.
+      summary: Create Substitution Group
+      description: 'Creates an empty, named substitution group — a set of mutually interchangeable products in which each product may belong to at most one group.
+
+        Use this tool to establish the group before populating it; do not use addSubstitutionGroupMember, which adds products to a group that already exists, and do not confuse groups with addProductReplacement, which records one-way successors for discontinued products.
+
+        Preconditions: none; group names are not checked for uniqueness.
+
+        Required inputs: name (non-blank, trimmed on save); notes are optional.
+
+        Emits a CATALOG_SUBSTITUTION_GROUP_CREATE event; no product facts are re-published until members are added.
+
+        Returns 201 with the group and an empty productIds list, and 400 when name is missing or blank.
+
+        '
       operationId: createSubstitutionGroup
       requestBody:
+        description: Name and optional notes for the new interchangeability group.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SubstitutionGroupCreateRequestDto'
+            examples:
+              Oil filter group:
+                description: Oil filter group
+                value:
+                  name: Oil Filters PH3593A-Compatible
+                  notes: Cross-brand equivalents for PH3593A fitment
         required: true
       responses:
         '201':
@@ -1358,8 +1968,20 @@ paths:
     post:
       tags:
       - Substitution Group API
-      summary: Add product to substitution group
-      description: Adds a product to the group (a product belongs to at most one group) and re-emits the product contract event for every member.
+      summary: Add Substitution Group Member
+      description: 'Adds a product to a substitution group, making it mutually interchangeable with every other member; membership is exclusive, a product can belong to only one group at a time.
+
+        Use this tool to grow an interchangeability set; do not use addProductReplacement, which records a one-way successor for a discontinued product rather than a symmetric substitute.
+
+        Preconditions: the group and the product must both exist, and the product must not already belong to any substitution group, including this one.
+
+        Required inputs: groupId (UUID) path parameter and productId (UUID) in the body.
+
+        Emits a CATALOG_SUBSTITUTION_GROUP_MEMBER_ADD event and re-publishes the product fact for every member of the group so downstream replicas learn the new association.
+
+        Returns 404 when the group or the product does not exist, and 409 when the product already belongs to a substitution group.
+
+        '
       operationId: addSubstitutionGroupMember
       parameters:
       - name: groupId
@@ -1370,10 +1992,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The product to add as an interchangeable member of the group.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SubstitutionGroupMemberRequestDto'
+            examples:
+              Add product:
+                description: Add product
+                value:
+                  productId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
         required: true
       responses:
         '200':
@@ -1408,14 +2036,37 @@ paths:
     post:
       tags:
       - Products API
-      summary: Create location price override
-      description: Creates a location-specific price override and enforces guardrails for margin and discount limits.
+      summary: Create Location Price Override
+      description: 'Creates a location-specific price override for one product, enforcing the location''s guardrail policy; discounts at or below the auto-approval threshold activate immediately, larger discounts are stored as PENDING_APPROVAL with an approval request assigned to a deterministic approver.
+
+        Use this tool to discount a product at one location; do not use upsertLocationGuardrailPolicy, which sets the limits themselves, and use approveLocationPriceOverride to activate a pending one.
+
+        Preconditions: the product must exist and a LOCATION guardrail policy must already exist for the locationId; any currently ACTIVE override for the same location and product is set INACTIVE.
+
+        Required inputs: locationId, productId, createdByUserId (UUIDs), positive basePrice and overridePrice with overridePrice not exceeding basePrice; cost is optional and enables the margin check when present.
+
+        Emits a CATALOG_LOCATION_OVERRIDE_CREATE event and invalidates the product-detail cache for that location.
+
+        Returns 404 when the product does not exist, and 400 when no guardrail policy exists for the location, the discount exceeds maxDiscountPercent, or the margin falls below minMarginPercent; callers must read the returned status to learn whether the override is ACTIVE or PENDING_APPROVAL.
+
+        '
       operationId: createLocationPriceOverride
       requestBody:
+        description: Override pricing for one product at one location; cost is optional and enables the minimum-margin guardrail check.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LocationPriceOverrideCreateRequestDto'
+            examples:
+              Discounted price:
+                description: Discounted price
+                value:
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  productId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  createdByUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
+                  basePrice: 100.0
+                  cost: 60.0
+                  overridePrice: 92.5
         required: true
       responses:
         '201':
@@ -1444,8 +2095,20 @@ paths:
     post:
       tags:
       - Products API
-      summary: Reject pending location price override
-      description: Rejects a pending override, persists rejection metadata, and marks the request as terminal.
+      summary: Reject Pending Price Override
+      description: 'Rejects a PENDING_APPROVAL location price override, recording who rejected it and why, and closing its approval request as REJECTED; the decision is terminal, a rejected override cannot be revived.
+
+        Use this tool to decline a pending override; do not use approveLocationPriceOverride, which activates it instead.
+
+        Preconditions: the override must exist, be in PENDING_APPROVAL status, have an open approval request, and the supplied version must match the override''s current version.
+
+        Required inputs: overrideId (UUID) path parameter plus version (long), actorUserId (UUID), and non-blank rejectionReasonCode and rejectionNotes in the body.
+
+        Emits a CATALOG_LOCATION_OVERRIDE_REJECT event and invalidates the product-detail cache for the override''s location.
+
+        Returns 404 when the override or its approval request cannot be found, 400 when the override is not in PENDING_APPROVAL status or the rejection reason or notes are blank, and 409 when the supplied version does not match the current one.
+
+        '
       operationId: rejectLocationPriceOverride
       parameters:
       - name: overrideId
@@ -1456,10 +2119,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Rejection decision carrying the acting user, the override's current version, and a mandatory reason code with notes.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LocationPriceOverrideDecisionRequestDto'
+            examples:
+              Reject below margin:
+                description: Reject below margin
+                value:
+                  version: 0
+                  actorUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  rejectionReasonCode: MARGIN_TOO_LOW
+                  rejectionNotes: Margin would fall below store target
         required: true
       responses:
         '200':
@@ -1496,8 +2168,20 @@ paths:
     post:
       tags:
       - Products API
-      summary: Approve pending location price override
-      description: Approves a pending override and activates it as the effective location price.
+      summary: Approve Pending Price Override
+      description: 'Approves a PENDING_APPROVAL location price override, setting it ACTIVE and closing its approval request as APPROVED.
+
+        Use this tool to grant a pending override; do not use rejectLocationPriceOverride, which terminally declines it instead.
+
+        Preconditions: the override must exist, be in PENDING_APPROVAL status, have an open approval request, and the supplied version must match the override''s current version.
+
+        Required inputs: overrideId (UUID) path parameter plus version (long) and actorUserId (UUID) in the body; rejection fields are ignored on approval.
+
+        Emits a CATALOG_LOCATION_OVERRIDE_APPROVE event and invalidates the product-detail cache for the override''s location.
+
+        Returns 404 when the override or its approval request cannot be found, 400 when the override is not in PENDING_APPROVAL status, and 409 when the supplied version does not match the current one.
+
+        '
       operationId: approveLocationPriceOverride
       parameters:
       - name: overrideId
@@ -1508,10 +2192,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Approval decision carrying the acting user and the override's current version for optimistic-lock verification.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LocationPriceOverrideDecisionRequestDto'
+            examples:
+              Approve:
+                description: Approve
+                value:
+                  version: 0
+                  actorUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
         required: true
       responses:
         '200':
@@ -1548,14 +2239,35 @@ paths:
     post:
       tags:
       - Products API
-      summary: Upsert location guardrail policy
-      description: Creates or updates the active LOCATION guardrail policy used by price overrides.
+      summary: Upsert Location Guardrail Policy
+      description: 'Creates or updates the LOCATION-scoped guardrail policy that createLocationPriceOverride enforces for discount, margin and auto-approval limits.
+
+        Use this tool to set pricing guardrails for a location before overrides are created there; do not use createLocationPriceOverride, which applies a price and is rejected until a policy exists.
+
+        Preconditions: none; when a policy already exists for the scopeId its limits are overwritten, otherwise a new policy row is created.
+
+        Required inputs: scopeId (the location UUID), minMarginPercent, maxDiscountPercent and autoApprovalThresholdPercent, all mandatory.
+
+        Emits a CATALOG_GUARDRAIL_POLICY_UPSERT event; existing overrides are not re-evaluated, the new limits apply only to overrides created afterwards.
+
+        Returns 400 when any of the four fields is missing; the 200 response body carries only the locationId, not the stored limits.
+
+        '
       operationId: upsertLocationGuardrailPolicy
       requestBody:
+        description: 'Guardrail limits for one location: minimum margin, maximum discount and the discount threshold under which overrides auto-approve.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/GuardrailPolicyUpsertRequestDto'
+            examples:
+              Location policy:
+                description: Location policy
+                value:
+                  scopeId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  minMarginPercent: 15.0
+                  maxDiscountPercent: 25.0
+                  autoApprovalThresholdPercent: 10.0
         required: true
       responses:
         '200':
@@ -1578,14 +2290,36 @@ paths:
     post:
       tags:
       - Price Book API
-      summary: Create price book
-      description: Creates a new price book used to group and apply pricing rules.
+      summary: Create Price Book
+      description: 'Creates a price book — a scoped container of pricing rules — with scope COMPANY_DEFAULT, LOCATION or CUSTOMER_TIER and an initial status defaulting to ACTIVE.
+
+        Use this tool to establish a rule container before adding rules; do not use createPriceBookRule, which adds rules to a book that already exists.
+
+        Preconditions: none; no uniqueness is enforced, so creating a second default book for the same scope is possible and should be avoided by the caller.
+
+        Required inputs: name and scope; scopeId is mandatory for LOCATION and CUSTOMER_TIER scopes, while isDefault defaults to false and status defaults to ACTIVE.
+
+        Emits a CATALOG_PRICE_BOOK_CREATE event; no rules exist until they are added.
+
+        Returns 400 when name is blank, scope is missing, or scopeId is absent for a LOCATION or CUSTOMER_TIER scope.
+
+        '
       operationId: createPriceBook
       requestBody:
+        description: 'Price book definition: a name, its scope, and for LOCATION or CUSTOMER_TIER scopes the id of the location or tier it prices.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PriceBookCreateRequestDto'
+            examples:
+              Location price book:
+                description: Location price book
+                value:
+                  name: Downtown Store Pricing
+                  scope: LOCATION
+                  scopeId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  isDefault: false
+                  status: ACTIVE
         required: true
       responses:
         '201':
@@ -1609,9 +2343,21 @@ paths:
     get:
       tags:
       - Price Book API
-      summary: List price book rules
-      description: Returns all rules associated with a price book.
-      operationId: listRules
+      summary: List Price Book Rules
+      description: 'Returns every rule in a price book — ACTIVE and INACTIVE alike — with target, pricing logic, condition, priority, effective window, status and version.
+
+        Use this tool to inspect a book''s rule set; use resolveProductPrice instead to evaluate which rule wins for a concrete product and context.
+
+        Preconditions: the price book must exist.
+
+        Required inputs: priceBookId (UUID) as a path parameter; there is no filtering or paging.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no price book exists for the supplied id, and 200 with an empty array when the book has no rules.
+
+        '
+      operationId: listPriceBookRules
       parameters:
       - name: priceBookId
         in: path
@@ -1634,9 +2380,21 @@ paths:
     post:
       tags:
       - Price Book API
-      summary: Create price book rule
-      description: Adds a new pricing rule to a specific price book.
-      operationId: createRule
+      summary: Create Price Book Rule
+      description: 'Adds an ACTIVE pricing rule to a price book, targeting a single SKU, a CATEGORY taxonomy node or GLOBAL, with an effective window and an optional LOCATION or CUSTOMER_TIER condition.
+
+        Use this tool to define a reference price; do not use resolveProductPrice, which evaluates rules, and do not use updatePriceBookRule, which edits a rule that already exists.
+
+        Preconditions: the price book must exist, and no ACTIVE rule with the same target, condition and an overlapping effective window may already exist in the book.
+
+        Required inputs: targetType (SKU, CATEGORY or GLOBAL), targetId for non-GLOBAL targets, pricingLogic as JSON of the form {"amounts":{"USD":"10.00"},"defaultCurrency":"USD"}, effectiveStartAt and createdByUserId; priority defaults to 0, conditionType defaults to NONE, and a LOCATION conditionValue must be a UUID string.
+
+        Emits a CATALOG_PRICE_BOOK_RULE_CREATE event; the rule participates in resolution immediately once its window opens.
+
+        Returns 404 when the price book does not exist, 409 when the rule conflicts with an existing rule in overlapping dates, and 400 when required fields are missing or the effective window is inverted.
+
+        '
+      operationId: createPriceBookRule
       parameters:
       - name: priceBookId
         in: path
@@ -1645,10 +2403,22 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: 'Rule definition: target, JSON pricingLogic with per-currency amounts, optional condition, priority and effective window.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PriceBookRuleCreateRequestDto'
+            examples:
+              SKU rule in USD:
+                description: SKU rule in USD
+                value:
+                  targetType: SKU
+                  targetId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  pricingLogic: '{"amounts":{"USD":"129.99"},"defaultCurrency":"USD"}'
+                  conditionType: NONE
+                  priority: 10
+                  effectiveStartAt: 2026-09-01 00:00:00+00:00
+                  createdByUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
         required: true
       responses:
         '201':
@@ -1672,14 +2442,35 @@ paths:
     post:
       tags:
       - Price Book API
-      summary: Resolve reference/list product price
-      description: 'Resolves the reference/list price for a product using applicable price books and rules. Candidate book precedence: explicit priceBookId, then active LOCATION book, then active CUSTOMER_TIER book (customerTierId), then COMPANY_DEFAULT. The result is catalog reference data (ADR-0054) — transactional sell prices are resolved by pos-price, never by this endpoint.'
-      operationId: resolvePrice
+      summary: Resolve Reference Product Price
+      description: 'Resolves a product''s catalog reference or list price by picking one candidate price book — the explicit priceBookId first, otherwise the active LOCATION book, then the active CUSTOMER_TIER book, then the COMPANY_DEFAULT book — and selecting the winning ACTIVE rule by SKU over CATEGORY over GLOBAL specificity, then priority; when no rule matches, the active MSRP is returned with fallbackReason MSRP_FALLBACK.
+
+        Use this tool for catalog reference pricing per ADR-0054; do not use it for transactional sell prices, which pos-price owns, and do not use getEffectiveLocationPrice, which reads location override records instead of price book rules.
+
+        Preconditions: the product must exist; price books and rules are optional, since MSRP fallback covers their absence.
+
+        Required inputs: productId (UUID); priceBookId, locationId, customerTierId, customerTier, currency and asOf are optional, with asOf defaulting to today and currency required only when a winning rule configures multiple currencies without a defaultCurrency.
+
+        Emits a CATALOG_PRICE_BOOK_RESOLVE_PRICE audit event; no pricing data changes.
+
+        Returns 404 when the product or an explicitly supplied priceBookId does not exist, 400 when the requested currency is not configured in the winning rule''s pricingLogic, and 200 with source UNAVAILABLE and fallbackReason PRICE_BASE_DATA_MISSING when neither a rule nor an MSRP applies.
+
+        '
+      operationId: resolveProductPrice
       requestBody:
+        description: 'Resolution context: the product plus optional book, location, customer tier, currency and as-of date that steer candidate book selection.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ResolvePriceRequestDto'
+            examples:
+              Location-context resolution:
+                description: Location-context resolution
+                value:
+                  productId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  currency: USD
+                  asOf: 2026-09-15
         required: true
       responses:
         '200':
@@ -1697,15 +2488,38 @@ paths:
     post:
       tags:
       - Catalog API
-      summary: Add a new catalog
-      description: Adds a new catalog.
-      operationId: addCatalog
+      summary: Create a New Catalog
+      description: 'Creates a named catalog that groups existing products, services and non-inventory products for presentation; the catalog does not own the items, it only references them.
+
+        Use this tool to define a new grouping; do not use updateCatalog, which replaces a catalog that already exists, and do not use createCatalogItem, which creates the underlying items themselves.
+
+        Preconditions: any ids listed in productIds, serviceIds or nonInventoryProductIds should already exist; ids that do not resolve are silently dropped from the stored catalog rather than rejected.
+
+        Required inputs: name; description and the three id lists are optional and default to empty.
+
+        Emits a CATALOG_CATALOG_CREATE event; no product, service or non-inventory records are modified.
+
+        Returns 201 with the stored catalog, whose id lists reflect only the references that resolved, so callers should compare them against what was sent.
+
+        '
+      operationId: createCatalog
       requestBody:
-        description: Catalog object to be added
+        description: 'Catalog to create: a name plus optional lists of existing product, service and non-inventory product ids to group.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CatalogDto'
+            examples:
+              Catalog with two products:
+                description: Catalog with two products
+                value:
+                  name: Winter Tires
+                  description: Seasonal winter tire lineup
+                  productIds:
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  serviceIds: []
+                  nonInventoryProductIds: []
         required: true
       responses:
         '201':
@@ -1728,14 +2542,41 @@ paths:
     post:
       tags:
       - Catalog Bulk Ingest API
-      summary: Bulk ingest records
-      description: Accepts a batch of domain records for bulk import. Returns per-record results.
-      operationId: bulkIngest
+      summary: Bulk Import Catalog Products
+      description: 'Imports a batch of catalog products in one call, creating each record through the same governed path as createProduct and reporting a per-row success or failure verdict.
+
+        Use this tool to load many products at once; do not use createProduct, which registers a single product and surfaces its errors as HTTP statuses rather than row results.
+
+        Preconditions: each row''s SKU must not already exist (case-insensitive), or that row fails with CATALOG_INGEST_FAILED while the rest of the batch proceeds.
+
+        Required inputs: jobId (UUID), locationId (UUID) and a non-empty records array; per record, unitOfMeasure defaults to EA, description defaults to the name, and mpn falls back to the sku then the name, while price, categoryName and subcategoryName are accepted but ignored in this wave.
+
+        Emits a CATALOG_BULK_INGEST event; each successful row also publishes a product fact and invalidates the product-detail cache.
+
+        Returns 200 even when rows fail, so callers must inspect successCount, failureCount and the per-row results rather than the HTTP status.
+
+        '
+      operationId: bulkIngestCatalogProducts
       requestBody:
+        description: Batch of product records to create for one ingest job scoped to a location.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BulkIngestRequestCatalogBulkIngestRecord'
+            examples:
+              Two-product batch:
+                description: Two-product batch
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  records:
+                  - sku: TIRE-AT-2657017
+                    name: All-Terrain Tire 265/70R17
+                    upc: 036121960222
+                    mpn: AT3-26570R17
+                    unitOfMeasure: EA
+                  - sku: WIP-22-PREM
+                    name: Premium Wiper Blade 22in
         required: true
       responses:
         '200':
@@ -1759,9 +2600,21 @@ paths:
     post:
       tags:
       - Catalog Items API
-      summary: Add a new catalog item
-      description: Adds a new product, service, or non-inventory product to the catalog.
-      operationId: addCatalogItem
+      summary: Add a New Catalog Item
+      description: 'Creates a catalog item of the given type: a product, a service, or a non-inventory product.
+
+        Use this tool for quick item entry across the three item types; do not use createProduct, which is the richer product-master path that enforces SKU and manufacturer-part uniqueness — this endpoint performs no duplicate checks.
+
+        Preconditions: none; for type service and noninventory only name, shortDescription and longDescription are persisted, while type product also stores manufacturer, SKU, productCode, material, color, warranty and specifications fields.
+
+        Required inputs: type path parameter, one of product, service or noninventory (case-insensitive), plus a body with at least name.
+
+        Emits a CATALOG_ITEM_CREATE event; no catalog groupings are touched.
+
+        Returns 400 when the type path parameter is not one of the three supported values.
+
+        '
+      operationId: createCatalogItem
       parameters:
       - name: type
         in: path
@@ -1770,10 +2623,24 @@ paths:
         schema:
           type: string
       requestBody:
+        description: Item to create; only name, shortDescription and longDescription are stored for services and non-inventory products, products store the full field set.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CatalogItemRequestDto'
+            examples:
+              New product item:
+                description: New product item
+                value:
+                  name: Premium Wiper Blade 22in
+                  shortDescription: 22-inch beam wiper blade
+                  longDescription: All-weather beam wiper blade, 22 inch
+                  sku: WIP-22-PREM
+                  productCode: 036121960221
+                  manufacturerPartNumber: PWB-22
+                  manufacturerName: ClearView
+                  material: Rubber
+                  color: Black
         required: true
       responses:
         '201':
@@ -1796,8 +2663,20 @@ paths:
     get:
       tags:
       - Products API
-      summary: Get substitute parts
-      description: Returns list of substitute parts for a given productId.
+      summary: Get Substitute Parts
+      description: 'Returns the full product records of a product''s recorded replacements, resolved from its replacement options in priority order with duplicates and dangling references dropped.
+
+        Use this tool when selling and a substitute product''s details are needed directly; use listProductReplacements instead for the raw option rows with priority and notes.
+
+        Preconditions: the product must exist; substitutes appear only after replacements were recorded via addProductReplacement.
+
+        Required inputs: productId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no product exists for the supplied id, and 200 with an empty array when no replacement products resolve.
+
+        '
       operationId: getPartSubstitutes
       parameters:
       - name: productId
@@ -1830,9 +2709,21 @@ paths:
     get:
       tags:
       - Product MSRP API
-      summary: Get active MSRP
-      description: Returns MSRP active for the provided asOf date (or today).
-      operationId: getActiveMsrp
+      summary: Get Active Product MSRP
+      description: 'Returns the single MSRP record whose effective window covers the requested date.
+
+        Use this tool to read the list price in force on a date; use listProductMsrpHistory instead to see every past and scheduled record.
+
+        Preconditions: the product must exist and an MSRP window must cover the date.
+
+        Required inputs: productId (UUID) path parameter; asOf is an optional ISO date defaulting to today.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the product does not exist or no MSRP window covers the requested date.
+
+        '
+      operationId: getActiveProductMsrp
       parameters:
       - name: productId
         in: path
@@ -1868,8 +2759,20 @@ paths:
     get:
       tags:
       - Products API
-      summary: Get product details with pricing and availability
-      description: Retrieves a consolidated view of product information including catalog data, location-specific pricing, and availability. Implements graceful degradation and returns partial data when non-critical services are unavailable.
+      summary: Get Product Detail With Pricing
+      description: 'Returns a consolidated product view for one location: catalog data, location-specific pricing, availability and lead time, with a confidence indicator describing how complete the data is.
+
+        Use this tool for a sales-facing view of one product at one store; use getProductById instead for raw master data, and getEffectiveLocationPrice for the override-derived price alone.
+
+        Preconditions: the product must exist; pricing and availability sources may be degraded, in which case partial data is returned rather than an error.
+
+        Required inputs: productId (UUID) path parameter and location_id (UUID) query parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the product does not exist, and 400 when location_id is missing or malformed; a 200 may still carry partial data, so callers should inspect the confidence field.
+
+        '
       operationId: getProductDetailView
       parameters:
       - name: productId
@@ -1919,8 +2822,20 @@ paths:
     get:
       tags:
       - Substitution Group API
-      summary: Get substitution group
-      description: Retrieves a substitution group with its member product ids.
+      summary: Get Substitution Group
+      description: 'Returns one substitution group with its name, notes and member product ids ordered by when each member joined.
+
+        Use this tool when the groupId is already known; use listSubstitutionGroups instead to discover groups.
+
+        Preconditions: the group must exist.
+
+        Required inputs: groupId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no substitution group exists for the supplied id.
+
+        '
       operationId: getSubstitutionGroup
       parameters:
       - name: groupId
@@ -1950,8 +2865,20 @@ paths:
     delete:
       tags:
       - Substitution Group API
-      summary: Delete substitution group
-      description: Deletes a group and its memberships, re-emitting the product contract event for every former member.
+      summary: Delete Substitution Group
+      description: 'Deletes a substitution group and all of its memberships permanently, freeing every former member to join another group; the products themselves are untouched.
+
+        Use this tool to dissolve a whole group; use removeSubstitutionGroupMember instead to take a single product out while keeping the group.
+
+        Preconditions: the group must exist; there is no soft delete or archive.
+
+        Required inputs: groupId (UUID) as a path parameter; there is no request body.
+
+        Emits a CATALOG_SUBSTITUTION_GROUP_DELETE event and re-publishes the product fact for every former member so downstream replicas drop the association.
+
+        Returns 204 on success, and 404 when no substitution group exists for the supplied id.
+
+        '
       operationId: deleteSubstitutionGroup
       parameters:
       - name: groupId
@@ -1974,8 +2901,20 @@ paths:
     get:
       tags:
       - Products API
-      summary: Get a service by ID
-      description: Retrieves a specific service by its unique ID.
+      summary: Get a Service by ID
+      description: 'Returns one catalog service record with its name, short description and long description.
+
+        Use this tool when the serviceId is already known; use searchCatalogServices instead to find services by partial name.
+
+        Preconditions: the service must exist.
+
+        Required inputs: serviceId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no service exists for the supplied id.
+
+        '
       operationId: getServiceById
       parameters:
       - name: serviceId
@@ -2006,9 +2945,21 @@ paths:
     get:
       tags:
       - Products API
-      summary: Search catalog services
-      description: Free-text substring search over service names for typeahead selection.
-      operationId: searchServices
+      summary: Search Catalog Services
+      description: 'Searches services by a case-insensitive substring of the service name, ordered by name, sized for typeahead selection.
+
+        Use this tool to find a serviceId by partial name; use getServiceById instead when the id is known, and listServicesByName for exact whole-name matches.
+
+        Preconditions: none; a blank or missing q returns an empty list rather than all services.
+
+        Required inputs: q as the substring to match; limit is optional, defaults to 20 and is clamped to 1-100.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty array when q is blank or nothing matches, so an empty result is not an error condition.
+
+        '
+      operationId: searchCatalogServices
       parameters:
       - name: q
         in: query
@@ -2041,9 +2992,21 @@ paths:
     get:
       tags:
       - Products API
-      summary: Get services by name
-      description: Retrieves a list of services matching the given name.
-      operationId: getServiceByName
+      summary: List Services by Exact Name
+      description: 'Returns every catalog service whose name equals the supplied value exactly; this is a whole-name match, not a substring search.
+
+        Use this tool only when the exact service name is known; use searchCatalogServices instead for partial, typeahead-style matching.
+
+        Preconditions: none; an empty result simply means no service carries that exact name.
+
+        Required inputs: name as a path parameter; there is no paging and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty array when nothing matches, so an empty result is not an error condition.
+
+        '
+      operationId: listServicesByName
       parameters:
       - name: name
         in: path
@@ -2066,9 +3029,21 @@ paths:
     get:
       tags:
       - Products API
-      summary: Search catalog products
-      description: Cursor-based product search with optional free-text query and exact filters for brand, category, and SKU. Pass detailed=true to enrich each row inline with lifecycle state + effective instant and the product's active MSRP (amount, currency, effective window), resolved server-side in a single request. Products without an active MSRP return null price fields.
-      operationId: searchProducts
+      summary: Search Catalog Products
+      description: 'Searches products with an optional free-text query over name and description plus exact case-insensitive filters for brand, category and SKU, paged by an opaque cursor.
+
+        Use this tool to find products by partial text or filters; use getProductById instead when the id is known, and listProductsByName only for exact whole-name matches.
+
+        Preconditions: none; a malformed or missing cursor silently restarts at the first page rather than failing.
+
+        Required inputs: all parameters are optional; limit defaults to 20 and is clamped to 1-100, and detailed defaults to false — pass detailed=true to enrich each row with lifecycle state, its effective instant and the active MSRP, with null price fields for products lacking an active MSRP.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty items array when nothing matches, so an empty result is not an error condition.
+
+        '
+      operationId: searchCatalogProducts
       parameters:
       - name: q
         in: query
@@ -2136,8 +3111,20 @@ paths:
     get:
       tags:
       - Products API
-      summary: Get effective location price
-      description: 'Resolves effective price using precedence: ACTIVE override first, otherwise base price.'
+      summary: Get Effective Location Price
+      description: 'Resolves the price a location currently charges for a product from its override records: the newest ACTIVE override wins, otherwise a PENDING_APPROVAL override reports its basePrice as the effective price with status PENDING_APPROVAL.
+
+        Use this tool to check what an override has done to a product''s price at one location; do not use getProductDetailView, which returns the full consolidated pricing and availability view.
+
+        Preconditions: at least one ACTIVE or PENDING_APPROVAL override must exist for the pair; a product with no override history at the location has no answer here.
+
+        Required inputs: locationId and productId (UUIDs) as path parameters; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no ACTIVE or PENDING_APPROVAL override exists for the location and product pair, even if the product itself exists.
+
+        '
       operationId: getEffectiveLocationPrice
       parameters:
       - name: locationId
@@ -2175,8 +3162,20 @@ paths:
     get:
       tags:
       - Products API
-      summary: Get a non-inventory product by ID
-      description: Retrieves a specific non-inventory product by its unique ID.
+      summary: Get Non-Inventory Product by ID
+      description: 'Returns one non-inventory product — an item sold without stock tracking, such as a fee or shop supply — with its name and descriptions.
+
+        Use this tool when the id is already known; use listNonInventoryProductsByName instead to find non-inventory products by exact name.
+
+        Preconditions: the non-inventory product must exist.
+
+        Required inputs: productId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no non-inventory product exists for the supplied id.
+
+        '
       operationId: getNonInventoryProductById
       parameters:
       - name: productId
@@ -2207,9 +3206,21 @@ paths:
     get:
       tags:
       - Products API
-      summary: Get non-inventory products by name
-      description: Retrieves a list of non-inventory products matching the given name.
-      operationId: getNonInventoryProductByName
+      summary: List Non-Inventory Products by Name
+      description: 'Returns every non-inventory product whose name equals the supplied value exactly; this is a whole-name match, not a substring search.
+
+        Use this tool only when the exact name is known; use getNonInventoryProductById instead when the id is available, since there is no substring search for non-inventory products.
+
+        Preconditions: none; an empty result simply means no non-inventory product carries that exact name.
+
+        Required inputs: name as a path parameter; there is no paging and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty array when nothing matches, so an empty result is not an error condition.
+
+        '
+      operationId: listNonInventoryProductsByName
       parameters:
       - name: name
         in: path
@@ -2232,9 +3243,21 @@ paths:
     get:
       tags:
       - Products API
-      summary: Get products by name
-      description: Retrieves a list of products matching the given name.
-      operationId: getProductByName
+      summary: List Products by Exact Name
+      description: 'Returns every product whose name equals the supplied value exactly; this is a whole-name match, not a substring search.
+
+        Use this tool only when the exact product name is known; use searchCatalogProducts instead for partial text, brand, category or SKU matching.
+
+        Preconditions: none; an empty result simply means no product carries that exact name.
+
+        Required inputs: name as a path parameter; there is no paging and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty array when nothing matches, so an empty result is not an error condition.
+
+        '
+      operationId: listProductsByName
       parameters:
       - name: name
         in: path
@@ -2257,8 +3280,20 @@ paths:
     get:
       tags:
       - Item Cost API
-      summary: Get current item costs
-      description: Returns the current standard, average, and last known cost values for the specified item.
+      summary: Get Current Item Costs
+      description: 'Returns the item''s current standard, average and last known costs in one record.
+
+        Use this tool to read cost values; do not use updateStandardItemCost, which changes the standard cost, and use getItemCostAuditHistory for who changed what and when.
+
+        Preconditions: none; an item with no cost record yet returns the itemId with all three cost fields null rather than an error.
+
+        Required inputs: itemId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 in all cases, so callers must treat null cost fields as absence of cost data rather than relying on a 404.
+
+        '
       operationId: getItemCosts
       parameters:
       - name: itemId
@@ -2283,9 +3318,21 @@ paths:
     get:
       tags:
       - Item Cost API
-      summary: Get item cost audit history
-      description: Returns the recorded audit history entries for item cost changes on the specified item.
-      operationId: getAuditHistory
+      summary: Get Item Cost Audit History
+      description: 'Returns every recorded cost change for an item, newest first, each entry naming the cost type changed, old and new value, the actor, the change source and any reason code.
+
+        Use this tool to trace how a cost reached its current value; use getItemCosts instead for just the current numbers.
+
+        Preconditions: none; entries exist only after manual standard-cost updates or purchase-order receipt events have touched the item.
+
+        Required inputs: itemId (UUID) as a path parameter; there is no request body and no paging.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty array when the item has no cost history, so an empty result is not an error condition.
+
+        '
+      operationId: getItemCostAuditHistory
       parameters:
       - name: itemId
         in: path
@@ -2309,9 +3356,21 @@ paths:
     get:
       tags:
       - Catalog API
-      summary: Get catalogs by name
-      description: Retrieves a list of catalogs matching the given name.
-      operationId: getCatalogByName
+      summary: List Catalogs by Name
+      description: 'Returns every catalog whose name contains the supplied fragment, matched case-insensitively.
+
+        Use this tool to discover a catalogId by name; use getCatalogById instead when the id is already known.
+
+        Preconditions: none; an empty result simply means no catalog name contains the fragment.
+
+        Required inputs: name (path parameter) as a case-insensitive substring; there is no paging and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty array when nothing matches, so an empty result is not an error condition.
+
+        '
+      operationId: listCatalogsByName
       parameters:
       - name: name
         in: path
@@ -2334,9 +3393,21 @@ paths:
     get:
       tags:
       - Supplier Item Cost List API
-      summary: List supplier cost structures
-      description: Returns a paginated list of supplier cost structures. At least one of itemId or supplierId must be provided.
-      operationId: listCostStructures
+      summary: List Supplier Cost Structures
+      description: 'Returns a page of supplier item cost structures filtered by item, by supplier, or by both combined with AND semantics.
+
+        Use this tool to find which suppliers price an item or which items a supplier prices; use getSupplierItemCost instead when the structure id is already known.
+
+        Preconditions: at least one of itemId or supplierId must be supplied; an unfiltered listing is deliberately not offered.
+
+        Required inputs: itemId or supplierId (UUIDs) as query parameters, plus standard Spring page, size and sort parameters.
+
+        Emits a CATALOG_SUPPLIER_COST_LIST audit event; no cost data changes.
+
+        Returns 400 when neither itemId nor supplierId is provided, and 200 with an empty page when the filters match nothing.
+
+        '
+      operationId: listSupplierItemCosts
       parameters:
       - name: itemId
         in: query
@@ -2397,8 +3468,20 @@ paths:
     delete:
       tags:
       - Substitution Group API
-      summary: Remove product from substitution group
-      description: Removes a product from the group and re-emits the product contract event for the removed product and every remaining member.
+      summary: Remove Substitution Group Member
+      description: 'Removes a product from a substitution group, ending its interchangeability with the remaining members and freeing it to join another group.
+
+        Use this tool to take one product out; use deleteSubstitutionGroup instead to dissolve the entire group at once.
+
+        Preconditions: the group must exist and the product must currently be a member of that specific group.
+
+        Required inputs: groupId and productId (UUIDs) as path parameters; there is no request body.
+
+        Emits a CATALOG_SUBSTITUTION_GROUP_MEMBER_REMOVE event and re-publishes the product fact for the removed product and every remaining member.
+
+        Returns 200 with the group''s remaining membership, and 404 when the group does not exist or the product is not a member of it.
+
+        '
       operationId: removeSubstitutionGroupMember
       parameters:
       - name: groupId
@@ -4780,14 +5863,14 @@ components:
         offset:
           type: integer
           format: int64
-        paged:
-          type: boolean
         pageNumber:
           type: integer
           format: int32
         pageSize:
           type: integer
           format: int32
+        paged:
+          type: boolean
         sort:
           $ref: '#/components/schemas/SortObject'
         unpaged:

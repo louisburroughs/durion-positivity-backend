@@ -28,9 +28,19 @@ public class PersonLinkReconciliationController {
         this.reconciliationService = reconciliationService;
     }
 
-    @Operation(
-            summary = "Reconcile person links",
-            description = "Verify every person_party.person_id resolves to a pos-people person (ADR-0015 I1).")
+    @Operation(operationId = "reconcilePersonLinks", summary = "Reconcile Person Links", description = """
+                    Produces an integrity report verifying that every person_party.person_id in this module \
+                    resolves to a canonical person in pos-people, the precondition for keeping person_party \
+                    as a thin link under ADR-0015.
+                    Use this tool for admin integrity checks after imports or migrations; do not use \
+                    searchPersons, which looks up individual customers rather than auditing link health.
+                    Preconditions: pos-people must be reachable to resolve the links being verified.
+                    Required inputs: none; there are no parameters and no request body.
+                    No events are emitted and no state changes; the report is computed on demand and \
+                    nothing is repaired automatically.
+                    Returns 200 with the reconciliation report, including any person ids that failed to \
+                    resolve.
+                    """)
     @ApiResponse(responseCode = "200", description = "Reconciliation report returned")
     @GetMapping("/reconcile")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")

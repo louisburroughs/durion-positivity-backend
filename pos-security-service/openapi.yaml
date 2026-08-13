@@ -39,9 +39,21 @@ paths:
     put:
       tags:
       - User API
-      summary: Assign roles to a user
-      description: Replaces or applies the requested role set for the specified user by username.
-      operationId: assignRoles
+      summary: Replace a User's Direct Role Set
+      description: 'Replaces a user''s directly attached role set with the supplied role names, looking the user up by username.
+
+        Use this tool for wholesale role replacement by username; do not use assignUserRole, which adds a single scoped role assignment by UUID without touching the direct set.
+
+        Preconditions: the caller must hold security:role:assign, the username must resolve to a user, and every named role must exist.
+
+        Required inputs: username as a path parameter and roles, an array of existing role names, in the body; the set replaces all current direct roles.
+
+        Emits a SECURITY_USER_ASSIGN_ROLES event.
+
+        Returns 400 with INVALID_REQUEST when the user or a named role cannot be found; the miss surfaces as 400 rather than 404.
+
+        '
+      operationId: assignUserRolesByUsername
       parameters:
       - name: username
         in: path
@@ -50,11 +62,18 @@ paths:
         schema:
           type: string
       requestBody:
+        description: The replacement set of role names for the user.
         content:
           application/json:
             schema:
               type: object
-              description: Payload containing the roles to assign
+            examples:
+              Replace roles:
+                description: Replace roles
+                value:
+                  roles:
+                  - SHOP_MGR
+                  - ACCOUNTING_CLERK
         required: true
       responses:
         '400':
@@ -106,9 +125,21 @@ paths:
     put:
       tags:
       - User Role Management
-      summary: Assign a role to a user
-      description: Creates an effective role assignment linking the specified user to the specified role.
-      operationId: assignRoleToUser
+      summary: Assign a Role to a User
+      description: 'Creates a GLOBAL-scoped role assignment linking a user to a role, effective immediately with no end date.
+
+        Use this tool for the common unscoped grant; do not use createRoleAssignment, which supports LOCATION scope and effective date windows, and do not use assignPrincipalRole, which targets the string-keyed RBAC principal matrix.
+
+        Preconditions: the caller must hold security:role:assign and both the user and role must exist; no overlap check is performed here, so repeated calls create duplicate assignments.
+
+        Required inputs: userId and roleId (UUIDs) as path parameters; there is no request body.
+
+        Emits a SECURITY_USER_ROLE_ASSIGN event and writes a RoleAssignedToUser audit record.
+
+        Returns 404 when the user or role does not exist.
+
+        '
+      operationId: assignUserRole
       parameters:
       - name: userId
         in: path
@@ -167,9 +198,21 @@ paths:
     delete:
       tags:
       - User Role Management
-      summary: Revoke a role from a user
-      description: Removes the effective assignment of the specified role from the specified user.
-      operationId: revokeRoleFromUser
+      summary: Revoke a Role From a User
+      description: 'Ends the first currently effective assignment of a role for a user by setting its end date to now, preserving the row for history.
+
+        Use this tool for the common immediate revocation; do not use revokeRoleAssignment, which targets a specific assignment id and supports past or future end dates.
+
+        Preconditions: the caller must hold security:role:assign, the user and role must exist, and at least one effective assignment must link them.
+
+        Required inputs: userId and roleId (UUIDs) as path parameters; there is no request body.
+
+        Emits a SECURITY_USER_ROLE_REVOKE event and writes a RoleRevokedFromUser audit record.
+
+        Returns 404 when the user or role does not exist, or when no active assignment links them.
+
+        '
+      operationId: revokeUserRole
       parameters:
       - name: userId
         in: path
@@ -229,8 +272,20 @@ paths:
     get:
       tags:
       - User API
-      summary: Get user by ID
-      description: Retrieve a user by their unique ID.
+      summary: Get a User Account by Id
+      description: 'Returns a single user account by UUID, including effective role names merged from direct roles and currently active role assignments.
+
+        Use this tool when the user id is known; use listUsers instead to browse accounts, and getUserAccountState for administrative lock and expiry flags.
+
+        Preconditions: the caller must hold security:user:view and the user must exist.
+
+        Required inputs: id (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no user exists for the supplied id.
+
+        '
       operationId: getUserById
       parameters:
       - name: id
@@ -290,8 +345,20 @@ paths:
     put:
       tags:
       - User API
-      summary: Update an existing user
-      description: Update the details of an existing user.
+      summary: Partially Update a User Account
+      description: 'Applies a partial update to a user account: username, password, and the direct role set are each replaced only when supplied.
+
+        Use this tool to change account fields; do not use assignUserRolesByUsername, which only replaces roles, and do not use the account-state endpoints such as disableUserAccount, which flip administrative flags.
+
+        Preconditions: the caller must hold security:user:edit, the user must exist, and any named role must already exist.
+
+        Required inputs: id (UUID) as a path parameter; username, password, and roles are all optional, and omitted or blank fields are left unchanged.
+
+        Emits a SECURITY_USER_UPDATE event; a supplied password is re-hashed before storage.
+
+        Returns 400 with INVALID_REQUEST when the user or a named role cannot be found; the miss surfaces as 400 rather than 404.
+
+        '
       operationId: updateUser
       parameters:
       - name: id
@@ -303,10 +370,18 @@ paths:
           format: uuid
         example: 123e4567-e89b-12d3-a456-426614174000
       requestBody:
+        description: The account fields to change; omitted fields are left untouched.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UserUpdateRequest'
+            examples:
+              Rename and reset roles:
+                description: Rename and reset roles
+                value:
+                  username: jane.doe
+                  roles:
+                  - SHOP_MGR
         required: true
       responses:
         '400':
@@ -357,8 +432,20 @@ paths:
     delete:
       tags:
       - User API
-      summary: Delete a user
-      description: Delete a user by their unique ID.
+      summary: Delete a User Account
+      description: 'Deletes a user account and queues removal of its user-person link so downstream projections follow the account out.
+
+        Use this tool to remove an account permanently; do not use disableUserAccount, which blocks sign-in reversibly and keeps the record.
+
+        Preconditions: the caller must hold security:user:delete; deleting an id that does not exist is a silent no-op.
+
+        Required inputs: id (UUID) as a path parameter.
+
+        Emits a SECURITY_USER_DELETE event and sends a UserPersonLinkRemoveRequested command to the people-contact domain in the same transaction.
+
+        Returns 204 in all cases, including when the user was already absent.
+
+        '
       operationId: deleteUser
       parameters:
       - name: id
@@ -415,9 +502,21 @@ paths:
     put:
       tags:
       - Role Management
-      summary: Assign permission to a role by key
-      description: Assigns the permission identified by path key to the specified role
-      operationId: assignPermissionToRole
+      summary: Assign a Registered Permission to a Role
+      description: 'Adds an already-registered permission, identified by its key in the path, to a role''s grant set.
+
+        Use this tool when the permission is known to be registered; do not use grantRolePermission, which auto-registers unknown keys, and do not use updateRolePermissions, which replaces the whole set.
+
+        Preconditions: the caller must hold security:role:edit, the role must exist, and the permission key must already be registered (modules register at startup via registerModulePermissions).
+
+        Required inputs: roleId (UUID) and permissionKey (domain:resource:action) as path parameters; there is no request body.
+
+        Emits a SECURITY_ROLE_PERMISSION_ASSIGN event.
+
+        Returns 404 when the role does not exist or the permission key has not been registered.
+
+        '
+      operationId: assignRolePermissionByKey
       parameters:
       - name: roleId
         in: path
@@ -475,9 +574,21 @@ paths:
     delete:
       tags:
       - Role Management
-      summary: Revoke permission from a role
-      description: Removes the specified permission from the role
-      operationId: revokePermissionFromRole
+      summary: Revoke a Permission From a Role
+      description: 'Removes a permission key from a role''s grant set.
+
+        Use this tool to take one permission away from a role; do not use deleteRole, which removes the role entirely, and do not use revokeRoleAssignment, which ends a user''s assignment instead.
+
+        Preconditions: the caller must hold security:role:edit and the role must exist; revoking a key the role does not hold is a silent no-op.
+
+        Required inputs: roleId (UUID) and permissionKey (domain:resource:action) as path parameters; there is no request body.
+
+        Emits a SECURITY_ROLE_PERMISSION_REVOKE event.
+
+        Returns 404 when the role does not exist; an unknown permission key still yields 204.
+
+        '
+      operationId: revokeRolePermission
       parameters:
       - name: roleId
         in: path
@@ -536,9 +647,21 @@ paths:
     put:
       tags:
       - Role Management
-      summary: Assign permission to a role by key
-      description: Assigns the permission identified by path key to the specified role
-      operationId: assignPermissionToRole_1
+      summary: Assign a Registered Permission to a Role
+      description: 'Adds an already-registered permission, identified by its key in the path, to a role''s grant set.
+
+        Use this tool when the permission is known to be registered; do not use grantRolePermission, which auto-registers unknown keys, and do not use updateRolePermissions, which replaces the whole set.
+
+        Preconditions: the caller must hold security:role:edit, the role must exist, and the permission key must already be registered (modules register at startup via registerModulePermissions).
+
+        Required inputs: roleId (UUID) and permissionKey (domain:resource:action) as path parameters; there is no request body.
+
+        Emits a SECURITY_ROLE_PERMISSION_ASSIGN event.
+
+        Returns 404 when the role does not exist or the permission key has not been registered.
+
+        '
+      operationId: assignRolePermissionByKey_1
       parameters:
       - name: roleId
         in: path
@@ -596,9 +719,21 @@ paths:
     delete:
       tags:
       - Role Management
-      summary: Revoke permission from a role
-      description: Removes the specified permission from the role
-      operationId: revokePermissionFromRole_1
+      summary: Revoke a Permission From a Role
+      description: 'Removes a permission key from a role''s grant set.
+
+        Use this tool to take one permission away from a role; do not use deleteRole, which removes the role entirely, and do not use revokeRoleAssignment, which ends a user''s assignment instead.
+
+        Preconditions: the caller must hold security:role:edit and the role must exist; revoking a key the role does not hold is a silent no-op.
+
+        Required inputs: roleId (UUID) and permissionKey (domain:resource:action) as path parameters; there is no request body.
+
+        Emits a SECURITY_ROLE_PERMISSION_REVOKE event.
+
+        Returns 404 when the role does not exist; an unknown permission key still yields 204.
+
+        '
+      operationId: revokeRolePermission_1
       parameters:
       - name: roleId
         in: path
@@ -657,9 +792,21 @@ paths:
     put:
       tags:
       - Role Management
-      summary: Grant permission to a role
-      description: Grants a single permission to the specified role and returns the updated role
-      operationId: grantPermissionToRole
+      summary: Grant a Permission to a Role
+      description: 'Grants a single permission key to a role, auto-registering the key in the permission registry when it is not yet known.
+
+        Use this tool for additive one-off grants; do not use updateRolePermissions, which replaces the role''s entire permission set, and do not use assignRolePermissionByKey, which requires the permission to be registered already.
+
+        Preconditions: the caller must hold security:role:edit and the role must exist; the permission key does not need to exist beforehand.
+
+        Required inputs: roleId (UUID) as a path parameter and permission (domain:resource:action) in the body; permissionKey is accepted as a field alias.
+
+        Emits a SECURITY_ROLE_PERMISSION_GRANT event and publishes an internal grant audit record, then returns the updated role.
+
+        Returns 400 when permission is missing or blank, and 404 when the role does not exist.
+
+        '
+      operationId: grantRolePermission
       parameters:
       - name: roleId
         in: path
@@ -668,10 +815,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The single permission key to grant to the role.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RolePermissionGrantRequest'
+            examples:
+              Grant one permission:
+                description: Grant one permission
+                value:
+                  permission: people:timekeeping:view
         required: true
       responses:
         '400':
@@ -723,9 +876,21 @@ paths:
     put:
       tags:
       - Role Management
-      summary: Grant permission to a role
-      description: Grants a single permission to the specified role and returns the updated role
-      operationId: grantPermissionToRole_1
+      summary: Grant a Permission to a Role
+      description: 'Grants a single permission key to a role, auto-registering the key in the permission registry when it is not yet known.
+
+        Use this tool for additive one-off grants; do not use updateRolePermissions, which replaces the role''s entire permission set, and do not use assignRolePermissionByKey, which requires the permission to be registered already.
+
+        Preconditions: the caller must hold security:role:edit and the role must exist; the permission key does not need to exist beforehand.
+
+        Required inputs: roleId (UUID) as a path parameter and permission (domain:resource:action) in the body; permissionKey is accepted as a field alias.
+
+        Emits a SECURITY_ROLE_PERMISSION_GRANT event and publishes an internal grant audit record, then returns the updated role.
+
+        Returns 400 when permission is missing or blank, and 404 when the role does not exist.
+
+        '
+      operationId: grantRolePermission_1
       parameters:
       - name: roleId
         in: path
@@ -734,10 +899,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The single permission key to grant to the role.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RolePermissionGrantRequest'
+            examples:
+              Grant one permission:
+                description: Grant one permission
+                value:
+                  permission: people:timekeeping:view
         required: true
       responses:
         '400':
@@ -789,14 +960,35 @@ paths:
     put:
       tags:
       - Role Management
-      summary: Update role permissions
-      description: Assigns a set of permissions to a role
+      summary: Replace a Role's Permission Set
+      description: 'Replaces a role''s entire permission set with the supplied list of permission names.
+
+        Use this tool for wholesale permission resets; do not use grantRolePermission or revokeRolePermission, which change one key at a time and preserve the rest.
+
+        Preconditions: the caller must hold security:role:edit, the role must exist, and every named permission must already be registered.
+
+        Required inputs: roleId (UUID) and permissionNames, a set of domain:resource:action strings; an empty set clears all grants.
+
+        Emits a SECURITY_ROLE_PERMISSIONS_UPDATE event and returns the updated role with its new permission set.
+
+        Returns 404 when the role or any named permission does not exist; nothing is applied on failure.
+
+        '
       operationId: updateRolePermissions
       requestBody:
+        description: The role and the replacement set of permission names it should hold.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RolePermissionsRequest'
+            examples:
+              Replace permission set:
+                description: Replace permission set
+                value:
+                  roleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  permissionNames:
+                  - people:timekeeping:view
+                  - people:timekeeping:edit
         required: true
       responses:
         '400':
@@ -848,14 +1040,35 @@ paths:
     put:
       tags:
       - Role Management
-      summary: Update role permissions
-      description: Assigns a set of permissions to a role
+      summary: Replace a Role's Permission Set
+      description: 'Replaces a role''s entire permission set with the supplied list of permission names.
+
+        Use this tool for wholesale permission resets; do not use grantRolePermission or revokeRolePermission, which change one key at a time and preserve the rest.
+
+        Preconditions: the caller must hold security:role:edit, the role must exist, and every named permission must already be registered.
+
+        Required inputs: roleId (UUID) and permissionNames, a set of domain:resource:action strings; an empty set clears all grants.
+
+        Emits a SECURITY_ROLE_PERMISSIONS_UPDATE event and returns the updated role with its new permission set.
+
+        Returns 404 when the role or any named permission does not exist; nothing is applied on failure.
+
+        '
       operationId: updateRolePermissions_1
       requestBody:
+        description: The role and the replacement set of permission names it should hold.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RolePermissionsRequest'
+            examples:
+              Replace permission set:
+                description: Replace permission set
+                value:
+                  roleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  permissionNames:
+                  - people:timekeeping:view
+                  - people:timekeeping:edit
         required: true
       responses:
         '400':
@@ -907,9 +1120,21 @@ paths:
     put:
       tags:
       - Audit
-      summary: Update audit events not allowed
-      description: Audit events are immutable and cannot be modified after creation.
-      operationId: updateNotAllowed
+      summary: Reject Audit Event Modification
+      description: 'Rejects every attempt to modify audit events, unconditionally answering 405 Method Not Allowed.
+
+        Use this tool never; audit events are write-once, so record a new fact with createAuditEvent instead of editing an existing one.
+
+        Preconditions: none that permit success; the operation fails by design for any path under the audit events resource.
+
+        Required inputs: none are honored; the request is rejected regardless of path or payload.
+
+        No events are emitted and no state changes; the endpoint exists only to make immutability explicit.
+
+        Returns 405 in all cases.
+
+        '
+      operationId: rejectAuditEventUpdate
       responses:
         '400':
           description: Bad Request
@@ -954,9 +1179,21 @@ paths:
     delete:
       tags:
       - Audit
-      summary: Delete audit events not allowed
-      description: Audit events are immutable and cannot be deleted once recorded.
-      operationId: deleteNotAllowed
+      summary: Reject Audit Event Deletion
+      description: 'Rejects every attempt to delete audit events, unconditionally answering 405 Method Not Allowed.
+
+        Use this tool never; audit events are write-once, so use createAuditEvent to record facts and searchAuditEvents to read them instead.
+
+        Preconditions: none that permit success; the operation fails by design for any path under the audit events resource.
+
+        Required inputs: none are honored; the request is rejected regardless of path or payload.
+
+        No events are emitted and no state changes; the endpoint exists only to make immutability explicit.
+
+        Returns 405 in all cases.
+
+        '
+      operationId: rejectAuditEventDelete
       responses:
         '400':
           description: Bad Request
@@ -1002,9 +1239,21 @@ paths:
     get:
       tags:
       - User API
-      summary: Get all users
-      description: Retrieve a list of all users.
-      operationId: getAllUsers
+      summary: List All User Accounts
+      description: 'Returns every user account with its id, username, effective role names, and linked personId.
+
+        Use this tool to enumerate accounts; use getUserById instead for one known user.
+
+        Preconditions: the caller must hold security:user:view.
+
+        Required inputs: none; there are no filters or paging parameters, so the full user table is returned.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when no users exist; there are no business error conditions.
+
+        '
+      operationId: listUsers
       responses:
         '400':
           description: Bad Request
@@ -1056,14 +1305,35 @@ paths:
     post:
       tags:
       - User API
-      summary: Create a new user
-      description: Creates a new user with username, password, and roles.
+      summary: Create a User With Roles
+      description: 'Creates a user account with a username, a hashed password, and a set of directly attached roles.
+
+        Use this tool for operator provisioning of accounts; do not use selfRegisterUser, the anonymous customer flow that fixes the role to SELF_SERVICE_CUSTOMER and runs identity resolution first.
+
+        Preconditions: the caller must hold security:user:create, the username must be unused, and every named role must already exist.
+
+        Required inputs: username, password, and roles, a non-empty array of existing role names.
+
+        Emits a SECURITY_USER_CREATE event; the password is hashed before storage.
+
+        Returns 400 when the username already exists or a named role is not found.
+
+        '
       operationId: createUser
       requestBody:
+        description: Username, password, and role names of the account to create.
         content:
           application/json:
             schema:
               type: object
+            examples:
+              New user:
+                description: New user
+                value:
+                  username: jane.doe
+                  password: Sup3rS3cret!
+                  roles:
+                  - SHOP_MGR
         required: true
       responses:
         '400':
@@ -1115,9 +1385,21 @@ paths:
     post:
       tags:
       - Admin Account-State API
-      summary: Unlock a user account
-      description: Removes the locked state from the specified user account so the user can authenticate again.
-      operationId: unlock
+      summary: Unlock a Locked User Account
+      description: 'Clears the lockout state on a user account, resetting the failed-attempt counter and lock timestamps so the user can authenticate again.
+
+        Use this tool after a lockout caused by repeated failed logins; do not use enableUserAccount, which reverses an administrative disable rather than a lockout.
+
+        Preconditions: the caller must hold security:user_account_state:manage and the user must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits a SECURITY_USER_UNLOCK event; existing tokens are not revoked.
+
+        Returns 404 with USER_NOT_FOUND when the user does not exist.
+
+        '
+      operationId: unlockUserAccount
       parameters:
       - name: id
         in: path
@@ -1171,9 +1453,21 @@ paths:
     post:
       tags:
       - Admin Account-State API
-      summary: Expire user credentials
-      description: Expires the specified user's credentials so a credential reset or update is required before reuse.
-      operationId: expireCredentials
+      summary: Expire a User's Credentials
+      description: 'Marks a user''s credentials as expired, stamping the expiry time and immediately revoking every token so a credential reset is required before further use.
+
+        Use this tool to force a password rotation; do not use expireUserAccount, which expires the whole account rather than just its credentials.
+
+        Preconditions: the caller must hold security:user_account_state:manage and the user must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits a SECURITY_USER_EXPIRE_CREDENTIALS event and revokes all of the user''s access and refresh tokens.
+
+        Returns 404 with USER_NOT_FOUND when the user does not exist.
+
+        '
+      operationId: expireUserCredentials
       parameters:
       - name: id
         in: path
@@ -1227,9 +1521,21 @@ paths:
     post:
       tags:
       - Admin Account-State API
-      summary: Expire a user account
-      description: Expires the specified user account so it is no longer considered valid for authentication.
-      operationId: expireAccount
+      summary: Expire a User Account
+      description: 'Marks a user account as expired, stamping the expiry time and immediately revoking every token issued to the user.
+
+        Use this tool to end an account''s validity, for example at offboarding; do not use disableUserAccount, which signals a reversible administrative block, or expireUserCredentials, which only forces a credential reset.
+
+        Preconditions: the caller must hold security:user_account_state:manage and the user must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits a SECURITY_USER_EXPIRE_ACCOUNT event and revokes all of the user''s access and refresh tokens.
+
+        Returns 404 with USER_NOT_FOUND when the user does not exist.
+
+        '
+      operationId: expireUserAccount
       parameters:
       - name: id
         in: path
@@ -1283,9 +1589,21 @@ paths:
     post:
       tags:
       - Admin Account-State API
-      summary: Enable a user account
-      description: Marks the specified user account as enabled so it can be used for sign-in and access checks.
-      operationId: enable
+      summary: Enable a Disabled User Account
+      description: 'Marks a user account as enabled so it is again accepted for sign-in and access checks.
+
+        Use this tool to reverse disableUserAccount; do not use unlockUserAccount, which clears a failed-login lockout instead.
+
+        Preconditions: the caller must hold security:user_account_state:manage and the user must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits a SECURITY_USER_ENABLE event; no tokens are issued or restored, so the user must sign in again.
+
+        Returns 404 with USER_NOT_FOUND when the user does not exist.
+
+        '
+      operationId: enableUserAccount
       parameters:
       - name: id
         in: path
@@ -1339,9 +1657,21 @@ paths:
     post:
       tags:
       - Admin Account-State API
-      summary: Disable a user account
-      description: Marks the specified user account as disabled to prevent further use until it is re-enabled.
-      operationId: disable
+      summary: Disable a User Account
+      description: 'Marks a user account as disabled, records the disabling actor and time, and immediately revokes every token issued to the user.
+
+        Use this tool for a reversible administrative block; do not use deleteUser, which removes the account, and do not use expireUserAccount, which marks the account expired instead.
+
+        Preconditions: the caller must hold security:user_account_state:manage and the user must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits a SECURITY_USER_DISABLE event and revokes all of the user''s access and refresh tokens.
+
+        Returns 404 with USER_NOT_FOUND when the user does not exist.
+
+        '
+      operationId: disableUserAccount
       parameters:
       - name: id
         in: path
@@ -1395,14 +1725,38 @@ paths:
     post:
       tags:
       - Role Management
-      summary: Create role assignment
-      description: Assigns a role to a user with optional scope and effective dates
+      summary: Create a Scoped Role Assignment
+      description: 'Assigns a role to a user with a scope (GLOBAL or LOCATION) and an optional effective date window.
+
+        Use this tool when the assignment needs scope or dates; do not use assignUserRole, the simple path-parameter variant that always creates a GLOBAL assignment starting now.
+
+        Preconditions: the caller must hold security:role:assign, the user and role must exist, and no overlapping assignment may exist for the same role, scope, and (for LOCATION scope) location.
+
+        Required inputs: userId and roleId (UUIDs); scopeType defaults to GLOBAL, scopeLocationIds is required for LOCATION scope and forbidden for GLOBAL, and effectiveStartDate defaults to now with an open-ended effectiveEndDate.
+
+        Emits a SECURITY_ROLE_ASSIGNMENT_CREATE event.
+
+        Returns 400 when the scope and location combination is invalid, 404 when the user or role does not exist, and 409 with ROLE_ASSIGNMENT_CONFLICT when the date window overlaps an existing assignment.
+
+        '
       operationId: createRoleAssignment
       requestBody:
+        description: The user, role, scope, and effective window of the assignment to create.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RoleAssignmentRequest'
+            examples:
+              Location-scoped assignment:
+                description: Location-scoped assignment
+                value:
+                  userId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  roleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  scopeType: LOCATION
+                  scopeLocationIds:
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
+                  effectiveStartDate: 2026-01-15 00:00:00
+                  effectiveEndDate: 2026-12-31 00:00:00
         required: true
       responses:
         '400':
@@ -1454,14 +1808,38 @@ paths:
     post:
       tags:
       - Role Management
-      summary: Create role assignment
-      description: Assigns a role to a user with optional scope and effective dates
+      summary: Create a Scoped Role Assignment
+      description: 'Assigns a role to a user with a scope (GLOBAL or LOCATION) and an optional effective date window.
+
+        Use this tool when the assignment needs scope or dates; do not use assignUserRole, the simple path-parameter variant that always creates a GLOBAL assignment starting now.
+
+        Preconditions: the caller must hold security:role:assign, the user and role must exist, and no overlapping assignment may exist for the same role, scope, and (for LOCATION scope) location.
+
+        Required inputs: userId and roleId (UUIDs); scopeType defaults to GLOBAL, scopeLocationIds is required for LOCATION scope and forbidden for GLOBAL, and effectiveStartDate defaults to now with an open-ended effectiveEndDate.
+
+        Emits a SECURITY_ROLE_ASSIGNMENT_CREATE event.
+
+        Returns 400 when the scope and location combination is invalid, 404 when the user or role does not exist, and 409 with ROLE_ASSIGNMENT_CONFLICT when the date window overlaps an existing assignment.
+
+        '
       operationId: createRoleAssignment_1
       requestBody:
+        description: The user, role, scope, and effective window of the assignment to create.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RoleAssignmentRequest'
+            examples:
+              Location-scoped assignment:
+                description: Location-scoped assignment
+                value:
+                  userId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  roleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  scopeType: LOCATION
+                  scopeLocationIds:
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
+                  effectiveStartDate: 2026-01-15 00:00:00
+                  effectiveEndDate: 2026-12-31 00:00:00
         required: true
       responses:
         '400':
@@ -1513,9 +1891,21 @@ paths:
     get:
       tags:
       - Role Management
-      summary: Get all roles
-      description: Returns all roles in the system
-      operationId: getAllRoles
+      summary: List All Roles in the System
+      description: 'Returns every role in the system with its permission set and audit metadata.
+
+        Use this tool to enumerate roles; use getRoleById or getRoleByName instead for a single known role.
+
+        Preconditions: the caller must hold security:role:view.
+
+        Required inputs: none; there are no filters or paging parameters.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when no roles exist; there are no business error conditions.
+
+        '
+      operationId: listRoles
       responses:
         '400':
           description: Bad Request
@@ -1567,16 +1957,35 @@ paths:
     post:
       tags:
       - Role Management
-      summary: Create a new role
-      description: Creates a new role with the specified name and description
+      summary: Create a New Role
+      description: 'Creates a new role with the given name and optional description; the role starts with no permissions and no user assignments.
+
+        Use this tool to define a new role; do not use createRoleAssignment, which links an existing role to a user, and do not use updateRolePermissions, which changes an existing role''s grants.
+
+        Preconditions: the caller must hold security:role:create and no role with the same name (compared case-insensitively) may already exist.
+
+        Required inputs: name, non-blank; description is optional.
+
+        Emits a SECURITY_ROLE_CREATE event and records the creating actor and timestamp.
+
+        Returns 400 when name is missing or blank, and 409 with DUPLICATE_ROLE_NAME when the name is already taken regardless of case.
+
+        '
       operationId: createRole
       requestBody:
+        description: Name and optional description of the role to create.
         content:
           application/json:
             schema:
               type: object
               additionalProperties:
                 type: string
+            examples:
+              New role:
+                description: New role
+                value:
+                  name: SHOP_MGR
+                  description: Shop manager
         required: true
       responses:
         '400':
@@ -1628,9 +2037,21 @@ paths:
     get:
       tags:
       - Role Management
-      summary: Get all roles
-      description: Returns all roles in the system
-      operationId: getAllRoles_1
+      summary: List All Roles in the System
+      description: 'Returns every role in the system with its permission set and audit metadata.
+
+        Use this tool to enumerate roles; use getRoleById or getRoleByName instead for a single known role.
+
+        Preconditions: the caller must hold security:role:view.
+
+        Required inputs: none; there are no filters or paging parameters.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when no roles exist; there are no business error conditions.
+
+        '
+      operationId: listRoles_1
       responses:
         '400':
           description: Bad Request
@@ -1682,16 +2103,35 @@ paths:
     post:
       tags:
       - Role Management
-      summary: Create a new role
-      description: Creates a new role with the specified name and description
+      summary: Create a New Role
+      description: 'Creates a new role with the given name and optional description; the role starts with no permissions and no user assignments.
+
+        Use this tool to define a new role; do not use createRoleAssignment, which links an existing role to a user, and do not use updateRolePermissions, which changes an existing role''s grants.
+
+        Preconditions: the caller must hold security:role:create and no role with the same name (compared case-insensitively) may already exist.
+
+        Required inputs: name, non-blank; description is optional.
+
+        Emits a SECURITY_ROLE_CREATE event and records the creating actor and timestamp.
+
+        Returns 400 when name is missing or blank, and 409 with DUPLICATE_ROLE_NAME when the name is already taken regardless of case.
+
+        '
       operationId: createRole_1
       requestBody:
+        description: Name and optional description of the role to create.
         content:
           application/json:
             schema:
               type: object
               additionalProperties:
                 type: string
+            examples:
+              New role:
+                description: New role
+                value:
+                  name: SHOP_MGR
+                  description: Shop manager
         required: true
       responses:
         '400':
@@ -1743,9 +2183,21 @@ paths:
     post:
       tags:
       - Principal Role Management
-      summary: Assign a role to a principal
-      description: Assigns the specified role to the specified principal identifier for RBAC matrix authorization.
-      operationId: assignRoleToPrincipal
+      summary: Assign a Role to a Principal
+      description: 'Links a free-form principal identifier to a role in the RBAC principal matrix consulted by getAuthorizationDecision.
+
+        Use this tool for matrix principals that are not user UUIDs; do not use assignUserRole, which creates a role assignment for a real user account.
+
+        Preconditions: the caller must hold security:role:assign and the role must exist; the principal is not validated against any store, and an existing identical link makes the call a no-op.
+
+        Required inputs: principalId (arbitrary string) and roleId (UUID) as path parameters; there is no request body.
+
+        Emits a SECURITY_PRINCIPAL_ROLE_ASSIGN event.
+
+        Returns 404 when the role does not exist; repeat assignments still return 200.
+
+        '
+      operationId: assignPrincipalRole
       parameters:
       - name: principalId
         in: path
@@ -1806,14 +2258,39 @@ paths:
     post:
       tags:
       - Permission Registry
-      summary: Register permissions (RBAC contract endpoint)
-      description: Registers or updates permissions using the RBAC contract payload and returns the resulting permission set.
+      summary: Register Permissions via RBAC Contract
+      description: 'Registers or updates permissions from an RBAC contract payload, upserting each named permission and returning the resulting permission list.
+
+        Use this tool for strict all-or-nothing permission upserts; do not use registerModulePermissions, the lenient startup manifest endpoint that skips invalid entries and reports per-entry counters instead of failing the request.
+
+        Preconditions: the caller must hold security:permission:register, and every permission name must match domain:resource:action (or the legacy domain:action form).
+
+        Required inputs: permissions, a list of name and description definitions; serviceName is optional here and defaults to pos-security-service as the registering service.
+
+        Emits a SECURITY_PERMISSION_REGISTER event; existing permissions with the same name are overwritten in place, including description and registering service.
+
+        Returns 400 when any permission key fails the format check, rejecting the entire request.
+
+        '
       operationId: registerPermissionsContract
       requestBody:
+        description: RBAC contract payload of permission definitions to upsert.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PermissionRegistrationRequest'
+            examples:
+              Contract registration:
+                description: Contract registration
+                value:
+                  domain: people
+                  serviceName: pos-people-service
+                  version: '1.0'
+                  permissions:
+                  - name: people:timekeeping:view
+                    description: View timekeeping records
+                  - name: people:timekeeping:edit
+                    description: Edit timekeeping records
         required: true
       responses:
         '400':
@@ -1867,14 +2344,39 @@ paths:
     post:
       tags:
       - Permission Registry
-      summary: Register permissions (RBAC contract endpoint)
-      description: Registers or updates permissions using the RBAC contract payload and returns the resulting permission set.
+      summary: Register Permissions via RBAC Contract
+      description: 'Registers or updates permissions from an RBAC contract payload, upserting each named permission and returning the resulting permission list.
+
+        Use this tool for strict all-or-nothing permission upserts; do not use registerModulePermissions, the lenient startup manifest endpoint that skips invalid entries and reports per-entry counters instead of failing the request.
+
+        Preconditions: the caller must hold security:permission:register, and every permission name must match domain:resource:action (or the legacy domain:action form).
+
+        Required inputs: permissions, a list of name and description definitions; serviceName is optional here and defaults to pos-security-service as the registering service.
+
+        Emits a SECURITY_PERMISSION_REGISTER event; existing permissions with the same name are overwritten in place, including description and registering service.
+
+        Returns 400 when any permission key fails the format check, rejecting the entire request.
+
+        '
       operationId: registerPermissionsContract_1
       requestBody:
+        description: RBAC contract payload of permission definitions to upsert.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PermissionRegistrationRequest'
+            examples:
+              Contract registration:
+                description: Contract registration
+                value:
+                  domain: people
+                  serviceName: pos-people-service
+                  version: '1.0'
+                  permissions:
+                  - name: people:timekeeping:view
+                    description: View timekeeping records
+                  - name: people:timekeeping:edit
+                    description: Edit timekeeping records
         required: true
       responses:
         '400':
@@ -1928,14 +2430,39 @@ paths:
     post:
       tags:
       - Permission Registry
-      summary: Register permissions from a service
-      description: Services call this endpoint to register their available permissions
-      operationId: registerPermissions
+      summary: Register Module Permission Manifest
+      description: 'Registers or updates a module''s permission manifest in the central registry; this is the endpoint every pos module''s permission-registry initializer calls at startup.
+
+        Use this tool for idempotent bulk manifest registration that tolerates partial failure; do not use registerPermissionsContract, which rejects the entire payload on the first invalid key.
+
+        Preconditions: the caller must hold security:permission:register (module initializers authenticate with an internal service token).
+
+        Required inputs: serviceName and a non-empty permissions list of name and description entries; names must match domain:resource:action, while domain and version are informational.
+
+        Emits a SECURITY_PERMISSION_REGISTER event; new names are inserted (with a bit index when the compiled catalog defines one), changed descriptions are updated, and unchanged or invalid entries are counted as skipped.
+
+        Returns 400 when serviceName is blank or permissions is empty, and 400 with success=false and a per-entry errors list when every entry failed; partial failures still return 200 with the errors listed in the response.
+
+        '
+      operationId: registerModulePermissions
       requestBody:
+        description: Permission manifest published by one domain service at startup.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PermissionRegistrationRequest'
+            examples:
+              Startup manifest:
+                description: Startup manifest
+                value:
+                  domain: people
+                  serviceName: pos-people-service
+                  version: '1.0'
+                  permissions:
+                  - name: people:timekeeping:view
+                    description: View timekeeping records
+                  - name: people:timekeeping:edit
+                    description: Edit timekeeping records
         required: true
       responses:
         '400':
@@ -1987,14 +2514,39 @@ paths:
     post:
       tags:
       - Permission Registry
-      summary: Register permissions from a service
-      description: Services call this endpoint to register their available permissions
-      operationId: registerPermissions_1
+      summary: Register Module Permission Manifest
+      description: 'Registers or updates a module''s permission manifest in the central registry; this is the endpoint every pos module''s permission-registry initializer calls at startup.
+
+        Use this tool for idempotent bulk manifest registration that tolerates partial failure; do not use registerPermissionsContract, which rejects the entire payload on the first invalid key.
+
+        Preconditions: the caller must hold security:permission:register (module initializers authenticate with an internal service token).
+
+        Required inputs: serviceName and a non-empty permissions list of name and description entries; names must match domain:resource:action, while domain and version are informational.
+
+        Emits a SECURITY_PERMISSION_REGISTER event; new names are inserted (with a bit index when the compiled catalog defines one), changed descriptions are updated, and unchanged or invalid entries are counted as skipped.
+
+        Returns 400 when serviceName is blank or permissions is empty, and 400 with success=false and a per-entry errors list when every entry failed; partial failures still return 200 with the errors listed in the response.
+
+        '
+      operationId: registerModulePermissions_1
       requestBody:
+        description: Permission manifest published by one domain service at startup.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PermissionRegistrationRequest'
+            examples:
+              Startup manifest:
+                description: Startup manifest
+                value:
+                  domain: people
+                  serviceName: pos-people-service
+                  version: '1.0'
+                  permissions:
+                  - name: people:timekeeping:view
+                    description: View timekeeping records
+                  - name: people:timekeeping:edit
+                    description: Edit timekeeping records
         required: true
       responses:
         '400':
@@ -2046,14 +2598,33 @@ paths:
     post:
       tags:
       - Permission Registry
-      summary: Decode perm_bits for diagnostics
-      description: Decodes a perm_bits Base64URL BitSet back to permission code strings. For debugging only.
-      operationId: decodePermissions
+      summary: Decode Permission Bits for Diagnostics
+      description: 'Decodes a Base64URL perm_bits bitset taken from an access token back into sorted permission code strings for diagnostics.
+
+        Use this tool to inspect what a token''s perm_bits claim grants; do not use getUserPermissions, which reads a user''s effective permissions from role assignments instead of from a token.
+
+        Preconditions: the caller must hold security:permission:view, and perm_ver must equal the catalog version currently compiled into the service (see getPermissionCatalogVersion).
+
+        Required inputs: perm_bits, the Base64URL-encoded BitSet string, and perm_ver, a positive integer catalog version.
+
+        Emits a SECURITY_PERMISSION_DECODE_EXECUTE event; no records are changed.
+
+        Returns 400 when perm_bits is blank, perm_ver is not positive, or perm_ver does not match the current catalog version.
+
+        '
+      operationId: decodePermissionBits
       requestBody:
+        description: Encoded permission bitset and the catalog version it was encoded with.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PermissionDecodeRequest'
+            examples:
+              Decode request:
+                description: Decode request
+                value:
+                  perm_bits: AQID
+                  perm_ver: 7
         required: true
       responses:
         '400':
@@ -2105,14 +2676,33 @@ paths:
     post:
       tags:
       - Permission Registry
-      summary: Decode perm_bits for diagnostics
-      description: Decodes a perm_bits Base64URL BitSet back to permission code strings. For debugging only.
-      operationId: decodePermissions_1
+      summary: Decode Permission Bits for Diagnostics
+      description: 'Decodes a Base64URL perm_bits bitset taken from an access token back into sorted permission code strings for diagnostics.
+
+        Use this tool to inspect what a token''s perm_bits claim grants; do not use getUserPermissions, which reads a user''s effective permissions from role assignments instead of from a token.
+
+        Preconditions: the caller must hold security:permission:view, and perm_ver must equal the catalog version currently compiled into the service (see getPermissionCatalogVersion).
+
+        Required inputs: perm_bits, the Base64URL-encoded BitSet string, and perm_ver, a positive integer catalog version.
+
+        Emits a SECURITY_PERMISSION_DECODE_EXECUTE event; no records are changed.
+
+        Returns 400 when perm_bits is blank, perm_ver is not positive, or perm_ver does not match the current catalog version.
+
+        '
+      operationId: decodePermissionBits_1
       requestBody:
+        description: Encoded permission bitset and the catalog version it was encoded with.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PermissionDecodeRequest'
+            examples:
+              Decode request:
+                description: Decode request
+                value:
+                  perm_bits: AQID
+                  perm_ver: 7
         required: true
       responses:
         '400':
@@ -2164,9 +2754,21 @@ paths:
     post:
       tags:
       - Self-Registration Review API
-      summary: Resolve a self-registration review case
-      description: Marks a blocked self-registration case as resolved after recovery or manual review.
-      operationId: resolveCase
+      summary: Resolve a Self-Registration Review Case
+      description: 'Marks a blocked self-registration case RESOLVED, recording the resolving operator, timestamp, and resolution notes.
+
+        Use this tool after the underlying recovery or identity review is finished; do not use it to recover the account itself, which is done first with account-state endpoints such as enableUserAccount.
+
+        Preconditions: the caller must hold security:user_account_state:manage and be authenticated (the resolver is taken from the request principal); the case must exist, and re-resolving an already RESOLVED case overwrites the resolution fields.
+
+        Required inputs: caseId (UUID) as a path parameter and resolutionNotes, non-blank, in the body.
+
+        Emits a SECURITY_SELF_REGISTRATION_REVIEW_RESOLVE event.
+
+        Returns 404 when no review case exists for the supplied id.
+
+        '
+      operationId: resolveSelfRegistrationReviewCase
       parameters:
       - name: caseId
         in: path
@@ -2175,10 +2777,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The resolution note recorded against the case.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ResolveSelfRegistrationReviewCaseRequest'
+            examples:
+              Case resolution:
+                description: Case resolution
+                value:
+                  resolutionNotes: Recovered existing disabled account and asked user to sign in.
         required: true
       responses:
         '400':
@@ -2230,14 +2838,35 @@ paths:
     post:
       tags:
       - JWT API
-      summary: Issue privileged JWT token pair (access + refresh)
-      description: Privileged internal endpoint that issues both access token (1-hour) and refresh token (7-day). Requires authority security:token:issue_internal. See BACKEND_CONTRACT_GUIDE.md §Token Pair Endpoint for full specification.
-      operationId: generateTokenPair
+      summary: Issue Privileged JWT Token Pair
+      description: 'Issues a JWT access token (1-hour) and refresh token (7-day) for an existing user''s username on behalf of a trusted internal caller, embedding uid, roles, perm_bits, and perm_ver claims.
+
+        Use this tool when an internal caller needs a refreshable session for an existing user; do not use issueInternalToken, which returns only a single access token, and do not use loginUser, which requires the user''s password.
+
+        Preconditions: the caller must hold security:token:issue_internal, and a user must already exist for the subject username.
+
+        Required inputs: subject, an existing username, and at least one role name in roles; roles are expanded to authorities and encoded into the perm_bits bitset claim.
+
+        Emits a SECURITY_AUTH_TOKEN_PAIR event and persists the pair so validateToken and refreshTokenPair recognize it.
+
+        Returns 400 when the subject is blank, no user exists for the subject, or the role set is empty.
+
+        '
+      operationId: issueTokenPair
       requestBody:
+        description: Subject and role names to embed in the issued access and refresh tokens.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/TokenPairRequest'
+            examples:
+              Token pair request:
+                description: Token pair request
+                value:
+                  subject: jane.doe
+                  roles:
+                  - SHOP_MGR
+                  - ACCOUNTING_CLERK
         required: true
       responses:
         '400':
@@ -2289,14 +2918,37 @@ paths:
     post:
       tags:
       - Auth API
-      summary: Self-register a new user
-      description: Creates a low-privilege customer account after resolving or creating a linked person record. Successful registration requires a follow-up login and does not issue tokens immediately. Conflict responses include operator guidance for recovery, linked-account, and CRM identity-review cases.
-      operationId: selfRegister
+      summary: Self-Register a New Customer Account
+      description: 'Creates a low-privilege SELF_SERVICE_CUSTOMER account for an anonymous person, resolving or creating a linked person record before any account row is written.
+
+        Use this tool when a customer registers themselves; do not use createUser, the operator-facing endpoint that provisions accounts with arbitrary roles and no identity resolution.
+
+        Preconditions: no active user may exist for the requested or email-derived username, the resolved person must not already have an active linked user, and CRM identity signals must not require manual review.
+
+        Required inputs: email, password, firstName, and lastName; username is optional and defaults to the email local part, phone and idpSubject are optional, and idempotencyKey optionally replays a completed attempt instead of duplicating it.
+
+        Emits a SECURITY_AUTH_SELF_REGISTER event, creates the user, and queues an asynchronous user-person link command, so the response reports linkStatus PENDING and issuedTokens false; a follow-up loginUser call is required to obtain tokens.
+
+        Returns 409 with code USER_ALREADY_EXISTS, ACCOUNT_RECOVERY_REQUIRED, PERSON_ALREADY_HAS_ACTIVE_USER, CRM_PERSON_CONFLICT, or IDEMPOTENCY_KEY_REUSED; recovery and identity conflicts also open a review case and return its id as referenceId with nextAction and supportAction guidance.
+
+        '
+      operationId: selfRegisterUser
       requestBody:
+        description: Identity and credential details of the person registering themselves.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SelfRegistrationRequest'
+            examples:
+              Customer self-registration:
+                description: Customer self-registration
+                value:
+                  email: jane.smith@example.com
+                  password: Sup3rS3cret!
+                  firstName: Jane
+                  lastName: Smith
+                  phone: '+15551234567'
+                  idempotencyKey: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
         required: true
       responses:
         '400':
@@ -2345,14 +2997,32 @@ paths:
     post:
       tags:
       - JWT API
-      summary: Refresh access token using refresh token
-      description: Exchange a valid refresh token for a new access token and refresh token. Old tokens are immediately revoked. See BACKEND_CONTRACT_GUIDE.md §Refresh Endpoint for full specification.
-      operationId: refreshAccessToken
+      summary: Refresh Access Token With Rotation
+      description: 'Exchanges a valid refresh token for a new access and refresh token pair, revoking the old pair in the same call (token rotation).
+
+        Use this tool when an access token nears expiry and the client still holds a refresh token; do not use loginUser, which requires credentials, and do not use validateToken, which only checks a token without renewing it.
+
+        Preconditions: the refresh token must be unexpired, unrevoked, present in the token store, and its user must still exist with at least one role.
+
+        Required inputs: refreshToken, the exact refresh token string previously issued.
+
+        Emits a SECURITY_AUTH_REFRESH event, revokes the old access and refresh token JTIs in Redis, deletes the stored pair, and persists the replacement pair.
+
+        Returns 400 when the refresh token is invalid, expired, revoked, or unknown, or the user has no roles, 401 with INVALID_REFRESH_TOKEN when the referenced user no longer exists, and 409 when concurrent refreshes race on the same token.
+
+        '
+      operationId: refreshTokenPair
       requestBody:
+        description: The refresh token being exchanged for a new token pair.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RefreshTokenRequest'
+            examples:
+              Refresh request:
+                description: Refresh request
+                value:
+                  refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIwMThmMGExYi0yYzNkLTdlNGYtOGE5Yi0wYzFkMmUzZjRhNWIifQ.sig
         required: true
       responses:
         '400':
@@ -2401,14 +3071,33 @@ paths:
     post:
       tags:
       - Auth API
-      summary: User login
-      description: Authenticates a user with username and password and returns a JWT token pair.
-      operationId: login
+      summary: Authenticate User and Issue Tokens
+      description: 'Authenticates a user with username and password and returns a JWT access token (1-hour) and refresh token (7-day) carrying uid, roles, perm_bits, and perm_ver claims.
+
+        Use this tool when a person signs in with credentials; do not use refreshTokenPair, which exchanges an existing refresh token, and do not use issueInternalToken, which mints tokens for trusted internal callers without a password.
+
+        Preconditions: the user account must exist, be enabled, non-expired, hold unexpired credentials, and not be inside an active failed-login lockout window.
+
+        Required inputs: username and password, both non-blank.
+
+        Emits a SECURITY_AUTH_LOGIN event, resets the failed-attempt counter on success, and persists the issued token pair for later validation and revocation.
+
+        Returns 401 with code ACCOUNT_LOCKED while the lockout window is active, INVALID_CREDENTIALS on a bad password, and ACCOUNT_DISABLED, ACCOUNT_EXPIRED, or CREDENTIALS_EXPIRED for the matching account states.
+
+        '
+      operationId: loginUser
       requestBody:
+        description: Credentials of the user signing in.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LoginRequest'
+            examples:
+              Credential login:
+                description: Credential login
+                value:
+                  username: jane.doe
+                  password: Sup3rS3cret!
         required: true
       responses:
         '400':
@@ -2457,14 +3146,34 @@ paths:
     post:
       tags:
       - JWT API
-      summary: Issue internal JWT access token
-      description: Internal endpoint to issue a JWT access token (1-hour expiration). See BACKEND_CONTRACT_GUIDE.md §Login Endpoint for full specification.
+      summary: Issue Internal JWT Access Token
+      description: 'Issues a single JWT access token (1-hour expiry) for an existing user''s username on behalf of a trusted internal caller, without checking a password.
+
+        Use this tool for internal service-to-service token minting when only an access token is needed; do not use issueTokenPair, which also returns a 7-day refresh token, and do not use loginUser, which authenticates with credentials.
+
+        Preconditions: the caller must hold security:token:issue_internal, and a user must already exist for the subject username.
+
+        Required inputs: subject, an existing username; roles is nominally optional, but an empty effective role set is rejected, so supply at least one role name.
+
+        Emits a SECURITY_AUTH_INTERNAL_TOKEN_ISSUE event and persists the issued token so validateToken and revokeToken recognize it.
+
+        Returns 400 when the subject is blank, no user exists for the subject, or the role set is empty.
+
+        '
       operationId: issueInternalToken
       requestBody:
+        description: Subject and role names to embed in the internally issued access token.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/InternalTokenRequest'
+            examples:
+              Internal token request:
+                description: Internal token request
+                value:
+                  subject: svc.reporting
+                  roles:
+                  - SHOP_MGR
         required: true
       responses:
         '400':
@@ -2516,14 +3225,42 @@ paths:
     post:
       tags:
       - Audit
-      summary: Create pricing snapshot
-      description: Creates an immutable pricing snapshot record for later audit and traceability.
+      summary: Record an Immutable Pricing Snapshot
+      description: 'Records an immutable pricing snapshot with its ordered rule-evaluation trace and returns the generated snapshot id.
+
+        Use this tool to preserve how a price was computed for later audit; do not use createAuditEvent, which records generic entity-change events without a rule trace.
+
+        Preconditions: the caller must hold security:audit:create; the snapshot is write-once and cannot be modified afterwards.
+
+        Required inputs: quoteContext, finalPrice, and evaluationSteps, where every step needs ruleId, status, inputs, and outputs; evaluationSteps may be an empty list but not null.
+
+        Emits a SECURITY_AUDIT_PRICING_SNAPSHOT_CREATE event.
+
+        Returns 400 when quoteContext, finalPrice, evaluationSteps, or any per-step field is missing, or when a JSON field cannot be serialized.
+
+        '
       operationId: createPricingSnapshot
       requestBody:
+        description: The evaluated quote context, final price, and rule trace to preserve.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PricingSnapshotRequest'
+            examples:
+              Snapshot with one rule step:
+                description: Snapshot with one rule step
+                value:
+                  quoteContext:
+                    sku: BRAKE-PAD-001
+                    quantity: 2
+                  finalPrice: 129.99
+                  evaluationSteps:
+                  - ruleId: MSRP_BASE
+                    status: APPLIED
+                    inputs:
+                      listPrice: 149.99
+                    outputs:
+                      price: 129.99
         required: true
       responses:
         '400':
@@ -2574,14 +3311,35 @@ paths:
     post:
       tags:
       - Audit Exports
-      summary: Request audit export
-      description: Submits an asynchronous audit export job. Returns 202 Accepted with the created job reference.
+      summary: Request an Asynchronous Audit Export
+      description: 'Submits an asynchronous audit export job and answers 202 Accepted with the job id and an initial PENDING status.
+
+        Use this tool for bulk extraction of audit data as a file; use searchAuditEvents instead for interactive paged queries.
+
+        Preconditions: the caller must hold security:audit:export; jobs are currently held in an in-memory store, so they do not survive a service restart.
+
+        Required inputs: format (CSV or JSON) and deliveryMode (DOWNLOAD or WEBHOOK); filters is optional and scopes the export with the same criteria as searchAuditEvents.
+
+        Emits a SECURITY_AUDIT_EXPORT_REQUEST event; execution is deferred, so callers must poll getAuditExportJob for status and the eventual download URL.
+
+        Returns 400 when format or deliveryMode is missing or not a valid enum value.
+
+        '
       operationId: requestAuditExport
       requestBody:
+        description: Format, delivery mode, and optional filter scope of the export job.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AuditExportRequest'
+            examples:
+              CSV download export:
+                description: CSV download export
+                value:
+                  format: CSV
+                  deliveryMode: DOWNLOAD
+                  filters:
+                    eventType: PERMISSION_DENIED
         required: true
       responses:
         '400':
@@ -2632,8 +3390,20 @@ paths:
     get:
       tags:
       - Audit
-      summary: Search audit events
-      description: Searches audit events using rich filter criteria with pagination support.
+      summary: Search Audit Events With Filters
+      description: 'Searches audit events with pagination, filtering by time window, actor, event type, and aggregate identifier.
+
+        Use this tool to query the audit trail; use getAuditEvent instead when the event id is known, and requestAuditExport for bulk extraction as a file.
+
+        Preconditions: the caller must hold security:audit:view; when both bounds are given, fromDate must be strictly before toDate (fromDate inclusive, toDate exclusive).
+
+        Required inputs: none are mandatory; fromDate, toDate, actorId, eventType, and aggregateId are applied as filters, while workorderId, movementId, productId, sku, correlationId, reasonCode, pageToken, and locationIds are accepted for contract compatibility but not yet applied.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 400 when fromDate is not before toDate or a parameter fails type conversion.
+
+        '
       operationId: searchAuditEvents
       parameters:
       - name: fromDate
@@ -2782,14 +3552,38 @@ paths:
     post:
       tags:
       - Audit
-      summary: Create audit event
-      description: Creates an immutable audit event record and returns the generated event identifier.
-      operationId: createEvent
+      summary: Record an Immutable Audit Event
+      description: 'Records an immutable audit event and returns the generated event id and server timestamp.
+
+        Use this tool to persist a write-once audit fact; do not use createPricingSnapshot, which records a pricing rule trace, and note that updates and deletes of audit events are rejected with 405 by design.
+
+        Preconditions: the caller must hold security:audit:create; the actor is resolved server-side from the security context, so any actorId in the body is ignored.
+
+        Required inputs: eventType, entityId, entityType, oldValue, and newValue (empty strings are accepted, null is not); context is optional and stored as serialized JSON.
+
+        Emits a SECURITY_AUDIT_EVENT_CREATE event; the stored record can never be modified or deleted.
+
+        Returns 400 when any required field is missing or a value cannot be serialized to JSON.
+
+        '
+      operationId: createAuditEvent
       requestBody:
+        description: 'The audit fact to record: what changed, on which entity, from and to what.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AuditLogEventRequest'
+            examples:
+              Role change event:
+                description: Role change event
+                value:
+                  eventType: ROLE_ASSIGNED
+                  entityId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  entityType: USER
+                  oldValue: ''
+                  newValue: SHOP_MGR
+                  context:
+                    reason: onboarding
         required: true
       responses:
         '400':
@@ -2840,8 +3634,20 @@ paths:
     get:
       tags:
       - User Role Management
-      summary: Get user permissions
-      description: Returns all effective permissions for a user
+      summary: Get a User's Effective Permissions
+      description: 'Returns the union of permissions granted through a user''s currently effective role assignments.
+
+        Use this tool for a user''s flattened effective permission set; use listUserRoleAssignments instead to see the assignments and scopes behind it.
+
+        Preconditions: the caller must hold security:permission:view and the user must exist.
+
+        Required inputs: userId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the user does not exist.
+
+        '
       operationId: getUserPermissions
       parameters:
       - name: userId
@@ -2903,9 +3709,21 @@ paths:
     get:
       tags:
       - Admin Account-State API
-      summary: Get user account state
-      description: Returns the current administrative account-state flags for the specified user.
-      operationId: getAccountState
+      summary: Get a User's Account-State Flags
+      description: 'Returns the administrative account-state flags for a user: enabled, lock, account-expiry, and credential-expiry state with their timestamps, disabling actor, and failed-attempt count.
+
+        Use this tool to diagnose why sign-in fails before choosing among unlockUserAccount, enableUserAccount, and the expiry endpoints; use getUserById instead for identity and role data.
+
+        Preconditions: the caller must hold security:user_account_state:view and the user must exist.
+
+        Required inputs: id (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 with USER_NOT_FOUND when the user does not exist.
+
+        '
+      operationId: getUserAccountState
       parameters:
       - name: id
         in: path
@@ -2963,8 +3781,20 @@ paths:
     get:
       tags:
       - Role Management
-      summary: Get a role's default permissions
-      description: Returns the authority codes (ROLE_* plus domain permission codes) that the given role expands to, used by clients to prebuild per-role tool/permission caches.
+      summary: Get a Role's Default Authority Expansion
+      description: 'Returns the authority codes a role name expands to: the ROLE_ prefixed authority plus the domain permission codes hardwired for known roles.
+
+        Use this tool to prebuild per-role permission or tool caches, as pos-mcp-server does; do not use getUserPermissions, which reads a specific user''s database assignments instead of the static role expansion.
+
+        Preconditions: the caller must hold security:role:view; the role name does not need to exist in the database.
+
+        Required inputs: role name as a path parameter, for example SHOP_MGR.
+
+        No events are emitted and no state changes; this is a read-only expansion of the compiled role-authority map.
+
+        Returns 200 in all cases; an unrecognized role yields only its ROLE_ authority with no domain codes rather than an error.
+
+        '
       operationId: getRoleDefaultPermissions
       parameters:
       - name: role
@@ -3022,8 +3852,20 @@ paths:
     get:
       tags:
       - Role Management
-      summary: Get a role's default permissions
-      description: Returns the authority codes (ROLE_* plus domain permission codes) that the given role expands to, used by clients to prebuild per-role tool/permission caches.
+      summary: Get a Role's Default Authority Expansion
+      description: 'Returns the authority codes a role name expands to: the ROLE_ prefixed authority plus the domain permission codes hardwired for known roles.
+
+        Use this tool to prebuild per-role permission or tool caches, as pos-mcp-server does; do not use getUserPermissions, which reads a specific user''s database assignments instead of the static role expansion.
+
+        Preconditions: the caller must hold security:role:view; the role name does not need to exist in the database.
+
+        Required inputs: role name as a path parameter, for example SHOP_MGR.
+
+        No events are emitted and no state changes; this is a read-only expansion of the compiled role-authority map.
+
+        Returns 200 in all cases; an unrecognized role yields only its ROLE_ authority with no domain codes rather than an error.
+
+        '
       operationId: getRoleDefaultPermissions_1
       parameters:
       - name: role
@@ -3081,8 +3923,20 @@ paths:
     get:
       tags:
       - Role Management
-      summary: Get role by ID
-      description: Returns a specific role by its UUID
+      summary: Get a Single Role by UUID
+      description: 'Returns a single role looked up by its UUID, including its permission set and audit metadata.
+
+        Use this tool when the role id is known; use getRoleByName instead when only the name is available, and listRoles to browse.
+
+        Preconditions: the caller must hold security:role:view and the role must exist.
+
+        Required inputs: id (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no role exists for the supplied UUID.
+
+        '
       operationId: getRoleById
       parameters:
       - name: id
@@ -3140,8 +3994,20 @@ paths:
     delete:
       tags:
       - Role Management
-      summary: Delete a role
-      description: Deletes a role by UUID and removes its associations
+      summary: Delete a Role and Its Associations
+      description: 'Deletes a role by UUID, clearing its permission grants and deleting all of its role assignments in the same transaction.
+
+        Use this tool to retire a role entirely; do not use revokeRolePermission or revokeRoleAssignment, which remove a single grant or assignment and keep the role.
+
+        Preconditions: the caller must hold security:role:delete and the role must exist; users holding the role lose it immediately.
+
+        Required inputs: id (UUID) as a path parameter.
+
+        Emits a SECURITY_ROLE_DELETE event.
+
+        Returns 404 when the role does not exist.
+
+        '
       operationId: deleteRole
       parameters:
       - name: id
@@ -3196,8 +4062,20 @@ paths:
     get:
       tags:
       - Role Management
-      summary: Get role by ID
-      description: Returns a specific role by its UUID
+      summary: Get a Single Role by UUID
+      description: 'Returns a single role looked up by its UUID, including its permission set and audit metadata.
+
+        Use this tool when the role id is known; use getRoleByName instead when only the name is available, and listRoles to browse.
+
+        Preconditions: the caller must hold security:role:view and the role must exist.
+
+        Required inputs: id (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no role exists for the supplied UUID.
+
+        '
       operationId: getRoleById_1
       parameters:
       - name: id
@@ -3255,8 +4133,20 @@ paths:
     delete:
       tags:
       - Role Management
-      summary: Delete a role
-      description: Deletes a role by UUID and removes its associations
+      summary: Delete a Role and Its Associations
+      description: 'Deletes a role by UUID, clearing its permission grants and deleting all of its role assignments in the same transaction.
+
+        Use this tool to retire a role entirely; do not use revokeRolePermission or revokeRoleAssignment, which remove a single grant or assignment and keep the role.
+
+        Preconditions: the caller must hold security:role:delete and the role must exist; users holding the role lose it immediately.
+
+        Required inputs: id (UUID) as a path parameter.
+
+        Emits a SECURITY_ROLE_DELETE event.
+
+        Returns 404 when the role does not exist.
+
+        '
       operationId: deleteRole_1
       parameters:
       - name: id
@@ -3311,9 +4201,21 @@ paths:
     get:
       tags:
       - Role Management
-      summary: Get user permissions (legacy path)
-      description: Returns all permissions for a user from their role assignments
-      operationId: getUserPermissionsByUserId
+      summary: Get User Permissions at Legacy Path
+      description: 'Returns the union of permissions granted through a user''s currently effective role assignments, served at the legacy /permissions/user/{userId} path.
+
+        Use this tool only for legacy callers; use getUserPermissions instead, which returns the same data at the canonical /v1/users/{userId}/permissions path.
+
+        Preconditions: the caller must hold security:permission:view and the user must exist.
+
+        Required inputs: userId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the user does not exist.
+
+        '
+      operationId: getUserPermissionsLegacy
       parameters:
       - name: userId
         in: path
@@ -3374,9 +4276,21 @@ paths:
     get:
       tags:
       - Role Management
-      summary: Get user permissions (legacy path)
-      description: Returns all permissions for a user from their role assignments
-      operationId: getUserPermissionsByUserId_1
+      summary: Get User Permissions at Legacy Path
+      description: 'Returns the union of permissions granted through a user''s currently effective role assignments, served at the legacy /permissions/user/{userId} path.
+
+        Use this tool only for legacy callers; use getUserPermissions instead, which returns the same data at the canonical /v1/users/{userId}/permissions path.
+
+        Preconditions: the caller must hold security:permission:view and the user must exist.
+
+        Required inputs: userId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the user does not exist.
+
+        '
+      operationId: getUserPermissionsLegacy_1
       parameters:
       - name: userId
         in: path
@@ -3437,8 +4351,20 @@ paths:
     get:
       tags:
       - Role Management
-      summary: Check user permission
-      description: Checks if a user has a specific permission for a location
+      summary: Check One User Permission at a Location
+      description: 'Checks whether a user holds a specific permission through a currently effective role assignment whose scope covers the given location.
+
+        Use this tool for a point authorization probe by user UUID; use getAuthorizationDecision instead when the caller has a principal identifier from the RBAC matrix rather than a user id.
+
+        Preconditions: the caller must hold security:permission:view and the user must exist.
+
+        Required inputs: userId (UUID) and permission (domain:resource:action) as query parameters; locationId is optional and defaults to GLOBAL.
+
+        No events are emitted and no state changes; this is a read-only check.
+
+        Returns 200 with a plain boolean body, and 404 when the user does not exist.
+
+        '
       operationId: checkUserPermission
       parameters:
       - name: userId
@@ -3507,8 +4433,20 @@ paths:
     get:
       tags:
       - Role Management
-      summary: Check user permission
-      description: Checks if a user has a specific permission for a location
+      summary: Check One User Permission at a Location
+      description: 'Checks whether a user holds a specific permission through a currently effective role assignment whose scope covers the given location.
+
+        Use this tool for a point authorization probe by user UUID; use getAuthorizationDecision instead when the caller has a principal identifier from the RBAC matrix rather than a user id.
+
+        Preconditions: the caller must hold security:permission:view and the user must exist.
+
+        Required inputs: userId (UUID) and permission (domain:resource:action) as query parameters; locationId is optional and defaults to GLOBAL.
+
+        No events are emitted and no state changes; this is a read-only check.
+
+        Returns 200 with a plain boolean body, and 404 when the user does not exist.
+
+        '
       operationId: checkUserPermission_1
       parameters:
       - name: userId
@@ -3577,8 +4515,20 @@ paths:
     get:
       tags:
       - Role Management
-      summary: Get role by name
-      description: Returns a specific role by its name
+      summary: Get a Single Role by Name
+      description: 'Returns a single role looked up by its exact name, including its permission set.
+
+        Use this tool when only the role name is known; use getRoleById instead when the UUID is available, and listRoles to browse.
+
+        Preconditions: the caller must hold security:role:view and a role with that exact (case-sensitive) name must exist.
+
+        Required inputs: name as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 with ROLE_NOT_FOUND when no role has the supplied name.
+
+        '
       operationId: getRoleByName
       parameters:
       - name: name
@@ -3636,8 +4586,20 @@ paths:
     get:
       tags:
       - Role Management
-      summary: Get role by name
-      description: Returns a specific role by its name
+      summary: Get a Single Role by Name
+      description: 'Returns a single role looked up by its exact name, including its permission set.
+
+        Use this tool when only the role name is known; use getRoleById instead when the UUID is available, and listRoles to browse.
+
+        Preconditions: the caller must hold security:role:view and a role with that exact (case-sensitive) name must exist.
+
+        Required inputs: name as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 with ROLE_NOT_FOUND when no role has the supplied name.
+
+        '
       operationId: getRoleByName_1
       parameters:
       - name: name
@@ -3695,9 +4657,21 @@ paths:
     get:
       tags:
       - Role Management
-      summary: Get user role assignments
-      description: Returns currently effective assignments by default. Set includeHistory=true to return all assignments including expired/revoked
-      operationId: getUserRoleAssignments
+      summary: List a User's Role Assignments
+      description: 'Returns a user''s role assignments with their scope and effective window, limited to currently effective assignments by default.
+
+        Use this tool to inspect who holds which roles and in what scope; use getUserPermissions instead when only the flattened permission set matters.
+
+        Preconditions: the caller must hold security:role:view and the user must exist.
+
+        Required inputs: userId (UUID) as a path parameter; includeHistory defaults to false and, when true, also returns expired and revoked assignments.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the user does not exist.
+
+        '
+      operationId: listUserRoleAssignments
       parameters:
       - name: userId
         in: path
@@ -3767,9 +4741,21 @@ paths:
     get:
       tags:
       - Role Management
-      summary: Get user role assignments
-      description: Returns currently effective assignments by default. Set includeHistory=true to return all assignments including expired/revoked
-      operationId: getUserRoleAssignments_1
+      summary: List a User's Role Assignments
+      description: 'Returns a user''s role assignments with their scope and effective window, limited to currently effective assignments by default.
+
+        Use this tool to inspect who holds which roles and in what scope; use getUserPermissions instead when only the flattened permission set matters.
+
+        Preconditions: the caller must hold security:role:view and the user must exist.
+
+        Required inputs: userId (UUID) as a path parameter; includeHistory defaults to false and, when true, also returns expired and revoked assignments.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the user does not exist.
+
+        '
+      operationId: listUserRoleAssignments_1
       parameters:
       - name: userId
         in: path
@@ -3839,8 +4825,20 @@ paths:
     get:
       tags:
       - Permission Registry
-      summary: Get permission by identifier
-      description: Returns a single registered permission by its UUID identifier.
+      summary: Get Permission by Identifier
+      description: 'Returns a single registered permission by its UUID identifier, including name, domain, description, and deprecation flag.
+
+        Use this tool when the permission id is already known; use listPermissions instead to search by domain or page through the registry.
+
+        Preconditions: the caller must hold security:permission:view and the permission must exist in the registry.
+
+        Required inputs: id (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no permission exists for the supplied id.
+
+        '
       operationId: getPermissionById
       parameters:
       - name: id
@@ -3899,8 +4897,20 @@ paths:
     get:
       tags:
       - Permission Registry
-      summary: Get permission by identifier
-      description: Returns a single registered permission by its UUID identifier.
+      summary: Get Permission by Identifier
+      description: 'Returns a single registered permission by its UUID identifier, including name, domain, description, and deprecation flag.
+
+        Use this tool when the permission id is already known; use listPermissions instead to search by domain or page through the registry.
+
+        Preconditions: the caller must hold security:permission:view and the permission must exist in the registry.
+
+        Required inputs: id (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no permission exists for the supplied id.
+
+        '
       operationId: getPermissionById_1
       parameters:
       - name: id
@@ -3959,8 +4969,20 @@ paths:
     get:
       tags:
       - Permission Registry
-      summary: Validate permission name format
-      description: Checks if a permission name follows the domain:resource:action format
+      summary: Validate Permission Name Format
+      description: 'Checks whether a permission name string matches the required domain:resource:action format (or the legacy two-segment domain:action form) without touching the database.
+
+        Use this tool to pre-validate a name before registration; use checkPermissionExists instead to test whether the name is actually registered.
+
+        Preconditions: the caller must hold security:permission:view.
+
+        Required inputs: permissionName as a path parameter; each segment must start with a letter and may contain letters, digits, underscores, and hyphens.
+
+        No events are emitted and no state changes; this is a pure format check.
+
+        Returns 200 with a plain boolean body; a malformed name yields false, never an error status.
+
+        '
       operationId: validatePermissionName
       parameters:
       - name: permissionName
@@ -4018,8 +5040,20 @@ paths:
     get:
       tags:
       - Permission Registry
-      summary: Validate permission name format
-      description: Checks if a permission name follows the domain:resource:action format
+      summary: Validate Permission Name Format
+      description: 'Checks whether a permission name string matches the required domain:resource:action format (or the legacy two-segment domain:action form) without touching the database.
+
+        Use this tool to pre-validate a name before registration; use checkPermissionExists instead to test whether the name is actually registered.
+
+        Preconditions: the caller must hold security:permission:view.
+
+        Required inputs: permissionName as a path parameter; each segment must start with a letter and may contain letters, digits, underscores, and hyphens.
+
+        No events are emitted and no state changes; this is a pure format check.
+
+        Returns 200 with a plain boolean body; a malformed name yields false, never an error status.
+
+        '
       operationId: validatePermissionName_1
       parameters:
       - name: permissionName
@@ -4077,9 +5111,21 @@ paths:
     get:
       tags:
       - Permission Registry
-      summary: Check if permission exists
-      description: Returns true if the permission is registered
-      operationId: permissionExists
+      summary: Check Whether a Permission Is Registered
+      description: 'Checks whether a permission with the given name is registered in the central registry.
+
+        Use this tool to test registration state; use validatePermissionName instead for a pure format check that ignores the database.
+
+        Preconditions: the caller must hold security:permission:view.
+
+        Required inputs: permissionName as a path parameter in domain:resource:action format.
+
+        No events are emitted and no state changes; this is a read-only existence check.
+
+        Returns 200 with a plain boolean body; an unregistered name yields false, never an error status.
+
+        '
+      operationId: checkPermissionExists
       parameters:
       - name: permissionName
         in: path
@@ -4136,9 +5182,21 @@ paths:
     get:
       tags:
       - Permission Registry
-      summary: Check if permission exists
-      description: Returns true if the permission is registered
-      operationId: permissionExists_1
+      summary: Check Whether a Permission Is Registered
+      description: 'Checks whether a permission with the given name is registered in the central registry.
+
+        Use this tool to test registration state; use validatePermissionName instead for a pure format check that ignores the database.
+
+        Preconditions: the caller must hold security:permission:view.
+
+        Required inputs: permissionName as a path parameter in domain:resource:action format.
+
+        No events are emitted and no state changes; this is a read-only existence check.
+
+        Returns 200 with a plain boolean body; an unregistered name yields false, never an error status.
+
+        '
+      operationId: checkPermissionExists_1
       parameters:
       - name: permissionName
         in: path
@@ -4195,9 +5253,21 @@ paths:
     get:
       tags:
       - Permission Registry
-      summary: Get permissions by domain
-      description: Returns all permissions for a specific domain/service
-      operationId: getPermissionsByDomain
+      summary: List Permissions for One Domain
+      description: 'Returns every registered permission for one domain as an unpaged list.
+
+        Use this tool when a complete domain snapshot is needed; use listPermissions instead when paging or when no domain filter applies.
+
+        Preconditions: the caller must hold security:permission:view.
+
+        Required inputs: domain as a path parameter, matching the first segment of the permission name (for example catalog in catalog:product:view).
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when the domain has no registered permissions; an unknown domain is not an error.
+
+        '
+      operationId: listPermissionsByDomain
       parameters:
       - name: domain
         in: path
@@ -4256,9 +5326,21 @@ paths:
     get:
       tags:
       - Permission Registry
-      summary: Get permissions by domain
-      description: Returns all permissions for a specific domain/service
-      operationId: getPermissionsByDomain_1
+      summary: List Permissions for One Domain
+      description: 'Returns every registered permission for one domain as an unpaged list.
+
+        Use this tool when a complete domain snapshot is needed; use listPermissions instead when paging or when no domain filter applies.
+
+        Preconditions: the caller must hold security:permission:view.
+
+        Required inputs: domain as a path parameter, matching the first segment of the permission name (for example catalog in catalog:product:view).
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when the domain has no registered permissions; an unknown domain is not an error.
+
+        '
+      operationId: listPermissionsByDomain_1
       parameters:
       - name: domain
         in: path
@@ -4317,9 +5399,21 @@ paths:
     get:
       tags:
       - Permission Registry
-      summary: Get current permission catalog version
-      description: Returns the active catalog version and total permission count. No authentication required.
-      operationId: getCatalogVersion
+      summary: Get Current Permission Catalog Version
+      description: 'Returns the permission catalog version compiled into this service build and the total number of permission codes in that catalog.
+
+        Use this tool to check whether a cached perm_bits decoding is stale before calling decodePermissionBits; do not use listPermissions, which pages the database registry rather than the compiled catalog.
+
+        Preconditions: none; the endpoint is public and requires no authentication.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection of the compiled PermissionCode catalog.
+
+        Returns 200 in all cases; there are no business error conditions.
+
+        '
+      operationId: getPermissionCatalogVersion
       responses:
         '400':
           description: Bad Request
@@ -4367,9 +5461,21 @@ paths:
     get:
       tags:
       - Permission Registry
-      summary: Get current permission catalog version
-      description: Returns the active catalog version and total permission count. No authentication required.
-      operationId: getCatalogVersion_1
+      summary: Get Current Permission Catalog Version
+      description: 'Returns the permission catalog version compiled into this service build and the total number of permission codes in that catalog.
+
+        Use this tool to check whether a cached perm_bits decoding is stale before calling decodePermissionBits; do not use listPermissions, which pages the database registry rather than the compiled catalog.
+
+        Preconditions: none; the endpoint is public and requires no authentication.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection of the compiled PermissionCode catalog.
+
+        Returns 200 in all cases; there are no business error conditions.
+
+        '
+      operationId: getPermissionCatalogVersion_1
       responses:
         '400':
           description: Bad Request
@@ -4417,8 +5523,20 @@ paths:
     get:
       tags:
       - Permission Registry
-      summary: List permissions
-      description: Returns a paged list of registered permissions, optionally filtered by domain.
+      summary: List Registered Permissions
+      description: 'Returns a paged list of registered permissions, optionally filtered to a single domain.
+
+        Use this tool to browse or search the permission registry; use getPermissionById instead when the UUID is already known, and getRoleDefaultPermissions to see what a role name expands to.
+
+        Preconditions: the caller must hold security:permission:view.
+
+        Required inputs: none are mandatory; domain is an optional filter, and page, size, and sort follow Spring pageable defaults (page 0, size 20).
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty page when nothing matches, and 400 when pagination parameters are malformed.
+
+        '
       operationId: listPermissions
       parameters:
       - name: domain
@@ -4478,8 +5596,20 @@ paths:
     get:
       tags:
       - Permission Registry
-      summary: List permissions
-      description: Returns a paged list of registered permissions, optionally filtered by domain.
+      summary: List Registered Permissions
+      description: 'Returns a paged list of registered permissions, optionally filtered to a single domain.
+
+        Use this tool to browse or search the permission registry; use getPermissionById instead when the UUID is already known, and getRoleDefaultPermissions to see what a role name expands to.
+
+        Preconditions: the caller must hold security:permission:view.
+
+        Required inputs: none are mandatory; domain is an optional filter, and page, size, and sort follow Spring pageable defaults (page 0, size 20).
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty page when nothing matches, and 400 when pagination parameters are malformed.
+
+        '
       operationId: listPermissions_1
       parameters:
       - name: domain
@@ -4539,9 +5669,21 @@ paths:
     get:
       tags:
       - Authorization
-      summary: Get authorization decision for a person
-      description: Returns allow or deny for the user backing the given personId and a permission key, evaluated against that user's assigned roles. Used to verify an off-session approver (e.g. a manager identified by employee number) holds a required permission.
-      operationId: getPersonDecision
+      summary: Get Authorization Decision for a Person
+      description: 'Returns an allow or deny decision for the user account linked to a personId, evaluated against that user''s directly assigned roles.
+
+        Use this tool to verify an off-session approver, such as a manager identified by employee number, holds a required permission; use getAuthorizationDecision instead for matrix principals.
+
+        Preconditions: the caller must hold security:authorization:decide; a user should be linked to the person via the user-person link projection.
+
+        Required inputs: personId (UUID) and permission (domain:resource:action) as query parameters.
+
+        No events are emitted and no state changes; this is a read-only evaluation.
+
+        Returns 200 with decision allow or deny; a person with no linked user or without the permission yields deny rather than an error.
+
+        '
+      operationId: getPersonAuthorizationDecision
       parameters:
       - name: personId
         in: query
@@ -4608,9 +5750,21 @@ paths:
     get:
       tags:
       - Authorization
-      summary: Get authorization decision
-      description: Returns allow or deny for a principal and permission key
-      operationId: getDecision
+      summary: Get Authorization Decision for a Principal
+      description: 'Returns an allow or deny decision for a principal identifier and permission key, evaluated against the principal-role matrix populated by assignPrincipalRole.
+
+        Use this tool for matrix-based checks keyed by principal string; use getPersonAuthorizationDecision instead when the caller has a personId, and checkUserPermission when it has a user UUID and location.
+
+        Preconditions: the caller must hold security:authorization:decide; the principal needs no prior registration.
+
+        Required inputs: principalId and permission (domain:resource:action) as query parameters.
+
+        No events are emitted and no state changes; this is a read-only evaluation.
+
+        Returns 200 with decision allow or deny; an unknown principal or permission yields deny rather than an error.
+
+        '
+      operationId: getAuthorizationDecision
       parameters:
       - name: principalId
         in: query
@@ -4676,9 +5830,21 @@ paths:
     get:
       tags:
       - Self-Registration Review API
-      summary: List self-registration review cases
-      description: Returns blocked self-registration cases for recovery or identity review.
-      operationId: listCases
+      summary: List Self-Registration Review Cases
+      description: 'Returns blocked self-registration review cases, newest first, optionally filtered by status and case type.
+
+        Use this tool to work the recovery and identity-review queue; use getSelfRegistrationReviewCase instead for one known case.
+
+        Preconditions: the caller must hold security:user_account_state:view.
+
+        Required inputs: none are mandatory; status filters on OPEN or RESOLVED and caseType on ACCOUNT_RECOVERY or IDENTITY_REVIEW.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with an empty list when nothing matches, and 400 when a filter value is not a valid enum constant.
+
+        '
+      operationId: listSelfRegistrationReviewCases
       parameters:
       - name: status
         in: query
@@ -4748,9 +5914,21 @@ paths:
     get:
       tags:
       - Self-Registration Review API
-      summary: Get a self-registration review case
-      description: Returns the details of a blocked self-registration case.
-      operationId: getCase
+      summary: Get One Self-Registration Review Case
+      description: 'Returns the full detail of one blocked self-registration case, including reason codes, CRM match summary, and any linked person or user ids.
+
+        Use this tool when the case id is known, typically from the referenceId of a 409 selfRegisterUser conflict; use listSelfRegistrationReviewCases instead to browse the queue.
+
+        Preconditions: the caller must hold security:user_account_state:view and the case must exist.
+
+        Required inputs: caseId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no review case exists for the supplied id.
+
+        '
+      operationId: getSelfRegistrationReviewCase
       parameters:
       - name: caseId
         in: path
@@ -4808,8 +5986,20 @@ paths:
     get:
       tags:
       - JWT API
-      summary: Validate JWT token
-      description: Check if a JWT token is valid (signature, expiration, revocation)
+      summary: Validate a JWT Access Token
+      description: 'Checks whether a JWT access token is currently valid by verifying signature, issuer, audience, expiry, Redis revocation status, and presence in the token store.
+
+        Use this tool to test a token without side effects; do not use refreshTokenPair, which rotates tokens, and do not use revokeToken, which invalidates one.
+
+        Preconditions: none beyond possessing the token string; the endpoint is public.
+
+        Required inputs: token as a query parameter.
+
+        No events are emitted and no state changes; this is a read-only check.
+
+        Returns 200 in all cases with a valid flag, so callers must read valid=false rather than expect an error status when the token fails any check.
+
+        '
       operationId: validateToken
       parameters:
       - name: token
@@ -4864,9 +6054,21 @@ paths:
     get:
       tags:
       - JWT API
-      summary: Extract userId from JWT token
-      description: Get the stable user identifier from a JWT token
-      operationId: getUserId
+      summary: Extract User Id From JWT Token
+      description: 'Extracts the stable user identifier from a valid JWT token''s uid claim (falling back to the legacy userId claim) and returns it as a plain string body.
+
+        Use this tool to resolve the user UUID behind a token; use getTokenSubject instead when the username is what is needed.
+
+        Preconditions: the token must pass full validation, including revocation and token-store checks.
+
+        Required inputs: token as a query parameter.
+
+        No events are emitted and no state changes; this is a read-only claim extraction.
+
+        Returns 401 when the token is invalid, expired, revoked, or unknown to the token store.
+
+        '
+      operationId: getTokenUserId
       parameters:
       - name: token
         in: query
@@ -4922,9 +6124,21 @@ paths:
     get:
       tags:
       - JWT API
-      summary: Extract subject from JWT token
-      description: Get the subject (username) from a JWT token
-      operationId: getSubject
+      summary: Extract Subject From JWT Token
+      description: 'Extracts the subject claim, the username, from a valid JWT token and returns it as a plain string body.
+
+        Use this tool to resolve which user a token belongs to; use getTokenUserId instead for the stable UUID identifier, and getTokenRoles for the role claim.
+
+        Preconditions: the token must pass full validation, including revocation and token-store checks.
+
+        Required inputs: token as a query parameter.
+
+        No events are emitted and no state changes; this is a read-only claim extraction.
+
+        Returns 401 when the token is invalid, expired, revoked, or unknown to the token store.
+
+        '
+      operationId: getTokenSubject
       parameters:
       - name: token
         in: query
@@ -4980,9 +6194,21 @@ paths:
     get:
       tags:
       - JWT API
-      summary: Extract roles from JWT token
-      description: Get the roles claim from a JWT token
-      operationId: getRoles
+      summary: Extract Roles From JWT Token
+      description: 'Extracts the roles claim from a valid JWT token and returns the normalized role names.
+
+        Use this tool when a caller holds a token and needs its roles; use getTokenSubject instead for the username, and decodePermissionBits instead to expand the token''s perm_bits claim into permission codes.
+
+        Preconditions: the token must pass full validation, including revocation and token-store checks.
+
+        Required inputs: token as a query parameter.
+
+        No events are emitted and no state changes; this is a read-only claim extraction.
+
+        Returns 401 when the token is invalid, expired, revoked, or unknown to the token store.
+
+        '
+      operationId: getTokenRoles
       parameters:
       - name: token
         in: query
@@ -5041,8 +6267,20 @@ paths:
     get:
       tags:
       - Audit
-      summary: Get pricing snapshot
-      description: Returns an immutable pricing snapshot by its snapshot identifier.
+      summary: Get One Pricing Snapshot by Id
+      description: 'Returns an immutable pricing snapshot with its rule-evaluation steps ordered by rule id.
+
+        Use this tool when the snapshot id is known; use searchAuditEvents instead for general audit queries, since snapshots have no search endpoint.
+
+        Preconditions: the caller must hold security:audit:view and the snapshot must exist.
+
+        Required inputs: snapshotId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; snapshots are read-only after creation.
+
+        Returns 400 with INVALID_REQUEST, not 404, when no snapshot exists for the supplied id; callers must treat that 400 as a miss.
+
+        '
       operationId: getPricingSnapshot
       parameters:
       - name: snapshotId
@@ -5100,8 +6338,20 @@ paths:
     get:
       tags:
       - Audit Exports
-      summary: Get audit export job status
-      description: Returns the current status of a previously submitted audit export job.
+      summary: Get Audit Export Job Status
+      description: 'Returns the current status of a previously submitted audit export job, including completion time, download URL, and error message when present.
+
+        Use this tool to poll a job created by requestAuditExport; do not resubmit the export while a job is still PENDING.
+
+        Preconditions: the caller must hold security:audit:export and the job must exist in the in-memory store, which is cleared on service restart.
+
+        Required inputs: jobId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only status projection.
+
+        Returns 404 when the job id is unknown or the store was cleared by a restart.
+
+        '
       operationId: getAuditExportJob
       parameters:
       - name: jobId
@@ -5161,9 +6411,21 @@ paths:
     get:
       tags:
       - Audit
-      summary: Get audit event
-      description: Returns a previously recorded audit event by its event identifier.
-      operationId: getEvent
+      summary: Get One Audit Event by Id
+      description: 'Returns a previously recorded audit event by its event id.
+
+        Use this tool when the event id is known; use searchAuditEvents instead to filter by time window, actor, event type, or aggregate.
+
+        Preconditions: the caller must hold security:audit:view and the event must exist.
+
+        Required inputs: eventId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; audit records are immutable.
+
+        Returns 404 when no audit event exists for the supplied id.
+
+        '
+      operationId: getAuditEvent
       parameters:
       - name: eventId
         in: path
@@ -5220,8 +6482,20 @@ paths:
     delete:
       tags:
       - Role Management
-      summary: Revoke role assignment
-      description: Revokes a role assignment by setting its end date. Supports past, present, or future dates. The system automatically records when the revocation was requested. Defaults to today when endDate is omitted
+      summary: Revoke a Role Assignment by Id
+      description: 'Revokes a role assignment by setting its effective end date, preserving the row for history.
+
+        Use this tool when the assignment id is known or a past or future end date is needed; do not use revokeUserRole, which finds the active assignment from userId and roleId and ends it now.
+
+        Preconditions: the caller must hold security:role:assign and the assignment must exist.
+
+        Required inputs: assignmentId (UUID) as a path parameter; endDate (ISO date-time) is optional and defaults to the current time, and the revocation timestamp is recorded automatically.
+
+        Emits a SECURITY_ROLE_ASSIGNMENT_REVOKE event.
+
+        Returns 400 when endDate is malformed, and 404 when the assignment does not exist.
+
+        '
       operationId: revokeRoleAssignment
       parameters:
       - name: assignmentId
@@ -5286,8 +6560,20 @@ paths:
     delete:
       tags:
       - Role Management
-      summary: Revoke role assignment
-      description: Revokes a role assignment by setting its end date. Supports past, present, or future dates. The system automatically records when the revocation was requested. Defaults to today when endDate is omitted
+      summary: Revoke a Role Assignment by Id
+      description: 'Revokes a role assignment by setting its effective end date, preserving the row for history.
+
+        Use this tool when the assignment id is known or a past or future end date is needed; do not use revokeUserRole, which finds the active assignment from userId and roleId and ends it now.
+
+        Preconditions: the caller must hold security:role:assign and the assignment must exist.
+
+        Required inputs: assignmentId (UUID) as a path parameter; endDate (ISO date-time) is optional and defaults to the current time, and the revocation timestamp is recorded automatically.
+
+        Emits a SECURITY_ROLE_ASSIGNMENT_REVOKE event.
+
+        Returns 400 when endDate is malformed, and 404 when the assignment does not exist.
+
+        '
       operationId: revokeRoleAssignment_1
       parameters:
       - name: assignmentId
@@ -5352,8 +6638,20 @@ paths:
     delete:
       tags:
       - JWT API
-      summary: Revoke JWT token
-      description: Revoke a JWT token immediately (Redis cache + database)
+      summary: Revoke a JWT Access Token
+      description: 'Revokes a JWT access token immediately by deleting its stored pair and adding its JTI to the Redis revocation cache until natural expiry.
+
+        Use this tool to invalidate one compromised or abandoned token; do not use disableUserAccount, which revokes every token for a user and blocks future sign-in.
+
+        Preconditions: an authenticated caller; the token should exist in the token store, though an unknown token is silently ignored.
+
+        Required inputs: token as a query parameter, the exact access token string to revoke.
+
+        Emits a SECURITY_AUTH_REVOKE event; revocation takes effect immediately for validateToken and downstream gateway checks.
+
+        Returns 204 in all cases, including when the token was not found, so revocation success cannot be inferred from the status code.
+
+        '
       operationId: revokeToken
       parameters:
       - name: token
@@ -5499,7 +6797,7 @@ components:
       - username
     UserUpdateRequest:
       type: object
-      description: Updated user object
+      description: Partial update of a user account; only supplied fields are applied
       properties:
         username:
           type: string
@@ -6521,12 +7819,12 @@ components:
     Page:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -6535,17 +7833,17 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     PageableObject:
@@ -6708,12 +8006,12 @@ components:
     PageAuditLogEventDto:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -6724,17 +8022,17 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
   securitySchemes:

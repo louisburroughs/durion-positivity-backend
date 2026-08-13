@@ -37,10 +37,18 @@ public class PrincipalRoleController {
     @EmitEvent(id = "SECURITY_PRINCIPAL_ROLE_ASSIGN", apiVersion = "1")
     @PostMapping("/{principalId}/roles/{roleId}")
     @PreAuthorize("hasAuthority('security:role:assign')")
-    @Operation(
-            summary = "Assign a role to a principal",
-            description =
-                    "Assigns the specified role to the specified principal identifier for RBAC matrix authorization.")
+    @Operation(operationId = "assignPrincipalRole", summary = "Assign a Role to a Principal", description = """
+                    Links a free-form principal identifier to a role in the RBAC principal matrix consulted by \
+                    getAuthorizationDecision.
+                    Use this tool for matrix principals that are not user UUIDs; do not use assignUserRole, which \
+                    creates a role assignment for a real user account.
+                    Preconditions: the caller must hold security:role:assign and the role must exist; the principal \
+                    is not validated against any store, and an existing identical link makes the call a no-op.
+                    Required inputs: principalId (arbitrary string) and roleId (UUID) as path parameters; there is \
+                    no request body.
+                    Emits a SECURITY_PRINCIPAL_ROLE_ASSIGN event.
+                    Returns 404 when the role does not exist; repeat assignments still return 200.
+                    """)
     @ApiResponse(responseCode = "200", description = "Role assigned to principal successfully")
     @ApiResponse(
             responseCode = "404",

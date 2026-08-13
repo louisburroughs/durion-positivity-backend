@@ -29,6 +29,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -70,7 +71,16 @@ public class CrmAccountsController {
         this.accountTierService = accountTierService;
     }
 
-    @Operation(summary = "Get account tier", description = "Retrieve the tier level for a specific account")
+    @Operation(operationId = "getAccountTier", summary = "Get Account Tier", description = """
+                    Returns the currently assigned tier for a commercial account, including who assigned it, \
+                    when, and whether a manual override is active; unassigned accounts report STANDARD.
+                    Use this tool when the stored tier of a known commercial account is needed; do not use \
+                    resolveAccountTier, which recomputes a recommended tier from revenue and contract inputs.
+                    Preconditions: a commercial party must exist for the accountId; person parties have no tier.
+                    Required inputs: accountId (UUID) as a path parameter; there is no request body.
+                    Emits a CUSTOMER_ACCOUNT_TIER_GET audit event; no state changes occur.
+                    Returns 404 when no commercial account exists for the supplied accountId.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -101,9 +111,20 @@ public class CrmAccountsController {
         }
     }
 
-    @Operation(
-            summary = "Resolve account tier",
-            description = "Resolve or compute the account tier based on business rules")
+    @Operation(operationId = "resolveAccountTier", summary = "Resolve Account Tier", description = """
+                    Computes the recommended tier for a commercial account from annual revenue, active contract \
+                    count, and account age thresholds, and optionally applies it to the account.
+                    Use this tool when a tier recommendation or recalculation is needed; do not use \
+                    getAccountTier, which only reads the stored tier without recomputing it.
+                    Preconditions: a commercial party must exist for the accountId; when applyTier is true, a \
+                    manual tier override on the account blocks application unless forceRecalculation is also true.
+                    Required inputs: accountId (UUID string); annualRevenue, activeContractCount, and \
+                    accountAgeMonths are optional scoring inputs, and applyTier and forceRecalculation both \
+                    default to false, so the default call is a dry run.
+                    Emits a CUSTOMER_ACCOUNT_TIER_RESOLVE event; when the tier is applied the account record is \
+                    updated with assignedBy SYSTEM and a customer fact is republished.
+                    Returns 404 when the account does not exist or the accountId is not a valid UUID.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -124,7 +145,22 @@ public class CrmAccountsController {
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
     @EmitEvent(id = "CUSTOMER_ACCOUNT_TIER_RESOLVE", apiVersion = "1")
     public ResponseEntity<ResolveAccountTierResponse> resolveAccountTier(
-            @Parameter(description = "Tier resolution request", required = true) @RequestBody
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Tier scoring inputs for one account, plus flags controlling whether the resolved tier is applied.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Dry-run resolution", value = """
+                                                                    {"accountId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "annualRevenue":275000,
+                                                                     "activeContractCount":3,
+                                                                     "accountAgeMonths":18,
+                                                                     "applyTier":false,
+                                                                     "forceRecalculation":false}
+                                                                    """)))
+                    @RequestBody
                     ResolveAccountTierRequest body) {
         try {
             ResolveAccountTierResponse response = accountTierService.resolveAccountTier(body);
@@ -137,9 +173,20 @@ public class CrmAccountsController {
 
     // --- Party/Commercial Account Management (Issue #176) ---
 
-    @Operation(
-            summary = "Create commercial account",
-            description = "Create a new commercial party/account in the CRM system")
+    @Operation(operationId = "createCommercialAccount", summary = "Create Commercial Account", description = """
+                    Creates a commercial party record with status ACTIVE and a generated customer number of the \
+                    form CUST-XXXXXXXX.
+                    Use this tool when onboarding a new commercial customer; do not use searchParties or \
+                    checkPartyDuplicates, which only look up existing parties, and run checkPartyDuplicates \
+                    first to avoid creating a duplicate, because no uniqueness check is applied here.
+                    Preconditions: none beyond authorization; the service performs no duplicate detection on \
+                    legalName.
+                    Required inputs: legalName (non-blank, max 255); partyType defaults to COMMERCIAL and must \
+                    be PERSON, COMMERCIAL, or UNKNOWN when supplied; displayName, taxId, billingTermsId, and \
+                    externalIdentifiers are optional.
+                    Emits a CUSTOMER_PARTY_CREATE event and publishes a party-changed customer fact.
+                    Returns 400 when legalName is missing or blank, or when partyType is not a recognized value.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -159,7 +206,20 @@ public class CrmAccountsController {
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_CREATE + "')")
     @EmitEvent(id = "CUSTOMER_PARTY_CREATE", apiVersion = "1")
     public ResponseEntity<CreateCommercialAccountResponse> createCommercialAccount(
-            @Parameter(description = "Commercial account creation request", required = false)
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Commercial party to create; legalName is the only mandatory field and no duplicate check is applied.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "New commercial account", value = """
+                                                                    {"legalName":"Acme Fleet Services LLC",
+                                                                     "displayName":"Acme Fleet",
+                                                                     "taxId":"12-3456789",
+                                                                     "partyType":"COMMERCIAL",
+                                                                     "externalIdentifiers":{"ERP":"AC-1001"}}
+                                                                    """)))
                     @RequestBody(required = false)
                     CreateCommercialAccountRequest body) {
         log.info("createCommercialAccount");
@@ -167,7 +227,16 @@ public class CrmAccountsController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @Operation(summary = "Get party details", description = "Retrieve details for a specific party by ID")
+    @Operation(operationId = "getParty", summary = "Get Party Details", description = """
+                    Returns the identity projection of a single party, resolving commercial parties first and \
+                    falling back to person parties, whose display name is resolved from the person directory.
+                    Use this tool when a party id is already known; use browseParties or searchParties instead \
+                    when locating a party by name, status, or customer number.
+                    Preconditions: a commercial or person party must exist for the supplied partyId.
+                    Required inputs: partyId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when neither a commercial nor a person party exists for the supplied partyId.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -194,12 +263,22 @@ public class CrmAccountsController {
 
     // --- Party Search and Merge (Issue #173) ---
 
-    @Operation(
-            summary = "Browse parties",
-            description =
-                    "Browse parties with paging and sorting. The service sorts by legalName ascending by default, "
-                            + "appends partyId ascending as a stable tie-breaker whenever the requested sort list "
-                            + "does not explicitly include partyId, and applies case-insensitive legalName sorting.")
+    @Operation(operationId = "browseParties", summary = "Browse Customer Directory", description = """
+                    Returns a paged customer directory that unifies commercial parties and standalone \
+                    individual customers, with person names and contact points resolved from pos-people.
+                    Use this tool when listing or typeahead-filtering customers by name, status, party type, \
+                    or customer number; do not use searchParties, which filters commercial parties only by \
+                    structured criteria, and use getParty instead when the party id is already known.
+                    Preconditions: none; an empty page is returned when nothing matches, and a pos-people \
+                    outage degrades person names to null rather than failing the request.
+                    Required inputs: none; page defaults to 0 with size 20, the name filter matches legal \
+                    name, display name, or customer number case-insensitively, status matches ACTIVE, \
+                    INACTIVE, ON_HOLD, or MERGED, sortField is name (default) or customerNumber, and \
+                    sortOrder is asc (default) or desc with partyId as a stable tie-breaker.
+                    Emits a CUSTOMER_PARTY_BROWSE audit event; no state changes occur.
+                    Returns 200 with an empty results array rather than an error when no party matches the \
+                    filters.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -255,7 +334,19 @@ public class CrmAccountsController {
                 partyService.browseParties(pageable, name, status, partyType, customerNumber, sortField, sortOrder));
     }
 
-    @Operation(summary = "Search parties", description = "Search for parties based on various criteria")
+    @Operation(operationId = "searchParties", summary = "Search Commercial Parties", description = """
+                    Searches commercial party records by structured criteria such as name, tax id, party type, \
+                    and status, returning all matches in a single unpaged result set.
+                    Use this tool when filtering commercial parties by structured attributes like taxId; use \
+                    browseParties instead for the paged, unified directory that also includes individual \
+                    customers, and checkPartyDuplicates for pre-create duplicate detection by legal name.
+                    Preconditions: none; an omitted or empty body matches every commercial party.
+                    Required inputs: none; name, email, phone, taxId, partyType, and status are all optional \
+                    filters, and the pageNumber and pageSize fields are accepted but not applied, so the full \
+                    match list is always returned.
+                    Emits a CUSTOMER_PARTY_SEARCH audit event; no state changes occur.
+                    Returns 200 with an empty results array rather than an error when no party matches.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -275,18 +366,36 @@ public class CrmAccountsController {
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
     @EmitEvent(id = "CUSTOMER_PARTY_SEARCH", apiVersion = "1")
     public ResponseEntity<SearchPartiesResponse> searchParties(
-            @Parameter(description = "Search criteria", required = false) @RequestBody(required = false)
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Optional structured filter criteria; every supplied field narrows the match and an empty body matches all commercial parties.",
+                            required = false,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Filter by name and status", value = """
+                                                                    {"name":"Acme","partyType":"COMMERCIAL","status":"ACTIVE"}
+                                                                    """)))
+                    @RequestBody(required = false)
                     SearchPartiesRequest body) {
         log.info("searchParties");
         SearchPartiesResponse response = partyService.searchParties(body);
         return ResponseEntity.ok(response);
     }
 
-    @Operation(
-            summary = "Resolve party display names",
-            description = "Batch-resolve party ids to display names. Consumed server-side by sibling services "
-                    + "(e.g. pos-invoice) that store only the party id and need the display name to enrich "
-                    + "finder/search rows. Unknown or unresolvable ids are omitted from the response.")
+    @Operation(operationId = "resolvePartyNames", summary = "Resolve Party Display Names", description = """
+                    Batch-resolves party ids to display names for both commercial and person parties, for \
+                    sibling services such as pos-invoice that store only the party id.
+                    Use this tool when enriching rows that already carry party ids; do not use getParty, which \
+                    returns the full identity projection for a single party per call.
+                    Preconditions: none; unknown or unresolvable ids are silently omitted from the response \
+                    rather than causing an error.
+                    Required inputs: partyIds, a non-empty list of up to 200 UUIDs; null entries and \
+                    duplicates are dropped before resolution.
+                    Emits a CUSTOMER_PARTY_RESOLVE audit event; no state changes occur.
+                    Returns 400 when partyIds is empty or exceeds 200 entries, and 200 with a possibly \
+                    shorter list than requested when some ids cannot be resolved.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -306,12 +415,41 @@ public class CrmAccountsController {
             scopes = {CrmPermissionRegistry.PARTY_VIEW})
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
     @EmitEvent(id = "CUSTOMER_PARTY_RESOLVE", apiVersion = "1")
-    public ResponseEntity<List<PartyNameRef>> resolvePartyNames(@Valid @RequestBody PartyNameResolveRequest body) {
+    public ResponseEntity<List<PartyNameRef>> resolvePartyNames(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Batch of party ids whose display names should be resolved.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Two-party batch", value = """
+                                                                    {"partyIds":["018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                                 "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c"]}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    PartyNameResolveRequest body) {
         log.info("resolvePartyNames count={}", body.partyIds().size());
         return ResponseEntity.ok(partyService.resolveNames(body.partyIds()));
     }
 
-    @Operation(summary = "Merge parties", description = "Merge multiple parties into a single party record")
+    @Operation(operationId = "mergeParties", summary = "Merge Duplicate Commercial Parties", description = """
+                    Merges one duplicate commercial party into a surviving party: relationships are reassigned \
+                    to the survivor, external identifiers and vehicle VINs are copied over, and the losing \
+                    party's status is set to MERGED.
+                    Use this tool when checkPartyDuplicates has confirmed two records represent the same \
+                    customer; do not use createCommercialAccount to work around duplicates, and note the merge \
+                    is not reversible through this API.
+                    Preconditions: both the surviving party (path) and losing party (body) must exist as \
+                    commercial parties and must be different records.
+                    Required inputs: partyId of the survivor as a path parameter, plus losingPartyId (UUID \
+                    string) and a justification of up to 1000 characters in the body.
+                    Emits a CUSTOMER_PARTY_MERGE event and republishes customer facts for both parties and \
+                    for contacts whose account linkage moved.
+                    Returns 404 when either party cannot be found, and 400 when losingPartyId or \
+                    justification is missing, losingPartyId is not a valid UUID, or both ids refer to the \
+                    same party.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -333,7 +471,17 @@ public class CrmAccountsController {
     @EmitEvent(id = "CUSTOMER_PARTY_MERGE", apiVersion = "1")
     public ResponseEntity<MergePartiesResponse> mergeParties(
             @Parameter(description = "Target party ID", required = true) @PathVariable UUID partyId,
-            @Parameter(description = "Merge request with source party IDs", required = false)
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Identifies the losing party to fold into the survivor and records the audit justification for the merge.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Merge duplicate", value = """
+                                                                    {"losingPartyId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
+                                                                     "justification":"Duplicate created during fleet onboarding import"}
+                                                                    """)))
                     @RequestBody(required = false)
                     MergePartiesRequest body) {
         log.info("mergeParties partyId={}", partyId);
@@ -344,8 +492,19 @@ public class CrmAccountsController {
     // --- Communication Preferences (Issue #171) ---
 
     @Operation(
-            summary = "Get communication preferences",
-            description = "Retrieve communication preferences and consent flags for a party")
+            operationId = "getAccountCommunicationPreferences",
+            summary = "Get Account Communication Preferences",
+            description = """
+                    Returns a legacy account-scoped communication-preference projection for a commercial \
+                    party in which every channel currently reports the placeholder value N/A.
+                    Use this tool only for the legacy accounts-scoped path; use getCommunicationPreferences \
+                    instead, which reads the persisted per-party preference record with real channel values \
+                    and consent flags.
+                    Preconditions: a commercial party must exist for the supplied partyId.
+                    Required inputs: partyId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no commercial party exists for the supplied partyId.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -372,8 +531,22 @@ public class CrmAccountsController {
     }
 
     @Operation(
-            summary = "Create or update communication preferences",
-            description = "Set or update communication preferences and consent flags for a party")
+            operationId = "upsertAccountCommunicationPreferences",
+            summary = "Upsert Account Communication Preferences",
+            description = """
+                    Acknowledges an account-scoped communication-preference submission for a commercial party \
+                    without persisting any preference values; this legacy path only validates the party and \
+                    returns SUCCESS.
+                    Use this tool only for the legacy accounts-scoped path; use upsertCommunicationPreferences \
+                    instead, which actually stores channel preferences and consent flags per party.
+                    Preconditions: a commercial party must exist for the supplied partyId.
+                    Required inputs: partyId (UUID) as a path parameter and a non-null JSON body; the \
+                    preference fields themselves are accepted but not stored.
+                    Emits a CUSTOMER_COMMUNICATION_PREFERENCE_UPSERT audit event; no preference record is \
+                    written.
+                    Returns 404 when no commercial party exists for the supplied partyId, and 400 when the \
+                    request body is missing.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -400,7 +573,19 @@ public class CrmAccountsController {
     @EmitEvent(id = "CUSTOMER_COMMUNICATION_PREFERENCE_UPSERT", apiVersion = "1")
     public ResponseEntity<UpsertCommunicationPreferencesResponse> upsertCommunicationPreferences(
             @Parameter(description = "Party ID", required = true) @PathVariable UUID partyId,
-            @Parameter(description = "Communication preferences to set", required = false)
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Channel preference values acknowledged by this legacy endpoint; the values are validated but not stored.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Opt-in email only", value = """
+                                                                    {"emailPreference":"OPT_IN",
+                                                                     "smsPreference":"OPT_OUT",
+                                                                     "phonePreference":"OPT_OUT",
+                                                                     "updateSource":"ADMIN"}
+                                                                    """)))
                     @RequestBody(required = false)
                     UpsertCommunicationPreferencesRequest body) {
         log.info("upsertCommunicationPreferences partyId={}", partyId);
@@ -410,7 +595,20 @@ public class CrmAccountsController {
 
     // --- Vehicle Management (Issue #169) ---
 
-    @Operation(summary = "Create vehicle for party", description = "Associate a new vehicle with a party/customer")
+    @Operation(operationId = "createVehicleForParty", summary = "Associate Vehicle With Party", description = """
+                    Associates a vehicle VIN with a commercial party by appending it to the party's owned VIN \
+                    list.
+                    Use this tool when recording that a commercial account operates a vehicle; do not use it \
+                    to change vehicle details, and note the VIN list is account-level rather than a full \
+                    vehicle record.
+                    Preconditions: a commercial party must exist for the supplied partyId, and the VIN must \
+                    not already be associated with that party.
+                    Required inputs: partyId (UUID) as a path parameter and vinNumber (max 17 characters) in \
+                    the body; unitNumber, description, licensePlate, and licensePlateRegion are optional.
+                    Emits a CUSTOMER_VEHICLE_CREATE event and republishes the party-changed customer fact.
+                    Returns 404 when the party does not exist, 409 when the VIN is already associated with \
+                    the party, and 400 when vinNumber is missing or blank.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -432,18 +630,40 @@ public class CrmAccountsController {
     @EmitEvent(id = "CUSTOMER_VEHICLE_CREATE", apiVersion = "1")
     public ResponseEntity<CreateVehicleForPartyResponse> createVehicleForParty(
             @Parameter(description = "Party ID", required = true) @PathVariable UUID partyId,
-            @Parameter(description = "Vehicle creation request", required = false) @RequestBody(required = false)
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Vehicle identification to associate with the party, keyed by VIN.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Fleet truck", value = """
+                                                                    {"vinNumber":"1FTFW1ET5DFC10312",
+                                                                     "unitNumber":"TRK-42",
+                                                                     "description":"2019 Ford F-150 service truck",
+                                                                     "licensePlate":"ABC1234",
+                                                                     "licensePlateRegion":"TX"}
+                                                                    """)))
+                    @RequestBody(required = false)
                     CreateVehicleForPartyRequest body) {
         log.info("createVehicleForParty partyId={}", partyId);
         CreateVehicleForPartyResponse response = partyService.createVehicleForParty(partyId, body);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @Operation(
-            operationId = "checkPartyDuplicates",
-            summary = "Check for duplicate commercial parties",
-            description =
-                    "Search for existing parties with a similar legal name to detect potential duplicates before creating a new commercial account.")
+    @Operation(operationId = "checkPartyDuplicates", summary = "Check Commercial Party Duplicates", description = """
+                    Checks for existing commercial parties whose legal name contains the supplied name, \
+                    flagging case-insensitive exact matches as EXACT with score 1.0 and other containment \
+                    matches as FUZZY with score 0.7.
+                    Use this tool before createCommercialAccount to avoid creating a duplicate customer; do \
+                    not use searchParties for this, which does not classify match strength or surface an \
+                    exactMatchPartyId.
+                    Preconditions: none; the check reads existing commercial parties only.
+                    Required inputs: legalName as a query parameter with at least 2 non-whitespace \
+                    characters; there is no request body.
+                    Emits a CUSTOMER_PARTY_DUPLICATE_CHECK audit event; no state changes occur.
+                    Returns 400 when legalName is blank or shorter than 2 characters after trimming, and 200 \
+                    with duplicatesFound false when no similar party exists.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -478,10 +698,22 @@ public class CrmAccountsController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(
-            operationId = "upsertBillingRules",
-            summary = "Upsert billing rules for a party",
-            description = "Create or update the billing rules configuration for a commercial party.")
+    @Operation(operationId = "upsertBillingRules", summary = "Upsert Party Billing Rules", description = """
+                    Creates or replaces the embedded billing-rules configuration on a commercial party, \
+                    covering PO requirement, tax exemption, credit hold, auto-pay, payment terms, credit \
+                    limit, currency, and invoice delivery method.
+                    Use this tool when configuring how a commercial account is billed; do not use \
+                    createCommercialAccount, which only sets billingTermsId at creation and cannot change \
+                    billing flags afterwards.
+                    Preconditions: a commercial party must exist for the supplied partyId; the whole rules \
+                    block is replaced on every call rather than patched field by field.
+                    Required inputs: partyId (UUID) as a path parameter; boolean flags poRequired, taxExempt, \
+                    creditHold, and autoPayEnabled default to false when omitted, and paymentTerms, \
+                    creditLimit, currency, and invoiceDeliveryMethod (EMAIL, MAIL, PORTAL) are optional.
+                    Emits a CUSTOMER_BILLING_RULES_UPSERT event; the rules are stored on the party record \
+                    itself.
+                    Returns 404 when no commercial party exists for the supplied partyId.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(
@@ -505,7 +737,27 @@ public class CrmAccountsController {
             @Parameter(description = "Party ID", required = true, example = "f47ac10b-58cc-4372-a567-0e02b2c3d479")
                     @PathVariable
                     UUID partyId,
-            @RequestBody @jakarta.validation.Valid UpsertBillingRulesRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Complete billing-rules configuration that replaces the party's current rules block.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Net-30 with PO", value = """
+                                                                    {"paymentTerms":"NET_30",
+                                                                     "creditLimit":25000.00,
+                                                                     "currency":"USD",
+                                                                     "taxExempt":false,
+                                                                     "poRequired":true,
+                                                                     "creditHold":false,
+                                                                     "autoPayEnabled":false,
+                                                                     "invoiceDeliveryMethod":"EMAIL",
+                                                                     "billingAddressId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d"}
+                                                                    """)))
+                    @RequestBody
+                    @jakarta.validation.Valid
+                    UpsertBillingRulesRequest request) {
         BillingRuleRef result = partyService.upsertBillingRulesForParty(partyId, request);
         return ResponseEntity.ok(result);
     }

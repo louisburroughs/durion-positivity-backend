@@ -32,8 +32,19 @@ public class CustomerRequirementsController {
     private final CustomerRequirementsService customerRequirementsService;
 
     @Operation(
-            summary = "Check whether a customer meets requirements",
-            description = "Returns true when the customer is active and, for commercial parties, not on credit hold.")
+            operationId = "checkCustomerRequirementsMet",
+            summary = "Check Customer Requirements Met",
+            description = """
+                    Evaluates whether a customer is eligible for customer-facing workflows: the party must \
+                    have ACTIVE status, and a commercial party must additionally not be on credit hold.
+                    Use this tool as a gate before starting orders or workorders for a customer; use \
+                    getBillingRules instead to see the underlying credit-hold configuration.
+                    Preconditions: a commercial or person party must exist for the supplied id.
+                    Required inputs: id (UUID, the party id) as a path parameter; there is no request body.
+                    Emits a CUSTOMER_REQUIREMENTS_MET_GET audit event; no state changes occur.
+                    Returns 404 when no party exists for the supplied id, and 200 with a bare boolean \
+                    verdict otherwise.
+                    """)
     @ApiResponses(
             value = {
                 @ApiResponse(

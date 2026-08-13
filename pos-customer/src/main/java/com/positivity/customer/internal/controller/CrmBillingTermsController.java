@@ -43,10 +43,18 @@ public class CrmBillingTermsController {
                     .netDays(-1)
                     .build());
 
-    @Operation(
-            summary = "List billing terms",
-            description = "Returns the reference list of all available billing terms. "
-                    + "This is a static reference endpoint; it does not vary per party or account.")
+    @Operation(operationId = "listBillingTerms", summary = "List Billing Term Options", description = """
+                    Returns the static reference list of billing term options: NET_30, NET_60, NET_90, COD, \
+                    and PREPAID, each with a display label and net-day count.
+                    Use this tool when populating a billing-terms dropdown before createCommercialAccount or \
+                    upsertBillingRules; do not use upsertBillingRules to discover valid terms, which writes \
+                    configuration rather than listing options.
+                    Preconditions: none; the list is compiled into the service and identical for every caller.
+                    Required inputs: none; there are no parameters and no request body.
+                    No events are emitted and no state changes; this is a read-only reference lookup.
+                    Returns 200 with the full five-entry list in every successful call; there are no \
+                    business error responses.
+                    """)
     @ApiResponse(responseCode = "200", description = "Billing terms retrieved successfully")
     @ApiResponse(responseCode = "401", description = "Authentication required")
     @ApiResponse(

@@ -13,6 +13,7 @@ modules:
     annotationDepth: STRICT
   pos-customer:
     mode: STRICT
+    annotationDepth: STRICT
   pos-location:
     mode: STRICT
     annotationDepth: STRICT
@@ -21,6 +22,7 @@ modules:
     annotationDepth: STRICT
   pos-catalog:
     mode: STRICT
+    annotationDepth: STRICT
   pos-shop-manager:
     mode: STRICT
     annotationDepth: STRICT
@@ -53,6 +55,7 @@ modules:
     annotationDepth: STRICT
   pos-security-service:
     mode: STRICT
+    annotationDepth: STRICT
   pos-api-gateway:
     mode: EXCEPTION
     reason: aggregate producer without module paths

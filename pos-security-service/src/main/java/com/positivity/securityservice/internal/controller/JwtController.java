@@ -11,6 +11,7 @@ import com.positivity.securityservice.service.UserService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -59,23 +60,23 @@ public class JwtController {
     /**
      * Issues a single JWT access token for internal trusted callers.
      *
-     * **Contract:**
-     * - Request: POST /v1/auth/internal/token with InternalTokenRequest body
-     * - Response: TokenResponse (single accessToken field)
-     * - Success: 200 OK
-     * - Errors: 400 (invalid request), 403 (forbidden), 500 (server error)
-     *
-     * **See BACKEND_CONTRACT_GUIDE.md: Login Endpoint (page 3)**
-     *
      * @param request token issuance request with subject and optional roles
      * @return token response containing access token
-     *
-     * @throws IllegalArgumentException if username is blank or roles are empty
      */
-    @Operation(
-            summary = "Issue internal JWT access token",
-            description = "Internal endpoint to issue a JWT access token (1-hour expiration). "
-                    + "See BACKEND_CONTRACT_GUIDE.md §Login Endpoint for full specification.")
+    @Operation(operationId = "issueInternalToken", summary = "Issue Internal JWT Access Token", description = """
+                    Issues a single JWT access token (1-hour expiry) for an existing user's username on behalf of a \
+                    trusted internal caller, without checking a password.
+                    Use this tool for internal service-to-service token minting when only an access token is \
+                    needed; do not use issueTokenPair, which also returns a 7-day refresh token, and do not use \
+                    loginUser, which authenticates with credentials.
+                    Preconditions: the caller must hold security:token:issue_internal, and a user must already \
+                    exist for the subject username.
+                    Required inputs: subject, an existing username; roles is nominally optional, but an empty \
+                    effective role set is rejected, so supply at least one role name.
+                    Emits a SECURITY_AUTH_INTERNAL_TOKEN_ISSUE event and persists the issued token so validateToken \
+                    and revokeToken recognize it.
+                    Returns 400 when the subject is blank, no user exists for the subject, or the role set is empty.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "JWT token issued successfully",
@@ -98,7 +99,19 @@ public class JwtController {
     @EmitEvent(id = "SECURITY_AUTH_INTERNAL_TOKEN_ISSUE", apiVersion = "1")
     @PreAuthorize("hasAuthority('security:token:issue_internal')")
     @PostMapping("/internal/token")
-    public ResponseEntity<TokenResponse> issueInternalToken(@Valid @RequestBody InternalTokenRequest request) {
+    public ResponseEntity<TokenResponse> issueInternalToken(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Subject and role names to embed in the internally issued access token.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Internal token request", value = """
+                                                                    {"subject":"svc.reporting","roles":["SHOP_MGR"]}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    InternalTokenRequest request) {
         log.info(
                 "Internal token issuance request received: subject={}, rolesCount={}",
                 request.subject(),
@@ -120,30 +133,23 @@ public class JwtController {
     /**
      * Issues both access and refresh tokens.
      *
-     * **Contract:**
-     * - Request: POST /v1/auth/token-pair with TokenPairRequest body
-     * - Response: TokenPairResponse (accessToken + refreshToken)
-     * - Success: 200 OK
-     * - Errors: 400 (invalid request), 403 (insufficient permission), 500 (server
-     * error)
-     *
-     * **Token Lifetimes:**
-     * - accessToken: 1 hour (3600 seconds)
-     * - refreshToken: 7 days (604800 seconds)
-     *
-     * **See BACKEND_CONTRACT_GUIDE.md: Token Pair Endpoint (page 4)**
-     *
      * @param request token pair request with username and optional roles
      * @return token pair response containing both tokens
-     *
-     * @throws IllegalArgumentException if username is blank or roles are empty
      */
-    @Operation(
-            summary = "Issue privileged JWT token pair (access + refresh)",
-            description =
-                    "Privileged internal endpoint that issues both access token (1-hour) and refresh token (7-day). "
-                            + "Requires authority security:token:issue_internal. "
-                            + "See BACKEND_CONTRACT_GUIDE.md §Token Pair Endpoint for full specification.")
+    @Operation(operationId = "issueTokenPair", summary = "Issue Privileged JWT Token Pair", description = """
+                    Issues a JWT access token (1-hour) and refresh token (7-day) for an existing user's username on \
+                    behalf of a trusted internal caller, embedding uid, roles, perm_bits, and perm_ver claims.
+                    Use this tool when an internal caller needs a refreshable session for an existing user; do not \
+                    use issueInternalToken, which returns only a single access token, and do not use loginUser, \
+                    which requires the user's password.
+                    Preconditions: the caller must hold security:token:issue_internal, and a user must already \
+                    exist for the subject username.
+                    Required inputs: subject, an existing username, and at least one role name in roles; roles are \
+                    expanded to authorities and encoded into the perm_bits bitset claim.
+                    Emits a SECURITY_AUTH_TOKEN_PAIR event and persists the pair so validateToken and \
+                    refreshTokenPair recognize it.
+                    Returns 400 when the subject is blank, no user exists for the subject, or the role set is empty.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Token pair issued successfully",
@@ -166,7 +172,19 @@ public class JwtController {
     @EmitEvent(id = "SECURITY_AUTH_TOKEN_PAIR", apiVersion = "1")
     @PreAuthorize("hasAuthority('security:token:issue_internal')")
     @PostMapping("/token-pair")
-    public ResponseEntity<TokenPairResponse> generateTokenPair(@Valid @RequestBody TokenPairRequest request) {
+    public ResponseEntity<TokenPairResponse> generateTokenPair(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Subject and role names to embed in the issued access and refresh tokens.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Token pair request", value = """
+                                                                    {"subject":"jane.doe","roles":["SHOP_MGR","ACCOUNTING_CLERK"]}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    TokenPairRequest request) {
 
         log.info(
                 "Token pair request received: subject={}, rolesCount={}",
@@ -189,29 +207,24 @@ public class JwtController {
     /**
      * Refreshes the access token using a refresh token.
      *
-     * **Contract:**
-     * - Request: POST /v1/auth/refresh with RefreshTokenRequest body
-     * - Response: TokenPairResponse (new accessToken + refreshToken)
-     * - Success: 200 OK
-     * - Errors: 400 (invalid token), 409 (concurrency), 500 (server error)
-     *
-     * **Process:**
-     * 1. Validate refresh token (signature, expiration, revocation, DB presence)
-     * 2. Revoke old tokens (Redis + database)
-     * 3. Issue new token pair
-     *
-     * **See BACKEND_CONTRACT_GUIDE.md: Refresh Endpoint (page 4)**
-     *
      * @param request refresh token request
      * @return token pair response with new tokens
-     *
-     * @throws IllegalArgumentException if refresh token is invalid
      */
-    @Operation(
-            summary = "Refresh access token using refresh token",
-            description = "Exchange a valid refresh token for a new access token and refresh token. "
-                    + "Old tokens are immediately revoked. "
-                    + "See BACKEND_CONTRACT_GUIDE.md §Refresh Endpoint for full specification.")
+    @Operation(operationId = "refreshTokenPair", summary = "Refresh Access Token With Rotation", description = """
+                    Exchanges a valid refresh token for a new access and refresh token pair, revoking the old pair \
+                    in the same call (token rotation).
+                    Use this tool when an access token nears expiry and the client still holds a refresh token; do \
+                    not use loginUser, which requires credentials, and do not use validateToken, which only checks \
+                    a token without renewing it.
+                    Preconditions: the refresh token must be unexpired, unrevoked, present in the token store, and \
+                    its user must still exist with at least one role.
+                    Required inputs: refreshToken, the exact refresh token string previously issued.
+                    Emits a SECURITY_AUTH_REFRESH event, revokes the old access and refresh token JTIs in Redis, \
+                    deletes the stored pair, and persists the replacement pair.
+                    Returns 400 when the refresh token is invalid, expired, revoked, or unknown, or the user has no \
+                    roles, 401 with INVALID_REFRESH_TOKEN when the referenced user no longer exists, and 409 when \
+                    concurrent refreshes race on the same token.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "New token pair issued successfully",
@@ -231,7 +244,19 @@ public class JwtController {
     @EmitEvent(id = "SECURITY_AUTH_REFRESH", apiVersion = "1")
     @PreAuthorize("permitAll()")
     @PostMapping("/refresh")
-    public ResponseEntity<TokenPairResponse> refreshAccessToken(@Valid @RequestBody RefreshTokenRequest request) {
+    public ResponseEntity<TokenPairResponse> refreshAccessToken(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The refresh token being exchanged for a new token pair.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Refresh request", value = """
+                                                                    {"refreshToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIwMThmMGExYi0yYzNkLTdlNGYtOGE5Yi0wYzFkMmUzZjRhNWIifQ.sig"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    RefreshTokenRequest request) {
 
         log.debug("Refresh token request received");
 
@@ -243,23 +268,20 @@ public class JwtController {
     /**
      * Validates a JWT token.
      *
-     * **Validation Checks:**
-     * 1. JWT signature (HMAC-SHA256)
-     * 2. Token expiration
-     * 3. Revocation status in Redis
-     * 4. Database presence
-     *
-     * **Contract:**
-     * - Request: GET /v1/auth/validate?token=...
-     * - Response: { valid: true/false }
-     * - Success: 200 OK
-     *
      * @param token JWT token to validate
      * @return validation result
      */
-    @Operation(
-            summary = "Validate JWT token",
-            description = "Check if a JWT token is valid (signature, expiration, revocation)")
+    @Operation(operationId = "validateToken", summary = "Validate a JWT Access Token", description = """
+                    Checks whether a JWT access token is currently valid by verifying signature, issuer, audience, \
+                    expiry, Redis revocation status, and presence in the token store.
+                    Use this tool to test a token without side effects; do not use refreshTokenPair, which rotates \
+                    tokens, and do not use revokeToken, which invalidates one.
+                    Preconditions: none beyond possessing the token string; the endpoint is public.
+                    Required inputs: token as a query parameter.
+                    No events are emitted and no state changes; this is a read-only check.
+                    Returns 200 in all cases with a valid flag, so callers must read valid=false rather than expect \
+                    an error status when the token fails any check.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Validation result returned",
@@ -274,20 +296,22 @@ public class JwtController {
     /**
      * Revokes a JWT token.
      *
-     * **Process:**
-     * 1. Extract JTI from token
-     * 2. Add JTI to Redis revocation cache with TTL
-     * 3. Delete token from database
-     *
-     * **Contract:**
-     * - Request: DELETE /v1/auth/revoke?token=...
-     * - Response: 204 No Content
-     * - Success: 204 No Content
-     *
      * @param token JWT token to revoke
      * @return 204 No Content
      */
-    @Operation(summary = "Revoke JWT token", description = "Revoke a JWT token immediately (Redis cache + database)")
+    @Operation(operationId = "revokeToken", summary = "Revoke a JWT Access Token", description = """
+                    Revokes a JWT access token immediately by deleting its stored pair and adding its JTI to the \
+                    Redis revocation cache until natural expiry.
+                    Use this tool to invalidate one compromised or abandoned token; do not use disableUserAccount, \
+                    which revokes every token for a user and blocks future sign-in.
+                    Preconditions: an authenticated caller; the token should exist in the token store, though an \
+                    unknown token is silently ignored.
+                    Required inputs: token as a query parameter, the exact access token string to revoke.
+                    Emits a SECURITY_AUTH_REVOKE event; revocation takes effect immediately for validateToken and \
+                    downstream gateway checks.
+                    Returns 204 in all cases, including when the token was not found, so revocation success cannot \
+                    be inferred from the status code.
+                    """)
     @ApiResponse(responseCode = "204", description = "Token revoked successfully")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
     @EmitEvent(id = "SECURITY_AUTH_REVOKE", apiVersion = "1")
@@ -305,7 +329,16 @@ public class JwtController {
      * @param token JWT token
      * @return set of roles or 401 if token invalid
      */
-    @Operation(summary = "Extract roles from JWT token", description = "Get the roles claim from a JWT token")
+    @Operation(operationId = "getTokenRoles", summary = "Extract Roles From JWT Token", description = """
+                    Extracts the roles claim from a valid JWT token and returns the normalized role names.
+                    Use this tool when a caller holds a token and needs its roles; use getTokenSubject instead for \
+                    the username, and decodePermissionBits instead to expand the token's perm_bits claim into \
+                    permission codes.
+                    Preconditions: the token must pass full validation, including revocation and token-store checks.
+                    Required inputs: token as a query parameter.
+                    No events are emitted and no state changes; this is a read-only claim extraction.
+                    Returns 401 when the token is invalid, expired, revoked, or unknown to the token store.
+                    """)
     @ApiResponse(responseCode = "200", description = "Roles extracted successfully")
     @ApiResponse(responseCode = "401", description = "Token invalid or expired")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
@@ -325,7 +358,16 @@ public class JwtController {
      * @param token JWT token
      * @return subject (username) or 401 if token invalid
      */
-    @Operation(summary = "Extract subject from JWT token", description = "Get the subject (username) from a JWT token")
+    @Operation(operationId = "getTokenSubject", summary = "Extract Subject From JWT Token", description = """
+                    Extracts the subject claim, the username, from a valid JWT token and returns it as a plain \
+                    string body.
+                    Use this tool to resolve which user a token belongs to; use getTokenUserId instead for the \
+                    stable UUID identifier, and getTokenRoles for the role claim.
+                    Preconditions: the token must pass full validation, including revocation and token-store checks.
+                    Required inputs: token as a query parameter.
+                    No events are emitted and no state changes; this is a read-only claim extraction.
+                    Returns 401 when the token is invalid, expired, revoked, or unknown to the token store.
+                    """)
     @ApiResponse(responseCode = "200", description = "Subject extracted successfully")
     @ApiResponse(responseCode = "401", description = "Token invalid or expired")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
@@ -345,9 +387,16 @@ public class JwtController {
      * @param token JWT token
      * @return userId or 401 if token invalid
      */
-    @Operation(
-            summary = "Extract userId from JWT token",
-            description = "Get the stable user identifier from a JWT token")
+    @Operation(operationId = "getTokenUserId", summary = "Extract User Id From JWT Token", description = """
+                    Extracts the stable user identifier from a valid JWT token's uid claim (falling back to the \
+                    legacy userId claim) and returns it as a plain string body.
+                    Use this tool to resolve the user UUID behind a token; use getTokenSubject instead when the \
+                    username is what is needed.
+                    Preconditions: the token must pass full validation, including revocation and token-store checks.
+                    Required inputs: token as a query parameter.
+                    No events are emitted and no state changes; this is a read-only claim extraction.
+                    Returns 401 when the token is invalid, expired, revoked, or unknown to the token store.
+                    """)
     @ApiResponse(responseCode = "200", description = "userId extracted successfully")
     @ApiResponse(responseCode = "401", description = "Token invalid or expired")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")

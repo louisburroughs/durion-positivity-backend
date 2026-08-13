@@ -36,10 +36,19 @@ public class SupplierItemCostListController {
             name = "bearerAuth",
             scopes = {"catalog:supplier_cost:read"})
     @EmitEvent(id = "CATALOG_SUPPLIER_COST_LIST", apiVersion = "1")
-    @Operation(
-            summary = "List supplier cost structures",
-            description =
-                    "Returns a paginated list of supplier cost structures. At least one of itemId or supplierId must be provided.")
+    @Operation(operationId = "listSupplierItemCosts", summary = "List Supplier Cost Structures", description = """
+            Returns a page of supplier item cost structures filtered by item, by supplier, or by both \
+            combined with AND semantics.
+            Use this tool to find which suppliers price an item or which items a supplier prices; use \
+            getSupplierItemCost instead when the structure id is already known.
+            Preconditions: at least one of itemId or supplierId must be supplied; an unfiltered listing is \
+            deliberately not offered.
+            Required inputs: itemId or supplierId (UUIDs) as query parameters, plus standard Spring page, \
+            size and sort parameters.
+            Emits a CATALOG_SUPPLIER_COST_LIST audit event; no cost data changes.
+            Returns 400 when neither itemId nor supplierId is provided, and 200 with an empty page when the \
+            filters match nothing.
+            """)
     @ApiResponse(
             responseCode = "200",
             description = "OK",

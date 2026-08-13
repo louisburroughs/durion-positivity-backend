@@ -42,11 +42,52 @@ public class CustomerBulkIngestController extends AbstractBulkIngestController<C
     private final PersonService personService;
 
     @Override
+    @io.swagger.v3.oas.annotations.Operation(
+            operationId = "bulkIngestCustomers",
+            summary = "Bulk Ingest Customer Records",
+            description = """
+                    Imports a batch of individual customer records, creating each one through the same path \
+                    as createPerson so canonical identities land in pos-people, and reports a per-row \
+                    success or failure result without aborting the batch.
+                    Use this tool for migrations and file imports of individuals; do not use createPerson \
+                    row by row for large loads, and note this path cannot create commercial accounts.
+                    Preconditions: none beyond authorization; rows that fail validation are reported with \
+                    errorCode CUSTOMER_INGEST_FAILED while the rest of the batch proceeds.
+                    Required inputs: jobId (UUID), locationId (UUID), and a non-empty records list where \
+                    each record has firstName and lastName (each max 100) and optionally email, \
+                    phoneNumber, primaryAddress, and customerNumber; preferredContactMethod is derived as \
+                    EMAIL when an email is present and PHONE_CALL otherwise, and operatorId falls back to \
+                    the security context when absent or not a UUID.
+                    Emits a CUSTOMER_BULK_INGEST event, and each successful row publishes a party-changed \
+                    customer fact and writes contact points to pos-people.
+                    Returns 200 with per-row results including failures, and 400 when jobId, locationId, or \
+                    the records list is missing or empty.
+                    """)
     @PostMapping("/bulk-ingest")
     @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_CREATE + "')")
     @EmitEvent(id = "CUSTOMER_BULK_INGEST", apiVersion = "1")
     public ResponseEntity<BulkIngestResponse> bulkIngest(
-            @Valid @RequestBody @NonNull BulkIngestRequest<CustomerBulkIngestRecord> request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The ingest job envelope with the batch of customer records to import.",
+                            required = true,
+                            content =
+                                    @io.swagger.v3.oas.annotations.media.Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                            name = "Two-record batch",
+                                                            value = """
+                                                                    {"jobId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a64",
+                                                                     "locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a65",
+                                                                     "operatorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a66",
+                                                                     "records":[
+                                                                       {"firstName":"Dana","lastName":"Ortiz","email":"dana.ortiz@example.com"},
+                                                                       {"firstName":"Sam","lastName":"Rivera","phoneNumber":"+15125550143"}]}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    BulkIngestRequest<CustomerBulkIngestRecord> request) {
         return super.bulkIngest(request);
     }
 
