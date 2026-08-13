@@ -35,10 +35,19 @@ public class InvoiceArtifactController {
         this.artifactService = artifactService;
     }
 
-    @Operation(
-            summary = "List the downloadable artifacts (documents) for an invoice",
-            description =
-                    "Returns the documents available for the invoice (the invoice itself and any receipts) as opaque, URL-safe artifact references with suggested file names and MIME types.")
+    @Operation(operationId = "listInvoiceArtifacts", summary = "List Downloadable Invoice Artifacts", description = """
+                    Returns the downloadable documents for an invoice — always the invoice document itself, plus one \
+                    entry per generated receipt — as opaque URL-safe artifact references with suggested file names \
+                    and application/pdf MIME types.
+                    Use this tool to discover artifactRefId values before minting a download token; do not use \
+                    downloadInvoiceArtifact directly, which requires a signed token from \
+                    createArtifactDownloadToken.
+                    Preconditions: the invoice must exist; receipts appear only after generateReceipt has created \
+                    them.
+                    Required inputs: invoiceId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no invoice exists for the supplied id.
+                    """)
     @ApiResponse(responseCode = "200", description = "Artifacts listed")
     @ApiResponse(responseCode = "404", description = "Invoice not found")
     @SecurityRequirement(name = "bearerAuth")
@@ -51,9 +60,21 @@ public class InvoiceArtifactController {
     }
 
     @Operation(
-            summary = "Create a short-lived download token for an invoice artifact",
-            description =
-                    "Issues a short-lived signed token bound to the invoice and artifact. The token is presented to the public download endpoint so a browser can fetch the file via a direct link.")
+            operationId = "createArtifactDownloadToken",
+            summary = "Create Artifact Download Token",
+            description = """
+                    Issues a short-lived signed token bound to one invoice artifact, so a browser can fetch the PDF \
+                    through the public download link without an Authorization header.
+                    Use this tool after listInvoiceArtifacts has supplied an artifactRefId; do not use \
+                    downloadInvoiceArtifact without a token — it rejects unsigned requests.
+                    Preconditions: the invoice must exist and the artifact reference must belong to that invoice \
+                    (an invoice ref must match the path invoice, a receipt ref must be one of its receipts).
+                    Required inputs: invoiceId (UUID) and artifactRefId (opaque reference from \
+                    listInvoiceArtifacts) as path parameters; there is no request body.
+                    No events are emitted and no record is stored; the token is stateless, signed, and expires after \
+                    300 seconds by default (invoice.artifacts.token-ttl-seconds).
+                    Returns 404 when the invoice does not exist or the artifact does not belong to it.
+                    """)
     @ApiResponse(responseCode = "200", description = "Token issued")
     @ApiResponse(responseCode = "404", description = "Invoice or artifact not found")
     @SecurityRequirement(name = "bearerAuth")

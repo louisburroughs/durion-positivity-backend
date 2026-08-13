@@ -7,6 +7,10 @@ import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.events.EmitEvent;
 import com.positivity.price.internal.dto.BasePriceBulkIngestRecord;
 import com.positivity.price.service.BasePriceService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
@@ -37,12 +41,56 @@ public class BasePriceBulkIngestController extends AbstractBulkIngestController<
 
     private final BasePriceService basePriceService;
 
+    private static final String BULK_INGEST_EXAMPLE = """
+            {"jobId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4d01",
+             "locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4d02",
+             "operatorId":"user-jdoe",
+             "records":[
+               {"productId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01",
+                "msrp":"125.50",
+                "currency":"USD",
+                "effectiveFrom":"2026-03-01T00:00:00Z"}]}
+            """;
+
     @Override
     @PostMapping("/bulk-ingest")
     @PreAuthorize("hasAuthority('pricing:base_price:create')")
     @EmitEvent(id = "PRICE_BULK_INGEST", apiVersion = "1")
+    @Operation(operationId = "bulkIngestBasePrices", summary = "Bulk Import Base Price Records", description = """
+                    Bulk-imports base price (MSRP) records, appending an effective-dated price window per product and \
+                    currency.
+                    Use this tool for batch price loads from an upstream catalog; use calculatePriceQuote instead to \
+                    read the price effective at a pricing instant, since quoting resolves these windows.
+                    Preconditions: each record's effectiveFrom must start after the product's current window begins; \
+                    re-submitting the current open window's unchanged price is idempotent and returns the existing id.
+                    Required inputs: jobId and locationId (UUIDs) and records (at least one), each record carrying \
+                    productId (UUID string), msrp (decimal string), currency (ISO 4217 code), and effectiveFrom as an \
+                    ISO-8601 instant such as 2026-03-01T00:00:00Z; operatorId is optional.
+                    Emits a PRICE_BULK_INGEST event; a new window closes the previous open window at its effectiveFrom \
+                    and rows are processed independently, so one bad row does not abort the batch.
+                    Returns 200 with per-row results even when rows fail, marking failed rows with errorCode \
+                    PRICE_INGEST_FAILED (including overlapping-window conflicts and unparseable values), and 400 when \
+                    the batch envelope itself is invalid.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Batch processed; check per-record success and failure results.")
+    @ApiResponse(responseCode = "400", description = "Invalid batch envelope.")
+    @ApiResponse(responseCode = "403", description = "Insufficient permissions.")
     public ResponseEntity<BulkIngestResponse> bulkIngest(
-            @Valid @RequestBody @NonNull BulkIngestRequest<BasePriceBulkIngestRecord> request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Batch envelope of base-price records to ingest, scoped to a job and location.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Single price window",
+                                                            value = BULK_INGEST_EXAMPLE)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    BulkIngestRequest<BasePriceBulkIngestRecord> request) {
         return super.bulkIngest(request);
     }
 

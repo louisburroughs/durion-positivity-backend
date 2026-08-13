@@ -44,24 +44,38 @@ public class McpChatController {
         this.currentUserContextResolver = currentUserContextResolver;
     }
 
-    @Operation(
-            summary = "Execute MCP chat message",
-            description =
-                    "Executes a chat message and returns the full response once complete. For streaming responses, use the /chat/stream endpoint which returns tokens as they are generated.",
-            requestBody =
-                    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            required = true,
-                            content =
-                                    @io.swagger.v3.oas.annotations.media.Content(
-                                            mediaType = org.springframework.http.MediaType.APPLICATION_JSON_VALUE,
-                                            schema =
-                                                    @io.swagger.v3.oas.annotations.media.Schema(
-                                                            implementation = McpChatController.ChatRequest.class))))
+    @Operation(operationId = "executeMcpChat", summary = "Execute a Blocking MCP Chat Turn", description = """
+                    Executes a single chat message against the caller's permission-scoped assistant agent and \
+                    returns the complete response text in one blocking call.
+                    Use this tool for a simple request-response chat turn; do not use streamMcpChat, which returns \
+                    the same answer incrementally as Server-Sent Events.
+                    Preconditions: the agent's tool set is selected from the caller's granted permission codes and \
+                    active workflow state, so the same message can produce different results for different callers.
+                    Required inputs: message (non-blank text); the acting user is derived from the authenticated \
+                    principal, not from the body.
+                    Emits a MCP_CHAT_EXECUTE event; the agent may invoke permission-gated tools, RAG retrieval and \
+                    web search while producing the answer.
+                    Returns 200 with the full response text, and 429 when the caller's chat rate limit is exceeded.
+                    """)
     @PostMapping("/chat")
     @PreAuthorize("hasAuthority('" + McpPermissions.MCP_CHAT_EXECUTE + "')")
     @EmitEvent(id = "MCP_CHAT_EXECUTE", apiVersion = "1")
     public ResponseEntity<ChatResponse> chat(
-            @RequestBody @Valid @NonNull ChatRequest request,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Single user chat message for the assistant agent to answer in full.",
+                            required = true,
+                            content =
+                                    @io.swagger.v3.oas.annotations.media.Content(
+                                            mediaType = org.springframework.http.MediaType.APPLICATION_JSON_VALUE,
+                                            examples =
+                                                    @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                                            name = "Chat message",
+                                                            value =
+                                                                    "{\"message\":\"Show me the open workorders for today\"}")))
+                    @RequestBody
+                    @Valid
+                    @NonNull
+                    ChatRequest request,
             @CurrentSecurityContext(expression = "authentication") @NonNull Authentication authentication) {
 
         CurrentUserContext currentUserContext = currentUserContextResolver.resolve(authentication);

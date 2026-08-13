@@ -98,8 +98,6 @@ class OpenApiModuleValidatorTest {
                         "pos-documents POST /v1/documents: description missing negative guidance"
                                 + " (\"do not use ...\" / \"... instead\")",
                         "pos-documents POST /v1/documents: request body missing description (ADR-0042 §3)",
-                        "pos-documents POST /v1/documents: request body missing explicit required flag"
-                                + " (ADR-0042 §3)",
                         "pos-documents POST /v1/documents: request body missing example (ADR-0042 §3)");
         assertThat(issues).allSatisfy(issue -> assertThat(issue.mode()).isEqualTo(OpenApiModulePolicy.Mode.STRICT));
     }

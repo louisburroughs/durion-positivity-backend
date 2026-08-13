@@ -7,6 +7,8 @@ import com.positivity.invoice.internal.enums.DepositSourceType;
 import com.positivity.invoice.service.DepositCreditService;
 import com.positivity.invoice.service.model.CreateDepositCommand;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -42,13 +44,45 @@ public class DepositCreditController {
     private final DepositCreditService depositCreditService;
 
     @Operation(
-            summary = "Register a deposit credit taken by a sales order",
-            description = "Creates a deposit credit record tied to the provided source transaction.",
+            operationId = "createDepositCredit",
+            summary = "Register a Deposit Credit",
+            description = """
+                    Creates an AVAILABLE deposit credit for a down-payment taken at pos-order checkout, holding the \
+                    amount against its source document until a settlement invoice draws it down.
+                    Use this tool when a deposit was tendered against an estimate, workorder, or order; do not use \
+                    refundDepositCredit, which returns a credit's remaining balance when the source is cancelled.
+                    Preconditions: none beyond a priced source document — the call is idempotent on orderId, so a \
+                    replay for an order that already registered a credit returns the existing record unchanged.
+                    Required inputs: orderId (UUID, idempotency anchor), sourceType (ESTIMATE, WORKORDER or ORDER), \
+                    sourceId (UUID) and amount (positive); partyId is optional and currencyCode defaults to USD.
+                    Emits an INVOICE_DEPOSIT_CREATE event; no invoice records are touched until settlement applies \
+                    the credit.
+                    Returns 201 with the credit (existing or new), and 422 when the amount is not positive or the \
+                    sourceType is not a known value.
+                    """,
             tags = {"Deposit Credits"})
     @PostMapping
     @EmitEvent(id = "INVOICE_DEPOSIT_CREATE", apiVersion = "1")
     @SecurityRequirement(name = "bearerAuth")
-    public ResponseEntity<DepositCreditResponse> createDeposit(@Valid @RequestBody CreateDepositRequest request) {
+    public ResponseEntity<DepositCreditResponse> createDeposit(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Deposit taken at checkout to register as a credit against its source document.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Workorder down-payment", value = """
+                                                                    {"orderId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10",
+                                                                     "sourceType":"WORKORDER",
+                                                                     "sourceId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a11",
+                                                                     "partyId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a12",
+                                                                     "amount":200.00,
+                                                                     "currencyCode":"USD"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    CreateDepositRequest request) {
         DepositCreditResponse response =
                 DepositCreditResponse.from(depositCreditService.createDeposit(new CreateDepositCommand(
                         request.getOrderId(),
@@ -61,8 +95,18 @@ public class DepositCreditController {
     }
 
     @Operation(
-            summary = "Get a deposit credit by id",
-            description = "Retrieves a single deposit credit by its identifier.",
+            operationId = "getDepositCredit",
+            summary = "Get a Deposit Credit",
+            description = """
+                    Returns a single deposit credit with its status (AVAILABLE, PARTIALLY_APPLIED, FULLY_APPLIED or \
+                    REFUNDED), original amount and remaining balance.
+                    Use this tool when the depositCreditId is already known; use listDepositCreditsBySource instead \
+                    to find the credits held against an estimate, workorder or order.
+                    Preconditions: the deposit credit must exist.
+                    Required inputs: depositCreditId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no deposit credit exists for the supplied id.
+                    """,
             tags = {"Deposit Credits"})
     @GetMapping("/{depositCreditId}")
     @SecurityRequirement(name = "bearerAuth")
@@ -71,8 +115,19 @@ public class DepositCreditController {
     }
 
     @Operation(
-            summary = "List deposit credits held against a source document",
-            description = "Lists all deposit credits associated with the given source type and source id.",
+            operationId = "listDepositCreditsBySource",
+            summary = "List Deposit Credits by Source",
+            description = """
+                    Lists every deposit credit held against one source document, identified by its type and id.
+                    Use this tool when checking what down-payments a settlement can draw on; use getDepositCredit \
+                    instead when a specific depositCreditId is already known.
+                    Preconditions: none — an unknown or credit-free source returns an empty list rather than an \
+                    error.
+                    Required inputs: sourceType query parameter (ESTIMATE, WORKORDER or ORDER, case-insensitive) and \
+                    sourceId (UUID) query parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 422 when sourceType is not one of the known values.
+                    """,
             tags = {"Deposit Credits"})
     @GetMapping
     @SecurityRequirement(name = "bearerAuth")
@@ -85,8 +140,21 @@ public class DepositCreditController {
     }
 
     @Operation(
-            summary = "Refund a deposit credit's remaining balance",
-            description = "Used when the deposit's source is cancelled after the deposit was taken (spec R7.4).",
+            operationId = "refundDepositCredit",
+            summary = "Refund a Deposit Credit Balance",
+            description = """
+                    Zeroes the remaining balance of a deposit credit and marks it REFUNDED, recording that the \
+                    deposit is returned because its source document was cancelled after the deposit was taken.
+                    Use this tool on source cancellation (spec R7.4); do not use createDepositCredit, which \
+                    registers a new deposit, and note the cash disbursement itself is not performed here.
+                    Preconditions: the deposit credit must exist; a credit already REFUNDED is left unchanged, so \
+                    the call is idempotent.
+                    Required inputs: depositCreditId (UUID) as a path parameter; the reason query parameter is \
+                    optional and defaults to "source cancelled"; there is no request body.
+                    Emits an INVOICE_DEPOSIT_REFUND event and sets the credit's status to REFUNDED with a zero \
+                    remaining balance.
+                    Returns 200 with the refunded credit, and 404 when no deposit credit exists for the supplied id.
+                    """,
             tags = {"Deposit Credits"})
     @PostMapping("/{depositCreditId}/refund")
     @EmitEvent(id = "INVOICE_DEPOSIT_REFUND", apiVersion = "1")

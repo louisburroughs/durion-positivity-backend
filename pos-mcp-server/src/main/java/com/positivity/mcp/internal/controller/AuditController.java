@@ -39,10 +39,21 @@ class AuditController {
     @GetMapping
     @EmitEvent(id = "NLTI_AUDIT_QUERY", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + McpPermissions.NLTI_AUDIT_READ + "')")
-    @Operation(
-            summary = "Query the NLTI audit ledger",
-            description =
-                    "Query the NLTI audit ledger with optional filters for correlation ID, time range, and event type. Results are paginated.")
+    @Operation(operationId = "searchNltiAuditEvents", summary = "Query the NLTI Audit Ledger", description = """
+                    Returns a page of NLTI audit ledger entries recording request, intent, plan, confirmation and \
+                    execution events.
+                    Use this tool to trace what the NLTI pipeline did for a conversation or time window; filter by \
+                    correlationId rather than paging the whole ledger when tracing a single request.
+                    Preconditions: none; the ledger is append-only and entries exist only for activity that has \
+                    already happened.
+                    Required inputs: all filters are optional — correlationId (UUID) takes precedence, then from \
+                    and to (ISO-8601 instants, applied only when both are present), then eventType (one of \
+                    REQUEST, INTENT, PLAN, CONFIRMATION, EXECUTION_STEP, EXECUTION_COMPLETE, EXECUTION_FAILED); \
+                    results default to page size 20 sorted by timestamp.
+                    Emits a NLTI_AUDIT_QUERY event; the ledger itself is never modified by this call.
+                    Returns 200 with a page of audit events, and 400 with code INVALID_EVENT_TYPE when eventType \
+                    is not one of the supported values.
+                    """)
     ResponseEntity<Page<AuditEventResponse>> queryAudit(
             @RequestParam(required = false) UUID correlationId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,

@@ -23,9 +23,21 @@ paths:
     get:
       tags:
       - System Prompts
-      summary: Get system prompt
-      description: Retrieve a single MCP system prompt by its identifier
-      operationId: get
+      summary: Get an MCP System Prompt
+      description: 'Returns a single MCP system prompt by its identifier, including its full content.
+
+        Use this tool when the prompt id (UUID) is already known; use listSystemPrompts instead to discover ids or find a prompt by name.
+
+        Preconditions: a system prompt with the given id must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no system prompt exists for the supplied id.
+
+        '
+      operationId: getSystemPrompt
       parameters:
       - name: id
         in: path
@@ -54,9 +66,21 @@ paths:
     put:
       tags:
       - System Prompts
-      summary: Update system prompt
-      description: Update an existing MCP system prompt by replacing its editable fields
-      operationId: update
+      summary: Update an MCP System Prompt
+      description: 'Replaces the name and content of an existing MCP system prompt.
+
+        Use this tool to edit prompt text or rename a prompt; do not use createSystemPrompt, which adds a new prompt alongside the existing ones.
+
+        Preconditions: the prompt must exist, and when the name is being changed no other prompt may already use the new name.
+
+        Required inputs: id (UUID) as a path parameter plus name and content in the body; both body fields are mandatory and fully replace the stored values.
+
+        Emits a MCP_SYSTEM_PROMPT_UPDATE event and invalidates cached agents built from the prompt so subsequent chats use the new content.
+
+        Returns 200 with the updated prompt, 404 when no prompt exists for the id, and 400 when the new name is already used by another prompt.
+
+        '
+      operationId: updateSystemPrompt
       parameters:
       - name: id
         in: path
@@ -65,10 +89,17 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Full replacement name and content for the stored prompt.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SystemPromptRequest'
+            examples:
+              Revised assistant prompt:
+                description: Revised assistant prompt
+                value:
+                  name: Workorder Assistant
+                  content: You are a concise assistant that creates and updates workorders.
         required: true
       responses:
         '200':
@@ -91,9 +122,21 @@ paths:
     delete:
       tags:
       - System Prompts
-      summary: Delete system prompt
-      description: Delete an MCP system prompt so it can no longer be selected for agent sessions
-      operationId: delete
+      summary: Delete an MCP System Prompt
+      description: 'Deletes an MCP system prompt so it can no longer be assigned to agent sessions.
+
+        Use this tool to retire a prompt; do not use updateSystemPrompt, which keeps the prompt and changes its fields.
+
+        Preconditions: none; deleting an id that does not exist is a no-op.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits a MCP_SYSTEM_PROMPT_DELETE event and, when the prompt existed, invalidates cached agents that were built from it.
+
+        Returns 204 whether or not the prompt existed, making the call idempotent.
+
+        '
+      operationId: deleteSystemPrompt
       parameters:
       - name: id
         in: path
@@ -115,9 +158,21 @@ paths:
     get:
       tags:
       - LLM API Configuration
-      summary: Get an LLM API configuration
-      description: Retrieve a single LLM API provider configuration by its identifier.
-      operationId: get_1
+      summary: Get an LLM API Configuration
+      description: 'Returns a single LLM provider API configuration by its identifier.
+
+        Use this tool when the configuration id (UUID) is already known; use listLlmApiConfigs instead to discover ids.
+
+        Preconditions: a configuration with the given id must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 when the configuration exists; an unknown id is not mapped to a 404 by this module and currently surfaces as a 500 error.
+
+        '
+      operationId: getLlmApiConfig
       parameters:
       - name: id
         in: path
@@ -140,9 +195,21 @@ paths:
     put:
       tags:
       - LLM API Configuration
-      summary: Update an LLM API configuration
-      description: Update an existing LLM API provider configuration by its identifier.
-      operationId: update_1
+      summary: Update an LLM API Configuration
+      description: 'Replaces every editable field of an existing LLM provider API configuration identified by id.
+
+        Use this tool to change a provider''s model, base URL, credential or headers; do not use createLlmApiConfig, which registers an additional configuration.
+
+        Preconditions: the configuration must exist, and when apiId is being changed the new apiId must not already be used by another configuration.
+
+        Required inputs: id (UUID) as a path parameter plus a full body with apiId, model, baseUrl and apiKey; headers defaults to empty when omitted, so a partial body is not merged.
+
+        Emits a MCP_LLM_API_UPDATE event.
+
+        Returns 200 with the updated configuration; an unknown id or a duplicate apiId is rejected, though this module surfaces both as a 500 rather than a 404 or 409.
+
+        '
+      operationId: updateLlmApiConfig
       parameters:
       - name: id
         in: path
@@ -151,10 +218,21 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Full replacement provider endpoint, model and credential values.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LlmApiConfigRequest'
+            examples:
+              Updated OpenAI provider:
+                description: Updated OpenAI provider
+                value:
+                  apiId: openai-gpt4o
+                  model: gpt-4o
+                  baseUrl: https://api.openai.com/v1
+                  apiKey: sk-proj-xxxxxxxxxxxxxxxx
+                  headers:
+                    X-Org-Id: org-01960003
         required: true
       responses:
         '200':
@@ -171,9 +249,21 @@ paths:
     delete:
       tags:
       - LLM API Configuration
-      summary: Delete an LLM API configuration
-      description: Delete an existing LLM API provider configuration by its identifier.
-      operationId: delete_1
+      summary: Delete an LLM API Configuration
+      description: 'Deletes an LLM provider API configuration so the MCP server can no longer use it to invoke that provider.
+
+        Use this tool to retire a provider configuration; do not use updateLlmApiConfig, which keeps the configuration and changes its fields.
+
+        Preconditions: none; deleting an id that does not exist is a no-op.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits a MCP_LLM_API_DELETE event.
+
+        Returns 204 whether or not the configuration existed, making the call idempotent.
+
+        '
+      operationId: deleteLlmApiConfig
       parameters:
       - name: id
         in: path
@@ -193,8 +283,20 @@ paths:
     get:
       tags:
       - MCP Tool Permissions
-      summary: List a tool's permission grants
-      description: Return the permission codes currently granted to a discovered OpenAPI tool.
+      summary: List a Tool's Permission Grants
+      description: 'Returns the permission codes currently granted to a discovered OpenAPI tool.
+
+        Use this tool to inspect why a discovered tool is or is not selectable for a caller; use grantToolPermission or revokeToolPermission instead to change the grants.
+
+        Preconditions: the named tool must exist as a discovered (source openapi) tool; discovered tools are fail-closed and unselectable until at least one grant exists.
+
+        Required inputs: toolName as a path parameter, matching the tool''s registered name exactly.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the grant set (possibly empty), and 404 when no discovered OpenAPI tool has the given name.
+
+        '
       operationId: listToolPermissions
       parameters:
       - name: toolName
@@ -217,8 +319,20 @@ paths:
     post:
       tags:
       - MCP Tool Permissions
-      summary: Grant a permission to a tool
-      description: Grant a permission code to a discovered OpenAPI tool so callers holding it can select the tool. Idempotent. Returns the tool's full permission set.
+      summary: Grant a Permission to a Tool
+      description: 'Grants a permission code to a discovered OpenAPI tool so callers holding that code can select the tool during chat.
+
+        Use this tool to open up a fail-closed discovered operation; do not use revokeToolPermission, which removes a grant.
+
+        Preconditions: the named tool must exist as a discovered (source openapi) tool; granting a code that is already present changes nothing.
+
+        Required inputs: toolName as a path parameter and permissionCode in the body, either the literal AUTHENTICATED or a domain:resource:action code such as event-receiver:event_type:view.
+
+        Emits a MCP_TOOL_PERMISSION_GRANT event; when the grant set actually changes, cached role agents are invalidated so the tool becomes selectable on the next chat turn.
+
+        Returns 201 with the tool''s full permission set (idempotently for repeated grants), 404 when no discovered OpenAPI tool has the given name, and 400 when the permission code does not match the required pattern.
+
+        '
       operationId: grantToolPermission
       parameters:
       - name: toolName
@@ -227,10 +341,16 @@ paths:
         schema:
           type: string
       requestBody:
+        description: The permission code the tool should be selectable under.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ToolPermissionRequest'
+            examples:
+              Domain permission grant:
+                description: Domain permission grant
+                value:
+                  permissionCode: event-receiver:event_type:view
         required: true
       responses:
         '200':
@@ -247,8 +367,20 @@ paths:
     delete:
       tags:
       - MCP Tool Permissions
-      summary: Revoke a permission from a tool
-      description: Revoke a permission code from a discovered OpenAPI tool. Idempotent.
+      summary: Revoke a Permission From a Tool
+      description: 'Revokes a permission code from a discovered OpenAPI tool, removing it from the set that makes the tool selectable.
+
+        Use this tool to withdraw chat access to a discovered operation; do not use grantToolPermission, which adds a grant.
+
+        Preconditions: the named tool must exist as a discovered (source openapi) tool; revoking a code that is not granted changes nothing.
+
+        Required inputs: toolName as a path parameter and permissionCode as a query parameter; there is no request body.
+
+        Emits a MCP_TOOL_PERMISSION_REVOKE event; when the grant set actually changes, cached role agents are invalidated so the tool stops being selectable.
+
+        Returns 204 whether or not the code was granted (idempotent), 404 when no discovered OpenAPI tool has the given name, and 400 when the permission code is blank.
+
+        '
       operationId: revokeToolPermission
       parameters:
       - name: toolName
@@ -274,9 +406,21 @@ paths:
     get:
       tags:
       - System Prompts
-      summary: List system prompts
-      description: List all configured MCP system prompts that can be assigned to agents
-      operationId: list
+      summary: List All MCP System Prompts
+      description: 'Returns every reusable MCP system prompt with its name and content.
+
+        Use this tool to browse prompts or to find a prompt id by name; use getSystemPrompt instead when the id is already known.
+
+        Preconditions: none; an empty list simply means no prompts have been created yet.
+
+        Required inputs: none; there are no filters, no paging and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the full list of prompts.
+
+        '
+      operationId: listSystemPrompts
       responses:
         '200':
           description: System prompts returned
@@ -294,14 +438,33 @@ paths:
     post:
       tags:
       - System Prompts
-      summary: Create system prompt
-      description: Create a new MCP system prompt that can be used during agent orchestration
-      operationId: create
+      summary: Create an MCP System Prompt
+      description: 'Creates a reusable MCP system prompt that agent orchestration can assign to assistant agents.
+
+        Use this tool to add a new named prompt; do not use updateSystemPrompt, which edits a prompt that already exists.
+
+        Preconditions: no prompt may already use the requested name, which is unique across prompts.
+
+        Required inputs: name (unique, human-readable) and content (the prompt text); both are mandatory and non-blank.
+
+        Emits a MCP_SYSTEM_PROMPT_CREATE event and invalidates any cached agents built from a prompt of that name so they rebuild with the new content.
+
+        Returns 201 with the stored prompt, and 400 when a prompt with the same name already exists.
+
+        '
+      operationId: createSystemPrompt
       requestBody:
+        description: The named prompt text to store for assignment to assistant agents.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SystemPromptRequest'
+            examples:
+              Workorder assistant prompt:
+                description: Workorder assistant prompt
+                value:
+                  name: Workorder Assistant
+                  content: You are a helpful assistant that creates workorders.
         required: true
       responses:
         '201':
@@ -325,9 +488,21 @@ paths:
     post:
       tags:
       - NLTI
-      summary: Set the session workflow state
-      description: Advances the operational workflow state of the caller's NLTI session so subsequent chat turns receive the workflow-gated tool set.
-      operationId: setWorkflowState
+      summary: Set the Session Workflow State
+      description: 'Advances the operational workflow state persisted on the caller''s NLTI session so subsequent chat turns receive the workflow-gated tool set for that state.
+
+        Use this tool when a conversation enters or leaves an operational flow such as purchase-order creation; do not use submitNltiRequest, which submits a new prompt and never changes the workflow state directly.
+
+        Preconditions: the session must exist and be owned by the authenticated subject; an unknown session and a session owned by someone else are both rejected as ownership violations.
+
+        Required inputs: sessionId (UUID) as a path parameter and workflowState, one of IDLE, CREATING_PO, RECEIVING_ASN, INVENTORY_RECON or PROCESSING_RETURN; new sessions default to IDLE.
+
+        Emits a NLTI_SESSION_WORKFLOW_STATE_SET event and updates only the session''s workflow state.
+
+        Returns 200 with the persisted state, and 403 when the session does not exist or is not owned by the caller.
+
+        '
+      operationId: setSessionWorkflowState
       parameters:
       - name: sessionId
         in: path
@@ -336,10 +511,16 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: The operational workflow state the session should move to.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/WorkflowStateUpdateRequest'
+            examples:
+              Enter purchase-order flow:
+                description: Enter purchase-order flow
+                value:
+                  workflowState: CREATING_PO
         required: true
       responses:
         '200':
@@ -357,9 +538,21 @@ paths:
     post:
       tags:
       - NLTI
-      summary: Submit a natural language task request
-      description: Submit a natural language task request for asynchronous MCP processing and correlation tracking
-      operationId: submitRequest
+      summary: Submit a Natural Language Task Request
+      description: 'Submits a natural-language prompt for asynchronous task interpretation, classifying the intent as QUERY or ACTION; an ACTION prompt yields a persisted write-plan preview that must be explicitly confirmed and is never executed directly.
+
+        Use this tool to start or continue a natural-language task conversation; do not use confirmWritePlan, which executes a plan this operation has already previewed.
+
+        Preconditions: a supplied sessionId must belong to the calling subject, and a session idle for more than 24 hours is silently replaced with a new one.
+
+        Required inputs: prompt (non-blank text); sessionId (UUID) is optional and a new session is created when it is absent; clientContext is an optional key-value map; an optional X-Correlation-Id header is reused and echoed back, otherwise a correlation id is generated.
+
+        Emits a NLTI_REQUEST_SUBMIT event and persists the request with a SHA-256 prompt hash rather than the raw prompt text.
+
+        Returns 202 with status ACCEPTED or an attached write-plan preview, 403 when the supplied sessionId is owned by another subject, and 429 when the per-session rate limit (default 100 requests) is exceeded.
+
+        '
+      operationId: submitNltiRequest
       parameters:
       - name: X-Correlation-Id
         in: header
@@ -367,10 +560,19 @@ paths:
         schema:
           type: string
       requestBody:
+        description: Natural-language prompt to interpret, with optional session continuity and client context.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/NltiRequestDTO'
+            examples:
+              Workorder prompt:
+                description: Workorder prompt
+                value:
+                  prompt: Create a workorder for an oil change at the downtown store
+                  sessionId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  clientContext:
+                    locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
         required: true
       responses:
         '200':
@@ -388,8 +590,20 @@ paths:
     post:
       tags:
       - NLTI
-      summary: Confirm a previewed write plan
-      description: Executes the exact persisted arguments of the write plan attached to the request. Rejects expired plans, re-checks the caller's permission at execution time, and returns the prior outcome for an already-executed idempotency key instead of re-executing.
+      summary: Confirm a Previewed Write Plan
+      description: 'Executes the previewed write plan attached to an NLTI request, invoking the plan''s target tool with the exact persisted arguments rather than a re-parse of the user''s text.
+
+        Use this tool after submitNltiRequest returned a PENDING_CONFIRMATION write-plan preview and the user approved it; do not use cancelWritePlan, which discards the plan without executing it.
+
+        Preconditions: the plan and its request must exist and belong to the authenticated subject; the plan must not be expired, cancelled or already executing; the caller must still hold the target tool''s permission at execution time; and for MEDIUM or higher risk plans the source-entity versions captured at plan time must be unchanged.
+
+        Required inputs: requestId (UUID) as a path parameter; the body is optional and may carry idempotencyKey, which must match the plan''s key when present.
+
+        Emits a NLTI_WRITE_PLAN_CONFIRM event, appends CONFIRMATION and EXECUTION audit-ledger entries, and executes the target tool; re-confirming a COMPLETE plan returns the prior outcome without re-executing.
+
+        Returns 200 on execution or idempotent replay, 404 when no plan or request exists for the id, 403 when the plan is not owned by the caller or the tool permission is missing, 409 when the plan is cancelled, executing, previously failed, stale, or the idempotency key mismatches, 410 when the plan has expired, and 502 when the target tool call itself fails.
+
+        '
       operationId: confirmWritePlan
       parameters:
       - name: requestId
@@ -404,10 +618,16 @@ paths:
         schema:
           type: string
       requestBody:
+        description: Optional confirmation payload carrying the idempotency key from the plan preview.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ConfirmWritePlanRequest'
+            examples:
+              Confirm with idempotency key:
+                description: Confirm with idempotency key
+                value:
+                  idempotencyKey: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
       responses:
         '200':
           description: OK
@@ -424,8 +644,20 @@ paths:
     post:
       tags:
       - NLTI
-      summary: Cancel a previewed write plan
-      description: Cancels the pending write plan attached to the request without executing it.
+      summary: Cancel a Previewed Write Plan
+      description: 'Cancels the pending write plan attached to an NLTI request so it can never be executed.
+
+        Use this tool when the user declines a previewed plan; do not use confirmWritePlan, which executes the plan instead of discarding it.
+
+        Preconditions: the plan and its request must exist and belong to the authenticated subject; a plan that is already CANCELLED or EXPIRED is returned unchanged, making the call idempotent.
+
+        Required inputs: requestId (UUID) as a path parameter; there is no request body.
+
+        Emits a NLTI_WRITE_PLAN_CANCEL event and appends a CONFIRMATION audit-ledger entry with outcome cancelled.
+
+        Returns 200 with the plan (idempotently for already-inactive plans), 404 when no plan or request exists for the id, 403 when the plan is not owned by the caller, and 409 when the plan is COMPLETE, EXECUTING or ERROR and can no longer be cancelled.
+
+        '
       operationId: cancelWritePlan
       parameters:
       - name: requestId
@@ -450,14 +682,35 @@ paths:
     post:
       tags:
       - Document Ingestion
-      summary: Queue a document for ingestion into the RAG vector store
-      description: Submit a document for asynchronous ingestion into the RAG vector store. The request includes the document content and optional metadata. The response returns a job ID that can be used to track the ingestion status.
+      summary: Queue a Document for RAG Ingestion
+      description: 'Queues a text document for asynchronous ingestion into the RAG vector store and returns a trackable job.
+
+        Use this tool to add reference content that chat agents can retrieve; do not use getDocumentIngestionJob, which only reads the status of a job that was already queued.
+
+        Preconditions: none beyond the mcp:document:ingest authority; the job is accepted and persisted before any embedding work happens.
+
+        Required inputs: content (non-blank raw text); metadata is an optional key-value map whose document_id entry names the document — when absent a random identifier is generated.
+
+        Emits a MCP_DOCUMENT_INGEST event and creates a PENDING job that is processed in the background through RUNNING to SUCCEEDED or FAILED.
+
+        Returns 202 with the job and a Location header pointing at the job-status resource; embedding failures are reported on the job''s errorMessage, not on this call.
+
+        '
       operationId: ingestDocument
       requestBody:
+        description: Raw document text to embed, with optional identifying metadata.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/DocumentIngestionRequest'
+            examples:
+              Policy document:
+                description: Policy document
+                value:
+                  content: 'Refund policy: customers may return items within 30 days.'
+                  metadata:
+                    document_id: policy-refunds
+                    source: manual
         required: true
       responses:
         '200':
@@ -475,14 +728,32 @@ paths:
     post:
       tags:
       - mcp-chat-controller
-      summary: Execute MCP chat message
-      description: Executes a chat message and returns the full response once complete. For streaming responses, use the /chat/stream endpoint which returns tokens as they are generated.
-      operationId: chat
+      summary: Execute a Blocking MCP Chat Turn
+      description: 'Executes a single chat message against the caller''s permission-scoped assistant agent and returns the complete response text in one blocking call.
+
+        Use this tool for a simple request-response chat turn; do not use streamMcpChat, which returns the same answer incrementally as Server-Sent Events.
+
+        Preconditions: the agent''s tool set is selected from the caller''s granted permission codes and active workflow state, so the same message can produce different results for different callers.
+
+        Required inputs: message (non-blank text); the acting user is derived from the authenticated principal, not from the body.
+
+        Emits a MCP_CHAT_EXECUTE event; the agent may invoke permission-gated tools, RAG retrieval and web search while producing the answer.
+
+        Returns 200 with the full response text, and 429 when the caller''s chat rate limit is exceeded.
+
+        '
+      operationId: executeMcpChat
       requestBody:
+        description: Single user chat message for the assistant agent to answer in full.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ChatRequest'
+            examples:
+              Chat message:
+                description: Chat message
+                value:
+                  message: Show me the open workorders for today
         required: true
       responses:
         '200':
@@ -500,14 +771,32 @@ paths:
     post:
       tags:
       - mcp-streaming-chat-controller
-      summary: Execute MCP streaming chat - returns SSE token stream
-      description: Executes a streaming chat message and returns a stream of tokens as Server-Sent Events (SSE). Each token is sent as an individual SSE with event type 'chat'.
-      operationId: streamChat
+      summary: Stream an MCP Chat Turn Over SSE
+      description: 'Executes a chat message against the caller''s permission-scoped assistant agent and streams the response as Server-Sent Events, one token per event with event type chat.
+
+        Use this tool when the client renders tokens incrementally as they are generated; do not use executeMcpChat, which blocks until the full response is complete.
+
+        Preconditions: the agent''s tool set is selected from the caller''s granted permission codes and active workflow state, so the same message can produce different results for different callers.
+
+        Required inputs: message (non-blank text); the client must accept the text/event-stream media type.
+
+        Emits a MCP_CHAT_STREAM_EXECUTE event; the agent may invoke permission-gated tools, RAG retrieval and web search while streaming.
+
+        Returns 200 with an SSE token stream, and 429 when the caller''s chat rate limit is exceeded.
+
+        '
+      operationId: streamMcpChat
       requestBody:
+        description: Single user chat message whose answer is streamed back token by token.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/StreamChatRequest'
+            examples:
+              Streaming chat message:
+                description: Streaming chat message
+                value:
+                  message: Summarize yesterday's sales
         required: true
       responses:
         '200':
@@ -527,9 +816,21 @@ paths:
     get:
       tags:
       - LLM API Configuration
-      summary: List LLM API configurations
-      description: Retrieve all configured LLM API provider definitions that are available to the MCP server.
-      operationId: list_1
+      summary: List All LLM API Configurations
+      description: 'Returns every configured LLM provider API definition available to the MCP server, including provider base URL and model.
+
+        Use this tool to enumerate provider configurations or to find a configuration id; use getLlmApiConfig instead when the id is already known.
+
+        Preconditions: none; an empty list simply means no provider has been configured yet.
+
+        Required inputs: none; there are no filters, no paging and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the full list of configurations.
+
+        '
+      operationId: listLlmApiConfigs
       responses:
         '200':
           description: OK
@@ -547,14 +848,37 @@ paths:
     post:
       tags:
       - LLM API Configuration
-      summary: Create an LLM API configuration
-      description: Create a new LLM API provider configuration for use by the MCP server.
-      operationId: create_1
+      summary: Create an LLM API Configuration
+      description: 'Creates a new LLM provider API configuration that the MCP server can use to invoke an external model.
+
+        Use this tool to register a new provider endpoint and credential; do not use updateLlmApiConfig, which modifies a configuration that already exists.
+
+        Preconditions: no configuration may already use the requested apiId, which is unique across configurations.
+
+        Required inputs: apiId (stable string identifier), model, baseUrl and apiKey; headers is an optional map of extra HTTP headers and defaults to empty.
+
+        Emits a MCP_LLM_API_CREATE event and stores the credential for later provider calls.
+
+        Returns 201 with the stored configuration; a duplicate apiId is rejected, though this module surfaces that failure as a 500 rather than a 409.
+
+        '
+      operationId: createLlmApiConfig
       requestBody:
+        description: LLM provider endpoint, model and credential to register.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LlmApiConfigRequest'
+            examples:
+              OpenAI provider:
+                description: OpenAI provider
+                value:
+                  apiId: openai-gpt4o
+                  model: gpt-4o
+                  baseUrl: https://api.openai.com/v1
+                  apiKey: sk-proj-xxxxxxxxxxxxxxxx
+                  headers:
+                    X-Org-Id: org-01960003
         required: true
       responses:
         '200':
@@ -572,9 +896,21 @@ paths:
     get:
       tags:
       - NLTI Audit
-      summary: Query the NLTI audit ledger
-      description: Query the NLTI audit ledger with optional filters for correlation ID, time range, and event type. Results are paginated.
-      operationId: queryAudit
+      summary: Query the NLTI Audit Ledger
+      description: 'Returns a page of NLTI audit ledger entries recording request, intent, plan, confirmation and execution events.
+
+        Use this tool to trace what the NLTI pipeline did for a conversation or time window; filter by correlationId rather than paging the whole ledger when tracing a single request.
+
+        Preconditions: none; the ledger is append-only and entries exist only for activity that has already happened.
+
+        Required inputs: all filters are optional — correlationId (UUID) takes precedence, then from and to (ISO-8601 instants, applied only when both are present), then eventType (one of REQUEST, INTENT, PLAN, CONFIRMATION, EXECUTION_STEP, EXECUTION_COMPLETE, EXECUTION_FAILED); results default to page size 20 sorted by timestamp.
+
+        Emits a NLTI_AUDIT_QUERY event; the ledger itself is never modified by this call.
+
+        Returns 200 with a page of audit events, and 400 with code INVALID_EVENT_TYPE when eventType is not one of the supported values.
+
+        '
+      operationId: searchNltiAuditEvents
       parameters:
       - name: correlationId
         in: query
@@ -641,9 +977,21 @@ paths:
     get:
       tags:
       - Document Ingestion
-      summary: Get RAG document ingestion job status
-      description: Retrieve the status and details of an asynchronous document ingestion job using its job ID. The response includes the current status, timestamps, and any error messages if applicable.
-      operationId: getIngestionJob
+      summary: Get Document Ingestion Job Status
+      description: 'Returns the current status of an asynchronous RAG document ingestion job, including timestamps, chunk count and any failure message.
+
+        Use this tool to poll a job created by ingestDocument; do not use ingestDocument again to check progress, since that queues a second ingestion instead.
+
+        Preconditions: the job must exist for the supplied jobId returned by ingestDocument.
+
+        Required inputs: jobId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the job in state PENDING, RUNNING, SUCCEEDED or FAILED, and 404 when no job exists for the id.
+
+        '
+      operationId: getDocumentIngestionJob
       parameters:
       - name: jobId
         in: path
@@ -1169,12 +1517,12 @@ components:
     PageAuditEventResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -1185,17 +1533,17 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     PageableObject:

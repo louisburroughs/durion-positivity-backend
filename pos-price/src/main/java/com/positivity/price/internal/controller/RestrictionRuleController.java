@@ -5,6 +5,8 @@ import com.positivity.price.internal.dto.CreateRestrictionRuleRequest;
 import com.positivity.price.internal.dto.RestrictionRuleResponse;
 import com.positivity.price.service.RestrictionRuleService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -37,9 +39,22 @@ public class RestrictionRuleController {
         this.restrictionRuleService = restrictionRuleService;
     }
 
-    @Operation(
-            summary = "Create a restriction rule",
-            description = "Creates a price restriction rule for a product, location tag, and service tag combination.")
+    @Operation(operationId = "createRestrictionRule", summary = "Create A Restriction Rule", description = """
+                    Creates an active sale-restriction rule that blocks or gates a product for a location tag and \
+                    service tag combination.
+                    Use this tool to configure a standing restriction policy; do not use overridePriceRestriction, \
+                    which grants a one-time transaction exemption from an existing rule.
+                    Preconditions: none are checked beyond authorization; duplicate rules for the same product and tag \
+                    combination are not rejected, so each call appends a new rule.
+                    Required inputs: productId (UUID), locationTag (ALL_LOCATIONS, RETAIL_STORE, WAREHOUSE, \
+                    MOBILE_SERVICE, FRANCHISE, or TEST_LOCATION), serviceTag (POS_SALE, WORKORDER, ESTIMATE, INVOICE, \
+                    or DELIVERY), effectiveFrom (date), and overrideable; effectiveTo is optional, and policyVersion \
+                    defaults to 1 when omitted.
+                    Emits a PRICE_RESTRICTION_RULE_CREATE event and the rule participates in evaluation immediately; \
+                    a rule with overrideable false forces a BLOCK decision that cannot be overridden.
+                    Returns 201 with the stored rule, and 400 when a required field is missing or a tag is not a valid \
+                    enum value.
+                    """)
     @ApiResponse(responseCode = "201", description = "Restriction rule created.")
     @ApiResponse(responseCode = "400", description = "Invalid request.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
@@ -51,15 +66,43 @@ public class RestrictionRuleController {
     @PreAuthorize("hasAuthority('pricing:restriction:manage')")
     @PostMapping
     public ResponseEntity<@NonNull RestrictionRuleResponse> createRule(
-            @Valid @RequestBody @NonNull CreateRestrictionRuleRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Restriction rule definition scoping a product restriction to location and service tags.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Overrideable retail restriction",
+                                                            value = """
+                                                                    {"productId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01",
+                                                                     "locationTag":"RETAIL_STORE",
+                                                                     "serviceTag":"POS_SALE",
+                                                                     "effectiveFrom":"2026-03-01",
+                                                                     "effectiveTo":"2026-12-31",
+                                                                     "policyVersion":3,
+                                                                     "overrideable":true}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    CreateRestrictionRuleRequest request) {
         log.info("POST /v1/price/restrictions/rules productId={}", request.productId());
         RestrictionRuleResponse response = restrictionRuleService.createRule(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @Operation(
-            summary = "Get a restriction rule by ID",
-            description = "Returns the active or inactive restriction rule identified by the supplied rule ID.")
+    @Operation(operationId = "getRestrictionRuleById", summary = "Get A Restriction Rule By ID", description = """
+                    Returns a single sale-restriction rule, active or inactive, identified by its rule id.
+                    Use this tool when the rule id is already known, typically from an evaluation result's ruleIds; \
+                    use listRestrictionRules instead to browse the active rule set.
+                    Preconditions: the rule must exist; inactive rules remain readable through this operation.
+                    Required inputs: ruleId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when no restriction rule exists for the supplied id.
+                    """)
     @ApiResponse(responseCode = "200", description = "Restriction rule found.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
     @ApiResponse(responseCode = "404", description = "Restriction rule not found.")
@@ -72,9 +115,15 @@ public class RestrictionRuleController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(
-            summary = "List all active restriction rules",
-            description = "Returns all currently active price restriction rules that can affect pricing decisions.")
+    @Operation(operationId = "listRestrictionRules", summary = "List All Active Restriction Rules", description = """
+                    Lists every currently active sale-restriction rule that can affect pricing and sale decisions.
+                    Use this tool to review the standing restriction policy; use getRestrictionRuleById instead to \
+                    fetch one rule, including deactivated rules, which this listing omits.
+                    Preconditions: none beyond an authenticated caller.
+                    Required inputs: none; there is no request body, filtering, or paging.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with an empty array when no active restriction rules exist.
+                    """)
     @ApiResponse(responseCode = "200", description = "List of restriction rules.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
@@ -86,10 +135,18 @@ public class RestrictionRuleController {
         return ResponseEntity.ok(rules);
     }
 
-    @Operation(
-            summary = "Deactivate a restriction rule",
-            description =
-                    "Deactivates the specified restriction rule so it no longer participates in price restriction evaluation.")
+    @Operation(operationId = "deactivateRestrictionRule", summary = "Deactivate A Restriction Rule", description = """
+                    Deactivates a sale-restriction rule so it no longer participates in restriction evaluation.
+                    Use this tool to retire a standing restriction for everyone; do not use overridePriceRestriction, \
+                    which leaves the rule active and exempts only a single transaction.
+                    Preconditions: the rule must exist and still be active; deactivation is not idempotent, so \
+                    repeating it fails.
+                    Required inputs: ruleId (UUID) as a path parameter; there is no request body.
+                    Emits a PRICE_RESTRICTION_RULE_DEACTIVATE event, sets active to false, and stamps effectiveTo with \
+                    the current date.
+                    Returns 404 when no restriction rule exists for the supplied id; calling it on an already inactive \
+                    rule produces a server error rather than a no-op.
+                    """)
     @ApiResponse(responseCode = "200", description = "Restriction rule deactivated.")
     @ApiResponse(responseCode = "401", description = "Authentication required.")
     @ApiResponse(responseCode = "403", description = "Insufficient permissions.")

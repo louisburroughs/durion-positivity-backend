@@ -7,6 +7,7 @@ import com.positivity.vehicle.service.VehicleSearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,12 +35,31 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/vehicles/search")
 public class VehicleSearchController {
 
+    private static final String SEARCH_EXAMPLE = """
+            {"query":"1HGCM8",
+             "limit":25,
+             "enableContainsMatching":false}
+            """;
+
     private final VehicleSearchService searchService;
 
-    @Operation(
-            summary = "Search vehicles",
-            description = "Search for vehicles by VIN, license plate, unit number, or description. "
-                    + "Results are ranked by relevance: exact match > prefix match > contains match.")
+    @Operation(operationId = "searchVehicles", summary = "Search vehicles", description = """
+                    Searches vehicle registry records with a single free-text query, ranking exact matches ahead \
+                    of prefix matches ahead of optional contains matches.
+                    Use this tool for vehicle discovery from a JSON body; use searchVehiclesByQuery for the \
+                    query-parameter variant, and use getVehicleByVin instead when the full 17-character VIN is \
+                    already known.
+                    Preconditions: none beyond registry data existing; the match field is inferred from the query \
+                    shape, with six or more alphanumeric characters searched as a VIN (seventeen as an exact VIN), \
+                    shorter queries searched against license plates, and the remainder searched against unit \
+                    number plus description.
+                    Required inputs: query (non-blank, at least 3 characters, or 6 when VIN-shaped); limit \
+                    defaults to 25 and is capped at 50, enableContainsMatching defaults to false, and cursor is \
+                    reserved and currently ignored.
+                    Emits a VEHICLE_SEARCH event; no vehicle state changes.
+                    Returns 200 with ranked results plus totalCount and hasMore, and 400 with a VALIDATION_ERROR \
+                    ApiError when the query is empty or shorter than the minimum for its inferred type.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Search results returned",
@@ -47,7 +67,18 @@ public class VehicleSearchController {
     @ApiResponse(responseCode = "400", description = "Invalid search query")
     @PostMapping
     @EmitEvent(id = "VEHICLE_SEARCH", apiVersion = "1")
-    public ResponseEntity<SearchVehiclesResponse> search(@RequestBody SearchVehiclesRequest request) {
+    public ResponseEntity<SearchVehiclesResponse> search(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Free-text search criteria with an optional result limit and matching"
+                                    + " strategy flag.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(name = "VIN prefix search", value = SEARCH_EXAMPLE)))
+                    @RequestBody
+                    SearchVehiclesRequest request) {
 
         log.info(
                 "POST /v1/vehicles/search - query(mask)='{}', limit={}",
@@ -58,9 +89,20 @@ public class VehicleSearchController {
         return ResponseEntity.ok(results);
     }
 
-    @Operation(
-            summary = "Search vehicles (query parameter)",
-            description = "Alternative search endpoint using query parameters. Useful for browser-based queries.")
+    @Operation(operationId = "searchVehiclesByQuery", summary = "Search vehicles (query parameter)", description = """
+                    Searches vehicle registry records using query parameters, applying the same ranking as \
+                    searchVehicles with exact matches first, then prefix matches, then optional contains matches.
+                    Use this tool for browser-friendly or link-style searches; use searchVehicles instead when the \
+                    client can send a JSON body, and use getVehicleByVin when the full 17-character VIN is already \
+                    known.
+                    Preconditions: none beyond registry data existing; the match field is inferred from the query \
+                    shape exactly as in searchVehicles.
+                    Required inputs: q (non-blank, at least 3 characters, or 6 when VIN-shaped); limit defaults to \
+                    25 and is capped at 50, and enableContains defaults to false.
+                    Emits a VEHICLE_SEARCH event; no vehicle state changes.
+                    Returns 200 with ranked results plus totalCount and hasMore, and 400 with a VALIDATION_ERROR \
+                    ApiError when q is empty or shorter than the minimum for its inferred type.
+                    """)
     @ApiResponse(
             responseCode = "200",
             description = "Search results returned",

@@ -9,6 +9,7 @@ modules:
     mode: STRICT
   pos-price:
     mode: STRICT
+    annotationDepth: STRICT
   pos-customer:
     mode: STRICT
   pos-location:
@@ -22,11 +23,13 @@ modules:
     annotationDepth: STRICT
   pos-invoice:
     mode: STRICT
+    annotationDepth: STRICT
   pos-bulk-loader:
     mode: STRICT
     annotationDepth: STRICT
   pos-vehicle-inventory:
     mode: STRICT
+    annotationDepth: STRICT
   pos-warranty:
     mode: STRICT
   pos-supplier:
@@ -51,11 +54,13 @@ modules:
     reason: aggregate producer without module paths
   pos-mcp-server:
     mode: STRICT
+    annotationDepth: STRICT
   pos-marketing:
     mode: STRICT
     annotationDepth: STRICT
   pos-people-contact:
     mode: STRICT
+    annotationDepth: STRICT
   pos-tax:
     mode: STRICT
     annotationDepth: STRICT

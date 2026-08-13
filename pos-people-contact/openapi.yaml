@@ -23,8 +23,20 @@ paths:
     get:
       tags:
       - People API
-      summary: Get person by ID
-      description: Retrieve a person by their unique ID.
+      summary: Get a Person by Unique ID
+      description: 'Returns a single person record by its UUID, including emails, work phone numbers and any linked username.
+
+        Use this tool when the person id is already known; use listPeople instead when searching by name or email, and getCurrentPerson when the target is the authenticated caller.
+
+        Preconditions: the person record must exist in the identity directory.
+
+        Required inputs: personId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no person exists for the supplied id.
+
+        '
       operationId: getPersonById
       parameters:
       - name: personId
@@ -56,8 +68,20 @@ paths:
     put:
       tags:
       - People API
-      summary: Update an existing person
-      description: Update the details of an existing person.
+      summary: Update an Existing Person Record
+      description: 'Updates an existing person''s identity fields, fully replacing names, emails and work phone numbers with the submitted values.
+
+        Use this tool to correct or complete a known person''s identity data; do not use replaceContactPoints, which manages the typed contact-point set, and do not use createPerson for records that do not exist yet.
+
+        Preconditions: the person record must already exist for the supplied id.
+
+        Required inputs: personId (UUID) as a path parameter plus a full person body with non-blank firstName and lastName; omitting primaryEmail, secondaryEmail or phoneNumbers erases the stored values, and username is ignored because it is owned by pos-security.
+
+        Emits a PEOPLE_CONTACT_PERSON_UPDATE event and queues a person.updated identity fact on the transactional outbox.
+
+        Returns 200 with the updated person, 404 when no person exists for the id, and 400 when firstName or lastName is blank.
+
+        '
       operationId: updatePerson
       parameters:
       - name: personId
@@ -69,10 +93,21 @@ paths:
           format: uuid
         example: 123e4567-e89b-12d3-a456-426614174000
       requestBody:
+        description: Full replacement identity snapshot for the person.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/Person'
+            examples:
+              Updated person:
+                description: Updated person
+                value:
+                  firstName: Jane
+                  lastName: Smith-Jones
+                  primaryEmail: jane.smith@example.com
+                  secondaryEmail: jane.alt@example.com
+                  phoneNumbers:
+                  - '+15551234567'
         required: true
       responses:
         '200':
@@ -95,8 +130,20 @@ paths:
     delete:
       tags:
       - People API
-      summary: Delete a person
-      description: Delete a person by their unique ID.
+      summary: Delete a Person Identity Record
+      description: 'Deletes a person record and, in the same transaction, its contact points and postal address.
+
+        Use this tool to permanently remove an identity record; do not use unlinkUserFromPerson, which only removes a user link and leaves the person in place.
+
+        Preconditions: the person must exist and must have no user-person links; linked users must be removed first with unlinkUserFromPerson.
+
+        Required inputs: personId (UUID) as a path parameter; there is no request body.
+
+        Emits a PEOPLE_CONTACT_PERSON_DELETE event and queues a person.deleted fact on the transactional outbox.
+
+        Returns 204 on success, 404 when the person does not exist, and 409 when one or more users are still linked to the person.
+
+        '
       operationId: deletePerson
       parameters:
       - name: personId
@@ -116,6 +163,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: Person still has linked users; unlink them first.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - people-contact:person:delete
@@ -125,9 +178,21 @@ paths:
     get:
       tags:
       - Postal Address API
-      summary: Get a person's postal address
-      description: Returns the person's structured postal address, or 404 when none is on file.
-      operationId: getPersonAddress
+      summary: Get a Person's Postal Address
+      description: 'Returns the single structured postal address on file for a person; pos-people-contact is the postal-address authority for person parties (FI-4).
+
+        Use this tool when reading a person''s mailing address; use getOrganizationPostalAddress instead for CRM organization parties.
+
+        Preconditions: an address must already have been stored for the person with putPersonPostalAddress.
+
+        Required inputs: personId (UUID) as a path parameter; there is no request body.
+
+        Emits a PEOPLE_CONTACT_PERSON_ADDRESS_GET audit event; no state changes.
+
+        Returns 404 when no address is on file for the person.
+
+        '
+      operationId: getPersonPostalAddress
       parameters:
       - name: personId
         in: path
@@ -157,9 +222,21 @@ paths:
     put:
       tags:
       - Postal Address API
-      summary: Create or replace a person's postal address
-      description: Stores the structured, validated address. Only line1 and an ISO 3166-1 alpha-2 countryCode are required — the shape is country-agnostic (region is free text, postalCode optional) so it works for any deployment locale.
-      operationId: putPersonAddress
+      summary: Create or Replace Person Postal Address
+      description: 'Creates or replaces the single structured postal address for a person; the shape is country-agnostic, with free-text region and an optional postalCode.
+
+        Use this tool for person mailing addresses; use putOrganizationPostalAddress instead for CRM organization parties, and do not use replaceContactPoints, which manages email and phone channels.
+
+        Preconditions: the person record must exist; any previously stored address is overwritten in place.
+
+        Required inputs: line1 and an ISO 3166-1 alpha-2 countryCode (stored upper-case); line2, city, region and postalCode are optional free text, trimmed, with blanks stored as null.
+
+        Emits a PEOPLE_CONTACT_PERSON_ADDRESS_PUT event and queues a person.updated identity fact carrying the new address.
+
+        Returns 200 with the stored address, 404 when the person does not exist, and 422 when line1 is blank or countryCode is not a valid ISO 3166-1 alpha-2 code.
+
+        '
+      operationId: putPersonPostalAddress
       parameters:
       - name: personId
         in: path
@@ -169,10 +246,21 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Country-agnostic structured postal address that replaces any address already on file for the person.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PostalAddressDto'
+            examples:
+              Japanese address:
+                description: Japanese address
+                value:
+                  line1: 1-2-3 Ginza
+                  line2: Chuo-ku
+                  city: Tokyo
+                  region: Tokyo
+                  postalCode: 104-0061
+                  countryCode: JP
         required: true
       responses:
         '200':
@@ -187,6 +275,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: line1 missing or countryCode not a valid ISO 3166-1 alpha-2 code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - people-contact:person:edit
@@ -195,9 +289,21 @@ paths:
     delete:
       tags:
       - Postal Address API
-      summary: Delete a person's postal address
-      description: Removes the person's postal address; succeeds even when none is on file.
-      operationId: deletePersonAddress
+      summary: Delete a Person's Postal Address
+      description: 'Removes the postal address on file for a person; the operation is idempotent and succeeds when none exists.
+
+        Use this tool to clear a person''s mailing address; do not use deletePerson, which removes the entire identity record.
+
+        Preconditions: none; a missing address is treated as already deleted.
+
+        Required inputs: personId (UUID) as a path parameter; there is no request body.
+
+        Emits a PEOPLE_CONTACT_PERSON_ADDRESS_DELETE event, and queues a person.updated identity fact only when an address actually existed.
+
+        Returns 204 whether or not an address was on file.
+
+        '
+      operationId: deletePersonPostalAddress
       parameters:
       - name: personId
         in: path
@@ -218,8 +324,20 @@ paths:
     put:
       tags:
       - People API
-      summary: Replace a person's contact points
-      description: Replaces all typed contact points (email/phone) for a person. pos-people-contact is the source of truth for contacts (ADR-0015).
+      summary: Replace a Person's Contact Points
+      description: 'Replaces the full set of typed contact points for one person; pos-people-contact is the source of truth for contact channels (ADR-0015).
+
+        Use this tool to overwrite a person''s contact channels wholesale; do not use updatePerson, which replaces names, primaryEmail, secondaryEmail and phoneNumbers as flat identity fields rather than the typed contact-point set.
+
+        Preconditions: the person should exist; the id is not validated here, so writes for an unknown person are stored without error.
+
+        Required inputs: a JSON array of contact points, each with contactType (EMAIL, PHONE_MOBILE, PHONE_HOME or PHONE_WORK), value, and primary; entries missing contactType or value are silently dropped, and an empty array clears all contact points.
+
+        Emits a people-contact person.updated identity fact through the transactional outbox when the person exists; prior contact points are deleted in the same transaction.
+
+        Returns 204 on success, including when the array is empty or the person id is unknown.
+
+        '
       operationId: replaceContactPoints
       parameters:
       - name: personId
@@ -230,12 +348,23 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Complete replacement set of typed contact points for the person.
         content:
           application/json:
             schema:
               type: array
               items:
                 $ref: '#/components/schemas/ContactPointDto'
+            examples:
+              Email and mobile phone:
+                description: Email and mobile phone
+                value:
+                - contactType: EMAIL
+                  value: jane.smith@example.com
+                  primary: true
+                - contactType: PHONE_MOBILE
+                  value: '+15551234567'
+                  primary: true
         required: true
       responses:
         '204':
@@ -249,9 +378,21 @@ paths:
     get:
       tags:
       - Postal Address API
-      summary: Get an organization's postal address
-      description: Returns the organization party's structured postal address, or 404 when none is on file. The organization id is the party UUID owned by the CRM module.
-      operationId: getOrganizationAddress
+      summary: Get an Organization's Postal Address
+      description: 'Returns the structured postal address on file for a CRM organization party; the organization id is an external pos-customer party reference stored verbatim.
+
+        Use this tool when reading an organization''s mailing address; use getPersonPostalAddress instead for person parties.
+
+        Preconditions: an address must already have been stored for the organization with putOrganizationPostalAddress.
+
+        Required inputs: organizationId (the pos-customer commercial party UUID) as a path parameter; there is no request body.
+
+        Emits a PEOPLE_CONTACT_ORG_ADDRESS_GET audit event; no state changes.
+
+        Returns 404 when no address is on file for the organization.
+
+        '
+      operationId: getOrganizationPostalAddress
       parameters:
       - name: organizationId
         in: path
@@ -281,9 +422,21 @@ paths:
     put:
       tags:
       - Postal Address API
-      summary: Create or replace an organization's postal address
-      description: Stores the structured, validated address for an organization party. The id is an external party reference (pos-customer commercial party) stored verbatim.
-      operationId: putOrganizationAddress
+      summary: Create or Replace Organization Postal Address
+      description: 'Creates or replaces the single structured postal address for a CRM organization party.
+
+        Use this tool for organization mailing addresses; use putPersonPostalAddress instead for person parties.
+
+        Preconditions: none in this module; the organization id is an external pos-customer party reference stored verbatim without an existence check.
+
+        Required inputs: organizationId (UUID) as a path parameter, plus line1 and an ISO 3166-1 alpha-2 countryCode in the body; line2, city, region and postalCode are optional free text.
+
+        Emits a PEOPLE_CONTACT_ORG_ADDRESS_PUT event and an organization-address-updated fact for downstream consumers.
+
+        Returns 200 with the stored address, and 422 when line1 is blank or countryCode is not a valid ISO 3166-1 alpha-2 code.
+
+        '
+      operationId: putOrganizationPostalAddress
       parameters:
       - name: organizationId
         in: path
@@ -293,10 +446,21 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Country-agnostic structured postal address that replaces any address already on file for the organization party.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PostalAddressDto'
+            examples:
+              US business address:
+                description: US business address
+                value:
+                  line1: 400 Commerce Way
+                  line2: Suite 210
+                  city: Austin
+                  region: TX
+                  postalCode: '78701'
+                  countryCode: US
         required: true
       responses:
         '200':
@@ -305,6 +469,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PostalAddressDto'
+        '422':
+          description: line1 missing or countryCode not a valid ISO 3166-1 alpha-2 code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
       security:
       - bearerAuth:
         - people-contact:organization:edit
@@ -313,9 +483,21 @@ paths:
     delete:
       tags:
       - Postal Address API
-      summary: Delete an organization's postal address
-      description: Removes the organization party's postal address; succeeds even when none is on file.
-      operationId: deleteOrganizationAddress
+      summary: Delete an Organization's Postal Address
+      description: 'Removes the postal address on file for a CRM organization party; the operation is idempotent and succeeds when none exists.
+
+        Use this tool to clear an organization''s mailing address; use deletePersonPostalAddress instead for person parties.
+
+        Preconditions: none; a missing address is treated as already deleted.
+
+        Required inputs: organizationId (UUID) as a path parameter; there is no request body.
+
+        Emits a PEOPLE_CONTACT_ORG_ADDRESS_DELETE event, and an organization-address-removed fact is published only when an address actually existed.
+
+        Returns 204 whether or not an address was on file.
+
+        '
+      operationId: deleteOrganizationPostalAddress
       parameters:
       - name: organizationId
         in: path
@@ -336,9 +518,21 @@ paths:
     get:
       tags:
       - People API
-      summary: Get all people
-      description: Retrieve people with an optional text filter. Employment filtering lives in pos-people (ADR-0044 §6) and is not available on the identity directory.
-      operationId: getAllPeople
+      summary: List People in Identity Directory
+      description: 'Lists person records in the identity directory, optionally narrowed by a free-text filter, with each result carrying emails, work phone numbers and any linked username.
+
+        Use this tool when browsing or searching people by name or email; do not use resolvePerson, which performs weighted duplicate matching and may create a new person as a side effect.
+
+        Preconditions: none; an empty directory simply yields an empty list.
+
+        Required inputs: none; q is an optional case-insensitive filter matched against firstName, lastName and primaryEmail, and employment attributes cannot be filtered here because they live in pos-people (ADR-0044 §6).
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the matching people, possibly an empty list when nothing matches the filter.
+
+        '
+      operationId: listPeople
       parameters:
       - name: q
         in: query
@@ -363,14 +557,36 @@ paths:
     post:
       tags:
       - People API
-      summary: Create a new person
-      description: Add a new person to the system.
+      summary: Create a New Person Record
+      description: 'Creates a new person identity record; emails and phone numbers are persisted as contact points owned by this module.
+
+        Use this tool when the person is known to be new; do not use resolvePerson, which should be preferred when a matching person may already exist, and do not use linkUserToPerson, which only associates an existing person with a security user.
+
+        Preconditions: none; duplicate names or emails are not rejected, so deduplication is the caller''s responsibility (or use resolvePerson).
+
+        Required inputs: firstName and lastName (non-blank); primaryEmail, secondaryEmail and phoneNumbers are optional, and username is ignored because usernames are owned by pos-security and linked separately.
+
+        Emits a PEOPLE_CONTACT_PERSON_CREATE event and queues a person.updated identity fact on the transactional outbox.
+
+        Returns 201 with the persisted person, and 400 when firstName or lastName is blank.
+
+        '
       operationId: createPerson
       requestBody:
+        description: Identity fields of the person to create; contact data is stored as contact points.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/Person'
+            examples:
+              New person:
+                description: New person
+                value:
+                  firstName: Jane
+                  lastName: Smith
+                  primaryEmail: jane.smith@example.com
+                  phoneNumbers:
+                  - '+15551234567'
         required: true
       responses:
         '201':
@@ -388,9 +604,21 @@ paths:
     get:
       tags:
       - People - Access Control
-      summary: Get role assignments
-      description: Retrieve role assignments for a person with optional history and date filtering
-      operationId: getAssignments
+      summary: List a Person's Role Assignments
+      description: 'Lists the role assignments a person holds in pos-security, resolved through the person''s active user-person link.
+
+        Use this tool to inspect the access a person already has; do not use listAssignableRoles, which returns the catalog of roles available for assignment.
+
+        Preconditions: the person must have an active user-person link, and the linked username must resolve to a pos-security user.
+
+        Required inputs: personUuid (UUID) as a path parameter; includeHistory defaults to false and adds ended assignments when true, and endDate (ISO date-time) optionally evaluates assignments as of that moment.
+
+        Emits a PEOPLE_CONTACT_ACCESS_ASSIGNMENTS_LIST audit event; no state changes.
+
+        Returns 404 when the person has no user link or the linked username has no security user.
+
+        '
+      operationId: listRoleAssignments
       parameters:
       - name: personUuid
         in: path
@@ -426,9 +654,21 @@ paths:
     post:
       tags:
       - People - Access Control
-      summary: Assign role to person
-      description: Assign a role to a person with optional location scope and date range
-      operationId: createAssignment
+      summary: Assign a Role to a Person
+      description: 'Assigns a role to a person by delegating to pos-security through the person''s linked user account, optionally scoped to one location and bounded by a date window.
+
+        Use this tool to grant access; do not use revokeRoleAssignment, which ends an assignment that already exists.
+
+        Preconditions: the person must have an active user-person link resolving to a pos-security user, and the roleCode must exist in pos-security.
+
+        Required inputs: personUuid (UUID) as a path parameter and roleCode in the body; locationId (UUID) scopes the role to one location when supplied, and optional startDate/endDate bound the assignment, with endDate required to be on or after startDate.
+
+        Emits a PEOPLE_CONTACT_ACCESS_ASSIGNMENT_CREATE event; the assignment record itself is created and owned by pos-security.
+
+        Returns 201 with the created assignment, 400 when roleCode is blank or endDate precedes startDate, and 404 when the person''s user link, the security user, or the role cannot be resolved.
+
+        '
+      operationId: assignRoleToPerson
       parameters:
       - name: personUuid
         in: path
@@ -437,10 +677,19 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Role code plus optional location scope and effective date window.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PersonRoleAssignmentRequest'
+            examples:
+              Location-scoped technician role:
+                description: Location-scoped technician role
+                value:
+                  roleCode: TECHNICIAN
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  startDate: 2026-09-01 00:00:00
+                  endDate: 2026-12-31 23:59:59
         required: true
       responses:
         '201':
@@ -470,14 +719,35 @@ paths:
     post:
       tags:
       - User-Person Linking API
-      summary: Link user to person
-      description: Create a link between an authentication user and a person record
+      summary: Link User to Person Record
+      description: 'Links a security user account to a person record, optionally recording a linkType and notes; the link is what lets a login act as that person.
+
+        Use this tool when associating a user with a person, for example during onboarding; do not use createUserPersonLink, which is the minimal admin variant without linkType or notes, and do not use createPerson, which creates the identity record itself.
+
+        Preconditions: the person must exist, and the username must not already be linked to a different person; one username maps to at most one person.
+
+        Required inputs: username and personId (UUID); linkType defaults to PRIMARY and notes is optional.
+
+        Emits a PEOPLE_CONTACT_USER_LINK_CREATE event and queues a link-updated fact on the transactional outbox.
+
+        Returns 201 when the link is created, 200 when the identical link already exists (the call is idempotent), 404 when the person does not exist, and 409 when the username is already linked to a different person.
+
+        '
       operationId: linkUserToPerson
       requestBody:
+        description: User-person pair to link, with optional link classification and notes.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LinkUserToPersonRequest'
+            examples:
+              Onboarding link:
+                description: Onboarding link
+                value:
+                  username: marcus.webb
+                  personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  linkType: PRIMARY
+                  notes: Linked during onboarding
         required: true
       responses:
         '201':
@@ -519,14 +789,33 @@ paths:
     post:
       tags:
       - User-Person Linking API
-      summary: Create user-person link (admin)
-      description: Create a link between an authentication user and a person record
+      summary: Create User Person Link as Admin
+      description: 'Creates a user-person link from the minimal administrative payload of username and personId only; the link is stored with linkType PRIMARY.
+
+        Use this tool for administrative linking when linkType and notes are not needed; do not use linkUserToPerson, which accepts the same pair plus an explicit linkType and notes.
+
+        Preconditions: the person must exist, and the username must not already be linked to a different person; one username maps to at most one person.
+
+        Required inputs: username and personId (UUID); both are mandatory and there are no other fields.
+
+        Emits a PEOPLE_CONTACT_USER_LINK_CREATE event and queues a link-updated fact on the transactional outbox.
+
+        Returns 201 when the link is created, 200 when the identical link already exists (the call is idempotent), 404 when the person does not exist, and 409 when the username is already linked to a different person.
+
+        '
       operationId: createUserPersonLink
       requestBody:
+        description: Minimal user-person pair to link; the link is stored as PRIMARY.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateUserLinkRequest'
+            examples:
+              Admin link:
+                description: Admin link
+                value:
+                  username: marcus.webb
+                  personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
         required: true
       responses:
         '201':
@@ -568,14 +857,36 @@ paths:
     post:
       tags:
       - People API
-      summary: Resolve person
-      description: Find best matching person by score or create a new person
+      summary: Resolve or Create Matching Person
+      description: 'Finds the best-matching existing person using weighted scoring (email 60, phone 25, lastName 10, firstName 5) and creates a new person when no candidate reaches the threshold.
+
+        Use this tool to deduplicate at intake before creating people; do not use createPerson, which always inserts a new record without any matching.
+
+        Preconditions: none; inputs are normalized before scoring (email lowercased, phone reduced to digits, names trimmed).
+
+        Required inputs: at least one of email, phone, lastName or firstName; threshold is optional and defaults to the configured pos.people-contact.matching.threshold value (30 unless overridden).
+
+        Emits a PEOPLE_CONTACT_PERSON_RESOLVE event; when no match reaches the threshold a new person is created and a person.updated identity fact is queued on the outbox.
+
+        Returns 200 with matchedExisting true, the score and the matchedBy reasons when a candidate wins, 200 with matchedExisting false when a new person was created, and 400 when all four matching inputs are absent or blank.
+
+        '
       operationId: resolvePerson
       requestBody:
+        description: Weighted matching criteria used to find or create the person.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ResolvePersonRequest'
+            examples:
+              Match by email and name:
+                description: Match by email and name
+                value:
+                  email: jane.smith@example.com
+                  phone: '+15551234567'
+                  lastName: Smith
+                  firstName: Jane
+                  threshold: 30
         required: true
       responses:
         '200':
@@ -593,18 +904,36 @@ paths:
     post:
       tags:
       - People API
-      summary: Get people by IDs
-      description: Batch-resolve persons by id in one request. Unknown ids are omitted; the result may be smaller than the request. Used for cross-service identity reads (ADR-0015).
+      summary: Batch Resolve People by IDs
+      description: 'Batch-resolves person records by id in one request, attaching typed contact points and linked usernames to each result.
+
+        Use this tool for cross-service identity reads that need several people at once (ADR-0015); use getPersonById instead for a single known id.
+
+        Preconditions: none; unknown ids are silently omitted, so the result may be smaller than the request.
+
+        Required inputs: a JSON array of person UUIDs as the request body; an empty array yields an empty list.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the resolved people; ids that do not exist are dropped rather than reported as errors.
+
+        '
       operationId: getPeopleByIds
       requestBody:
+        description: JSON array of person UUIDs to resolve in one batch.
         content:
           application/json:
             schema:
               type: array
-              description: Person ids to resolve
               items:
                 type: string
                 format: uuid
+            examples:
+              Two ids:
+                description: Two ids
+                value:
+                - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
         required: true
       responses:
         '200':
@@ -624,9 +953,21 @@ paths:
     get:
       tags:
       - People - Access Control
-      summary: Get available roles
-      description: Retrieve list of roles that can be assigned to people
-      operationId: getRoles
+      summary: List Roles Assignable to Person
+      description: 'Lists the role catalog a person could be assigned, combining LOCATION-scoped and GLOBAL-scoped roles fetched live from pos-security.
+
+        Use this tool to populate a role picker before calling assignRoleToPerson; do not use listRoleAssignments, which returns the roles the person already holds.
+
+        Preconditions: the person record must exist; the roles themselves are owned by pos-security, and no user-person link is needed for this listing.
+
+        Required inputs: personUuid (UUID) as a path parameter; there is no request body and no filtering.
+
+        Emits a PEOPLE_CONTACT_ACCESS_ROLES_LIST audit event; no state changes.
+
+        Returns 404 when the person does not exist, and propagates the pos-security status code when the role listing call fails there.
+
+        '
+      operationId: listAssignableRoles
       parameters:
       - name: personUuid
         in: path
@@ -652,9 +993,21 @@ paths:
     get:
       tags:
       - User-Person Linking API
-      summary: Get users linked to person
-      description: Retrieve all usernames linked to a person record
-      operationId: getUsernamesByPersonId
+      summary: List Usernames Linked to Person
+      description: 'Lists every username linked to a person record as a flat array of strings.
+
+        Use this tool to see which logins can act as a person; use getLinksByPersonId instead when the full link records with linkType, notes and audit fields are needed.
+
+        Preconditions: the person record must exist; a person with no links yields an empty list.
+
+        Required inputs: personId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the person does not exist.
+
+        '
+      operationId: listUsernamesForPerson
       parameters:
       - name: personId
         in: path
@@ -689,8 +1042,20 @@ paths:
     get:
       tags:
       - User-Person Linking API
-      summary: Get person by username
-      description: Retrieve the person record linked to a user
+      summary: Get Person Linked to Username
+      description: 'Returns the person record linked to a username, including emails, work phone numbers and the username itself.
+
+        Use this tool to translate a login identity into its person record; use getCurrentPerson instead when the target is the authenticated caller, and getLinksByPersonId to go from a person to its links.
+
+        Preconditions: a user-person link must exist for the username, and the linked person record must still exist.
+
+        Required inputs: username as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no link exists for the username or the linked person record is missing.
+
+        '
       operationId: getPersonByUsername
       parameters:
       - name: username
@@ -721,8 +1086,20 @@ paths:
     get:
       tags:
       - User-Person Linking API
-      summary: Get links by person ID
-      description: Retrieve user-person links for person
+      summary: Get User Links for Person
+      description: 'Returns the full user-person link records for a person, including linkType, notes, creator and creation time.
+
+        Use this tool when link metadata is needed; use listUsernamesForPerson instead when only the usernames matter, and getPersonByUsername to go from a username to its person.
+
+        Preconditions: the person record must exist; a person with no links yields an empty list.
+
+        Required inputs: personId (UUID) as a path parameter; there is no request body.
+
+        Emits a PEOPLE_CONTACT_USER_LINK_GET audit event; no state changes.
+
+        Returns 404 when the person does not exist.
+
+        '
       operationId: getLinksByPersonId
       parameters:
       - name: personId
@@ -756,8 +1133,20 @@ paths:
     get:
       tags:
       - People API
-      summary: Get current user's person record
-      description: Resolve the authenticated user to their linked person record. Returns 404 when the user has no person link or the linked person no longer exists.
+      summary: Get Current User's Person Record
+      description: 'Resolves the authenticated caller''s username to its linked person record and returns the identity snapshot with emails, work phone numbers and username.
+
+        Use this tool when the caller needs their own person record without knowing a person id; do not use getPersonById, which requires a known person UUID and can read any person.
+
+        Preconditions: an active user-person link must exist for the authenticated username, and the linked person record must still exist.
+
+        Required inputs: none; identity comes entirely from the authenticated security context.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when the caller has no user-person link or the linked person no longer exists, and 401 when the authenticated context carries no username.
+
+        '
       operationId: getCurrentPerson
       responses:
         '200':
@@ -781,9 +1170,21 @@ paths:
     delete:
       tags:
       - People - Access Control
-      summary: Revoke role assignment
-      description: Revoke a role assignment from a person
-      operationId: revokeAssignment
+      summary: Revoke Role Assignment from Person
+      description: 'Revokes one of a person''s role assignments by delegating to pos-security through the person''s linked user account.
+
+        Use this tool to end access granted with assignRoleToPerson; do not use unlinkUserFromPerson, which severs the whole user-person link rather than a single role.
+
+        Preconditions: the person must have an active user-person link resolving to a pos-security user, and an assignment for the roleCode must exist there.
+
+        Required inputs: personUuid (UUID) and roleCode as path parameters; endDate (ISO date-time) optionally ends the assignment at that moment instead of immediately.
+
+        Emits a PEOPLE_CONTACT_ACCESS_ASSIGNMENT_REVOKE event; the assignment state change is recorded in pos-security.
+
+        Returns 204 on success, and 404 when the person has no user link, the security user cannot be resolved, or pos-security has no matching assignment.
+
+        '
+      operationId: revokeRoleAssignment
       parameters:
       - name: personUuid
         in: path
@@ -826,8 +1227,20 @@ paths:
     delete:
       tags:
       - User-Person Linking API
-      summary: Unlink user from person
-      description: Remove the link between a user and person
+      summary: Unlink User from Person Record
+      description: 'Removes the link between a security user and its person record, leaving both the user account and the person untouched.
+
+        Use this tool to sever a login from an identity, including before deletePerson on a person that still has linked users; do not use revokeRoleAssignment, which removes a single role rather than the whole link.
+
+        Preconditions: a user-person link must exist for the username.
+
+        Required inputs: username as a path parameter; there is no request body.
+
+        Emits a PEOPLE_CONTACT_USER_PERSON_LINK_DELETE event and queues a link-removed fact on the transactional outbox.
+
+        Returns 204 on success, and 404 when no link exists for the username.
+
+        '
       operationId: unlinkUserFromPerson
       parameters:
       - name: username
@@ -875,7 +1288,6 @@ components:
       - value
     Person:
       type: object
-      description: Person object to be created
       properties:
         id:
           type: string
@@ -1118,7 +1530,7 @@ components:
       - username
     ResolvePersonRequest:
       type: object
-      description: Resolve criteria
+      description: Resolve person request with weighted matching inputs
       properties:
         email:
           type: string

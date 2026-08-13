@@ -46,10 +46,18 @@ public class InvoiceSearchController {
     /** Hard cap on page size so a caller cannot request an unbounded enrichment fan-out. */
     private static final int MAX_PAGE_SIZE = 50;
 
-    @Operation(
-            summary = "Search invoices",
-            description = "Paginated free-text search for invoices matching the invoice number, "
-                    + "customer name, or workorder number.")
+    @Operation(operationId = "searchInvoices", summary = "Search Invoices by Free Text", description = """
+                    Searches invoices by a free-text term matched against the invoice number, the customer name \
+                    (resolved via the customer service), or the workorder number, returning a page of finder rows.
+                    Use this tool to locate an invoice when its id is unknown; use getInvoice instead once the \
+                    invoiceId is known, and searchInvoiceLines for line-level warranty correlation.
+                    Preconditions: none — but a blank or missing q short-circuits to an empty page rather than \
+                    listing all invoices.
+                    Required inputs: q (free-text term) plus optional page, size and sort parameters; size defaults \
+                    to 25, is hard-capped at 50, and the default sort is createdAt descending.
+                    Emits an INVOICE_SEARCH audit event; no state changes — this is a read-only projection.
+                    Returns 400 when pagination parameters are malformed.
+                    """)
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Page of invoice search results returned."),
         @ApiResponse(
@@ -77,12 +85,18 @@ public class InvoiceSearchController {
         return invoiceSearchService.search(q == null ? "" : q.trim(), capPageSize(pageable));
     }
 
-    @Operation(
-            summary = "Search invoice line items by customer party",
-            description = "Returns invoice line items belonging to the given customer party, "
-                    + "optionally narrowed by a SKU/description term, flattened with the owning "
-                    + "invoice's number, status, and creation time. Newest invoice first, bounded "
-                    + "to the newest 200 lines. Built for warranty-claim correlation.")
+    @Operation(operationId = "searchInvoiceLines", summary = "Search Invoice Lines by Party", description = """
+                    Returns invoice line items belonging to one customer party, flattened with the owning invoice's \
+                    number, status and creation time, newest invoice first and bounded to the newest 200 lines; \
+                    built for warranty-claim origin-line correlation.
+                    Use this tool to find the invoice line a warranty claim originates from; use searchInvoices \
+                    instead for invoice-level free-text search.
+                    Preconditions: none — an unknown party simply returns an empty list.
+                    Required inputs: partyId (UUID) query parameter; q is an optional SKU or description term \
+                    narrowing the lines.
+                    Emits an INVOICE_ITEM_SEARCH audit event; no state changes — this is a read-only projection.
+                    Returns 400 when partyId is missing or malformed.
+                    """)
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "List of matching invoice line items returned."),
         @ApiResponse(
