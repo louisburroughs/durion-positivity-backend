@@ -680,7 +680,7 @@ Repo-wide, summing all 38 per-module reports: **81.1% line, 66.6% branch**
 | `pos-api-gateway` | 435 | 85.5 | 72.2 | 0.80 | 0.67 |
 | `pos-security-common` | 406 | 46.8 | 36.5 | 0.41 | 0.31 |
 | `pos-documents` | 383 | 75.2 | 52.9 | 0.70 | 0.47 |
-| `pos-document-helper` | 346 | 74.0 | 35.2 | 0.68 | 0.30 |
+| `pos-document-helper` | 162 | 95.7 | 90.0 | 0.90 | 0.80 |
 | `pos-vehicle-reference-nhtsa` | 189 | 0.0 | 0.0 | — *(unguarded)* | — |
 | `pos-events` | 174 | 59.8 | 57.1 | 0.54 | 0.52 |
 | `pos-openapi-validation` | 171 | 93.6 | 82.3 | 0.88 | 0.77 |
@@ -768,8 +768,11 @@ consumer-credited figure for shared libraries. No work is outstanding here.
 2. ~~**Controller `@WebMvcTest` slices**~~ — closed 2026-08-12, see §7.3.
 3. ~~**The four all-zero modules**~~ — closed 2026-08-12, see §7.2.
 4. **Branch-coverage tails** — `pos-catalog` (53.5% branch against 77.4% line),
-   `pos-workorder` (56.7%), `pos-document-helper` (35.2%). Parameterized tests
-   over the uncovered branches, not more happy paths.
+   `pos-workorder` (56.7%). Parameterized tests over the uncovered branches, not
+   more happy paths. `pos-document-helper` is off this list: its 35.2% was the
+   untested duplicate under `com.positivity.documents.helper`, deleted in #1274,
+   leaving the module at 90.0% branch on the surviving `com.positivity.documents`
+   copy.
 5. **Low-coverage shared libraries** — `pos-tax-common` 34.0%,
    `pos-domain-events` 39.3%, `pos-security-common` 46.8% on their own tests.
    They read far higher in the aggregate because consumers exercise them; their
