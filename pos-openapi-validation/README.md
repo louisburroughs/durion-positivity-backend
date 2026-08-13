@@ -39,6 +39,10 @@ The repository validation flow is:
 | `EXCEPTION` | The module is intentionally skipped and must include a reason. |
 | `EXCLUDED` | The module is outside the current rollout scope and is skipped entirely. |
 
+A module that is absent from the inventory is not validated at all — the validator never looks at a spec it was not told about, so an unregistered module can ship an `openapi.yaml` that does not parse and CI stays green. `scripts/check-openapi-inventory-drift.sh` guards against that: it fails when a module with a committed `openapi.yaml` has no inventory entry, and when an inventory entry names something that is no longer a reactor module. CI runs it on every build.
+
+When adding a new spec-producing module, register it at `STRICT`. That may surface real defects in the spec; the fix belongs in the controller annotations the spec is generated from, not in the inventory entry. If the module cannot be made `STRICT`-clean immediately, `REPORT_ONLY` is still better than absence.
+
 ## Commands
 
 Run the full module test suite:

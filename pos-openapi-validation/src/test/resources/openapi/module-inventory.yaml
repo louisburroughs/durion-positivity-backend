@@ -44,6 +44,12 @@ modules:
     reason: aggregate producer without module paths
   pos-mcp-server:
     mode: STRICT
+  pos-marketing:
+    mode: STRICT
+  pos-people-contact:
+    mode: STRICT
+  pos-tax:
+    mode: STRICT
   pos-inquiry:
     mode: EXCEPTION
     reason: stub module with no REST producer surface
