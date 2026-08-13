@@ -17,8 +17,20 @@ paths:
     get:
       tags:
       - Event Types
-      summary: Get event type by ID
-      description: Retrieve a specific event type by its unique ID
+      summary: Get an event type by id
+      description: 'Returns a single event type, resolved by its UUID primary key, including its typeCode, description, active flag, apiVersion and latency thresholds.
+
+        Use this tool when the event-type id is already known from a prior create or list call; use getEventTypeByCode instead when only the typeCode string such as ORDER_ORDER_CREATE is known.
+
+        Preconditions: an event type row with the supplied id must exist.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body and no filtering.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no event type exists for the supplied id.
+
+        '
       operationId: getEventTypeById
       parameters:
       - name: id
@@ -45,8 +57,20 @@ paths:
     put:
       tags:
       - Event Types
-      summary: Update event type
-      description: Update an existing event type
+      summary: Update an existing event type
+      description: 'Updates an existing event type identified by its UUID, replacing the description and active flag and selectively overriding apiVersion and the latency thresholds; the stored typeCode itself is never changed by this operation.
+
+        Use this tool when the registration id is known and the type must already exist; use upsertEventType instead to create-or-update by typeCode without knowing the id.
+
+        Preconditions: an event type row with the supplied id must exist, and the caller must present a valid X-Events-Api-Secret shared-secret header when pos.events.api-secret is configured.
+
+        Required inputs: id (UUID) as a path parameter and a body with typeCode and description; active defaults to false when omitted, and a null apiVersion or null p50Micros/p95Micros/p99Micros keeps the currently stored values.
+
+        Emits an EVENT_RECEIVER_EVENT_TYPE_UPDATE event and updates one event_type row.
+
+        Returns 404 when no event type exists for the id, 400 when a field fails validation such as thresholds violating p50 <= p95 <= p99, and 401 when the shared secret is missing or invalid.
+
+        '
       operationId: updateEventType
       parameters:
       - name: id
@@ -58,11 +82,21 @@ paths:
           format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       requestBody:
-        description: Updated event type details
+        description: Replacement event type details; omitted optional fields fall back to stored or default values.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/EventTypeRequest'
+            examples:
+              Tighten thresholds:
+                description: Tighten thresholds
+                value:
+                  typeCode: ORDER_ORDER_CREATE
+                  description: Emitted when an order is created
+                  active: true
+                  p50Micros: 250000
+                  p95Micros: 750000
+                  p99Micros: 1500000
         required: true
       responses:
         '200':
@@ -80,8 +114,20 @@ paths:
     delete:
       tags:
       - Event Types
-      summary: Delete event type
-      description: Delete an event type by ID
+      summary: Delete an event type by id
+      description: 'Deletes an event type registration by its UUID, removing the typeCode, metadata and latency thresholds from the registry.
+
+        Use this tool when a registration was created in error or is being retired permanently; do not use it for a temporary pause — updateEventType with active set to false deactivates the type reversibly instead.
+
+        Preconditions: an event type row with the supplied id must exist, and the caller must present a valid X-Events-Api-Secret shared-secret header when pos.events.api-secret is configured.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits an EVENT_RECEIVER_EVENT_TYPE_DELETE event and removes one event_type row; already recorded emitted_event history is not touched.
+
+        Returns 204 on successful deletion, 404 when no event type exists for the id, and 401 when the shared secret is missing or invalid.
+
+        '
       operationId: deleteEventType
       parameters:
       - name: id
@@ -101,8 +147,20 @@ paths:
     get:
       tags:
       - Event Types
-      summary: Get event type by code
-      description: Retrieve a specific event type by its unique type code
+      summary: Get an event type by code
+      description: 'Returns a single event type resolved by its unique typeCode, the same code services reference in @EmitEvent annotations.
+
+        Use this tool when only the typeCode string is known; use getEventTypeById instead when the UUID of the registration row is already at hand.
+
+        Preconditions: an event type with the given code must exist; the code is trimmed and upper-cased before lookup, so matching is case-insensitive on input.
+
+        Required inputs: typeCode as a path parameter, containing only letters, digits and underscores after normalization.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no event type matches the normalized code, and 400 when the code contains characters other than letters, digits and underscores.
+
+        '
       operationId: getEventTypeByCode
       parameters:
       - name: typeCode
@@ -129,8 +187,20 @@ paths:
     put:
       tags:
       - Event Types
-      summary: Upsert event type
-      description: Create or update an event type by type code
+      summary: Create or update event type by code
+      description: 'Creates the event type when the typeCode is not yet registered, or updates it in place when it is, keyed by the typeCode path segment; this is the idempotent registration path that module EventTypeInitializers call at startup.
+
+        Use this tool when the caller does not care whether the type exists yet; use updateEventType instead when a missing type must fail with 404, and createEventType when a duplicate must be rejected.
+
+        Preconditions: the body typeCode, when supplied, must match the path typeCode after normalization, and the caller must present a valid X-Events-Api-Secret shared-secret header when pos.events.api-secret is configured.
+
+        Required inputs: typeCode as a path parameter plus a body with typeCode and description; active defaults to false when omitted, while a null apiVersion or null p50Micros/p95Micros/p99Micros keeps the stored values on update and falls back to 1 and 10000000 microseconds on create.
+
+        Emits an EVENT_RECEIVER_EVENT_TYPE_UPSERT event and inserts or updates one event_type row.
+
+        Returns 200 for both the create and update outcome, 400 when the path and body typeCode disagree or a field fails validation, and 401 when the shared secret is missing or invalid.
+
+        '
       operationId: upsertEventType
       parameters:
       - name: typeCode
@@ -142,11 +212,22 @@ paths:
           minLength: 1
         example: ORDER_ORDER_CREATE
       requestBody:
-        description: Event type details
+        description: Event type registration to create or overwrite; its typeCode must match the path code when provided.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/EventTypeRequest'
+            examples:
+              Startup registration:
+                description: Startup registration
+                value:
+                  typeCode: ORDER_ORDER_CREATE
+                  description: Emitted when an order is created
+                  active: true
+                  apiVersion: '1'
+                  p50Micros: 500000
+                  p95Micros: 1000000
+                  p99Micros: 2000000
         required: true
       responses:
         '200':
@@ -165,15 +246,36 @@ paths:
     post:
       tags:
       - Event Emission
-      summary: Receive emitted event
-      description: Stores a preregistered emitted event payload
+      summary: Receive and store an emitted event
+      description: 'Receives one event occurrence emitted by another pos service and queues it for storage in the emitted_event time-series table.
+
+        Use this tool when a service needs to record that a registered event happened; do not use upsertEventType, which registers or edits event-type metadata rather than recording occurrences.
+
+        Preconditions: the event id must already exist in the preregistered_event allowlist, and the call must carry a valid X-Events-Api-Secret shared-secret header when pos.events.api-secret is configured; this service is internal-network only and is not exposed through the API gateway.
+
+        Required inputs: id (uppercase letters, digits and underscores), numeric apiVersion, timestamp as positive epoch milliseconds, elapsedMs of zero or more, and publishedAt as a UTC instant.
+
+        No events are emitted by this operation itself, by design, to prevent infinite recursion; the submitted event is queued in memory and a batch flush persists the queue every 5 seconds, so a 200 response means accepted, not yet durably stored.
+
+        Returns 400 when the id is not preregistered or a field fails validation, and 401 when the shared secret is missing or invalid.
+
+        '
       operationId: receiveEvent
       requestBody:
-        description: Event payload to persist
+        description: Single event occurrence to record, identifying the preregistered event id and its timing measurements.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/EmitEventRequest'
+            examples:
+              Order creation event:
+                description: Order creation event
+                value:
+                  id: ORDER_ORDER_CREATE
+                  apiVersion: '1'
+                  timestamp: 1730809200000
+                  elapsedMs: 42
+                  publishedAt: 2026-03-05 21:15:00+00:00
         required: true
       responses:
         '200':
@@ -192,9 +294,21 @@ paths:
     get:
       tags:
       - Event Types
-      summary: Get all event types
-      description: Retrieve all available event types
-      operationId: getAllEventTypes
+      summary: List all registered event types
+      description: 'Lists every registered event type, active and inactive, with its typeCode, description, apiVersion and p50/p95/p99 latency thresholds in microseconds.
+
+        Use this tool when auditing the full event-type registry including deactivated types; use listActiveEventTypes instead when only the types currently accepted for monitoring matter.
+
+        Preconditions: none beyond service availability; GET requests pass the shared-secret filter without authentication.
+
+        Required inputs: none; there are no parameters, no paging and no filtering.
+
+        No events are emitted and no state changes; this is a read-only projection of the event_type table.
+
+        Returns 200 with the full list, which is empty when no event types have been registered.
+
+        '
+      operationId: listEventTypes
       responses:
         '200':
           description: List of event types returned successfully
@@ -205,15 +319,38 @@ paths:
     post:
       tags:
       - Event Types
-      summary: Create event type
-      description: Create a new event type for preregistered events
+      summary: Create a new event type
+      description: 'Creates a new event type registration whose typeCode other services reference from @EmitEvent annotations, with latency thresholds used to monitor event performance.
+
+        Use this tool when registering a brand-new typeCode that must not already exist; use upsertEventType instead for idempotent create-or-update registration, because a duplicate typeCode is rejected here.
+
+        Preconditions: no event type with the same normalized typeCode may exist, and the caller must present a valid X-Events-Api-Secret shared-secret header when pos.events.api-secret is configured.
+
+        Required inputs: typeCode (letters, digits and underscores; trimmed and upper-cased) and description; active defaults to false when omitted from the JSON body, apiVersion defaults to 1, and p50Micros/p95Micros/p99Micros default to 10000000 microseconds (10 seconds) and must satisfy p50 <= p95 <= p99 when supplied.
+
+        Emits an EVENT_RECEIVER_EVENT_TYPE_CREATE event and inserts one event_type row.
+
+        Returns 201 with the created type, 400 when the typeCode already exists or a field fails validation, and 401 when the shared secret is missing or invalid.
+
+        '
       operationId: createEventType
       requestBody:
-        description: Event type details
+        description: Event type registration to create, naming the code, description and optional latency thresholds.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/EventTypeRequest'
+            examples:
+              New event type:
+                description: New event type
+                value:
+                  typeCode: ORDER_ORDER_CREATE
+                  description: Emitted when an order is created
+                  active: true
+                  apiVersion: '1'
+                  p50Micros: 500000
+                  p95Micros: 1000000
+                  p99Micros: 2000000
         required: true
       responses:
         '201':
@@ -233,8 +370,20 @@ paths:
       tags:
       - Event Summary
       summary: Get event summary for the last week
-      description: Returns event counts grouped by event type for the last 7 days
-      operationId: getLastWeekSummary
+      description: 'Returns emitted-event counts grouped by event type code for the trailing 7 days, read from the emitted_event_hourly TimescaleDB continuous aggregate.
+
+        Use this tool for a weekly trend of platform event traffic; use getEventSummaryLastHour or getEventSummaryLastDay instead when a shorter window is wanted.
+
+        Preconditions: none beyond service availability; GET requests bypass the shared-secret filter, and the aggregate refreshes hourly with a one-hour end offset, so the newest counts can lag by up to an hour.
+
+        Required inputs: none; the window is fixed at 7 days and cannot be parameterized.
+
+        Emits an EVENT_RECEIVER_SUMMARY_LAST_WEEK event recording the query itself; the read changes no stored state.
+
+        Returns 200 with a list of event-type and count pairs, which is empty when no events fall inside the window.
+
+        '
+      operationId: getEventSummaryLastWeek
       responses:
         '200':
           description: Summary returned successfully
@@ -247,8 +396,20 @@ paths:
       tags:
       - Event Summary
       summary: Get event summary for the last hour
-      description: Returns event counts grouped by event type for the last 60 minutes
-      operationId: getLastHourSummary
+      description: 'Returns emitted-event counts grouped by event type code for the trailing 60 minutes, read from the emitted_event_hourly TimescaleDB continuous aggregate.
+
+        Use this tool for a near-real-time pulse of platform event traffic; use getEventSummaryLastDay or getEventSummaryLastWeek instead for longer trend windows.
+
+        Preconditions: none beyond service availability; GET requests bypass the shared-secret filter, and the aggregate refreshes hourly with a one-hour end offset, so the newest counts can lag by up to an hour.
+
+        Required inputs: none; the window is fixed at one hour and cannot be parameterized.
+
+        Emits an EVENT_RECEIVER_SUMMARY_LAST_HOUR event recording the query itself; the read changes no stored state.
+
+        Returns 200 with a list of event-type and count pairs, which is empty when no events fall inside the window.
+
+        '
+      operationId: getEventSummaryLastHour
       responses:
         '200':
           description: Summary returned successfully
@@ -261,8 +422,20 @@ paths:
       tags:
       - Event Summary
       summary: Get event summary for the last day
-      description: Returns event counts grouped by event type for the last 24 hours
-      operationId: getLastDaySummary
+      description: 'Returns emitted-event counts grouped by event type code for the trailing 24 hours, read from the emitted_event_hourly TimescaleDB continuous aggregate.
+
+        Use this tool for a daily view of platform event traffic; use getEventSummaryLastHour instead for a near-real-time pulse, or getEventSummaryLastWeek for the weekly trend.
+
+        Preconditions: none beyond service availability; GET requests bypass the shared-secret filter, and the aggregate refreshes hourly with a one-hour end offset, so the newest counts can lag by up to an hour.
+
+        Required inputs: none; the window is fixed at 24 hours and cannot be parameterized.
+
+        Emits an EVENT_RECEIVER_SUMMARY_LAST_DAY event recording the query itself; the read changes no stored state.
+
+        Returns 200 with a list of event-type and count pairs, which is empty when no events fall inside the window.
+
+        '
+      operationId: getEventSummaryLastDay
       responses:
         '200':
           description: Summary returned successfully
@@ -274,9 +447,21 @@ paths:
     get:
       tags:
       - Event Types
-      summary: Get active event types
-      description: Retrieve only active event types
-      operationId: getActiveEventTypes
+      summary: List only active event types
+      description: 'Lists the event types whose active flag is true, which are the types currently expected to appear in event traffic and latency monitoring.
+
+        Use this tool when only live, monitorable event types matter; use listEventTypes instead to audit the whole registry including deactivated types.
+
+        Preconditions: none beyond service availability; GET requests pass the shared-secret filter without authentication.
+
+        Required inputs: none; there are no parameters, no paging and no filtering.
+
+        No events are emitted and no state changes; this is a read-only projection of the event_type table filtered on active = true.
+
+        Returns 200 with the active list, which is empty when every registered type is inactive.
+
+        '
+      operationId: listActiveEventTypes
       responses:
         '200':
           description: List of active event types returned successfully
@@ -315,16 +500,19 @@ components:
           format: int64
           description: '50th percentile latency threshold in microseconds (default: 10,000,000 = 10s)'
           example: 500000
+          minimum: 0
         p95Micros:
           type: integer
           format: int64
           description: '95th percentile latency threshold in microseconds (default: 10,000,000 = 10s)'
           example: 1000000
+          minimum: 0
         p99Micros:
           type: integer
           format: int64
           description: '99th percentile latency threshold in microseconds (default: 10,000,000 = 10s)'
           example: 2000000
+          minimum: 0
       required:
       - description
       - typeCode
@@ -398,11 +586,13 @@ components:
           format: int64
           description: Event timestamp in epoch milliseconds
           example: 1730809200000
+          minimum: 0
         elapsedMs:
           type: integer
           format: int64
           description: Elapsed operation time in milliseconds
           example: 42
+          minimum: 0
         publishedAt:
           type: string
           format: date-time

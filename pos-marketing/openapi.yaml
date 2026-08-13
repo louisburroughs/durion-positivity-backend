@@ -21,9 +21,21 @@ paths:
     get:
       tags:
       - Marketing Templates
-      summary: Get template
-      description: Retrieve a template and its available tokens
-      operationId: get
+      summary: Get Message Template By Id
+      description: 'Returns one message template with its name, channel, audience type, subject, body, and the substitution tokens available to its audience.
+
+        Use this tool when the template id is already known; use listMessageTemplates instead when searching by channel or audience.
+
+        Preconditions: the template must exist.
+
+        Required inputs: templateId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_TEMPLATE_GET audit event; no marketing state is changed and this is a read-only projection.
+
+        Returns 404 when no template exists for the supplied id.
+
+        '
+      operationId: getMessageTemplateById
       parameters:
       - name: templateId
         in: path
@@ -50,9 +62,21 @@ paths:
     put:
       tags:
       - Marketing Templates
-      summary: Update template
-      description: Update a template's name, subject, or body
-      operationId: update
+      summary: Update Message Template
+      description: 'Updates a template''s name, subject and body, re-validating every {{token}} against the audience''s vocabulary.
+
+        Use this tool to revise wording; do not use createMessageTemplate for a different channel or audience, because channel and audienceType are immutable and changing either requires a new template.
+
+        Preconditions: the template must exist, the channel and audienceType in the body must equal the stored values, and no other template may hold the new name.
+
+        Required inputs: templateId (UUID) path parameter plus the full body (name, channel, audienceType, body); subject is required for EMAIL and discarded for SMS.
+
+        Emits a MARKETING_TEMPLATE_UPDATE event; campaigns already bound to the template pick up the new wording at their next dispatch.
+
+        Returns 404 when the template does not exist, 409 when the name belongs to another template, and 422 when channel or audienceType is changed or the token, subject or SMS length rules fail.
+
+        '
+      operationId: updateMessageTemplate
       parameters:
       - name: templateId
         in: path
@@ -61,10 +85,20 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Full replacement template; channel and audienceType must match the stored values because both are immutable.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpsertMessageTemplateRequest'
+            examples:
+              Commercial email template:
+                description: Commercial email template
+                value:
+                  name: Spring fleet email
+                  channel: EMAIL
+                  audienceType: COMMERCIAL
+                  subject: '{{accountName}}, your spring fleet alignment offer'
+                  body: 'Hi {{contactFirstName}}, {{accountName}} qualifies for our spring alignment offer. Use code {{offerCode}} at {{shopName}}. Unsubscribe: {{unsubscribeUrl}}'
         required: true
       responses:
         '200':
@@ -89,9 +123,21 @@ paths:
     delete:
       tags:
       - Marketing Templates
-      summary: Delete template
-      description: Delete a template that no campaign is using
-      operationId: delete
+      summary: Delete Unused Message Template
+      description: 'Permanently deletes a message template that no campaign references.
+
+        Use this tool to retire an unused template; detach it from every campaign first via updateCampaign rather than expecting the delete to cascade.
+
+        Preconditions: the template must exist and must not be referenced as the email or SMS template of any campaign, because a campaign whose template vanished would fail at dispatch across its whole audience.
+
+        Required inputs: templateId (UUID) as a path parameter; there is no request body and no confirmation flag.
+
+        Emits a MARKETING_TEMPLATE_DELETE event; the deletion is irreversible.
+
+        Returns 404 when the template does not exist, and 422 when it is still attached to at least one campaign.
+
+        '
+      operationId: deleteMessageTemplate
       parameters:
       - name: templateId
         in: path
@@ -117,9 +163,21 @@ paths:
     get:
       tags:
       - Marketing Campaigns
-      summary: Get campaign
-      description: Retrieve a campaign by id
-      operationId: get_1
+      summary: Get Campaign By Id
+      description: 'Returns one campaign''s full definition, including status, channels, bound segment, templates, schedule and delivery window.
+
+        Use this tool when the campaign id is already known; use listCampaigns instead when searching by status or program.
+
+        Preconditions: the campaign must exist.
+
+        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_CAMPAIGN_GET audit event; no marketing state is changed and this is a read-only projection.
+
+        Returns 404 when no campaign exists for the supplied id.
+
+        '
+      operationId: getCampaignById
       parameters:
       - name: campaignId
         in: path
@@ -146,9 +204,21 @@ paths:
     put:
       tags:
       - Marketing Campaigns
-      summary: Update campaign
-      description: Update a DRAFT campaign. Editing is refused once dispatch has begun.
-      operationId: update_1
+      summary: Update Draft Campaign
+      description: 'Replaces the definition of a DRAFT campaign, including its code, channels, segment, templates, schedule and delivery window.
+
+        Use this tool to revise a campaign before it is scheduled; do not use createCampaign, which makes a new campaign, and use the lifecycle tools (scheduleCampaign, pauseCampaign, cancelCampaign) rather than this one to change status.
+
+        Preconditions: the campaign must exist and still be in DRAFT, since once dispatch may have begun the definition is frozen; audienceType must equal the stored value because it is immutable.
+
+        Required inputs: campaignId (UUID) path parameter plus the full replacement body (code, name, audienceType, channels); scheduleType defaults to IMMEDIATE when omitted, and omitted optional fields are cleared rather than preserved.
+
+        Emits a MARKETING_CAMPAIGN_UPDATE event; no recipients are contacted.
+
+        Returns 404 when the campaign does not exist, 409 when the code belongs to another campaign, and 422 when the campaign is no longer editable, audienceType is changed, or the schedule and window fields are inconsistent.
+
+        '
+      operationId: updateCampaign
       parameters:
       - name: campaignId
         in: path
@@ -157,10 +227,32 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Full replacement campaign definition; audienceType must match the stored value, and omitted optional fields are cleared.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpsertCampaignRequest'
+            examples:
+              Scheduled commercial campaign:
+                description: Scheduled commercial campaign
+                value:
+                  code: SPRING-FLEET-2026
+                  name: Spring fleet alignment push
+                  description: Alignment offer for commercial fleet accounts
+                  audienceType: COMMERCIAL
+                  campaignProgramId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                  channels:
+                  - EMAIL
+                  - SMS
+                  segmentId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                  promotionOfferId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
+                  catalogFocusRef: service:alignment
+                  windowStart: 2026-03-01 00:00:00+00:00
+                  windowEnd: 2026-03-31 23:59:59+00:00
+                  scheduleType: SCHEDULED
+                  scheduledAt: 2026-03-02 14:00:00+00:00
+                  emailTemplateId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
+                  smsTemplateId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a05
         required: true
       responses:
         '200':
@@ -186,9 +278,21 @@ paths:
     get:
       tags:
       - Marketing Templates
-      summary: List templates
-      description: List templates, optionally filtered by channel and audience
-      operationId: list
+      summary: List Message Templates
+      description: 'Lists message templates ordered by name, optionally filtered by delivery channel and audience type.
+
+        Use this tool when browsing templates or finding one to attach to a campaign; do not use getMessageTemplateById, which requires a known template id and returns exactly one template.
+
+        Preconditions: none; an empty result simply means no template matches the filters.
+
+        Required inputs: none; channel (EMAIL or SMS) and audienceType (COMMERCIAL or INDIVIDUAL) are optional query filters that combine when both are supplied.
+
+        Emits a MARKETING_TEMPLATE_LIST audit event; no marketing state is changed.
+
+        Returns 200 with an empty array when nothing matches, so an empty result is not an error condition.
+
+        '
+      operationId: listMessageTemplates
       parameters:
       - name: channel
         in: query
@@ -225,14 +329,36 @@ paths:
     post:
       tags:
       - Marketing Templates
-      summary: Create template
-      description: Create a template. Unknown tokens and tokens outside the audience's vocabulary are rejected.
-      operationId: create
+      summary: Create Message Template
+      description: 'Creates a channel-specific message template whose {{token}} placeholders are validated against the closed vocabulary for its audience at save time, so a typo costs a validation error rather than a batch of broken messages.
+
+        Use this tool when authoring a new template; do not use updateMessageTemplate, which revises an existing template and cannot change its channel or audienceType.
+
+        Preconditions: no template may already use the same name (compared case-insensitively); commercial-only tokens such as accountName are rejected for INDIVIDUAL audiences and vehicle tokens for COMMERCIAL ones.
+
+        Required inputs: name, channel (EMAIL or SMS), audienceType (COMMERCIAL or INDIVIDUAL) and body; subject is required for EMAIL, and for SMS it must be absent and any supplied value is discarded.
+
+        Emits a MARKETING_TEMPLATE_CREATE event; no campaign is affected until the template is attached to one.
+
+        Returns 409 when the name is already in use, and 422 when a token is unknown or outside the audience''s vocabulary, an email template lacks a subject, an SMS template has one, or an SMS body exceeds 320 characters.
+
+        '
+      operationId: createMessageTemplate
       requestBody:
+        description: 'Template to create: name, channel, audience, subject (EMAIL only) and a body whose {{token}} placeholders must belong to the audience''s vocabulary.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpsertMessageTemplateRequest'
+            examples:
+              Commercial email template:
+                description: Commercial email template
+                value:
+                  name: Spring fleet email
+                  channel: EMAIL
+                  audienceType: COMMERCIAL
+                  subject: '{{accountName}}, your spring fleet alignment offer'
+                  body: 'Hi {{contactFirstName}}, {{accountName}} qualifies for our spring alignment offer. Use code {{offerCode}} at {{shopName}}. Unsubscribe: {{unsubscribeUrl}}'
         required: true
       responses:
         '201':
@@ -256,9 +382,21 @@ paths:
     get:
       tags:
       - Marketing Campaigns
-      summary: List campaigns
-      description: List campaigns, optionally filtered by status or program
-      operationId: list_1
+      summary: List Campaigns
+      description: 'Lists marketing campaigns ordered by newest first, optionally filtered by lifecycle status and campaign program.
+
+        Use this tool when browsing or searching campaigns; do not use getCampaignById, which requires a known campaign id and returns exactly one campaign.
+
+        Preconditions: none; an empty result simply means no campaign matches the filters.
+
+        Required inputs: none; status (DRAFT, SCHEDULED, SENDING, SENT, PAUSED, CANCELLED or CLOSED) and campaignProgramId (UUID) are optional query filters that combine when both are supplied.
+
+        Emits a MARKETING_CAMPAIGN_LIST audit event; no marketing state is changed.
+
+        Returns 200 with an empty array when nothing matches, so an empty result is not an error condition.
+
+        '
+      operationId: listCampaigns
       parameters:
       - name: status
         in: query
@@ -298,14 +436,48 @@ paths:
     post:
       tags:
       - Marketing Campaigns
-      summary: Create campaign
-      description: Create a campaign in DRAFT status
-      operationId: create_1
+      summary: Create Campaign
+      description: 'Creates a marketing campaign in DRAFT status; nothing is targeted or sent until it is scheduled and dispatched.
+
+        Use this tool when defining a new campaign; do not use updateCampaign, which edits an existing DRAFT campaign.
+
+        Preconditions: no campaign may already use the same code (compared case-insensitively); segment and templates may be attached later, since readiness is only enforced by scheduleCampaign.
+
+        Required inputs: code, name, audienceType (COMMERCIAL or INDIVIDUAL, immutable after creation) and a non-empty channels set (EMAIL, SMS); scheduleType defaults to IMMEDIATE, and scheduledAt is required only when scheduleType is SCHEDULED.
+
+        Emits a MARKETING_CAMPAIGN_CREATE event; no recipients are contacted.
+
+        Returns 409 when the code is already in use, and 422 when scheduleType is SCHEDULED without scheduledAt or windowEnd precedes windowStart.
+
+        '
+      operationId: createCampaign
       requestBody:
+        description: 'Campaign definition: code, name, audience, channels, and the optional segment, templates, offer and schedule to attach.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpsertCampaignRequest'
+            examples:
+              Scheduled commercial campaign:
+                description: Scheduled commercial campaign
+                value:
+                  code: SPRING-FLEET-2026
+                  name: Spring fleet alignment push
+                  description: Alignment offer for commercial fleet accounts
+                  audienceType: COMMERCIAL
+                  campaignProgramId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                  channels:
+                  - EMAIL
+                  - SMS
+                  segmentId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                  promotionOfferId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
+                  catalogFocusRef: service:alignment
+                  windowStart: 2026-03-01 00:00:00+00:00
+                  windowEnd: 2026-03-31 23:59:59+00:00
+                  scheduleType: SCHEDULED
+                  scheduledAt: 2026-03-02 14:00:00+00:00
+                  emailTemplateId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
+                  smsTemplateId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a05
         required: true
       responses:
         '201':
@@ -329,9 +501,21 @@ paths:
     post:
       tags:
       - Marketing Campaigns
-      summary: Dispatch campaign
-      description: 'Queue the campaign''s audience for delivery. Asynchronous and idempotent: re-invoking never double-sends.'
-      operationId: send
+      summary: Dispatch Campaign To Audience
+      description: 'Materializes the campaign''s resolved audience into one PENDING send row per recipient and channel, moves a SCHEDULED campaign to SENDING, and returns 202 with the queued count while the send worker delivers asynchronously.
+
+        Use this tool to start or retry delivery; do not use scheduleCampaign, which only validates readiness, and do not use previewCampaignAudience, which reports reach without queueing anything.
+
+        Preconditions: the campaign must exist, be SCHEDULED or SENDING, and have a segment bound; the audience is the last snapshot replicated from pos-customer.
+
+        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_CAMPAIGN_SEND event; the call is idempotent because each recipient-channel pair is unique per campaign, so re-invoking never double-sends, and when no audience snapshot has arrived yet it queues nothing, asynchronously requests resolution from pos-customer, and reports queued 0 for a later retry.
+
+        Returns 404 when the campaign does not exist, and 422 when it is not SCHEDULED or SENDING or has no segment bound.
+
+        '
+      operationId: dispatchCampaign
       parameters:
       - name: campaignId
         in: path
@@ -363,9 +547,21 @@ paths:
     post:
       tags:
       - Marketing Campaigns
-      summary: Schedule campaign
-      description: Validate the segment, templates, and offer, then move the campaign to SCHEDULED
-      operationId: schedule
+      summary: Schedule Campaign For Dispatch
+      description: 'Validates a campaign''s readiness and moves it to SCHEDULED, the state from which dispatch is allowed.
+
+        Use this tool when a DRAFT campaign is complete; do not use dispatchCampaign, which queues the actual sends and only accepts a campaign that is already SCHEDULED or SENDING.
+
+        Preconditions: the campaign must exist and be in DRAFT or PAUSED; it must have at least one channel, a bound segment that is known to this module, active, and matching the campaign''s audienceType, and an existing template attached for every selected channel.
+
+        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_CAMPAIGN_SCHEDULE event and publishes a campaign-scheduled fact through the transactional outbox.
+
+        Returns 404 when the campaign does not exist, and 422 listing every readiness problem at once when the campaign is not ready or the transition is not legal from its current status.
+
+        '
+      operationId: scheduleCampaign
       parameters:
       - name: campaignId
         in: path
@@ -395,9 +591,21 @@ paths:
     post:
       tags:
       - Marketing Campaigns
-      summary: Resume campaign
-      description: Return a paused campaign to the dispatch queue
-      operationId: resume
+      summary: Resume Paused Campaign
+      description: 'Returns a PAUSED campaign to SCHEDULED so it re-enters the dispatch queue; the send worker decides when delivery actually restarts rather than jumping straight back into SENDING.
+
+        Use this tool to continue a campaign that pauseCampaign halted; do not use scheduleCampaign, which re-runs readiness validation on a DRAFT or PAUSED campaign.
+
+        Preconditions: the campaign must exist and be PAUSED.
+
+        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_CAMPAIGN_RESUME event; recipients already recorded as sent are never re-queued, because each recipient-channel pair is unique per campaign.
+
+        Returns 404 when the campaign does not exist, and 422 when its current status does not allow resuming.
+
+        '
+      operationId: resumeCampaign
       parameters:
       - name: campaignId
         in: path
@@ -412,6 +620,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CampaignResponse'
+        '404':
+          description: Campaign not found
         '422':
           description: Illegal lifecycle transition
         '403':
@@ -425,9 +635,21 @@ paths:
     post:
       tags:
       - Marketing Campaigns
-      summary: Pause campaign
-      description: Halt dispatch; queued recipients stop being drained
-      operationId: pause
+      summary: Pause Campaign Dispatch
+      description: 'Moves a campaign to PAUSED so the send worker stops draining its queued recipients.
+
+        Use this tool to halt an in-flight or scheduled campaign without losing it; do not use cancelCampaign, which is terminal and cannot be undone.
+
+        Preconditions: the campaign must exist and be in SCHEDULED or SENDING, the only statuses that permit the PAUSED transition.
+
+        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_CAMPAIGN_PAUSE event; already-delivered messages are unaffected and queued send rows remain PENDING for a later resume.
+
+        Returns 404 when the campaign does not exist, and 422 when its current status does not allow pausing.
+
+        '
+      operationId: pauseCampaign
       parameters:
       - name: campaignId
         in: path
@@ -442,6 +664,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CampaignResponse'
+        '404':
+          description: Campaign not found
         '422':
           description: Illegal lifecycle transition
         '403':
@@ -455,9 +679,21 @@ paths:
     post:
       tags:
       - Marketing Campaigns
-      summary: Cancel campaign
-      description: Cancel a campaign; the state is terminal
-      operationId: cancel
+      summary: Cancel Campaign Permanently
+      description: 'Moves a campaign to CANCELLED, a terminal state from which no further transition exists.
+
+        Use this tool to abandon a campaign for good; do not use pauseCampaign, which halts dispatch reversibly and keeps the queue intact.
+
+        Preconditions: the campaign must exist and be in DRAFT, SCHEDULED, SENDING or PAUSED; a SENT campaign can only be CLOSED, and CANCELLED and CLOSED campaigns cannot transition at all.
+
+        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_CAMPAIGN_CANCEL event; messages already delivered are not recalled.
+
+        Returns 404 when the campaign does not exist, and 422 when its current status does not allow cancellation.
+
+        '
+      operationId: cancelCampaign
       parameters:
       - name: campaignId
         in: path
@@ -472,6 +708,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CampaignResponse'
+        '404':
+          description: Campaign not found
         '422':
           description: Illegal lifecycle transition
         '403':
@@ -485,9 +723,21 @@ paths:
     post:
       tags:
       - Marketing Campaigns
-      summary: Preview audience
-      description: Per-channel reach after consent, account gate, and suppression, plus any issues that would block scheduling
-      operationId: previewAudience
+      summary: Preview Campaign Audience
+      description: 'Reports the campaign''s last resolved audience snapshot: total segment members, per-channel eligible counts after consent, staleness and suppression checks, whether each channel has a template, and the readiness problems that would block scheduling.
+
+        Use this tool to gauge reach before scheduling or dispatch; do not use dispatchCampaign, which actually queues messages for delivery.
+
+        Preconditions: the campaign must exist and have a segmentId bound; membership is replicated asynchronously from pos-customer, so the counts reflect the snapshot taken at resolvedAt rather than live CRM data.
+
+        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_AUDIENCE_PREVIEW audit event and, while the campaign is still DRAFT, SCHEDULED or PAUSED, asynchronously requests a fresher membership snapshot from pos-customer; the campaign itself is not modified.
+
+        Returns 404 when the campaign does not exist, and 422 when no segment is bound so there is nothing to preview.
+
+        '
+      operationId: previewCampaignAudience
       parameters:
       - name: campaignId
         in: path
@@ -502,6 +752,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AudiencePreviewResponse'
+        '404':
+          description: Campaign not found
         '422':
           description: Campaign has no segment bound
         '503':
@@ -517,9 +769,21 @@ paths:
     get:
       tags:
       - Marketing Analytics
-      summary: Program stats
-      description: Compare the commercial and individual arms of one campaign program side by side
-      operationId: programStats
+      summary: Get Campaign Program Stats
+      description: 'Returns the full stats block for every campaign sharing one campaignProgramId, so the commercial and individual arms of an initiative can be compared side by side.
+
+        Use this tool when comparing the arms of a program; use getCampaignStats instead for a single campaign.
+
+        Preconditions: at least one campaign must reference the campaignProgramId, since the program has no record of its own in this module.
+
+        Required inputs: campaignProgramId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_PROGRAM_STATS_GET audit event; no marketing state is changed and this is a read-only projection.
+
+        Returns 404 when no campaign references the supplied campaignProgramId.
+
+        '
+      operationId: getProgramStats
       parameters:
       - name: campaignProgramId
         in: path
@@ -547,9 +811,21 @@ paths:
     get:
       tags:
       - Marketing Analytics
-      summary: Campaign stats
-      description: Per-channel reach funnel plus redemptions and discount value credited to the campaign
-      operationId: campaignStats
+      summary: Get Campaign Stats
+      description: 'Returns one campaign''s per-channel delivery funnel (targeted, suppressed, sent, delivered, bounced, complained, failed) plus the redemption count and discount value attributed to its campaign code; the sent figure is cumulative, counting delivered, bounced and complained messages as sent.
+
+        Use this tool for aggregate campaign performance; use listCampaignSends instead to inspect individual recipient send rows, and use getProgramStats to compare the arms of a program.
+
+        Preconditions: the campaign must exist; a campaign that has never dispatched reports zeroed funnels rather than an error.
+
+        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_CAMPAIGN_STATS_GET audit event; no marketing state is changed and this is a read-only projection.
+
+        Returns 404 when no campaign exists for the supplied id.
+
+        '
+      operationId: getCampaignStats
       parameters:
       - name: campaignId
         in: path
@@ -577,9 +853,21 @@ paths:
     get:
       tags:
       - Marketing Campaigns
-      summary: List sends
-      description: Per-recipient send records for a campaign
-      operationId: listSends
+      summary: List Campaign Send Records
+      description: 'Lists the per-recipient, per-channel send rows a campaign dispatch queued, including status, failure reason, provider message id, attempts and timestamps.
+
+        Use this tool to inspect individual delivery outcomes; use getCampaignStats instead for aggregate funnel and attribution numbers.
+
+        Preconditions: none; an unknown campaignId yields an empty page rather than an error.
+
+        Required inputs: campaignId (UUID) as a path parameter; page defaults to 0 and size defaults to 50, clamped between 1 and 200, ordered by queuedAt ascending.
+
+        Emits a MARKETING_CAMPAIGN_SENDS_LIST audit event; no marketing state is changed and this is a read-only projection.
+
+        Returns 200 with an empty page when the campaign has no send rows, so an empty result is not an error condition.
+
+        '
+      operationId: listCampaignSends
       parameters:
       - name: campaignId
         in: path

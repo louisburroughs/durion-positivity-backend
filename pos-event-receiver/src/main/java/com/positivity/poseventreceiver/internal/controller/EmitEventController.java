@@ -4,6 +4,7 @@ import com.positivity.poseventreceiver.internal.dto.EmitEventRequest;
 import com.positivity.poseventreceiver.service.EmitEventService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -67,17 +68,45 @@ public class EmitEventController {
      */
     @PostMapping
     @Operation(
-            summary = "Receive emitted event",
-            description = "Stores a preregistered emitted event payload",
+            operationId = "receiveEvent",
+            summary = "Receive and store an emitted event",
+            description = """
+                    Receives one event occurrence emitted by another pos service and queues it for storage in the \
+                    emitted_event time-series table.
+                    Use this tool when a service needs to record that a registered event happened; do not use \
+                    upsertEventType, which registers or edits event-type metadata rather than recording occurrences.
+                    Preconditions: the event id must already exist in the preregistered_event allowlist, and the call \
+                    must carry a valid X-Events-Api-Secret shared-secret header when pos.events.api-secret is \
+                    configured; this service is internal-network only and is not exposed through the API gateway.
+                    Required inputs: id (uppercase letters, digits and underscores), numeric apiVersion, timestamp as \
+                    positive epoch milliseconds, elapsedMs of zero or more, and publishedAt as a UTC instant.
+                    No events are emitted by this operation itself, by design, to prevent infinite recursion; the \
+                    submitted event is queued in memory and a batch flush persists the queue every 5 seconds, so a 200 \
+                    response means accepted, not yet durably stored.
+                    Returns 400 when the id is not preregistered or a field fails validation, and 401 when the shared \
+                    secret is missing or invalid.
+                    """,
             tags = {"Event Emission"})
     @ApiResponse(responseCode = "200", description = "Event stored successfully")
     @ApiResponse(responseCode = "400", description = "Event type ID is not preregistered")
     // @EmitEvent - FORBIDDEN: See warning above. Would cause infinite recursion.
     public ResponseEntity<String> receiveEvent(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Event payload to persist",
+                            description =
+                                    "Single event occurrence to record, identifying the preregistered event id and its"
+                                            + " timing measurements.",
                             required = true,
-                            content = @Content(schema = @Schema(implementation = EmitEventRequest.class)))
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = EmitEventRequest.class),
+                                            examples = @ExampleObject(name = "Order creation event", value = """
+                                                                    {"id":"ORDER_ORDER_CREATE",
+                                                                     "apiVersion":"1",
+                                                                     "timestamp":1730809200000,
+                                                                     "elapsedMs":42,
+                                                                     "publishedAt":"2026-03-05T21:15:00Z"}
+                                                                    """)))
                     @Valid
                     @NotNull
                     @RequestBody

@@ -5,6 +5,8 @@ import com.positivity.bulkloader.internal.dto.ColumnMappingResponse;
 import com.positivity.bulkloader.service.ColumnMappingService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -38,12 +40,20 @@ public class ColumnMappingController {
 
     @GetMapping("/{jobId}/mappings")
     @PreAuthorize("hasAuthority('bulkImport:status:read')")
-    @Operation(
-            summary = "Get proposed column mappings for a job",
-            description =
-                    "Retrieves the proposed column mappings for the specified bulk load job. The operator can only access mappings for their own jobs. This endpoint is typically used to review the detected column mappings before approving them for processing.")
+    @Operation(operationId = "getColumnMappings", summary = "Get Proposed Column Mappings for Job", description = """
+                    Returns the column mappings currently stored for a bulk load job, covering both auto-suggested \
+                    mappings from content detection and operator-approved overrides.
+                    Use this tool to review detected source-column to target-field mappings, their confidence and \
+                    origin; use approveColumnMappings instead to finalize the set.
+                    Preconditions: the job must exist and belong to the authenticated operator; mappings are \
+                    typically present only after a file upload has triggered content detection.
+                    Required inputs: jobId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 404 when the job does not exist, and 403 when the job belongs to another operator.
+                    """)
     @ApiResponse(responseCode = "200", description = "Mappings returned")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
+    @ApiResponse(responseCode = "404", description = "Job not found")
     public ResponseEntity<List<ColumnMappingResponse>> getMappings(@PathVariable @NonNull UUID jobId) {
         String operatorId = currentOperatorId();
         return ResponseEntity.ok(columnMappingService.getMappingsForJob(jobId, operatorId));
@@ -53,13 +63,44 @@ public class ColumnMappingController {
     @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
     @EmitEvent(id = "BULK_LOADER_MAPPING_APPROVE", apiVersion = "1")
     @Operation(
-            summary = "Approve and finalize column mappings for a job",
-            description =
-                    "Approves and finalizes the proposed column mappings for the specified bulk load job. The operator can only approve mappings for their own jobs. Once approved, the mappings are locked and used for processing the bulk load job.")
+            operationId = "approveColumnMappings",
+            summary = "Approve and Finalize Column Mappings",
+            description = """
+                    Replaces all stored column mappings for a bulk load job with the submitted set, marking every \
+                    mapping operator-approved with confidence 1.0.
+                    Use this tool after reviewing the suggestions from getColumnMappings; do not use \
+                    getColumnMappings, which only reads mappings, and note that the submitted list fully replaces \
+                    prior mappings rather than merging with them.
+                    Preconditions: the job must exist and belong to the authenticated operator; the job state is not \
+                    checked, but approved mappings only affect processing started afterwards.
+                    Required inputs: mappings, a non-empty list where each entry names a sourceColumn from the \
+                    uploaded file and the targetField it maps to; mappingId is accepted but ignored because the set \
+                    is replaced wholesale.
+                    Emits a BULK_LOADER_MAPPING_APPROVE event and deletes previously stored mappings, including \
+                    auto-suggested ones, before saving the new set.
+                    Returns 404 when the job does not exist, and 403 when the job belongs to another operator.
+                    """)
     @ApiResponse(responseCode = "200", description = "Mappings approved")
     @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
+    @ApiResponse(responseCode = "404", description = "Job not found")
     public ResponseEntity<List<ColumnMappingResponse>> approveMappings(
-            @PathVariable @NonNull UUID jobId, @Valid @RequestBody @NonNull ColumnMappingApproveRequest request) {
+            @PathVariable @NonNull UUID jobId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Full replacement set of column mappings, one entry per source column to import.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Two approved mappings", value = """
+                                                                    {"mappings":[
+                                                                      {"sourceColumn":"Product SKU","targetField":"sku"},
+                                                                      {"sourceColumn":"Retail Price","targetField":"price"}]}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    ColumnMappingApproveRequest request) {
         String operatorId = currentOperatorId();
         return ResponseEntity.ok(columnMappingService.approveMappings(jobId, operatorId, request));
     }

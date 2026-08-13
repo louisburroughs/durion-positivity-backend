@@ -21,9 +21,21 @@ paths:
     get:
       tags:
       - Vehicle Applicability Hints
-      summary: Get a vehicle applicability hint
-      description: Retrieve a hint by its ID
-      operationId: getHint
+      summary: Get Vehicle Applicability Hint
+      description: 'Returns one vehicle applicability hint, including its productId, fitment tags and audit fields.
+
+        Use this tool when the hintId is already known; use listVehicleHintsByProduct instead to find all hints attached to a product.
+
+        Preconditions: the hint must exist under the supplied hintId.
+
+        Required inputs: hintId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the hint, and 404 when no hint exists for the supplied id.
+
+        '
+      operationId: getVehicleHint
       parameters:
       - name: hintId
         in: path
@@ -52,9 +64,21 @@ paths:
     put:
       tags:
       - Vehicle Applicability Hints
-      summary: Update a vehicle applicability hint
-      description: Update the fitment tags for an existing hint
-      operationId: updateHint
+      summary: Update Vehicle Applicability Hint
+      description: 'Replaces the full set of fitment tags on an existing vehicle applicability hint; the previous tags are deleted and the submitted list becomes the hint''s only tags.
+
+        Use this tool to correct or extend the vehicles a product fits; do not use createVehicleHint, which adds a second hint to the product instead of changing this one.
+
+        Preconditions: the hint must already exist under the supplied hintId; the owning productId cannot be changed here.
+
+        Required inputs: hintId (UUID) as a path parameter and fitmentTags, a non-empty list of tagType/tagValue pairs; the list is a full replacement, so tags to keep must be resubmitted.
+
+        Emits a VEHICLE_HINT_UPDATED event and records the caller as updatedBy.
+
+        Returns 200 with the updated hint, and 404 when no hint exists for the supplied id.
+
+        '
+      operationId: updateVehicleHint
       parameters:
       - name: hintId
         in: path
@@ -64,10 +88,22 @@ paths:
           type: string
           format: uuid
       requestBody:
+        description: Replacement fitment tag list for the hint; it fully supersedes the tags currently stored.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateHintRequest'
+            examples:
+              Replace tags with a wider year range:
+                description: Replace tags with a wider year range
+                value:
+                  fitmentTags:
+                  - tagType: MAKE
+                    tagValue: Toyota
+                  - tagType: MODEL
+                    tagValue: Camry
+                  - tagType: YEAR_RANGE
+                    tagValue: 2016-2024
         required: true
       responses:
         '200':
@@ -95,9 +131,21 @@ paths:
     delete:
       tags:
       - Vehicle Applicability Hints
-      summary: Delete a vehicle applicability hint
-      description: Remove a hint and all its associated tags
-      operationId: deleteHint
+      summary: Delete Vehicle Applicability Hint
+      description: 'Deletes a vehicle applicability hint together with all fitment tags attached to it, removing those match criteria from product filtering.
+
+        Use this tool when a hint''s vehicle coverage should no longer apply to the product at all; do not use updateVehicleHint, which keeps the hint and replaces its tags instead.
+
+        Preconditions: the hint must exist under the supplied hintId.
+
+        Required inputs: hintId (UUID) as a path parameter; there is no request body.
+
+        Emits a VEHICLE_HINT_DELETED event; the delete is permanent, with no soft-delete or restore.
+
+        Returns 204 on successful deletion, and 404 when no hint exists for the supplied id.
+
+        '
+      operationId: deleteVehicleHint
       parameters:
       - name: hintId
         in: path
@@ -119,14 +167,39 @@ paths:
     post:
       tags:
       - Vehicle Applicability Hints
-      summary: Create a vehicle applicability hint
-      description: Create a new hint with fitment tags for a product
-      operationId: createHint
+      summary: Create Vehicle Applicability Hint
+      description: 'Creates a vehicle applicability hint that attaches a set of fitment tags to one product, making the product discoverable through filterProductsByVehicleAttributes.
+
+        Use this tool when declaring which vehicles a product fits for the first time; do not use updateVehicleHint, which replaces the tags on a hint that already exists.
+
+        Preconditions: none are checked against other services; productId is stored as given and is not verified against the catalog, so callers must supply a valid product id themselves.
+
+        Required inputs: productId (UUID) and fitmentTags, a non-empty list of tagType/tagValue pairs; tagType is one of MAKE, MODEL, YEAR_RANGE, TIRE_SIZE, AXLE_POSITION, ENGINE_SIZE or TRIM_LEVEL, tagValue is at most 120 characters, and YEAR_RANGE values use "2018-2022" or a single year like "2020".
+
+        Emits a VEHICLE_HINT_CREATED event and persists the hint with its tags in one transaction.
+
+        Returns 201 with the stored hint on success; because productId is not validated, an unknown product id still returns 201 rather than 404.
+
+        '
+      operationId: createVehicleHint
       requestBody:
+        description: 'Hint to create: the product identifier and the fitment tags that describe which vehicles the product applies to.'
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateHintRequest'
+            examples:
+              Make, model and year-range hint:
+                description: Make, model and year-range hint
+                value:
+                  productId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  fitmentTags:
+                  - tagType: MAKE
+                    tagValue: Toyota
+                  - tagType: MODEL
+                    tagValue: Camry
+                  - tagType: YEAR_RANGE
+                    tagValue: 2018-2022
         required: true
       responses:
         '201':
@@ -155,14 +228,35 @@ paths:
     post:
       tags:
       - Vehicle Applicability Hints
-      summary: Filter products by vehicle attributes
-      description: Find products that match the provided vehicle attributes
-      operationId: filterProducts
+      summary: Filter Products by Vehicle Attributes
+      description: 'Finds product ids whose applicability hints are compatible with a supplied set of vehicle attributes such as make, model and year.
+
+        Use this tool to answer which products fit a given vehicle; use listVehicleHintsByProduct instead to go the other direction, from a product to its vehicle coverage.
+
+        Preconditions: hints must already exist, and attribute keys must match tag types case-insensitively (make, model, year_range, tire_size, axle_position, engine_size, trim_level); unknown keys are ignored rather than rejected.
+
+        Required inputs: vehicleAttributes, a non-empty map of attribute name to value; value matching is case-insensitive, a hint that lacks a given tag type is treated as compatible with that attribute, and a year value like "2020" matches YEAR_RANGE tags stored as "2018-2022" or as a single year.
+
+        Emits a FITMENT_PRODUCTS_FILTER event; no hint or product records are modified.
+
+        Returns 200 with the matching productIds and their count, which may be empty, and 400 when vehicleAttributes is missing, empty, or contains blank keys or values.
+
+        '
+      operationId: filterProductsByVehicleAttributes
       requestBody:
+        description: Vehicle attributes to match against stored fitment tags; keys name a tag type and values describe the vehicle being fitted.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/FilterProductsRequest'
+            examples:
+              Match a 2020 Toyota Camry:
+                description: Match a 2020 Toyota Camry
+                value:
+                  vehicleAttributes:
+                    make: Toyota
+                    model: Camry
+                    year_range: '2020'
         required: true
       responses:
         '200':
@@ -185,14 +279,44 @@ paths:
     post:
       tags:
       - Vehicle Fitment Bulk Ingest API
-      summary: Bulk ingest records
-      description: Accepts a batch of domain records for bulk import. Returns per-record results.
-      operationId: bulkIngest
+      summary: Bulk Ingest Part Fitment Records
+      description: 'Bulk-imports part fitment records, creating one part-to-vehicle fitment row per record and resolving manufacturer, make, model and vehicle-type names to reference rows.
+
+        Use this tool for catalog-scale fitment loads from a prepared batch; do not use createVehicleHint, which manages per-product applicability hint tags rather than part fitment rows.
+
+        Preconditions: the caller must hold vehicle-fitment:hint:create; referenced manufacturer, make, model and vehicle-type names need not pre-exist, because each is matched case-insensitively and created on the fly when missing.
+
+        Required inputs: jobId (UUID), locationId (UUID) and records, a non-empty list where each record requires partNumberId (numeric); manufacturerName, makeName, modelName, vehicleTypeName, vehicleYear, engineType, submodel and notes are optional, and jobId, locationId and operatorId are accepted for the envelope but not persisted by this module.
+
+        Emits a VEHICLE_FITMENT_BULK_INGEST event covering the whole batch; rows are processed independently, so one failed row does not roll back the others.
+
+        Returns 200 even when every row fails, so callers must inspect each result''s success flag and FITMENT_INGEST_FAILED errorCode rather than trusting the status alone.
+
+        '
+      operationId: bulkIngestVehicleFitments
       requestBody:
+        description: Batch envelope of part fitment records to import, each naming the vehicle the part applies to.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BulkIngestRequestFitmentBulkIngestRecord'
+            examples:
+              Single fitment record:
+                description: Single fitment record
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  operatorId: user-jdoe
+                  records:
+                  - partNumberId: 100245
+                    manufacturerName: Toyota Motor Corporation
+                    makeName: Toyota
+                    modelName: Camry
+                    vehicleTypeName: Passenger Car
+                    vehicleYear: 2018-2022
+                    engineType: 2.5L I4
+                    submodel: SE
+                    notes: Verified against OEM catalog
         required: true
       responses:
         '200':
@@ -216,9 +340,21 @@ paths:
     get:
       tags:
       - Vehicle Fitment API
-      summary: Get vehicle types for make
-      description: Retrieve all vehicle types for a given make.
-      operationId: getVehicleTypesForMake
+      summary: List Vehicle Types for a Make
+      description: 'Returns the vehicle types, meaning body classes such as Passenger Car or Truck, recorded for one make, served from a local cache of the NHTSA vPIC registry.
+
+        Use this tool when a make''s body classes are needed; do not use listModelsByMake, which returns the make''s named models instead.
+
+        Preconditions: the make must already exist in the local cache under the supplied id.
+
+        Required inputs: makeId (UUID) as a path parameter.
+
+        No events are emitted; a cache refresh may rewrite the local vehicle-type rows for the make, but nothing else changes.
+
+        Returns 200 with the vehicle-type list, and 500 when the make id cannot be resolved or the NHTSA refresh fails, because the not-found case is not currently mapped to 404.
+
+        '
+      operationId: listVehicleTypesByMake
       parameters:
       - name: makeId
         in: path
@@ -245,9 +381,21 @@ paths:
     get:
       tags:
       - Vehicle Fitment API
-      summary: Get models by make
-      description: Retrieve all models for a given make.
-      operationId: getModelsByMake
+      summary: List Models for a Make
+      description: 'Returns all vehicle models recorded for one make, served from a local cache of the NHTSA vPIC registry.
+
+        Use this tool after picking a make from listMakesByManufacturer; do not use listVehicleTypesByMake, which returns body classes such as Passenger Car rather than named models.
+
+        Preconditions: the make must already exist in the local cache under the supplied id.
+
+        Required inputs: makeId (UUID) as a path parameter.
+
+        No events are emitted; a cache refresh may rewrite the local model rows for the make, but nothing else changes.
+
+        Returns 200 with the model list, and 500 when the make id cannot be resolved or the NHTSA refresh fails, because the not-found case is not currently mapped to 404.
+
+        '
+      operationId: listModelsByMake
       parameters:
       - name: makeId
         in: path
@@ -274,9 +422,21 @@ paths:
     get:
       tags:
       - Vehicle Fitment API
-      summary: Get all manufacturers
-      description: Retrieve a list of all vehicle manufacturers.
-      operationId: getManufacturers
+      summary: List Vehicle Manufacturers
+      description: 'Returns the list of vehicle manufacturers known to the fitment service, served from a local cache of the NHTSA vPIC registry.
+
+        Use this tool to start the manufacturer-make-model selection chain; do not use listMakesByManufacturer, which requires a manufacturerId taken from this response.
+
+        Preconditions: none beyond authentication; when the local cache is empty or stale the list is re-fetched from the public NHTSA vPIC service, so outbound connectivity is required for a refresh.
+
+        Required inputs: none; there are no parameters, no paging and no filtering.
+
+        No events are emitted; a refresh rewrites the local manufacturer cache rows, but the response is otherwise a read-only projection.
+
+        Returns 200 with the manufacturer list, which may be empty, and 500 when the NHTSA refresh cannot be fetched or parsed.
+
+        '
+      operationId: listManufacturers
       responses:
         '200':
           description: List of manufacturers returned successfully.
@@ -294,9 +454,21 @@ paths:
     get:
       tags:
       - Vehicle Fitment API
-      summary: Get makes by manufacturer
-      description: Retrieve all makes for a given manufacturer.
-      operationId: getMakesByManufacturer
+      summary: List Makes for a Manufacturer
+      description: 'Returns all vehicle makes recorded for one manufacturer, served from a local cache of the NHTSA vPIC registry.
+
+        Use this tool after picking a manufacturer from listManufacturers; do not use listModelsByMake, which descends one level further and needs a makeId taken from this response.
+
+        Preconditions: the manufacturer must already exist in the local cache under the supplied id; ids are the UUIDs returned by listManufacturers, not raw NHTSA numeric ids.
+
+        Required inputs: manufacturerId (UUID) as a path parameter.
+
+        No events are emitted; a cache refresh may rewrite the local make rows for the manufacturer, but nothing else changes.
+
+        Returns 200 with the make list, and 500 when the manufacturer id cannot be resolved or the NHTSA refresh fails, because the not-found case is not currently mapped to 404.
+
+        '
+      operationId: listMakesByManufacturer
       parameters:
       - name: manufacturerId
         in: path
@@ -323,9 +495,21 @@ paths:
     get:
       tags:
       - Vehicle Applicability Hints
-      summary: Get hints by product ID
-      description: Retrieve all hints associated with a specific product
-      operationId: getHintsByProductId
+      summary: List Hints for a Product
+      description: 'Returns every vehicle applicability hint recorded for one product, each with its full fitment tag list.
+
+        Use this tool to review a product''s declared vehicle coverage; use getVehicleHint instead when a specific hintId is already known.
+
+        Preconditions: none; an unknown productId or one without hints simply yields an empty list rather than an error.
+
+        Required inputs: productId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the hint list, which is empty when the product has no hints.
+
+        '
+      operationId: listVehicleHintsByProduct
       parameters:
       - name: productId
         in: path

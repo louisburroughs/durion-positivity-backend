@@ -19,10 +19,12 @@ modules:
     mode: STRICT
   pos-shop-manager:
     mode: STRICT
+    annotationDepth: STRICT
   pos-invoice:
     mode: STRICT
   pos-bulk-loader:
     mode: STRICT
+    annotationDepth: STRICT
   pos-vehicle-inventory:
     mode: STRICT
   pos-warranty:
@@ -32,12 +34,16 @@ modules:
     annotationDepth: STRICT
   pos-event-receiver:
     mode: STRICT
+    annotationDepth: STRICT
   pos-vehicle-fitment:
     mode: STRICT
+    annotationDepth: STRICT
   pos-image:
     mode: STRICT
+    annotationDepth: STRICT
   pos-documents:
     mode: STRICT
+    annotationDepth: STRICT
   pos-security-service:
     mode: STRICT
   pos-api-gateway:
@@ -47,6 +53,7 @@ modules:
     mode: STRICT
   pos-marketing:
     mode: STRICT
+    annotationDepth: STRICT
   pos-people-contact:
     mode: STRICT
   pos-tax:

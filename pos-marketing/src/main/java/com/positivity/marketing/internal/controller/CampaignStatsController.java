@@ -32,9 +32,21 @@ public class CampaignStatsController {
         this.statsService = statsService;
     }
 
-    @Operation(
-            summary = "Campaign stats",
-            description = "Per-channel reach funnel plus redemptions and discount value credited to the campaign")
+    @Operation(operationId = "getCampaignStats", summary = "Get Campaign Stats", description = """
+                    Returns one campaign's per-channel delivery funnel (targeted, suppressed, sent, \
+                    delivered, bounced, complained, failed) plus the redemption count and discount value \
+                    attributed to its campaign code; the sent figure is cumulative, counting delivered, \
+                    bounced and complained messages as sent.
+                    Use this tool for aggregate campaign performance; use listCampaignSends instead to \
+                    inspect individual recipient send rows, and use getProgramStats to compare the arms of a \
+                    program.
+                    Preconditions: the campaign must exist; a campaign that has never dispatched reports \
+                    zeroed funnels rather than an error.
+                    Required inputs: campaignId (UUID) as a path parameter; there is no request body.
+                    Emits a MARKETING_CAMPAIGN_STATS_GET audit event; no marketing state is changed and this \
+                    is a read-only projection.
+                    Returns 404 when no campaign exists for the supplied id.
+                    """)
     @ApiResponses({
         @ApiResponse(
                 responseCode = "200",
@@ -53,9 +65,18 @@ public class CampaignStatsController {
         return ResponseEntity.ok(statsService.campaignStats(campaignId));
     }
 
-    @Operation(
-            summary = "Program stats",
-            description = "Compare the commercial and individual arms of one campaign program side by side")
+    @Operation(operationId = "getProgramStats", summary = "Get Campaign Program Stats", description = """
+                    Returns the full stats block for every campaign sharing one campaignProgramId, so the \
+                    commercial and individual arms of an initiative can be compared side by side.
+                    Use this tool when comparing the arms of a program; use getCampaignStats instead for a \
+                    single campaign.
+                    Preconditions: at least one campaign must reference the campaignProgramId, since the \
+                    program has no record of its own in this module.
+                    Required inputs: campaignProgramId (UUID) as a path parameter; there is no request body.
+                    Emits a MARKETING_PROGRAM_STATS_GET audit event; no marketing state is changed and this \
+                    is a read-only projection.
+                    Returns 404 when no campaign references the supplied campaignProgramId.
+                    """)
     @ApiResponses({
         @ApiResponse(
                 responseCode = "200",

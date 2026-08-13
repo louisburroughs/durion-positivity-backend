@@ -28,8 +28,18 @@ public class ImageController {
     private final ImageService imageService;
 
     @Operation(
+            operationId = "getImageById",
             summary = "Get image by ID",
-            description = "Retrieve an image file by its unique database ID.",
+            description = """
+                    Returns the stored image file for a numeric image id as a binary attachment.
+                    Use this tool when the image's database id is already known; use getImageByFilename instead when
+                    only the filename is known.
+                    Preconditions: the image record must exist and its backing file must still be present on disk.
+                    Required inputs: id (numeric database id) path parameter; there is no request body and no
+                    resizing or format options.
+                    No events are emitted and no state changes; this is a read-only file retrieval.
+                    Returns 404 when no image record has that id or the backing file is missing from storage.
+                    """,
             tags = {"Image API"})
     @ApiResponse(responseCode = "200", description = "Image file returned successfully.")
     @ApiResponse(responseCode = "404", description = "Image not found.")
@@ -45,8 +55,21 @@ public class ImageController {
     }
 
     @Operation(
+            operationId = "getImageByFilename",
             summary = "Get image by filename",
-            description = "Retrieve an image file by its filename.",
+            description = """
+                    Returns the stored image file matching a filename as a binary attachment.
+                    Use this tool when only the filename is known, such as a reference embedded in catalog data; use
+                    getImageById instead when the numeric id is available, because filenames are not guaranteed
+                    unique over time.
+                    Preconditions: an image record with that exact filename must exist and its backing file must
+                    still be present on disk.
+                    Required inputs: filename path parameter, matched exactly including extension; there is no
+                    request body and no resizing or format options.
+                    No events are emitted and no state changes; this is a read-only file retrieval.
+                    Returns 404 when no image record matches the filename or the backing file is missing from
+                    storage.
+                    """,
             tags = {"Image API"})
     @ApiResponse(responseCode = "200", description = "Image file returned successfully.")
     @ApiResponse(responseCode = "404", description = "Image not found.")
