@@ -768,13 +768,59 @@ jobs:
         # and fell back to its own `target/site/jacoco/jacoco.xml` — losing exactly the
         # cross-module coverage the aggregate report exists to capture. The path is absolute
         # (github.workspace) so it resolves identically from every module.
+        #
+        # The coverage ratchet runs here with -Djacoco.check.haltOnFailure=false. With the
+        # default (true) the reactor stops at the first module under its floor, so a single
+        # regression hid every other module's result *and* skipped the SonarCloud upload, because
+        # the sonar goal is bound to the aggregate module that depends on all of them. Reporting
+        # one offender per nightly run turns a ten-minute fix into a ten-day queue. The gate is
+        # not weakened: JaCoCo still evaluates every rule and logs each violation, and the step
+        # below fails the job with the complete list.
         run: |
+          set -o pipefail
           ./mvnw -pl ${{ env.COVERAGE_AGGREGATE_MODULE }} -am -DskipITs -Darchunit.skipTests=true verify -T 1C -B \
+            -Djacoco.check.haltOnFailure=false \
             org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
             -Dsonar.projectKey=louisburroughs_durion-positivity-backend \
             -Dsonar.organization=louisburroughs \
             -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.coverage.jacoco.aggregateXmlReportPaths=${{ github.workspace }}/${{ env.COVERAGE_AGGREGATE_XML_PATH }}
+            -Dsonar.coverage.jacoco.aggregateXmlReportPaths=${{ github.workspace }}/${{ env.COVERAGE_AGGREGATE_XML_PATH }} \
+            2>&1 | tee "$RUNNER_TEMP/full-coverage.log"
+
+      - name: Enforce the coverage ratchet across every module
+        if: always()
+        run: |
+          LOG="$RUNNER_TEMP/full-coverage.log"
+          if [ ! -f "$LOG" ]; then
+            echo "::error::Coverage log missing — the build step did not run to completion."
+            exit 1
+          fi
+
+          # JaCoCo emits one "Rule violated for bundle <module>: <counter> covered ratio is X,
+          # but expected minimum is Y" per breach. Collect them all rather than the first.
+          grep -F 'Rule violated for bundle' "$LOG" | sed 's/^\[WARNING\] *//; s/^\[ERROR\] *//' \
+            | sort -u > "$RUNNER_TEMP/coverage-violations.txt" || true
+
+          if [ ! -s "$RUNNER_TEMP/coverage-violations.txt" ]; then
+            echo "Coverage ratchet: every module met its floor."
+            exit 0
+          fi
+
+          COUNT=$(wc -l < "$RUNNER_TEMP/coverage-violations.txt")
+          {
+            echo "## Coverage ratchet: $COUNT module(s) below floor"
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/coverage-violations.txt"
+            echo '```'
+            echo
+            echo "Floors live in each module's pom.xml (jacoco.line.min / jacoco.branch.min)."
+            echo "See docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6 for how they are set."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          while IFS= read -r line; do echo "::error::$line"; done < "$RUNNER_TEMP/coverage-violations.txt"
+          echo "Coverage ratchet failed for $COUNT module(s); see the job summary for the full list."
+          exit 1
 
       - name: Upload aggregate JaCoCo coverage report
         if: always()
