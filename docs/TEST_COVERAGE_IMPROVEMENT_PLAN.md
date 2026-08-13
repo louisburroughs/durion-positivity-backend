@@ -888,7 +888,7 @@ loudly once the behaviour changed, and are now ordinary assertions.
 |---|---|---|---|---|
 | `pos-catalog` | 53.5% | 57.6% | 78.6% | 0.73 / 0.52 |
 | `pos-workorder` | 56.7% | 58.5% | 78.2% | 0.73 / 0.53 |
-| `pos-document-helper` | 35.2% | 35.2% | 74.0% | unchanged |
+| `pos-document-helper` | 35.2% | 35.2% (90.0% after #1277) | 74.0% | 0.90 / 0.80 after #1277 |
 
 Attacked the two worst individual classes rather than spreading thinly, on the
 view that a branch tail is not uniform — it concentrates in the places where the
@@ -998,6 +998,61 @@ Both modules still have tails below their new floors — the next candidates are
 item 4's stated goal, moving the three named modules off their branch floors with
 parameterized tests over real decisions, is met.
 
+### 7.6 Shared libraries closed (2026-08-13)
+
+| Module | Line before | Line after | Branch before | Branch after | Floor |
+|---|---|---|---|---|---|
+| `pos-tax-common` | 34.0% | **90.0%** | 46.4% | **75.0%** | 0.85 / 0.70 |
+| `pos-security-common` | 46.8% | **79.6%** | 36.5% | **80.7%** | 0.74 / 0.75 |
+| `pos-domain-events` | 39.3% | **87.1%** | 37.2% | **82.9%** | 0.82 / 0.77 |
+
+**`pos-security-common` is the trust boundary**, so it went first.
+`SecurityContextHelper` (65 lines, 0%) is how every downstream service learns who
+the caller is; the tests hold down that it *fails loudly* rather than falling
+back — absent, unauthenticated and anonymous contexts all throw, because a helper
+returning an empty authority set would make "no security context" look identical
+to "this user lacks a permission". Anonymous is checked explicitly: Spring marks
+those tokens authenticated, so without the principal check an unauthenticated
+request would be written into audit rows as a user named "anonymous".
+`PermissionManifestLoader` (44 lines, 0%) fails startup on every malformed input,
+which is the right outcome — a partially registered manifest brings the service
+up with a few endpoints unreachable for everyone. And the JWT half of
+`GatewayAuthoritiesFilter` had no tests at all: it parses the payload without
+verifying the signature (the gateway already did), so every malformed token has
+to be handled defensively there, and its failure policy is asymmetric — an
+unreadable token drops the userId but keeps the authorities, so a regression
+produces audit rows with no author rather than a failed request.
+
+**`pos-domain-events` was closed with one sweep instead of sixty test classes.**
+Around sixty near-identical records, thirteen with tests. `DomainEventContractTest`
+enumerates them off the classpath and asserts what must hold for all: EVENT_TYPE
+shape, EVENT_TYPE uniqueness across the module (only visible from the whole set —
+a duplicate delivers one fact to another's listener), a positive SCHEMA_VERSION,
+and that every record constructs. Four records with cross-field invariants are
+named and excluded rather than filtered by a heuristic, and the two of those that
+had no test now have one.
+
+Two things the sweep corrected in my own assumptions, worth recording because
+they change what the test can claim:
+
+- `@NonNull` in this module is **jspecify** — static analysis, no runtime effect.
+  Only 37 of 64 records add explicit guards. An earlier draft asserted universal
+  null rejection and produced 62 failures; that was asserting a rule that does
+  not exist. The test now verifies guards where they exist and holds a floor on
+  how many records have them.
+- There are **two** `BillingRulesUpdatedV1` classes, in `invoice` and `customer`.
+  Any allowlist here has to key on the fully-qualified name.
+
+**`pos-tax-common`** is enums and one DTO — the wire contract between pos-tax and
+its callers. Deliberately kept dependency-free: the module ships
+`jackson-annotations` only, so rather than adding databind to a shared library the
+serialization contract is asserted through the annotations themselves plus
+`fromValue`. Jurisdiction resolution is pinned as case-insensitive but exact:
+`"state "` and `"STATES"` are rejected rather than resolving to a neighbouring
+level of government.
+
+One defect filed: #1279.
+
 ### Defects found by this work, still open
 
 - louisburroughs/durion-positivity-backend#1245 — a partial customer update
@@ -1031,10 +1086,14 @@ parameterized tests over real decisions, is met.
   now wires the builder up as the creator. A sweep for the same shape — a
   `@Builder` class with no Jackson creator used as a `@RequestBody` — found no
   other instance in the reactor.
-- louisburroughs/durion-positivity-backend#1274 — `pos-document-helper` ships two
-  parallel copies of the same library, under `com.positivity.documents` and
-  `com.positivity.documents.helper`, and no module imports either. Both trees
-  landed in the same commit, so this is not a half-finished migration.
+- ~~louisburroughs/durion-positivity-backend#1274~~ — **fixed** by PR #1277, which
+  deleted the duplicate `com.positivity.documents.helper` tree. The module went
+  from 35.2% to 90.0% branch coverage by deletion rather than by testing; see
+  §7.4.
+- louisburroughs/durion-positivity-backend#1279 — 16 of 64 event records in
+  `pos-domain-events` declare no `SCHEMA_VERSION`, so their publishers hardcode
+  the envelope version in another module. Correct today, but a schema bump now
+  requires editing a numeric literal nowhere near the record it describes.
 - louisburroughs/durion-positivity-backend#1267 — `pos-vehicle-reference-carapi`
   conflates its own primary key with CarAPI's make id inside one method, so no
   argument to `GET /models/{makeId}` is correct for all three of its uses; the
