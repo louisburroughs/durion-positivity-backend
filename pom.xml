@@ -18,6 +18,25 @@
 
 	<dependencyManagement>
 		<dependencies>
+			<!-- RESILIENCE4J BOM — governs the whole resilience4j family as one coherent set.
+			     MUST stay declared BEFORE spring-cloud-dependencies: imported BOMs are
+			     first-declaration-wins, and spring-cloud-dependencies transitively imports
+			     spring-cloud-circuitbreaker-dependencies, which pins resilience4j-bom to 2.3.0.
+			     2.3.0 cannot be used here: resilience4j-spring-boot4 (the Spring Boot 4
+			     autoconfiguration module this project needs) was first released in 2.4.0 and
+			     does not exist at 2.3.0. Letting Spring Cloud's 2.3.0 win therefore leaves
+			     -spring-boot4 unmanaged, which is what produced the previous split classpath
+			     (2.4.0 autoconfig + retry over a 2.3.0 core/circuitbreaker/spring6/micrometer).
+			     Do not pin individual resilience4j artifacts anywhere — add them here or let
+			     this BOM decide. -->
+			<dependency>
+				<groupId>io.github.resilience4j</groupId>
+				<artifactId>resilience4j-bom</artifactId>
+				<version>${resilience4j.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+
 			<!-- Spring Cloud BOM -->
 			<dependency>
 				<groupId>org.springframework.cloud</groupId>
@@ -201,12 +220,14 @@
 			<!-- Jackson 3.x versions come from the Spring Boot BOM (jackson-bom.version property);
 			     do not re-pin individual artifacts here — a stale pin can downgrade below the BOM. -->
 
-			<!-- RESILIENCE4J (for Retry Patterns) -->
-			<dependency>
-				<groupId>io.github.resilience4j</groupId>
-				<artifactId>resilience4j-retry</artifactId>
-				<version>${resilience4j.version}</version>
-			</dependency>
+			<!-- RESILIENCE4J — every other artifact in the family is governed by resilience4j-bom
+			     (imported at the top of this section). resilience4j-spring-boot4 is the one
+			     exception: it is published to Maven Central at 2.4.0 but is NOT listed in
+			     resilience4j-bom at any version (the BOM still lists only -spring-boot2/-spring-boot3),
+			     so it cannot be managed by the import and has to be pinned here. It is pinned to
+			     ${resilience4j.version} — the same property the BOM import uses — so the
+			     autoconfiguration module can never drift from the core family it runs against.
+			     Do not add per-artifact pins for anything else; the BOM covers them. -->
 			<dependency>
 				<groupId>io.github.resilience4j</groupId>
 				<artifactId>resilience4j-spring-boot4</artifactId>
@@ -329,7 +350,8 @@
 		<opentelemetry.version>1.55.0</opentelemetry.version>
 		<!-- UUID v7 Generator -->
 		<uuid-creator.version>5.3.7</uuid-creator.version>
-		<!-- Resilience4j for Retry Patterns and Vavr for Functional Programming -->
+		<!-- Resilience4j for Retry Patterns (whole family via resilience4j-bom — see
+		     dependencyManagement) and Vavr for Functional Programming -->
 		<resilience4j.version>2.4.0</resilience4j.version>
 		<vavr.version>0.10.4</vavr.version>
 		<spring-ai.version>2.0.0</spring-ai.version>

@@ -106,21 +106,20 @@
             <artifactId>spring-aspects</artifactId>
         </dependency>
 
-        <!-- Resilience4j Circuit Breaker (for cross-service resilience) -->
+        <!-- Resilience4j Circuit Breaker (for cross-service resilience).
+             Deliberately unversioned: the root POM's resilience4j-bom import governs the
+             whole family as one set. Do not re-add per-artifact versions here. -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-core</artifactId>
-            <version>${resilience4j.version}</version>
         </dependency>
         <dependency>
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-circuitbreaker</artifactId>
-            <version>${resilience4j.version}</version>
         </dependency>
         <dependency>
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-spring-boot4</artifactId>
-            <version>${resilience4j.version}</version>
         </dependency>
 
         <!-- Database -->
