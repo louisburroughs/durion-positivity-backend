@@ -13,7 +13,8 @@
     <description>POS Customer Module</description>
 
     <properties>
-        <!-- Coverage ratchet (plan Phase 4): measured 85.9% line / 70.6% branch.
+        <!-- Coverage ratchet (plan Phase 4): measured 86.3% line / 71.5% branch after the
+             §7 controller web-slice wave (was 85.4% / 70.6%).
              Floors sit ~5 points under to catch regression without failing on noise. -->
         <jacoco.line.min>0.81</jacoco.line.min>
         <jacoco.branch.min>0.66</jacoco.branch.min>

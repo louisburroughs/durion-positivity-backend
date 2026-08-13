@@ -192,7 +192,8 @@ class VehicleRegistryControllerWebMvcTest {
         // issue #1269. When that is fixed this becomes status().isBadRequest() with an
         // ApiError body.
         assertThatThrownBy(() -> mockMvc.perform(get(PATH + "/vin/TOOSHORT").header(AUTH, BEARER)))
-                .hasRootCauseInstanceOf(ConstraintViolationException.class)
+                .rootCause()
+                .isInstanceOf(ConstraintViolationException.class)
                 .hasMessageContaining("size must be between 17 and 17");
 
         verifyNoInteractions(vehicleService);

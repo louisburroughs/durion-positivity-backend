@@ -876,7 +876,8 @@ the module's entire error contract — twenty near-identical four-line handlers
 where a wrong `HttpStatus` still compiles and still returns a well-formed
 ProblemDetail.
 
-Four defects were found and filed; see below.
+Two defects were found and filed by this wave (#1269 and #1270); they join the
+standing list below.
 
 ### Defects found by this work, still open
 

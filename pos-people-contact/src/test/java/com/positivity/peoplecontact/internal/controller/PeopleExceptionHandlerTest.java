@@ -49,9 +49,10 @@ import org.springframework.web.server.ResponseStatusException;
  * exhaustively for that reason.
  *
  * <p>
- * Three distinctions in it carry real meaning and are called out individually
- * below: 409 versus 404 on delete, 422 versus 400 on validation, and the
- * catch-all's refusal to echo the underlying message.
+ * Four distinctions in it carry real meaning and are called out individually
+ * below: 409 versus 404 on delete, 422 versus 400 on validation, the catch-all's
+ * refusal to echo the underlying message, and the routing and binding handlers'
+ * rule of naming the offending parameter but never the submitted value.
  */
 @DisplayName("PeopleExceptionHandler — the module's error contract")
 class PeopleExceptionHandlerTest {
