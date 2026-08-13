@@ -130,7 +130,9 @@ public class UserController {
                     surfaces as 400 rather than 404.
                     """)
     @ApiResponse(responseCode = "200", description = "User updated successfully.")
-    @ApiResponse(responseCode = "404", description = "User not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "User or named role not found (INVALID_REQUEST); the miss surfaces as 400, not 404.")
     @EmitEvent(id = "SECURITY_USER_UPDATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -201,7 +203,9 @@ public class UserController {
                     surfaces as 400 rather than 404.
                     """)
     @ApiResponse(responseCode = "200", description = "User roles updated successfully.")
-    @ApiResponse(responseCode = "404", description = "User not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "User or named role not found (INVALID_REQUEST); the miss surfaces as 400, not 404.")
     @EmitEvent(id = "SECURITY_USER_ASSIGN_ROLES", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

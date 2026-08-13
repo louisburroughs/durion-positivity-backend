@@ -140,7 +140,9 @@ public class WorkSessionController {
                     unknown.
                     """)
     @ApiResponse(responseCode = "200", description = "Break stopped successfully.")
-    @ApiResponse(responseCode = "404", description = "Work session or break not found.")
+    @ApiResponse(
+            responseCode = "409",
+            description = "No open break exists for the session, including when the session id itself is unknown.")
     @EmitEvent(id = "PEOPLE_WORK_SESSION_BREAK_STOP", apiVersion = "1")
     @PostMapping("/{id}/breaks/stop")
     @PreAuthorize("isAuthenticated()")

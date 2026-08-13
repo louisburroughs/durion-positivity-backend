@@ -77,13 +77,13 @@ paths:
         required: true
       responses:
         '400':
-          description: Bad Request
+          description: User or named role not found (INVALID_REQUEST); the miss surfaces as 400, not 404.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '404':
-          description: User not found.
+          description: Not Found
           content:
             application/json:
               schema:
@@ -385,13 +385,13 @@ paths:
         required: true
       responses:
         '400':
-          description: Bad Request
+          description: User or named role not found (INVALID_REQUEST); the miss surfaces as 400, not 404.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
         '404':
-          description: User not found.
+          description: Not Found
           content:
             application/json:
               schema:
