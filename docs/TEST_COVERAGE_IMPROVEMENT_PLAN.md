@@ -767,11 +767,11 @@ consumer-credited figure for shared libraries. No work is outstanding here.
 1. ~~**Wave 1c** (`{Module}PermissionRegistry`, §3.3)~~ — closed 2026-08-12, see §7.1.
 2. ~~**Controller `@WebMvcTest` slices**~~ — closed 2026-08-12, see §7.3.
 3. ~~**The four all-zero modules**~~ — closed 2026-08-12, see §7.2.
-4. **Branch-coverage tails** — first pass done 2026-08-12, see §7.4. `pos-catalog`
-   and `pos-workorder` still have tails worth a second pass. `pos-document-helper`
-   is off this list: its 35.2% was the untested duplicate under
-   `com.positivity.documents.helper`, deleted in #1274, leaving the module at
-   90.0% branch on the surviving `com.positivity.documents` copy.
+4. ~~**Branch-coverage tails**~~ — closed 2026-08-12 over two passes, see §7.4 and
+   §7.5. `pos-document-helper` is resolved by deletion rather than by tests: its
+   35.2% was the untested duplicate under `com.positivity.documents.helper`,
+   removed in #1274, leaving the module at 90.0% branch on the surviving
+   `com.positivity.documents` copy.
 5. **Low-coverage shared libraries** — `pos-tax-common` 34.0%,
    `pos-domain-events` 39.3%, `pos-security-common` 46.8% on their own tests.
    They read far higher in the aggregate because consumers exercise them; their
@@ -936,6 +936,66 @@ that decision. **Resolved since:** the decision on #1274 kept
 `com.positivity.documents` and deleted the `helper` copy, which took the whole
 branch tail with it — the module now measures 95.7% line / 90.0% branch and its
 floors are 0.90 / 0.80.
+
+### 7.5 Branch tails, second pass (2026-08-12)
+
+| Module | Branch (start of §7) | After pass 1 | After pass 2 | Line | Floor |
+|---|---|---|---|---|---|
+| `pos-catalog` | 53.5% | 57.6% | **59.7%** | 80.3% | 0.75 / 0.54 |
+| `pos-workorder` | 56.7% | 58.5% | **60.4%** | 78.7% | 0.73 / 0.55 |
+
+Same approach as pass 1: the next-worst class in each module, chosen for what its
+branches decide rather than for how many there are.
+
+**`ChangeRequestServiceImpl`** (29.5% → 62.1% branch, 93 → 50 missed). A change
+request is how extra work gets added to a job the customer already agreed to, so
+these branches decide whether someone can be billed for work they never
+approved. Two rules carry that:
+
+- *Emergency items must carry evidence.* An emergency/safety item skips the
+  normal approval wait, so it needs a photo, or an explicit "photo not possible"
+  plus notes. The two checks overlap — the second catches an item that claimed
+  photo-not-possible and then supplied nothing — and collapsing them into one
+  would let a shop mark anything as an emergency with no record of why. The full
+  evidence truth table is asserted, whitespace-only values included on both
+  sides.
+- *A declined emergency blocks closing the workorder* until the customer has
+  acknowledged the denial, on every emergency item, across services **and**
+  parts. That is the paper trail for "we told them it was unsafe and they said
+  no". The services and parts checks are separate methods with identical bodies,
+  so both halves are asserted independently: dropping the parts one leaves the
+  services test green.
+
+Also pinned: only a workorder actually in `WORK_IN_PROGRESS` accepts a change
+request, checked against every other status via `@EnumSource` exclusion rather
+than one sample, because adding work to a job that is finished, invoiced or
+cancelled is exactly the case that produces an unagreed bill.
+
+**`ProductDetailServiceImpl`** (37.7% → 54.4% branch, 71 → 52 missed). This view
+stitches the catalog row together with live pricing from pos-price and live
+availability from pos-inventory, and its whole design is graceful degradation:
+when a remote call fails the endpoint still answers, with the parts it could get
+and a `confidence` saying how much of it is real. That makes the failure branches
+the *normal* operating mode during any partial outage, and invisible from a happy
+path because the response still looks complete. The full confidence matrix is
+asserted (both up → HIGH, either → MEDIUM, neither → LOW), along with:
+
+- A remote answering successfully with no data is treated exactly like an
+  outage — not as a price of zero and not as an error to propagate.
+- Null amounts stay null. The BigDecimal-to-double conversions are null-guarded
+  on both fields; without the guards this is a NullPointerException, and with a
+  naive default it is a free product.
+- Unparseable enum values from the wire (`source`, `confidence`) degrade to a
+  default rather than throwing, so a new constant added upstream cannot take this
+  endpoint down — and an unreadable confidence degrades to MEDIUM, never HIGH.
+- A lead-time lookup that throws falls back to the catalog hint while leaving
+  availability itself reported as OK, since letting that exception escape would
+  turn a working stock read into an outage.
+
+Both modules still have tails below their new floors — the next candidates are
+`SupplierItemCostServiceImpl` (44 missed) and `EstimateServiceImpl` (82) — but
+item 4's stated goal, moving the three named modules off their branch floors with
+parameterized tests over real decisions, is met.
 
 ### Defects found by this work, still open
 

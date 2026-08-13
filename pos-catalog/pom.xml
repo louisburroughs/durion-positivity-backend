@@ -14,11 +14,11 @@
     <description>POS Catalog module</description>
 
     <properties>
-        <!-- Coverage ratchet (plan Phase 4): measured 78.6% line / 57.6% branch after the
+        <!-- Coverage ratchet (plan Phase 4): measured 80.3% line / 59.7% branch after the
              §7 branch-tail wave (was 77.4% / 53.5%).
              Floors sit ~5 points under to catch regression without failing on noise. -->
-        <jacoco.line.min>0.73</jacoco.line.min>
-        <jacoco.branch.min>0.52</jacoco.branch.min>
+        <jacoco.line.min>0.75</jacoco.line.min>
+        <jacoco.branch.min>0.54</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>
     <dependencies>
