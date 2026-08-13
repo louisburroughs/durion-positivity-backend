@@ -767,12 +767,11 @@ consumer-credited figure for shared libraries. No work is outstanding here.
 1. ~~**Wave 1c** (`{Module}PermissionRegistry`, §3.3)~~ — closed 2026-08-12, see §7.1.
 2. ~~**Controller `@WebMvcTest` slices**~~ — closed 2026-08-12, see §7.3.
 3. ~~**The four all-zero modules**~~ — closed 2026-08-12, see §7.2.
-4. **Branch-coverage tails** — `pos-catalog` (53.5% branch against 77.4% line),
-   `pos-workorder` (56.7%). Parameterized tests over the uncovered branches, not
-   more happy paths. `pos-document-helper` is off this list: its 35.2% was the
-   untested duplicate under `com.positivity.documents.helper`, deleted in #1274,
-   leaving the module at 90.0% branch on the surviving `com.positivity.documents`
-   copy.
+4. **Branch-coverage tails** — first pass done 2026-08-12, see §7.4. `pos-catalog`
+   and `pos-workorder` still have tails worth a second pass. `pos-document-helper`
+   is off this list: its 35.2% was the untested duplicate under
+   `com.positivity.documents.helper`, deleted in #1274, leaving the module at
+   90.0% branch on the surviving `com.positivity.documents` copy.
 5. **Low-coverage shared libraries** — `pos-tax-common` 34.0%,
    `pos-domain-events` 39.3%, `pos-security-common` 46.8% on their own tests.
    They read far higher in the aggregate because consumers exercise them; their
@@ -882,6 +881,62 @@ ProblemDetail.
 Two defects were found and filed by this wave (#1269 and #1270); they join the
 standing list below.
 
+### 7.4 Branch tails, first pass (2026-08-12)
+
+| Module | Branch before | Branch after | Line after | Floor |
+|---|---|---|---|---|
+| `pos-catalog` | 53.5% | 57.6% | 78.6% | 0.73 / 0.52 |
+| `pos-workorder` | 56.7% | 58.5% | 78.2% | 0.73 / 0.53 |
+| `pos-document-helper` | 35.2% | 35.2% | 74.0% | unchanged |
+
+Attacked the two worst individual classes rather than spreading thinly, on the
+view that a branch tail is not uniform — it concentrates in the places where the
+code makes a choice the caller cannot see it make.
+
+**`PriceBookServiceImpl.resolvePrice`** (47.1% → 68.8% branch, 90 → 53 missed).
+This is the read that decides what a product costs, and almost every branch in it
+is silent. It walks two independent precedence chains — which price book applies,
+then which rule inside it wins — then falls back to MSRP and finally to "no
+price". Every step produces a well-formed answer, so an error does not fail, it
+quotes a different number. Only `source` and `fallbackReason` distinguish "this
+is the contract price" from "this is list price because nothing matched", and
+nothing downstream re-derives them. The tests assert the winning rule and the
+source, not that a price came back. Specifics worth keeping:
+
+- Target specificity (SKU > CATEGORY > GLOBAL) is scored before priority, so
+  priorities in the fixtures are set to contradict the expected winner.
+- `nullsLast` on a reversed comparator decides whether an unprioritised rule
+  outranks every deliberately prioritised one; both directions are asserted.
+- A fully tied pair is broken by rule id, asserted with the inputs supplied in
+  reverse — a tie that resolved by input order would have two servers quoting
+  different prices for the same basket.
+- Currency selection refuses to guess: an unconfigured requested currency and an
+  ambiguous multi-currency rule are both errors, because substituting either
+  would hand the caller a number in the wrong denomination.
+- Zero and negative amounts are rejected. A rule resolving to nothing or to a
+  credit is a data error, and letting it through prices the product at that
+  value.
+
+**`WorkorderPickFacadeServiceImpl`** (0% → 100% branch). Turns warehouse scans
+into asynchronous inventory commands (ADR-0044, #901). Two families of branch:
+the four-way scan grade (MATCHED / SKU_MISMATCH / LOCATION_MISMATCH / NO_MATCH),
+whose two mismatch cases are decided by opposite comparisons and are trivially
+swappable — a picker acts on that word, and it tells them whether they are at the
+wrong bin or holding the wrong part; and the refusal to publish half-formed
+commands, which fails closed twice over with a 409 for an incomplete replica and
+a 503 for an absent publisher or a broker nack. Those two must stay
+distinguishable: a 409 cannot be fixed by retrying, a 503 is exactly what should
+be retried.
+
+**`pos-document-helper` is deliberately untouched.** Its entire branch tail — 32
+of 35 missed branches — sits in a duplicated copy of the library that no module
+consumes (#1274). Testing it would cement a deletion candidate and make the
+number look healthy while the duplication stayed. Its floor is unchanged pending
+that decision. **Resolved since:** the decision on #1274 kept
+`com.positivity.documents` and deleted the `helper` copy, which took the whole
+branch tail with it — the module now measures 95.7% line / 90.0% branch and its
+floors are 0.90 / 0.80.
+
 ### Defects found by this work, still open
 
 - louisburroughs/durion-positivity-backend#1245 — a partial customer update
@@ -910,6 +965,10 @@ standing list below.
   fields and no `@Jacksonized`, so Jackson has no creator and message conversion
   fails before the controller is entered. The GET route builds the object in
   Java, which is why nothing caught it.
+- louisburroughs/durion-positivity-backend#1274 — `pos-document-helper` ships two
+  parallel copies of the same library, under `com.positivity.documents` and
+  `com.positivity.documents.helper`, and no module imports either. Both trees
+  landed in the same commit, so this is not a half-finished migration.
 - louisburroughs/durion-positivity-backend#1267 — `pos-vehicle-reference-carapi`
   conflates its own primary key with CarAPI's make id inside one method, so no
   argument to `GET /models/{makeId}` is correct for all three of its uses; the
