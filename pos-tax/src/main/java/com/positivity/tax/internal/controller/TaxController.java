@@ -48,10 +48,22 @@ public class TaxController {
     @PostMapping("/calculate")
     @PreAuthorize("hasAuthority('tax:calculate')")
     @EmitEvent(id = "TAX_CALCULATE", apiVersion = "1")
-    @Operation(
-            summary = "Calculate tax",
-            description =
-                    "Calculate tax for line items based on location. Routes to external service in production or test calculator in test mode.")
+    @Operation(operationId = "calculateTax", summary = "Calculate tax", description = """
+                    Calculates tax for the supplied line items against the destination address and returns the
+                    per-line and total tax amounts.
+                    Use this tool whenever a quote, estimate or invoice needs tax figures; do not use it to make a
+                    calculation permanent, which is commitTaxDocument.
+                    Preconditions: none beyond an authenticated caller; when an exemption is claimed the referenced
+                    certificate must already exist in the registry and be ACTIVE for the destination state on the
+                    transaction date, otherwise tax is calculated as taxable.
+                    Required inputs: lineItems (at least one) and destinationAddress with countryCode and postalCode;
+                    currencyCode defaults to USD, calculationType defaults to SALE, and referenceId should carry the
+                    source document id so the result can later be committed.
+                    Emits a TAX_CALCULATE event and, in production mode, calls the configured external tax provider;
+                    no provider document is created until commitTaxDocument is called.
+                    Returns 400 when line items or the destination address are missing or malformed, and 500 when the
+                    provider is unreachable in production mode.
+                    """)
     @ApiResponse(responseCode = "200", description = "Tax calculated successfully")
     @ApiResponse(responseCode = "400", description = "Invalid tax calculation request")
     @ApiResponse(responseCode = "500", description = "Tax calculation failed")
@@ -102,10 +114,21 @@ public class TaxController {
     @PostMapping("/transactions/{referenceId}/commit")
     @PreAuthorize("hasAuthority('tax:commit')")
     @EmitEvent(id = "TAX_COMMIT", apiVersion = "1")
-    @Operation(
-            summary = "Commit tax document",
-            description = "Commit the provider tax document for a finalized invoice. Idempotent; never blocks on"
-                    + " provider outage (records PENDING_COMMIT for the re-commit job).")
+    @Operation(operationId = "commitTaxDocument", summary = "Commit tax document", description = """
+                    Commits the provider tax document for a finalized invoice so the recorded tax becomes
+                    filing-visible at the provider.
+                    Use this tool when an invoice is finalized; do not use it to recalculate amounts, which is
+                    calculateTax, and do not use it to reverse a commit, which is voidTaxDocument.
+                    Preconditions: tax must already have been calculated for this referenceId with a committable
+                    request, so that a provider document exists to commit.
+                    Required inputs: referenceId (UUID) path parameter, which is the source invoice id; referenceType
+                    is an optional query parameter defaulting to INVOICE.
+                    Emits a TAX_COMMIT event and updates the stored provider transaction; the call is idempotent, so
+                    an already-COMMITTED document is returned unchanged.
+                    Returns 200 with status PENDING_COMMIT rather than an error when the provider call fails, because
+                    a sale is never blocked on the provider, so callers must read the returned status instead of
+                    treating 200 as a completed commit and leave the re-commit job to true it up.
+                    """)
     @ApiResponse(responseCode = "200", description = "Commit recorded (COMMITTED or PENDING_COMMIT)")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -125,10 +148,20 @@ public class TaxController {
     @PostMapping("/transactions/{referenceId}/void")
     @PreAuthorize("hasAuthority('tax:commit')")
     @EmitEvent(id = "TAX_VOID", apiVersion = "1")
-    @Operation(
-            summary = "Void tax document",
-            description = "Void the provider tax document when its invoice reverts to DRAFT (InvoiceStatus has no"
-                    + " CANCELLED/VOIDED; void hooks the revert transition).")
+    @Operation(operationId = "voidTaxDocument", summary = "Void tax document", description = """
+                    Voids the provider tax document for an invoice that has been reverted to DRAFT, withdrawing the
+                    committed tax from the provider.
+                    Use this tool when a finalized invoice reverts to DRAFT; do not use it for ordinary corrections,
+                    where calculateTax followed by commitTaxDocument replaces the figures instead.
+                    Preconditions: a provider transaction must already exist for this referenceId, which means tax was
+                    calculated and committed earlier.
+                    Required inputs: referenceId (UUID) path parameter, which is the source invoice id; there is no
+                    request body and no referenceType, because the existing transaction supplies it.
+                    Emits a TAX_VOID event and moves the stored provider transaction to VOIDED, or to FAILED when the
+                    provider rejects the void.
+                    Returns 200 with status FAILED when the provider call fails, so callers must read the returned
+                    status rather than treating 200 as a completed void.
+                    """)
     @ApiResponse(responseCode = "200", description = "Void recorded")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -158,9 +191,17 @@ public class TaxController {
      */
     @GetMapping("/mode")
     @PreAuthorize("hasAuthority('tax:mode:view')")
-    @Operation(
-            summary = "Get tax service mode",
-            description = "Check if the tax service is currently in test mode or production mode")
+    @Operation(operationId = "getTaxServiceMode", summary = "Get tax service mode", description = """
+                    Returns whether the tax service is running against the external provider or against the built-in
+                    test calculator.
+                    Use this tool to interpret a calculation result before relying on it; do not use it as a health
+                    check, which is the actuator health endpoint instead.
+                    Preconditions: none; the mode is service configuration and is readable at any time.
+                    Required inputs: none, and there is no request body or query parameter.
+                    No events are emitted and no state changes; this is a read-only configuration projection.
+                    Returns 200 in all cases, so an absent or unexpected mode value indicates a misconfigured
+                    deployment rather than a request error.
+                    """)
     @ApiResponse(responseCode = "200", description = "Tax service mode retrieved successfully")
     @SecurityRequirement(
             name = "bearerAuth",

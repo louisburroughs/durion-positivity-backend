@@ -29,6 +29,7 @@ modules:
     mode: STRICT
   pos-supplier:
     mode: STRICT
+    annotationDepth: STRICT
   pos-event-receiver:
     mode: STRICT
   pos-vehicle-fitment:
@@ -50,6 +51,7 @@ modules:
     mode: STRICT
   pos-tax:
     mode: STRICT
+    annotationDepth: STRICT
   pos-inquiry:
     mode: EXCEPTION
     reason: stub module with no REST producer surface

@@ -44,17 +44,38 @@ public final class OpenApiValidationInventoryLoader {
             throw new IllegalArgumentException("Expected non-blank mode for module: " + moduleName);
         }
         OpenApiModulePolicy.Mode mode = OpenApiModulePolicy.Mode.valueOf(modeString);
-        Object reasonValue = policyMap.get("reason");
-        String reason;
-        if (reasonValue == null) {
-            reason = null;
-        } else if (reasonValue instanceof String s) {
-            reason = s;
+        String reason = optionalString(policyMap.get("reason"), "reason", moduleName);
+
+        Object depthValue = policyMap.get("annotationDepth");
+        OpenApiModulePolicy.DepthMode annotationDepth;
+        if (depthValue == null) {
+            annotationDepth = OpenApiModulePolicy.DepthMode.REPORT_ONLY;
+        } else if (depthValue instanceof String depthString && !depthString.isBlank()) {
+            annotationDepth = OpenApiModulePolicy.DepthMode.valueOf(depthString);
         } else {
-            throw new IllegalArgumentException("Expected string reason for module: " + moduleName + ", got: "
-                    + reasonValue.getClass().getSimpleName());
+            throw new IllegalArgumentException("Expected non-blank annotationDepth for module: " + moduleName);
         }
-        return new OpenApiModulePolicy(mode, reason);
+
+        String annotationDepthReason =
+                optionalString(policyMap.get("annotationDepthReason"), "annotationDepthReason", moduleName);
+        if (annotationDepth == OpenApiModulePolicy.DepthMode.EXEMPT
+                && (annotationDepthReason == null || annotationDepthReason.isBlank())) {
+            throw new IllegalArgumentException(
+                    "annotationDepth: EXEMPT requires an annotationDepthReason for module: " + moduleName);
+        }
+
+        return new OpenApiModulePolicy(mode, reason, annotationDepth, annotationDepthReason);
+    }
+
+    private static String optionalString(Object value, @NonNull String key, @NonNull String moduleName) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String string) {
+            return string;
+        }
+        throw new IllegalArgumentException("Expected string " + key + " for module: " + moduleName + ", got: "
+                + value.getClass().getSimpleName());
     }
 
     private static @NonNull Map<?, ?> requireMap(Object value, @NonNull String description) {

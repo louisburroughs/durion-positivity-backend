@@ -75,12 +75,22 @@ public class SupplierExchangeAuditController {
     private final SupplierExchangeAuditService auditService;
 
     @Operation(
+            operationId = "listSupplierExchanges",
             summary = "List supplier exchanges in a window",
-            description = "Exchange metadata for one vendor profile within a half-open time window"
-                    + " (from inclusive, to exclusive), newest first. Payload content is NOT included and"
-                    + " nothing is recorded: browsing the trail discloses no commercial content. Rows whose"
-                    + " stored content cannot be decrypted still list normally, because this query never"
-                    + " touches the encrypted columns.")
+            description = """
+                    Returns a page of exchange-audit metadata for one vendor profile within a half-open time window,
+                    newest first.
+                    Use this tool to find the exchangeAuditId of a supplier call; use traceSupplierCorrelation instead
+                    when every attempt of one logical call is wanted, and do not expect payload content here.
+                    Preconditions: the caller must hold supplier:audit:read, which supplier:profile:read does not
+                    imply; the vendor profile need not still exist, because audit history outlives configuration.
+                    Required inputs: vendorProfileId, from (inclusive) and to (exclusive) as ISO-8601 instants;
+                    capability is optional, page defaults to 0 and size defaults to 50 with a maximum of 200.
+                    Emits a SUPPLIER_AUDIT_EXCHANGE_LIST event; no payload content is served, so no access row is
+                    written against the exchanges listed.
+                    Returns 400 when the window end is not after its start, the capability key is unrecognised, or the
+                    page size is out of range.
+                    """)
     @ApiResponse(responseCode = "200", description = "A page of exchange metadata, newest first.")
     @ApiResponse(
             responseCode = "400",
@@ -151,9 +161,20 @@ public class SupplierExchangeAuditController {
     }
 
     @Operation(
+            operationId = "traceSupplierCorrelation",
             summary = "Trace one logical call by correlation id",
-            description = "Every attempt sharing a correlation id, OLDEST FIRST — the order in which a retry"
-                    + " sequence actually happened. Metadata only; nothing is recorded.")
+            description = """
+                    Returns every exchange attempt sharing one correlation id, oldest first, which is the order in
+                    which a retry sequence actually happened.
+                    Use this tool when a single logical supplier call needs to be reconstructed across its retries; use
+                    listSupplierExchanges instead to search a time window.
+                    Preconditions: the caller must hold supplier:audit:read; an unknown correlation id is not an error
+                    and yields an empty page.
+                    Required inputs: correlationId path parameter; page defaults to 0 and size defaults to 50 with a
+                    maximum of 200.
+                    Emits a SUPPLIER_AUDIT_EXCHANGE_TRACE event; metadata only, so no payload access is recorded.
+                    Returns 400 when the page size is outside the permitted range.
+                    """)
     @ApiResponse(responseCode = "200", description = "A page of exchange metadata, oldest first.")
     @ApiResponse(
             responseCode = "400",
@@ -194,11 +215,15 @@ public class SupplierExchangeAuditController {
         return ResponseEntity.ok(auditService.traceCorrelation(correlationId, page, size));
     }
 
-    @Operation(
-            summary = "Get one exchange's audit metadata",
-            description = "Metadata of a single attempt, without payload content. Use this to decide whether"
-                    + " content exists (requestPayloadPresent / responsePayloadPresent) before making the"
-                    + " recorded payload call.")
+    @Operation(operationId = "getSupplierExchange", summary = "Get one exchange's audit metadata", description = """
+                    Returns the metadata of a single supplier exchange attempt, without any payload content.
+                    Use this tool to check requestPayloadPresent and responsePayloadPresent before calling
+                    readSupplierExchangePayload, which is recorded; do not use it to read the documents themselves.
+                    Preconditions: the caller must hold supplier:audit:read and the exchange-audit record must exist.
+                    Required inputs: exchangeAuditId (UUIDv7) path parameter; there is no request body.
+                    Emits a SUPPLIER_AUDIT_EXCHANGE_GET event; because no content is served, no access row is written.
+                    Returns 404 when no exchange-audit record has that id.
+                    """)
     @ApiResponse(responseCode = "200", description = "Exchange metadata returned.")
     @ApiResponse(
             responseCode = "404",
@@ -233,14 +258,24 @@ public class SupplierExchangeAuditController {
     }
 
     @Operation(
+            operationId = "readSupplierExchangePayload",
             summary = "Read one exchange's stored payload content",
-            description = "Returns the stored request and response documents. THIS CALL IS ITSELF RECORDED"
-                    + " (ADR-0050 §7): an access row naming the caller is written in the same transaction, and"
-                    + " the content is withheld if that row cannot be written. Null payload fields are a normal"
-                    + " state, not an error — a METADATA_ONLY binding captured none, the exchange carried no"
-                    + " body, or retention has already purged the content after 400 days. When 'redacted' is"
-                    + " true the documents are not the wire bytes: sensitive fields were replaced at capture"
-                    + " time and the originals were never stored.")
+            description = """
+                    Returns the stored request and response documents of one supplier exchange.
+                    Use this tool only when the documents themselves are needed; use getSupplierExchange instead for
+                    routine inspection, because this call is itself recorded and each read adds an access row naming the
+                    caller.
+                    Preconditions: the caller must hold supplier:audit:read, the record must exist, and the access row
+                    must be writable, since content is withheld when it cannot be written.
+                    Required inputs: exchangeAuditId (UUIDv7) path parameter; there is no request body and no way to
+                    request the unredacted originals.
+                    Emits a SUPPLIER_AUDIT_PAYLOAD_READ event and writes an access row in the same transaction; null
+                    payload fields are normal, meaning a METADATA_ONLY binding, a bodiless exchange, or content already
+                    purged after 400 days, and a redacted flag means sensitive fields were replaced at capture time so
+                    the originals were never stored.
+                    Returns 404 when no record has that id, and 500 when stored content exists but cannot be decrypted,
+                    in which case the read is still recorded with an UNREADABLE outcome.
+                    """)
     @ApiResponse(responseCode = "200", description = "Stored content returned, and the read has been recorded.")
     @ApiResponse(
             responseCode = "404",
@@ -284,11 +319,21 @@ public class SupplierExchangeAuditController {
     }
 
     @Operation(
+            operationId = "listSupplierExchangeAccesses",
             summary = "List who read one exchange's payload content",
-            description = "The ADR-0050 §7 access trail for one exchange, newest first: who read it, when, and"
-                    + " what the read yielded. Only payload reads appear here. Metadata browsing does not, and"
-                    + " neither do denied attempts — a 403 disclosed nothing. Reading this trail is not itself"
-                    + " recorded, or every inspection would generate the noise the next one has to sift.")
+            description = """
+                    Returns the access trail for one exchange, newest first: who read its payload, when, and what the
+                    read yielded.
+                    Use this tool to audit who has seen a trading partner's documents; do not expect metadata browsing
+                    or denied attempts here, because a 403 disclosed nothing and is deliberately not recorded.
+                    Preconditions: the caller must hold supplier:audit:read; an unknown exchangeAuditId returns an
+                    empty page rather than 404, because access rows carry no foreign key to the exchange.
+                    Required inputs: exchangeAuditId (UUIDv7) path parameter; page defaults to 0 and size defaults to
+                    50 with a maximum of 200.
+                    Emits a SUPPLIER_AUDIT_ACCESS_LIST event; reading this trail is not itself recorded, or every
+                    inspection would generate the noise the next one has to sift.
+                    Returns 400 when the page size is outside the permitted range.
+                    """)
     @ApiResponse(responseCode = "200", description = "A page of access records, newest first.")
     @ApiResponse(
             responseCode = "400",

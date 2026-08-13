@@ -23,6 +23,12 @@ The repository validation flow is:
 - operations missing `summary`
 - operations missing `description`
 
+`OpenApiAnnotationDepthValidator` additionally checks, for modules whose `annotationDepth` is not `EXEMPT`, that each operation meets the ADR-0042 §1 and §3 depth rules fixed in `docs/OPENAPI_DESCRIPTION_STANDARD.md`:
+
+- descriptions of 4–8 sentences opening with a primary-action sentence
+- the six remaining §1 elements, detected by their canonical lead-ins (`Use this tool ...`, `Preconditions: ...`, `Required inputs: ...`, `Emits ...` / `No events are emitted`, `Returns <code> when ...`, and negative guidance such as `do not use ...`)
+- request bodies carrying a `description`, an explicit `required`, and at least one example
+
 `OpenApiAggregateValidator` checks the aggregate spec for:
 
 - duplicate YAML keys in the aggregate file
@@ -40,6 +46,16 @@ The repository validation flow is:
 | `EXCLUDED` | The module is outside the current rollout scope and is skipped entirely. |
 
 A module that is absent from the inventory is not validated at all — the validator never looks at a spec it was not told about, so an unregistered module can ship an `openapi.yaml` that does not parse and CI stays green. `scripts/check-openapi-inventory-drift.sh` guards against that: it fails when a module with a committed `openapi.yaml` has no inventory entry, and when an inventory entry names something that is no longer a reactor module. CI runs it on every build.
+
+Description depth is a second, independent dimension on the same entry:
+
+| `annotationDepth` | Meaning |
+| --- | --- |
+| `STRICT` | Depth findings are blocking now. |
+| `REPORT_ONLY` | Depth findings are reported and become blocking under `-Dopenapi.validation.mode=STRICT`. This is the default when the key is absent. |
+| `EXEMPT` | Depth is not checked; requires an `annotationDepthReason`. |
+
+`mode` and `annotationDepth` are deliberately separate: every module is already `STRICT` on summary/description *presence*, while ADR-0042's depth requirement was met by no module in the fleet when it was introduced (#1263). `pos-tax` and `pos-supplier` are the reference conversions at `annotationDepth: STRICT`; every other module stays `REPORT_ONLY` until its descriptions are rewritten, so a default-mode run stays green while `-Dopenapi.validation.mode=STRICT` reports the full fleet gap.
 
 When adding a new spec-producing module, register it at `STRICT`. That may surface real defects in the spec; the fix belongs in the controller annotations the spec is generated from, not in the inventory entry. If the module cannot be made `STRICT`-clean immediately, `REPORT_ONLY` is still better than absence.
 
