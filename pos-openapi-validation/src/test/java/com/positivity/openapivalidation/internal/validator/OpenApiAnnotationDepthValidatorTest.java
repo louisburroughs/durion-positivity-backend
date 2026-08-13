@@ -118,7 +118,6 @@ class OpenApiAnnotationDepthValidatorTest {
 
         assertThat(validator.check(operation))
                 .containsExactly(
-                        "request body missing description (ADR-0042 §3)",
-                        "request body missing example (ADR-0042 §3)");
+                        "request body missing description (ADR-0042 §3)", "request body missing example (ADR-0042 §3)");
     }
 }
