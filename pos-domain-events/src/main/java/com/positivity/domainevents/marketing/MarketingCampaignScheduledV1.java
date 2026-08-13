@@ -25,6 +25,7 @@ public record MarketingCampaignScheduledV1(
         @Nullable Instant scheduledAt) {
 
     public static final String EVENT_TYPE = "marketing.campaign.scheduled";
+    public static final int SCHEMA_VERSION = 1;
 
     public MarketingCampaignScheduledV1 {
         if (campaignId == null) {

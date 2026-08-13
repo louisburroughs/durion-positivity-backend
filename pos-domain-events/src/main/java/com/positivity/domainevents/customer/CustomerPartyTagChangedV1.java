@@ -25,6 +25,7 @@ public record CustomerPartyTagChangedV1(
         @Nullable String source) {
 
     public static final String EVENT_TYPE = "customer.party.tag-changed";
+    public static final int SCHEMA_VERSION = 1;
 
     public CustomerPartyTagChangedV1 {
         if (partyId == null) {

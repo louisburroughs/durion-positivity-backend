@@ -1,6 +1,7 @@
 package com.positivity.domainevents;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -154,30 +155,6 @@ class DomainEventContractTest {
         assertThat(eventRecords()).hasSizeGreaterThan(40);
     }
 
-    /**
-     * Event records that predate the SCHEMA_VERSION convention. Their publishers
-     * hardcode the envelope version instead; tracked as issue #1279. Listed
-     * explicitly so the existing gap does not fail the build while a <em>new</em>
-     * event without a version does.
-     */
-    private static final Set<String> KNOWN_MISSING_SCHEMA_VERSION = Set.of(
-            "com.positivity.domainevents.customer.BillingRulesUpdatedV1",
-            "com.positivity.domainevents.customer.CustomerConsentDecisionChangedV1",
-            "com.positivity.domainevents.customer.CustomerPartyDeletedV1",
-            "com.positivity.domainevents.customer.CustomerPartyTagChangedV1",
-            "com.positivity.domainevents.customer.CustomerPartyUpdatedV1",
-            "com.positivity.domainevents.customer.CustomerPersonIdentityUpdatedV1",
-            "com.positivity.domainevents.customer.CustomerRedemptionRecordedV1",
-            "com.positivity.domainevents.customer.CustomerSegmentChangedV1",
-            "com.positivity.domainevents.customer.CustomerSegmentResolvedV1",
-            "com.positivity.domainevents.customer.CustomerSuppressionChangedV1",
-            "com.positivity.domainevents.location.LocationDeletedV1",
-            "com.positivity.domainevents.location.LocationUpdatedV1",
-            "com.positivity.domainevents.location.StorageLocationUpdatedV1",
-            "com.positivity.domainevents.marketing.MarketingCampaignScheduledV1",
-            "com.positivity.domainevents.marketing.MarketingCampaignSentV1",
-            "com.positivity.domainevents.workorder.JobTimeRecordedV1");
-
     @ParameterizedTest(name = "{0}")
     @MethodSource("eventRecords")
     @DisplayName("every event declares a well-formed EVENT_TYPE")
@@ -196,27 +173,21 @@ class DomainEventContractTest {
     @DisplayName("every event declares a positive SCHEMA_VERSION")
     void everyEventDeclaresASchemaVersion(Class<?> eventType) throws Exception {
         String name = eventType.getName();
-        java.lang.reflect.Field field;
-        try {
-            field = eventType.getField("SCHEMA_VERSION");
-        } catch (NoSuchFieldException absent) {
-            // The envelope requires a version regardless, so a record without this constant
-            // means its publisher hardcodes a literal in another module — which will not move
-            // when the payload shape does. Sixteen records predate the convention (#1279);
-            // anything else is new and fails here.
-            assertThat(KNOWN_MISSING_SCHEMA_VERSION)
-                    .as(
-                            "%s declares no SCHEMA_VERSION. Add one rather than hardcoding the envelope version"
-                                    + " at the publisher — see issue #1279.",
-                            name)
-                    .contains(name);
-            return;
-        }
 
-        assertThat(field.getInt(null)).as("%s.SCHEMA_VERSION", name).isPositive();
-        assertThat(KNOWN_MISSING_SCHEMA_VERSION)
-                .as("%s now declares a SCHEMA_VERSION — remove it from the #1279 allowance", name)
-                .doesNotContain(name);
+        // The envelope requires a version regardless, so a record without this constant forces
+        // its publisher to hardcode a literal in another module — one that will not move when
+        // the payload shape does. Owning the number here keeps the bump in the same file as the
+        // change that motivated it.
+        assertThatCode(() -> eventType.getField("SCHEMA_VERSION"))
+                .as(
+                        "%s declares no SCHEMA_VERSION. Add one rather than hardcoding the envelope"
+                                + " version at the publisher.",
+                        name)
+                .doesNotThrowAnyException();
+
+        assertThat(eventType.getField("SCHEMA_VERSION").getInt(null))
+                .as("%s.SCHEMA_VERSION", name)
+                .isPositive();
     }
 
     @Test

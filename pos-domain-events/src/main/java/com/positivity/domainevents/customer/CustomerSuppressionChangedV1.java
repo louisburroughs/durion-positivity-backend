@@ -30,6 +30,7 @@ public record CustomerSuppressionChangedV1(
         @Nullable String reason) {
 
     public static final String EVENT_TYPE = "customer.suppression.changed";
+    public static final int SCHEMA_VERSION = 1;
 
     public CustomerSuppressionChangedV1 {
         if (channel == null || channel.isBlank()) {

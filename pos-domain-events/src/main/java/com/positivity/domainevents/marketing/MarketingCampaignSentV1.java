@@ -33,6 +33,7 @@ public record MarketingCampaignSentV1(
         @Nullable String subject) {
 
     public static final String EVENT_TYPE = "marketing.campaign.sent";
+    public static final int SCHEMA_VERSION = 1;
 
     public MarketingCampaignSentV1 {
         if (campaignSendId == null) {

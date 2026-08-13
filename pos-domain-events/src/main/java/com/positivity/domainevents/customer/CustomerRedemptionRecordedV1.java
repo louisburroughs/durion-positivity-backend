@@ -31,6 +31,7 @@ public record CustomerRedemptionRecordedV1(
         @Nullable BigDecimal discountAmount) {
 
     public static final String EVENT_TYPE = "customer.redemption.recorded";
+    public static final int SCHEMA_VERSION = 1;
 
     public CustomerRedemptionRecordedV1 {
         if (redemptionId == null) {

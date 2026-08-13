@@ -28,6 +28,7 @@ public record CustomerSegmentChangedV1(
         boolean deleted) {
 
     public static final String EVENT_TYPE = "customer.segment.changed";
+    public static final int SCHEMA_VERSION = 1;
 
     public CustomerSegmentChangedV1 {
         if (segmentId == null) {

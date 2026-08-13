@@ -34,6 +34,7 @@ public record CustomerPersonIdentityUpdatedV1(
         int commercialAccountCount) {
 
     public static final String EVENT_TYPE = "customer.person-identity.updated";
+    public static final int SCHEMA_VERSION = 1;
 
     public CustomerPersonIdentityUpdatedV1 {
         if (personId == null) {

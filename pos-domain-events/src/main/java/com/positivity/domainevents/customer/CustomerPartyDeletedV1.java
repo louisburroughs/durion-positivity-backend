@@ -18,6 +18,7 @@ public record CustomerPartyDeletedV1(
         @NonNull UUID partyId, @Nullable UUID personId) {
 
     public static final String EVENT_TYPE = "customer.party.deleted";
+    public static final int SCHEMA_VERSION = 1;
 
     public CustomerPartyDeletedV1 {
         if (partyId == null) {

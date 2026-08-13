@@ -31,6 +31,7 @@ public record CustomerSegmentResolvedV1(
         boolean truncated) {
 
     public static final String EVENT_TYPE = "customer.segment.resolved";
+    public static final int SCHEMA_VERSION = 1;
 
     public CustomerSegmentResolvedV1 {
         if (requestId == null) {

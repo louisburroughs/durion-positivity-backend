@@ -43,6 +43,9 @@ public record ReconciliationManifestV1(
     /** Event-type suffix of manifest envelopes: {@code {domain}.reconciliation.manifest}. */
     public static final String EVENT_TYPE_SUFFIX = "reconciliation.manifest";
 
+    /** Envelope schema version of manifests, shared by every domain that publishes them. */
+    public static final int SCHEMA_VERSION = 1;
+
     public ReconciliationManifestV1 {
         if (windowStartUtc == null || windowEndUtc == null) {
             throw new IllegalArgumentException("windowStartUtc and windowEndUtc must not be null");

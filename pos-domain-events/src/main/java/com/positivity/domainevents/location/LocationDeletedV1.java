@@ -15,6 +15,7 @@ import org.jspecify.annotations.NonNull;
 public record LocationDeletedV1(@NonNull UUID locationId) {
 
     public static final String EVENT_TYPE = "location.location.deleted";
+    public static final int SCHEMA_VERSION = 1;
 
     public LocationDeletedV1 {
         if (locationId == null) {
