@@ -680,10 +680,10 @@ Repo-wide, summing all 38 per-module reports: **81.1% line, 66.6% branch**
 | `pos-api-gateway` | 435 | 85.5 | 72.2 | 0.80 | 0.67 |
 | `pos-security-common` | 406 | 46.8 | 36.5 | 0.41 | 0.31 |
 | `pos-documents` | 383 | 75.2 | 52.9 | 0.70 | 0.47 |
-| `pos-document-helper` | 346 | 74.0 | 35.2 | 0.68 | 0.30 |
 | `pos-vehicle-reference-nhtsa` | 189 | 0.0 | 0.0 | — *(unguarded)* | — |
 | `pos-events` | 174 | 59.8 | 57.1 | 0.54 | 0.52 |
 | `pos-openapi-validation` | 171 | 93.6 | 82.3 | 0.88 | 0.77 |
+| `pos-document-helper` | 162 | 95.7 | 90.0 | 0.90 | 0.80 |
 | `pos-tax-common` | 100 | 34.0 | 46.4 | 0.29 | 0.41 |
 | `pos-vehicle-reference-carapi` | 69 | 0.0 | 0.0 | — *(unguarded)* | — |
 | `pos-image` | 61 | 0.0 | 0.0 | — *(unguarded)* | — |
@@ -768,8 +768,14 @@ consumer-credited figure for shared libraries. No work is outstanding here.
 2. ~~**Controller `@WebMvcTest` slices**~~ — closed 2026-08-12, see §7.3.
 3. ~~**The four all-zero modules**~~ — closed 2026-08-12, see §7.2.
 4. ~~**Branch-coverage tails**~~ — closed 2026-08-12 over two passes, see §7.4 and
-   §7.5. `pos-document-helper` remains deliberately untouched, blocked on #1274.
-5. ~~**Low-coverage shared libraries**~~ — closed 2026-08-13, see §7.6.
+   §7.5. `pos-document-helper` is resolved by deletion rather than by tests: its
+   35.2% was the untested duplicate under `com.positivity.documents.helper`,
+   removed in #1274, leaving the module at 90.0% branch on the surviving
+   `com.positivity.documents` copy.
+5. **Low-coverage shared libraries** — `pos-tax-common` 34.0%,
+   `pos-domain-events` 39.3%, `pos-security-common` 46.8% on their own tests.
+   They read far higher in the aggregate because consumers exercise them; their
+   own floors are set from the honest per-module number.
 6. ~~SonarCloud wiring~~ — already in place; see the §6.3 correction.
 
 ### 7.1 Wave 1c closed (2026-08-12)
@@ -926,7 +932,10 @@ be retried.
 of 35 missed branches — sits in a duplicated copy of the library that no module
 consumes (#1274). Testing it would cement a deletion candidate and make the
 number look healthy while the duplication stayed. Its floor is unchanged pending
-that decision.
+that decision. **Resolved since:** the decision on #1274 kept
+`com.positivity.documents` and deleted the `helper` copy, which took the whole
+branch tail with it — the module now measures 95.7% line / 90.0% branch and its
+floors are 0.90 / 0.80.
 
 ### 7.5 Branch tails, second pass (2026-08-12)
 
