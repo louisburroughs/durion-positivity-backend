@@ -14,6 +14,16 @@ import org.jspecify.annotations.NonNull;
 
 public class OpenApiModuleValidator {
 
+    private final OpenApiAnnotationDepthValidator depthValidator;
+
+    public OpenApiModuleValidator() {
+        this(new OpenApiAnnotationDepthValidator());
+    }
+
+    public OpenApiModuleValidator(@NonNull OpenApiAnnotationDepthValidator depthValidator) {
+        this.depthValidator = depthValidator;
+    }
+
     public @NonNull List<OpenApiValidationIssue> validate(
             @NonNull String module, @NonNull Path specPath, @NonNull OpenApiModulePolicy policy) {
         if (!Files.exists(specPath)) {
@@ -42,6 +52,11 @@ public class OpenApiModuleValidator {
                 }
                 if (isBlank(operation.getDescription())) {
                     issues.add(new OpenApiValidationIssue(module, policy.mode(), prefix + " missing description"));
+                }
+                if (policy.annotationDepth() != OpenApiModulePolicy.DepthMode.EXEMPT) {
+                    for (String finding : depthValidator.check(operation)) {
+                        issues.add(new OpenApiValidationIssue(module, policy.depthIssueMode(), prefix + " " + finding));
+                    }
                 }
             }
         }

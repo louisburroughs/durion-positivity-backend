@@ -1,0 +1,24 @@
+openapi: "3.0.3"
+info:
+  title: pos-documents
+  version: "1.0"
+paths:
+  /v1/documents:
+    post:
+      summary: Create a document
+      description: Creates a document.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocumentRequest"
+      responses:
+        "201":
+          description: Document created
+components:
+  schemas:
+    CreateDocumentRequest:
+      type: object
+      properties:
+        contentRef:
+          type: string

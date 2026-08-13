@@ -21,6 +21,27 @@ class OpenApiValidationInventoryLoaderTest {
     }
 
     @Test
+    void defaultsAnnotationDepthToReportOnlyAndReadsExplicitStrict() {
+        OpenApiValidationInventory inventory =
+                OpenApiValidationInventoryLoader.load(Path.of("src/test/resources/openapi/module-inventory.yaml"));
+
+        assertThat(inventory.policyFor("pos-accounting").annotationDepth())
+                .isEqualTo(OpenApiModulePolicy.DepthMode.REPORT_ONLY);
+        assertThat(inventory.policyFor("pos-tax").annotationDepth()).isEqualTo(OpenApiModulePolicy.DepthMode.STRICT);
+        assertThat(inventory.policyFor("pos-supplier").annotationDepth())
+                .isEqualTo(OpenApiModulePolicy.DepthMode.STRICT);
+    }
+
+    @Test
+    void throwsWhenAnnotationDepthIsExemptWithoutReason() {
+        Path path = Path.of("src/test/resources/openapi/depth-exempt-without-reason.yaml");
+
+        assertThatThrownBy(() -> OpenApiValidationInventoryLoader.load(path))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("annotationDepthReason");
+    }
+
+    @Test
     void throwsWhenReasonIsNotString() {
         Path path = Path.of("src/test/resources/openapi/invalid-reason-type.yaml");
 

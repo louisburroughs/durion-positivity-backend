@@ -9,6 +9,7 @@ import com.positivity.supplier.service.model.VendorProfileView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -46,9 +47,25 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/supplier/admin/profiles")
 public class SupplierProfileAdminController {
 
+    private static final String PROFILE_EXAMPLE = """
+            {"supplierRef":"michelin-eu","displayName":"Michelin Europe","enabled":true,"sandbox":false,
+             "connectTimeoutMillis":5000,"readTimeoutMillis":30000,"maxRetries":2,"retryBackoff":"EXPONENTIAL"}
+            """;
+
     private final SupplierProfileAdminService adminService;
 
-    @Operation(summary = "List vendor profiles", description = "All vendor profiles, ordered by supplierRef")
+    @Operation(operationId = "listVendorProfiles", summary = "List vendor profiles", description = """
+                    Returns every configured vendor profile, ordered by supplierRef, with its enabled, sandbox and
+                    source-of-truth state.
+                    Use this tool to discover a vendorProfileId before working with accounts, auth config or
+                    bindings; use getVendorProfile instead when the id is already known.
+                    Preconditions: none; the list is unfiltered and includes both ADMIN-managed and YAML-managed
+                    profiles.
+                    Required inputs: none, and there is no request body, paging or filtering.
+                    Emits a SUPPLIER_PROFILE_LIST audit event; no configuration is changed.
+                    Returns 200 with an empty array when nothing is configured, so an empty result is not an error
+                    condition.
+                    """)
     @ApiResponse(responseCode = "200", description = "Profiles returned.")
     @ApiResponse(
             responseCode = "401",
@@ -67,7 +84,16 @@ public class SupplierProfileAdminController {
         return ResponseEntity.ok(adminService.listProfiles());
     }
 
-    @Operation(summary = "Get vendor profile", description = "Retrieve one vendor profile by id")
+    @Operation(operationId = "getVendorProfile", summary = "Get vendor profile", description = """
+                    Returns one vendor profile with its timeouts, retry settings, sandbox overlay and whether it is
+                    ADMIN-managed or YAML-managed.
+                    Use this tool when the vendorProfileId is already known; use listVendorProfiles instead to search
+                    by supplierRef.
+                    Preconditions: the profile must exist.
+                    Required inputs: vendorProfileId (UUIDv7) path parameter; there is no request body.
+                    Emits a SUPPLIER_PROFILE_GET audit event; no configuration is changed.
+                    Returns 404 when no profile exists for the supplied id.
+                    """)
     @ApiResponse(responseCode = "200", description = "Profile returned.")
     @ApiResponse(
             responseCode = "404",
@@ -102,9 +128,21 @@ public class SupplierProfileAdminController {
         return ResponseEntity.ok(adminService.getProfile(vendorProfileId));
     }
 
-    @Operation(
-            summary = "Create vendor profile",
-            description = "Create an ADMIN-managed vendor profile; supplierRef must be unique")
+    @Operation(operationId = "createVendorProfile", summary = "Create vendor profile", description = """
+                    Creates an ADMIN-managed vendor profile, the row that carries one supplier connection and owns
+                    its accounts, auth config and endpoint bindings.
+                    Use this tool when onboarding a new supplier connection; do not use it to change an existing
+                    profile, which is updateVendorProfile, and note that YAML-managed profiles cannot be created
+                    here at all.
+                    Preconditions: supplierRef must not already be in use by another profile.
+                    Required inputs: supplierRef and displayName, both non-blank, plus the enabled and sandbox flags;
+                    timeouts, maxRetries, retryBackoff and sandboxBaseUrlOverride are optional and fall back to the
+                    deployment defaults when omitted.
+                    Emits a SUPPLIER_PROFILE_CREATE audit event; the profile is created with no bindings, so it
+                    resolves every capability to a not-configured outcome until bindings are added.
+                    Returns 409 when supplierRef is already in use, and 400 when supplierRef or displayName are blank
+                    or a timeout value is not greater than zero.
+                    """)
     @ApiResponse(responseCode = "201", description = "Profile created.")
     @ApiResponse(
             responseCode = "400",
@@ -127,13 +165,40 @@ public class SupplierProfileAdminController {
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PROFILE_WRITE + "')")
     @EmitEvent(id = "SUPPLIER_PROFILE_CREATE", apiVersion = "1")
     @PostMapping
-    public ResponseEntity<VendorProfileView> createProfile(@Valid @NotNull @RequestBody VendorProfileRequest request) {
+    public ResponseEntity<VendorProfileView> createProfile(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Vendor profile to create; the configuration source is always ADMIN.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Enabled production profile",
+                                                            value = PROFILE_EXAMPLE)))
+                    @Valid
+                    @NotNull
+                    @RequestBody
+                    VendorProfileRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(adminService.createProfile(request));
     }
 
-    @Operation(
-            summary = "Update vendor profile",
-            description = "Full update of a vendor profile; rejected for YAML-managed profiles (ADR-0050 §6)")
+    @Operation(operationId = "updateVendorProfile", summary = "Update vendor profile", description = """
+                    Replaces every settable field of a vendor profile, including its alias, display name, enabled and
+                    sandbox flags and default timeouts.
+                    Use this tool to change connection defaults or take a supplier out of service by clearing
+                    enabled; do not use it on YAML-managed profiles, whose source of truth is the deployment
+                    configuration instead.
+                    Preconditions: the profile must exist, must be ADMIN-managed, and the supplierRef in the body
+                    must not belong to a different profile.
+                    Required inputs: vendorProfileId (UUIDv7) path parameter plus the full body, because every field
+                    is replaced; omitting an optional field resets it to the deployment default rather than leaving
+                    the stored value.
+                    Emits a SUPPLIER_PROFILE_UPDATE audit event; disabling a profile immediately makes its bindings
+                    resolve to a typed not-configured outcome.
+                    Returns 404 when the profile does not exist, 409 when it is YAML-managed or the supplierRef is
+                    taken, and 400 when a required field is blank or a timeout is not greater than zero.
+                    """)
     @ApiResponse(responseCode = "200", description = "Profile updated.")
     @ApiResponse(
             responseCode = "400",
@@ -173,13 +238,35 @@ public class SupplierProfileAdminController {
                     @PathVariable
                     @NotNull
                     UUID vendorProfileId,
-            @Valid @NotNull @RequestBody VendorProfileRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Replacement values for every settable field of the vendor profile.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Enabled production profile",
+                                                            value = PROFILE_EXAMPLE)))
+                    @Valid
+                    @NotNull
+                    @RequestBody
+                    VendorProfileRequest request) {
         return ResponseEntity.ok(adminService.updateProfile(vendorProfileId, request));
     }
 
-    @Operation(
-            summary = "Delete vendor profile",
-            description = "Delete a vendor profile and its child configuration; rejected for YAML-managed profiles")
+    @Operation(operationId = "deleteVendorProfile", summary = "Delete vendor profile", description = """
+                    Deletes a vendor profile together with its accounts, auth config and endpoint bindings.
+                    Use this tool only when a supplier connection is being retired permanently; to stop traffic while
+                    keeping the configuration, call updateVendorProfile with enabled cleared instead.
+                    Preconditions: the profile must exist and must be ADMIN-managed, because YAML-managed profiles
+                    are owned by the deployment configuration.
+                    Required inputs: vendorProfileId (UUIDv7) path parameter; there is no request body and no
+                    confirmation flag.
+                    Emits a SUPPLIER_PROFILE_DELETE audit event and cascades to the profile's child configuration;
+                    exchange audit records already written are retained.
+                    Returns 404 when the profile does not exist and 409 when it is YAML-managed.
+                    """)
     @ApiResponse(responseCode = "204", description = "Profile deleted.")
     @ApiResponse(
             responseCode = "404",

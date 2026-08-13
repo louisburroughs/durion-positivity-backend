@@ -9,6 +9,7 @@ import com.positivity.supplier.service.model.CommercialAccountView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -46,9 +47,25 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/supplier/admin/profiles/{vendorProfileId}/accounts")
 public class SupplierAccountAdminController {
 
+    private static final String ACCOUNT_EXAMPLE = """
+            {"role":"DELIVERY","accountNumber":"FR-0042871","agencyCode":"PAR01",
+             "deliveryLocationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70"}
+            """;
+
     private final SupplierProfileAdminService adminService;
 
-    @Operation(summary = "List commercial accounts", description = "Accounts of a vendor profile, billing first")
+    @Operation(operationId = "listCommercialAccounts", summary = "List commercial accounts", description = """
+                    Returns the commercial accounts configured on a vendor profile, the BILLING account first and
+                    then the per-location DELIVERY accounts.
+                    Use this tool to find the accountId or the vendor account number for a location; do not use it to
+                    read credentials, which are never returned here because account numbers are ordinary
+                    configuration data.
+                    Preconditions: the vendor profile must exist.
+                    Required inputs: vendorProfileId (UUIDv7) path parameter; there is no request body or filtering.
+                    Emits a SUPPLIER_ACCOUNT_LIST audit event; no configuration is changed.
+                    Returns 404 when the vendor profile does not exist, and 200 with an empty array when the profile
+                    exists but has no accounts.
+                    """)
     @ApiResponse(responseCode = "200", description = "Accounts returned.")
     @ApiResponse(
             responseCode = "404",
@@ -83,9 +100,21 @@ public class SupplierAccountAdminController {
         return ResponseEntity.ok(adminService.listAccounts(vendorProfileId));
     }
 
-    @Operation(
-            summary = "Create commercial account",
-            description = "Add a billing or delivery account; delivery accounts carry the pos-location mapping")
+    @Operation(operationId = "createCommercialAccount", summary = "Create commercial account", description = """
+                    Adds a commercial account to a vendor profile, either the profile's single BILLING account or a
+                    DELIVERY account mapping one pos-location to its vendor account number.
+                    Use this tool when a location is first authorised to order from a supplier; do not use it to
+                    correct an account number, which is updateCommercialAccount.
+                    Preconditions: the vendor profile must exist and be ADMIN-managed, and the slot must be free —
+                    one BILLING account per profile and one DELIVERY account per profile and location pair.
+                    Required inputs: vendorProfileId (UUIDv7) path parameter plus role and accountNumber in the body;
+                    deliveryLocationId is required for DELIVERY and must be absent for BILLING, and agencyCode is
+                    optional.
+                    Emits a SUPPLIER_ACCOUNT_CREATE audit event; no order or invoice records are touched.
+                    Returns 404 when the profile does not exist, 409 when the profile is YAML-managed or the account
+                    slot is already taken, and 400 when accountNumber is blank or deliveryLocationId does not match
+                    the role.
+                    """)
     @ApiResponse(responseCode = "201", description = "Account created.")
     @ApiResponse(
             responseCode = "400",
@@ -125,11 +154,38 @@ public class SupplierAccountAdminController {
                     @PathVariable
                     @NotNull
                     UUID vendorProfileId,
-            @Valid @NotNull @RequestBody CommercialAccountRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Commercial account to create on the vendor profile.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Delivery account for one location",
+                                                            value = ACCOUNT_EXAMPLE)))
+                    @Valid
+                    @NotNull
+                    @RequestBody
+                    CommercialAccountRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(adminService.createAccount(vendorProfileId, request));
     }
 
-    @Operation(summary = "Update commercial account", description = "Replace a commercial account")
+    @Operation(operationId = "updateCommercialAccount", summary = "Update commercial account", description = """
+                    Replaces the role, account number, agency code and location mapping of an existing commercial
+                    account.
+                    Use this tool to correct a vendor-assigned account number or move a DELIVERY account to another
+                    location; do not use it to add a second account, which is createCommercialAccount.
+                    Preconditions: the profile must exist and be ADMIN-managed, the account must belong to that
+                    profile, and the target slot must not already be occupied by another account.
+                    Required inputs: vendorProfileId and accountId (UUIDv7) path parameters plus the full body,
+                    because every field is replaced; omitting agencyCode clears it.
+                    Emits a SUPPLIER_ACCOUNT_UPDATE audit event; orders already transmitted under the previous
+                    account number are unaffected.
+                    Returns 404 when the profile or account does not exist, 409 when the profile is YAML-managed or
+                    the account slot is taken, and 400 when accountNumber is blank or deliveryLocationId does not
+                    match the role.
+                    """)
     @ApiResponse(responseCode = "200", description = "Account updated.")
     @ApiResponse(
             responseCode = "400",
@@ -181,11 +237,36 @@ public class SupplierAccountAdminController {
                     @PathVariable
                     @NotNull
                     UUID accountId,
-            @Valid @NotNull @RequestBody CommercialAccountRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Commercial account to store in place of the existing one on the vendor profile.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Delivery account for one location",
+                                                            value = ACCOUNT_EXAMPLE)))
+                    @Valid
+                    @NotNull
+                    @RequestBody
+                    CommercialAccountRequest request) {
         return ResponseEntity.ok(adminService.updateAccount(vendorProfileId, accountId, request));
     }
 
-    @Operation(summary = "Delete commercial account", description = "Remove a commercial account")
+    @Operation(operationId = "deleteCommercialAccount", summary = "Delete commercial account", description = """
+                    Removes a commercial account from a vendor profile, freeing its BILLING or per-location DELIVERY
+                    slot.
+                    Use this tool when a location stops ordering from the supplier; to change the account number
+                    instead, call updateCommercialAccount, which preserves the slot.
+                    Preconditions: the profile must exist and be ADMIN-managed, and the account must belong to that
+                    profile.
+                    Required inputs: vendorProfileId and accountId (UUIDv7) path parameters; there is no request body.
+                    Emits a SUPPLIER_ACCOUNT_DELETE audit event; ordering for the mapped location resolves to a
+                    not-configured outcome from that point on.
+                    Returns 404 when the profile or account does not exist, and 409 when the profile is YAML-managed.
+                    """)
     @ApiResponse(responseCode = "204", description = "Account deleted.")
     @ApiResponse(
             responseCode = "404",

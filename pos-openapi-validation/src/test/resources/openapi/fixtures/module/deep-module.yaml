@@ -1,0 +1,43 @@
+openapi: "3.0.3"
+info:
+  title: pos-documents
+  version: "1.0"
+paths:
+  /v1/documents:
+    post:
+      summary: Create a document
+      description: |
+        Creates a stored document from the supplied metadata and content reference.
+        Use this tool when a caller already holds an uploaded content reference; do not use
+        uploadDocumentContent, which stores the bytes themselves.
+        Preconditions: the referenced content must already be uploaded and the owning entity must exist.
+        Required inputs: contentRef (string) and ownerId (UUID); retentionDays is optional and defaults
+        to the tenant retention policy.
+        Emits a DOCUMENT_CREATE event; the content reference is marked as claimed.
+        Returns 404 when the owning entity cannot be resolved, and 409 when the content reference has
+        already been claimed by another document.
+      requestBody:
+        description: Document metadata and the content reference to claim.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocumentRequest"
+            examples:
+              minimal:
+                value:
+                  contentRef: "content/018f8c1e-0000-7000-8000-000000000001"
+                  ownerId: "018f8c1e-0000-7000-8000-000000000002"
+      responses:
+        "201":
+          description: Document created
+components:
+  schemas:
+    CreateDocumentRequest:
+      type: object
+      properties:
+        contentRef:
+          type: string
+        ownerId:
+          type: string
+          format: uuid

@@ -9,6 +9,7 @@ import com.positivity.supplier.service.model.AuthConfigView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -47,9 +48,24 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/supplier/admin/profiles/{vendorProfileId}/auth-configs")
 public class SupplierAuthConfigAdminController {
 
+    private static final String AUTH_CONFIG_EXAMPLE = """
+            {"name":"ediwheel-basic","type":"BASIC_PLUS_APIKEY","usernameRef":"env:MICHELIN_EDI_USER",
+             "passwordRef":"env:MICHELIN_EDI_PASSWORD","apiKeyRef":"env:MICHELIN_EDI_APIKEY","apiKeyHeader":"apikey"}
+            """;
+
     private final SupplierProfileAdminService adminService;
 
-    @Operation(summary = "List auth configs", description = "Auth configs of a vendor profile, ordered by name")
+    @Operation(operationId = "listAuthConfigs", summary = "List auth configs", description = """
+                    Returns the auth configs of a vendor profile, ordered by name, showing the credential scheme and
+                    which reference fields are populated.
+                    Use this tool to find the auth config name an endpoint binding should reference; do not use it to
+                    read credentials, because secret references are write-only and never appear in a response.
+                    Preconditions: the vendor profile must exist.
+                    Required inputs: vendorProfileId (UUIDv7) path parameter; there is no request body or filtering.
+                    Emits a SUPPLIER_AUTHCONFIG_LIST audit event; no configuration is changed.
+                    Returns 404 when the vendor profile does not exist, and 200 with an empty array when the profile
+                    has no auth configs.
+                    """)
     @ApiResponse(responseCode = "200", description = "Auth configs returned.")
     @ApiResponse(
             responseCode = "404",
@@ -84,9 +100,23 @@ public class SupplierAuthConfigAdminController {
         return ResponseEntity.ok(adminService.listAuthConfigs(vendorProfileId));
     }
 
-    @Operation(
-            summary = "Create auth config",
-            description = "Add an auth config to a vendor profile; secret fields are references, never plaintext")
+    @Operation(operationId = "createAuthConfig", summary = "Create auth config", description = """
+                    Adds a named auth config to a vendor profile, describing one credential scheme as a set of secret
+                    references resolved at call time.
+                    Use this tool when a supplier connection needs credentials; do not put plaintext credentials in
+                    any field, because every secret field takes a scheme-prefixed reference such as env:VAR_NAME and
+                    plaintext is rejected.
+                    Preconditions: the profile must exist and be ADMIN-managed, and the name must not already be used
+                    by another auth config on the same profile.
+                    Required inputs: vendorProfileId (UUIDv7) path parameter plus name and type in the body; the type
+                    fixes which reference fields are required and which must be absent, so BASIC_PLUS_APIKEY needs
+                    usernameRef, passwordRef and apiKeyRef while OAUTH2_CLIENT_CREDENTIALS needs tokenUrlRef,
+                    clientIdRef and clientSecretRef.
+                    Emits a SUPPLIER_AUTHCONFIG_CREATE audit event; the response omits every reference value.
+                    Returns 404 when the profile does not exist, 409 when the profile is YAML-managed or the name is
+                    taken, and 400 when the reference set does not match the declared type or a reference is
+                    malformed.
+                    """)
     @ApiResponse(responseCode = "201", description = "Auth config created (without credential reference values).")
     @ApiResponse(
             responseCode = "400",
@@ -126,13 +156,41 @@ public class SupplierAuthConfigAdminController {
                     @PathVariable
                     @NotNull
                     UUID vendorProfileId,
-            @Valid @NotNull @RequestBody AuthConfigRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Auth config to add to the vendor profile. Every secret field is a reference, never a plaintext"
+                                            + " credential.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Basic auth plus API key",
+                                                            value = AUTH_CONFIG_EXAMPLE)))
+                    @Valid
+                    @NotNull
+                    @RequestBody
+                    AuthConfigRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(adminService.createAuthConfig(vendorProfileId, request));
     }
 
-    @Operation(
-            summary = "Update auth config",
-            description = "Replace an auth config; renaming while endpoint bindings reference it is rejected")
+    @Operation(operationId = "updateAuthConfig", summary = "Update auth config", description = """
+                    Replaces the name, credential scheme and secret references of an existing auth config.
+                    Use this tool to rotate which references a connection resolves or to switch credential scheme; do
+                    not use it to rename a config that endpoint bindings still reference, because bindings resolve it
+                    by name and the rename is rejected.
+                    Preconditions: the profile must exist and be ADMIN-managed, the auth config must belong to it,
+                    and a new name must be free and unreferenced.
+                    Required inputs: vendorProfileId and authConfigId (UUIDv7) path parameters plus the full body,
+                    because every field is replaced; omitting a reference field clears it, which fails validation
+                    when the declared type requires it.
+                    Emits a SUPPLIER_AUTHCONFIG_UPDATE audit event; the new references take effect on the next
+                    outbound call, and the response omits every reference value.
+                    Returns 404 when the profile or config does not exist, 409 when the profile is YAML-managed or
+                    the name is in use or still referenced, and 400 when the reference set does not match the
+                    declared type.
+                    """)
     @ApiResponse(responseCode = "200", description = "Auth config updated (without credential reference values).")
     @ApiResponse(
             responseCode = "400",
@@ -184,13 +242,39 @@ public class SupplierAuthConfigAdminController {
                     @PathVariable
                     @NotNull
                     UUID authConfigId,
-            @Valid @NotNull @RequestBody AuthConfigRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Auth config to store in place of the existing one. Every secret field is a reference, never a plaintext"
+                                            + " credential.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Basic auth plus API key",
+                                                            value = AUTH_CONFIG_EXAMPLE)))
+                    @Valid
+                    @NotNull
+                    @RequestBody
+                    AuthConfigRequest request) {
         return ResponseEntity.ok(adminService.updateAuthConfig(vendorProfileId, authConfigId, request));
     }
 
-    @Operation(
-            summary = "Delete auth config",
-            description = "Remove an auth config; rejected while endpoint bindings still reference it")
+    @Operation(operationId = "deleteAuthConfig", summary = "Delete auth config", description = """
+                    Removes an auth config from a vendor profile.
+                    Use this tool when a credential scheme is retired; do not call it to rotate credentials, where
+                    updateAuthConfig repoints the references instead, and repoint or delete the endpoint bindings
+                    that name it first, because deletion is rejected while any binding still references it.
+                    Preconditions: the profile must exist and be ADMIN-managed, the config must belong to it, and no
+                    endpoint binding may reference it.
+                    Required inputs: vendorProfileId and authConfigId (UUIDv7) path parameters; there is no request
+                    body.
+                    Emits a SUPPLIER_AUTHCONFIG_DELETE audit event; the referenced secrets themselves are untouched,
+                    since only the reference is stored here.
+                    Returns 404 when the profile or config does not exist, and 409 when the profile is YAML-managed
+                    or a binding still references the config.
+                    """)
     @ApiResponse(responseCode = "204", description = "Auth config deleted.")
     @ApiResponse(
             responseCode = "404",

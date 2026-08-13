@@ -9,6 +9,7 @@ import com.positivity.supplier.service.model.EndpointBindingView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -48,9 +49,25 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/supplier/admin/profiles/{vendorProfileId}/bindings")
 public class SupplierEndpointBindingAdminController {
 
+    private static final String BINDING_EXAMPLE = """
+            {"capability":"STOCK_INQUIRY","protocolFamily":"EDIWHEEL_A25","version":"A2_5",
+             "baseUrl":"https://edi.michelin.example/a25","path":"/stock/inquiry",
+             "authConfigName":"ediwheel-basic","enabled":true,"captureLevel":"REDACTED"}
+            """;
+
     private final SupplierProfileAdminService adminService;
 
-    @Operation(summary = "List endpoint bindings", description = "Bindings of a vendor profile, ordered by capability")
+    @Operation(operationId = "listEndpointBindings", summary = "List endpoint bindings", description = """
+                    Returns the capability endpoint bindings of a vendor profile, ordered by capability, each with
+                    its protocol family, version, URL, auth config name and enabled flag.
+                    Use this tool to see which capabilities a supplier actually resolves; do not infer availability
+                    from the profile itself, because an absent or disabled binding disables just that capability.
+                    Preconditions: the vendor profile must exist.
+                    Required inputs: vendorProfileId (UUIDv7) path parameter; there is no request body or filtering.
+                    Emits a SUPPLIER_BINDING_LIST audit event; no configuration is changed.
+                    Returns 404 when the vendor profile does not exist, and 200 with an empty array when the profile
+                    has no bindings, which means every capability is unconfigured.
+                    """)
     @ApiResponse(responseCode = "200", description = "Bindings returned.")
     @ApiResponse(
             responseCode = "404",
@@ -85,9 +102,22 @@ public class SupplierEndpointBindingAdminController {
         return ResponseEntity.ok(adminService.listBindings(vendorProfileId));
     }
 
-    @Operation(
-            summary = "Create endpoint binding",
-            description = "Bind a capability to (protocolFamily, version, baseUrl, path, authConfigName)")
+    @Operation(operationId = "createEndpointBinding", summary = "Create endpoint binding", description = """
+                    Binds one supplier capability on a vendor profile to a protocol family, adapter version, URL and
+                    auth config, which is what makes that capability resolve at call time.
+                    Use this tool when enabling a capability for a supplier; do not use it to change an existing
+                    binding, which is updateEndpointBinding, since at most one binding per capability may exist.
+                    Preconditions: the profile must exist and be ADMIN-managed, the capability must not already be
+                    bound on it, and authConfigName must name an auth config on the same profile.
+                    Required inputs: vendorProfileId (UUIDv7) path parameter plus capability, protocolFamily,
+                    version, baseUrl, path and authConfigName; version is not validated on write, so a key with no
+                    registered codec is accepted and then resolves to CAPABILITY_NOT_CONFIGURED on every call.
+                    Emits a SUPPLIER_BINDING_CREATE audit event; captureLevel and the redaction classifications
+                    decide what the exchange-audit trail retains for this binding from now on.
+                    Returns 404 when the profile does not exist, 409 when the profile is YAML-managed or the
+                    capability is already bound, and 400 when the capability, protocol family or auth config name is
+                    unknown.
+                    """)
     @ApiResponse(responseCode = "201", description = "Binding created.")
     @ApiResponse(
             responseCode = "400",
@@ -128,11 +158,40 @@ public class SupplierEndpointBindingAdminController {
                     @PathVariable
                     @NotNull
                     UUID vendorProfileId,
-            @Valid @NotNull @RequestBody EndpointBindingRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Endpoint binding to add to the vendor profile, mapping one capability to a vendor endpoint.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Stock inquiry over EDIWHEEL A2.5",
+                                                            value = BINDING_EXAMPLE)))
+                    @Valid
+                    @NotNull
+                    @RequestBody
+                    EndpointBindingRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(adminService.createBinding(vendorProfileId, request));
     }
 
-    @Operation(summary = "Update endpoint binding", description = "Replace an endpoint binding")
+    @Operation(operationId = "updateEndpointBinding", summary = "Update endpoint binding", description = """
+                    Replaces every settable field of an endpoint binding, including its capability, adapter version,
+                    URL, auth config, schedule, enabled flag and audit capture level.
+                    Use this tool to repoint a capability or take it out of service by clearing enabled; do not use
+                    it to bind a second capability, which is createEndpointBinding.
+                    Preconditions: the profile must exist and be ADMIN-managed, the binding must belong to it, and a
+                    changed capability must not already be bound elsewhere on the profile.
+                    Required inputs: vendorProfileId and bindingId (UUIDv7) path parameters plus the full body,
+                    because every field is replaced; omitting captureLevel resets it to the deployment default rather
+                    than leaving the stored value.
+                    Emits a SUPPLIER_BINDING_UPDATE audit event; a disabled binding immediately reports the typed
+                    CAPABILITY_NOT_CONFIGURED outcome with HTTP 200 rather than failing.
+                    Returns 404 when the profile or binding does not exist, 409 when the profile is YAML-managed or
+                    the capability is already bound, and 400 when the capability, protocol family or auth config name
+                    is unknown.
+                    """)
     @ApiResponse(responseCode = "200", description = "Binding updated.")
     @ApiResponse(
             responseCode = "400",
@@ -185,13 +244,36 @@ public class SupplierEndpointBindingAdminController {
                     @PathVariable
                     @NotNull
                     UUID bindingId,
-            @Valid @NotNull @RequestBody EndpointBindingRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Endpoint binding to store in place of the existing one, mapping one capability to a vendor endpoint.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Stock inquiry over EDIWHEEL A2.5",
+                                                            value = BINDING_EXAMPLE)))
+                    @Valid
+                    @NotNull
+                    @RequestBody
+                    EndpointBindingRequest request) {
         return ResponseEntity.ok(adminService.updateBinding(vendorProfileId, bindingId, request));
     }
 
-    @Operation(
-            summary = "Delete endpoint binding",
-            description = "Remove a binding, disabling its capability for the profile")
+    @Operation(operationId = "deleteEndpointBinding", summary = "Delete endpoint binding", description = """
+                    Removes an endpoint binding, which disables that one capability for the vendor profile.
+                    Use this tool when a capability is retired for a supplier; to pause it while keeping the
+                    configuration, call updateEndpointBinding with enabled cleared instead, since a disabled binding
+                    behaves exactly as an absent one.
+                    Preconditions: the profile must exist and be ADMIN-managed, and the binding must belong to it.
+                    Required inputs: vendorProfileId and bindingId (UUIDv7) path parameters; there is no request
+                    body.
+                    Emits a SUPPLIER_BINDING_DELETE audit event; the capability then resolves to the typed
+                    CAPABILITY_NOT_CONFIGURED outcome, and exchange audit rows already written are retained.
+                    Returns 404 when the profile or binding does not exist, and 409 when the profile is YAML-managed.
+                    """)
     @ApiResponse(responseCode = "204", description = "Binding deleted.")
     @ApiResponse(
             responseCode = "404",

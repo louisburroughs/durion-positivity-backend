@@ -26,8 +26,24 @@ paths:
       tags:
       - Supplier Vendor Profiles
       summary: Get vendor profile
-      description: Retrieve one vendor profile by id
-      operationId: getProfile
+      description: 'Returns one vendor profile with its timeouts, retry settings, sandbox overlay and whether it is
+
+        ADMIN-managed or YAML-managed.
+
+        Use this tool when the vendorProfileId is already known; use listVendorProfiles instead to search
+
+        by supplierRef.
+
+        Preconditions: the profile must exist.
+
+        Required inputs: vendorProfileId (UUIDv7) path parameter; there is no request body.
+
+        Emits a SUPPLIER_PROFILE_GET audit event; no configuration is changed.
+
+        Returns 404 when no profile exists for the supplied id.
+
+        '
+      operationId: getVendorProfile
       parameters:
       - name: vendorProfileId
         in: path
@@ -66,8 +82,36 @@ paths:
       tags:
       - Supplier Vendor Profiles
       summary: Update vendor profile
-      description: Full update of a vendor profile; rejected for YAML-managed profiles (ADR-0050 §6)
-      operationId: updateProfile
+      description: 'Replaces every settable field of a vendor profile, including its alias, display name, enabled and
+
+        sandbox flags and default timeouts.
+
+        Use this tool to change connection defaults or take a supplier out of service by clearing
+
+        enabled; do not use it on YAML-managed profiles, whose source of truth is the deployment
+
+        configuration instead.
+
+        Preconditions: the profile must exist, must be ADMIN-managed, and the supplierRef in the body
+
+        must not belong to a different profile.
+
+        Required inputs: vendorProfileId (UUIDv7) path parameter plus the full body, because every field
+
+        is replaced; omitting an optional field resets it to the deployment default rather than leaving
+
+        the stored value.
+
+        Emits a SUPPLIER_PROFILE_UPDATE audit event; disabling a profile immediately makes its bindings
+
+        resolve to a typed not-configured outcome.
+
+        Returns 404 when the profile does not exist, 409 when it is YAML-managed or the supplierRef is
+
+        taken, and 400 when a required field is blank or a timeout is not greater than zero.
+
+        '
+      operationId: updateVendorProfile
       parameters:
       - name: vendorProfileId
         in: path
@@ -78,10 +122,23 @@ paths:
           format: uuid
           example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
       requestBody:
+        description: Replacement values for every settable field of the vendor profile.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/VendorProfileRequest'
+            examples:
+              Enabled production profile:
+                description: Enabled production profile
+                value:
+                  supplierRef: michelin-eu
+                  displayName: Michelin Europe
+                  enabled: true
+                  sandbox: false
+                  connectTimeoutMillis: 5000
+                  readTimeoutMillis: 30000
+                  maxRetries: 2
+                  retryBackoff: EXPONENTIAL
         required: true
       responses:
         '200':
@@ -124,8 +181,28 @@ paths:
       tags:
       - Supplier Vendor Profiles
       summary: Delete vendor profile
-      description: Delete a vendor profile and its child configuration; rejected for YAML-managed profiles
-      operationId: deleteProfile
+      description: 'Deletes a vendor profile together with its accounts, auth config and endpoint bindings.
+
+        Use this tool only when a supplier connection is being retired permanently; to stop traffic while
+
+        keeping the configuration, call updateVendorProfile with enabled cleared instead.
+
+        Preconditions: the profile must exist and must be ADMIN-managed, because YAML-managed profiles
+
+        are owned by the deployment configuration.
+
+        Required inputs: vendorProfileId (UUIDv7) path parameter; there is no request body and no
+
+        confirmation flag.
+
+        Emits a SUPPLIER_PROFILE_DELETE audit event and cascades to the profile''s child configuration;
+
+        exchange audit records already written are retained.
+
+        Returns 404 when the profile does not exist and 409 when it is YAML-managed.
+
+        '
+      operationId: deleteVendorProfile
       parameters:
       - name: vendorProfileId
         in: path
@@ -167,8 +244,36 @@ paths:
       tags:
       - Supplier Endpoint Bindings
       summary: Update endpoint binding
-      description: Replace an endpoint binding
-      operationId: updateBinding
+      description: 'Replaces every settable field of an endpoint binding, including its capability, adapter version,
+
+        URL, auth config, schedule, enabled flag and audit capture level.
+
+        Use this tool to repoint a capability or take it out of service by clearing enabled; do not use
+
+        it to bind a second capability, which is createEndpointBinding.
+
+        Preconditions: the profile must exist and be ADMIN-managed, the binding must belong to it, and a
+
+        changed capability must not already be bound elsewhere on the profile.
+
+        Required inputs: vendorProfileId and bindingId (UUIDv7) path parameters plus the full body,
+
+        because every field is replaced; omitting captureLevel resets it to the deployment default rather
+
+        than leaving the stored value.
+
+        Emits a SUPPLIER_BINDING_UPDATE audit event; a disabled binding immediately reports the typed
+
+        CAPABILITY_NOT_CONFIGURED outcome with HTTP 200 rather than failing.
+
+        Returns 404 when the profile or binding does not exist, 409 when the profile is YAML-managed or
+
+        the capability is already bound, and 400 when the capability, protocol family or auth config name
+
+        is unknown.
+
+        '
+      operationId: updateEndpointBinding
       parameters:
       - name: vendorProfileId
         in: path
@@ -187,10 +292,23 @@ paths:
           format: uuid
           example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60
       requestBody:
+        description: Endpoint binding to store in place of the existing one, mapping one capability to a vendor endpoint.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/EndpointBindingRequest'
+            examples:
+              Stock inquiry over EDIWHEEL A2.5:
+                description: Stock inquiry over EDIWHEEL A2.5
+                value:
+                  capability: STOCK_INQUIRY
+                  protocolFamily: EDIWHEEL_A25
+                  version: A2_5
+                  baseUrl: https://edi.michelin.example/a25
+                  path: /stock/inquiry
+                  authConfigName: ediwheel-basic
+                  enabled: true
+                  captureLevel: REDACTED
         required: true
       responses:
         '200':
@@ -233,8 +351,28 @@ paths:
       tags:
       - Supplier Endpoint Bindings
       summary: Delete endpoint binding
-      description: Remove a binding, disabling its capability for the profile
-      operationId: deleteBinding
+      description: 'Removes an endpoint binding, which disables that one capability for the vendor profile.
+
+        Use this tool when a capability is retired for a supplier; to pause it while keeping the
+
+        configuration, call updateEndpointBinding with enabled cleared instead, since a disabled binding
+
+        behaves exactly as an absent one.
+
+        Preconditions: the profile must exist and be ADMIN-managed, and the binding must belong to it.
+
+        Required inputs: vendorProfileId and bindingId (UUIDv7) path parameters; there is no request
+
+        body.
+
+        Emits a SUPPLIER_BINDING_DELETE audit event; the capability then resolves to the typed
+
+        CAPABILITY_NOT_CONFIGURED outcome, and exchange audit rows already written are retained.
+
+        Returns 404 when the profile or binding does not exist, and 409 when the profile is YAML-managed.
+
+        '
+      operationId: deleteEndpointBinding
       parameters:
       - name: vendorProfileId
         in: path
@@ -284,7 +422,35 @@ paths:
       tags:
       - Supplier Auth Configs
       summary: Update auth config
-      description: Replace an auth config; renaming while endpoint bindings reference it is rejected
+      description: 'Replaces the name, credential scheme and secret references of an existing auth config.
+
+        Use this tool to rotate which references a connection resolves or to switch credential scheme; do
+
+        not use it to rename a config that endpoint bindings still reference, because bindings resolve it
+
+        by name and the rename is rejected.
+
+        Preconditions: the profile must exist and be ADMIN-managed, the auth config must belong to it,
+
+        and a new name must be free and unreferenced.
+
+        Required inputs: vendorProfileId and authConfigId (UUIDv7) path parameters plus the full body,
+
+        because every field is replaced; omitting a reference field clears it, which fails validation
+
+        when the declared type requires it.
+
+        Emits a SUPPLIER_AUTHCONFIG_UPDATE audit event; the new references take effect on the next
+
+        outbound call, and the response omits every reference value.
+
+        Returns 404 when the profile or config does not exist, 409 when the profile is YAML-managed or
+
+        the name is in use or still referenced, and 400 when the reference set does not match the
+
+        declared type.
+
+        '
       operationId: updateAuthConfig
       parameters:
       - name: vendorProfileId
@@ -304,10 +470,21 @@ paths:
           format: uuid
           example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61
       requestBody:
+        description: Auth config to store in place of the existing one. Every secret field is a reference, never a plaintext credential.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AuthConfigRequest'
+            examples:
+              Basic auth plus API key:
+                description: Basic auth plus API key
+                value:
+                  name: ediwheel-basic
+                  type: BASIC_PLUS_APIKEY
+                  usernameRef: env:MICHELIN_EDI_USER
+                  passwordRef: env:MICHELIN_EDI_PASSWORD
+                  apiKeyRef: env:MICHELIN_EDI_APIKEY
+                  apiKeyHeader: apikey
         required: true
       responses:
         '200':
@@ -350,7 +527,31 @@ paths:
       tags:
       - Supplier Auth Configs
       summary: Delete auth config
-      description: Remove an auth config; rejected while endpoint bindings still reference it
+      description: 'Removes an auth config from a vendor profile.
+
+        Use this tool when a credential scheme is retired; do not call it to rotate credentials, where
+
+        updateAuthConfig repoints the references instead, and repoint or delete the endpoint bindings
+
+        that name it first, because deletion is rejected while any binding still references it.
+
+        Preconditions: the profile must exist and be ADMIN-managed, the config must belong to it, and no
+
+        endpoint binding may reference it.
+
+        Required inputs: vendorProfileId and authConfigId (UUIDv7) path parameters; there is no request
+
+        body.
+
+        Emits a SUPPLIER_AUTHCONFIG_DELETE audit event; the referenced secrets themselves are untouched,
+
+        since only the reference is stored here.
+
+        Returns 404 when the profile or config does not exist, and 409 when the profile is YAML-managed
+
+        or a binding still references the config.
+
+        '
       operationId: deleteAuthConfig
       parameters:
       - name: vendorProfileId
@@ -401,8 +602,34 @@ paths:
       tags:
       - Supplier Commercial Accounts
       summary: Update commercial account
-      description: Replace a commercial account
-      operationId: updateAccount
+      description: 'Replaces the role, account number, agency code and location mapping of an existing commercial
+
+        account.
+
+        Use this tool to correct a vendor-assigned account number or move a DELIVERY account to another
+
+        location; do not use it to add a second account, which is createCommercialAccount.
+
+        Preconditions: the profile must exist and be ADMIN-managed, the account must belong to that
+
+        profile, and the target slot must not already be occupied by another account.
+
+        Required inputs: vendorProfileId and accountId (UUIDv7) path parameters plus the full body,
+
+        because every field is replaced; omitting agencyCode clears it.
+
+        Emits a SUPPLIER_ACCOUNT_UPDATE audit event; orders already transmitted under the previous
+
+        account number are unaffected.
+
+        Returns 404 when the profile or account does not exist, 409 when the profile is YAML-managed or
+
+        the account slot is taken, and 400 when accountNumber is blank or deliveryLocationId does not
+
+        match the role.
+
+        '
+      operationId: updateCommercialAccount
       parameters:
       - name: vendorProfileId
         in: path
@@ -421,10 +648,19 @@ paths:
           format: uuid
           example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a62
       requestBody:
+        description: Commercial account to store in place of the existing one on the vendor profile.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CommercialAccountRequest'
+            examples:
+              Delivery account for one location:
+                description: Delivery account for one location
+                value:
+                  role: DELIVERY
+                  accountNumber: FR-0042871
+                  agencyCode: PAR01
+                  deliveryLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
         required: true
       responses:
         '200':
@@ -467,8 +703,28 @@ paths:
       tags:
       - Supplier Commercial Accounts
       summary: Delete commercial account
-      description: Remove a commercial account
-      operationId: deleteAccount
+      description: 'Removes a commercial account from a vendor profile, freeing its BILLING or per-location DELIVERY
+
+        slot.
+
+        Use this tool when a location stops ordering from the supplier; to change the account number
+
+        instead, call updateCommercialAccount, which preserves the slot.
+
+        Preconditions: the profile must exist and be ADMIN-managed, and the account must belong to that
+
+        profile.
+
+        Required inputs: vendorProfileId and accountId (UUIDv7) path parameters; there is no request body.
+
+        Emits a SUPPLIER_ACCOUNT_DELETE audit event; ordering for the mapped location resolves to a
+
+        not-configured outcome from that point on.
+
+        Returns 404 when the profile or account does not exist, and 409 when the profile is YAML-managed.
+
+        '
+      operationId: deleteCommercialAccount
       parameters:
       - name: vendorProfileId
         in: path
@@ -518,8 +774,28 @@ paths:
       tags:
       - Supplier Vendor Profiles
       summary: List vendor profiles
-      description: All vendor profiles, ordered by supplierRef
-      operationId: listProfiles
+      description: 'Returns every configured vendor profile, ordered by supplierRef, with its enabled, sandbox and
+
+        source-of-truth state.
+
+        Use this tool to discover a vendorProfileId before working with accounts, auth config or
+
+        bindings; use getVendorProfile instead when the id is already known.
+
+        Preconditions: none; the list is unfiltered and includes both ADMIN-managed and YAML-managed
+
+        profiles.
+
+        Required inputs: none, and there is no request body, paging or filtering.
+
+        Emits a SUPPLIER_PROFILE_LIST audit event; no configuration is changed.
+
+        Returns 200 with an empty array when nothing is configured, so an empty result is not an error
+
+        condition.
+
+        '
+      operationId: listVendorProfiles
       responses:
         '200':
           description: Profiles returned.
@@ -545,13 +821,52 @@ paths:
       tags:
       - Supplier Vendor Profiles
       summary: Create vendor profile
-      description: Create an ADMIN-managed vendor profile; supplierRef must be unique
-      operationId: createProfile
+      description: 'Creates an ADMIN-managed vendor profile, the row that carries one supplier connection and owns
+
+        its accounts, auth config and endpoint bindings.
+
+        Use this tool when onboarding a new supplier connection; do not use it to change an existing
+
+        profile, which is updateVendorProfile, and note that YAML-managed profiles cannot be created
+
+        here at all.
+
+        Preconditions: supplierRef must not already be in use by another profile.
+
+        Required inputs: supplierRef and displayName, both non-blank, plus the enabled and sandbox flags;
+
+        timeouts, maxRetries, retryBackoff and sandboxBaseUrlOverride are optional and fall back to the
+
+        deployment defaults when omitted.
+
+        Emits a SUPPLIER_PROFILE_CREATE audit event; the profile is created with no bindings, so it
+
+        resolves every capability to a not-configured outcome until bindings are added.
+
+        Returns 409 when supplierRef is already in use, and 400 when supplierRef or displayName are blank
+
+        or a timeout value is not greater than zero.
+
+        '
+      operationId: createVendorProfile
       requestBody:
+        description: Vendor profile to create; the configuration source is always ADMIN.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/VendorProfileRequest'
+            examples:
+              Enabled production profile:
+                description: Enabled production profile
+                value:
+                  supplierRef: michelin-eu
+                  displayName: Michelin Europe
+                  enabled: true
+                  sandbox: false
+                  connectTimeoutMillis: 5000
+                  readTimeoutMillis: 30000
+                  maxRetries: 2
+                  retryBackoff: EXPONENTIAL
         required: true
       responses:
         '201':
@@ -589,8 +904,26 @@ paths:
       tags:
       - Supplier Endpoint Bindings
       summary: List endpoint bindings
-      description: Bindings of a vendor profile, ordered by capability
-      operationId: listBindings
+      description: 'Returns the capability endpoint bindings of a vendor profile, ordered by capability, each with
+
+        its protocol family, version, URL, auth config name and enabled flag.
+
+        Use this tool to see which capabilities a supplier actually resolves; do not infer availability
+
+        from the profile itself, because an absent or disabled binding disables just that capability.
+
+        Preconditions: the vendor profile must exist.
+
+        Required inputs: vendorProfileId (UUIDv7) path parameter; there is no request body or filtering.
+
+        Emits a SUPPLIER_BINDING_LIST audit event; no configuration is changed.
+
+        Returns 404 when the vendor profile does not exist, and 200 with an empty array when the profile
+
+        has no bindings, which means every capability is unconfigured.
+
+        '
+      operationId: listEndpointBindings
       parameters:
       - name: vendorProfileId
         in: path
@@ -631,8 +964,36 @@ paths:
       tags:
       - Supplier Endpoint Bindings
       summary: Create endpoint binding
-      description: Bind a capability to (protocolFamily, version, baseUrl, path, authConfigName)
-      operationId: createBinding
+      description: 'Binds one supplier capability on a vendor profile to a protocol family, adapter version, URL and
+
+        auth config, which is what makes that capability resolve at call time.
+
+        Use this tool when enabling a capability for a supplier; do not use it to change an existing
+
+        binding, which is updateEndpointBinding, since at most one binding per capability may exist.
+
+        Preconditions: the profile must exist and be ADMIN-managed, the capability must not already be
+
+        bound on it, and authConfigName must name an auth config on the same profile.
+
+        Required inputs: vendorProfileId (UUIDv7) path parameter plus capability, protocolFamily,
+
+        version, baseUrl, path and authConfigName; version is not validated on write, so a key with no
+
+        registered codec is accepted and then resolves to CAPABILITY_NOT_CONFIGURED on every call.
+
+        Emits a SUPPLIER_BINDING_CREATE audit event; captureLevel and the redaction classifications
+
+        decide what the exchange-audit trail retains for this binding from now on.
+
+        Returns 404 when the profile does not exist, 409 when the profile is YAML-managed or the
+
+        capability is already bound, and 400 when the capability, protocol family or auth config name is
+
+        unknown.
+
+        '
+      operationId: createEndpointBinding
       parameters:
       - name: vendorProfileId
         in: path
@@ -643,10 +1004,23 @@ paths:
           format: uuid
           example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
       requestBody:
+        description: Endpoint binding to add to the vendor profile, mapping one capability to a vendor endpoint.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/EndpointBindingRequest'
+            examples:
+              Stock inquiry over EDIWHEEL A2.5:
+                description: Stock inquiry over EDIWHEEL A2.5
+                value:
+                  capability: STOCK_INQUIRY
+                  protocolFamily: EDIWHEEL_A25
+                  version: A2_5
+                  baseUrl: https://edi.michelin.example/a25
+                  path: /stock/inquiry
+                  authConfigName: ediwheel-basic
+                  enabled: true
+                  captureLevel: REDACTED
         required: true
       responses:
         '201':
@@ -690,7 +1064,25 @@ paths:
       tags:
       - Supplier Auth Configs
       summary: List auth configs
-      description: Auth configs of a vendor profile, ordered by name
+      description: 'Returns the auth configs of a vendor profile, ordered by name, showing the credential scheme and
+
+        which reference fields are populated.
+
+        Use this tool to find the auth config name an endpoint binding should reference; do not use it to
+
+        read credentials, because secret references are write-only and never appear in a response.
+
+        Preconditions: the vendor profile must exist.
+
+        Required inputs: vendorProfileId (UUIDv7) path parameter; there is no request body or filtering.
+
+        Emits a SUPPLIER_AUTHCONFIG_LIST audit event; no configuration is changed.
+
+        Returns 404 when the vendor profile does not exist, and 200 with an empty array when the profile
+
+        has no auth configs.
+
+        '
       operationId: listAuthConfigs
       parameters:
       - name: vendorProfileId
@@ -732,7 +1124,37 @@ paths:
       tags:
       - Supplier Auth Configs
       summary: Create auth config
-      description: Add an auth config to a vendor profile; secret fields are references, never plaintext
+      description: 'Adds a named auth config to a vendor profile, describing one credential scheme as a set of secret
+
+        references resolved at call time.
+
+        Use this tool when a supplier connection needs credentials; do not put plaintext credentials in
+
+        any field, because every secret field takes a scheme-prefixed reference such as env:VAR_NAME and
+
+        plaintext is rejected.
+
+        Preconditions: the profile must exist and be ADMIN-managed, and the name must not already be used
+
+        by another auth config on the same profile.
+
+        Required inputs: vendorProfileId (UUIDv7) path parameter plus name and type in the body; the type
+
+        fixes which reference fields are required and which must be absent, so BASIC_PLUS_APIKEY needs
+
+        usernameRef, passwordRef and apiKeyRef while OAUTH2_CLIENT_CREDENTIALS needs tokenUrlRef,
+
+        clientIdRef and clientSecretRef.
+
+        Emits a SUPPLIER_AUTHCONFIG_CREATE audit event; the response omits every reference value.
+
+        Returns 404 when the profile does not exist, 409 when the profile is YAML-managed or the name is
+
+        taken, and 400 when the reference set does not match the declared type or a reference is
+
+        malformed.
+
+        '
       operationId: createAuthConfig
       parameters:
       - name: vendorProfileId
@@ -744,10 +1166,21 @@ paths:
           format: uuid
           example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
       requestBody:
+        description: Auth config to add to the vendor profile. Every secret field is a reference, never a plaintext credential.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AuthConfigRequest'
+            examples:
+              Basic auth plus API key:
+                description: Basic auth plus API key
+                value:
+                  name: ediwheel-basic
+                  type: BASIC_PLUS_APIKEY
+                  usernameRef: env:MICHELIN_EDI_USER
+                  passwordRef: env:MICHELIN_EDI_PASSWORD
+                  apiKeyRef: env:MICHELIN_EDI_APIKEY
+                  apiKeyHeader: apikey
         required: true
       responses:
         '201':
@@ -791,8 +1224,28 @@ paths:
       tags:
       - Supplier Commercial Accounts
       summary: List commercial accounts
-      description: Accounts of a vendor profile, billing first
-      operationId: listAccounts
+      description: 'Returns the commercial accounts configured on a vendor profile, the BILLING account first and
+
+        then the per-location DELIVERY accounts.
+
+        Use this tool to find the accountId or the vendor account number for a location; do not use it to
+
+        read credentials, which are never returned here because account numbers are ordinary
+
+        configuration data.
+
+        Preconditions: the vendor profile must exist.
+
+        Required inputs: vendorProfileId (UUIDv7) path parameter; there is no request body or filtering.
+
+        Emits a SUPPLIER_ACCOUNT_LIST audit event; no configuration is changed.
+
+        Returns 404 when the vendor profile does not exist, and 200 with an empty array when the profile
+
+        exists but has no accounts.
+
+        '
+      operationId: listCommercialAccounts
       parameters:
       - name: vendorProfileId
         in: path
@@ -833,8 +1286,34 @@ paths:
       tags:
       - Supplier Commercial Accounts
       summary: Create commercial account
-      description: Add a billing or delivery account; delivery accounts carry the pos-location mapping
-      operationId: createAccount
+      description: 'Adds a commercial account to a vendor profile, either the profile''s single BILLING account or a
+
+        DELIVERY account mapping one pos-location to its vendor account number.
+
+        Use this tool when a location is first authorised to order from a supplier; do not use it to
+
+        correct an account number, which is updateCommercialAccount.
+
+        Preconditions: the vendor profile must exist and be ADMIN-managed, and the slot must be free —
+
+        one BILLING account per profile and one DELIVERY account per profile and location pair.
+
+        Required inputs: vendorProfileId (UUIDv7) path parameter plus role and accountNumber in the body;
+
+        deliveryLocationId is required for DELIVERY and must be absent for BILLING, and agencyCode is
+
+        optional.
+
+        Emits a SUPPLIER_ACCOUNT_CREATE audit event; no order or invoice records are touched.
+
+        Returns 404 when the profile does not exist, 409 when the profile is YAML-managed or the account
+
+        slot is already taken, and 400 when accountNumber is blank or deliveryLocationId does not match
+
+        the role.
+
+        '
+      operationId: createCommercialAccount
       parameters:
       - name: vendorProfileId
         in: path
@@ -845,10 +1324,19 @@ paths:
           format: uuid
           example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
       requestBody:
+        description: Commercial account to create on the vendor profile.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CommercialAccountRequest'
+            examples:
+              Delivery account for one location:
+                description: Delivery account for one location
+                value:
+                  role: DELIVERY
+                  accountNumber: FR-0042871
+                  agencyCode: PAR01
+                  deliveryLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
         required: true
       responses:
         '201':
@@ -892,8 +1380,32 @@ paths:
       tags:
       - Supplier Exchange Audit
       summary: List supplier exchanges in a window
-      description: 'Exchange metadata for one vendor profile within a half-open time window (from inclusive, to exclusive), newest first. Payload content is NOT included and nothing is recorded: browsing the trail discloses no commercial content. Rows whose stored content cannot be decrypted still list normally, because this query never touches the encrypted columns.'
-      operationId: listExchanges
+      description: 'Returns a page of exchange-audit metadata for one vendor profile within a half-open time window,
+
+        newest first.
+
+        Use this tool to find the exchangeAuditId of a supplier call; use traceSupplierCorrelation instead
+
+        when every attempt of one logical call is wanted, and do not expect payload content here.
+
+        Preconditions: the caller must hold supplier:audit:read, which supplier:profile:read does not
+
+        imply; the vendor profile need not still exist, because audit history outlives configuration.
+
+        Required inputs: vendorProfileId, from (inclusive) and to (exclusive) as ISO-8601 instants;
+
+        capability is optional, page defaults to 0 and size defaults to 50 with a maximum of 200.
+
+        Emits a SUPPLIER_AUDIT_EXCHANGE_LIST event; no payload content is served, so no access row is
+
+        written against the exchanges listed.
+
+        Returns 400 when the window end is not after its start, the capability key is unrecognised, or the
+
+        page size is out of range.
+
+        '
+      operationId: listSupplierExchanges
       parameters:
       - name: vendorProfileId
         in: query
@@ -973,8 +1485,22 @@ paths:
       tags:
       - Supplier Exchange Audit
       summary: Get one exchange's audit metadata
-      description: Metadata of a single attempt, without payload content. Use this to decide whether content exists (requestPayloadPresent / responsePayloadPresent) before making the recorded payload call.
-      operationId: getExchange
+      description: 'Returns the metadata of a single supplier exchange attempt, without any payload content.
+
+        Use this tool to check requestPayloadPresent and responsePayloadPresent before calling
+
+        readSupplierExchangePayload, which is recorded; do not use it to read the documents themselves.
+
+        Preconditions: the caller must hold supplier:audit:read and the exchange-audit record must exist.
+
+        Required inputs: exchangeAuditId (UUIDv7) path parameter; there is no request body.
+
+        Emits a SUPPLIER_AUDIT_EXCHANGE_GET event; because no content is served, no access row is written.
+
+        Returns 404 when no exchange-audit record has that id.
+
+        '
+      operationId: getSupplierExchange
       parameters:
       - name: exchangeAuditId
         in: path
@@ -1014,8 +1540,36 @@ paths:
       tags:
       - Supplier Exchange Audit
       summary: Read one exchange's stored payload content
-      description: 'Returns the stored request and response documents. THIS CALL IS ITSELF RECORDED (ADR-0050 §7): an access row naming the caller is written in the same transaction, and the content is withheld if that row cannot be written. Null payload fields are a normal state, not an error — a METADATA_ONLY binding captured none, the exchange carried no body, or retention has already purged the content after 400 days. When ''redacted'' is true the documents are not the wire bytes: sensitive fields were replaced at capture time and the originals were never stored.'
-      operationId: readPayload
+      description: 'Returns the stored request and response documents of one supplier exchange.
+
+        Use this tool only when the documents themselves are needed; use getSupplierExchange instead for
+
+        routine inspection, because this call is itself recorded and each read adds an access row naming the
+
+        caller.
+
+        Preconditions: the caller must hold supplier:audit:read, the record must exist, and the access row
+
+        must be writable, since content is withheld when it cannot be written.
+
+        Required inputs: exchangeAuditId (UUIDv7) path parameter; there is no request body and no way to
+
+        request the unredacted originals.
+
+        Emits a SUPPLIER_AUDIT_PAYLOAD_READ event and writes an access row in the same transaction; null
+
+        payload fields are normal, meaning a METADATA_ONLY binding, a bodiless exchange, or content already
+
+        purged after 400 days, and a redacted flag means sensitive fields were replaced at capture time so
+
+        the originals were never stored.
+
+        Returns 404 when no record has that id, and 500 when stored content exists but cannot be decrypted,
+
+        in which case the read is still recorded with an UNREADABLE outcome.
+
+        '
+      operationId: readSupplierExchangePayload
       parameters:
       - name: exchangeAuditId
         in: path
@@ -1061,8 +1615,30 @@ paths:
       tags:
       - Supplier Exchange Audit
       summary: List who read one exchange's payload content
-      description: 'The ADR-0050 §7 access trail for one exchange, newest first: who read it, when, and what the read yielded. Only payload reads appear here. Metadata browsing does not, and neither do denied attempts — a 403 disclosed nothing. Reading this trail is not itself recorded, or every inspection would generate the noise the next one has to sift.'
-      operationId: listAccesses
+      description: 'Returns the access trail for one exchange, newest first: who read its payload, when, and what the
+
+        read yielded.
+
+        Use this tool to audit who has seen a trading partner''s documents; do not expect metadata browsing
+
+        or denied attempts here, because a 403 disclosed nothing and is deliberately not recorded.
+
+        Preconditions: the caller must hold supplier:audit:read; an unknown exchangeAuditId returns an
+
+        empty page rather than 404, because access rows carry no foreign key to the exchange.
+
+        Required inputs: exchangeAuditId (UUIDv7) path parameter; page defaults to 0 and size defaults to
+
+        50 with a maximum of 200.
+
+        Emits a SUPPLIER_AUDIT_ACCESS_LIST event; reading this trail is not itself recorded, or every
+
+        inspection would generate the noise the next one has to sift.
+
+        Returns 400 when the page size is outside the permitted range.
+
+        '
+      operationId: listSupplierExchangeAccesses
       parameters:
       - name: exchangeAuditId
         in: path
@@ -1119,8 +1695,28 @@ paths:
       tags:
       - Supplier Exchange Audit
       summary: Trace one logical call by correlation id
-      description: Every attempt sharing a correlation id, OLDEST FIRST — the order in which a retry sequence actually happened. Metadata only; nothing is recorded.
-      operationId: traceCorrelation
+      description: 'Returns every exchange attempt sharing one correlation id, oldest first, which is the order in
+
+        which a retry sequence actually happened.
+
+        Use this tool when a single logical supplier call needs to be reconstructed across its retries; use
+
+        listSupplierExchanges instead to search a time window.
+
+        Preconditions: the caller must hold supplier:audit:read; an unknown correlation id is not an error
+
+        and yields an empty page.
+
+        Required inputs: correlationId path parameter; page defaults to 0 and size defaults to 50 with a
+
+        maximum of 200.
+
+        Emits a SUPPLIER_AUDIT_EXCHANGE_TRACE event; metadata only, so no payload access is recorded.
+
+        Returns 400 when the page size is outside the permitted range.
+
+        '
+      operationId: traceSupplierCorrelation
       parameters:
       - name: correlationId
         in: path

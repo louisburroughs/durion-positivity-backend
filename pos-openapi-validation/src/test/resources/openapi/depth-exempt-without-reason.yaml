@@ -1,0 +1,4 @@
+modules:
+  pos-test:
+    mode: STRICT
+    annotationDepth: EXEMPT
