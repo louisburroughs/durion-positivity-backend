@@ -806,20 +806,29 @@ jobs:
             exit 0
           fi
 
-          COUNT=$(wc -l < "$RUNNER_TEMP/coverage-violations.txt")
+          # One module can breach both counters, so violations and modules are different
+          # counts. Report both: the module count is what says how much work this is, the
+          # violation count is what you tick off.
+          VIOLATIONS=$(wc -l < "$RUNNER_TEMP/coverage-violations.txt")
+          sed 's/^Rule violated for bundle \([^:]*\):.*/\1/' "$RUNNER_TEMP/coverage-violations.txt" \
+            | sort -u > "$RUNNER_TEMP/coverage-modules.txt"
+          MODULES=$(wc -l < "$RUNNER_TEMP/coverage-modules.txt")
+
           {
-            echo "## Coverage ratchet: $COUNT module(s) below floor"
+            echo "## Coverage ratchet: $MODULES module(s) below floor, $VIOLATIONS violation(s)"
             echo
             echo '```'
             cat "$RUNNER_TEMP/coverage-violations.txt"
             echo '```'
+            echo
+            echo "Modules: $(paste -sd, "$RUNNER_TEMP/coverage-modules.txt" | sed 's/,/, /g')"
             echo
             echo "Floors live in each module's pom.xml (jacoco.line.min / jacoco.branch.min)."
             echo "See docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6 for how they are set."
           } >> "$GITHUB_STEP_SUMMARY"
 
           while IFS= read -r line; do echo "::error::$line"; done < "$RUNNER_TEMP/coverage-violations.txt"
-          echo "Coverage ratchet failed for $COUNT module(s); see the job summary for the full list."
+          echo "Coverage ratchet failed for $MODULES module(s) ($VIOLATIONS violation(s)); see the job summary."
           exit 1
 
       - name: Upload aggregate JaCoCo coverage report
