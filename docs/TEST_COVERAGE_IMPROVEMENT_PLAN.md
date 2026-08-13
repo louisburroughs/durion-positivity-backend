@@ -887,7 +887,7 @@ standing list below.
 |---|---|---|---|---|
 | `pos-catalog` | 53.5% | 57.6% | 78.6% | 0.73 / 0.52 |
 | `pos-workorder` | 56.7% | 58.5% | 78.2% | 0.73 / 0.53 |
-| `pos-document-helper` | 35.2% | 35.2% | 74.0% | unchanged |
+| `pos-document-helper` | 35.2% | 35.2% (90.0% after #1277) | 74.0% | 0.90 / 0.80 after #1277 |
 
 Attacked the two worst individual classes rather than spreading thinly, on the
 view that a branch tail is not uniform — it concentrates in the places where the
@@ -1080,10 +1080,10 @@ One defect filed: #1279.
   fields and no `@Jacksonized`, so Jackson has no creator and message conversion
   fails before the controller is entered. The GET route builds the object in
   Java, which is why nothing caught it.
-- louisburroughs/durion-positivity-backend#1274 — `pos-document-helper` ships two
-  parallel copies of the same library, under `com.positivity.documents` and
-  `com.positivity.documents.helper`, and no module imports either. Both trees
-  landed in the same commit, so this is not a half-finished migration.
+- ~~louisburroughs/durion-positivity-backend#1274~~ — **fixed** by PR #1277, which
+  deleted the duplicate `com.positivity.documents.helper` tree. The module went
+  from 35.2% to 90.0% branch coverage by deletion rather than by testing; see
+  §7.4.
 - louisburroughs/durion-positivity-backend#1279 — 16 of 64 event records in
   `pos-domain-events` declare no `SCHEMA_VERSION`, so their publishers hardcode
   the envelope version in another module. Correct today, but a schema bump now
