@@ -69,6 +69,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       responses:
         '200':
@@ -101,6 +102,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       - name: Idempotency-Key
         in: header
@@ -167,6 +169,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       - name: Idempotency-Key
         in: header
@@ -233,6 +236,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       - name: entryId
         in: path
@@ -240,6 +244,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440100
       - name: Idempotency-Key
         in: header
@@ -305,6 +310,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -337,6 +343,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Updated configuration object
@@ -376,6 +383,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '204':
@@ -541,12 +549,14 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       - name: serviceLineId
         in: path
         description: Service line ID
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Service line completed.
@@ -585,6 +595,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       - name: serviceId
         in: path
@@ -592,6 +603,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440010
       - name: Idempotency-Key
         in: header
@@ -663,6 +675,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Reopen workorder request
@@ -714,6 +727,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         content:
@@ -765,6 +779,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: pickTaskId
         in: path
@@ -772,6 +787,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       requestBody:
         content:
@@ -823,6 +839,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: pickTaskId
         in: path
@@ -830,6 +847,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       requestBody:
         description: Completion details; omit or send {} if no reason is provided
@@ -881,6 +899,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: pickTaskId
         in: path
@@ -888,6 +907,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       - name: pickLineId
         in: path
@@ -895,6 +915,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440002
       requestBody:
         content:
@@ -952,12 +973,14 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       - name: partId
         in: path
         description: Part ID
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: Part completed.
@@ -1394,6 +1417,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       - name: entryId
         in: path
@@ -1401,6 +1425,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440100
       - name: Idempotency-Key
         in: header
@@ -1453,6 +1478,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: Idempotency-Key
         in: header
@@ -1505,6 +1531,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Complete workorder request
@@ -1556,6 +1583,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -1584,6 +1612,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: Idempotency-Key
         in: header
@@ -1643,6 +1672,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Approval request with customer ID and signature capture
@@ -1698,6 +1728,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         content:
@@ -1743,6 +1774,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         content:
@@ -1788,6 +1820,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: breakSegmentId
         in: path
@@ -1795,6 +1828,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       responses:
         '200':
@@ -2158,6 +2192,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -2197,6 +2232,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: notes
         in: query
@@ -2243,6 +2279,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -2282,6 +2319,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: Idempotency-Key
         in: header
@@ -2334,6 +2372,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Line item details
@@ -2395,6 +2434,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: reason
         in: query
@@ -2441,6 +2481,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -2480,6 +2521,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Approval request with customer ID, signature capture, and optional selective line item approvals
@@ -2584,6 +2626,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Emergency override details including manager ID and reason
@@ -2642,6 +2685,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Decline details including note
@@ -2693,6 +2737,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       requestBody:
         description: Approval details including user ID and note
@@ -2745,6 +2790,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '204':
@@ -2961,6 +3007,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -2993,6 +3040,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '204':
@@ -3061,6 +3109,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: itemId
         in: path
@@ -3068,6 +3117,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       responses:
         '204':
@@ -3094,6 +3144,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       - name: itemId
         in: path
@@ -3101,6 +3152,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       requestBody:
         description: Updated item fields
@@ -3161,6 +3213,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -3193,6 +3246,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '204':
@@ -3217,6 +3271,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -3245,6 +3300,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -3273,6 +3329,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -3308,6 +3365,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -3347,6 +3405,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -3394,6 +3453,7 @@ paths:
         required: false
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440050
       responses:
         '200':
@@ -3435,6 +3495,7 @@ paths:
         required: false
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440050
       responses:
         '200':
@@ -3501,6 +3562,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440001
       responses:
         '200':
@@ -3538,6 +3600,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -3570,6 +3633,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -3603,6 +3667,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -3635,12 +3700,14 @@ paths:
         required: false
         schema:
           type: string
+          format: uuid
       - name: vehicleId
         in: query
         description: Exact vehicle id filter, combinable with q (optional)
         required: false
         schema:
           type: string
+          format: uuid
       - name: pageable
         in: query
         required: true
@@ -3672,6 +3739,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -3705,6 +3773,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -3747,6 +3816,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440020
       responses:
         '200':
@@ -3776,6 +3846,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440020
       responses:
         '200':
@@ -3805,6 +3876,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440010
       responses:
         '200':
@@ -3879,6 +3951,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
@@ -3971,6 +4044,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       responses:
         '200':
           description: OK
@@ -4022,6 +4096,7 @@ paths:
         required: true
         schema:
           type: string
+          format: date
         example: 2026-03-01
       - name: endDate
         in: query
@@ -4029,6 +4104,7 @@ paths:
         required: true
         schema:
           type: string
+          format: date
         example: 2026-03-02
       - name: timezone
         in: query
@@ -4043,13 +4119,17 @@ paths:
         required: false
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440010
       - name: technicianIds
         in: query
         description: Optional technician filters
         required: false
         schema:
-          type: string
+          type: array
+          items:
+            type: string
+            format: uuid
         example:
         - 550e8400-e29b-41d4-a716-446655440120
       responses:
@@ -4090,12 +4170,14 @@ paths:
         required: false
         schema:
           type: string
+          format: uuid
       - name: vehicleId
         in: query
         description: Filter by vehicle UUID (optional)
         required: false
         schema:
           type: string
+          format: uuid
       - name: pageable
         in: query
         required: true
@@ -4158,6 +4240,7 @@ paths:
         required: false
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440020
       - name: customerId
         in: query
@@ -4165,6 +4248,7 @@ paths:
         required: false
         schema:
           type: string
+          format: uuid
         example: 550e8400-e29b-41d4-a716-446655440010
       responses:
         '200':
@@ -4372,7 +4456,6 @@ components:
           example: Corrected for break time
         active:
           type: boolean
-          default: false
           description: Whether this session is still active (not stopped)
           example: false
         createdBy:
@@ -4396,6 +4479,7 @@ components:
           type: number
           description: Adjusted hours worked
           example: 2.5
+          minimum: 0
         adjustmentReason:
           type: string
           description: Reason for the adjustment
@@ -4405,7 +4489,7 @@ components:
       - hoursWorked
     ApprovalConfigurationRequest:
       type: object
-      description: Request DTO for approval configuration creation and updates
+      description: Configuration object to be created
       properties:
         locationId:
           type: string
@@ -4431,7 +4515,7 @@ components:
           type: string
           default: 'false'
           description: Whether signature is required
-          example: 'false'
+          example: false
         priority:
           type: integer
           format: int32
@@ -4470,7 +4554,6 @@ components:
           example: 30
         requireSignature:
           type: boolean
-          default: false
           description: Whether signature is required
           example: false
         priority:
@@ -4482,7 +4565,7 @@ components:
       - id
     CreateWorkorderRequest:
       type: object
-      description: Request DTO for workorder creation
+      description: Work order creation request
       properties:
         estimateId:
           type: string
@@ -4540,7 +4623,6 @@ components:
           description: Date and time the workorder was completed
         isReopened:
           type: boolean
-          default: false
           description: Whether the completed workorder is currently reopened for controlled edits
         reopenedAt:
           type: string
@@ -4640,12 +4722,10 @@ components:
           type: boolean
         isAutoSuggest:
           type: boolean
-          default: false
           description: Whether this substitute is automatically suggested during picking
           example: true
         isActive:
           type: boolean
-          default: false
           description: Whether this substitute link is currently active
           example: true
       required:
@@ -4790,7 +4870,6 @@ components:
           example: WORK_IN_PROGRESS
         isReopened:
           type: boolean
-          default: false
           description: Whether the workorder is reopened for controlled edits
           example: true
         reopenedAt:
@@ -4822,6 +4901,7 @@ components:
           format: int32
           description: Quantity to consume
           example: 2
+          minimum: 0
       required:
       - pickTaskId
       - quantityToConsume
@@ -4992,7 +5072,6 @@ components:
           example: 01960003-0000-7000-8000-000000000002
         matched:
           type: boolean
-          default: false
           description: Whether the scan matched the expected SKU and location for the pick task
           example: true
         matchStatus:
@@ -5084,6 +5163,7 @@ components:
           format: int32
           description: Quantity picked for the line
           example: 2
+          minimum: 0
       required:
       - quantityPicked
     SubstitutePartRequest:
@@ -5264,6 +5344,7 @@ components:
           type: number
           description: Quantity to return
           example: 1
+          minimum: 0
         reason:
           type: string
           description: Audit reason for return
@@ -5310,6 +5391,7 @@ components:
           type: number
           description: Corrected authorized quantity
           example: 2
+          minimum: 0
         reason:
           type: string
           description: Audit reason for correction
@@ -5434,7 +5516,6 @@ components:
             type: string
         locked:
           type: boolean
-          default: false
           description: Whether context is locked after work start
           example: false
       required:
@@ -5538,7 +5619,7 @@ components:
       - workorderId
     CreateChangeRequestDTO:
       type: object
-      description: Request payload for creating a change request
+      description: Change request details including items
       properties:
         workorderId:
           type: string
@@ -5552,7 +5633,6 @@ components:
           minLength: 1
         isEmergencyException:
           type: boolean
-          default: false
           description: Whether this request contains emergency/safety exception items
           example: false
         exceptionReason:
@@ -5599,7 +5679,6 @@ components:
           example: 2
         isEmergencySafety:
           type: boolean
-          default: false
           description: Whether this item is emergency/safety related
           example: false
         photoEvidenceUrl:
@@ -5612,7 +5691,6 @@ components:
           example: Brake line rupture visible after wheel removal
         photoNotPossible:
           type: boolean
-          default: false
           description: Flag indicating photo capture was not possible
           example: false
     ChangeRequestResponse:
@@ -5646,7 +5724,6 @@ components:
           description: Description of the change request
         isEmergencyException:
           type: boolean
-          default: false
           description: Whether this is an emergency exception
         exceptionReason:
           type: string
@@ -5656,7 +5733,6 @@ components:
           description: Approval notes
         isApprovalGated:
           type: boolean
-          default: false
           description: Whether approval is gated
         approvedAt:
           type: string
@@ -5672,7 +5748,7 @@ components:
           description: Date and time the change was declined
     ApproveWorkorderRequest:
       type: object
-      description: Request to approve a work order with customer signature
+      description: Approval request with customer ID and signature capture
       properties:
         customerId:
           type: string
@@ -5713,7 +5789,6 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
         approved:
           type: boolean
-          default: false
           description: Whether this line item is approved (true) or rejected (false)
           example: true
         rejectionReason:
@@ -5782,7 +5857,6 @@ components:
           - REJECTED
         locked:
           type: boolean
-          default: false
           description: Whether the session is locked
         totalDurationSeconds:
           type: integer
@@ -5804,7 +5878,6 @@ components:
           description: Timestamp when the session was locked
         overlapOverrideUsed:
           type: boolean
-          default: false
           description: Whether an overlap override was used
         overrideReason:
           type: string
@@ -6302,7 +6375,7 @@ components:
       - workorderId
     CreateEstimateRequest:
       type: object
-      description: Request payload for creating an estimate
+      description: Estimate creation request with customer and vehicle IDs
       properties:
         customerId:
           type: string
@@ -6394,7 +6467,6 @@ components:
           example: USD
         taxPending:
           type: boolean
-          default: false
           description: Whether tax is pending because the tax service was unavailable at calculation time (degraded estimate; no rate invented). Cleared by a successful recalculation.
           example: false
         status:
@@ -6544,7 +6616,7 @@ components:
       - status
     AddEstimateItemRequest:
       type: object
-      description: Request payload for adding a line item to an estimate
+      description: Line item details
       properties:
         itemType:
           type: string
@@ -6646,7 +6718,7 @@ components:
           description: Record last update timestamp
     ApproveEstimateRequest:
       type: object
-      description: Request to approve an estimate with customer signature
+      description: Approval request with customer ID, signature capture, and optional selective line item approvals
       properties:
         customerId:
           type: string
@@ -6738,7 +6810,6 @@ components:
           example: DRAFT
         created:
           type: boolean
-          default: false
           description: Whether a new estimate was created (false when idempotency returns existing record)
           example: true
       required:
@@ -6747,7 +6818,7 @@ components:
       - status
     EmergencyOverrideDTO:
       type: object
-      description: Request payload for applying an emergency override
+      description: Emergency override details including manager ID and reason
       properties:
         exceptionReason:
           type: string
@@ -6758,7 +6829,7 @@ components:
       - exceptionReason
     DeclineChangeRequestDTO:
       type: object
-      description: Request payload for declining a change request
+      description: Decline details including note
       properties:
         approvalNote:
           type: string
@@ -6769,7 +6840,7 @@ components:
       - approvalNote
     ApproveChangeRequestDTO:
       type: object
-      description: Request payload for approving a change request
+      description: Approval details including user ID and note
       properties:
         approvedBy:
           type: string
@@ -6982,7 +7053,7 @@ components:
       - workorderId
     UpdateEstimateItemRequest:
       type: object
-      description: Request payload for partial update of an estimate line item
+      description: Updated item fields
       properties:
         description:
           type: string
@@ -7173,42 +7244,34 @@ components:
       properties:
         canStart:
           type: boolean
-          default: false
           description: User can start workorder
           example: true
         canApprove:
           type: boolean
-          default: false
           description: User can approve workorder
           example: false
         canAssignTechnician:
           type: boolean
-          default: false
           description: User can assign/reassign technicians
           example: true
         canRecordLabor:
           type: boolean
-          default: false
           description: User can record labor entries
           example: true
         canRecordPartsUsage:
           type: boolean
-          default: false
           description: User can record parts usage
           example: true
         canViewFinancials:
           type: boolean
-          default: false
           description: User can view financial data
           example: false
         canEditWorkorder:
           type: boolean
-          default: false
           description: User can edit workorder
           example: true
         canDeleteWorkorder:
           type: boolean
-          default: false
           description: User can delete workorder
           example: false
       required:
@@ -7278,15 +7341,15 @@ components:
         isStarted:
           type: string
           description: Is workorder started (derived from status)
-          example: 'true'
+          example: true
         isInProgress:
           type: string
           description: Is workorder in progress (derived from status)
-          example: 'true'
+          example: true
         isCompleted:
           type: string
           description: Is workorder completed (derived from status)
-          example: 'false'
+          example: false
         startedAt:
           type: string
           format: date-time
@@ -7456,7 +7519,6 @@ components:
           example: 01960003-0000-7000-8000-000000000001
         canComplete:
           type: boolean
-          default: false
           description: Whether the workorder can be completed
           example: true
         currentStatus:
@@ -7494,12 +7556,10 @@ components:
           example: 2
         emergencyDenialAcknowledged:
           type: boolean
-          default: false
           description: Whether emergency denial acknowledgment requirements are satisfied
           example: true
         hasBillableItems:
           type: boolean
-          default: false
           description: Whether at least one billable item exists for final snapshot
           example: true
       required:
@@ -7524,12 +7584,12 @@ components:
     PageWorkorderSearchResult:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -7540,17 +7600,17 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     PageableObject:
@@ -7763,12 +7823,12 @@ components:
     PageWorkorderStatusView:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -7779,17 +7839,17 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     WorkorderStatusView:
@@ -7926,12 +7986,12 @@ components:
     PageEstimateSummaryResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -7942,17 +8002,17 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     BayStatus:
@@ -7977,7 +8037,6 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
         available:
           type: boolean
-          default: false
           description: Whether the bay is currently available
           example: false
       required:
@@ -8056,7 +8115,6 @@ components:
           example: 2026-01-15 09:30:00+00:00
         dataQualityWarning:
           type: boolean
-          default: false
           description: True when one or more upstream data sources were unavailable during aggregation; data may be incomplete
           example: false
       required:
@@ -8090,7 +8148,6 @@ components:
           example: 01960003-0000-7000-8000-000000000002
         onBreak:
           type: boolean
-          default: false
           description: Whether the mechanic is currently on break
           example: false
         breakExpectedReturn:

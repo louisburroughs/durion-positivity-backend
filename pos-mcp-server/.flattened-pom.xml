@@ -21,6 +21,8 @@
   </licenses>
   <properties>
     <maven.compiler.target>25</maven.compiler.target>
+    <jacoco.branch.min>0.63</jacoco.branch.min>
+    <jacoco.line.min>0.75</jacoco.line.min>
     <java.version>25</java.version>
     <maven.compiler.source>25</maven.compiler.source>
   </properties>

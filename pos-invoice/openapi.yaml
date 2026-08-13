@@ -1067,6 +1067,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
       - name: q
         in: query
         description: SKU / description term narrowing the lines (optional)
@@ -1141,7 +1142,6 @@ components:
           example: 01960003-0000-7000-8000-000000000002
         purchaseOrderRequired:
           type: boolean
-          default: false
           description: Whether a purchase order is required before invoicing
           example: true
         paymentTermsCode:
@@ -1207,6 +1207,7 @@ components:
           type: number
           description: Amount to refund
           example: 25.0
+          minimum: 0
         reason:
           type: string
           description: Reason the refund is being issued
@@ -1576,7 +1577,6 @@ components:
           example: msmith
         requiresManagerApproval:
           type: boolean
-          default: false
           description: Whether finalizing this invoice requires a manager approval code (DRAFT total exceeds the service-advisor threshold)
           example: false
         items:
@@ -1634,6 +1634,7 @@ components:
           type: number
           description: Amount to refund
           example: 25.0
+          minimum: 0
         reason:
           type: string
           description: Reason the refund is being issued
@@ -1770,6 +1771,7 @@ components:
           type: number
           description: Payment amount (must be positive)
           example: 149.99
+          minimum: 0
         idempotencyKey:
           type: string
           description: Client-provided idempotency key for safe retry
@@ -1859,6 +1861,7 @@ components:
           type: number
           description: Amount to refund from the captured payment
           example: 25.0
+          minimum: 0
         reason:
           type: string
           description: Reason the payment is being refunded
@@ -1894,6 +1897,7 @@ components:
           type: number
           description: Amount to capture from the authorized hold
           example: 89.99
+          minimum: 0
         captureIdempotencyKey:
           type: string
           description: Idempotency key ensuring the capture is processed at most once
@@ -1948,7 +1952,6 @@ components:
           example: 50.0
         existing:
           type: boolean
-          default: false
           description: True when an existing invoice was returned (orderId replay or workorder dedupe).
       required:
       - existing
@@ -2132,6 +2135,7 @@ components:
           type: number
           description: Deposit amount
           example: 200.0
+          minimum: 0
         currencyCode:
           type: string
           description: ISO-4217 currency; defaults to USD
@@ -2419,17 +2423,17 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     PageableObject:

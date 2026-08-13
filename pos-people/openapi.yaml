@@ -1927,11 +1927,13 @@ components:
           format: int32
           description: Total billable minutes for the session
           example: 480
+          minimum: 0
         breakMinutes:
           type: integer
           format: int32
           description: Total break minutes for the session
           example: 30
+          minimum: 0
         submittedAt:
           type: string
           format: date-time

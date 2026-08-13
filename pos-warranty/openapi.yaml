@@ -1774,10 +1774,12 @@ components:
           type: integer
           format: int32
           description: Time limit in months from sale date; null = unlimited
+          minimum: 0
         mileageLimit:
           type: integer
           format: int32
           description: Miles from sale odometer; null = n/a
+          minimum: 0
         treadPullPointThirtySeconds:
           type: integer
           format: int32
@@ -2446,6 +2448,7 @@ components:
         amountApproved:
           type: number
           description: Amount the vendor approved (required for APPROVED / PARTIALLY_APPROVED)
+          minimum: 0
         creditReference:
           type: string
           description: Vendor credit/payment reference (typically with CREDIT_RECEIVED)
@@ -2660,9 +2663,11 @@ components:
         coveredAmount:
           type: number
           description: Amount coverage pays
+          minimum: 0
         customerAmount:
           type: number
           description: Amount the customer still owes (proration remainder, upcharge, fees)
+          minimum: 0
         replacementWorkorderId:
           type: string
           format: uuid
@@ -2751,6 +2756,7 @@ components:
         amountRequested:
           type: number
           description: Amount requested from the vendor
+          minimum: 0
         vendorClaimReference:
           type: string
           description: The vendor's own claim reference number, if already assigned
@@ -3004,12 +3010,12 @@ components:
     PageClaimSummaryResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -3024,13 +3030,13 @@ components:
           $ref: '#/components/schemas/SortObject'
         pageable:
           $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     PageableObject:
@@ -3039,8 +3045,6 @@ components:
         offset:
           type: integer
           format: int64
-        sort:
-          $ref: '#/components/schemas/SortObject'
         paged:
           type: boolean
         pageNumber:
@@ -3049,6 +3053,8 @@ components:
         pageSize:
           type: integer
           format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
     SortObject:

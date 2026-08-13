@@ -1521,11 +1521,13 @@ components:
           format: int32
           description: Buffer minutes reserved before appointments for check-in
           example: 15
+          minimum: 0
         cleanupBufferMinutes:
           type: integer
           format: int32
           description: Buffer minutes reserved after appointments for cleanup
           example: 10
+          minimum: 0
         type:
           $ref: '#/components/schemas/LocationTypeDTO'
         parents:
@@ -1691,6 +1693,7 @@ components:
           type: number
           description: Numeric value of the buffer (interpretation depends on buffer type)
           example: 30
+          minimum: 0
         notes:
           type: string
           description: Free-text notes about the policy
@@ -1831,6 +1834,7 @@ components:
           format: int32
           description: Evaluation priority of the rule (lower is evaluated first)
           example: 1
+          minimum: 0
         validFrom:
           type: string
           format: date
@@ -1845,6 +1849,7 @@ components:
           type: number
           description: Maximum service distance in kilometres covered by the rule
           example: 25.5
+          minimum: 0
       required:
       - ruleType
       - serviceAreaId
@@ -2398,11 +2403,13 @@ components:
           format: int32
           description: Buffer minutes reserved before appointments for check-in
           example: 15
+          minimum: 0
         cleanupBufferMinutes:
           type: integer
           format: int32
           description: Buffer minutes reserved after appointments for cleanup
           example: 10
+          minimum: 0
     BayPatchRequest:
       type: object
       description: Partial update payload for a service bay; null fields are left unchanged
@@ -2475,12 +2482,12 @@ components:
     PageMobileUnitResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -2491,17 +2498,17 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     PageableObject:
@@ -2574,12 +2581,12 @@ components:
     PageStorageLocationResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -2590,17 +2597,17 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     StorageLocationTopologyResponse:
@@ -2728,12 +2735,12 @@ components:
     PageBayResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -2744,17 +2751,17 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     LocationRef:
@@ -2796,12 +2803,12 @@ components:
     PageLocationRef:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -2812,17 +2819,17 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
   securitySchemes:

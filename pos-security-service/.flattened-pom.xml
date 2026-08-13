@@ -18,6 +18,10 @@
       <distribution>repo</distribution>
     </license>
   </licenses>
+  <properties>
+    <jacoco.line.min>0.76</jacoco.line.min>
+    <jacoco.branch.min>0.66</jacoco.branch.min>
+  </properties>
   <dependencies>
     <dependency>
       <groupId>org.springframework.boot</groupId>

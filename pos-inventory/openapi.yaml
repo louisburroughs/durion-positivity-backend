@@ -6310,6 +6310,7 @@ components:
           format: int32
           description: New count frequency in days
           example: 14
+          minimum: 0
         nextDueDate:
           type: string
           format: date
@@ -6640,6 +6641,7 @@ components:
           format: int32
           description: Quantity requested for transfer; must be positive
           example: 6
+          minimum: 0
       required:
       - requestedQty
       - sku
@@ -6809,6 +6811,7 @@ components:
           type: integer
           format: int32
           description: Quantity to dispatch/receive on this line; must be positive
+          minimum: 0
         lotNumber:
           type: string
           description: Lot number the dispatched units are drawn from (dispatch only; receive and short-close reuse the lot recorded at dispatch). Required (422 LOT_NUMBER_REQUIRED) when the SKU is LOT-tracked; must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE) lot. Ignored for untracked SKUs
@@ -6862,6 +6865,7 @@ components:
           format: int32
           description: Quantity of units being moved
           example: 12
+          minimum: 0
         unitOfMeasure:
           type: string
           description: Unit of measure for the quantity
@@ -6909,6 +6913,7 @@ components:
           format: int32
           description: Quantity that is short and to be resolved
           example: 3
+          minimum: 0
         locationId:
           type: string
           format: uuid
@@ -6999,6 +7004,7 @@ components:
           format: int32
           description: Quantity to write off; must be positive
           example: 3
+          minimum: 0
         locationId:
           type: string
           format: uuid
@@ -7209,6 +7215,7 @@ components:
           format: int32
           description: Quantity of the item being returned
           example: 3
+          minimum: 0
         reasonCode:
           type: string
           description: Reason code explaining the return
@@ -7300,6 +7307,7 @@ components:
           format: int32
           description: Quantity of the stock item required by the reservation
           example: 4
+          minimum: 0
       required:
       - requiredQuantity
       - stockItemId
@@ -7635,6 +7643,7 @@ components:
           type: number
           description: Quantity received expressed in documentUom; must be supplied together with documentUom
           example: 1
+          minimum: 0
         expirationDate:
           type: string
           format: date
@@ -7813,6 +7822,7 @@ components:
           format: int32
           description: Quantity of units to move
           example: 12
+          minimum: 0
         overrideLocationCompatibility:
           type: boolean
           description: When true, bypasses the location compatibility check for this move
@@ -8240,6 +8250,7 @@ components:
           format: int32
           description: Sequential line number identifying this line within the purchase order
           example: 1
+          minimum: 0
         skuId:
           type: string
           format: uuid
@@ -8254,11 +8265,13 @@ components:
           type: number
           description: Quantity of the item being ordered on this line, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 12
+          minimum: 0
         unitCostMinor:
           type: integer
           format: int64
           description: Unit cost of the item in the smallest currency unit (e.g. cents)
           example: 1499
+          minimum: 0
         taxCodeId:
           type: string
           description: Identifier of the tax code applied to this line
@@ -8275,6 +8288,7 @@ components:
           type: number
           description: Quantity ordered expressed in documentUom; must be supplied together with documentUom
           example: 1
+          minimum: 0
       required:
       - description
       - lineNumber
@@ -8533,6 +8547,7 @@ components:
           type: number
           description: Quantity received for this line, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 4
+          minimum: 0
         unitCostMinor:
           type: integer
           format: int64
@@ -8546,6 +8561,7 @@ components:
           type: number
           description: Quantity received expressed in documentUom; must be supplied together with documentUom
           example: 1
+          minimum: 0
         lotNumber:
           type: string
           description: Lot or batch number of the received stock. Required (422 LOT_NUMBER_REQUIRED) when the line's product is LOT-tracked per the catalog replica; ignored for tracking purposes otherwise
@@ -8643,6 +8659,7 @@ components:
           format: int32
           description: Relative priority of the pick list; higher values are picked sooner
           example: 5
+          minimum: 0
         reservationId:
           type: string
           format: uuid
@@ -8720,6 +8737,7 @@ components:
           format: int32
           description: Quantity of units actually picked at the scanned location
           example: 12
+          minimum: 0
         lotNumber:
           type: string
           description: Lot number the units were picked from. Required (422 LOT_NUMBER_REQUIRED) when the SKU is LOT-tracked; must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE) lot. May differ from the task's advisory suggestedLotNumber. Ignored for untracked SKUs
@@ -8954,11 +8972,13 @@ components:
           type: number
           description: Whole-unit quantity of the SKU received, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 8
+          minimum: 0
         unitCostMinor:
           type: integer
           format: int64
           description: Unit cost of the received product expressed in minor currency units (e.g. cents)
           example: 1499
+          minimum: 0
         lotNumber:
           type: string
           description: Lot or batch number associated with the received product
@@ -8971,6 +8991,7 @@ components:
           type: number
           description: Quantity received expressed in documentUom; must be supplied together with documentUom
           example: 1
+          minimum: 0
         serialNumbers:
           type: array
           description: 'Serial numbers of the received units (odoo-parity E4). Required for SERIAL-tracked products: the list size must equal the received base quantity (422 SERIAL_COUNT_MISMATCH otherwise), and each serial is enumerated as an in-stock unit. Ignored for untracked and LOT-tracked products'
@@ -9136,6 +9157,7 @@ components:
           format: int32
           description: Count frequency in days
           example: 30
+          minimum: 0
         nextDueDate:
           type: string
           format: date
@@ -9524,6 +9546,7 @@ components:
           format: int32
           description: Quantity of the SKU to consume
           example: 4
+          minimum: 0
         lotNumber:
           type: string
           description: 'Optional lot override for LOT-tracked SKUs: must reference an existing (422 LOT_UNKNOWN) ACTIVE (422 LOT_NOT_AVAILABLE) lot. When absent, the lot recorded at pick confirmation is used; a LOT-tracked SKU with neither is rejected (422 LOT_NUMBER_REQUIRED). Ignored for untracked SKUs'
@@ -9786,6 +9809,7 @@ components:
           type: number
           description: Quantity of the SKU declared as shipped on the ASN, in the product's base UoM. Required unless documentUom/documentQuantity are supplied, in which case the base quantity is derived and this field is ignored
           example: 12
+          minimum: 0
         unitOfMeasure:
           type: string
           description: Unit of measure for the shipped quantity
@@ -9795,6 +9819,7 @@ components:
           format: int64
           description: Unit cost of the product expressed in minor currency units (e.g. cents)
           example: 1499
+          minimum: 0
         lotNumber:
           type: string
           description: Lot or batch number associated with the shipped product
@@ -9807,6 +9832,7 @@ components:
           type: number
           description: Quantity shipped expressed in documentUom; must be supplied together with documentUom
           example: 1
+          minimum: 0
       required:
       - poId
       - sku
@@ -10861,12 +10887,12 @@ components:
     PagePurchaseOrderResponse:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -10881,13 +10907,13 @@ components:
           $ref: '#/components/schemas/SortObject'
         pageable:
           $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     PageableObject:
@@ -10896,8 +10922,6 @@ components:
         offset:
           type: integer
           format: int64
-        sort:
-          $ref: '#/components/schemas/SortObject'
         paged:
           type: boolean
         pageNumber:
@@ -10906,6 +10930,8 @@ components:
         pageSize:
           type: integer
           format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
     SortObject:

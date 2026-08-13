@@ -4898,16 +4898,19 @@ components:
           type: number
           description: Annual revenue or spending for tier calculation
           example: 125000.0
+          minimum: 0
         activeContractCount:
           type: integer
           format: int32
           description: Number of active contracts or subscriptions
           example: 3
+          minimum: 0
         accountAgeMonths:
           type: integer
           format: int32
           description: Account age in months
           example: 18
+          minimum: 0
         applyTier:
           type: boolean
           description: Whether to apply the resolved tier or just return the recommendation
@@ -5462,12 +5465,12 @@ components:
     PageCustomerDTO:
       type: object
       properties:
-        totalElements:
-          type: integer
-          format: int64
         totalPages:
           type: integer
           format: int32
+        totalElements:
+          type: integer
+          format: int64
         size:
           type: integer
           format: int32
@@ -5478,17 +5481,17 @@ components:
         number:
           type: integer
           format: int32
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
         sort:
           $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
         first:
           type: boolean
         last:
           type: boolean
-        numberOfElements:
-          type: integer
-          format: int32
         empty:
           type: boolean
     PageableObject:

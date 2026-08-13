@@ -315,16 +315,19 @@ components:
           format: int64
           description: '50th percentile latency threshold in microseconds (default: 10,000,000 = 10s)'
           example: 500000
+          minimum: 0
         p95Micros:
           type: integer
           format: int64
           description: '95th percentile latency threshold in microseconds (default: 10,000,000 = 10s)'
           example: 1000000
+          minimum: 0
         p99Micros:
           type: integer
           format: int64
           description: '99th percentile latency threshold in microseconds (default: 10,000,000 = 10s)'
           example: 2000000
+          minimum: 0
       required:
       - description
       - typeCode
@@ -398,11 +401,13 @@ components:
           format: int64
           description: Event timestamp in epoch milliseconds
           example: 1730809200000
+          minimum: 0
         elapsedMs:
           type: integer
           format: int64
           description: Elapsed operation time in milliseconds
           example: 42
+          minimum: 0
         publishedAt:
           type: string
           format: date-time

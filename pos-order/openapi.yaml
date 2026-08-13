@@ -531,12 +531,14 @@ paths:
         required: false
         schema:
           type: string
+          format: date-time
       - name: endDate
         in: query
         description: End date for date range filter
         required: false
         schema:
           type: string
+          format: date-time
       responses:
         '200':
           description: Overrides retrieved
@@ -609,6 +611,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       requestBody:
         content:
@@ -660,6 +663,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       requestBody:
         content:
@@ -1162,6 +1166,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
         example: 018e1c9f-6b5a-7890-abcd-1234567890ab
       responses:
         '200':
@@ -1323,7 +1328,6 @@ components:
             type: string
         returnable:
           type: boolean
-          default: false
           description: Explicit source-document returnability flag (imported lines only; null for counter lines)
       required:
       - itemSku
@@ -1345,6 +1349,7 @@ components:
           type: number
           description: Percent (0-100] or currency amount, per type
           example: 10
+          minimum: 0
         reasonCode:
           type: string
           description: Business reason for the discount
@@ -1414,7 +1419,6 @@ components:
           example: 58.29
         taxStale:
           type: boolean
-          default: false
           description: True when mutations invalidated taxTotal; cleared by quote/checkout tax recompute
           example: false
         orderDiscountType:
@@ -1513,6 +1517,7 @@ components:
           format: int32
           description: Units to return (capped at the un-refunded remainder)
           example: 1
+          minimum: 0
         condition:
           type: string
           description: Disposition of the returned item
@@ -1641,6 +1646,7 @@ components:
           type: number
           description: Starting drawer cash; defaults to the terminal's previous counted close when omitted
           example: 150.0
+          minimum: 0
       required:
       - openedByClerkId
       - terminalId
@@ -1697,6 +1703,7 @@ components:
           type: number
           description: Positive cash amount moved
           example: 40.0
+          minimum: 0
         reason:
           type: string
           description: Reason for the movement
@@ -1741,6 +1748,7 @@ components:
           type: number
           description: Physical cash counted in the drawer
           example: 310.0
+          minimum: 0
       required:
       - countedCash
     ApplyPriceOverrideRequest:
@@ -1843,12 +1851,10 @@ components:
           example: APPROVED
         requiresApproval:
           type: boolean
-          default: false
           description: Whether the override required approval
           example: false
         affectsCommission:
           type: boolean
-          default: false
           description: Whether the override affects sales commission
           example: true
         requestedByUserId:
@@ -1945,12 +1951,10 @@ components:
           example: PENDING_APPROVAL
         requiresApproval:
           type: boolean
-          default: false
           description: Whether the override required approval
           example: true
         affectsCommission:
           type: boolean
-          default: false
           description: Whether the override affects sales commission
           example: true
         requestedByUserId:
