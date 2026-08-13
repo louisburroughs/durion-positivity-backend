@@ -44,7 +44,7 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- Resilience4j for Retry and Circuit Breaker -->
+        <!-- Resilience4j for Retry (DocumentServiceClient) -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-spring-boot4</artifactId>

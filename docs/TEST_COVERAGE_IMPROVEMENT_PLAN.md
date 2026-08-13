@@ -680,10 +680,10 @@ Repo-wide, summing all 38 per-module reports: **81.1% line, 66.6% branch**
 | `pos-api-gateway` | 435 | 85.5 | 72.2 | 0.80 | 0.67 |
 | `pos-security-common` | 406 | 46.8 | 36.5 | 0.41 | 0.31 |
 | `pos-documents` | 383 | 75.2 | 52.9 | 0.70 | 0.47 |
-| `pos-document-helper` | 162 | 95.7 | 90.0 | 0.90 | 0.80 |
 | `pos-vehicle-reference-nhtsa` | 189 | 0.0 | 0.0 | — *(unguarded)* | — |
 | `pos-events` | 174 | 59.8 | 57.1 | 0.54 | 0.52 |
 | `pos-openapi-validation` | 171 | 93.6 | 82.3 | 0.88 | 0.77 |
+| `pos-document-helper` | 162 | 95.7 | 90.0 | 0.90 | 0.80 |
 | `pos-tax-common` | 100 | 34.0 | 46.4 | 0.29 | 0.41 |
 | `pos-vehicle-reference-carapi` | 69 | 0.0 | 0.0 | — *(unguarded)* | — |
 | `pos-image` | 61 | 0.0 | 0.0 | — *(unguarded)* | — |
