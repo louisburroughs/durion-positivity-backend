@@ -32,6 +32,7 @@ public record CustomerConsentDecisionChangedV1(
         @Nullable UUID governingPartyId) {
 
     public static final String EVENT_TYPE = "customer.consent.decision-changed";
+    public static final int SCHEMA_VERSION = 1;
 
     public CustomerConsentDecisionChangedV1 {
         if (partyId == null) {

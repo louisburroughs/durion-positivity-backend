@@ -113,7 +113,12 @@ public class CustomerFactPublisher {
         }
         UUID personId = party instanceof PersonParty person ? person.getPersonId() : null;
         CustomerPartyDeletedV1 payload = new CustomerPartyDeletedV1(party.getPartyId(), personId);
-        publish(writer, CustomerPartyDeletedV1.EVENT_TYPE, party.getPartyId(), payload);
+        publish(
+                writer,
+                CustomerPartyDeletedV1.EVENT_TYPE,
+                CustomerPartyDeletedV1.SCHEMA_VERSION,
+                party.getPartyId(),
+                payload);
         if (personId != null) {
             publishPersonIdentity(writer, personId);
         }
@@ -159,7 +164,12 @@ public class CustomerFactPublisher {
             return;
         }
         CustomerPartyTagChangedV1 payload = new CustomerPartyTagChangedV1(partyId, tagId, tagName, assigned, source);
-        publish(writer, CustomerPartyTagChangedV1.EVENT_TYPE, partyId, payload);
+        publish(
+                writer,
+                CustomerPartyTagChangedV1.EVENT_TYPE,
+                CustomerPartyTagChangedV1.SCHEMA_VERSION,
+                partyId,
+                payload);
     }
 
     /**
@@ -183,7 +193,12 @@ public class CustomerFactPublisher {
         UUID aggregateId = UUID.nameUUIDFromBytes((channel + ":" + addressHash).getBytes(StandardCharsets.UTF_8));
         CustomerSuppressionChangedV1 payload =
                 new CustomerSuppressionChangedV1(channel, addressHash, partyId, suppressed, reason);
-        publish(writer, CustomerSuppressionChangedV1.EVENT_TYPE, aggregateId, payload);
+        publish(
+                writer,
+                CustomerSuppressionChangedV1.EVENT_TYPE,
+                CustomerSuppressionChangedV1.SCHEMA_VERSION,
+                aggregateId,
+                payload);
     }
 
     /**
@@ -206,7 +221,12 @@ public class CustomerFactPublisher {
         }
         CustomerRedemptionRecordedV1 payload = new CustomerRedemptionRecordedV1(
                 redemptionId, promotionId, customerId, workorderId, promotionCode, campaignCode, discountAmount);
-        publish(writer, CustomerRedemptionRecordedV1.EVENT_TYPE, customerId, payload);
+        publish(
+                writer,
+                CustomerRedemptionRecordedV1.EVENT_TYPE,
+                CustomerRedemptionRecordedV1.SCHEMA_VERSION,
+                customerId,
+                payload);
     }
 
     /**
@@ -228,7 +248,12 @@ public class CustomerFactPublisher {
         }
         CustomerConsentDecisionChangedV1 payload =
                 new CustomerConsentDecisionChangedV1(partyId, channel, allowed, reason, governingPartyId);
-        publish(writer, CustomerConsentDecisionChangedV1.EVENT_TYPE, partyId, payload);
+        publish(
+                writer,
+                CustomerConsentDecisionChangedV1.EVENT_TYPE,
+                CustomerConsentDecisionChangedV1.SCHEMA_VERSION,
+                partyId,
+                payload);
     }
 
     /** Emit {@code customer.segment.changed} — metadata only, never membership (Story #1137). */
@@ -245,7 +270,12 @@ public class CustomerFactPublisher {
         }
         CustomerSegmentChangedV1 payload =
                 new CustomerSegmentChangedV1(segmentId, name, audienceType, type, active, deleted);
-        publish(writer, CustomerSegmentChangedV1.EVENT_TYPE, segmentId, payload);
+        publish(
+                writer,
+                CustomerSegmentChangedV1.EVENT_TYPE,
+                CustomerSegmentChangedV1.SCHEMA_VERSION,
+                segmentId,
+                payload);
     }
 
     /**
@@ -266,7 +296,12 @@ public class CustomerFactPublisher {
         }
         CustomerSegmentResolvedV1 payload =
                 new CustomerSegmentResolvedV1(requestId, segmentId, audienceType, partyIds, truncated);
-        publish(writer, CustomerSegmentResolvedV1.EVENT_TYPE, segmentId, payload);
+        publish(
+                writer,
+                CustomerSegmentResolvedV1.EVENT_TYPE,
+                CustomerSegmentResolvedV1.SCHEMA_VERSION,
+                segmentId,
+                payload);
     }
 
     private void publishPartyUpdated(@NonNull OutboxEventWriter writer, @NonNull AbstractParty party) {
@@ -309,7 +344,12 @@ public class CustomerFactPublisher {
                 CustomerRequirementsService.requirementsMet(party),
                 creditHold,
                 parentPartyId);
-        publish(writer, CustomerPartyUpdatedV1.EVENT_TYPE, party.getPartyId(), payload);
+        publish(
+                writer,
+                CustomerPartyUpdatedV1.EVENT_TYPE,
+                CustomerPartyUpdatedV1.SCHEMA_VERSION,
+                party.getPartyId(),
+                payload);
     }
 
     private void publishPersonIdentity(@NonNull OutboxEventWriter writer, @NonNull UUID personId) {
@@ -323,7 +363,12 @@ public class CustomerFactPublisher {
                         .count();
         CustomerPersonIdentityUpdatedV1 payload = new CustomerPersonIdentityUpdatedV1(
                 personId, personPartyId, person.isPresent(), commercialAccountCount > 0, (int) commercialAccountCount);
-        publish(writer, CustomerPersonIdentityUpdatedV1.EVENT_TYPE, personId, payload);
+        publish(
+                writer,
+                CustomerPersonIdentityUpdatedV1.EVENT_TYPE,
+                CustomerPersonIdentityUpdatedV1.SCHEMA_VERSION,
+                personId,
+                payload);
     }
 
     private @Nullable String resolvePersonDisplayName(@Nullable UUID personId) {
@@ -341,9 +386,21 @@ public class CustomerFactPublisher {
     }
 
     private void publish(
-            @NonNull OutboxEventWriter writer, @NonNull String eventType, @NonNull UUID aggregateId, Object payload) {
+            @NonNull OutboxEventWriter writer,
+            @NonNull String eventType,
+            int schemaVersion,
+            @NonNull UUID aggregateId,
+            Object payload) {
         DomainEventEnvelope<Object> envelope = DomainEventEnvelope.of(
-                eventType, 1, aggregateId, Instant.now(clock).toEpochMilli(), SOURCE, null, null, payload, clock);
+                eventType,
+                schemaVersion,
+                aggregateId,
+                Instant.now(clock).toEpochMilli(),
+                SOURCE,
+                null,
+                null,
+                payload,
+                clock);
         writer.publish(eventsTopic, envelope);
         log.debug("Queued {} for aggregate {}", eventType, aggregateId);
     }

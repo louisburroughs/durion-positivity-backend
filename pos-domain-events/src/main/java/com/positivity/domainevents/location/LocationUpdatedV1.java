@@ -63,6 +63,7 @@ public record LocationUpdatedV1(
         @Nullable Instant updatedAt) {
 
     public static final String EVENT_TYPE = "location.location.updated";
+    public static final int SCHEMA_VERSION = 1;
 
     /**
      * One typed parent edge in the location hierarchy.

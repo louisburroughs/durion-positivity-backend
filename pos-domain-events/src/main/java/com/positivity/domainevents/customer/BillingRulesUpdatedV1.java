@@ -29,6 +29,7 @@ public record BillingRulesUpdatedV1(
         @Nullable String discountPolicyRef) {
 
     public static final String EVENT_TYPE = "customer.billing-rules.updated";
+    public static final int SCHEMA_VERSION = 1;
 
     public BillingRulesUpdatedV1 {
         if (partyId == null) {

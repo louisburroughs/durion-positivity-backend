@@ -182,7 +182,7 @@ public class ManifestPublisher {
 
         DomainEventEnvelope<ReconciliationManifestV1> envelope = DomainEventEnvelope.of(
                 ReconciliationManifestV1.eventTypeFor(DOMAIN),
-                1,
+                ReconciliationManifestV1.SCHEMA_VERSION,
                 manifestAggregateId(windowStart),
                 windowStart.getEpochSecond(),
                 "pos-inventory",

@@ -38,6 +38,7 @@ public record MarketingCampaignSendOutcomeV1(
     public static final String EVENT_TYPE_DELIVERED = "marketing.campaign.send.delivered";
     public static final String EVENT_TYPE_BOUNCED = "marketing.campaign.send.bounced";
     public static final String EVENT_TYPE_COMPLAINED = "marketing.campaign.send.complained";
+    public static final int SCHEMA_VERSION = 1;
 
     public MarketingCampaignSendOutcomeV1 {
         if (campaignSendId == null) {

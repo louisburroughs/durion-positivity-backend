@@ -46,6 +46,7 @@ public record CustomerPartyUpdatedV1(
         @Nullable UUID parentPartyId) {
 
     public static final String EVENT_TYPE = "customer.party.updated";
+    public static final int SCHEMA_VERSION = 1;
 
     public CustomerPartyUpdatedV1 {
         if (partyId == null) {

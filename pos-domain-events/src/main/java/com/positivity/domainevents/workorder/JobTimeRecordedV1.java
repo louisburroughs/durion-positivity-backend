@@ -28,4 +28,5 @@ public record JobTimeRecordedV1(
         int minutes) {
 
     public static final String EVENT_TYPE = "workorder.job_time.recorded.v1";
+    public static final int SCHEMA_VERSION = 1;
 }

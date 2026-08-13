@@ -55,7 +55,12 @@ public class MarketingFactPublisher {
                 campaign.getAudienceType().name(),
                 campaign.getSegmentId(),
                 campaign.getScheduledAt());
-        publish(writer, MarketingCampaignScheduledV1.EVENT_TYPE, campaign.getCampaignId(), payload);
+        publish(
+                writer,
+                MarketingCampaignScheduledV1.EVENT_TYPE,
+                MarketingCampaignScheduledV1.SCHEMA_VERSION,
+                campaign.getCampaignId(),
+                payload);
     }
 
     /**
@@ -78,7 +83,12 @@ public class MarketingFactPublisher {
                 send.getContactId(),
                 send.getChannel().name(),
                 renderedSubject);
-        publish(writer, MarketingCampaignSentV1.EVENT_TYPE, send.getRecipientPartyId(), payload);
+        publish(
+                writer,
+                MarketingCampaignSentV1.EVENT_TYPE,
+                MarketingCampaignSentV1.SCHEMA_VERSION,
+                send.getRecipientPartyId(),
+                payload);
     }
 
     /**
@@ -98,13 +108,25 @@ public class MarketingFactPublisher {
                 send.getChannel().name(),
                 send.getStatus().name(),
                 send.getFailureReason());
-        publish(writer, eventType, send.getRecipientPartyId(), payload);
+        publish(writer, eventType, MarketingCampaignSendOutcomeV1.SCHEMA_VERSION, send.getRecipientPartyId(), payload);
     }
 
     private void publish(
-            @NonNull OutboxEventWriter writer, @NonNull String eventType, @NonNull UUID aggregateId, Object payload) {
+            @NonNull OutboxEventWriter writer,
+            @NonNull String eventType,
+            int schemaVersion,
+            @NonNull UUID aggregateId,
+            Object payload) {
         DomainEventEnvelope<Object> envelope = DomainEventEnvelope.of(
-                eventType, 1, aggregateId, Instant.now(clock).toEpochMilli(), SOURCE, null, null, payload, clock);
+                eventType,
+                schemaVersion,
+                aggregateId,
+                Instant.now(clock).toEpochMilli(),
+                SOURCE,
+                null,
+                null,
+                payload,
+                clock);
         writer.publish(eventsTopic, envelope);
         log.debug("Queued {} for aggregate {}", eventType, aggregateId);
     }

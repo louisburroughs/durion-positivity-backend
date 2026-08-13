@@ -886,7 +886,7 @@ public class PartyServiceImpl implements PartyService {
                 embedded.getDiscountPolicyRef());
         DomainEventEnvelope<BillingRulesUpdatedV1> envelope = DomainEventEnvelope.of(
                 BillingRulesUpdatedV1.EVENT_TYPE,
-                1,
+                BillingRulesUpdatedV1.SCHEMA_VERSION,
                 partyId,
                 java.time.Instant.now(clock).toEpochMilli(),
                 "pos-customer",

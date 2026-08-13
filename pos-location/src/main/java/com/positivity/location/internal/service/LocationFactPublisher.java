@@ -84,7 +84,7 @@ public class LocationFactPublisher {
                 parentRefs(location.getId()),
                 location.getCreatedAt(),
                 location.getUpdatedAt());
-        publish(writer, LocationUpdatedV1.EVENT_TYPE, location.getId(), payload);
+        publish(writer, LocationUpdatedV1.EVENT_TYPE, LocationUpdatedV1.SCHEMA_VERSION, location.getId(), payload);
     }
 
     /** Emit {@code location.location.deleted} for a location removed in the current transaction. */
@@ -93,7 +93,12 @@ public class LocationFactPublisher {
         if (writer == null) {
             return;
         }
-        publish(writer, LocationDeletedV1.EVENT_TYPE, locationId, new LocationDeletedV1(locationId));
+        publish(
+                writer,
+                LocationDeletedV1.EVENT_TYPE,
+                LocationDeletedV1.SCHEMA_VERSION,
+                locationId,
+                new LocationDeletedV1(locationId));
     }
 
     /**
@@ -122,7 +127,12 @@ public class LocationFactPublisher {
                 storageLocation.getTemperature(),
                 storageLocation.getCreatedAt(),
                 storageLocation.getUpdatedAt());
-        publish(writer, StorageLocationUpdatedV1.EVENT_TYPE, storageLocation.getId(), payload);
+        publish(
+                writer,
+                StorageLocationUpdatedV1.EVENT_TYPE,
+                StorageLocationUpdatedV1.SCHEMA_VERSION,
+                storageLocation.getId(),
+                payload);
     }
 
     private List<LocationUpdatedV1.ParentRef> parentRefs(@NonNull UUID locationId) {
@@ -133,9 +143,21 @@ public class LocationFactPublisher {
     }
 
     private void publish(
-            @NonNull OutboxEventWriter writer, @NonNull String eventType, @NonNull UUID aggregateId, Object payload) {
+            @NonNull OutboxEventWriter writer,
+            @NonNull String eventType,
+            int schemaVersion,
+            @NonNull UUID aggregateId,
+            Object payload) {
         DomainEventEnvelope<Object> envelope = DomainEventEnvelope.of(
-                eventType, 1, aggregateId, Instant.now(clock).toEpochMilli(), SOURCE, null, null, payload, clock);
+                eventType,
+                schemaVersion,
+                aggregateId,
+                Instant.now(clock).toEpochMilli(),
+                SOURCE,
+                null,
+                null,
+                payload,
+                clock);
         writer.publish(eventsTopic, envelope);
         log.debug("Queued {} for aggregate {}", eventType, aggregateId);
     }
