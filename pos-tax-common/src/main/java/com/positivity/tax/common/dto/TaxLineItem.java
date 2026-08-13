@@ -54,7 +54,12 @@ public class TaxLineItem {
      */
     @NotNull(message = "Quantity is required")
     @Positive(message = "Quantity must be positive")
-    @Schema(description = "Quantity of the item", example = "1", requiredMode = REQUIRED)
+    @Schema(
+            description = "Quantity of the item. Must be greater than zero; zero is rejected.",
+            example = "1",
+            requiredMode = REQUIRED,
+            minimum = "0",
+            exclusiveMinimum = true)
     private BigDecimal quantity;
 
     /**
@@ -62,7 +67,12 @@ public class TaxLineItem {
      */
     @NotNull(message = "Unit price is required")
     @Positive(message = "Unit price must be positive")
-    @Schema(description = "Unit price of the item before tax", example = "89.99", requiredMode = REQUIRED)
+    @Schema(
+            description = "Unit price of the item before tax. Must be greater than zero; zero is rejected.",
+            example = "89.99",
+            requiredMode = REQUIRED,
+            minimum = "0",
+            exclusiveMinimum = true)
     private BigDecimal unitPrice;
 
     /**

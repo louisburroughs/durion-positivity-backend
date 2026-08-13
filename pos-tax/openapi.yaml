@@ -774,12 +774,12 @@ components:
           minLength: 1
         quantity:
           type: number
-          description: Quantity of the item
+          description: Quantity of the item. Must be greater than zero; zero is rejected.
           example: 1
           minimum: 0
         unitPrice:
           type: number
-          description: Unit price of the item before tax
+          description: Unit price of the item before tax. Must be greater than zero; zero is rejected.
           example: 89.99
           minimum: 0
         subtotal:
