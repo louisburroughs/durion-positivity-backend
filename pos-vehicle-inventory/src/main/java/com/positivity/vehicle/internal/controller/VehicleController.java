@@ -11,7 +11,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,7 +22,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Slf4j
+/**
+ * Legacy vehicle CRUD surface.
+ *
+ * <p>
+ * Domain rejections propagate to {@code VehicleExceptionHandler}, which returns
+ * 400 with the {@code ApiError} envelope (ADR-0017). Absence is still reported
+ * here, because these service methods signal it with an empty {@link java.util.Optional}
+ * or a {@code false} return rather than an exception.
+ */
 @Tag(name = "Vehicle API", description = "Endpoints for vehicle CRUD and VIN-based operations")
 @RequiredArgsConstructor
 @RestController
@@ -42,12 +49,7 @@ public class VehicleController {
     @PostMapping
     public ResponseEntity<VehicleLegacyResponse> createVehicle(
             @Parameter(description = "Vehicle object to be created") @RequestBody VehicleLegacyRequest vehicle) {
-        try {
-            return ResponseEntity.ok(vehicleLegacyService.createVehicle(vehicle));
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid create vehicle request: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
+        return ResponseEntity.ok(vehicleLegacyService.createVehicle(vehicle));
     }
 
     @Operation(
@@ -83,13 +85,8 @@ public class VehicleController {
     public ResponseEntity<VehicleLegacyResponse> updateVehicle(
             @Parameter(description = "ID of the vehicle to update", example = "1") @PathVariable UUID id,
             @Parameter(description = "Updated vehicle object") @RequestBody VehicleLegacyRequest updated) {
-        try {
-            // ResponseEntity.of: 200 + body when present, 404 when empty (Sonar S6863).
-            return ResponseEntity.of(vehicleLegacyService.updateVehicle(id, updated));
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid update request for vehicle id {}: {}", id, e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
+        // ResponseEntity.of: 200 + body when present, 404 when empty (Sonar S6863).
+        return ResponseEntity.of(vehicleLegacyService.updateVehicle(id, updated));
     }
 
     @Operation(
@@ -102,15 +99,10 @@ public class VehicleController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteVehicle(
             @Parameter(description = "ID of the vehicle to delete", example = "1") @PathVariable UUID id) {
-        try {
-            if (!vehicleLegacyService.deleteVehicle(id)) {
-                return ResponseEntity.notFound().build();
-            }
-            return ResponseEntity.noContent().build();
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid delete request for vehicle id {}: {}", id, e.getMessage());
-            return ResponseEntity.badRequest().build();
+        if (!vehicleLegacyService.deleteVehicle(id)) {
+            return ResponseEntity.notFound().build();
         }
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Create vehicle by VIN", description = "Add a new vehicle to the inventory using its VIN.")
@@ -119,12 +111,7 @@ public class VehicleController {
     @PostMapping("/vin")
     public ResponseEntity<VehicleLegacyResponse> createVehicleByVIN(
             @Parameter(description = "Vehicle object to be created") @RequestBody VehicleLegacyRequest vehicle) {
-        try {
-            return ResponseEntity.ok(vehicleLegacyService.createVehicleByVin(vehicle));
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid create-by-vin request: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
+        return ResponseEntity.ok(vehicleLegacyService.createVehicleByVin(vehicle));
     }
 
     @Operation(summary = "Get vehicle by VIN", description = "Retrieve a vehicle by its VIN.")
@@ -134,13 +121,8 @@ public class VehicleController {
     public ResponseEntity<VehicleLegacyResponse> getVehicleByVIN(
             @Parameter(description = "VIN of the vehicle to retrieve", example = "1HGCM82633A004352") @PathVariable
                     String vin) {
-        try {
-            // ResponseEntity.of: 200 + body when present, 404 when empty (Sonar S6863).
-            return ResponseEntity.of(vehicleLegacyService.getVehicleByVin(vin));
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid VIN lookup request: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
+        // ResponseEntity.of: 200 + body when present, 404 when empty (Sonar S6863).
+        return ResponseEntity.of(vehicleLegacyService.getVehicleByVin(vin));
     }
 
     @Operation(summary = "Update vehicle by VIN", description = "Update an existing vehicle's details by its VIN.")
@@ -152,13 +134,8 @@ public class VehicleController {
             @Parameter(description = "VIN of the vehicle to update", example = "1HGCM82633A004352") @PathVariable
                     String vin,
             @Parameter(description = "Updated vehicle object") @RequestBody VehicleLegacyRequest updated) {
-        try {
-            // ResponseEntity.of: 200 + body when present, 404 when empty (Sonar S6863).
-            return ResponseEntity.of(vehicleLegacyService.updateVehicleByVin(vin, updated));
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid update-by-vin request for VIN {}: {}", vin, e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
+        // ResponseEntity.of: 200 + body when present, 404 when empty (Sonar S6863).
+        return ResponseEntity.of(vehicleLegacyService.updateVehicleByVin(vin, updated));
     }
 
     @Operation(summary = "Delete vehicle by VIN", description = "Delete a vehicle from the inventory by its VIN.")
@@ -169,14 +146,9 @@ public class VehicleController {
     public ResponseEntity<Void> deleteVehicleByVIN(
             @Parameter(description = "VIN of the vehicle to delete", example = "1HGCM82633A004352") @PathVariable
                     String vin) {
-        try {
-            if (!vehicleLegacyService.deleteVehicleByVin(vin)) {
-                return ResponseEntity.notFound().build();
-            }
-            return ResponseEntity.noContent().build();
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid delete-by-vin request for VIN {}: {}", vin, e.getMessage());
-            return ResponseEntity.badRequest().build();
+        if (!vehicleLegacyService.deleteVehicleByVin(vin)) {
+            return ResponseEntity.notFound().build();
         }
+        return ResponseEntity.noContent().build();
     }
 }

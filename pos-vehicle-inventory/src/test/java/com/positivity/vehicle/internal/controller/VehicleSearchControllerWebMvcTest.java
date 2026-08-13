@@ -1,7 +1,6 @@
 package com.positivity.vehicle.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -39,6 +38,12 @@ import org.springframework.test.web.servlet.MockMvc;
  * relying on it to stay in strict-matching mode. Both are decisions the
  * controller makes silently on the caller's behalf, so nothing downstream would
  * notice if they changed.
+ *
+ * <p>
+ * The POST route is exercised through a real request body rather than a builder,
+ * because that is the only thing that proves the DTO is deserializable at all —
+ * the defect in #1270 survived precisely because every existing caller of this
+ * DTO constructed it in Java.
  */
 @WebMvcTest(VehicleSearchController.class)
 @Import(WebMvcTestSecurityConfig.class)
@@ -112,25 +117,48 @@ class VehicleSearchControllerWebMvcTest {
     }
 
     @Test
-    @DisplayName("BUG: POST cannot deserialize any body, so the endpoint fails for every request")
-    void postCannotDeserializeAnyBody() {
-        // Documents current behaviour, not desired behaviour. SearchVehiclesRequest is
-        // @Getter/@Builder with final fields and no @Jacksonized, so Lombok's only constructor
-        // is package-private and Jackson has no creator to call. Message conversion fails
-        // before the controller method is entered, which means this documented endpoint has
-        // never worked for any input. The GET route above is unaffected because it builds the
-        // object in Java rather than deserializing it — which is why nothing caught this.
-        // Tracked as issue #1270. When that is fixed this test becomes the ordinary
-        // pass-through assertion: the body's limit and enableContainsMatching reach the service
-        // unchanged, in contrast to the GET route, which supplies defaults.
-        assertThatThrownBy(() -> mockMvc.perform(post(PATH)
+    @DisplayName("POST passes the body's values through to the service unchanged")
+    void postPassesBodyThrough() throws Exception {
+        when(searchService.search(any())).thenReturn(empty("UNIT-001"));
+
+        // Until #1270 this failed during message conversion for every body: the DTO was
+        // @Getter/@Builder over final fields with no @Jacksonized, so Lombok's only constructor
+        // was package-private and Jackson had no creator to call. Unlike GET, this route
+        // supplies no defaults — whatever the caller sends is what the service must receive.
+        mockMvc.perform(post(PATH)
                         .header(AUTH, BEARER)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"query\":\"UNIT-001\",\"limit\":5,\"enableContainsMatching\":true}")))
-                .rootCause()
-                .hasMessageContaining("no Creators, like default constructor, exist");
+                        .content("{\"query\":\"UNIT-001\",\"limit\":5,\"enableContainsMatching\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.query").value("UNIT-001"));
 
-        verify(searchService, never()).search(any());
+        ArgumentCaptor<SearchVehiclesRequest> captor = ArgumentCaptor.forClass(SearchVehiclesRequest.class);
+        verify(searchService).search(captor.capture());
+        assertThat(captor.getValue().getQuery()).isEqualTo("UNIT-001");
+        assertThat(captor.getValue().getLimit()).isEqualTo(5);
+        assertThat(captor.getValue().getEnableContainsMatching()).isTrue();
+    }
+
+    @Test
+    @DisplayName("POST with limit omitted falls back to the DTO's own default")
+    void postWithoutLimitUsesDtoDefault() throws Exception {
+        when(searchService.search(any())).thenReturn(empty("UNIT-001"));
+
+        // The controller supplies no default on this route, so the cap comes from the DTO
+        // getter instead. Without it an uncapped search would reach the service.
+        mockMvc.perform(post(PATH)
+                        .header(AUTH, BEARER)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"query\":\"UNIT-001\"}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<SearchVehiclesRequest> captor = ArgumentCaptor.forClass(SearchVehiclesRequest.class);
+        verify(searchService).search(captor.capture());
+        assertThat(captor.getValue().getLimit()).isEqualTo(25);
+        // The raw field stays null — the strict-matching default lives in the accessor, not in
+        // the deserialized value, so reading the field directly would skip the guard rail.
+        assertThat(captor.getValue().getEnableContainsMatching()).isNull();
+        assertThat(captor.getValue().isEnableContainsMatching()).isFalse();
     }
 
     @Test

@@ -9,14 +9,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,8 +30,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * REST controller for vehicle registry CRUD operations.
+ *
+ * <p>
+ * Failures are left to {@code VehicleExceptionHandler}, which maps
+ * {@code EntityNotFoundException} to 404 and {@code IllegalArgumentException} to
+ * 400 and returns the {@code ApiError} envelope (ADR-0017) in both cases.
  */
-@Slf4j
 @Tag(name = "Vehicle Registry API", description = "Operations for creating and maintaining vehicle registry records")
 @RequiredArgsConstructor
 @RestController
@@ -53,13 +55,8 @@ public class VehicleRegistryController {
     public ResponseEntity<VehicleResponse> createVehicle(
             @Parameter(description = "Vehicle creation request", required = true) @Valid @NotNull @RequestBody
                     CreateVehicleRequest request) {
-        try {
-            VehicleResponse response = vehicleService.createVehicle(request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (IllegalArgumentException e) {
-            log.warn("Failed to create vehicle: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
+        VehicleResponse response = vehicleService.createVehicle(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @Operation(summary = "Get vehicle by ID", description = "Retrieve a vehicle by its unique ID")
@@ -97,16 +94,8 @@ public class VehicleRegistryController {
             @Parameter(description = "Vehicle UUID", required = true) @PathVariable @NotNull UUID vehicleId,
             @Parameter(description = "Vehicle update request", required = true) @Valid @NotNull @RequestBody
                     UpdateVehicleRequest request) {
-        try {
-            VehicleResponse response = vehicleService.updateVehicle(vehicleId, request);
-            return ResponseEntity.ok(response);
-        } catch (EntityNotFoundException e) {
-            log.warn("Vehicle not found for update {}: {}", vehicleId, e.getMessage());
-            return ResponseEntity.notFound().build();
-        } catch (IllegalArgumentException e) {
-            log.warn("Failed to update vehicle {}: {}", vehicleId, e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
+        VehicleResponse response = vehicleService.updateVehicle(vehicleId, request);
+        return ResponseEntity.ok(response);
     }
 
     @Operation(summary = "Delete vehicle", description = "Deactivate a vehicle by ID")
@@ -116,15 +105,7 @@ public class VehicleRegistryController {
     @DeleteMapping("/{vehicleId}")
     public ResponseEntity<Void> deleteVehicle(
             @Parameter(description = "Vehicle UUID", required = true) @PathVariable @NotNull UUID vehicleId) {
-        try {
-            vehicleService.deleteVehicle(vehicleId);
-            return ResponseEntity.noContent().build();
-        } catch (EntityNotFoundException e) {
-            log.warn("Vehicle not found for delete {}: {}", vehicleId, e.getMessage());
-            return ResponseEntity.notFound().build();
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid delete request for vehicle {}: {}", vehicleId, e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
+        vehicleService.deleteVehicle(vehicleId);
+        return ResponseEntity.noContent().build();
     }
 }
