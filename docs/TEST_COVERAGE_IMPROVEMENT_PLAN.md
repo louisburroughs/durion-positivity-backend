@@ -834,7 +834,7 @@ stale cache refetches and replaces — and, for NHTSA, the derivation
 instead of duplicating them.
 
 Writing them surfaced a live defect, filed as
-louisburroughs/durion-positivity-backend#1265 and listed below.
+louisburroughs/durion-positivity-backend#1265 and since fixed — see below.
 
 ### 7.3 Controller web slices closed (2026-08-12)
 
@@ -1063,13 +1063,14 @@ One defect filed: #1279.
   rejects every real Canadian province.
 - louisburroughs/durion-positivity-backend#1255 — replica listeners silently drop
   events whose payload omits a primitive field (Jackson 3).
-- louisburroughs/durion-positivity-backend#1265 — `pos-vehicle-reference-nhtsa`
-  inverts its own 24h cache: `isCacheExpired` computes "is still fresh", and
-  three of six call sites negate it, so those methods call vPIC on every request
-  while the cache is warm and then serve permanently frozen rows once it is not.
-  The same helper is copied into `pos-vehicle-reference-carapi`, where both call
-  sites happen to cancel out — correct by accident, and a trap for anyone who
-  fixes the name alone.
+- ~~louisburroughs/durion-positivity-backend#1265~~ — closed 2026-08-13.
+  `pos-vehicle-reference-nhtsa` inverted its own 24h cache: `isCacheExpired`
+  computed "is still fresh", and three of six call sites negated it, so those
+  methods called vPIC on every request while the cache was warm and then served
+  permanently frozen rows once it was not. The helper is now `isCacheFresh` in
+  both vehicle-reference modules, with every call site unnegated — including
+  `pos-vehicle-reference-carapi`, where the two inversions had cancelled out and
+  the behaviour was correct only by accident.
 - ~~louisburroughs/durion-positivity-backend#1269~~ — closed 2026-08-13.
   `pos-vehicle-inventory` had no `@ControllerAdvice` at all, so a wrong-length VIN
   on `@Validated` `GET /vin/{vin}` raised `ConstraintViolationException` and
