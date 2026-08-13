@@ -293,7 +293,11 @@ class DomainEventContractTest {
      * mean anything checks it. Only these records add explicit guards.
      */
     static List<Class<?>> guardedEventRecords() {
-        return eventRecords().stream()
+        // Deliberately over constructibleEventRecords, not eventRecords: a cross-field-invariant
+        // record throws even for a fully valid argument set, so hasRuntimeGuard would read that
+        // as "guards everything" and guardsRejectNullClearly would then pass on it for the wrong
+        // reason. It also keeps this count comparable with the total in guardCoverageIsRecorded.
+        return constructibleEventRecords().stream()
                 .filter(DomainEventContractTest::hasRuntimeGuard)
                 .toList();
     }

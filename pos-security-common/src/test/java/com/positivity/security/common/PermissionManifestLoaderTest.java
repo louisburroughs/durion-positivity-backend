@@ -4,8 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,10 +44,23 @@ class PermissionManifestLoaderTest {
     Path tempDir;
 
     private ClassLoader originalClassLoader;
+    private final List<URLClassLoader> openedLoaders = new ArrayList<>();
 
     @BeforeEach
     void captureClassLoader() {
         originalClassLoader = Thread.currentThread().getContextClassLoader();
+    }
+
+    @AfterEach
+    void restoreClassLoader() throws IOException {
+        // ClassPathResource resolves through the thread context loader, so these tests have to
+        // swap it. Leaving it swapped would hand a temp-directory loader to every later test in
+        // the JVM, and leaving the loaders open holds their file handles.
+        Thread.currentThread().setContextClassLoader(originalClassLoader);
+        for (URLClassLoader loader : openedLoaders) {
+            loader.close();
+        }
+        openedLoaders.clear();
     }
 
     /**
@@ -53,9 +71,9 @@ class PermissionManifestLoaderTest {
     private String manifest(String content) throws IOException {
         String name = "test-permissions-" + Math.abs(content.hashCode()) + ".yaml";
         Files.writeString(tempDir.resolve(name), content);
-        Thread.currentThread()
-                .setContextClassLoader(new java.net.URLClassLoader(
-                        new java.net.URL[] {tempDir.toUri().toURL()}, originalClassLoader));
+        URLClassLoader loader = new URLClassLoader(new URL[] {tempDir.toUri().toURL()}, originalClassLoader);
+        openedLoaders.add(loader);
+        Thread.currentThread().setContextClassLoader(loader);
         return name;
     }
 
