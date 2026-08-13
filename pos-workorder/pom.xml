@@ -13,10 +13,11 @@
     <description>Module to manage workorders for a shop</description>
 
     <properties>
-        <!-- Coverage ratchet (plan Phase 4): measured 76.6% line / 56.7% branch.
+        <!-- Coverage ratchet (plan Phase 4): measured 78.2% line / 58.5% branch after the
+             §7 branch-tail wave (was 76.6% / 56.7%).
              Floors sit ~5 points under to catch regression without failing on noise. -->
-        <jacoco.line.min>0.71</jacoco.line.min>
-        <jacoco.branch.min>0.51</jacoco.branch.min>
+        <jacoco.line.min>0.73</jacoco.line.min>
+        <jacoco.branch.min>0.53</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>
     <pluginRepositories>
