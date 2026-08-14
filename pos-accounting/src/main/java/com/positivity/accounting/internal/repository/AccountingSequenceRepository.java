@@ -43,8 +43,13 @@ public interface AccountingSequenceRepository extends JpaRepository<AccountingSe
      *
      * <p><strong>PostgreSQL only</strong> ({@code generate_series}, regex
      * {@code substring}) — must not be executed against the H2 dev/test
-     * database. Exercised by the Docker-gated concurrency IT and the PG16
-     * migration validation only.
+     * database, where it fails to parse ({@code CROSS JOIN LATERAL} is
+     * unsupported; H2 reports {@code 42102 Table "LATERAL" not found}).
+     * Callers must gate on
+     * {@code com.positivity.accounting.internal.config.DatabaseDialectSupport#isPostgreSql()};
+     * {@code FinancialReportingServiceImpl#checkEntryNumberGaps} is the only
+     * production caller and does so. Exercised by the Docker-gated concurrency
+     * IT and the PG16 migration validation only.
      *
      * <p>The stored side parses the numeric suffix of {@code entry_number}
      * server-side (the digits after the last {@code '-'}) rather than

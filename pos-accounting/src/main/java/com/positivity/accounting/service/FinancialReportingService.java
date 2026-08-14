@@ -65,7 +65,9 @@ public interface FinancialReportingService {
      * Also runs the entry-number gap-check (per monthly sequence scope, see
      * {@code AccountingSequenceRepository#findMissingEntryNumbers}) and
      * attaches the results as a footnote block; the footnote is empty on a
-     * clean ledger.
+     * clean ledger. The gap query is PostgreSQL-only, so the footnote is also
+     * reported empty when the service runs on another database (the H2 dev
+     * profile and the H2-backed tests).
      *
      * Returns empty rows with zero totals (balanced = true) and an empty gap
      * footnote when no POSTED data exists as of the requested date.

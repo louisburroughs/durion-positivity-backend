@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.config.DatabaseDialectSupport;
 import com.positivity.accounting.internal.dto.EntryNumberGapCheck;
 import com.positivity.accounting.internal.dto.TrialBalanceAccountTotal;
 import com.positivity.accounting.internal.dto.TrialBalanceReport;
@@ -79,6 +80,9 @@ class FinancialReportingServiceImplTest {
     @Mock
     private InvoiceBalanceCalculator invoiceBalanceCalculator;
 
+    @Mock
+    private DatabaseDialectSupport databaseDialectSupport;
+
     private FinancialReportingServiceImpl service;
 
     @BeforeEach
@@ -95,6 +99,7 @@ class FinancialReportingServiceImplTest {
                 vendorBillRepository,
                 apPaymentAllocationRepository,
                 invoiceBalanceCalculator,
+                databaseDialectSupport,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
     }
 
@@ -118,6 +123,7 @@ class FinancialReportingServiceImplTest {
                         ACCT_CASH, "1000", "Cash", new BigDecimal("150.00"), new BigDecimal("40.00")),
                 new TrialBalanceAccountTotal(
                         ACCT_REVENUE, "4000", "Revenue", new BigDecimal("40.00"), new BigDecimal("150.00")));
+        when(databaseDialectSupport.isPostgreSql()).thenReturn(true);
         when(accountingSequenceRepository.findAllByOrderByScopeKeyAsc()).thenReturn(List.of());
 
         TrialBalanceReport report = service.generateTrialBalance(AS_OF);
@@ -160,6 +166,7 @@ class FinancialReportingServiceImplTest {
                 new TrialBalanceAccountTotal(ACCT_CASH, "1000", "Cash", new BigDecimal("100.00"), BigDecimal.ZERO),
                 new TrialBalanceAccountTotal(
                         ACCT_REVENUE, "4000", "Revenue", BigDecimal.ZERO, new BigDecimal("90.00")));
+        when(databaseDialectSupport.isPostgreSql()).thenReturn(true);
         when(accountingSequenceRepository.findAllByOrderByScopeKeyAsc()).thenReturn(List.of());
 
         TrialBalanceReport report = service.generateTrialBalance(AS_OF);
@@ -174,6 +181,7 @@ class FinancialReportingServiceImplTest {
     void balancedIgnoresBigDecimalScaleDifferences() {
         aggregatedTotals(new TrialBalanceAccountTotal(
                 ACCT_CASH, "1000", "Cash", new BigDecimal("100.0"), new BigDecimal("100.00")));
+        when(databaseDialectSupport.isPostgreSql()).thenReturn(true);
         when(accountingSequenceRepository.findAllByOrderByScopeKeyAsc()).thenReturn(List.of());
 
         TrialBalanceReport report = service.generateTrialBalance(AS_OF);
@@ -186,6 +194,7 @@ class FinancialReportingServiceImplTest {
     void populatesGapFootnoteForJeScopesUpToAsOfMonth() {
         aggregatedTotals(new TrialBalanceAccountTotal(
                 ACCT_CASH, "1000", "Cash", new BigDecimal("10.00"), new BigDecimal("10.00")));
+        when(databaseDialectSupport.isPostgreSql()).thenReturn(true);
         when(accountingSequenceRepository.findAllByOrderByScopeKeyAsc())
                 .thenReturn(List.of(
                         sequence("INV-202605"), sequence("JE-202605"), sequence("JE-202606"), sequence("JE-202607")));
@@ -200,6 +209,23 @@ class FinancialReportingServiceImplTest {
         // Scopes after the as-of month and non-JE scopes are never gap-checked
         verify(accountingSequenceRepository, never()).findMissingEntryNumbers("JE-202607");
         verify(accountingSequenceRepository, never()).findMissingEntryNumbers("INV-202605");
+    }
+
+    @Test
+    @DisplayName("Reports an empty gap footnote without touching the PostgreSQL-only query on another dialect")
+    void skipsGapFootnoteOnNonPostgreSqlDialect() {
+        // Regression guard for issue #1244: the gap query uses CROSS JOIN LATERAL
+        // generate_series and fails to parse on H2, so a populated
+        // accounting_sequence table used to break Trial Balance (and the report
+        // exports built on it) in every H2-backed test and in the dev profile.
+        aggregatedTotals(new TrialBalanceAccountTotal(
+                ACCT_CASH, "1000", "Cash", new BigDecimal("10.00"), new BigDecimal("10.00")));
+
+        TrialBalanceReport report = service.generateTrialBalance(AS_OF);
+
+        assertThat(report.getEntryNumberGaps()).isEmpty();
+        assertThat(report.getBalanced()).isTrue();
+        verifyNoInteractions(accountingSequenceRepository);
     }
 
     @Test

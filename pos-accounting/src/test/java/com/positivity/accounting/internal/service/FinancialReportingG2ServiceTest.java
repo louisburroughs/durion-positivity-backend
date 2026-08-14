@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.config.DatabaseDialectSupport;
 import com.positivity.accounting.internal.dto.AgedPayablesReport;
 import com.positivity.accounting.internal.dto.AgedReceivablesReport;
 import com.positivity.accounting.internal.dto.GeneralLedgerAccountSection;
@@ -97,6 +98,9 @@ class FinancialReportingG2ServiceTest {
     @Mock
     private InvoiceBalanceCalculator invoiceBalanceCalculator;
 
+    @Mock
+    private DatabaseDialectSupport databaseDialectSupport;
+
     private FinancialReportingServiceImpl service;
 
     @BeforeEach
@@ -113,6 +117,7 @@ class FinancialReportingG2ServiceTest {
                 vendorBillRepository,
                 apPaymentAllocationRepository,
                 invoiceBalanceCalculator,
+                databaseDialectSupport,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
     }
 

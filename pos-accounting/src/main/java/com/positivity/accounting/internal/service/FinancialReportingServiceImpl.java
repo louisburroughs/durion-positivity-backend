@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.config.DatabaseDialectSupport;
 import com.positivity.accounting.internal.dto.AccountDrilldownResponse;
 import com.positivity.accounting.internal.dto.AgedPayablesReport;
 import com.positivity.accounting.internal.dto.AgedPayablesRow;
@@ -128,6 +129,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     private final VendorBillRepository vendorBillRepository;
     private final APPaymentAllocationRepository apPaymentAllocationRepository;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
+    private final DatabaseDialectSupport databaseDialectSupport;
     private final Clock clock;
 
     public FinancialReportingServiceImpl(
@@ -142,6 +144,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             VendorBillRepository vendorBillRepository,
             APPaymentAllocationRepository apPaymentAllocationRepository,
             InvoiceBalanceCalculator invoiceBalanceCalculator,
+            DatabaseDialectSupport databaseDialectSupport,
             Clock clock) {
         this.journalEntryRepository = journalEntryRepository;
         this.statementLineMappingRepository = statementLineMappingRepository;
@@ -154,6 +157,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         this.vendorBillRepository = vendorBillRepository;
         this.apPaymentAllocationRepository = apPaymentAllocationRepository;
         this.invoiceBalanceCalculator = invoiceBalanceCalculator;
+        this.databaseDialectSupport = databaseDialectSupport;
         this.clock = clock;
     }
 
@@ -413,8 +417,21 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
      * keys are {@code JE-{YYYYMM}} on the entry's transaction month, so the
      * lexicographic comparison against the as-of month boundary is a correct
      * chronological cut. A clean ledger yields an empty footnote.
+     *
+     * <p>The gap query is PostgreSQL-only and fails to parse on H2, so on any
+     * other dialect (the dev profile and the H2-backed Spring Boot tests) the
+     * footnote is reported empty rather than executing the query. This is the
+     * enforcement of the constraint that
+     * {@code AccountingSequenceRepository#findMissingEntryNumbers} documents:
+     * before it existed, whether the report blew up on H2 depended on whether
+     * any {@code accounting_sequence} row had handed out a number yet.
      */
     private List<EntryNumberGapCheck> checkEntryNumberGaps(LocalDate asOf) {
+        if (!databaseDialectSupport.isPostgreSql()) {
+            log.debug("Skipping entry-number gap footnote as of {}: the gap query requires PostgreSQL", asOf);
+            return List.of();
+        }
+
         String asOfScopeBoundary =
                 String.format("%s%04d%02d", ENTRY_NUMBER_SCOPE_PREFIX, asOf.getYear(), asOf.getMonthValue());
 

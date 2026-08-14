@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.config.DatabaseDialectSupport;
 import com.positivity.accounting.internal.dto.TaxLiabilityReport;
 import com.positivity.accounting.internal.dto.TaxLiabilityRow;
 import com.positivity.accounting.internal.entity.CreditMemo;
@@ -90,6 +91,9 @@ class FinancialReportingTaxLiabilityServiceTest {
     @Mock
     private InvoiceBalanceCalculator invoiceBalanceCalculator;
 
+    @Mock
+    private DatabaseDialectSupport databaseDialectSupport;
+
     private FinancialReportingServiceImpl service;
 
     @BeforeEach
@@ -106,6 +110,7 @@ class FinancialReportingTaxLiabilityServiceTest {
                 vendorBillRepository,
                 apPaymentAllocationRepository,
                 invoiceBalanceCalculator,
+                databaseDialectSupport,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
     }
 
