@@ -7,6 +7,13 @@ package com.positivity.supplier.internal.domain.model;
  *
  * <p>Registry resolution is keyed by {@code (capability, protocolFamily, version)}
  * (ADR-0051 §3).
+ *
+ * <p>There is deliberately no shipment-tracking capability (#1313). EDIWheel shipment
+ * tracking is an exchange between logistics providers and suppliers, not one a service
+ * provider participates in, so the LEX v1 document we hold offers only the write operation
+ * a carrier would call — nothing to read. Should a non-EDIWheel source ever offer shipment
+ * milestones (a carrier API, a Michelin S2S operation), that is a new capability with its
+ * own spec, not a revival of this one.
  */
 public enum SupplierCapability {
     ORDER_CREATE,
@@ -15,7 +22,6 @@ public enum SupplierCapability {
     STOCK_REPORT,
     PRICE_CATALOG,
     INVOICE_FETCH,
-    SHIPMENT_TRACKING,
     WORKORDER_AUTHORIZATION,
     MARKETING_CATALOG,
     TIRE_IDENTIFICATION

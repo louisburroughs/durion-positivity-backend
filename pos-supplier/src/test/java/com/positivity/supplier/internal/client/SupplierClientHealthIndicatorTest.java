@@ -81,7 +81,7 @@ class SupplierClientHealthIndicatorTest {
 
     @Test
     void halfOpenBreakersAreReportedSeparately() {
-        CircuitBreaker breaker = breakers.breakerFor(PROFILE_A, SupplierCapability.SHIPMENT_TRACKING);
+        CircuitBreaker breaker = breakers.breakerFor(PROFILE_A, SupplierCapability.WORKORDER_AUTHORIZATION);
         breaker.transitionToOpenState();
         breaker.transitionToHalfOpenState();
 
