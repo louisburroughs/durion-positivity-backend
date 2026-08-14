@@ -220,6 +220,8 @@ class FinancialReportingServiceImplTest {
         // exports built on it) in every H2-backed test and in the dev profile.
         aggregatedTotals(new TrialBalanceAccountTotal(
                 ACCT_CASH, "1000", "Cash", new BigDecimal("10.00"), new BigDecimal("10.00")));
+        // Stated, not inherited from the mock default: the dialect is the subject of this test.
+        when(databaseDialectSupport.isPostgreSql()).thenReturn(false);
 
         TrialBalanceReport report = service.generateTrialBalance(AS_OF);
 
