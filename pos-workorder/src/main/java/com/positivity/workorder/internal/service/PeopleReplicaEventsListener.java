@@ -50,7 +50,8 @@ public class PeopleReplicaEventsListener {
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
     private final ExtUserLinkReplicaRepository extUserLinkReplicaRepository;
     private final ExtStaffingAssignmentReplicaRepository extStaffingAssignmentReplicaRepository;
-    private final Counter payloadRejectedCounter;
+    private final Counter payloadRejectedCounterPeopleContact;
+    private final Counter payloadRejectedCounterPeople;
 
     public PeopleReplicaEventsListener(
             Clock clock,
@@ -67,12 +68,20 @@ public class PeopleReplicaEventsListener {
         this.extUserLinkReplicaRepository = extUserLinkReplicaRepository;
         this.extStaffingAssignmentReplicaRepository = extStaffingAssignmentReplicaRepository;
         MeterRegistry registry = meterRegistry.getIfAvailable();
-        this.payloadRejectedCounter = registry == null
+        this.payloadRejectedCounterPeopleContact = registry == null
                 ? null
                 : Counter.builder("replica.payload.rejected")
                         .description(
                                 "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
-                        .tag("owner", "people")
+                        .tag("owner", OWNER_PEOPLE_CONTACT)
+                        .tag("entity", "people-contact-events")
+                        .register(registry);
+        this.payloadRejectedCounterPeople = registry == null
+                ? null
+                : Counter.builder("replica.payload.rejected")
+                        .description(
+                                "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
+                        .tag("owner", OWNER_PEOPLE)
                         .tag("entity", "people-events")
                         .register(registry);
     }
@@ -127,8 +136,11 @@ public class PeopleReplicaEventsListener {
         } catch (TransientDataAccessException e) {
             throw e;
         } catch (DatabindException e) {
-            if (payloadRejectedCounter != null) {
-                payloadRejectedCounter.increment();
+            Counter counter = OWNER_PEOPLE_CONTACT.equals(owner)
+                    ? payloadRejectedCounterPeopleContact
+                    : payloadRejectedCounterPeople;
+            if (counter != null) {
+                counter.increment();
             }
             log.error("Rejected malformed {} event payload eventId={}: {}", owner, eventId, e.getMessage(), e);
         } catch (Exception e) {
