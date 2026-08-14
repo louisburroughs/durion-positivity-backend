@@ -24,6 +24,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -70,7 +71,13 @@ class PeopleContactEventsListenerTest {
     @BeforeEach
     void setUp() {
         listener = new PeopleContactEventsListener(
-                TEST_CLOCK, new ObjectMapper(), processedEvents, personReplica, addressReplica, factPublisher);
+                TEST_CLOCK,
+                new ObjectMapper(),
+                processedEvents,
+                personReplica,
+                addressReplica,
+                factPublisher,
+                mock(ObjectProvider.class));
     }
 
     private static String personUpdated(long aggregateVersion) {

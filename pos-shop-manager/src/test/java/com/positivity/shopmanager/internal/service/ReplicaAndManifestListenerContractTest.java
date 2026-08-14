@@ -138,8 +138,12 @@ class ReplicaAndManifestListenerContractTest {
                         id -> """
                             {"partyId":"%s","partyType":"ORGANIZATION","customerNumber":"C-1",
                              "displayName":"Fleet Co","status":"ACTIVE","requirementsMet":true}""".formatted(id),
-                        new CustomerEventsListener(clock, objectMapper, processedEventRepository, customerRepository)
-                                ::onCustomerEvent,
+                        new CustomerEventsListener(
+                                clock,
+                                objectMapper,
+                                processedEventRepository,
+                                customerRepository,
+                                org.mockito.Mockito.mock(ObjectProvider.class))::onCustomerEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(customerRepository)
                                 .findById(any()));
@@ -151,8 +155,12 @@ class ReplicaAndManifestListenerContractTest {
                             {"vehicleId":"%s","accountId":"%s","vin":"1HGCM82633A004352",
                              "unitNumber":"U1","description":"d","licensePlate":"AB-123",
                              "year":2024,"make":"Toyota","model":"Tacoma","active":true}""".formatted(id, ID),
-                        new VehicleEventsListener(clock, objectMapper, processedEventRepository, vehicleRepository)
-                                ::onVehicleEvent,
+                        new VehicleEventsListener(
+                                clock,
+                                objectMapper,
+                                processedEventRepository,
+                                vehicleRepository,
+                                org.mockito.Mockito.mock(ObjectProvider.class))::onVehicleEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(vehicleRepository)
                                 .findById(any()));
@@ -164,8 +172,12 @@ class ReplicaAndManifestListenerContractTest {
                             {"assignmentId":"%s","employeeId":"%s","personId":"%s","locationId":"%s",
                              "role":"TECHNICIAN","primary":true,"status":"ACTIVE",
                              "effectiveFrom":"2026-02-01","effectiveTo":null}""".formatted(id, ID, ID, ID),
-                        new PeopleEventsListener(clock, objectMapper, processedEventRepository, assignmentRepository)
-                                ::onPeopleEvent,
+                        new PeopleEventsListener(
+                                clock,
+                                objectMapper,
+                                processedEventRepository,
+                                assignmentRepository,
+                                org.mockito.Mockito.mock(ObjectProvider.class))::onPeopleEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(assignmentRepository)
                                 .findById(any()));
@@ -177,8 +189,12 @@ class ReplicaAndManifestListenerContractTest {
                             {"personId":"%s","firstName":"Ada","lastName":"Lovelace",
                              "preferredName":null,"contactPoints":[],"postalAddress":null,
                              "createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-08-01T00:00:00Z"}""".formatted(id),
-                        new PeopleContactEventsListener(clock, objectMapper, processedEventRepository, personRepository)
-                                ::onPeopleContactEvent,
+                        new PeopleContactEventsListener(
+                                clock,
+                                objectMapper,
+                                processedEventRepository,
+                                personRepository,
+                                org.mockito.Mockito.mock(ObjectProvider.class))::onPeopleContactEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(personRepository)
                                 .findById(any()));
@@ -251,8 +267,12 @@ class ReplicaAndManifestListenerContractTest {
         @Test
         @DisplayName("customer: maps the party and removes the row on deletion")
         void customerMapping() {
-            CustomerEventsListener listener =
-                    new CustomerEventsListener(clock, objectMapper, processedEventRepository, customerRepository);
+            CustomerEventsListener listener = new CustomerEventsListener(
+                    clock,
+                    objectMapper,
+                    processedEventRepository,
+                    customerRepository,
+                    org.mockito.Mockito.mock(ObjectProvider.class));
             Replica replica = replica("customer");
 
             replica.dispatch().accept(envelope(replica, "evt-1", ID.toString()));

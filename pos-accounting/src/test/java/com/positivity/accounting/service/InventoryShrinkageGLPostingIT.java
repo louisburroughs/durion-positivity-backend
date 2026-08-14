@@ -23,6 +23,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
@@ -112,7 +113,12 @@ class InventoryShrinkageGLPostingIT {
 
     @BeforeEach
     void setUp() {
-        listener = new InventoryEventsListener(clock, objectMapper, processedEventRepository, shrinkagePostingService);
+        listener = new InventoryEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                shrinkagePostingService,
+                org.mockito.Mockito.mock(ObjectProvider.class));
     }
 
     @AfterEach

@@ -42,6 +42,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -126,8 +127,12 @@ class ReplicaListenerContractTest {
                         id -> """
                             {"partyId":"%s","partyType":"ORGANIZATION","displayName":"Fleet Co",
                              "status":"ACTIVE","requirementsMet":true}""".formatted(id),
-                        new CustomerEventsListener(clock, objectMapper, processedEventRepository, customerRepository)
-                                ::onCustomerEvent,
+                        new CustomerEventsListener(
+                                clock,
+                                objectMapper,
+                                processedEventRepository,
+                                customerRepository,
+                                org.mockito.Mockito.mock(ObjectProvider.class))::onCustomerEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(customerRepository)
                                 .findById(any()));
@@ -137,8 +142,12 @@ class ReplicaListenerContractTest {
                         LocationUpdatedV1.EVENT_TYPE,
                         id -> """
                             {"locationId":"%s","name":"Main Shop","active":true}""".formatted(id),
-                        new LocationEventsListener(clock, objectMapper, processedEventRepository, locationRepository)
-                                ::onLocationEvent,
+                        new LocationEventsListener(
+                                clock,
+                                objectMapper,
+                                processedEventRepository,
+                                locationRepository,
+                                org.mockito.Mockito.mock(ObjectProvider.class))::onLocationEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(locationRepository)
                                 .findById(any()));
@@ -148,8 +157,12 @@ class ReplicaListenerContractTest {
                         EmployeeUpdatedV1.EVENT_TYPE,
                         id -> """
                             {"employeeId":"%s","employeeNumber":"E-1001","status":"ACTIVE"}""".formatted(id),
-                        new PeopleEventsListener(clock, objectMapper, processedEventRepository, employeeRepository)
-                                ::onPeopleEvent,
+                        new PeopleEventsListener(
+                                clock,
+                                objectMapper,
+                                processedEventRepository,
+                                employeeRepository,
+                                org.mockito.Mockito.mock(ObjectProvider.class))::onPeopleEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(employeeRepository)
                                 .findById(any()));
@@ -159,8 +172,12 @@ class ReplicaListenerContractTest {
                         WorkorderUpdatedV1.EVENT_TYPE,
                         id -> """
                             {"workorderId":"%s","workorderNumber":"WO-1001","status":"CLOSED"}""".formatted(id),
-                        new WorkorderEventsListener(clock, objectMapper, processedEventRepository, workorderRepository)
-                                ::onWorkorderEvent,
+                        new WorkorderEventsListener(
+                                clock,
+                                objectMapper,
+                                processedEventRepository,
+                                workorderRepository,
+                                org.mockito.Mockito.mock(ObjectProvider.class))::onWorkorderEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(workorderRepository)
                                 .findById(any()));
@@ -246,8 +263,12 @@ class ReplicaListenerContractTest {
     @Test
     @DisplayName("customer: replicates the party fields invoicing needs, and removes the row on deletion")
     void customerMapping() {
-        CustomerEventsListener listener =
-                new CustomerEventsListener(clock, objectMapper, processedEventRepository, customerRepository);
+        CustomerEventsListener listener = new CustomerEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                customerRepository,
+                org.mockito.Mockito.mock(ObjectProvider.class));
 
         listener.onCustomerEvent("""
                 {"eventId":"evt-1","eventType":"%s","aggregateVersion":3,
@@ -270,8 +291,12 @@ class ReplicaListenerContractTest {
     @Test
     @DisplayName("location: replicates the full address an invoice is stamped with")
     void locationMapping() {
-        LocationEventsListener listener =
-                new LocationEventsListener(clock, objectMapper, processedEventRepository, locationRepository);
+        LocationEventsListener listener = new LocationEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                locationRepository,
+                org.mockito.Mockito.mock(ObjectProvider.class));
 
         listener.onLocationEvent("""
                 {"eventId":"evt-1","eventType":"%s","aggregateVersion":2,
@@ -304,7 +329,12 @@ class ReplicaListenerContractTest {
     @DisplayName("people: replicates the employee identity an invoice attributes work to")
     void peopleMapping() {
         UUID personId = UUID.randomUUID();
-        new PeopleEventsListener(clock, objectMapper, processedEventRepository, employeeRepository)
+        new PeopleEventsListener(
+                        clock,
+                        objectMapper,
+                        processedEventRepository,
+                        employeeRepository,
+                        org.mockito.Mockito.mock(ObjectProvider.class))
                 .onPeopleEvent("""
                         {"eventId":"evt-1","eventType":"%s","aggregateVersion":1,
                          "payload":{"employeeId":"%s","personId":"%s","employeeNumber":"E-1001",
@@ -322,7 +352,13 @@ class ReplicaListenerContractTest {
     @Test
     @DisplayName("people: ignores an event type it does not consume, without a dedup row")
     void peopleIgnoresOtherTypes() {
-        new PeopleEventsListener(clock, objectMapper, processedEventRepository, employeeRepository).onPeopleEvent("""
+        new PeopleEventsListener(
+                        clock,
+                        objectMapper,
+                        processedEventRepository,
+                        employeeRepository,
+                        org.mockito.Mockito.mock(ObjectProvider.class))
+                .onPeopleEvent("""
                         {"eventId":"evt-9","eventType":"people.staffing-assignment.updated","payload":{}}""");
 
         verify(employeeRepository, never()).save(any());
@@ -333,7 +369,12 @@ class ReplicaListenerContractTest {
     @DisplayName("workorder: replicates the workorder an invoice is raised from")
     void workorderMapping() {
         UUID customerId = UUID.randomUUID();
-        new WorkorderEventsListener(clock, objectMapper, processedEventRepository, workorderRepository)
+        new WorkorderEventsListener(
+                        clock,
+                        objectMapper,
+                        processedEventRepository,
+                        workorderRepository,
+                        org.mockito.Mockito.mock(ObjectProvider.class))
                 .onWorkorderEvent("""
                         {"eventId":"evt-1","eventType":"%s","aggregateVersion":6,
                          "payload":{"workorderId":"%s","workorderNumber":"WO-1001","status":"CLOSED",
@@ -357,8 +398,12 @@ class ReplicaListenerContractTest {
                         .workorderId(ID)
                         .aggregateVersion(6)
                         .build()));
-        WorkorderEventsListener listener =
-                new WorkorderEventsListener(clock, objectMapper, processedEventRepository, workorderRepository);
+        WorkorderEventsListener listener = new WorkorderEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                workorderRepository,
+                org.mockito.Mockito.mock(ObjectProvider.class));
         String template = """
                 {"eventId":"evt-%d","eventType":"%s","aggregateVersion":%d,
                  "payload":{"workorderId":"%s","workorderNumber":"WO-1001","status":"CLOSED",

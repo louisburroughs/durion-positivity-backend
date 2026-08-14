@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -55,11 +56,21 @@ class SettlementListenersReliabilityTest {
     private SettlementReconciliationService reconciliationService;
 
     private SettlementConfigEventsListener configListener() {
-        return new SettlementConfigEventsListener(CLOCK, mapper, processedEventRepository, settlementConfigService);
+        return new SettlementConfigEventsListener(
+                CLOCK,
+                mapper,
+                processedEventRepository,
+                settlementConfigService,
+                org.mockito.Mockito.mock(ObjectProvider.class));
     }
 
     private SettlementEventsListener eventListener() {
-        return new SettlementEventsListener(CLOCK, mapper, processedEventRepository, reconciliationService);
+        return new SettlementEventsListener(
+                CLOCK,
+                mapper,
+                processedEventRepository,
+                reconciliationService,
+                org.mockito.Mockito.mock(ObjectProvider.class));
     }
 
     private String envelope(String eventType, String eventId, Object payload) {

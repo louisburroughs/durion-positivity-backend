@@ -13,16 +13,19 @@ import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtUserLinkReplicaRepository;
 import com.positivity.workorder.internal.repository.ProcessedEventRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -35,7 +38,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "workorder.kafka", name = "enabled", havingValue = "true")
 public class PeopleReplicaEventsListener {
 
@@ -48,6 +50,41 @@ public class PeopleReplicaEventsListener {
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
     private final ExtUserLinkReplicaRepository extUserLinkReplicaRepository;
     private final ExtStaffingAssignmentReplicaRepository extStaffingAssignmentReplicaRepository;
+    private final Counter payloadRejectedCounterPeopleContact;
+    private final Counter payloadRejectedCounterPeople;
+
+    public PeopleReplicaEventsListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            ExtPersonReplicaRepository extPersonReplicaRepository,
+            ExtUserLinkReplicaRepository extUserLinkReplicaRepository,
+            ExtStaffingAssignmentReplicaRepository extStaffingAssignmentReplicaRepository,
+            ObjectProvider<MeterRegistry> meterRegistry) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.extPersonReplicaRepository = extPersonReplicaRepository;
+        this.extUserLinkReplicaRepository = extUserLinkReplicaRepository;
+        this.extStaffingAssignmentReplicaRepository = extStaffingAssignmentReplicaRepository;
+        MeterRegistry registry = meterRegistry.getIfAvailable();
+        this.payloadRejectedCounterPeopleContact = registry == null
+                ? null
+                : Counter.builder("replica.payload.rejected")
+                        .description(
+                                "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
+                        .tag("owner", OWNER_PEOPLE_CONTACT)
+                        .tag("entity", "people-contact-events")
+                        .register(registry);
+        this.payloadRejectedCounterPeople = registry == null
+                ? null
+                : Counter.builder("replica.payload.rejected")
+                        .description(
+                                "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
+                        .tag("owner", OWNER_PEOPLE)
+                        .tag("entity", "people-events")
+                        .register(registry);
+    }
 
     @KafkaListener(
             topics = "${workorder.kafka.people-contact-events-topic:people-contact.events.v1}",
@@ -98,6 +135,14 @@ public class PeopleReplicaEventsListener {
             }
         } catch (TransientDataAccessException e) {
             throw e;
+        } catch (DatabindException e) {
+            Counter counter = OWNER_PEOPLE_CONTACT.equals(owner)
+                    ? payloadRejectedCounterPeopleContact
+                    : payloadRejectedCounterPeople;
+            if (counter != null) {
+                counter.increment();
+            }
+            log.error("Rejected malformed {} event payload eventId={}: {}", owner, eventId, e.getMessage(), e);
         } catch (Exception e) {
             log.warn("Skipping malformed {} event eventId={}", owner, eventId, e);
         }

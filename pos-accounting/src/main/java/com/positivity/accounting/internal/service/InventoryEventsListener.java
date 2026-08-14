@@ -3,16 +3,19 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.inventory.ScrapPostedV1;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -42,7 +45,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.accounting.kafka", name = "enabled", havingValue = "true")
 public class InventoryEventsListener {
 
@@ -50,6 +52,28 @@ public class InventoryEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final InventoryShrinkagePostingService shrinkagePostingService;
+    private final Counter payloadRejectedCounter;
+
+    public InventoryEventsListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            InventoryShrinkagePostingService shrinkagePostingService,
+            ObjectProvider<MeterRegistry> meterRegistry) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.shrinkagePostingService = shrinkagePostingService;
+        MeterRegistry registry = meterRegistry.getIfAvailable();
+        this.payloadRejectedCounter = registry == null
+                ? null
+                : Counter.builder("replica.payload.rejected")
+                        .description(
+                                "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
+                        .tag("owner", "inventory")
+                        .tag("entity", "inventory-events")
+                        .register(registry);
+    }
 
     @KafkaListener(
             topics = "${pos.accounting.kafka.inventory-events-topic:inventory.events.v1}",
@@ -85,6 +109,13 @@ public class InventoryEventsListener {
         ScrapPostedV1 fact;
         try {
             fact = objectMapper.treeToValue(envelope.path("payload"), ScrapPostedV1.class);
+        } catch (DatabindException e) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.error("Rejected malformed scrap event payload eventId={}: {}", eventId, e.getMessage(), e);
+            markProcessed(eventId);
+            return;
         } catch (Exception e) {
             log.warn("Skipping malformed scrap event eventId={}", eventId, e);
             markProcessed(eventId);

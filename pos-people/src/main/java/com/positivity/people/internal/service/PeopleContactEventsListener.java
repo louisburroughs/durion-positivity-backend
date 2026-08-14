@@ -10,18 +10,21 @@ import com.positivity.people.internal.entity.ProcessedEvent;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.ExtUserLinkReplicaRepository;
 import com.positivity.people.internal.repository.ProcessedEventRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -42,7 +45,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.people.kafka", name = "enabled", havingValue = "true")
 public class PeopleContactEventsListener {
 
@@ -53,6 +55,30 @@ public class PeopleContactEventsListener {
     private final ProcessedEventRepository processedEventRepository;
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
     private final ExtUserLinkReplicaRepository extUserLinkReplicaRepository;
+    private final Counter payloadRejectedCounter;
+
+    public PeopleContactEventsListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            ExtPersonReplicaRepository extPersonReplicaRepository,
+            ExtUserLinkReplicaRepository extUserLinkReplicaRepository,
+            ObjectProvider<MeterRegistry> meterRegistry) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.extPersonReplicaRepository = extPersonReplicaRepository;
+        this.extUserLinkReplicaRepository = extUserLinkReplicaRepository;
+        MeterRegistry registry = meterRegistry.getIfAvailable();
+        this.payloadRejectedCounter = registry == null
+                ? null
+                : Counter.builder("replica.payload.rejected")
+                        .description(
+                                "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
+                        .tag("owner", "people-contact")
+                        .tag("entity", "people-contact-events")
+                        .register(registry);
+    }
 
     @KafkaListener(
             topics = "${pos.people.kafka.people-contact-events-topic:people-contact.events.v1}",
@@ -92,6 +118,11 @@ public class PeopleContactEventsListener {
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
             throw e;
+        } catch (DatabindException e) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.error("Rejected malformed people-contact event payload eventId={}: {}", eventId, e.getMessage(), e);
         } catch (Exception e) {
             log.warn("Skipping malformed people-contact event eventId={}", eventId, e);
         }

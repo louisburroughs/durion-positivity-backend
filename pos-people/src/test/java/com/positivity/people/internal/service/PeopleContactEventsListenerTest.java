@@ -32,6 +32,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -86,7 +87,8 @@ class PeopleContactEventsListenerTest {
                 new ObjectMapper(),
                 processedEventRepository,
                 extPersonReplicaRepository,
-                extUserLinkReplicaRepository);
+                extUserLinkReplicaRepository,
+                org.mockito.Mockito.mock(ObjectProvider.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(extPersonReplicaRepository.findById(any())).thenReturn(Optional.empty());
         when(extUserLinkReplicaRepository.findById(any())).thenReturn(Optional.empty());

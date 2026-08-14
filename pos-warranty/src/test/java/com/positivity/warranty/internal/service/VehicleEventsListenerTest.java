@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -42,7 +43,8 @@ class VehicleEventsListenerTest {
 
     @BeforeEach
     void setUp() {
-        listener = new VehicleEventsListener(TEST_CLOCK, new ObjectMapper(), processedEvents, extVehicleReplica);
+        listener = new VehicleEventsListener(
+                TEST_CLOCK, new ObjectMapper(), processedEvents, extVehicleReplica, mock(ObjectProvider.class));
     }
 
     private static String updatedEvent(String eventId, long aggregateVersion) {
