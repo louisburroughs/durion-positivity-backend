@@ -259,8 +259,12 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog-items~1{type}~1{catalogId}
   /v1/catalog/bulk-ingest:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1bulk-ingest
-  /v1/catalog/supplier-item-costs:
-    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1supplier-item-costs
+  /v1/catalog/supplier-prices/history:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1supplier-prices~1history
+  /v1/catalog/supplier-prices/imports/incomplete:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1supplier-prices~1imports~1incomplete
+  /v1/catalog/supplier-prices/latest:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1supplier-prices~1latest
   /v1/catalogs:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalogs
   /v1/catalogs/name/{name}:
@@ -319,10 +323,6 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1substitution-groups~1{groupId}~1members
   /v1/products/substitution-groups/{groupId}/members/{productId}:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1substitution-groups~1{groupId}~1members~1{productId}
-  /v1/products/supplier-costs:
-    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1supplier-costs
-  /v1/products/supplier-costs/{id}:
-    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1supplier-costs~1{id}
   /v1/products/uom-conversions:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1uom-conversions
   /v1/products/uom-conversions/{id}:

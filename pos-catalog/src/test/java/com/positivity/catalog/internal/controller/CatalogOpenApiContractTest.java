@@ -26,10 +26,12 @@ class CatalogOpenApiContractTest extends BaseContractIntegrationTest {
                 objectMapper.readValue(result.getResponse().getContentAsByteArray(), Map.class);
         Map<String, Object> paths = (Map<String, Object>) openApiSpec.get("paths");
 
-        assertOperationDescription(paths, "/v1/products/supplier-costs", "post");
-        assertOperationDescription(paths, "/v1/products/supplier-costs/{id}", "get");
-        assertOperationDescription(paths, "/v1/products/supplier-costs/{id}", "put");
-        assertOperationDescription(paths, "/v1/products/supplier-costs/{id}", "delete");
+        // The supplier-costs write surface was retired with #1308: vendor cost is applied from
+        // PRICAT events into append-only entries, not typed in by hand, so the replacement surface
+        // is read-only and is what this contract now guards.
+        assertOperationDescription(paths, "/v1/catalog/supplier-prices/latest", "get");
+        assertOperationDescription(paths, "/v1/catalog/supplier-prices/history", "get");
+        assertOperationDescription(paths, "/v1/catalog/supplier-prices/imports/incomplete", "get");
         assertOperationDescription(paths, "/v1/products/items/{itemId}/standard-cost", "put");
         assertOperationDescription(paths, "/v1/products/items/{itemId}/costs", "get");
         assertOperationDescription(paths, "/v1/products/items/{itemId}/costs/audit", "get");

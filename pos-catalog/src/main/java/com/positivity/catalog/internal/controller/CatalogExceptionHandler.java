@@ -9,6 +9,8 @@ import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import java.time.Clock;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -17,8 +19,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice(basePackages = "com.positivity.catalog.internal.controller")
 @RequiredArgsConstructor
@@ -48,6 +52,59 @@ public class CatalogExceptionHandler {
                 .map(fieldError -> fieldError.getField() + " " + fieldError.getDefaultMessage())
                 .orElse("Validation failed");
         return buildResponse(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message, correlationId);
+    }
+
+    /**
+     * A missing or unparseable request parameter is a caller error, not a server fault. Without
+     * these two handlers Spring's own exceptions fell through to the catch-all and every such
+     * request answered 500 — which tells a client to retry something that will never succeed, and
+     * hides a contract mistake behind an alarm.
+     */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiError> handleMissingParameter(
+            MissingServletRequestParameterException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        return buildResponse(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR",
+                "Required parameter '" + ex.getParameterName() + "' is missing",
+                correlationId);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiError> handleTypeMismatch(
+            MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        // The rejected value is echoed deliberately: a caller debugging a malformed UUID or date
+        // needs to see what the server read, and it is their own input.
+        return buildResponse(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR",
+                "Parameter '" + ex.getName() + "' has an invalid value: " + ex.getValue(),
+                correlationId);
+    }
+
+    /**
+     * Bean-validation failures on {@code @Validated} controller parameters — a page size beyond its
+     * bound, for instance. Distinct from {@link MethodArgumentNotValidException}, which covers
+     * request bodies, and previously unhandled, so bounded parameters answered 500 for violating
+     * the bound the contract advertises.
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiError> handleConstraintViolation(
+            ConstraintViolationException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        String message = ex.getConstraintViolations().stream()
+                .findFirst()
+                .map(violation -> lastNode(violation) + " " + violation.getMessage())
+                .orElse("Validation failed");
+        return buildResponse(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message, correlationId);
+    }
+
+    private static String lastNode(ConstraintViolation<?> violation) {
+        String path = violation.getPropertyPath().toString();
+        int lastDot = path.lastIndexOf('.');
+        return lastDot < 0 ? path : path.substring(lastDot + 1);
     }
 
     @ExceptionHandler(CatalogValidationException.class)

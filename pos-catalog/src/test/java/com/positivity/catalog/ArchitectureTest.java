@@ -34,6 +34,23 @@ public class ArchitectureTest {
             };
 
     @ArchTest
+    static final ArchRule supplier_price_entries_must_not_reach_any_price_resolver = noClasses()
+            .that()
+            .resideInAPackage("..internal..")
+            .and()
+            .haveSimpleNameNotEndingWith("SupplierPriceEntryServiceImpl")
+            .and()
+            .haveSimpleNameNotEndingWith("SupplierPriceCatalogEventsListener")
+            .should()
+            .dependOnClassesThat()
+            .haveSimpleName("SupplierPriceEntryRepository")
+            .allowEmptyShould(true)
+            .because("supplier cost participates in no sell-price resolution (ADR-0053 §4, ADR-0054);"
+                    + " keeping the repository reachable only from its own read service and the event"
+                    + " consumer makes that structural rather than a rule a future price-book change"
+                    + " could quietly break");
+
+    @ArchTest
     static final ArchRule controllers_should_not_access_repositories_directly = noClasses()
             .that()
             .resideInAPackage("..internal.controller..")
