@@ -119,6 +119,18 @@ pos:
       # binding's own cron.
       poll-interval-ms: ${SUPPLIER_PRICAT_POLL_INTERVAL_MS:60000}
       scheduler-enabled: ${SUPPLIER_PRICAT_SCHEDULER_ENABLED:true}
+    # ── Stock report / B2.1 (CAP-322) ───────────────────────────────────────────────────
+    #
+    # Same chunking problem as PRICAT: a country-level report is as wide as a catalog. A binding
+    # may override the size; the binding column governs both feeds.
+    stockreport:
+      chunk-size: ${SUPPLIER_STOCKREPORT_CHUNK_SIZE:500}
+      poll-interval-ms: ${SUPPLIER_STOCKREPORT_POLL_INTERVAL_MS:60000}
+      scheduler-enabled: ${SUPPLIER_STOCKREPORT_SCHEDULER_ENABLED:true}
+      # B2.1 identifies the buyer by credential and takes no query parameters. The sibling C1.0
+      # report on the same spec DOES take buyerParty/agencyCode, so a deployment binding a C1.0
+      # endpoint to this codec turns this on rather than silently fetching nothing.
+      send-buyer-party: ${SUPPLIER_STOCKREPORT_SEND_BUYER_PARTY:false}
     # ── Event outbox drain (ADR-0044 §4) ────────────────────────────────────────────────
     outbox:
       poll-interval-ms: ${SUPPLIER_OUTBOX_POLL_INTERVAL_MS:1000}

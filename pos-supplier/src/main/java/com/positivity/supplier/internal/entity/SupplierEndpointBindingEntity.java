@@ -102,16 +102,17 @@ public class SupplierEndpointBindingEntity {
     private boolean enabled;
 
     /**
-     * Per-binding chunk size for catalog-style batch capabilities (ADR-0053 §7); {@code null} uses
-     * the deployment default {@code pos.supplier.pricat.chunk-size}.
+     * Per-binding chunk size for every chunked batch feed this binding drives — the price catalog
+     * (ADR-0053 §7) and the stock report alike; {@code null} uses the feed's deployment default.
      *
      * <p>Lives on the binding rather than in configuration alone because the right value is a
      * property of one vendor's documents — how many lines fit a broker message depends on how wide
      * that vendor's lines are — and a deployment talking to two vendors should not have to pick one
-     * number for both.
+     * number for both. One column rather than one per feed, so tuning a vendor cannot leave half
+     * its feeds on the default by accident.
      */
-    @Column(name = "pricat_chunk_size")
-    private Integer pricatChunkSize;
+    @Column(name = "event_chunk_size")
+    private Integer eventChunkSize;
 
     /** Exchange-audit payload capture level (ADR-0050 §7); {@code null} = deployment default. */
     @Enumerated(EnumType.STRING)
