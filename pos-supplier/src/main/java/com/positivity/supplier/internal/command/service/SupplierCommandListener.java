@@ -114,6 +114,14 @@ public class SupplierCommandListener {
             throw e;
         } catch (TransmissionIntentWriter.UnknownSupplierException e) {
             log.error("Supplier order command eventId={} names an unusable vendor: {}", eventId, e.getMessage());
+        } catch (IllegalStateException e) {
+            // Not a bad command — this module's own state contradicting itself. Swallowing it would
+            // mislabel it as malformed input and blame the producer, and would record as processed a
+            // command whose transaction is already doomed: the handlers run in this transaction, so
+            // their failure has marked it rollback-only and the commit would fail anyway. Rethrown so
+            // the failure is what it is, at the cost of retrying a message only a fix can clear.
+            log.error("Supplier command eventId={} hit inconsistent state in this module: {}", eventId, e.toString());
+            throw e;
         } catch (Exception e) {
             log.warn("Skipping malformed supplier command eventId={}", eventId, e);
         }

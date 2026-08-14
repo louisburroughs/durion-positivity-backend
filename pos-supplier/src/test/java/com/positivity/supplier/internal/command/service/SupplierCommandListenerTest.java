@@ -170,6 +170,18 @@ class SupplierCommandListenerTest {
     }
 
     @Test
+    void doesNotPassOffThisModulesOwnInconsistentStateAsAMalformedCommand() {
+        when(republisher.republish(any())).thenThrow(new IllegalStateException("chunk 2 has no staged lines"));
+
+        // The command is valid; our staged data contradicts itself. Recording it as processed would
+        // blame the producer for our bug and would mark as handled a command whose transaction the
+        // failure has already doomed.
+        assertThatThrownBy(() -> listener.onSupplierCommand(republishCommand("e-11")))
+                .isInstanceOf(IllegalStateException.class);
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
     void recordsAMalformedCommandRatherThanBlockingThePartitionOnIt() {
         String malformed = """
                 {"eventId":"e-10","eventType":"supplier.pricecatalog.republish.requested","schemaVersion":1,

@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -131,6 +132,15 @@ public class PriceCatalogRepublisher {
             return 0;
         }
 
+        if (!hasEveryChunkItDeclared(manifest)) {
+            // Checked before anything is queued, not discovered part-way through publishing. The
+            // events and the counter share this transaction, so a failure mid-emit would roll the
+            // whole thing back — but only after the listener had already decided how to treat the
+            // command, and only for a condition no retry can fix. Refusing up front turns our own
+            // inconsistent staged data into a plain, logged refusal.
+            return 0;
+        }
+
         int chunks = emit(manifest, now);
         manifest.setRepublishCount(manifest.getRepublishCount() + 1);
         manifest.setLastRepublishedAt(now);
@@ -166,9 +176,10 @@ public class PriceCatalogRepublisher {
                     entryRepository.findByImportManifestIdAndChunkSequenceOrderByPositionNumberAscEntryIdAsc(
                             manifest.getImportManifestId(), sequence);
             if (entries.isEmpty()) {
-                // The manifest declares a chunk whose lines are not in the table. Re-emitting the
-                // rest would hand the consumer a set that satisfies its chunk count while missing
-                // lines, turning a visible gap into an invisible one.
+                // Unreachable: hasEveryChunkItDeclared() has already compared the staged sequences
+                // against the declared total in this same transaction. Kept as an assertion because
+                // publishing past it would emit a partial catalogue that looks whole to a consumer,
+                // and a loud failure is the only acceptable answer to that.
                 throw new IllegalStateException("PRICAT import " + manifest.getImportManifestId() + " declares "
                         + chunkCount + " chunks but chunk " + sequence + " has no staged lines");
             }
@@ -197,6 +208,28 @@ public class PriceCatalogRepublisher {
                         occurredAt,
                         PriceCatalogEventFactory.completionPayload(manifest, completedAt)));
         return chunkCount;
+    }
+
+    /**
+     * Whether the staged lines still cover every chunk the manifest declared.
+     *
+     * <p>A re-emit that publishes only the chunks it happens to find would hand the consumer a set
+     * that satisfies its chunk count while lines stayed missing — turning a gap it can see into one
+     * it cannot. Refusing the whole re-emit keeps the import visibly incomplete instead.
+     */
+    private boolean hasEveryChunkItDeclared(PriceCatalogImportEntity manifest) {
+        List<Integer> staged = entryRepository.findDistinctChunkSequences(manifest.getImportManifestId());
+        List<Integer> declared =
+                IntStream.rangeClosed(1, manifest.getChunkCount()).boxed().toList();
+        if (staged.equals(declared)) {
+            return true;
+        }
+        log.error(
+                "Refusing to re-publish PRICAT import {}: it declares {} chunks but its staged lines cover {}",
+                manifest.getImportManifestId(),
+                manifest.getChunkCount(),
+                staged);
+        return false;
     }
 
     private static boolean isRepublishable(PriceCatalogImportStatus status) {

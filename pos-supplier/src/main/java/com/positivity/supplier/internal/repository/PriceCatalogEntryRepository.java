@@ -21,6 +21,19 @@ public interface PriceCatalogEntryRepository extends JpaRepository<PriceCatalogE
     long countByImportManifestId(UUID importManifestId);
 
     /**
+     * The chunk sequences an import actually has staged lines for, ascending.
+     *
+     * <p>Read before a re-emit so an import whose staged lines no longer cover the chunk total it
+     * declared is refused whole, rather than discovered part-way through publishing.
+     */
+    @Query("""
+      SELECT DISTINCT e.chunkSequence FROM PriceCatalogEntryEntity e
+      WHERE e.importManifestId = :importManifestId
+      ORDER BY e.chunkSequence
+      """)
+    List<Integer> findDistinctChunkSequences(@Param("importManifestId") UUID importManifestId);
+
+    /**
      * One published chunk of one import, in the order it was published (ADR-0044 §4 re-emission).
      *
      * <p>Read a chunk at a time rather than a whole import, so re-emitting a 50k-line catalogue

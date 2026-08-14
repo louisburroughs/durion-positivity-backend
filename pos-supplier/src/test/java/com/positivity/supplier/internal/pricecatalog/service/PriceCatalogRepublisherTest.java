@@ -1,7 +1,6 @@
 package com.positivity.supplier.internal.pricecatalog.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -124,6 +123,7 @@ class PriceCatalogRepublisherTest {
     }
 
     private void stageTwoChunks() {
+        when(entryRepository.findDistinctChunkSequences(IMPORT_ID)).thenReturn(List.of(1, 2));
         when(entryRepository.findByImportManifestIdAndChunkSequenceOrderByPositionNumberAscEntryIdAsc(IMPORT_ID, 1))
                 .thenReturn(List.of(entry(1, 1), entry(2, 1)));
         when(entryRepository.findByImportManifestIdAndChunkSequenceOrderByPositionNumberAscEntryIdAsc(IMPORT_ID, 2))
@@ -311,19 +311,32 @@ class PriceCatalogRepublisherTest {
     }
 
     @Test
-    void refusesToReEmitAPartialSetWhenADeclaredChunkHasNoStagedLines() {
+    void refusesTheWholeReEmitWhenTheStagedLinesNoLongerCoverEveryDeclaredChunk() {
         when(importRepository.findById(IMPORT_ID))
                 .thenReturn(Optional.of(manifest(PriceCatalogImportStatus.COMPLETED, 2)));
-        when(entryRepository.findByImportManifestIdAndChunkSequenceOrderByPositionNumberAscEntryIdAsc(IMPORT_ID, 1))
-                .thenReturn(List.of(entry(1, 1)));
-        when(entryRepository.findByImportManifestIdAndChunkSequenceOrderByPositionNumberAscEntryIdAsc(IMPORT_ID, 2))
-                .thenReturn(List.of());
+        when(entryRepository.findDistinctChunkSequences(IMPORT_ID)).thenReturn(List.of(1));
+
+        assertThat(republisher.republish(request())).isZero();
 
         // Publishing the chunks that DO exist would satisfy the consumer's chunk count while lines
-        // stayed missing — a visible gap turned into an invisible one. The transaction rolls back
-        // instead, and the attempt is not recorded.
-        assertThatThrownBy(() -> republisher.republish(request()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("chunk 2");
+        // stayed missing — a visible gap turned into an invisible one. Checked before anything is
+        // queued, so the refusal is a logged no-op rather than a rollback part-way through.
+        verifyNoInteractions(outboxWriter);
+        verify(entryRepository, never())
+                .findByImportManifestIdAndChunkSequenceOrderByPositionNumberAscEntryIdAsc(any(UUID.class), anyInt());
+        verify(importRepository, never()).save(any(PriceCatalogImportEntity.class));
+    }
+
+    @Test
+    void refusesWhenTheStagedSequencesAreNotTheOnesTheManifestDeclared() {
+        when(importRepository.findById(IMPORT_ID))
+                .thenReturn(Optional.of(manifest(PriceCatalogImportStatus.COMPLETED, 2)));
+        // The right NUMBER of chunks under the wrong sequence numbers. Counting alone would pass
+        // this and then re-emit chunk 2 twice while chunk 1 never arrived.
+        when(entryRepository.findDistinctChunkSequences(IMPORT_ID)).thenReturn(List.of(2, 3));
+
+        assertThat(republisher.republish(request())).isZero();
+
+        verifyNoInteractions(outboxWriter);
     }
 }
