@@ -3,7 +3,6 @@ package com.positivity.customer.internal.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -44,12 +43,20 @@ public class CustomerDTO {
 
     @NotBlank
     @Size(max = 100)
-    @Schema(description = "Last name of the customer", example = "Doe", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "Last name of the customer. For a commercial party (customerType=COMMERCIAL), this"
+                    + " field carries the organization's legal/registered name instead.",
+            example = "Doe",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private String lastName;
 
     @NotBlank
     @Size(max = 100)
-    @Schema(description = "First name of the customer", example = "John", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "First name of the customer. For a commercial party (customerType=COMMERCIAL), this"
+                    + " field carries the organization's display name instead.",
+            example = "John",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private String firstName;
 
     @Size(max = 255)
@@ -61,12 +68,12 @@ public class CustomerDTO {
             deprecated = true)
     private String primaryAddress;
 
-    @Builder.Default
     @Schema(
-            description = "List of vehicle VINs associated with the customer",
+            description = "List of vehicle VINs associated with the customer. Omitting this field on an update"
+                    + " leaves the customer's existing VINs unchanged; sending an empty list clears them.",
             example = "[\"1HGCM82633A004352\"]",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-    private List<String> vehicleVins = new ArrayList<>();
+    private List<String> vehicleVins;
 
     @Size(max = 50)
     @Schema(
