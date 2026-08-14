@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 43")
+    @DisplayName("CATALOG_VERSION is 45")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(43);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(45);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 449")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 452")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1276,8 +1276,18 @@ class SecurityGatewayConfigTest {
         // import's worth of events.
         assertThat(GatewayPermissionCatalog.authorityForBit(448)).isEqualTo("PERM_supplier:pricecatalog:read");
         assertThat(GatewayPermissionCatalog.authorityForBit(449)).isEqualTo("PERM_supplier:pricecatalog:import");
+        // catalog v44 (CAP-322, #1312): reading vendor-reported availability hints (450). Its own
+        // authority rather than an inventory view permission, because supplier availability is
+        // advisory vendor data and not the owned stock those permissions guard.
+        assertThat(GatewayPermissionCatalog.authorityForBit(450)).isEqualTo("PERM_inventory:supplier_stock_hint:view");
+        // catalog v45 (CAP-320, #1226): the purchase-order transmission ledger (451) and its manual
+        // resolution actions (452). Two authorities rather than one, because reading what was sent to
+        // a vendor and asserting on the system's behalf that a vendor did or did not receive an order
+        // are different powers (ADR-0052 §4).
+        assertThat(GatewayPermissionCatalog.authorityForBit(451)).isEqualTo("PERM_supplier:transmission:read");
+        assertThat(GatewayPermissionCatalog.authorityForBit(452)).isEqualTo("PERM_supplier:transmission:resolve");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(450)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(453)).isNull();
     }
 
     @Test

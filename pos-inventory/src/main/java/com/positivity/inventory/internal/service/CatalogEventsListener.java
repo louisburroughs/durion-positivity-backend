@@ -1,10 +1,12 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
+import com.positivity.inventory.internal.entity.ExtProductCodeReplica;
 import com.positivity.inventory.internal.entity.ExtProductReplica;
 import com.positivity.inventory.internal.entity.ExtProductSubstitutionReplica;
 import com.positivity.inventory.internal.entity.ExtProductUomReplica;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
+import com.positivity.inventory.internal.repository.ExtProductCodeReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtProductSubstitutionReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtProductUomReplicaRepository;
@@ -62,6 +64,7 @@ public class CatalogEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtProductReplicaRepository extProductReplicaRepository;
+    private final ExtProductCodeReplicaRepository extProductCodeReplicaRepository;
     private final ExtProductUomReplicaRepository extProductUomReplicaRepository;
     private final ExtProductSubstitutionReplicaRepository extProductSubstitutionReplicaRepository;
     private final Counter payloadRejectedCounter;
@@ -71,6 +74,7 @@ public class CatalogEventsListener {
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtProductReplicaRepository extProductReplicaRepository,
+            ExtProductCodeReplicaRepository extProductCodeReplicaRepository,
             ExtProductUomReplicaRepository extProductUomReplicaRepository,
             ExtProductSubstitutionReplicaRepository extProductSubstitutionReplicaRepository,
             ObjectProvider<MeterRegistry> meterRegistry) {
@@ -78,6 +82,7 @@ public class CatalogEventsListener {
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extProductReplicaRepository = extProductReplicaRepository;
+        this.extProductCodeReplicaRepository = extProductCodeReplicaRepository;
         this.extProductUomReplicaRepository = extProductUomReplicaRepository;
         this.extProductSubstitutionReplicaRepository = extProductSubstitutionReplicaRepository;
         MeterRegistry registry = meterRegistry.getIfAvailable();
@@ -173,6 +178,17 @@ public class CatalogEventsListener {
                 .precisionScale(conversion.precisionScale())
                 .build()));
 
+        // Product identity codes (CAP-322 #1312, ADR-0044 R3): the read path supplier stock-hint
+        // resolution uses in place of calling pos-catalog, which R1 forbids. A cleared code is
+        // stored as null rather than by deleting the row, so "carries no code" stays distinct from
+        // "never replicated" — the resolver defers on the latter and gives up on the former.
+        extProductCodeReplicaRepository.save(ExtProductCodeReplica.builder()
+                .productId(productId)
+                .codeType(trimToNull(payload.productCodeType()))
+                .code(trimToNull(payload.productCode()))
+                .aggregateVersion(aggregateVersion)
+                .build());
+
         // Same for the substitution member set: null means the product is in no group — clear.
         extProductSubstitutionReplicaRepository.deleteByProductId(productId);
         List<UUID> members = payload.substitutionProductIds() == null ? List.of() : payload.substitutionProductIds();
@@ -187,5 +203,14 @@ public class CatalogEventsListener {
                 aggregateVersion,
                 conversions.size(),
                 members.size());
+    }
+
+    /** Blank and absent are the same statement from catalog: the product carries no code. */
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

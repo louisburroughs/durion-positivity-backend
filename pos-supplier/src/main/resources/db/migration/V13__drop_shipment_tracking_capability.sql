@@ -1,5 +1,14 @@
 -- #1313: SHIPMENT_TRACKING is removed from the bindable capability set.
 --
+-- RENUMBERED V12 -> V13 (#1319). This landed as V12 in #1317 while #1316 was landing its own V12
+-- (V12__pricat_reapplication.sql); neither PR could see the other's version number. Flyway refuses
+-- to initialize with two migrations at one version, so pos-supplier could not start and every
+-- module's build failed the migration-hygiene check until one of them moved. This file moved rather
+-- than the other because it merged second: an environment that deployed in the window between the
+-- two merges would already have recorded V12__pricat_reapplication, and renumbering that one would
+-- have invalidated its checksum. Nothing can have applied THIS file in the meantime, because the
+-- duplicate made the service unbootable from the moment it landed.
+--
 -- WHY THE CAPABILITY GOES RATHER THAN WAITS
 --
 -- CAP-322 (#1228) carried a shipment half alongside the stock report, on the reading that the vendor

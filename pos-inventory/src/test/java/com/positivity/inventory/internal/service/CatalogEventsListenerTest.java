@@ -9,10 +9,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.inventory.internal.entity.ExtProductCodeReplica;
 import com.positivity.inventory.internal.entity.ExtProductReplica;
 import com.positivity.inventory.internal.entity.ExtProductSubstitutionReplica;
 import com.positivity.inventory.internal.entity.ExtProductUomReplica;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
+import com.positivity.inventory.internal.repository.ExtProductCodeReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtProductSubstitutionReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtProductUomReplicaRepository;
@@ -46,6 +48,7 @@ class CatalogEventsListenerTest {
 
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final ExtProductReplicaRepository extProduct = mock(ExtProductReplicaRepository.class);
+    private final ExtProductCodeReplicaRepository extProductCode = mock(ExtProductCodeReplicaRepository.class);
     private final ExtProductUomReplicaRepository extProductUom = mock(ExtProductUomReplicaRepository.class);
     private final ExtProductSubstitutionReplicaRepository extProductSubstitution =
             mock(ExtProductSubstitutionReplicaRepository.class);
@@ -59,6 +62,7 @@ class CatalogEventsListenerTest {
                 new ObjectMapper(),
                 processedEvents,
                 extProduct,
+                extProductCode,
                 extProductUom,
                 extProductSubstitution,
                 org.mockito.Mockito.mock(ObjectProvider.class));
@@ -75,7 +79,8 @@ class CatalogEventsListenerTest {
                             "uomConversions":[
                               {"uomCode":"EA","uomType":"BASE","factorToBase":1,"precisionScale":0},
                               {"uomCode":"CASE","uomType":"PURCHASE","factorToBase":12,"precisionScale":2}],
-                            "substitutionGroupId":"%s","substitutionProductIds":["%s","%s"]}}
+                            "substitutionGroupId":"%s","substitutionProductIds":["%s","%s"],
+                            "productCode":"4012345678901","productCodeType":"EAN"}}
                 """.formatted(eventId, PRODUCT_ID, aggregateVersion, PRODUCT_ID, GROUP_ID, PRODUCT_ID, MEMBER_ID);
     }
 
@@ -239,5 +244,32 @@ class CatalogEventsListenerTest {
                 .isThrownBy(() -> listener.onCatalogEvent(v2Event("e-transient", 100)));
 
         verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("product identity codes land in the ext_product_code replica")
+    void product_codes_are_replicated() {
+        listener.onCatalogEvent(v2Event("e-code", 100));
+
+        ArgumentCaptor<ExtProductCodeReplica> saved = ArgumentCaptor.forClass(ExtProductCodeReplica.class);
+        verify(extProductCode).save(saved.capture());
+        assertThat(saved.getValue().getProductId()).isEqualTo(PRODUCT_ID);
+        assertThat(saved.getValue().getCodeType()).isEqualTo("EAN");
+        assertThat(saved.getValue().getCode()).isEqualTo("4012345678901");
+        assertThat(saved.getValue().getAggregateVersion()).isEqualTo(100L);
+    }
+
+    @Test
+    @DisplayName("a product carrying no code keeps its row with a null code")
+    void cleared_code_is_kept_as_null() {
+        listener.onCatalogEvent(v1Event("e-nocode", 100));
+
+        ArgumentCaptor<ExtProductCodeReplica> saved = ArgumentCaptor.forClass(ExtProductCodeReplica.class);
+        verify(extProductCode).save(saved.capture());
+        // "This product has no code" and "never replicated here" are different answers to the
+        // resolver: it gives up on the first and defers on the second.
+        assertThat(saved.getValue().getProductId()).isEqualTo(PRODUCT_ID);
+        assertThat(saved.getValue().getCode()).isNull();
+        assertThat(saved.getValue().getCodeType()).isNull();
     }
 }
