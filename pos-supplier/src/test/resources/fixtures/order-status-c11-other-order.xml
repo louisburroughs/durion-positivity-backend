@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The vendor answered about a DIFFERENT order than the one asked about. Picking the first answer in
+  the document would attribute another order's delivery dates and despatches to ours, so the codec
+  matches on our own reference and reports NOT_FOUND when nothing echoes it.
+-->
+<ew:order_status xmlns:ew="http://www.reifen.net">
+    <ew:DocumentID>C1</ew:DocumentID>
+    <ew:Variant>1</ew:Variant>
+    <ew:ReferencedOrder>
+        <ew:Error>
+            <ew:ErrorCode>0</ew:ErrorCode>
+        </ew:Error>
+        <ew:SupplierOrderNumber>
+            <ew:DocumentID>MICH-111111</ew:DocumentID>
+        </ew:SupplierOrderNumber>
+        <ew:OrderReference>
+            <ew:DocumentID>DURFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</ew:DocumentID>
+        </ew:OrderReference>
+        <ew:OrderLine>
+            <ew:LineID>000001</ew:LineID>
+            <ew:OrderedArticle>
+                <ew:ArticleIdentification>
+                    <ew:EANUCCArticleID>3528709999999</ew:EANUCCArticleID>
+                </ew:ArticleIdentification>
+                <ew:ScheduleDetails>
+                    <ew:DeliveryDate>2026-09-01</ew:DeliveryDate>
+                    <ew:ConfirmedQuantity>
+                        <ew:QuantityValue>99</ew:QuantityValue>
+                    </ew:ConfirmedQuantity>
+                </ew:ScheduleDetails>
+            </ew:OrderedArticle>
+        </ew:OrderLine>
+    </ew:ReferencedOrder>
+</ew:order_status>

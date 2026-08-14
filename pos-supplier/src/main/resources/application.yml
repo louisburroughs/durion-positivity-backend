@@ -137,6 +137,29 @@ pos:
       # report on the same spec DOES take buyerParty/agencyCode, so a deployment binding a C1.0
       # endpoint to this codec turns this on rather than silently fetching nothing.
       send-buyer-party: ${SUPPLIER_STOCKREPORT_SEND_BUYER_PARTY:false}
+    # ── Purchase-order transmission (ADR-0052, CAP-320) ─────────────────────────────────
+    #
+    # Three background jobs, three cadences. None of them ever re-sends an order: dispatch drains
+    # PENDING, recovery reconciles what a crash left mid-flight, and the status poll watches
+    # fulfilment.
+    order:
+      scheduler-enabled: ${SUPPLIER_ORDER_SCHEDULER_ENABLED:true}
+      # Short, because this is the latency between a purchase order being approved and reaching the
+      # vendor. It costs nothing when the queue is empty.
+      dispatch-poll-interval-ms: ${SUPPLIER_ORDER_DISPATCH_POLL_INTERVAL_MS:5000}
+      recovery-poll-interval-ms: ${SUPPLIER_ORDER_RECOVERY_POLL_INTERVAL_MS:60000}
+      # How long an order may sit mid-flight before a human is asked to look at it. Bounded because
+      # the alternative is an order that MAY exist at a vendor sitting unresolved indefinitely while
+      # reconciliation quietly fails every cycle.
+      ambiguity-escalation-minutes: ${SUPPLIER_ORDER_AMBIGUITY_ESCALATION_MINUTES:30}
+      # How often the poller LOOKS for due orders, not how often a vendor is asked -- that is the
+      # minimum interval below.
+      status-poll-interval-ms: ${SUPPLIER_ORDER_STATUS_POLL_INTERVAL_MS:60000}
+      status-poll-min-interval-seconds: ${SUPPLIER_ORDER_STATUS_POLL_MIN_INTERVAL_SECONDS:900}
+      # Days of UNCHANGED vendor answers after which polling stops. Needed because a schedule is
+      # only settled on a positive statement, so a vendor that never states quantities would
+      # otherwise be polled forever. Recorded as STALE, never as a completion.
+      status-max-quiet-days: ${SUPPLIER_ORDER_STATUS_MAX_QUIET_DAYS:45}
     # ── Event outbox drain (ADR-0044 §4) ────────────────────────────────────────────────
     outbox:
       poll-interval-ms: ${SUPPLIER_OUTBOX_POLL_INTERVAL_MS:1000}
@@ -149,6 +172,11 @@ pos:
       enabled: ${SUPPLIER_KAFKA_ENABLED:false}
       catalog-events-topic: ${SUPPLIER_CATALOG_EVENTS_TOPIC:catalog.events.v1}
       catalog-events-consumer-group: ${SUPPLIER_CATALOG_EVENTS_CONSUMER_GROUP:pos-supplier-catalog-events}
+      # Inbound purchase-order commands (ADR-0049 §3). Also gated by `enabled` above: with Kafka
+      # off nothing is consumed and no order is transmitted, which is the safe direction — the
+      # alternative would be orders placed by a deployment that cannot report the results.
+      supplier-commands-topic: ${SUPPLIER_COMMANDS_TOPIC:supplier.commands.v1}
+      supplier-commands-consumer-group: ${SUPPLIER_COMMANDS_CONSUMER_GROUP:pos-supplier-order-commands}
   # @EmitEvent event-type registration with pos-event-receiver at startup (AGENTS.md)
   events:
     base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}

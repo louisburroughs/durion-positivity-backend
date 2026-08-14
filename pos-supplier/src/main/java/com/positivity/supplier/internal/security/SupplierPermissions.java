@@ -46,5 +46,27 @@ public final class SupplierPermissions {
      */
     public static final String PRICECATALOG_IMPORT = "supplier:pricecatalog:import";
 
+    /**
+     * Read the purchase-order transmission ledger: what was sent to which vendor, what the vendor
+     * answered, and what is stuck (ADR-0052).
+     *
+     * <p>Separate from {@link #PROFILE_READ} because it answers a different question — profile
+     * read says how this deployment is configured to talk to a vendor, this says what we actually
+     * ordered from them. Deliberately not {@link #AUDIT_READ} either: an operator working the
+     * stuck-transmission queue needs the ledger, not sight of raw commercial payloads.
+     */
+    public static final String TRANSMISSION_READ = "supplier:transmission:read";
+
+    /**
+     * Resolve a transmission awaiting manual review (ADR-0052 §4, deny-by-default per ADR-0040).
+     *
+     * <p>The most consequential permission in this module. Its holder asserts, on the system's
+     * behalf, that a vendor did or did not receive a purchase order — a statement about the
+     * physical world that this system cannot verify and that decides whether goods get ordered
+     * again. Every use is recorded with the actor's name and their free-text evidence, and
+     * published as an event on the purchase-order timeline.
+     */
+    public static final String TRANSMISSION_RESOLVE = "supplier:transmission:resolve";
+
     private SupplierPermissions() {}
 }

@@ -156,6 +156,17 @@
             <artifactId>jspecify</artifactId>
             <version>1.0.0</version>
         </dependency>
+        <!-- JAXB for the EDIWheel C1 XML norms (CAP-320 #1226): order creation C1.0 and order
+             status C1.1 are XML documents, unlike the B-series JSON reports. Versions come from
+             the Spring Boot BOM, same as pos-documents — keep these unversioned. -->
+        <dependency>
+            <groupId>jakarta.xml.bind</groupId>
+            <artifactId>jakarta.xml.bind-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.jaxb</groupId>
+            <artifactId>jaxb-runtime</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>

@@ -3,7 +3,7 @@ package com.positivity.gateway.config;
 public final class GatewayPermissionCatalog {
     private GatewayPermissionCatalog() {}
 
-    public static final int CATALOG_VERSION = 44;
+    public static final int CATALOG_VERSION = 45;
 
     protected static final String[] AUTHORITY_BY_BIT = {
         "PERM_accounting:je:view",
@@ -525,7 +525,11 @@ public final class GatewayPermissionCatalog {
         "PERM_supplier:pricecatalog:import", // 449
 
         // ── New batch (bits 450–450) ──────────────────────────────────────────
-        "PERM_inventory:supplier_stock_hint:view" // 450
+        "PERM_inventory:supplier_stock_hint:view", // 450
+
+        // ── New batch (bits 451–452) ──────────────────────────────────────────
+        "PERM_supplier:transmission:read", // 451
+        "PERM_supplier:transmission:resolve" // 452
     };
 
     public static String authorityForBit(int bitIndex) {

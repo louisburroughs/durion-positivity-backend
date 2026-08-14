@@ -89,6 +89,19 @@ public final class SupplierEventTypes {
                 EventTypeRegistration.write(
                                 "SUPPLIER_PRICECATALOG_REAPPLY",
                                 "Re-apply quarantined price-catalog lines after a catalog fix")
+                        .build(),
+                // Order transmission ledger (ADR-0052, CAP-320)
+                EventTypeRegistration.search(
+                                "SUPPLIER_TRANSMISSION_LIST", "List the vendor transmissions of one purchase order")
+                        .build(),
+                EventTypeRegistration.fastRead("SUPPLIER_TRANSMISSION_GET", "Get one vendor transmission")
+                        .build(),
+                // Approval-grade rather than write, and not for latency reasons: this is an operator
+                // asserting whether a vendor holds a real purchase order, which is the most
+                // consequential single action in this module (ADR-0052 §4).
+                EventTypeRegistration.approval(
+                                "SUPPLIER_TRANSMISSION_RESOLVE",
+                                "Resolve a purchase-order transmission awaiting manual review")
                         .build());
     }
 }

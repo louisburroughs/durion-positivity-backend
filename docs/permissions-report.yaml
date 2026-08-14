@@ -1,9 +1,9 @@
-generatedAt: "2026-08-14T18:33:05.724979+00:00"
+generatedAt: "2026-08-14T20:53:04.829365+00:00"
 root: "."
 summary:
   manifestCount: 22
-  permissionCount: 420
-  uniquePermissionCount: 420
+  permissionCount: 422
+  uniquePermissionCount: 422
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -786,7 +786,7 @@ manifests:
     domain: "supplier"
     serviceName: "pos-supplier"
     version: "1.0"
-    permissionCount: 5
+    permissionCount: 7
     permissions:
       - name: "supplier:audit:read"
         description: "Read supplier exchange audit records"
@@ -798,6 +798,10 @@ manifests:
         description: "View vendor price-catalog import bookkeeping and the unmatched-line quarantine"
       - name: "supplier:pricecatalog:import"
         description: "Trigger an on-demand vendor price-catalog (PRICAT) import"
+      - name: "supplier:transmission:read"
+        description: "View the purchase-order transmission ledger and its stuck-transmission queue"
+      - name: "supplier:transmission:resolve"
+        description: "Resolve a purchase-order transmission awaiting manual review (confirm with vendor reference, mark not received, or cancel)"
   - module: "pos-tax"
     path: "pos-tax/src/main/resources/permissions.yaml"
     domain: "tax"
@@ -3014,6 +3018,18 @@ permissions:
     source: "pos-supplier/src/main/resources/permissions.yaml"
   - name: "supplier:profile:write"
     description: "Create and edit vendor profiles, auth configs, commercial accounts, and endpoint bindings"
+    domain: "supplier"
+    serviceName: "pos-supplier"
+    module: "pos-supplier"
+    source: "pos-supplier/src/main/resources/permissions.yaml"
+  - name: "supplier:transmission:read"
+    description: "View the purchase-order transmission ledger and its stuck-transmission queue"
+    domain: "supplier"
+    serviceName: "pos-supplier"
+    module: "pos-supplier"
+    source: "pos-supplier/src/main/resources/permissions.yaml"
+  - name: "supplier:transmission:resolve"
+    description: "Resolve a purchase-order transmission awaiting manual review (confirm with vendor reference, mark not received, or cancel)"
     domain: "supplier"
     serviceName: "pos-supplier"
     module: "pos-supplier"
