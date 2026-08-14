@@ -21,6 +21,30 @@ public interface PriceCatalogEntryRepository extends JpaRepository<PriceCatalogE
     long countByImportManifestId(UUID importManifestId);
 
     /**
+     * The chunk sequences an import actually has staged lines for, ascending.
+     *
+     * <p>Read before a re-emit so an import whose staged lines no longer cover the chunk total it
+     * declared is refused whole, rather than discovered part-way through publishing.
+     */
+    @Query("""
+      SELECT DISTINCT e.chunkSequence FROM PriceCatalogEntryEntity e
+      WHERE e.importManifestId = :importManifestId
+      ORDER BY e.chunkSequence
+      """)
+    List<Integer> findDistinctChunkSequences(@Param("importManifestId") UUID importManifestId);
+
+    /**
+     * One published chunk of one import, in the order it was published (ADR-0044 §4 re-emission).
+     *
+     * <p>Read a chunk at a time rather than a whole import, so re-emitting a 50k-line catalogue
+     * costs one chunk of memory rather than all of it. The entry id breaks position ties, because a
+     * re-emit whose line order varied between runs would produce a payload the consumer's checksum
+     * no longer matches.
+     */
+    List<PriceCatalogEntryEntity> findByImportManifestIdAndChunkSequenceOrderByPositionNumberAscEntryIdAsc(
+            UUID importManifestId, int chunkSequence);
+
+    /**
      * The applicable entry for one product in one market as at a given day (ADR-0053 §2):
      * greatest {@code effectiveFrom} not after the day, ties broken by source-document date and
      * then by fetch timestamp — the deterministic ordering the ADR fixes so two readers never

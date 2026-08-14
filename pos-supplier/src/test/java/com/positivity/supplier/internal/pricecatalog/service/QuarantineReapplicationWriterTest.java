@@ -206,6 +206,20 @@ class QuarantineReapplicationWriterTest {
     }
 
     @Test
+    void stagesEachLineWithTheChunkItWasPublishedIn() {
+        writer.commit(profile(), List.of(resolvedLine(1), resolvedLine(2), resolvedLine(3)), APPLIED_AT, 2);
+
+        // This path needs the recorded sequence more than the import path does: these lines are
+        // staged in quarantine-query order rather than position order, so a re-emit could not
+        // reconstruct the boundaries from the rows alone (ADR-0044 §4).
+        ArgumentCaptor<PriceCatalogEntryEntity> captor = ArgumentCaptor.forClass(PriceCatalogEntryEntity.class);
+        verify(entryRepository, times(3)).save(captor.capture());
+        assertThat(captor.getAllValues())
+                .extracting(PriceCatalogEntryEntity::getChunkSequence)
+                .containsExactly(1, 1, 2);
+    }
+
+    @Test
     void publishesChunksAndACompletionEventSoAConsumerCanConfirmItWhole() {
         writer.commit(profile(), List.of(resolvedLine(1), resolvedLine(2), resolvedLine(3)), APPLIED_AT, 2);
 

@@ -1,11 +1,9 @@
 package com.positivity.supplier.internal.pricecatalog.service;
 
-import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogImportCompletedV1;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogLine;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogUpdatedV1;
-import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.supplier.internal.adapter.ediwheelb.PricatDocument;
 import com.positivity.supplier.internal.domain.model.SupplierPriceCatalogEntry;
 import com.positivity.supplier.internal.entity.PriceCatalogEntryEntity;
@@ -115,8 +113,12 @@ public class PriceCatalogStagingWriter {
                 .correlationId(correlationId)
                 .build());
 
-        for (MatchedLine line : prepared.matched()) {
-            entryRepository.save(toEntryEntity(line, importRow, billing, fetchedAt));
+        // Staged with the chunk they are published in, so a later re-emit reproduces these exact
+        // boundaries — the consumer deduplicates re-emitted chunks on the sequence (ADR-0044 §4).
+        for (int index = 0; index < chunks.size(); index++) {
+            for (MatchedLine line : chunks.get(index)) {
+                entryRepository.save(toEntryEntity(line, importRow, billing, fetchedAt, index + 1));
+            }
         }
         for (QuarantinedLine line : prepared.quarantined()) {
             unmatchedLineRepository.save(toUnmatchedEntity(line, importRow, billing, fetchedAt));
@@ -169,66 +171,31 @@ public class PriceCatalogStagingWriter {
     private void publishEvents(
             PriceCatalogImportEntity importRow, List<List<MatchedLine>> chunks, Instant completedAt) {
         String topic = DomainTopics.events("supplier");
+        Instant occurredAt = Instant.now(clock);
         int sequence = 0;
         for (List<MatchedLine> chunk : chunks) {
             sequence++;
-            SupplierPriceCatalogUpdatedV1 payload = new SupplierPriceCatalogUpdatedV1(
-                    importRow.getImportManifestId(),
-                    importRow.getVendorProfileId(),
-                    importRow.getSupplierRef(),
+            SupplierPriceCatalogUpdatedV1 payload = PriceCatalogEventFactory.chunkPayload(
+                    importRow,
                     sequence,
                     chunks.size(),
-                    importRow.getSourceDocumentId(),
-                    importRow.getSourceDocumentDate(),
-                    importRow.getBuyerAccountNumber(),
-                    importRow.getCountryCode(),
-                    importRow.getCurrency(),
-                    importRow.getProtocolVersion(),
-                    importRow.getFetchedAt(),
                     chunk.stream().map(PriceCatalogStagingWriter::toEventLine).toList());
             outboxWriter.publish(
-                    topic, envelope(importRow, SupplierPriceCatalogUpdatedV1.EVENT_TYPE, sequence, payload));
+                    topic,
+                    PriceCatalogEventFactory.envelope(
+                            importRow, SupplierPriceCatalogUpdatedV1.EVENT_TYPE, sequence, occurredAt, payload));
         }
 
-        SupplierPriceCatalogImportCompletedV1 completion = new SupplierPriceCatalogImportCompletedV1(
-                importRow.getImportManifestId(),
-                importRow.getVendorProfileId(),
-                importRow.getSupplierRef(),
-                importRow.getStatus().name(),
-                importRow.getLinesFetched(),
-                importRow.getLinesMatched(),
-                importRow.getLinesUnmatched(),
-                importRow.getLinesDuplicate(),
-                importRow.getChunkCount(),
-                importRow.getChunkSize(),
-                importRow.getContentChecksum(),
-                importRow.getSourceDocumentId(),
-                importRow.getSourceDocumentDate(),
-                importRow.getBuyerAccountNumber(),
-                importRow.getCountryCode(),
-                importRow.getCurrency(),
-                importRow.getFetchedAt(),
-                completedAt);
         // Sequenced after every chunk, and the outbox drains in id order, so a consumer can never
         // see "complete" before the lines it is meant to complete.
         outboxWriter.publish(
                 topic,
-                envelope(importRow, SupplierPriceCatalogImportCompletedV1.EVENT_TYPE, chunks.size() + 1L, completion));
-    }
-
-    private <T> DomainEventEnvelope<T> envelope(
-            PriceCatalogImportEntity importRow, String eventType, long aggregateVersion, T payload) {
-        return new DomainEventEnvelope<>(
-                UUIDv7Generator.generate(),
-                eventType,
-                1,
-                importRow.getImportManifestId(),
-                aggregateVersion,
-                Instant.now(clock),
-                "pos-supplier",
-                importRow.getCorrelationId(),
-                importRow.getCreatedBy(),
-                payload);
+                PriceCatalogEventFactory.envelope(
+                        importRow,
+                        SupplierPriceCatalogImportCompletedV1.EVENT_TYPE,
+                        chunks.size() + 1L,
+                        occurredAt,
+                        PriceCatalogEventFactory.completionPayload(importRow, completedAt)));
     }
 
     private static SupplierPriceCatalogLine toEventLine(MatchedLine line) {
@@ -249,12 +216,17 @@ public class PriceCatalogStagingWriter {
     }
 
     private static PriceCatalogEntryEntity toEntryEntity(
-            MatchedLine line, PriceCatalogImportEntity importRow, SupplierAccountEntity billing, Instant fetchedAt) {
+            MatchedLine line,
+            PriceCatalogImportEntity importRow,
+            SupplierAccountEntity billing,
+            Instant fetchedAt,
+            int chunkSequence) {
         SupplierPriceCatalogEntry entry = line.entry();
         return PriceCatalogEntryEntity.builder()
                 .importManifestId(importRow.getImportManifestId())
                 .vendorProfileId(importRow.getVendorProfileId())
                 .positionNumber(entry.positionNumber())
+                .chunkSequence(chunkSequence)
                 .articleEan(entry.articleEan())
                 .supplierArticleCode(entry.supplierArticleCode())
                 .xReferenceCode(entry.xReferenceCode())
