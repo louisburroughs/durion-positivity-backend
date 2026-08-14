@@ -45,8 +45,11 @@ CREATE TABLE supplier_stock_snapshot (
     created_by character varying(100),
 
     CONSTRAINT pk_supplier_stock_snapshot PRIMARY KEY (snapshot_id),
+    -- REJECTED is deliberately distinct from EMPTY: "the vendor reported nothing" and "the vendor
+    -- reported something we could not read" are different problems with different owners, and an
+    -- operator filtering on EMPTY would never see the second.
     CONSTRAINT ck_sstock_snapshot_status
-        CHECK (status IN ('COMPLETED', 'EMPTY', 'FAILED'))
+        CHECK (status IN ('COMPLETED', 'EMPTY', 'REJECTED', 'FAILED'))
 );
 
 CREATE INDEX idx_sstock_snapshot_profile_asof ON supplier_stock_snapshot (vendor_profile_id, snapshot_as_of);

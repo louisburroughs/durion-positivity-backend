@@ -50,8 +50,10 @@ public record SupplierStockSnapshot(
      * @param supplierArticleCode vendor's own article code — an alias, never an identifier
      * @param buyersArticleId     the buyer's own code as the vendor holds it, when stated
      * @param description         vendor article description, when stated
-     * @param availableQuantity   quantity the vendor reported; null means the vendor stated none,
-     *                            which is not the same as reporting zero
+     * @param availableQuantity   quantity the vendor stated for this line. Null means the vendor
+     *                            listed the article WITHOUT stating any quantity — it is not a
+     *                            statement that stock is zero. An explicit {@code 0} is that
+     *                            statement, and the two must never be collapsed
      */
     public record Line(
             @Nullable String lineId,

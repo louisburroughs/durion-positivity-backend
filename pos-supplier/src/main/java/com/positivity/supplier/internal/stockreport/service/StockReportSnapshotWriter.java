@@ -43,6 +43,15 @@ public class StockReportSnapshotWriter {
 
     public static final String STATUS_EMPTY = "EMPTY";
 
+    /**
+     * The vendor sent lines and none of them decoded. Distinct from {@link #STATUS_EMPTY} on
+     * purpose: "the vendor reported nothing" and "the vendor reported something we could not read"
+     * are different problems with different owners — the first is a quiet warehouse, the second is
+     * a codec or a vendor format change — and an operator filtering on EMPTY would never see the
+     * second.
+     */
+    public static final String STATUS_REJECTED = "REJECTED";
+
     public static final String STATUS_FAILED = "FAILED";
 
     /**
@@ -78,7 +87,7 @@ public class StockReportSnapshotWriter {
 
         List<List<SupplierStockSnapshot.Line>> chunks = partition(snapshot.lines(), chunkSize);
         Instant completedAt = Instant.now(clock);
-        String status = snapshot.lines().isEmpty() ? STATUS_EMPTY : STATUS_COMPLETED;
+        String status = classify(snapshot);
 
         StockSnapshotEntity row = snapshotRepository.save(StockSnapshotEntity.builder()
                 .vendorProfileId(binding.profile().getVendorProfileId())
@@ -151,6 +160,18 @@ public class StockReportSnapshotWriter {
                 .build());
         log.warn("Stock snapshot {} failed: {}", row.getSnapshotId(), failureDetail);
         return row;
+    }
+
+    /**
+     * A document with no lines at all is {@code EMPTY}; one whose lines all failed to decode is
+     * {@code REJECTED}; anything with at least one usable line is {@code COMPLETED}, with the
+     * rejected count recorded alongside.
+     */
+    private static String classify(SupplierStockSnapshot snapshot) {
+        if (!snapshot.lines().isEmpty()) {
+            return STATUS_COMPLETED;
+        }
+        return snapshot.linesFetched() == 0 ? STATUS_EMPTY : STATUS_REJECTED;
     }
 
     private void publish(StockSnapshotEntity row, List<List<SupplierStockSnapshot.Line>> chunks) {

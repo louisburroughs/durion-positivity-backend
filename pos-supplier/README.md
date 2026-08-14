@@ -113,6 +113,11 @@ Snapshots are append-only. A failed or undecodable fetch records a `FAILED` snap
 the previous snapshot stays the last thing the vendor actually said — a vendor outage is not a
 statement that a warehouse is empty.
 
+Four terminal statuses, and the distinction between the middle two is the point: `COMPLETED` (at
+least one usable line), `EMPTY` (the vendor sent no lines), `REJECTED` (the vendor sent lines and
+none of them decoded — a codec or vendor-format break, not a quiet warehouse), `FAILED` (no usable
+answer at all).
+
 ### Gateway routing
 
 `Path=/supplier/**` with `StripPrefix=1`, plus the gateway's global `ApiVersionHeaderToPathFilter`:

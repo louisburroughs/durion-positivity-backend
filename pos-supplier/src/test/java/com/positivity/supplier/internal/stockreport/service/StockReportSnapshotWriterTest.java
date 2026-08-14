@@ -191,6 +191,28 @@ class StockReportSnapshotWriterTest {
     }
 
     @Test
+    void marksASnapshotWhoseLinesAllFailedToDecodeAsRejectedNotEmpty() {
+        // The vendor DID report — we could not read it. Classifying that as EMPTY would hide a
+        // codec or vendor-format break behind "quiet warehouse" in every operator query.
+        SupplierStockSnapshot allRejected = new SupplierStockSnapshot(
+                "STOCKREPORT-1",
+                LocalDate.of(2026, 8, 14),
+                Instant.parse("2026-08-14T06:00:00Z"),
+                "30012456",
+                List.of(),
+                List.of(
+                        new SupplierStockSnapshot.RejectedLine("1", "quantityValue is not a number: 'lots'"),
+                        new SupplierStockSnapshot.RejectedLine("2", "line states no article identity")),
+                2);
+
+        StockSnapshotEntity row = writer.commit(allRejected, binding(), billing(), "corr-1", FETCHED_AT, 500);
+
+        assertThat(row.getStatus()).isEqualTo(StockReportSnapshotWriter.STATUS_REJECTED);
+        assertThat(row.getLinesRejected()).isEqualTo(2);
+        verify(outboxWriter, never()).publish(any(), any());
+    }
+
+    @Test
     void marksALineLessSnapshotEmptyAndPublishesNothing() {
         StockSnapshotEntity row = writer.commit(snapshot(0, null), binding(), billing(), "corr-1", FETCHED_AT, 500);
 
