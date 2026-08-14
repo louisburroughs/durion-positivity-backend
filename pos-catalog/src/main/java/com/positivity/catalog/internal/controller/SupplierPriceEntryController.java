@@ -7,6 +7,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -221,7 +222,9 @@ public class SupplierPriceEntryController {
             content =
                     @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = SupplierPriceImportStatusDto.class)))
+                            array =
+                                    @ArraySchema(
+                                            schema = @Schema(implementation = SupplierPriceImportStatusDto.class))))
     public ResponseEntity<List<SupplierPriceImportStatusDto>> listIncompleteSupplierPriceImports() {
         return ResponseEntity.ok(supplierPriceEntryService.findIncompleteImports());
     }

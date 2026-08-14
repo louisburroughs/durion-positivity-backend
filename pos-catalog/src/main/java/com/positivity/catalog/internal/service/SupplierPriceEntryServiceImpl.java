@@ -10,7 +10,6 @@ import com.positivity.catalog.service.SupplierPriceEntryService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -63,9 +62,9 @@ public class SupplierPriceEntryServiceImpl implements SupplierPriceEntryService 
     @NonNull
     @Transactional(readOnly = true)
     public List<SupplierPriceImportStatusDto> findIncompleteImports() {
-        return priceImportRepository.findByStatus(SupplierPriceImportEntity.STATUS_INCOMPLETE).stream()
-                .sorted(Comparator.comparing(SupplierPriceImportEntity::getUpdatedAt)
-                        .reversed())
+        return priceImportRepository
+                .findByStatusOrderByUpdatedAtDesc(SupplierPriceImportEntity.STATUS_INCOMPLETE)
+                .stream()
                 .map(SupplierPriceEntryServiceImpl::toStatusDto)
                 .toList();
     }

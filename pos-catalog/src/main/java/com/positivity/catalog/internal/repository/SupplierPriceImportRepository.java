@@ -10,5 +10,10 @@ public interface SupplierPriceImportRepository extends JpaRepository<SupplierPri
 
     List<SupplierPriceImportEntity> findByVendorProfileIdOrderByUpdatedAtDesc(UUID vendorProfileId);
 
-    List<SupplierPriceImportEntity> findByStatus(String status);
+    /**
+     * Ordered in the query rather than in the service: this table grows with every import, and
+     * sorting a whole status partition in memory would get slower exactly as the operator's need
+     * for it becomes more urgent.
+     */
+    List<SupplierPriceImportEntity> findByStatusOrderByUpdatedAtDesc(String status);
 }

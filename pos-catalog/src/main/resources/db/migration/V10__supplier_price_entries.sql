@@ -88,3 +88,26 @@ CREATE TABLE supplier_price_import (
 
 CREATE INDEX idx_supplier_price_import_profile ON supplier_price_import (vendor_profile_id);
 CREATE INDEX idx_supplier_price_import_status ON supplier_price_import (status);
+
+-- ── Applied-chunk log ───────────────────────────────────────────────────────────────────────
+--
+-- Event-id deduplication is not sufficient on its own. A re-emit requested through
+-- supplier.pricecatalog.republish.requested re-delivers the same chunks as NEW events with new
+-- ids, so an eventId guard alone would let the producer's recovery write a second copy of every
+-- line in the chunk: duplicate supplier_price_entry rows with identical effective dates and
+-- document identity, which the latest-selection tie-break cannot separate, plus an inflated chunk
+-- count that could mark a still-incomplete import complete.
+--
+-- The natural identity of a chunk is (import_manifest_id, chunk_sequence), and it is unique here.
+CREATE TABLE supplier_price_import_chunk (
+    id uuid NOT NULL,
+    import_manifest_id uuid NOT NULL,
+    chunk_sequence integer NOT NULL,
+    lines_applied integer NOT NULL,
+    applied_at timestamp(6) with time zone NOT NULL,
+
+    CONSTRAINT pk_supplier_price_import_chunk PRIMARY KEY (id),
+    CONSTRAINT uk_supplier_price_import_chunk UNIQUE (import_manifest_id, chunk_sequence),
+    CONSTRAINT fk_supplier_price_import_chunk_import
+        FOREIGN KEY (import_manifest_id) REFERENCES supplier_price_import (import_manifest_id)
+);

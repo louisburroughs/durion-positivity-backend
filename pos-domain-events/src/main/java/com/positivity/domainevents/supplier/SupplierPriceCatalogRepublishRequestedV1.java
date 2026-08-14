@@ -14,9 +14,14 @@ import org.jspecify.annotations.Nullable;
  * producer to be correct.
  *
  * <p>The request names the import, not the missing lines, because the consumer cannot know what it
- * never received — only how many chunks it is short. The owner re-emits the import's chunk events;
- * consumers dedupe by {@code eventId} and applying a chunk twice writes nothing new, so an
- * over-broad re-emit is safe and an under-broad one is not.
+ * never received — only how many chunks it is short. The owner re-emits the import's chunk events,
+ * and an over-broad re-emit is safe while an under-broad one is not.
+ *
+ * <p><strong>Safe on the consumer's side, not on the event id.</strong> A re-emit republishes the
+ * chunks as new events with new {@code eventId}s, so the ordinary event-id guard does not fire for
+ * them. A consumer of these events must therefore deduplicate on the chunk's own identity —
+ * {@code (importManifestId, chunkSequence)} — or a recovery will write a second copy of every line
+ * it re-delivers. pos-catalog keeps an applied-chunk log for exactly this reason.
  *
  * @param importManifestId the import to re-emit
  * @param vendorProfileId  vendor profile the import belongs to, for the owner's routing and logs

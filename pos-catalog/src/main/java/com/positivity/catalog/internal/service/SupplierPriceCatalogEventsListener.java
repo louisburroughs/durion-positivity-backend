@@ -3,9 +3,11 @@ package com.positivity.catalog.internal.service;
 import com.positivity.catalog.internal.config.OutboxEventWriter;
 import com.positivity.catalog.internal.entity.ProcessedEvent;
 import com.positivity.catalog.internal.entity.SupplierPriceEntryEntity;
+import com.positivity.catalog.internal.entity.SupplierPriceImportChunkEntity;
 import com.positivity.catalog.internal.entity.SupplierPriceImportEntity;
 import com.positivity.catalog.internal.repository.ProcessedEventRepository;
 import com.positivity.catalog.internal.repository.SupplierPriceEntryRepository;
+import com.positivity.catalog.internal.repository.SupplierPriceImportChunkRepository;
 import com.positivity.catalog.internal.repository.SupplierPriceImportRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
@@ -37,11 +39,17 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <h2>Idempotency and ordering</h2>
  *
- * Delivery is at-least-once, so the same chunk will arrive twice; {@code processed_events} makes
- * the second delivery a no-op. Chunks are independent of one another — each carries its own lines —
- * so they may be applied in any order, and the completion event is the only thing that needs the
- * others to have landed first. That is why completeness is a comparison against a counter rather
- * than an ordering assumption.
+ * Two guards, because they answer different questions. {@code processed_events} makes a redelivery
+ * of the <em>same event</em> a no-op. The applied-chunk log
+ * ({@code supplier_price_import_chunk}) makes a redelivery of the <em>same chunk</em> a no-op, which
+ * the event-id guard cannot do: a re-emit requested after a detected gap republishes the chunks as
+ * new events with new ids, and without the second guard that recovery would write a duplicate copy
+ * of every line it re-delivers.
+ *
+ * <p>Chunks are independent of one another — each carries its own lines — so they may be applied in
+ * any order, and the completion event is the only thing that needs the others to have landed first.
+ * Completeness is therefore a comparison of the applied-chunk set against the declared total, not
+ * an ordering assumption.
  *
  * <h2>Nothing here deletes</h2>
  *
@@ -64,6 +72,7 @@ public class SupplierPriceCatalogEventsListener {
     private final ProcessedEventRepository processedEventRepository;
     private final SupplierPriceEntryRepository priceEntryRepository;
     private final SupplierPriceImportRepository priceImportRepository;
+    private final SupplierPriceImportChunkRepository priceImportChunkRepository;
     private final OutboxEventWriter outboxEventWriter;
 
     @KafkaListener(
@@ -116,6 +125,21 @@ public class SupplierPriceCatalogEventsListener {
         SupplierPriceCatalogUpdatedV1 payload =
                 objectMapper.treeToValue(envelope.path("payload"), SupplierPriceCatalogUpdatedV1.class);
 
+        SupplierPriceImportEntity tracker = priceImportRepository.save(
+                trackerFor(payload.importManifestId(), payload.vendorProfileId(), payload.supplierRef()));
+
+        if (priceImportChunkRepository.existsByImportManifestIdAndChunkSequence(
+                payload.importManifestId(), payload.chunkSequence())) {
+            // Already applied — almost certainly a re-emit after a gap was reported. Writing the
+            // lines again would duplicate them, and counting the chunk again could declare an
+            // import complete that still has a hole elsewhere.
+            log.debug(
+                    "Skipping already-applied PRICAT chunk {} of import {}",
+                    payload.chunkSequence(),
+                    payload.importManifestId());
+            return;
+        }
+
         for (SupplierPriceCatalogLine line : payload.lines()) {
             priceEntryRepository.save(SupplierPriceEntryEntity.builder()
                     .vendorProfileId(payload.vendorProfileId())
@@ -141,8 +165,13 @@ public class SupplierPriceCatalogEventsListener {
                     .build());
         }
 
-        SupplierPriceImportEntity tracker =
-                trackerFor(payload.importManifestId(), payload.vendorProfileId(), payload.supplierRef());
+        priceImportChunkRepository.save(SupplierPriceImportChunkEntity.builder()
+                .importManifestId(payload.importManifestId())
+                .chunkSequence(payload.chunkSequence())
+                .linesApplied(payload.lines().size())
+                .appliedAt(Instant.now(clock))
+                .build());
+
         tracker.setChunksApplied(tracker.getChunksApplied() + 1);
         tracker.setLinesApplied(tracker.getLinesApplied() + payload.lines().size());
         // The chunk knows the total too; recording it here means a completion event that never
@@ -195,10 +224,10 @@ public class SupplierPriceCatalogEventsListener {
     }
 
     /**
-     * An import is complete when the producer has declared a chunk total and this module has
-     * applied at least that many. "At least" rather than "exactly": a re-emit re-delivers chunks
-     * under new event ids, which advances the counter without writing new rows, and treating that
-     * as a discrepancy would report a healthy recovery as a fault.
+     * An import is complete when the producer has declared a chunk total and this module has applied
+     * that many distinct chunks. Distinct is what the applied-chunk log buys: the counter now counts
+     * chunks rather than deliveries, so it can neither be inflated by a re-emit nor fall short
+     * because a redelivery was skipped.
      */
     private void evaluateCompleteness(SupplierPriceImportEntity tracker) {
         Integer expected = tracker.getExpectedChunkCount();

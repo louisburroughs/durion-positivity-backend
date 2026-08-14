@@ -12,9 +12,11 @@ import static org.mockito.Mockito.when;
 import com.positivity.catalog.internal.config.OutboxEventWriter;
 import com.positivity.catalog.internal.entity.ProcessedEvent;
 import com.positivity.catalog.internal.entity.SupplierPriceEntryEntity;
+import com.positivity.catalog.internal.entity.SupplierPriceImportChunkEntity;
 import com.positivity.catalog.internal.entity.SupplierPriceImportEntity;
 import com.positivity.catalog.internal.repository.ProcessedEventRepository;
 import com.positivity.catalog.internal.repository.SupplierPriceEntryRepository;
+import com.positivity.catalog.internal.repository.SupplierPriceImportChunkRepository;
 import com.positivity.catalog.internal.repository.SupplierPriceImportRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogRepublishRequestedV1;
@@ -58,6 +60,9 @@ class SupplierPriceCatalogEventsListenerTest {
     private SupplierPriceImportRepository priceImportRepository;
 
     @Mock
+    private SupplierPriceImportChunkRepository priceImportChunkRepository;
+
+    @Mock
     private OutboxEventWriter outboxEventWriter;
 
     private SupplierPriceCatalogEventsListener listener;
@@ -70,10 +75,13 @@ class SupplierPriceCatalogEventsListenerTest {
                 processedEventRepository,
                 priceEntryRepository,
                 priceImportRepository,
+                priceImportChunkRepository,
                 outboxEventWriter);
         when(priceEntryRepository.save(any(SupplierPriceEntryEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(priceImportRepository.save(any(SupplierPriceImportEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(priceImportRepository.findById(MANIFEST_ID)).thenReturn(Optional.empty());
+        when(priceImportChunkRepository.save(any(SupplierPriceImportChunkEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
     }
 
     private static String chunkEvent(String eventId, int sequence, int chunkCount, int lines) {
@@ -225,15 +233,15 @@ class SupplierPriceCatalogEventsListenerTest {
         }
 
         @Test
-        void treatsAReEmittedChunkAsRecoveryRatherThanADiscrepancy() {
-            // Re-emitted chunks arrive under new eventIds, so the counter can exceed the declared
-            // total. That is a healthy recovery, not a fault.
+        void flipsAnIncompleteImportToCompleteWhenTheMissingChunkArrives() {
+            // The real recovery path: completion was processed first and reported a gap, then the
+            // re-emitted chunk lands and closes it.
             when(priceImportRepository.findById(MANIFEST_ID))
                     .thenReturn(Optional.of(SupplierPriceImportEntity.builder()
                             .importManifestId(MANIFEST_ID)
                             .vendorProfileId(PROFILE_ID)
-                            .chunksApplied(4)
-                            .linesApplied(8)
+                            .chunksApplied(2)
+                            .linesApplied(4)
                             .expectedChunkCount(3)
                             .completedAt(Instant.parse("2026-08-14T09:05:00Z"))
                             .status(SupplierPriceImportEntity.STATUS_INCOMPLETE)
@@ -242,6 +250,45 @@ class SupplierPriceCatalogEventsListenerTest {
             listener.onSupplierEvent(chunkEvent("e-replay", 3, 3, 2));
 
             assertThat(capturedTracker().getStatus()).isEqualTo(SupplierPriceImportEntity.STATUS_COMPLETE);
+            assertThat(capturedTracker().getChunksApplied()).isEqualTo(3);
+        }
+
+        @Test
+        void appliesAReEmittedChunkOnlyOnceEvenUnderANewEventId() {
+            // A re-emit republishes the same chunk as a NEW event, so the eventId guard does not
+            // fire. Without the applied-chunk log this would duplicate every line in the chunk and
+            // inflate the counter — potentially declaring an import complete that still has a hole.
+            when(priceImportRepository.findById(MANIFEST_ID))
+                    .thenReturn(Optional.of(SupplierPriceImportEntity.builder()
+                            .importManifestId(MANIFEST_ID)
+                            .vendorProfileId(PROFILE_ID)
+                            .chunksApplied(1)
+                            .linesApplied(2)
+                            .expectedChunkCount(3)
+                            .status(SupplierPriceImportEntity.STATUS_APPLYING)
+                            .build()));
+            when(priceImportChunkRepository.existsByImportManifestIdAndChunkSequence(MANIFEST_ID, 1))
+                    .thenReturn(true);
+
+            listener.onSupplierEvent(chunkEvent("e-different-id", 1, 3, 2));
+
+            verify(priceEntryRepository, never()).save(any());
+            verify(priceImportChunkRepository, never()).save(any());
+            assertThat(capturedTracker().getChunksApplied()).isEqualTo(1);
+            // Still recorded as processed: the event was delivered and deliberately not applied.
+            verify(processedEventRepository).save(any(ProcessedEvent.class));
+        }
+
+        @Test
+        void recordsEachAppliedChunkSoARedeliveryCanBeRecognised() {
+            listener.onSupplierEvent(chunkEvent("e-1", 2, 3, 2));
+
+            ArgumentCaptor<SupplierPriceImportChunkEntity> captor =
+                    ArgumentCaptor.forClass(SupplierPriceImportChunkEntity.class);
+            verify(priceImportChunkRepository).save(captor.capture());
+            assertThat(captor.getValue().getImportManifestId()).isEqualTo(MANIFEST_ID);
+            assertThat(captor.getValue().getChunkSequence()).isEqualTo(2);
+            assertThat(captor.getValue().getLinesApplied()).isEqualTo(2);
         }
 
         @Test

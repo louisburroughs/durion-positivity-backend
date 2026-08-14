@@ -149,17 +149,11 @@ class SupplierPriceEntryServiceImplTest {
     }
 
     @Test
-    void listsIncompleteImportsNewestFirst() {
-        when(priceImportRepository.findByStatus(SupplierPriceImportEntity.STATUS_INCOMPLETE))
+    void preservesTheRepositoryOrderingOfIncompleteImports() {
+        // The repository orders by updatedAt DESC; the service must pass that through rather than
+        // re-sorting, so the fixture arrives newest-first and must leave in the same order.
+        when(priceImportRepository.findByStatusOrderByUpdatedAtDesc(SupplierPriceImportEntity.STATUS_INCOMPLETE))
                 .thenReturn(List.of(
-                        SupplierPriceImportEntity.builder()
-                                .importManifestId(UUID.randomUUID())
-                                .vendorProfileId(PROFILE_ID)
-                                .status(SupplierPriceImportEntity.STATUS_INCOMPLETE)
-                                .chunksApplied(1)
-                                .expectedChunkCount(3)
-                                .updatedAt(Instant.parse("2026-08-13T10:00:00Z"))
-                                .build(),
                         SupplierPriceImportEntity.builder()
                                 .importManifestId(UUID.randomUUID())
                                 .vendorProfileId(PROFILE_ID)
@@ -167,11 +161,18 @@ class SupplierPriceEntryServiceImplTest {
                                 .chunksApplied(2)
                                 .expectedChunkCount(4)
                                 .updatedAt(Instant.parse("2026-08-14T10:00:00Z"))
+                                .build(),
+                        SupplierPriceImportEntity.builder()
+                                .importManifestId(UUID.randomUUID())
+                                .vendorProfileId(PROFILE_ID)
+                                .status(SupplierPriceImportEntity.STATUS_INCOMPLETE)
+                                .chunksApplied(1)
+                                .expectedChunkCount(3)
+                                .updatedAt(Instant.parse("2026-08-13T10:00:00Z"))
                                 .build()));
 
         assertThat(service.findIncompleteImports())
-                .hasSize(2)
-                .satisfies(list ->
-                        assertThat(list.getFirst().updatedAt()).isEqualTo(Instant.parse("2026-08-14T10:00:00Z")));
+                .extracting(dto -> dto.updatedAt())
+                .containsExactly(Instant.parse("2026-08-14T10:00:00Z"), Instant.parse("2026-08-13T10:00:00Z"));
     }
 }
