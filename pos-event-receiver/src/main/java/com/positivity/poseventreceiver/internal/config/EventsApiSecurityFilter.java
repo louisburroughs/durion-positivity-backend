@@ -5,6 +5,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -102,7 +104,11 @@ public class EventsApiSecurityFilter extends OncePerRequestFilter {
 
         // Validate the shared secret
         String providedSecret = request.getHeader(SECRET_HEADER);
-        if (providedSecret == null || !expectedSecret.equals(providedSecret)) {
+        boolean authorized = providedSecret != null
+                && MessageDigest.isEqual(
+                        expectedSecret.getBytes(StandardCharsets.UTF_8),
+                        providedSecret.getBytes(StandardCharsets.UTF_8));
+        if (!authorized) {
             log.warn("Unauthorized request to {} {} - invalid or missing {} header", method, path, SECRET_HEADER);
             response.setStatus(HttpStatus.UNAUTHORIZED.value());
             response.setContentType("application/json");

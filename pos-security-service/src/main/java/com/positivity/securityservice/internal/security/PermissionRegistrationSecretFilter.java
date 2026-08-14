@@ -7,6 +7,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -72,7 +74,11 @@ public class PermissionRegistrationSecretFilter extends OncePerRequestFilter {
         }
 
         String providedSecret = request.getHeader(SECRET_HEADER);
-        if (providedSecret == null || !expectedSecret.equals(providedSecret)) {
+        boolean authorized = providedSecret != null
+                && MessageDigest.isEqual(
+                        expectedSecret.getBytes(StandardCharsets.UTF_8),
+                        providedSecret.getBytes(StandardCharsets.UTF_8));
+        if (!authorized) {
             writeUnauthorized(
                     response,
                     request,
