@@ -127,6 +127,9 @@ public class CommercialPartyServiceImpl implements CustomerService {
     @Transactional
     public CustomerDTO createCustomer(@NonNull CustomerDTO dto) {
         log.debug("Creating new customer: {}", dto);
+        if (isBlank(dto.getFirstName()) || isBlank(dto.getLastName())) {
+            throw new IllegalArgumentException("firstName and lastName are required to create a customer");
+        }
         CommercialParty customer = toEntity(dto);
 
         // Determine party type and save to appropriate repository
@@ -295,5 +298,9 @@ public class CommercialPartyServiceImpl implements CustomerService {
      */
     private PartyType determineCustomerType(CommercialParty entity) {
         return entity.getPartyType();
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

@@ -130,8 +130,8 @@ public class CustomerController {
                     where COMMERCIAL routes to the commercial service and anything else creates a person \
                     party, and customerNumber, primaryAddress, and vehicleVins are optional.
                     Emits a CUSTOMER_CUSTOMER_CREATE event and publishes a party-changed customer fact.
-                    Returns 201 with the stored customer on success; field validation is not enforced on \
-                    this legacy path, so a malformed JSON body producing 400 is the only rejection.
+                    Returns 201 with the stored customer on success; returns 400 for a malformed JSON body or \
+                    when firstName/lastName are blank or absent.
                     """)
     @ApiResponse(responseCode = "201", description = "Customer created successfully.")
     @PostMapping

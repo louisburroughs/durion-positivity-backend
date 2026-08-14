@@ -1,7 +1,6 @@
 package com.positivity.customer.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
@@ -41,22 +40,23 @@ public class CustomerDTO {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String customerNumber;
 
-    @NotBlank
     @Size(max = 100)
     @Schema(
             description = "Last name of the customer. For a commercial party (customerType=COMMERCIAL), this"
-                    + " field carries the organization's legal/registered name instead.",
+                    + " field carries the organization's legal/registered name instead. Required when creating a"
+                    + " customer (POST); optional on update (PUT), where an absent value leaves the existing name"
+                    + " unchanged.",
             example = "Doe",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String lastName;
 
-    @NotBlank
     @Size(max = 100)
     @Schema(
             description = "First name of the customer. For a commercial party (customerType=COMMERCIAL), this"
-                    + " field carries the organization's display name instead.",
+                    + " field carries the organization's display name instead. Required when creating a customer"
+                    + " (POST); optional on update (PUT), where an absent value leaves the existing name unchanged.",
             example = "John",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String firstName;
 
     @Size(max = 255)

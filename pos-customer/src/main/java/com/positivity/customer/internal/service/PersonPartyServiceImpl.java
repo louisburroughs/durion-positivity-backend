@@ -132,6 +132,9 @@ public class PersonPartyServiceImpl implements CustomerService {
     @Transactional
     public CustomerDTO createCustomer(@NonNull CustomerDTO dto) {
         log.debug("Creating new customer: {}", dto);
+        if (isBlank(dto.getFirstName()) || isBlank(dto.getLastName())) {
+            throw new IllegalArgumentException("firstName and lastName are required to create a customer");
+        }
         PersonParty customer = toEntity(dto);
 
         // Determine party type and save to appropriate repository
@@ -325,5 +328,9 @@ public class PersonPartyServiceImpl implements CustomerService {
      */
     private PartyType determineCustomerType(PersonParty entity) {
         return entity.getPartyType();
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }
