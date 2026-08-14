@@ -5,7 +5,6 @@ import com.positivity.supplier.internal.adapter.ediwheelb.EdiwheelB40PricatCodec
 import com.positivity.supplier.internal.adapter.ediwheelb.PricatDecodeException;
 import com.positivity.supplier.internal.adapter.ediwheelb.PricatDocument;
 import com.positivity.supplier.internal.audit.SupplierCorrelationContext;
-import com.positivity.supplier.internal.client.CatalogProductLookupClient;
 import com.positivity.supplier.internal.client.SupplierBaseClient;
 import com.positivity.supplier.internal.client.SupplierHttpRequest;
 import com.positivity.supplier.internal.client.SupplierHttpResponse;
@@ -76,7 +75,7 @@ public class PriceCatalogImporter {
     private final SupplierProfileResolver profileResolver;
     private final AdapterRegistry adapterRegistry;
     private final SupplierBaseClient baseClient;
-    private final CatalogProductLookupClient catalogLookupClient;
+    private final ProductCodeResolver productCodeResolver;
     private final PriceCatalogStagingWriter stagingWriter;
     private final Clock clock;
 
@@ -208,11 +207,12 @@ public class PriceCatalogImporter {
         if (byXref.productId() != null || byXref.reason() == UnmatchedLineReason.AMBIGUOUS_CATALOG_MATCH) {
             return byXref;
         }
-        // An unreachable catalog outranks a plain miss: those lines are worth retrying later,
+        // An unanswerable replica outranks a plain miss: those lines are worth retrying later,
         // whereas a miss needs catalog work. Collapsing the two would strand recoverable lines.
         if (byEan.reason() == UnmatchedLineReason.CATALOG_UNAVAILABLE
                 || byXref.reason() == UnmatchedLineReason.CATALOG_UNAVAILABLE) {
-            return new MatchOutcome(null, null, UnmatchedLineReason.CATALOG_UNAVAILABLE, "catalog lookup unavailable");
+            return new MatchOutcome(
+                    null, null, UnmatchedLineReason.CATALOG_UNAVAILABLE, "product-code replica unavailable");
         }
         if (isBlank(entry.articleEan()) && isBlank(entry.xReferenceCode())) {
             return new MatchOutcome(
@@ -229,15 +229,14 @@ public class PriceCatalogImporter {
         if (isBlank(code)) {
             return new MatchOutcome(null, null, UnmatchedLineReason.NO_IDENTIFIER, null);
         }
-        CatalogProductLookupClient.LookupResult result = catalogLookupClient.findProductByCode(codeType, code);
-        return switch (result) {
-            case CatalogProductLookupClient.LookupResult.Matched m ->
-                new MatchOutcome(m.productId(), method, null, null);
-            case CatalogProductLookupClient.LookupResult.NotFound ignored ->
+        ProductCodeResolver.Resolution resolution = productCodeResolver.resolve(codeType, code);
+        return switch (resolution) {
+            case ProductCodeResolver.Resolution.Matched m -> new MatchOutcome(m.productId(), method, null, null);
+            case ProductCodeResolver.Resolution.NotFound ignored ->
                 new MatchOutcome(null, null, UnmatchedLineReason.NO_CATALOG_MATCH, null);
-            case CatalogProductLookupClient.LookupResult.Ambiguous a ->
+            case ProductCodeResolver.Resolution.Ambiguous a ->
                 new MatchOutcome(null, null, UnmatchedLineReason.AMBIGUOUS_CATALOG_MATCH, a.detail());
-            case CatalogProductLookupClient.LookupResult.Unavailable u ->
+            case ProductCodeResolver.Resolution.Unavailable u ->
                 new MatchOutcome(null, null, UnmatchedLineReason.CATALOG_UNAVAILABLE, u.detail());
         };
     }

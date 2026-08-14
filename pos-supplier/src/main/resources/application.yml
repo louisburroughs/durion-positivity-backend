@@ -125,8 +125,12 @@ pos:
       send-timeout-ms: ${SUPPLIER_OUTBOX_SEND_TIMEOUT_MS:10000}
     kafka:
       # Off by default so a deployment without a broker starts cleanly; the outbox still records
-      # events, and they drain once this is enabled.
+      # events, and they drain once this is enabled. It also gates the catalog product-code
+      # consumer, so a deployment with Kafka off cannot match PRICAT lines at all — by design: an
+      # empty replica is reported as unavailable rather than as a catalog full of misses.
       enabled: ${SUPPLIER_KAFKA_ENABLED:false}
+      catalog-events-topic: ${SUPPLIER_CATALOG_EVENTS_TOPIC:catalog.events.v1}
+      catalog-events-consumer-group: ${SUPPLIER_CATALOG_EVENTS_CONSUMER_GROUP:pos-supplier-catalog-events}
   # @EmitEvent event-type registration with pos-event-receiver at startup (AGENTS.md)
   events:
     base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}

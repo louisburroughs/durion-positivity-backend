@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.entity;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
@@ -13,6 +14,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Transactional-outbox row for supplier domain events (ADR-0044 §4).
@@ -27,6 +30,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(
         name = "supplier_event_outbox",
         indexes = {@Index(name = "idx_soutbox_unpublished", columnList = "published_at, id")})
@@ -50,7 +54,8 @@ public class SupplierOutboxEventEntity {
     @Column(name = "payload", nullable = false, columnDefinition = "text")
     private String payload;
 
-    @Column(name = "created_at", nullable = false)
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @Column(name = "published_at")

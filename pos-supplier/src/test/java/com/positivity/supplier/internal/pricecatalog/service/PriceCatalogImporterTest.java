@@ -11,8 +11,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.supplier.internal.adapter.ediwheelb.EdiwheelB40PricatCodec;
-import com.positivity.supplier.internal.client.CatalogProductLookupClient;
-import com.positivity.supplier.internal.client.CatalogProductLookupClient.LookupResult;
 import com.positivity.supplier.internal.client.SupplierBaseClient;
 import com.positivity.supplier.internal.client.SupplierHttpRequest;
 import com.positivity.supplier.internal.client.SupplierHttpResponse;
@@ -26,6 +24,7 @@ import com.positivity.supplier.internal.entity.SupplierAuthConfigEntity;
 import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
+import com.positivity.supplier.internal.pricecatalog.service.ProductCodeResolver.Resolution;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
 import com.positivity.supplier.internal.registry.AdapterResolution;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
@@ -76,7 +75,7 @@ class PriceCatalogImporterTest {
     private SupplierBaseClient baseClient;
 
     @Mock
-    private CatalogProductLookupClient catalogLookupClient;
+    private ProductCodeResolver productCodeResolver;
 
     @Mock
     private PriceCatalogStagingWriter stagingWriter;
@@ -86,7 +85,7 @@ class PriceCatalogImporterTest {
     @BeforeEach
     void setUp() {
         service = new PriceCatalogImporter(
-                profileResolver, adapterRegistry, baseClient, catalogLookupClient, stagingWriter, CLOCK);
+                profileResolver, adapterRegistry, baseClient, productCodeResolver, stagingWriter, CLOCK);
         ReflectionTestUtils.setField(service, "defaultChunkSize", 500);
 
         when(profileResolver.resolveBinding(SUPPLIER, SupplierCapability.PRICE_CATALOG))
@@ -95,8 +94,7 @@ class PriceCatalogImporterTest {
                 .thenReturn(new ResolvedPartyAccounts(billing(), null));
         when(adapterRegistry.resolve(SupplierCapability.PRICE_CATALOG, ProtocolFamily.EDIWHEEL_B, ProtocolVersion.B4_0))
                 .thenReturn(new AdapterResolution.Resolved(new EdiwheelB40PricatCodec(new ObjectMapper())));
-        when(catalogLookupClient.findProductByCode("EAN", "3528709999083"))
-                .thenReturn(new LookupResult.Matched(PRODUCT_ID));
+        when(productCodeResolver.resolve("EAN", "3528709999083")).thenReturn(new Resolution.Matched(PRODUCT_ID));
         when(stagingWriter.commit(any(), any(), any(), any(), any(), anyString(), any(), anyInt()))
                 .thenReturn(PriceCatalogImportEntity.builder().build());
         when(stagingWriter.persistFailure(any(), any(), any(), any(), anyString(), any()))

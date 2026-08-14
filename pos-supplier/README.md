@@ -76,10 +76,17 @@ product or a quarantine row with a reason, and the writer asserts
 `matched + unmatched + duplicate == fetched` before marking an import complete, so a silent drop fails
 the import rather than under-reporting it.
 
-Matching is deterministic and exact (ADR-0053 §5): EAN against pos-catalog product codes of type EAN,
+Matching is deterministic and exact (ADR-0053 §5): EAN against a catalog product code of type EAN,
 then the line's `xReferenceCode` against type UPC. `supplierCode` is stored as a display alias and is
-never a match key. An unreachable catalog quarantines as `CATALOG_UNAVAILABLE` rather than
-`NO_CATALOG_MATCH`, because those lines are worth retrying and a miss is catalog work.
+never a match key.
+
+Matching reads the local `ext_product_code` replica, not pos-catalog. ADR-0044 R1 forbids
+domain-to-domain synchronous calls and R3 makes replicas the read path, so pos-catalog publishes
+product identity codes on `catalog.events.v1` and `CatalogProductEventsListener` maintains the copy
+(`processed_events` idempotency, stale guard on `aggregateVersion`). The trade is staleness: a product
+created seconds ago may not be matchable yet, and its line is quarantined until the next import. An
+empty replica — Kafka disabled, or nothing consumed yet — reports `CATALOG_UNAVAILABLE` rather than
+turning a whole vendor catalog into `NO_CATALOG_MATCH` misses an operator would go hunting for.
 
 ### Gateway routing
 
@@ -362,6 +369,9 @@ nothing), then update the Angular SDK.
   that no vendor profile carries yet.
 - The 500-line chunk default is ADR-0053's estimate and is still owed a validation against the first
   Michelin sandbox pull.
+- The `ext_product_code` replica has no backfill path yet: it is built from facts published after the
+  consumer starts, so a first deployment needs pos-catalog to re-emit (ADR-0044 §4 replay) before
+  PRICAT lines can match.
 - V5 (`protocol_version` widened to 64) has run against H2 in PostgreSQL mode only; this environment has
   no Docker daemon for `FlywayMigrationIT`.
 - `EndpointBindingRequest.version` is bounded but not validated against the adapter registry.

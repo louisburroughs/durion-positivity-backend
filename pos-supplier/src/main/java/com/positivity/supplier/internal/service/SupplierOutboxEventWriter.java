@@ -3,8 +3,6 @@ package com.positivity.supplier.internal.service;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.supplier.internal.entity.SupplierOutboxEventEntity;
 import com.positivity.supplier.internal.repository.SupplierOutboxEventRepository;
-import java.time.Clock;
-import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -27,7 +25,6 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class SupplierOutboxEventWriter {
 
-    private final Clock clock;
     private final ObjectMapper objectMapper;
     private final SupplierOutboxEventRepository outboxRepository;
 
@@ -45,7 +42,6 @@ public class SupplierOutboxEventWriter {
                 .recordKey(envelope.aggregateId().toString())
                 .eventType(envelope.eventType())
                 .payload(serialize(envelope))
-                .createdAt(Instant.now(clock))
                 .build();
         outboxRepository.save(row);
         log.debug(

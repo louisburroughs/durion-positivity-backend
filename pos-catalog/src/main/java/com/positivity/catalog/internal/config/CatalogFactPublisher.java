@@ -89,7 +89,11 @@ public class CatalogFactPublisher {
                 trackingLevel.name(),
                 uomConversionsOf(product.getId()),
                 membership == null ? null : membership.getGroup().getId(),
-                membership == null ? null : substitutionMemberIdsOf(membership));
+                membership == null ? null : substitutionMemberIdsOf(membership),
+                product.getProductCode(),
+                product.getProductCodeType() == null
+                        ? null
+                        : product.getProductCodeType().name());
         DomainEventEnvelope<ProductUpdatedV1> envelope = DomainEventEnvelope.of(
                 ProductUpdatedV1.EVENT_TYPE,
                 ProductUpdatedV1.SCHEMA_VERSION,

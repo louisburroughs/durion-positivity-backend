@@ -8,13 +8,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.supplier.internal.adapter.ediwheelb.PricatDocument;
-import com.positivity.supplier.internal.client.CatalogProductLookupClient;
-import com.positivity.supplier.internal.client.CatalogProductLookupClient.LookupResult;
 import com.positivity.supplier.internal.client.SupplierBaseClient;
 import com.positivity.supplier.internal.domain.model.SupplierPriceCatalogEntry;
 import com.positivity.supplier.internal.enums.PriceCatalogMatchMethod;
 import com.positivity.supplier.internal.enums.UnmatchedLineReason;
 import com.positivity.supplier.internal.pricecatalog.service.PriceCatalogImporter.PreparedImport;
+import com.positivity.supplier.internal.pricecatalog.service.ProductCodeResolver.Resolution;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import java.math.BigDecimal;
@@ -51,14 +50,14 @@ class PriceCatalogMatchingTest {
     private SupplierBaseClient baseClient;
 
     @Mock
-    private CatalogProductLookupClient catalogLookupClient;
+    private ProductCodeResolver productCodeResolver;
 
     @Mock
     private PriceCatalogStagingWriter stagingWriter;
 
     private PriceCatalogImporter service() {
         return new PriceCatalogImporter(
-                profileResolver, adapterRegistry, baseClient, catalogLookupClient, stagingWriter, CLOCK);
+                profileResolver, adapterRegistry, baseClient, productCodeResolver, stagingWriter, CLOCK);
     }
 
     private static SupplierPriceCatalogEntry entry(String ean, String xref, String supplierCode, int position) {
@@ -86,8 +85,7 @@ class PriceCatalogMatchingTest {
 
     @Test
     void matchesOnExactEanFirst() {
-        when(catalogLookupClient.findProductByCode("EAN", "3528709999083"))
-                .thenReturn(new LookupResult.Matched(PRODUCT_ID));
+        when(productCodeResolver.resolve("EAN", "3528709999083")).thenReturn(new Resolution.Matched(PRODUCT_ID));
 
         PreparedImport prepared =
                 service().prepare(document(List.of(entry("3528709999083", "0123456789012", "999908", 1))), MANIFEST_ID);
@@ -96,14 +94,13 @@ class PriceCatalogMatchingTest {
             assertThat(line.productId()).isEqualTo(PRODUCT_ID);
             assertThat(line.method()).isEqualTo(PriceCatalogMatchMethod.EAN);
         });
-        verify(catalogLookupClient, never()).findProductByCode(eq("UPC"), any());
+        verify(productCodeResolver, never()).resolve(eq("UPC"), any());
     }
 
     @Test
     void fallsBackToTheCrossReferenceCodeAsAUpc() {
-        when(catalogLookupClient.findProductByCode("EAN", "3528709999083")).thenReturn(new LookupResult.NotFound());
-        when(catalogLookupClient.findProductByCode("UPC", "0123456789012"))
-                .thenReturn(new LookupResult.Matched(PRODUCT_ID));
+        when(productCodeResolver.resolve("EAN", "3528709999083")).thenReturn(new Resolution.NotFound());
+        when(productCodeResolver.resolve("UPC", "0123456789012")).thenReturn(new Resolution.Matched(PRODUCT_ID));
 
         PreparedImport prepared =
                 service().prepare(document(List.of(entry("3528709999083", "0123456789012", "999908", 1))), MANIFEST_ID);
@@ -115,13 +112,13 @@ class PriceCatalogMatchingTest {
 
     @Test
     void neverMatchesOnTheSupplierCode() {
-        when(catalogLookupClient.findProductByCode("EAN", "3528709999083")).thenReturn(new LookupResult.NotFound());
+        when(productCodeResolver.resolve("EAN", "3528709999083")).thenReturn(new Resolution.NotFound());
 
         PreparedImport prepared =
                 service().prepare(document(List.of(entry("3528709999083", null, "999908", 1))), MANIFEST_ID);
 
         assertThat(prepared.matched()).isEmpty();
-        verify(catalogLookupClient, never()).findProductByCode(any(), eq("999908"));
+        verify(productCodeResolver, never()).resolve(any(), eq("999908"));
     }
 
     @Test
@@ -135,8 +132,8 @@ class PriceCatalogMatchingTest {
 
     @Test
     void quarantinesAMissAsCatalogWork() {
-        when(catalogLookupClient.findProductByCode("EAN", "3528709999083")).thenReturn(new LookupResult.NotFound());
-        when(catalogLookupClient.findProductByCode("UPC", "0123456789012")).thenReturn(new LookupResult.NotFound());
+        when(productCodeResolver.resolve("EAN", "3528709999083")).thenReturn(new Resolution.NotFound());
+        when(productCodeResolver.resolve("UPC", "0123456789012")).thenReturn(new Resolution.NotFound());
 
         PreparedImport prepared =
                 service().prepare(document(List.of(entry("3528709999083", "0123456789012", "999908", 1))), MANIFEST_ID);
@@ -148,8 +145,7 @@ class PriceCatalogMatchingTest {
 
     @Test
     void refusesToGuessWhenTheCatalogReportsAmbiguity() {
-        when(catalogLookupClient.findProductByCode("EAN", "3528709999083"))
-                .thenReturn(new LookupResult.Ambiguous("two products"));
+        when(productCodeResolver.resolve("EAN", "3528709999083")).thenReturn(new Resolution.Ambiguous("two products"));
 
         PreparedImport prepared =
                 service().prepare(document(List.of(entry("3528709999083", "0123456789012", "999908", 1))), MANIFEST_ID);
@@ -160,14 +156,14 @@ class PriceCatalogMatchingTest {
                 .satisfies(line -> assertThat(line.reason()).isEqualTo(UnmatchedLineReason.AMBIGUOUS_CATALOG_MATCH));
         // Ambiguity stops the search: trying the cross-reference next could attach the line to a
         // different product than the EAN pointed at.
-        verify(catalogLookupClient, never()).findProductByCode(eq("UPC"), any());
+        verify(productCodeResolver, never()).resolve(eq("UPC"), any());
     }
 
     @Test
     void marksAnUnreachableCatalogAsRetryableRatherThanAsAMiss() {
-        when(catalogLookupClient.findProductByCode("EAN", "3528709999083"))
-                .thenReturn(new LookupResult.Unavailable("connect timeout"));
-        when(catalogLookupClient.findProductByCode("UPC", "0123456789012")).thenReturn(new LookupResult.NotFound());
+        when(productCodeResolver.resolve("EAN", "3528709999083"))
+                .thenReturn(new Resolution.Unavailable("connect timeout"));
+        when(productCodeResolver.resolve("UPC", "0123456789012")).thenReturn(new Resolution.NotFound());
 
         PreparedImport prepared =
                 service().prepare(document(List.of(entry("3528709999083", "0123456789012", "999908", 1))), MANIFEST_ID);
@@ -179,8 +175,7 @@ class PriceCatalogMatchingTest {
 
     @Test
     void dedupesRepeatedIdentifiersWithinOneDocumentAndKeepsTheFirst() {
-        when(catalogLookupClient.findProductByCode("EAN", "3528709999083"))
-                .thenReturn(new LookupResult.Matched(PRODUCT_ID));
+        when(productCodeResolver.resolve("EAN", "3528709999083")).thenReturn(new Resolution.Matched(PRODUCT_ID));
 
         PreparedImport prepared = service()
                 .prepare(
@@ -219,9 +214,8 @@ class PriceCatalogMatchingTest {
 
     @Test
     void accountsForEveryLineTheVendorSent() {
-        when(catalogLookupClient.findProductByCode("EAN", "3528709999083"))
-                .thenReturn(new LookupResult.Matched(PRODUCT_ID));
-        when(catalogLookupClient.findProductByCode("EAN", "3528709999084")).thenReturn(new LookupResult.NotFound());
+        when(productCodeResolver.resolve("EAN", "3528709999083")).thenReturn(new Resolution.Matched(PRODUCT_ID));
+        when(productCodeResolver.resolve("EAN", "3528709999084")).thenReturn(new Resolution.NotFound());
 
         PricatDocument document = new PricatDocument(
                 "DOC-1",

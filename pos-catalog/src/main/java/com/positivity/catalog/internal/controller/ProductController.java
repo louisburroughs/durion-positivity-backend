@@ -26,6 +26,7 @@ import com.positivity.catalog.service.ProductLifecycleService;
 import com.positivity.catalog.service.ProductMasterDataService;
 import com.positivity.catalog.service.ProductSearchService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -589,9 +590,19 @@ public class ProductController {
             description = "The single product carrying the supplied code",
             content =
                     @Content(mediaType = "application/json", schema = @Schema(implementation = ProductCodeMatch.class)))
-    @ApiResponse(responseCode = "400", description = "codeType is not a supported code scheme")
-    @ApiResponse(responseCode = "404", description = "No product carries the supplied code")
-    @ApiResponse(responseCode = "409", description = "The code is carried by more than one product")
+    @ApiResponse(
+            responseCode = "400",
+            description = "codeType is not a supported code scheme.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "No product carries the supplied code. The response has NO body — a miss is an"
+                    + " expected outcome of a lookup, not an error to parse.",
+            content = @Content(schema = @Schema(hidden = true)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The code is carried by more than one product; matching is refused rather than guessed.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ProductCodeMatch> findProductByCode(
             @Parameter(
                             description = "Code scheme to match within; EAN and UPC are matched independently",

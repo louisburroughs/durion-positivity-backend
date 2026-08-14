@@ -49,6 +49,12 @@ import org.jspecify.annotations.Nullable;
  * @param substitutionGroupId substitution group this product belongs to, if any
  * @param substitutionProductIds product ids of all members of the substitution group (including
  *     this product); null when the product is not in a group
+ * @param productCode the product's EAN/UPC code, null when it carries none. Additive within schema
+ *     v2 (ADR-0044 §3) and the reason it exists is ADR-0053 §5: pos-supplier resolves PRICAT lines
+ *     against a local replica of these codes, so the code must travel with the fact rather than
+ *     being fetched synchronously across a domain wall (ADR-0044 R1/R3)
+ * @param productCodeType scheme of {@code productCode}: {@code EAN} or {@code UPC}; null exactly
+ *     when {@code productCode} is null
  */
 public record ProductUpdatedV1(
         @NonNull UUID productId,
@@ -68,7 +74,9 @@ public record ProductUpdatedV1(
         @Nullable String trackingLevel,
         @Nullable List<UomConversion> uomConversions,
         @Nullable UUID substitutionGroupId,
-        @Nullable List<UUID> substitutionProductIds) {
+        @Nullable List<UUID> substitutionProductIds,
+        @Nullable String productCode,
+        @Nullable String productCodeType) {
 
     public static final String EVENT_TYPE = "catalog.product.updated";
     public static final int SCHEMA_VERSION = 2;
