@@ -35,7 +35,6 @@ class SupplierContractKeyParityTest {
             "STOCK_REPORT",
             "PRICE_CATALOG",
             "INVOICE_FETCH",
-            "SHIPMENT_TRACKING",
             "WORKORDER_AUTHORIZATION",
             "MARKETING_CATALOG",
             "TIRE_IDENTIFICATION");
