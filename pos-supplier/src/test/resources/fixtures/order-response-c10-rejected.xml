@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The vendor refuses the whole document. A header ErrorCode outside the non-error set {0, 1} is a
+  refusal on the merits - the request reached the vendor and was declined - which is a business
+  outcome to report, never an ambiguity to reconcile.
+-->
+<ew:order_response xmlns:ew="http://www.reifen.net">
+    <ew:DocumentID>C1</ew:DocumentID>
+    <ew:Variant>0</ew:Variant>
+    <ew:ErrorHead>
+        <ew:ErrorCode>913</ew:ErrorCode>
+        <ew:ErrorText>Buyer party unknown</ew:ErrorText>
+    </ew:ErrorHead>
+    <ew:CustomerReference>
+        <ew:DocumentID>DUR0198F3A24C7E7A1B9C2D3E4F5A6B7C8D</ew:DocumentID>
+    </ew:CustomerReference>
+</ew:order_response>

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Golden EDIWheel C1.0 order response (#1226): the vendor accepts the order but confirms LESS than
+  was ordered on one line and kills part of another.
+
+  Partial acceptance is the ordinary case in this trade, not an error, and the ordering domain has
+  to be able to see WHICH lines fell short - so it is carried per line rather than as a document
+  level "partially accepted" flag.
+-->
+<ew:order_response xmlns:ew="http://www.reifen.net">
+    <ew:DocumentID>C1</ew:DocumentID>
+    <ew:Variant>0</ew:Variant>
+    <ew:ErrorHead>
+        <ew:ErrorCode>0</ew:ErrorCode>
+    </ew:ErrorHead>
+    <ew:CustomerReference>
+        <ew:DocumentID>DUR0198F3A24C7E7A1B9C2D3E4F5A6B7C8D</ew:DocumentID>
+    </ew:CustomerReference>
+    <ew:SupplierOrderNumber>
+        <ew:DocumentID>MICH-770412</ew:DocumentID>
+    </ew:SupplierOrderNumber>
+    <ew:OrderLine>
+        <ew:LineID>000001</ew:LineID>
+        <ew:OrderedArticle>
+            <ew:ArticleIdentification>
+                <ew:ManufacturersArticleID>999908</ew:ManufacturersArticleID>
+                <ew:EANUCCArticleID>3528709999083</ew:EANUCCArticleID>
+            </ew:ArticleIdentification>
+            <ew:RequestedDeliveryDate>2026-08-10</ew:RequestedDeliveryDate>
+            <ew:Error>
+                <ew:ErrorCode>0</ew:ErrorCode>
+            </ew:Error>
+            <ew:ScheduleDetails>
+                <ew:DeliveryDate>2026-08-12</ew:DeliveryDate>
+                <ew:ConfirmedQuantity>
+                    <ew:QuantityValue>8</ew:QuantityValue>
+                </ew:ConfirmedQuantity>
+            </ew:ScheduleDetails>
+            <ew:ScheduleDetails>
+                <ew:DeliveryDate>2026-08-26</ew:DeliveryDate>
+                <ew:ConfirmedQuantity>
+                    <ew:QuantityValue>4</ew:QuantityValue>
+                </ew:ConfirmedQuantity>
+            </ew:ScheduleDetails>
+            <ew:OrderedQuantity>
+                <ew:QuantityValue>12</ew:QuantityValue>
+            </ew:OrderedQuantity>
+        </ew:OrderedArticle>
+    </ew:OrderLine>
+    <ew:OrderLine>
+        <ew:LineID>000002</ew:LineID>
+        <ew:OrderedArticle>
+            <ew:ArticleIdentification>
+                <ew:EANUCCArticleID>3528709999084</ew:EANUCCArticleID>
+            </ew:ArticleIdentification>
+            <ew:Error>
+                <ew:ErrorCode>1</ew:ErrorCode>
+                <ew:ErrorText>Partially available</ew:ErrorText>
+            </ew:Error>
+            <ew:ScheduleDetails>
+                <ew:DeliveryDate>2026-08-14</ew:DeliveryDate>
+                <ew:ConfirmedQuantity>
+                    <ew:QuantityValue>6</ew:QuantityValue>
+                </ew:ConfirmedQuantity>
+            </ew:ScheduleDetails>
+            <ew:KilledQuantity>
+                <ew:QuantityValue>4</ew:QuantityValue>
+            </ew:KilledQuantity>
+            <ew:OrderedQuantity>
+                <ew:QuantityValue>10</ew:QuantityValue>
+            </ew:OrderedQuantity>
+        </ew:OrderedArticle>
+    </ew:OrderLine>
+</ew:order_response>

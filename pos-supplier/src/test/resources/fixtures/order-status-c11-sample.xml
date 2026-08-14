@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Golden EDIWheel Order Status C1.1 response (#1226 / #1318), shaped from
+  durion/docs/ediwheel/EDIWHEEL Order Status API PROD_1.yaml.
+
+  One order, three lines, each exercising a case the codec must not flatten:
+
+    000001 - two confirmed schedules; the first has TWO despatches, the second has none.
+    000002 - one schedule, partially despatched, with OpenQuantity still outstanding.
+    000003 - accepted with NO ScheduleDetails at all: the vendor holds it and has scheduled nothing.
+
+  Every line states a RequestedDeliveryDate that differs from every DeliveryDate, so a codec that
+  coalesced the two would produce visibly wrong dates rather than plausible ones.
+-->
+<ew:order_status xmlns:ew="http://www.reifen.net">
+    <ew:DocumentID>C1</ew:DocumentID>
+    <ew:Variant>1</ew:Variant>
+    <ew:OrderStatusIndicator>2</ew:OrderStatusIndicator>
+    <ew:ErrorHead>
+        <ew:ErrorCode>0</ew:ErrorCode>
+    </ew:ErrorHead>
+    <ew:ReferencedOrder>
+        <ew:Error>
+            <ew:ErrorCode>0</ew:ErrorCode>
+            <ew:ErrorText>No errors occurred</ew:ErrorText>
+        </ew:Error>
+        <ew:OrderDate>2026-08-03</ew:OrderDate>
+        <ew:SupplierOrderNumber>
+            <ew:DocumentID>MICH-770412</ew:DocumentID>
+        </ew:SupplierOrderNumber>
+        <ew:OrderReference>
+            <ew:DocumentID>DUR0198F3A24C7E7A1B9C2D3E4F5A6B7C8D</ew:DocumentID>
+        </ew:OrderReference>
+
+        <!-- Line 1: split across two confirmed schedules; the first has despatched twice. -->
+        <ew:OrderLine>
+            <ew:LineID>000001</ew:LineID>
+            <ew:CustomerLineItemNumber>000001</ew:CustomerLineItemNumber>
+            <ew:OrderedArticle>
+                <ew:ArticleIdentification>
+                    <ew:BuyersArticleID>BUY-1</ew:BuyersArticleID>
+                    <ew:ManufacturersArticleID>999908</ew:ManufacturersArticleID>
+                    <ew:EANUCCArticleID>3528709999083</ew:EANUCCArticleID>
+                </ew:ArticleIdentification>
+                <ew:ArticleDescription>
+                    <ew:ArticleDescriptionText>255/55R19 111VXL PS4 SUV</ew:ArticleDescriptionText>
+                </ew:ArticleDescription>
+                <ew:RequestedDeliveryDate>2026-08-10</ew:RequestedDeliveryDate>
+                <ew:Error>
+                    <ew:ErrorCode>0</ew:ErrorCode>
+                </ew:Error>
+                <ew:ScheduleDetails>
+                    <ew:DeliveryDate>2026-08-12</ew:DeliveryDate>
+                    <ew:ConfirmedQuantity>
+                        <ew:QuantityValue>8</ew:QuantityValue>
+                    </ew:ConfirmedQuantity>
+                    <ew:OpenQuantity>
+                        <ew:QuantityValue>0</ew:QuantityValue>
+                    </ew:OpenQuantity>
+                    <ew:ShippedDetails>
+                        <ew:ShippedQuantity>
+                            <ew:QuantityValue>8</ew:QuantityValue>
+                        </ew:ShippedQuantity>
+                        <ew:DespatchedDetails>
+                            <ew:ScheduledArticleDespatchDetails>
+                                <ew:DespatchDate>2026-08-11</ew:DespatchDate>
+                                <ew:DespatchAdviceReference>
+                                    <ew:DocumentID>ASN-2026-08-11-0001</ew:DocumentID>
+                                    <ew:LineID>000001</ew:LineID>
+                                </ew:DespatchAdviceReference>
+                                <ew:DespatchedQuantity>
+                                    <ew:QuantityValue>5</ew:QuantityValue>
+                                </ew:DespatchedQuantity>
+                            </ew:ScheduledArticleDespatchDetails>
+                            <ew:ScheduledArticleDespatchDetails>
+                                <ew:DespatchDate>2026-08-12</ew:DespatchDate>
+                                <ew:DespatchAdviceReference>
+                                    <ew:DocumentID>ASN-2026-08-12-0007</ew:DocumentID>
+                                </ew:DespatchAdviceReference>
+                                <ew:DespatchedQuantity>
+                                    <ew:QuantityValue>3</ew:QuantityValue>
+                                </ew:DespatchedQuantity>
+                            </ew:ScheduledArticleDespatchDetails>
+                        </ew:DespatchedDetails>
+                    </ew:ShippedDetails>
+                </ew:ScheduleDetails>
+                <ew:ScheduleDetails>
+                    <ew:DeliveryDate>2026-08-26</ew:DeliveryDate>
+                    <ew:ConfirmedQuantity>
+                        <ew:QuantityValue>4</ew:QuantityValue>
+                    </ew:ConfirmedQuantity>
+                    <ew:OpenQuantity>
+                        <ew:QuantityValue>4</ew:QuantityValue>
+                    </ew:OpenQuantity>
+                </ew:ScheduleDetails>
+                <ew:OrderedQuantity>
+                    <ew:QuantityValue>12</ew:QuantityValue>
+                </ew:OrderedQuantity>
+            </ew:OrderedArticle>
+        </ew:OrderLine>
+
+        <!-- Line 2: one schedule, partially despatched, with 4 still open. -->
+        <ew:OrderLine>
+            <ew:LineID>000002</ew:LineID>
+            <ew:CustomerLineItemNumber>000002</ew:CustomerLineItemNumber>
+            <ew:OrderedArticle>
+                <ew:ArticleIdentification>
+                    <ew:ManufacturersArticleID>888801</ew:ManufacturersArticleID>
+                    <ew:EANUCCArticleID>3528709999084</ew:EANUCCArticleID>
+                </ew:ArticleIdentification>
+                <ew:RequestedDeliveryDate>2026-08-10</ew:RequestedDeliveryDate>
+                <ew:ScheduleDetails>
+                    <ew:DeliveryDate>2026-08-14</ew:DeliveryDate>
+                    <ew:ConfirmedQuantity>
+                        <ew:QuantityValue>10</ew:QuantityValue>
+                    </ew:ConfirmedQuantity>
+                    <ew:OpenQuantity>
+                        <ew:QuantityValue>4</ew:QuantityValue>
+                    </ew:OpenQuantity>
+                    <ew:ShippedDetails>
+                        <ew:ShippedQuantity>
+                            <ew:QuantityValue>6</ew:QuantityValue>
+                        </ew:ShippedQuantity>
+                        <ew:DespatchedDetails>
+                            <ew:ScheduledArticleDespatchDetails>
+                                <ew:DespatchDate>2026-08-13</ew:DespatchDate>
+                                <ew:DespatchAdviceReference>
+                                    <ew:DocumentID>ASN-2026-08-13-0042</ew:DocumentID>
+                                </ew:DespatchAdviceReference>
+                                <ew:DespatchedQuantity>
+                                    <ew:QuantityValue>6</ew:QuantityValue>
+                                </ew:DespatchedQuantity>
+                            </ew:ScheduledArticleDespatchDetails>
+                        </ew:DespatchedDetails>
+                    </ew:ShippedDetails>
+                </ew:ScheduleDetails>
+                <ew:OrderedQuantity>
+                    <ew:QuantityValue>10</ew:QuantityValue>
+                </ew:OrderedQuantity>
+            </ew:OrderedArticle>
+        </ew:OrderLine>
+
+        <!-- Line 3: no ScheduleDetails at all. The vendor holds it and has scheduled nothing. -->
+        <ew:OrderLine>
+            <ew:LineID>000003</ew:LineID>
+            <ew:OrderedArticle>
+                <ew:ArticleIdentification>
+                    <ew:EANUCCArticleID>3528709999085</ew:EANUCCArticleID>
+                </ew:ArticleIdentification>
+                <ew:RequestedDeliveryDate>2026-08-20</ew:RequestedDeliveryDate>
+                <ew:OrderedQuantity>
+                    <ew:QuantityValue>2</ew:QuantityValue>
+                </ew:OrderedQuantity>
+            </ew:OrderedArticle>
+        </ew:OrderLine>
+    </ew:ReferencedOrder>
+</ew:order_status>

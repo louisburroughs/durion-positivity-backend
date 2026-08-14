@@ -12,3 +12,7 @@ permissions:
     description: "View vendor price-catalog import bookkeeping and the unmatched-line quarantine"
   - name: "supplier:pricecatalog:import"
     description: "Trigger an on-demand vendor price-catalog (PRICAT) import"
+  - name: "supplier:transmission:read"
+    description: "View the purchase-order transmission ledger and its stuck-transmission queue"
+  - name: "supplier:transmission:resolve"
+    description: "Resolve a purchase-order transmission awaiting manual review (confirm with vendor reference, mark not received, or cancel)"

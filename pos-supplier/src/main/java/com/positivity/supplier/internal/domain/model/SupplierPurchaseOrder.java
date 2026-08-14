@@ -1,5 +1,6 @@
 package com.positivity.supplier.internal.domain.model;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -14,14 +15,17 @@ import org.jspecify.annotations.Nullable;
  * derived deterministically from {@code transmissionIntentId}: never regenerated on retry of
  * the same intent, always new for a new intent (ADR-0052 §1).
  *
- * <p>Pragmatic/minimal for the CAP-317 foundation slice; line shape grows with CAP-320
- * (order transmission), never to mirror a wire format (ADR-0051 §4).
+ * <p>Carries what a vendor order needs and nothing else: it is not a copy of the purchase-order
+ * aggregate, and it never mirrors a wire format (ADR-0051 §4).
  *
  * @param transmissionIntentId immutable idempotency identity of this transmission intent
- * @param purchaseOrderId originating pos-order purchase-order aggregate id
+ * @param purchaseOrderId originating purchase-order aggregate id
  * @param intentType why this transmission exists relative to the purchase order
  * @param revision revision number of the purchase order this intent transmits; {@code >= 0}
  * @param documentId wire document id derived from {@code transmissionIntentId}; never blank
+ * @param purchaseOrderNumber the ordering domain's human-readable order number, sent as an
+ *     additional customer reference where the norm has a field for it; descriptive only, and
+ *     never an identity pos-supplier joins on
  * @param lines the order lines to transmit; never empty
  */
 public record SupplierPurchaseOrder(
@@ -30,6 +34,7 @@ public record SupplierPurchaseOrder(
         @NonNull IntentType intentType,
         int revision,
         @NonNull String documentId,
+        @Nullable String purchaseOrderNumber,
         @NonNull List<Line> lines) {
 
     /** Intent taxonomy per ADR-0052 §1. */
@@ -47,12 +52,17 @@ public record SupplierPurchaseOrder(
      * @param articleEan EAN/GTIN of the article, when known
      * @param supplierArticleCode vendor's own article code, when known
      * @param quantity ordered quantity; {@code >= 1}
+     * @param requestedDeliveryDate the delivery date to ask the vendor for; null to ask for
+     *     none. This is the <em>requested</em> date and stays that forever — what the vendor
+     *     later confirms is a separate fact on the order response and the status feed, and the
+     *     two are never merged (#1318)
      */
     public record Line(
             int lineNumber,
             @Nullable String articleEan,
             @Nullable String supplierArticleCode,
-            int quantity) {
+            int quantity,
+            @Nullable LocalDate requestedDeliveryDate) {
 
         public Line {
             if (lineNumber < 1) {

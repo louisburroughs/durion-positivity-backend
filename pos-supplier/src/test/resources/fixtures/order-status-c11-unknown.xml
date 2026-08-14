@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The vendor answered and holds no such order: a well-formed C1.1 response with an empty
+  ReferencedOrder list. This is the ADR-0052 §3 "does not know it" answer, and it must be reachable
+  ONLY from a real vendor answer - never from a transport failure.
+-->
+<ew:order_status xmlns:ew="http://www.reifen.net">
+    <ew:DocumentID>C1</ew:DocumentID>
+    <ew:Variant>1</ew:Variant>
+    <ew:ErrorHead>
+        <ew:ErrorCode>0</ew:ErrorCode>
+    </ew:ErrorHead>
+</ew:order_status>

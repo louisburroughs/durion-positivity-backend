@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Golden EDIWheel Order Status C1.1 response with NO ScheduleDetails anywhere (#1318 acceptance
+  criteria). The vendor holds the order and has committed to nothing.
+
+  Deliberately UNQUALIFIED: no namespace on any element. Vendors in this family differ on whether
+  they qualify children, and a reader that rejected this would turn a perfectly readable answer
+  about a real order into an unreconcilable ambiguity.
+-->
+<order_status>
+    <DocumentID>C1</DocumentID>
+    <Variant>1</Variant>
+    <ErrorHead>
+        <ErrorCode>0</ErrorCode>
+    </ErrorHead>
+    <ReferencedOrder>
+        <Error>
+            <ErrorCode>0</ErrorCode>
+        </Error>
+        <OrderDate>2026-08-14</OrderDate>
+        <SupplierOrderNumber>
+            <DocumentID>MICH-770999</DocumentID>
+        </SupplierOrderNumber>
+        <OrderReference>
+            <DocumentID>DUR0198F3A24C7E7A1B9C2D3E4F5A6B7C8D</DocumentID>
+        </OrderReference>
+        <OrderLine>
+            <LineID>000001</LineID>
+            <OrderedArticle>
+                <ArticleIdentification>
+                    <EANUCCArticleID>3528709999083</EANUCCArticleID>
+                </ArticleIdentification>
+                <RequestedDeliveryDate>2026-08-20</RequestedDeliveryDate>
+                <OrderedQuantity>
+                    <QuantityValue>4</QuantityValue>
+                </OrderedQuantity>
+            </OrderedArticle>
+        </OrderLine>
+    </ReferencedOrder>
+</order_status>
