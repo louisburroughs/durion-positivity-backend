@@ -226,8 +226,8 @@ public class CommercialPartyServiceImpl implements CustomerService {
     private CommercialParty toEntity(CustomerDTO dto) {
         CommercialParty entity = createEntityByType(dto.getCustomerType());
         entity.setCustomerNumber(dto.getCustomerNumber());
-        entity.setLegalName(dto.getFirstName());
-        entity.setDisplayName(dto.getLastName());
+        entity.setLegalName(dto.getLastName());
+        entity.setDisplayName(dto.getFirstName());
         entity.setPrimaryAddress(dto.getPrimaryAddress());
         if (dto.getVehicleVins() != null) {
             entity.getVehicleVins().addAll(dto.getVehicleVins());
@@ -245,11 +245,11 @@ public class CommercialPartyServiceImpl implements CustomerService {
         if (dto.getCustomerNumber() != null) {
             entity.setCustomerNumber(dto.getCustomerNumber());
         }
-        if (dto.getFirstName() != null) {
-            entity.setLegalName(dto.getFirstName());
-        }
         if (dto.getLastName() != null) {
-            entity.setDisplayName(dto.getLastName());
+            entity.setLegalName(dto.getLastName());
+        }
+        if (dto.getFirstName() != null) {
+            entity.setDisplayName(dto.getFirstName());
         }
         if (dto.getPrimaryAddress() != null) {
             entity.setPrimaryAddress(dto.getPrimaryAddress());

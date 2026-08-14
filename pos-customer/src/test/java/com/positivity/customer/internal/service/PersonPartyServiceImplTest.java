@@ -377,8 +377,8 @@ class PersonPartyServiceImplTest {
         }
 
         @Test
-        @DisplayName("an update that names no VINs clears the ones the party had")
-        void omittingVinsClearsThem() {
+        @DisplayName("an update that omits VINs leaves the ones the party had")
+        void omittingVinsLeavesThemUnchanged() {
             PersonParty existing = party(PERSON_ID);
             when(customerRepository.findById(PARTY_ID)).thenReturn(Optional.of(existing));
             when(customerRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -386,13 +386,11 @@ class PersonPartyServiceImplTest {
             service.updateCustomer(
                     PARTY_ID, CustomerDTO.builder().primaryAddress("2 Oak Ave").build());
 
-            // Documents current behaviour, not desired behaviour. updateEntityFromDTO guards on
-            // `vehicleVins != null`, but CustomerDTO declares the field @Builder.Default with an
-            // empty ArrayList and initializes it in the no-args constructor Jackson uses, so the
-            // guard can never be false: a partial update that simply omits vehicleVins reaches the
-            // clear()/addAll() branch with an empty list and drops every VIN association. The other
-            // optional fields on this DTO are plain nullable references and behave as intended.
-            assertThat(existing.getVehicleVins()).isEmpty();
+            // CustomerDTO's vehicleVins has no field initializer, so an absent field in the request
+            // body deserializes as null, not an empty list (issue #1245), and updateEntityFromDTO's
+            // `vehicleVins != null` guard now actually skips the clear()/addAll() branch on a
+            // partial update, matching how the DTO's other optional fields already behave.
+            assertThat(existing.getVehicleVins()).containsExactly("VIN-1");
         }
 
         @Test

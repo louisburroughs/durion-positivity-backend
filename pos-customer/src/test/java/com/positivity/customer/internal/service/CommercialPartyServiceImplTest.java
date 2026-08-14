@@ -35,8 +35,9 @@ import org.springframework.data.domain.PageRequest;
  * behind an organization — so this service is the simpler sibling of
  * {@link PersonPartyServiceImpl}. What it does have is a
  * {@link CustomerDTO}-shaped API that carries organization names in
- * person-shaped fields, and the mapping between the two is <em>not</em>
- * symmetric; see {@link Mapping#roundTripSwapsTheNameFields()}.
+ * person-shaped fields: {@code lastName} holds the legal/registered name and
+ * {@code firstName} holds the display name, symmetrically on both read and
+ * write; see {@link Mapping#roundTripPreservesTheNameFields()}.
  *
  * <p>
  * Commercial parties hold no locally searchable email, so an email-only query
@@ -92,14 +93,14 @@ class CommercialPartyServiceImplTest {
         }
 
         @Test
-        @DisplayName("writes firstName to the legal name and lastName to the display name")
+        @DisplayName("writes lastName to the legal name and firstName to the display name")
         void writeMapping() {
             when(commercialRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
             service.createCustomer(CustomerDTO.builder()
                     .customerType("COMMERCIAL")
-                    .firstName("Fleet Co LLC")
-                    .lastName("Fleet Co")
+                    .lastName("Fleet Co LLC")
+                    .firstName("Fleet Co")
                     .build());
 
             ArgumentCaptor<CommercialParty> captor = ArgumentCaptor.forClass(CommercialParty.class);
@@ -109,23 +110,21 @@ class CommercialPartyServiceImplTest {
         }
 
         @Test
-        @DisplayName("a create-then-read round trip returns the two names swapped")
-        void roundTripSwapsTheNameFields() {
+        @DisplayName("a create-then-read round trip preserves both name fields")
+        void roundTripPreservesTheNameFields() {
             when(commercialRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
             CustomerDTO created = service.createCustomer(CustomerDTO.builder()
                     .customerType("COMMERCIAL")
-                    .firstName("Fleet Co LLC")
-                    .lastName("Fleet Co")
+                    .lastName("Fleet Co LLC")
+                    .firstName("Fleet Co")
                     .build());
 
-            // Documents current behaviour, not desired behaviour. toEntity maps firstName ->
-            // legalName and lastName -> displayName, while toDTO maps legalName -> lastName and
-            // displayName -> firstName. The two directions disagree, so a client that POSTs a
-            // commercial party and reads it back gets its two name fields transposed.
-            // updateEntityFromDTO follows toEntity, so the same transposition applies on update.
-            assertThat(created.getFirstName()).isEqualTo("Fleet Co");
+            // toEntity now maps lastName -> legalName and firstName -> displayName, agreeing with
+            // toDTO's legalName -> lastName / displayName -> firstName. updateEntityFromDTO follows
+            // toEntity, so the same agreement holds on update (issue #1246).
             assertThat(created.getLastName()).isEqualTo("Fleet Co LLC");
+            assertThat(created.getFirstName()).isEqualTo("Fleet Co");
         }
     }
 
@@ -262,8 +261,8 @@ class CommercialPartyServiceImplTest {
         }
 
         @Test
-        @DisplayName("an update that names no VINs clears the ones the party had")
-        void omittingVinsClearsThem() {
+        @DisplayName("an update that omits VINs leaves the ones the party had")
+        void omittingVinsLeavesThemUnchanged() {
             CommercialParty existing = party();
             when(commercialRepository.findById(PARTY_ID)).thenReturn(Optional.of(existing));
             when(commercialRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -271,11 +270,10 @@ class CommercialPartyServiceImplTest {
             service.updateCustomer(
                     PARTY_ID, CustomerDTO.builder().primaryAddress("2 Depot Rd").build());
 
-            // Documents current behaviour, not desired behaviour — same cause as the person-party
-            // case: CustomerDTO declares vehicleVins @Builder.Default with an empty ArrayList and
-            // initializes it in the no-args constructor Jackson uses, so the `!= null` guard in
-            // updateEntityFromDTO can never be false and a partial update drops every VIN.
-            assertThat(existing.getVehicleVins()).isEmpty();
+            // CustomerDTO's vehicleVins has no field initializer, so an absent field in the request
+            // body deserializes as null, not an empty list (issue #1245). The `!= null` guard in
+            // updateEntityFromDTO now actually skips the clear()/addAll() branch on a partial update.
+            assertThat(existing.getVehicleVins()).containsExactly("VIN-1");
         }
 
         @Test
