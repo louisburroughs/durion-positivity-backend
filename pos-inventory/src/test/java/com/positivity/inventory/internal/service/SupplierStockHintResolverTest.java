@@ -144,6 +144,42 @@ class SupplierStockHintResolverTest {
     }
 
     @Test
+    @DisplayName("a pass that resolves nothing clears any product the row was still carrying")
+    void failed_resolution_clears_a_stale_product() {
+        SupplierStockHint hint = pending("4012345678999");
+        // Re-queued after a snapshot changed its EAN, still carrying the earlier resolution.
+        hint.setResolvedProductId(PRODUCT_ID);
+        hint.setResolvedAt(NOW.minusSeconds(7200));
+        hint.setResolvedBy("catalog:EAN");
+        backlog(hint);
+        when(catalog.findByCode("EAN", "4012345678999")).thenReturn(Optional.empty());
+
+        resolver.runResolutionPass();
+
+        assertThat(hint.getResolutionStatus()).isEqualTo(SupplierHintResolutionStatus.UNRESOLVED);
+        assertThat(hint.getResolvedProductId()).isNull();
+        assertThat(hint.getResolvedAt()).isNull();
+        assertThat(hint.getResolvedBy()).isNull();
+    }
+
+    @Test
+    @DisplayName("an article that loses its EAN drops the product it had resolved to")
+    void not_resolvable_clears_a_stale_product() {
+        SupplierStockHint hint = pending(null);
+        hint.setResolvedProductId(PRODUCT_ID);
+        hint.setResolvedAt(NOW.minusSeconds(7200));
+        hint.setResolvedBy("catalog:EAN");
+        backlog(hint);
+
+        resolver.runResolutionPass();
+
+        assertThat(hint.getResolutionStatus()).isEqualTo(SupplierHintResolutionStatus.NOT_RESOLVABLE);
+        assertThat(hint.getResolvedProductId()).isNull();
+        assertThat(hint.getResolvedAt()).isNull();
+        assertThat(hint.getResolvedBy()).isNull();
+    }
+
+    @Test
     @DisplayName("a pass is bounded by the configured batch size")
     void pass_is_bounded() {
         properties.getResolution().setBatchSize(50);

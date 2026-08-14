@@ -6,8 +6,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 /**
  * Resolves an article code to a catalog product through pos-catalog's exact-match lookup
@@ -54,7 +56,11 @@ public class CatalogProductCodeClient {
      */
     @NonNull
     public Optional<ProductCodeMatchDto> findByCode(@NonNull String codeType, @NonNull String code) {
-        ProductCodeMatchDto match = restClient
+        // exchange() rather than retrieve(): the two non-match outcomes carry bodies that are not a
+        // match — 404 has none at all and 409 carries an ApiError — so the response body must only
+        // be read once the status says it is a match. Reading it first and relying on the mapper to
+        // shrug at the mismatch would make the outcome depend on message-converter configuration.
+        return restClient
                 .get()
                 .uri(uriBuilder -> uriBuilder
                         .path(basePath + "/by-code")
@@ -63,17 +69,29 @@ public class CatalogProductCodeClient {
                         .build())
                 .header("X-User", "pos-inventory-service")
                 .header("X-Authorities", "ROLE_CATALOG_VIEW")
-                .retrieve()
-                // A miss is the expected outcome of a lookup and has no body.
-                .onStatus(status -> status.value() == 404, (request, response) -> {})
-                // Catalog refuses to arbitrate between products carrying the same code, and so do
-                // we: an ambiguous article stays unresolved rather than resolving to a guess.
-                .onStatus(
-                        status -> status.value() == 409,
-                        (request, response) ->
-                                log.warn("Catalog reports code {}={} carried by more than one product", codeType, code))
-                .body(ProductCodeMatchDto.class);
-        return Optional.ofNullable(match).filter(dto -> dto.productId() != null);
+                .exchange((request, response) -> {
+                    int status = response.getStatusCode().value();
+                    if (status == HttpStatus.NOT_FOUND.value()) {
+                        // A miss is the expected outcome of a lookup, not an error to parse.
+                        return Optional.empty();
+                    }
+                    if (status == HttpStatus.CONFLICT.value()) {
+                        // Catalog refuses to arbitrate between products carrying the same code, and
+                        // so do we: an ambiguous article stays unresolved rather than resolving to
+                        // a guess. This is a settled answer, not a failure to retry.
+                        log.warn("Catalog reports code {}={} carried by more than one product", codeType, code);
+                        return Optional.empty();
+                    }
+                    if (response.getStatusCode().isError()) {
+                        // Anything else means we did not get an answer. Thrown so the caller defers
+                        // the hint rather than recording "unresolved", which would state something
+                        // about our catalog data that this response does not support.
+                        throw new RestClientException("Catalog product-code lookup failed with status " + status
+                                + " for " + codeType + "=" + code);
+                    }
+                    return Optional.ofNullable(response.bodyTo(ProductCodeMatchDto.class))
+                            .filter(dto -> dto.productId() != null);
+                });
     }
 
     /** Consumer-side view of a catalog product-code match; only the fields resolution needs. */

@@ -243,6 +243,10 @@ public class SupplierStockHintEventsListener {
                         .firstSeenAt(now)
                         .build();
 
+        // Decided before any setter runs: an existing row IS the row being updated, so reading its
+        // previous state after the setters would compare the new line against itself.
+        SupplierHintResolutionStatus status = nextResolutionStatus(existing, line);
+
         hint.setArticleEan(line.articleEan());
         hint.setSupplierArticleCode(line.supplierArticleCode());
         hint.setBuyersArticleId(line.buyersArticleId());
@@ -256,8 +260,23 @@ public class SupplierStockHintEventsListener {
         hint.setSnapshotAsOf(payload.snapshotAsOf());
         hint.setAsOfSource(asOfSource);
         hint.setFetchedAt(payload.fetchedAt());
-        hint.setResolutionStatus(nextResolutionStatus(existing, line));
+
+        hint.setResolutionStatus(status);
+        if (status != SupplierHintResolutionStatus.RESOLVED) {
+            // The row is no longer resolved, which here means the EAN it resolved on has changed or
+            // gone away. The product it used to point at is a statement about a different article,
+            // so it is cleared rather than carried: a caller reading a PENDING row must not be
+            // shown a product this vendor never tied to the code it is now stating.
+            clearResolution(hint);
+        }
         return hint;
+    }
+
+    /** Drops a resolution that no longer describes the article the row now carries. */
+    private static void clearResolution(SupplierStockHint hint) {
+        hint.setResolvedProductId(null);
+        hint.setResolvedAt(null);
+        hint.setResolvedBy(null);
     }
 
     /**

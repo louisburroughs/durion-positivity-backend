@@ -1,9 +1,9 @@
-generatedAt: "2026-08-14T13:17:31.879002+00:00"
+generatedAt: "2026-08-14T17:48:44.433352+00:00"
 root: "."
 summary:
   manifestCount: 22
-  permissionCount: 419
-  uniquePermissionCount: 419
+  permissionCount: 420
+  uniquePermissionCount: 420
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -303,7 +303,7 @@ manifests:
     domain: "inventory"
     serviceName: "pos-inventory"
     version: "1.0"
-    permissionCount: 54
+    permissionCount: 55
     permissions:
       - name: "inventory:adjustment:approve"
         description: "Approve and post an adjustment to the ledger (creates ADJUSTMENT_IN/OUT events)"
@@ -397,6 +397,8 @@ manifests:
         description: "Resolve a shortage decision for an allocation"
       - name: "inventory:shortage:view"
         description: "View shortage resolution options"
+      - name: "inventory:supplier_stock_hint:view"
+        description: "View vendor-reported availability hints (advisory supplier stock, never owned stock or ATP)"
       - name: "inventory:stock_movement:create"
         description: "Record RECEIVE, PUT_AWAY, PICK, ISSUE, RETURN, or TRANSFER movements directly in the inventory ledger"
       - name: "inventory:transfer:create"
@@ -2052,6 +2054,12 @@ permissions:
     source: "pos-inventory/src/main/resources/permissions.yaml"
   - name: "inventory:stock_movement:create"
     description: "Record RECEIVE, PUT_AWAY, PICK, ISSUE, RETURN, or TRANSFER movements directly in the inventory ledger"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:supplier_stock_hint:view"
+    description: "View vendor-reported availability hints (advisory supplier stock, never owned stock or ATP)"
     domain: "inventory"
     serviceName: "pos-inventory"
     module: "pos-inventory"

@@ -404,6 +404,38 @@ class SupplierStockHintEventsListenerTest {
                 .isEqualTo(UUID.fromString("018f0000-0000-7000-8000-0000000005f6"));
     }
 
+    @Test
+    @DisplayName("a resolved hint whose EAN changes drops the product it resolved to")
+    void changed_ean_clears_the_previous_resolution() {
+        // Keyed on the buyer's code, so a changed EAN does not move the row — it re-identifies the
+        // article the row is about, which is exactly when the old product must not survive.
+        SupplierStockHint existing = storedHint("4012345678901", 5, FETCHED_AT.minusSeconds(3600));
+        existing.setIdentityKind(SupplierHintIdentityKind.BUYER_ARTICLE);
+        existing.setIdentityValue("B-1");
+        existing.setBuyersArticleId("B-1");
+        existing.setResolutionStatus(SupplierHintResolutionStatus.RESOLVED);
+        existing.setResolvedProductId(UUID.fromString("018f0000-0000-7000-8000-0000000005f6"));
+        existing.setResolvedAt(FETCHED_AT.minusSeconds(3600));
+        existing.setResolvedBy("catalog:EAN");
+        when(hints.findByVendorProfileIdAndIdentityKindAndIdentityValue(
+                        VENDOR_ID, SupplierHintIdentityKind.EAN, "4012345678999"))
+                .thenReturn(Optional.empty());
+        when(hints.findByVendorProfileIdAndIdentityKindAndIdentityValue(
+                        VENDOR_ID, SupplierHintIdentityKind.BUYER_ARTICLE, "B-1"))
+                .thenReturn(Optional.of(existing));
+
+        listener.onSupplierEvent(chunkEvent("evt-17", 1, 1, 1, line(null, "V-1", "B-1", "7")));
+
+        ArgumentCaptor<SupplierStockHint> saved = ArgumentCaptor.forClass(SupplierStockHint.class);
+        verify(hints).save(saved.capture());
+        // No EAN now, so nothing deterministic to match on — and the product it used to resolve to
+        // describes a code this row no longer states.
+        assertThat(saved.getValue().getResolutionStatus()).isEqualTo(SupplierHintResolutionStatus.NOT_RESOLVABLE);
+        assertThat(saved.getValue().getResolvedProductId()).isNull();
+        assertThat(saved.getValue().getResolvedAt()).isNull();
+        assertThat(saved.getValue().getResolvedBy()).isNull();
+    }
+
     // ---------------------------------------------------------------------
     // Error policy
     // ---------------------------------------------------------------------

@@ -93,6 +93,7 @@ public class SupplierStockHintResolver {
             String ean = hint.getArticleEan();
             if (ean == null || ean.isBlank()) {
                 hint.setResolutionStatus(SupplierHintResolutionStatus.NOT_RESOLVABLE);
+                clearResolution(hint);
                 hintRepository.save(hint);
                 notResolvable++;
                 continue;
@@ -110,6 +111,7 @@ public class SupplierStockHintResolver {
                     // Catalog does not carry this article, or carries it ambiguously. Keep the
                     // hint and what the vendor said; the next snapshot re-queues the attempt.
                     hint.setResolutionStatus(SupplierHintResolutionStatus.UNRESOLVED);
+                    clearResolution(hint);
                     unresolved++;
                 }
                 hintRepository.save(hint);
@@ -121,6 +123,20 @@ public class SupplierStockHintResolver {
             }
         }
         return new ResolutionPassResult(pending.size(), resolved, unresolved, notResolvable, deferred);
+    }
+
+    /**
+     * Drops any resolution a row is carrying when this pass concludes it has none.
+     *
+     * <p>A row reaching the resolver is {@code PENDING}, which the consumer sets when a snapshot
+     * changes an article's EAN. If that row had previously resolved, the product it points at
+     * describes the old code — so a pass that fails to resolve the new one must clear it rather
+     * than leave a product hanging off a row that is no longer resolved.
+     */
+    private static void clearResolution(SupplierStockHint hint) {
+        hint.setResolvedProductId(null);
+        hint.setResolvedAt(null);
+        hint.setResolvedBy(null);
     }
 
     /** Outcome counts for one pass. */
