@@ -11,10 +11,11 @@ supplier APIs, and the exchange audit trail of what was sent and received.
 | Compose port | `8096` → container `8080` |
 | Governing ADRs | ADR-0050 (vendor profile configuration), ADR-0051 (protocol adapter versioning), ADR-0052 (outbound idempotency / duplicate-order prevention) |
 
-This module owns **how** we reach a supplier, and — as CAP-318 lands its codecs — **what** we say to
-them for each capability. The first codec is EDIWheel PRICAT B4.0 (`internal.adapter.ediwheelb`,
-issue #1224); the remaining capabilities still have SPI ports in `internal.spi` and no codec behind
-them. ADR-0053 governs the price-catalog behaviour described below.
+This module owns **how** we reach a supplier, and — as the codec waves land — **what** we say to
+them for each capability. Two codecs exist today, both in `internal.adapter.ediwheelb`: PRICAT B4.0
+(#1224) and Stock Report B2.1 (#1228). The remaining capabilities still have SPI ports in
+`internal.spi` and no codec behind them. ADR-0053 governs the price-catalog behaviour described
+below.
 
 ---
 
@@ -87,6 +88,35 @@ product identity codes on `catalog.events.v1` and `CatalogProductEventsListener`
 created seconds ago may not be matchable yet, and its line is quarantined until the next import. An
 empty replica — Kafka disabled, or nothing consumed yet — reports `CATALOG_UNAVAILABLE` rather than
 turning a whole vendor catalog into `NO_CATALOG_MATCH` misses an operator would go hunting for.
+
+### Stock report (B2.1) — no API surface
+
+A scheduled snapshot feed with no endpoints: pos-supplier fetches the vendor's country-level stock
+report on the binding's cron and publishes it as chunked `supplier.stockreport.updated` events for
+pos-inventory to hold as **availability hints**. Hints are not owned stock and must never enter
+valuation or on-hand ATP (ADR-0048).
+
+Three states, kept distinct end to end, because collapsing them is how a vendor's silence becomes a
+false out-of-stock:
+
+| Vendor said | Stored / published as | Means |
+| --- | --- | --- |
+| `"quantityValue": "0"` | `0` | The vendor reports it has none |
+| `"quantityValue": ""` or absent | `null` | The vendor listed the article without stating a quantity |
+| article not in the document | no line at all | The vendor did not mention it |
+
+The snapshot carries **two timestamps**: `snapshotAsOf` is the vendor's own statement of when the
+snapshot was taken, `fetchedAt` is when we asked. A report fetched at noon may describe stock as of
+06:00, and staleness is judged against the vendor's figure.
+
+Snapshots are append-only. A failed or undecodable fetch records a `FAILED` snapshot and stops, so
+the previous snapshot stays the last thing the vendor actually said — a vendor outage is not a
+statement that a warehouse is empty.
+
+Four terminal statuses, and the distinction between the middle two is the point: `COMPLETED` (at
+least one usable line), `EMPTY` (the vendor sent no lines), `REJECTED` (the vendor sent lines and
+none of them decoded — a codec or vendor-format break, not a quiet warehouse), `FAILED` (no usable
+answer at all).
 
 ### Gateway routing
 
@@ -372,6 +402,10 @@ nothing), then update the Angular SDK.
 - The `ext_product_code` replica has no backfill path yet: it is built from facts published after the
   consumer starts, so a first deployment needs pos-catalog to re-emit (ADR-0044 §4 replay) before
   PRICAT lines can match.
+- Stock-report snapshots are published but not yet consumed: the pos-inventory hint representation is
+  a domain decision (#1312) and the consumer waits on it.
+- `SupplierShipmentTrackingPort` has no adapter and cannot get one from the spec we hold: the LEX v1
+  document declares only a write operation, so there is nothing to fetch (#1313).
 - V5 (`protocol_version` widened to 64) has run against H2 in PostgreSQL mode only; this environment has
   no Docker daemon for `FlywayMigrationIT`.
 - `EndpointBindingRequest.version` is bounded but not validated against the adapter registry.

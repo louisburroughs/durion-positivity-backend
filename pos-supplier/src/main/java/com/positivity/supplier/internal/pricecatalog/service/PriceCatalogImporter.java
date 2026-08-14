@@ -126,9 +126,9 @@ public class PriceCatalogImporter {
         }
 
         PreparedImport prepared = prepare(document, importManifestId);
-        int chunkSize = binding.binding().getPricatChunkSize() == null
+        int chunkSize = binding.binding().getEventChunkSize() == null
                 ? defaultChunkSize
-                : binding.binding().getPricatChunkSize();
+                : binding.binding().getEventChunkSize();
 
         return stagingWriter.commit(
                 prepared, document, binding, billing, importManifestId, correlationId, fetchedAt, chunkSize);

@@ -1,0 +1,54 @@
+{
+  "envelopeHeader": {
+    "issueDate": "20260814",
+    "issueTime": "0600",
+    "documentId": "STOCKREPORT-4046266_20260814",
+    "variant": "B2_1",
+    "errorCode": "0"
+  },
+  "totalLineItemsNumber": "4",
+  "buyerParty": "30012456",
+  "lineLevel": [
+    {
+      "lineId": "1",
+      "article": {
+        "articleIdentification": {
+          "buyersArticleId": "BUY-1",
+          "manufacturersArticleId": "999908",
+          "eanuccarticleID": "3528709999083"
+        },
+        "articleDescription": { "articleDescriptionText": "255/55R19 111VXL PS4 SUV" },
+        "availableQuantity": { "quantityValue": "42" }
+      }
+    },
+    {
+      "lineId": "2",
+      "article": {
+        "articleIdentification": {
+          "manufacturersArticleId": "888801",
+          "eanuccarticleID": "3528709999084"
+        },
+        "articleDescription": { "articleDescriptionText": "205/55R16 91V PRIMACY 4" },
+        "availableQuantity": { "quantityValue": "0" }
+      }
+    },
+    {
+      "lineId": "3",
+      "article": {
+        "articleIdentification": {
+          "manufacturersArticleId": "777701",
+          "eanuccarticleID": "3528709999085"
+        },
+        "articleDescription": { "articleDescriptionText": "225/45R17 94Y PILOT SPORT 5" },
+        "availableQuantity": { "quantityValue": "" }
+      }
+    },
+    {
+      "lineId": "4",
+      "article": {
+        "articleIdentification": {},
+        "availableQuantity": { "quantityValue": "12" }
+      }
+    }
+  ]
+}
