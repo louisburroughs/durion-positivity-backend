@@ -344,16 +344,20 @@ class PersonPartyServiceImplTest {
         @Test
         @DisplayName("rejects a create with a blank firstName or lastName")
         void createRejectsBlankNames() {
-            assertThatThrownBy(() -> service.createCustomer(CustomerDTO.builder()
-                            .customerType("PERSON")
-                            .firstName("Ada")
-                            .build()))
-                    .isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> service.createCustomer(CustomerDTO.builder()
-                            .customerType("PERSON")
-                            .lastName("Lovelace")
-                            .build()))
-                    .isInstanceOf(IllegalArgumentException.class);
+            for (String blank : new String[] {null, "", "   "}) {
+                assertThatThrownBy(() -> service.createCustomer(CustomerDTO.builder()
+                                .customerType("PERSON")
+                                .firstName(blank)
+                                .lastName("Lovelace")
+                                .build()))
+                        .isInstanceOf(IllegalArgumentException.class);
+                assertThatThrownBy(() -> service.createCustomer(CustomerDTO.builder()
+                                .customerType("PERSON")
+                                .firstName("Ada")
+                                .lastName(blank)
+                                .build()))
+                        .isInstanceOf(IllegalArgumentException.class);
+            }
 
             verifyNoInteractions(customerRepository);
         }

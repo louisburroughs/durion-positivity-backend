@@ -253,16 +253,20 @@ class CommercialPartyServiceImplTest {
         @Test
         @DisplayName("rejects a create with a blank firstName or lastName")
         void createRejectsBlankNames() {
-            assertThatThrownBy(() -> service.createCustomer(CustomerDTO.builder()
-                            .customerType("COMMERCIAL")
-                            .firstName("Fleet Co")
-                            .build()))
-                    .isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> service.createCustomer(CustomerDTO.builder()
-                            .customerType("COMMERCIAL")
-                            .lastName("Fleet Co LLC")
-                            .build()))
-                    .isInstanceOf(IllegalArgumentException.class);
+            for (String blank : new String[] {null, "", "   "}) {
+                assertThatThrownBy(() -> service.createCustomer(CustomerDTO.builder()
+                                .customerType("COMMERCIAL")
+                                .firstName(blank)
+                                .lastName("Fleet Co LLC")
+                                .build()))
+                        .isInstanceOf(IllegalArgumentException.class);
+                assertThatThrownBy(() -> service.createCustomer(CustomerDTO.builder()
+                                .customerType("COMMERCIAL")
+                                .firstName("Fleet Co")
+                                .lastName(blank)
+                                .build()))
+                        .isInstanceOf(IllegalArgumentException.class);
+            }
 
             verifyNoInteractions(commercialRepository);
         }
