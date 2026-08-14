@@ -24,9 +24,9 @@ import org.junit.jupiter.params.provider.ValueSource;
  *
  * <p>
  * The subdivision check normalizes {@code US-TX} and {@code tx} to {@code TX}
- * before matching, and carries an explicit US fallback list because the ISO
- * dataset alone does not cover the territories tax law cares about (PR, GU, DC,
- * ...).
+ * before matching, and carries explicit US and CA fallback lists because the ISO
+ * dataset alone does not cover the US territories tax law cares about (PR, GU,
+ * DC, ...) or any Canadian province at all.
  */
 @DisplayName("pos-tax-common validators — country, currency, subdivision")
 class TaxValidationTest {
@@ -107,16 +107,16 @@ class TaxValidationTest {
         }
 
         @ParameterizedTest
-        @CsvSource({"CA, ON", "CA, QC", "CA, BC"})
-        @DisplayName("rejects every real Canadian province — the backing dataset has no CA data")
-        void canadianProvincesAreRejected(String country, String region) {
-            // Documents current behaviour, not desired behaviour. The i18n-subdivision-enums
-            // dataset returns no subdivisions for Canada (probing yields only "NA"), and unlike
-            // the US there is no fallback list, so a valid Canadian address fails validation.
-            // Any consumer validating a Canadian TaxAddress gets a 400 for a correct region code.
-            // The fix — a CA fallback list like the US one, or a different dataset — is a design
-            // call; this test exists so it cannot be fixed silently.
-            assertThat(validator.isValid(address(country, region), null)).isFalse();
+        @CsvSource({
+            "CA, ON", "CA, QC", "CA, BC", "CA, AB", "CA, MB", "CA, NB", "CA, NL", "CA, NS", "CA, NT", "CA, NU",
+            "CA, PE", "CA, SK", "CA, YT"
+        })
+        @DisplayName("accepts every real Canadian province and territory via the explicit fallback list")
+        void canadianProvincesAreAccepted(String country, String region) {
+            // The i18n-subdivision-enums dataset returns no subdivisions for Canada (probing
+            // yields only "NA"), so — like the US territories below — CA needs an explicit
+            // fallback list rather than relying on the backing dataset.
+            assertThat(validator.isValid(address(country, region), null)).isTrue();
         }
 
         @ParameterizedTest

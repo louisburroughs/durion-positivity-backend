@@ -19,6 +19,12 @@ public class SubdivisionForCountryValidator
             "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC", "AS", "GU", "MP",
             "PR", "UM", "VI");
 
+    // The org.meeuw.i18n:i18n-subdivision-enums dataset carries no Canadian subdivision
+    // data (probing CA yields only "NA"), so — as with the US territories above — the
+    // ISO 3166-2:CA provinces and territories need an explicit fallback.
+    private static final Set<String> CA_SUBDIVISION_CODES =
+            Set.of("AB", "BC", "MB", "NB", "NL", "NS", "NT", "NU", "ON", "PE", "QC", "SK", "YT");
+
     @Override
     public boolean isValid(TaxCalculationRequest.TaxAddress value, ConstraintValidatorContext context) {
         if (value == null) {
@@ -44,6 +50,10 @@ public class SubdivisionForCountryValidator
 
         if (CountryCode.US.equals(country)) {
             return US_SUBDIVISION_CODES.contains(normalizedRegion);
+        }
+
+        if (CountryCode.CA.equals(country)) {
+            return CA_SUBDIVISION_CODES.contains(normalizedRegion);
         }
 
         return false;
