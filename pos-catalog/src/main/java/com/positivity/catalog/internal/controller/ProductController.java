@@ -602,7 +602,10 @@ public class ProductController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ProductFactReplayResultDto.class)))
-    @ApiResponse(responseCode = "400", description = "A parameter is malformed or the limit is out of range")
+    @ApiResponse(
+            responseCode = "400",
+            description = "A parameter is malformed or the limit is out of range.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ProductFactReplayResultDto> replayProductFacts(
             @Parameter(
                             description = "Resume cursor from a previous call; omit to start at the beginning.",

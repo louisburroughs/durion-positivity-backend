@@ -9,6 +9,7 @@ import com.positivity.supplier.service.model.PriceCatalogImportSummary;
 import com.positivity.supplier.service.model.UnmatchedPriceCatalogLineView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -17,6 +18,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -141,19 +143,20 @@ public class SupplierPriceCatalogAdminController {
                     never decoded are skipped, because no catalog fix can rescue them.
                     Required inputs: vendorProfileId (UUIDv7) as a path parameter; there is no request body, and the
                     batch size is a deployment setting rather than a caller choice.
-                    Emits a SUPPLIER_PRICECATALOG_REAPPLY event, creates a re-application manifest that references
-                    the import it healed, closes the lines it matched, and publishes their prices; the original
-                    import's counters are left untouched, because they record what the vendor sent at the time.
-                    Returns 200 with the re-application summary, 204 when nothing matched — the healthy steady state,
-                    not a failure — and 404 when the profile does not exist.
+                    Emits a SUPPLIER_PRICECATALOG_REAPPLY event and creates one re-application manifest per origin
+                    import — a quarantine spans every import that left a line open, and each manifest carries one
+                    vendor document's identity — closing the lines it matched and publishing their prices; the
+                    original imports' counters are left untouched, because they record what the vendor sent at the time.
+                    Returns 200 with one summary per healed import, 204 when nothing matched — the healthy steady
+                    state, not a failure — and 404 when the profile does not exist.
                     """)
     @ApiResponse(
             responseCode = "200",
-            description = "Summary of the re-application manifest.",
+            description = "One summary per origin import that had lines resolve.",
             content =
                     @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = PriceCatalogImportSummary.class)))
+                            array = @ArraySchema(schema = @Schema(implementation = PriceCatalogImportSummary.class))))
     @ApiResponse(
             responseCode = "204",
             description = "Nothing in the quarantine resolved. The response has NO body: an empty result is the"
@@ -174,7 +177,7 @@ public class SupplierPriceCatalogAdminController {
     @PreAuthorize("hasAuthority('" + SupplierPermissions.PRICECATALOG_IMPORT + "')")
     @EmitEvent(id = "SUPPLIER_PRICECATALOG_REAPPLY", apiVersion = "1")
     @PostMapping("/{vendorProfileId}/quarantine/reapply")
-    public ResponseEntity<PriceCatalogImportSummary> reapplyQuarantine(
+    public ResponseEntity<List<PriceCatalogImportSummary>> reapplyQuarantine(
             @Parameter(
                             description = "Vendor profile whose quarantine to work (UUIDv7).",
                             required = true,
@@ -186,10 +189,8 @@ public class SupplierPriceCatalogAdminController {
                     @PathVariable
                     @NotNull
                     UUID vendorProfileId) {
-        return priceCatalogService
-                .reapplyQuarantine(vendorProfileId)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.noContent().build());
+        List<PriceCatalogImportSummary> summaries = priceCatalogService.reapplyQuarantine(vendorProfileId);
+        return summaries.isEmpty() ? ResponseEntity.noContent().build() : ResponseEntity.ok(summaries);
     }
 
     @Operation(

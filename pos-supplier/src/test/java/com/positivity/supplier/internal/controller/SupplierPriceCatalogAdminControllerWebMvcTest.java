@@ -182,18 +182,17 @@ class SupplierPriceCatalogAdminControllerWebMvcTest {
 
         @Test
         void returnsTheReapplicationSummaryWhenLinesResolved() throws Exception {
-            when(priceCatalogService.reapplyQuarantine(PROFILE_ID))
-                    .thenReturn(java.util.Optional.of(summary("COMPLETED")));
+            when(priceCatalogService.reapplyQuarantine(PROFILE_ID)).thenReturn(List.of(summary("COMPLETED")));
 
             mockMvc.perform(authed(post(BASE + "/quarantine/reapply"), SupplierPermissions.PRICECATALOG_IMPORT))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.importManifestId").value(MANIFEST_ID.toString()));
+                    .andExpect(jsonPath("$[0].importManifestId").value(MANIFEST_ID.toString()));
         }
 
         @Test
         void returns204WhenNothingResolved() throws Exception {
             // An empty quarantine sweep is the healthy steady state, not an error.
-            when(priceCatalogService.reapplyQuarantine(PROFILE_ID)).thenReturn(java.util.Optional.empty());
+            when(priceCatalogService.reapplyQuarantine(PROFILE_ID)).thenReturn(List.of());
 
             mockMvc.perform(authed(post(BASE + "/quarantine/reapply"), SupplierPermissions.PRICECATALOG_IMPORT))
                     .andExpect(status().isNoContent());

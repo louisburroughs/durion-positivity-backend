@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -117,7 +118,7 @@ class QuarantineReapplierTest {
         when(productCodeResolver.resolve("EAN", "3528709999083"))
                 .thenReturn(new ProductCodeResolver.Resolution.Matched(PRODUCT_ID));
 
-        assertThat(service.reapply(PROFILE_ID)).isPresent();
+        assertThat(service.reapply(PROFILE_ID)).hasSize(1);
 
         ArgumentCaptor<List<ResolvedLine>> captor = ArgumentCaptor.forClass(List.class);
         verify(reapplicationWriter).commit(any(), captor.capture(), any(), eq(500));
@@ -136,7 +137,7 @@ class QuarantineReapplierTest {
         when(productCodeResolver.resolve("EAN", "3528709999083"))
                 .thenReturn(new ProductCodeResolver.Resolution.Matched(PRODUCT_ID));
 
-        assertThat(service.reapply(PROFILE_ID)).isPresent();
+        assertThat(service.reapply(PROFILE_ID)).hasSize(1);
     }
 
     @Test
@@ -145,7 +146,7 @@ class QuarantineReapplierTest {
         when(productCodeResolver.resolve("UPC", "0123456789012"))
                 .thenReturn(new ProductCodeResolver.Resolution.Matched(PRODUCT_ID));
 
-        assertThat(service.reapply(PROFILE_ID)).isPresent();
+        assertThat(service.reapply(PROFILE_ID)).hasSize(1);
     }
 
     @Test
@@ -200,7 +201,7 @@ class QuarantineReapplierTest {
         candidates(quarantined("3528709999083", null, UnmatchedLineReason.NO_CATALOG_MATCH));
         when(productCodeResolver.resolve("EAN", "3528709999083"))
                 .thenReturn(new ProductCodeResolver.Resolution.Matched(PRODUCT_ID));
-        assertThat(service.reapply(PROFILE_ID)).isPresent();
+        assertThat(service.reapply(PROFILE_ID)).hasSize(1);
 
         when(unmatchedLineRepository.findByVendorProfileIdAndResolvedAtIsNullAndReasonIn(
                         eq(PROFILE_ID), anyList(), any(Pageable.class)))
@@ -214,5 +215,36 @@ class QuarantineReapplierTest {
         when(profileRepository.findById(PROFILE_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.reapply(PROFILE_ID)).isInstanceOf(SupplierConfigurationException.class);
+    }
+
+    @Test
+    void commitsOneManifestPerOriginImportRatherThanCollapsingThem() {
+        // A profile's quarantine spans every import that ever left a line open. One manifest for all
+        // of them would stamp every published price with the first line's document identity and
+        // fetch timestamp — attributing prices to a document that never contained them, and feeding
+        // the latest-selection tie-break a fetch time belonging to a different fetch.
+        UUID otherImport = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70");
+        PriceCatalogUnmatchedLineEntity fromFirstImport =
+                quarantined("3528709999083", null, UnmatchedLineReason.NO_CATALOG_MATCH);
+        PriceCatalogUnmatchedLineEntity fromSecondImport =
+                quarantined("3528709999084", null, UnmatchedLineReason.NO_CATALOG_MATCH);
+        fromSecondImport.setImportManifestId(otherImport);
+        candidates(fromFirstImport, fromSecondImport);
+        when(productCodeResolver.resolve("EAN", "3528709999083"))
+                .thenReturn(new ProductCodeResolver.Resolution.Matched(PRODUCT_ID));
+        when(productCodeResolver.resolve("EAN", "3528709999084"))
+                .thenReturn(new ProductCodeResolver.Resolution.Matched(PRODUCT_ID));
+
+        assertThat(service.reapply(PROFILE_ID)).hasSize(2);
+
+        ArgumentCaptor<List<ResolvedLine>> captor = ArgumentCaptor.forClass(List.class);
+        verify(reapplicationWriter, times(2)).commit(any(), captor.capture(), any(), anyInt());
+        assertThat(captor.getAllValues())
+                .allSatisfy(group -> assertThat(group)
+                        .extracting(line -> line.quarantineRow().getImportManifestId())
+                        .containsOnly(group.getFirst().quarantineRow().getImportManifestId()));
+        assertThat(captor.getAllValues())
+                .extracting(group -> group.getFirst().quarantineRow().getImportManifestId())
+                .containsExactlyInAnyOrder(ORIGIN_IMPORT, otherImport);
     }
 }

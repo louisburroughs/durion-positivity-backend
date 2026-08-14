@@ -1402,15 +1402,17 @@ paths:
 
         batch size is a deployment setting rather than a caller choice.
 
-        Emits a SUPPLIER_PRICECATALOG_REAPPLY event, creates a re-application manifest that references
+        Emits a SUPPLIER_PRICECATALOG_REAPPLY event and creates one re-application manifest per origin
 
-        the import it healed, closes the lines it matched, and publishes their prices; the original
+        import — a quarantine spans every import that left a line open, and each manifest carries one
 
-        import''s counters are left untouched, because they record what the vendor sent at the time.
+        vendor document''s identity — closing the lines it matched and publishing their prices; the
 
-        Returns 200 with the re-application summary, 204 when nothing matched — the healthy steady state,
+        original imports'' counters are left untouched, because they record what the vendor sent at the time.
 
-        not a failure — and 404 when the profile does not exist.
+        Returns 200 with one summary per healed import, 204 when nothing matched — the healthy steady
+
+        state, not a failure — and 404 when the profile does not exist.
 
         '
       operationId: reapplySupplierPriceCatalogQuarantine
@@ -1425,11 +1427,13 @@ paths:
           example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
       responses:
         '200':
-          description: Summary of the re-application manifest.
+          description: One summary per origin import that had lines resolve.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PriceCatalogImportSummary'
+                type: array
+                items:
+                  $ref: '#/components/schemas/PriceCatalogImportSummary'
         '204':
           description: 'Nothing in the quarantine resolved. The response has NO body: an empty result is the healthy steady state, not an error envelope to parse.'
         '404':

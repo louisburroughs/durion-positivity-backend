@@ -47,9 +47,10 @@ public class QuarantineReapplicationScheduler {
             try {
                 reapplicationService
                         .reapply(profile.getVendorProfileId())
-                        .ifPresent(manifest -> log.info(
-                                "Quarantine sweep re-applied {} lines for profile {} as import {}",
+                        .forEach(manifest -> log.info(
+                                "Quarantine sweep re-applied {} lines of import {} for profile {} as import {}",
                                 manifest.getLinesMatched(),
+                                manifest.getReappliedFromImportId(),
                                 profile.getVendorProfileId(),
                                 manifest.getImportManifestId()));
             } catch (Exception e) {

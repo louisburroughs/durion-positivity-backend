@@ -12,7 +12,9 @@ import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +45,15 @@ import org.springframework.stereotype.Service;
  * contradict the chunk sequencing consumers have already applied — chunk 4 of a 3-chunk import is
  * not something a completeness check can accept, and #1308's consumer would read it as a discrepancy
  * rather than a repair.
+ *
+ * <h2>One manifest per origin import</h2>
+ *
+ * A profile's quarantine spans every import that ever left a line open, so a batch routinely mixes
+ * them. Resolved lines are therefore grouped by the import they came from and committed one
+ * manifest per group. Collapsing them into a single manifest would stamp every published price with
+ * the first line's document identity and fetch timestamp — attributing prices to a document that
+ * never contained them, and feeding the latest-selection tie-break (ADR-0053 §2) a fetch time that
+ * belongs to a different fetch.
  *
  * <h2>Matching stays exactly as strict</h2>
  *
@@ -81,12 +92,12 @@ public class QuarantineReapplier {
      * Re-matches one batch of a profile's open quarantine and applies what now resolves.
      *
      * @param vendorProfileId profile whose quarantine to work
-     * @return the re-application manifest, or empty when nothing matched — an empty result is the
-     *         healthy steady state, not a failure
+     * @return one manifest per origin import that had lines resolve; empty when nothing matched,
+     *         which is the healthy steady state rather than a failure
      * @throws SupplierConfigurationException when no profile exists with that id
      */
     @NonNull
-    public Optional<PriceCatalogImportEntity> reapply(@NonNull UUID vendorProfileId) {
+    public List<PriceCatalogImportEntity> reapply(@NonNull UUID vendorProfileId) {
         SupplierProfileEntity profile = profileRepository
                 .findById(vendorProfileId)
                 .orElseThrow(() -> new SupplierConfigurationException(
@@ -97,31 +108,40 @@ public class QuarantineReapplier {
                 unmatchedLineRepository.findByVendorProfileIdAndResolvedAtIsNullAndReasonIn(
                         vendorProfileId, RETRYABLE_REASONS, PageRequest.of(0, Math.max(1, batchSize)));
         if (candidates.isEmpty()) {
-            return Optional.empty();
+            return List.of();
         }
 
-        List<ResolvedLine> resolved = new ArrayList<>();
+        // Grouped by origin import, in encounter order, because a profile's quarantine spans every
+        // import that ever left a line open and the manifest carries one document's identity.
+        Map<UUID, List<ResolvedLine>> byOriginImport = new LinkedHashMap<>();
         for (PriceCatalogUnmatchedLineEntity line : candidates) {
-            match(line).ifPresent(resolved::add);
+            match(line)
+                    .ifPresent(resolvedLine -> byOriginImport
+                            .computeIfAbsent(line.getImportManifestId(), key -> new ArrayList<>())
+                            .add(resolvedLine));
         }
 
-        if (resolved.isEmpty()) {
+        if (byOriginImport.isEmpty()) {
             log.debug(
                     "Re-application for profile {} matched none of {} candidate lines",
                     vendorProfileId,
                     candidates.size());
-            return Optional.empty();
+            return List.of();
         }
 
-        PriceCatalogImportEntity manifest =
-                reapplicationWriter.commit(profile, resolved, Instant.now(clock), chunkSize);
-        log.info(
-                "Re-applied {} of {} quarantined lines for profile {} as import {}",
-                resolved.size(),
-                candidates.size(),
-                vendorProfileId,
-                manifest.getImportManifestId());
-        return Optional.of(manifest);
+        Instant appliedAt = Instant.now(clock);
+        List<PriceCatalogImportEntity> manifests = new ArrayList<>(byOriginImport.size());
+        byOriginImport.forEach((originImportId, lines) -> {
+            PriceCatalogImportEntity manifest = reapplicationWriter.commit(profile, lines, appliedAt, chunkSize);
+            manifests.add(manifest);
+            log.info(
+                    "Re-applied {} quarantined lines of import {} for profile {} as import {}",
+                    lines.size(),
+                    originImportId,
+                    vendorProfileId,
+                    manifest.getImportManifestId());
+        });
+        return manifests;
     }
 
     /** Same deterministic order as the original import: exact EAN, then cross-reference as a UPC. */

@@ -87,8 +87,10 @@ public class SupplierPriceCatalogServiceImpl implements SupplierPriceCatalogServ
 
     @Override
     @NonNull
-    public Optional<PriceCatalogImportSummary> reapplyQuarantine(@NonNull UUID vendorProfileId) {
-        return reapplicationService.reapply(vendorProfileId).map(SupplierPriceCatalogServiceImpl::toSummary);
+    public List<PriceCatalogImportSummary> reapplyQuarantine(@NonNull UUID vendorProfileId) {
+        return reapplicationService.reapply(vendorProfileId).stream()
+                .map(SupplierPriceCatalogServiceImpl::toSummary)
+                .toList();
     }
 
     static PriceCatalogImportSummary toSummary(PriceCatalogImportEntity row) {
