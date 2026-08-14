@@ -12,6 +12,7 @@ import com.positivity.catalog.internal.dto.ProductCodeMatch;
 import com.positivity.catalog.internal.dto.ProductCreateRequestDto;
 import com.positivity.catalog.internal.dto.ProductDetailView;
 import com.positivity.catalog.internal.dto.ProductDto;
+import com.positivity.catalog.internal.dto.ProductFactReplayResultDto;
 import com.positivity.catalog.internal.dto.ProductLifecycleResponse;
 import com.positivity.catalog.internal.dto.ProductLifecycleUpdateRequest;
 import com.positivity.catalog.internal.dto.ProductReplacementRequest;
@@ -22,6 +23,7 @@ import com.positivity.catalog.service.CatalogService;
 import com.positivity.catalog.service.LocationPriceOverrideService;
 import com.positivity.catalog.service.ProductCodeLookupService;
 import com.positivity.catalog.service.ProductDetailService;
+import com.positivity.catalog.service.ProductFactReplayService;
 import com.positivity.catalog.service.ProductLifecycleService;
 import com.positivity.catalog.service.ProductMasterDataService;
 import com.positivity.catalog.service.ProductSearchService;
@@ -36,6 +38,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -56,6 +61,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Slf4j
 @RestController
+@org.springframework.validation.annotation.Validated
 @RequestMapping("/v1/products")
 @Tag(name = "Products API", description = "API for products, lifecycle, and pricing")
 public class ProductController {
@@ -67,6 +73,7 @@ public class ProductController {
     private final ProductMasterDataService productMasterDataService;
     private final ProductSearchService productSearchService;
     private final ProductCodeLookupService productCodeLookupService;
+    private final ProductFactReplayService productFactReplayService;
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -560,6 +567,68 @@ public class ProductController {
                 .getProductById(productId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT"})
+    @PostMapping("/facts/replay")
+    @EmitEvent(id = "CATALOG_PRODUCT_FACT_REPLAY", apiVersion = "1")
+    @Operation(
+            operationId = "replayProductFacts",
+            summary = "Re-emit Product Facts for Replica Consumers",
+            description = """
+            Re-publishes catalog.product.updated facts for one bounded page of products so that \
+            event-fed replicas in other modules can be seeded or repaired, returning what it emitted and \
+            a cursor for the next page.
+            Use this tool to fill a consumer's replica after a first deployment or a consumer outage \
+            longer than broker retention; do not use it to fix one product, which republishes itself on \
+            its next ordinary update.
+            Preconditions: Kafka publication must be enabled, or the facts queue in the outbox and \
+            reach nobody; replayed facts are indistinguishable from live ones, so consumers apply them \
+            through their normal path and their stale guard prevents an older fact regressing newer state.
+            Required inputs: none; afterProductId resumes a previous page, updatedSince restricts to \
+            products changed at or after an instant, and limit bounds the page at 1000.
+            Emits a CATALOG_PRODUCT_FACT_REPLAY event and queues one product fact per product in the \
+            page; no catalog state changes.
+            Returns 200 with complete=true and a null cursor once the catalog end is reached, and 400 \
+            when limit is out of range or a parameter is malformed.
+            """)
+    @ApiResponse(
+            responseCode = "200",
+            description = "What this page emitted and where to resume.",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ProductFactReplayResultDto.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "A parameter is malformed or the limit is out of range.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<ProductFactReplayResultDto> replayProductFacts(
+            @Parameter(
+                            description = "Resume cursor from a previous call; omit to start at the beginning.",
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @RequestParam(required = false)
+                    UUID afterProductId,
+            @Parameter(
+                            description = "Restrict to products changed at or after this instant; omit to replay all.",
+                            schema = @Schema(type = "string", format = "date-time", example = "2026-08-01T00:00:00Z"))
+                    @RequestParam(required = false)
+                    Instant updatedSince,
+            @Parameter(
+                            description = "Maximum facts to emit in this call (1–1000).",
+                            schema = @Schema(type = "integer", example = "500", defaultValue = "500"))
+                    @RequestParam(defaultValue = "500")
+                    @Min(1)
+                    @Max(1000)
+                    int limit) {
+        return ResponseEntity.ok(productFactReplayService.replayPage(afterProductId, updatedSince, limit));
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")

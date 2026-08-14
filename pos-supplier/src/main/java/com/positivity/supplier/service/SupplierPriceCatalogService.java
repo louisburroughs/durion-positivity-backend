@@ -3,6 +3,7 @@ package com.positivity.supplier.service;
 import com.positivity.supplier.service.model.PagedResponse;
 import com.positivity.supplier.service.model.PriceCatalogImportSummary;
 import com.positivity.supplier.service.model.UnmatchedPriceCatalogLineView;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -64,4 +65,24 @@ public interface SupplierPriceCatalogService {
      */
     @NonNull
     PriceCatalogImportSummary runImport(@NonNull UUID vendorProfileId);
+
+    /**
+     * Re-matches the profile's open quarantine against the current product-code replica and applies
+     * whatever now resolves, without asking the vendor for the document again (ADR-0053 §5).
+     *
+     * <p>Lines that carried no identifier, or whose values never decoded, are skipped: no catalog
+     * fix can rescue them, and retrying them forever would keep an operator's worklist permanently
+     * non-empty.
+     *
+     * <p>Returns one summary per origin import that had lines resolve. A profile's quarantine spans
+     * every import that ever left a line open, and each re-application manifest carries one vendor
+     * document's identity — so a batch that heals lines from three imports produces three summaries,
+     * not one summary attributing every price to whichever document happened to be first.
+     *
+     * @param vendorProfileId profile whose quarantine to work
+     * @return one summary per origin import that resolved; empty when nothing matched, which is the
+     *         healthy steady state rather than a failure
+     */
+    @NonNull
+    List<PriceCatalogImportSummary> reapplyQuarantine(@NonNull UUID vendorProfileId);
 }

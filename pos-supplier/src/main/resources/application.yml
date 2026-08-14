@@ -119,6 +119,12 @@ pos:
       # binding's own cron.
       poll-interval-ms: ${SUPPLIER_PRICAT_POLL_INTERVAL_MS:60000}
       scheduler-enabled: ${SUPPLIER_PRICAT_SCHEDULER_ENABLED:true}
+      # Quarantine re-application (#1310). The sweep runs on its own cadence rather than with an
+      # import: what makes a quarantined line matchable is a change in the CATALOG, which has
+      # nothing to do with when the vendor is next fetched.
+      reapply-batch-size: ${SUPPLIER_PRICAT_REAPPLY_BATCH_SIZE:2000}
+      reapply-cron: ${SUPPLIER_PRICAT_REAPPLY_CRON:0 15 * * * *}
+      reapply-enabled: ${SUPPLIER_PRICAT_REAPPLY_ENABLED:true}
     # ── Stock report / B2.1 (CAP-322) ───────────────────────────────────────────────────
     #
     # Same chunking problem as PRICAT: a country-level report is as wide as a catalog. A binding

@@ -24,4 +24,7 @@ public interface PriceCatalogUnmatchedLineRepository extends JpaRepository<Price
      */
     List<PriceCatalogUnmatchedLineEntity> findByVendorProfileIdAndResolvedAtIsNullAndReasonIn(
             UUID vendorProfileId, List<UnmatchedLineReason> reasons, Pageable pageable);
+
+    /** How many open rows are retryable, so a caller can size a re-application before running it. */
+    long countByVendorProfileIdAndResolvedAtIsNullAndReasonIn(UUID vendorProfileId, List<UnmatchedLineReason> reasons);
 }

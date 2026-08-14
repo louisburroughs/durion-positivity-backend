@@ -83,6 +83,12 @@ public final class SupplierEventTypes {
                 EventTypeRegistration.search(
                                 "SUPPLIER_PRICECATALOG_UNMATCHED_LIST",
                                 "List price-catalog lines quarantined for catalog review")
+                        .build(),
+                // Re-application stages and publishes a batch of lines, so it carries a write's
+                // latency rather than a read's.
+                EventTypeRegistration.write(
+                                "SUPPLIER_PRICECATALOG_REAPPLY",
+                                "Re-apply quarantined price-catalog lines after a catalog fix")
                         .build());
     }
 }

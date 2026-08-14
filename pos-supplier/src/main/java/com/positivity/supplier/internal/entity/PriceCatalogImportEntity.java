@@ -144,6 +144,19 @@ public class PriceCatalogImportEntity {
     @Column(name = "correlation_id", nullable = false, length = 100)
     private String correlationId;
 
+    /**
+     * Set when this manifest re-applied quarantined lines of an earlier import (#1310); null for an
+     * ordinary vendor fetch.
+     *
+     * <p>A re-application gets its own manifest rather than editing the original's counters,
+     * because those counters record what the vendor sent and how much of it matched <em>at the
+     * time</em>. Rewriting them later would destroy that record and contradict the chunk sequencing
+     * consumers already applied — chunk 4 of a 3-chunk import is not something a completeness check
+     * can accept.
+     */
+    @Column(name = "reapplied_from_import_id", updatable = false)
+    private UUID reappliedFromImportId;
+
     /** Operator-facing failure summary for a FAILED import; never a credential. */
     @Column(name = "failure_detail", length = 2000)
     private String failureDetail;
