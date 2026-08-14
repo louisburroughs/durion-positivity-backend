@@ -63,7 +63,7 @@ public class SupplierOrderServiceImpl implements SupplierOrderService {
         SupplierTransmissionIntentEntity intent = require(transmissionIntentId);
         if (intent.getAttemptState() != TransmissionAttemptState.MANUAL_REVIEW) {
             throw new SupplierConflictException(
-                    SupplierConflictException.BINDING_CAPABILITY_CONFLICT,
+                    SupplierConflictException.TRANSMISSION_STATE_CONFLICT,
                     "Transmission " + transmissionIntentId + " is in state " + intent.getAttemptState()
                             + "; only a transmission awaiting MANUAL_REVIEW can be resolved by hand (ADR-0052 §4)");
         }
@@ -76,7 +76,7 @@ public class SupplierOrderServiceImpl implements SupplierOrderService {
                             // The vendor's own reference is the evidence. Without it the operator is
                             // asserting a confirmation with nothing to check it against later.
                             throw new SupplierValidationException(
-                                    SupplierValidationException.AUTH_REFS_INCOMPLETE,
+                                    SupplierValidationException.TRANSMISSION_RESOLUTION_INCOMPLETE,
                                     "supplierOrderNumber is required when confirming a transmission with a vendor"
                                             + " reference");
                         }
@@ -101,7 +101,7 @@ public class SupplierOrderServiceImpl implements SupplierOrderService {
         return intentRepository
                 .findById(transmissionIntentId)
                 .orElseThrow(() -> new SupplierNotFoundException(
-                        SupplierNotFoundException.EXCHANGE_AUDIT_NOT_FOUND,
+                        SupplierNotFoundException.TRANSMISSION_NOT_FOUND,
                         "No transmission exists with id " + transmissionIntentId));
     }
 

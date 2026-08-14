@@ -15,6 +15,17 @@ public class SupplierConflictException extends RuntimeException {
     public static final String ACCOUNT_SLOT_CONFLICT = "SUPPLIER_ACCOUNT_SLOT_CONFLICT";
     public static final String BINDING_CAPABILITY_CONFLICT = "SUPPLIER_BINDING_CAPABILITY_CONFLICT";
 
+    /**
+     * A manual resolution was attempted on a transmission that is not awaiting review
+     * (ADR-0052 §4).
+     *
+     * <p>A <em>runtime state</em> collision rather than a configuration one, which is why it does
+     * not reuse any of the codes above: the caller's view of the transmission is simply stale, and
+     * refreshing it is the fix. Telling them a capability binding conflicts would send them to an
+     * admin screen that has nothing to do with the problem.
+     */
+    public static final String TRANSMISSION_STATE_CONFLICT = "SUPPLIER_TRANSMISSION_STATE_CONFLICT";
+
     private final String code;
 
     public SupplierConflictException(String code, String message) {

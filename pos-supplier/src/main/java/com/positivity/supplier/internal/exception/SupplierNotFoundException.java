@@ -18,6 +18,15 @@ public class SupplierNotFoundException extends RuntimeException {
      */
     public static final String EXCHANGE_AUDIT_NOT_FOUND = "SUPPLIER_EXCHANGE_AUDIT_NOT_FOUND";
 
+    /**
+     * No purchase-order transmission intent with that id (ADR-0052 §1).
+     *
+     * <p>Distinct from {@link #EXCHANGE_AUDIT_NOT_FOUND}, which is about a single vendor call. A
+     * transmission is the whole intent to place one order, spanning many calls, and an operator
+     * chasing a missing order needs to know which of the two the system cannot find.
+     */
+    public static final String TRANSMISSION_NOT_FOUND = "SUPPLIER_TRANSMISSION_NOT_FOUND";
+
     private final String code;
 
     public SupplierNotFoundException(String code, String message) {

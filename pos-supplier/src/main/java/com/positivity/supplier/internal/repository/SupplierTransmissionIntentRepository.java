@@ -5,7 +5,9 @@ import com.positivity.supplier.internal.enums.TransmissionAttemptState;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 /** The transmission ledger and its dispatch queue (ADR-0052 §§1–2). */
 public interface SupplierTransmissionIntentRepository extends JpaRepository<SupplierTransmissionIntentEntity, UUID> {
@@ -42,8 +44,18 @@ public interface SupplierTransmissionIntentRepository extends JpaRepository<Supp
      * <p>Ordered by when the vendor was last <em>asked</em> rather than when its answer last
      * changed: ordering by the latter would starve an order whose answer never changes, which is
      * precisely the order most likely to need a human eventually.
+     *
+     * <p>Written out as a query rather than derived from the method name for one word:
+     * <strong>{@code NULLS FIRST}</strong>. A newly confirmed order has never been polled, so its
+     * {@code lastPolledAt} is null — and PostgreSQL sorts nulls <em>last</em> for {@code ASC},
+     * which would put every brand-new order at the back of the queue behind orders already being
+     * tracked. That is exactly backwards: the order nobody has asked about yet is the one with the
+     * most to learn. Null is not a missing timestamp to be defaulted away, it is "never asked",
+     * and never-asked sorts first.
      */
-    List<SupplierTransmissionIntentEntity> findTop100ByStatusPollingActiveTrueOrderByLastPolledAtAsc();
+    @Query("select i from SupplierTransmissionIntentEntity i where i.statusPollingActive = true"
+            + " order by i.lastPolledAt asc nulls first")
+    List<SupplierTransmissionIntentEntity> findDueForStatusPolling(Pageable pageable);
 
     /** The transmission history of one purchase order, newest intent first. */
     List<SupplierTransmissionIntentEntity> findByPurchaseOrderIdOrderByTransmissionIntentIdDesc(UUID purchaseOrderId);

@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -34,6 +35,12 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.supplier.order", name = "scheduler-enabled", matchIfMissing = true)
 public class OrderTransmissionScheduler {
+
+    /**
+     * How many orders one status tick may ask about. Bounds a single tick's vendor traffic; the
+     * per-order minimum interval bounds how often any one of them is asked.
+     */
+    private static final int STATUS_POLL_BATCH_SIZE = 100;
 
     private final SupplierTransmissionIntentRepository intentRepository;
     private final OrderTransmissionDispatcher dispatcher;
@@ -130,7 +137,7 @@ public class OrderTransmissionScheduler {
     public void pollOrderStatus() {
         Instant now = Instant.now(clock);
         for (SupplierTransmissionIntentEntity intent :
-                intentRepository.findTop100ByStatusPollingActiveTrueOrderByLastPolledAtAsc()) {
+                intentRepository.findDueForStatusPolling(PageRequest.of(0, STATUS_POLL_BATCH_SIZE))) {
             try {
                 if (!isOlderThan(intent.getLastPolledAt(), now, Duration.ofSeconds(statusPollMinIntervalSeconds))) {
                     continue;

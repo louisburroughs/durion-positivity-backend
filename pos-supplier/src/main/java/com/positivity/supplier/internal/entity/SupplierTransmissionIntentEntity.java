@@ -71,7 +71,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         indexes = {
             @Index(name = "idx_stintent_purchase_order", columnList = "purchase_order_id"),
             @Index(name = "idx_stintent_state", columnList = "attempt_state, transmission_intent_id"),
-            @Index(name = "idx_stintent_polling", columnList = "status_polling_active, vendor_profile_id")
+            // Matches V14 and the poller's actual query shape: filter on the flag, order by
+            // least-recently-asked. An index on (flag, vendor_profile_id) would support neither.
+            @Index(name = "idx_stintent_polling", columnList = "status_polling_active, last_polled_at")
         })
 public class SupplierTransmissionIntentEntity {
 

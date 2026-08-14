@@ -25,6 +25,16 @@ public class SupplierValidationException extends RuntimeException {
      */
     public static final String URL_CONTAINS_CREDENTIALS = "SUPPLIER_URL_CONTAINS_CREDENTIALS";
 
+    /**
+     * A manual transmission resolution that does not carry what its action requires — today, a
+     * confirmation without the vendor's own order reference (ADR-0052 §4).
+     *
+     * <p>The vendor reference is the evidence for the assertion being made. Without it an operator
+     * is recording "the vendor has this order" with nothing anyone can check it against later,
+     * which is the one thing the manual path exists to avoid.
+     */
+    public static final String TRANSMISSION_RESOLUTION_INCOMPLETE = "SUPPLIER_TRANSMISSION_RESOLUTION_INCOMPLETE";
+
     private final String code;
 
     public SupplierValidationException(String code, String message) {
