@@ -112,7 +112,7 @@ class TaxValidationTest {
             "CA, PE", "CA, SK", "CA, YT"
         })
         @DisplayName("accepts every real Canadian province and territory via the explicit fallback list")
-        void canadianProvincesAreAccepted(String country, String region) {
+        void canadianProvincesAndTerritoriesAreAccepted(String country, String region) {
             // The i18n-subdivision-enums dataset returns no subdivisions for Canada (probing
             // yields only "NA"), so — like the US territories below — CA needs an explicit
             // fallback list rather than relying on the backing dataset.
