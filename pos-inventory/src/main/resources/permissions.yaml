@@ -94,6 +94,8 @@ permissions:
     description: "Resolve a shortage decision for an allocation"
   - name: "inventory:shortage:view"
     description: "View shortage resolution options"
+  - name: "inventory:supplier_stock_hint:view"
+    description: "View vendor-reported availability hints (advisory supplier stock, never owned stock or ATP)"
   - name: "inventory:stock_movement:create"
     description: "Record RECEIVE, PUT_AWAY, PICK, ISSUE, RETURN, or TRANSFER movements directly in the inventory ledger"
   - name: "inventory:transfer:create"

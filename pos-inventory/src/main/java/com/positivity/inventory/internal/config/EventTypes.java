@@ -290,6 +290,16 @@ public final class EventTypes {
                                 "INVENTORY_RETURN_SUBMIT_TO_STOCK", "Submit inventory return lines to stock")
                         .build(),
                 EventTypeRegistration.write("INVENTORY_BULK_INGEST", "Bulk ingest inventory stock counts")
+                        .build(),
+
+                // SupplierStockHintController - 2 events (CAP-322, #1312)
+                EventTypeRegistration.fastRead(
+                                "INVENTORY_SUPPLIER_STOCK_HINT_LIST_BY_PRODUCT",
+                                "List vendor-reported availability hints for a product")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "INVENTORY_SUPPLIER_STOCK_HINT_LIST_BY_CODE",
+                                "List vendor-reported availability hints for an article code")
                         .build());
     }
 }

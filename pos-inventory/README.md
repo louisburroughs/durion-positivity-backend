@@ -105,12 +105,60 @@ move stock — spec R7.5). Each line posts in its own transaction: a rejected po
 stock, unknown item) raises `inventory.counter-sale.consumption-failed` on
 `inventory.events.v1` and never affects the completed sale.
 
+## Supplier availability hints (CAP-322, #1312)
+
+`SupplierStockHintEventsListener` consumes `supplier.stockreport.updated` from
+`supplier.events.v1` (producer #1228) into `supplier_stock_hint` — one row per
+`(vendorProfileId, article identity)` holding what that vendor last said about its own stock.
+
+**This is not owned stock.** It never enters valuation (ADR-0048), it is never part of on-hand
+ATP, and it never satisfies a gate on committing stock. The guarantee is structural rather than
+procedural: the hints live in their own tables that no valuation or ATP query joins, and two
+ArchUnit rules in `ArchitectureTest` hold the repository to the supplier-hint classes.
+
+What the feed's shape forces, and how each is handled:
+
+- **No terminal event, no republish command, and an empty snapshot publishes nothing.**
+  Completeness is in-band only: `supplier_stock_snapshot_chunk` logs the sequences that arrived
+  and `supplier_stock_snapshot_receipt` compares the count against the `chunkCount` every chunk
+  states. Incomplete is the resting state, so a lost chunk needs no timer to be noticed and every
+  hint from that snapshot reads as `snapshotComplete: false`.
+- **Three-way quantity distinction.** A stated quantity (`0` included — an explicit "we have
+  none"), a `NULL` quantity (the vendor listed the article and stated no quantity), and no row at
+  all (the vendor never mentioned it). A snapshot that omits a previously reported article leaves
+  its hint standing with its own `asOf`; a vendor's silence never reads as an out-of-stock.
+- **Two timestamps.** `snapshotAsOf` is the vendor's own figure and is nullable; `fetchedAt` is
+  when we asked. Freshness is judged on the vendor's figure where there is one, and `asOfSource`
+  says which is in play. Supersession is ordered on `fetchedAt`, the one instant that always
+  exists.
+- **Staleness ceiling.** Past `pos.inventory.supplier-hints.staleness-ceiling` (per-vendor
+  override available) a hint reads as `STALE_UNKNOWN` with its quantity suppressed — never as
+  zero.
+- **Resolution is out of band, against a local replica.** `SupplierStockHintResolver` sweeps
+  `PENDING` hints against `ext_product_code` — this module's own copy of pos-catalog's product
+  identity codes, maintained by `CatalogEventsListener` from `catalog.product.updated` facts.
+  Never a synchronous call to pos-catalog: ADR-0044 R1 forbids it and R3 makes the replica the
+  sanctioned read path, and pos-supplier resolves PRICAT lines the same way against its own copy
+  (CAP-318 #1224). Only EAN is matched; vendor and buyer article codes carry no uniqueness
+  guarantee and are never guessed at. Unresolved hints are retained and remain readable by code,
+  and an unseeded replica defers rather than reporting every hint as a catalog miss.
+
+Read path: `GET /v1/inventory/supplierStockHints/byProduct/{productId}` and
+`GET /v1/inventory/supplierStockHints/byCode` (`inventory:supplier_stock_hint:view`). Results are
+per vendor and never aggregated.
+
+Not in this module: publishing hints onward as an `inventory.supplier-availability.updated` fact
+for estimates. That waits on resolution being settled — see #1312.
+
 ## Configuration
 
-| Property                | Default  | Description                  |
-| ----------------------- | -------- | ---------------------------- |
-| `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
-| `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
+| Property                                             | Default  | Description                                            |
+| ---------------------------------------------------- | -------- | ------------------------------------------------------ |
+| `SPRING_DATASOURCE_URL`                              | required | PostgreSQL connection URL                              |
+| `EUREKA_SERVER_URL`                                  | required | Eureka service discovery URL                           |
+| `POS_INVENTORY_SUPPLIER_HINT_STALENESS_CEILING`      | `PT24H`  | Age past which a supplier hint reads as unknown        |
+| `POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_ENABLED`     | `false`  | Run the EAN resolution sweep against pos-catalog       |
+| `POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_BATCH_SIZE`  | `200`    | Hints resolved per pass                                |
 
 ## Dependencies
 
