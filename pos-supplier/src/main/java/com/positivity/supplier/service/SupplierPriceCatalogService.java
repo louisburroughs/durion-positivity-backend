@@ -64,4 +64,19 @@ public interface SupplierPriceCatalogService {
      */
     @NonNull
     PriceCatalogImportSummary runImport(@NonNull UUID vendorProfileId);
+
+    /**
+     * Re-matches the profile's open quarantine against the current product-code replica and applies
+     * whatever now resolves, without asking the vendor for the document again (ADR-0053 §5).
+     *
+     * <p>Lines that carried no identifier, or whose values never decoded, are skipped: no catalog
+     * fix can rescue them, and retrying them forever would keep an operator's worklist permanently
+     * non-empty.
+     *
+     * @param vendorProfileId profile whose quarantine to work
+     * @return the summary of the re-application manifest, or empty when nothing matched — which is
+     *         the healthy steady state rather than a failure
+     */
+    @NonNull
+    Optional<PriceCatalogImportSummary> reapplyQuarantine(@NonNull UUID vendorProfileId);
 }

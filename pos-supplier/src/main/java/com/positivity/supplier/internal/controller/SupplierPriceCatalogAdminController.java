@@ -128,6 +128,71 @@ public class SupplierPriceCatalogAdminController {
     }
 
     @Operation(
+            operationId = "reapplySupplierPriceCatalogQuarantine",
+            summary = "Re-apply quarantined price-catalog lines",
+            description = """
+                    Re-matches the profile's open unmatched-line quarantine against the current product-code replica
+                    and applies whatever now resolves, staging it and publishing it exactly as an import would — with
+                    no call to the vendor.
+                    Use this tool after a catalog fix, or after the product-code replica has been seeded, to close
+                    lines that were quarantined for a reason that no longer holds; do not use it to fetch fresh
+                    prices, which is triggerSupplierPriceCatalogImport.
+                    Preconditions: the profile must exist; lines that carried no identifier and lines whose values
+                    never decoded are skipped, because no catalog fix can rescue them.
+                    Required inputs: vendorProfileId (UUIDv7) as a path parameter; there is no request body, and the
+                    batch size is a deployment setting rather than a caller choice.
+                    Emits a SUPPLIER_PRICECATALOG_REAPPLY event, creates a re-application manifest that references
+                    the import it healed, closes the lines it matched, and publishes their prices; the original
+                    import's counters are left untouched, because they record what the vendor sent at the time.
+                    Returns 200 with the re-application summary, 204 when nothing matched — the healthy steady state,
+                    not a failure — and 404 when the profile does not exist.
+                    """)
+    @ApiResponse(
+            responseCode = "200",
+            description = "Summary of the re-application manifest.",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PriceCatalogImportSummary.class)))
+    @ApiResponse(
+            responseCode = "204",
+            description = "Nothing in the quarantine resolved. The response has NO body: an empty result is the"
+                    + " healthy steady state, not an error envelope to parse.",
+            content = @Content(schema = @Schema(hidden = true)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "No vendor profile exists with the supplied id.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = UNAUTHENTICATED_DESCRIPTION,
+            content = @Content(schema = @Schema(hidden = true)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Authenticated caller lacks supplier:pricecatalog:import.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @PreAuthorize("hasAuthority('" + SupplierPermissions.PRICECATALOG_IMPORT + "')")
+    @EmitEvent(id = "SUPPLIER_PRICECATALOG_REAPPLY", apiVersion = "1")
+    @PostMapping("/{vendorProfileId}/quarantine/reapply")
+    public ResponseEntity<PriceCatalogImportSummary> reapplyQuarantine(
+            @Parameter(
+                            description = "Vendor profile whose quarantine to work (UUIDv7).",
+                            required = true,
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @PathVariable
+                    @NotNull
+                    UUID vendorProfileId) {
+        return priceCatalogService
+                .reapplyQuarantine(vendorProfileId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    @Operation(
             operationId = "listSupplierPriceCatalogImports",
             summary = "List vendor price-catalog imports",
             description = """

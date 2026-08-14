@@ -37,6 +37,7 @@ public class SupplierPriceCatalogServiceImpl implements SupplierPriceCatalogServ
     private final PriceCatalogUnmatchedLineRepository unmatchedLineRepository;
     private final SupplierProfileRepository profileRepository;
     private final PriceCatalogImporter importService;
+    private final QuarantineReapplier reapplicationService;
 
     @Override
     @NonNull
@@ -82,6 +83,12 @@ public class SupplierPriceCatalogServiceImpl implements SupplierPriceCatalogServ
     private static <T> PagedResponse<T> toPage(Page<T> source, int page, int size) {
         List<T> items = source.getContent();
         return new PagedResponse<>(items, page, size, source.getTotalElements(), source.getTotalPages());
+    }
+
+    @Override
+    @NonNull
+    public Optional<PriceCatalogImportSummary> reapplyQuarantine(@NonNull UUID vendorProfileId) {
+        return reapplicationService.reapply(vendorProfileId).map(SupplierPriceCatalogServiceImpl::toSummary);
     }
 
     static PriceCatalogImportSummary toSummary(PriceCatalogImportEntity row) {

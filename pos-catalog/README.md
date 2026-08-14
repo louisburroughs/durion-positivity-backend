@@ -73,6 +73,24 @@ Routing rule for new stories: computing **what a customer pays** → pos-price; 
 
 Product mutations queue a `catalog.product.updated` fact (payload `ProductUpdatedV1`, schema version 2) on `catalog.events.v1` via the transactional outbox (`pos.catalog.kafka.enabled`), reconciled hourly on `catalog.manifest.v1`. Schema version 2 (#1023, additive) added `baseUom`, `trackingLevel`, `uomConversions[]` (`uomCode`, `uomType`, `factorToBase`, `precisionScale`), `substitutionGroupId`, and `substitutionProductIds[]` so pos-inventory can replicate UoM conversions, tracking level, and substitution membership (`ext_product_uom` et al.). UoM and substitution-membership mutations bump the product's `updatedAt` (the envelope `aggregateVersion`) and re-emit the fact for every affected product.
 
+### Replay for replica consumers (#1309)
+
+`POST /v1/products/facts/replay` re-emits `catalog.product.updated` facts so a consumer's replica
+can be seeded or repaired — the mechanism ADR-0044 §4 has always required owners to provide, and
+which this module lacked until pos-supplier's PRICAT matching became the first consumer that cannot
+function without it.
+
+- **Producer-side only.** No replica-holding module needs code for a replay to reach it.
+- **Indistinguishable from live facts.** The same `CatalogFactPublisher` produces them, with
+  `aggregateVersion` still the product's `updatedAt` epoch millis — so a consumer's ordinary stale
+  guard prevents a replayed older fact regressing newer replica state. New `eventId`s are expected.
+- **Paged and resumable.** `afterProductId` is a cursor over the product id (not an offset, which
+  would shift under concurrent writes and drop a product out of the window), `updatedSince` narrows
+  the set, and `limit` is capped at 1000 per call. A short page means the catalog end was reached.
+
+A first deployment of a replica consumer should replay before trusting the replica: it holds only
+facts published after it started.
+
 ## Configuration
 
 | Property                | Default  | Description                  |

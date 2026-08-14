@@ -36,6 +36,12 @@ public final class CatalogEventTypes {
                 EventTypeRegistration.fastRead(
                                 "CATALOG_PRODUCT_CODE_LOOKUP", "Resolve a product by exact EAN or UPC product code")
                         .build(),
+                // Replica seeding / repair (ADR-0044 §4, #1309). An approval-grade budget rather
+                // than a write: one call queues up to a thousand facts, so a write threshold would
+                // alert on every healthy replay.
+                EventTypeRegistration.approval(
+                                "CATALOG_PRODUCT_FACT_REPLAY", "Re-emit product facts for event-fed replica consumers")
+                        .build(),
                 // Supplier price entries applied from PRICAT imports (ADR-0053, #1308)
                 EventTypeRegistration.fastRead(
                                 "CATALOG_SUPPLIER_PRICE_LATEST",
