@@ -216,6 +216,10 @@ public class CustomerEventsListener {
                 }
             }
         }
+        // The owner reports when its candidate scan hit a ceiling and the list is partial. That
+        // travels with the snapshot: a preview reporting a truncated audience as complete would
+        // let a marketer read a short count as a small audience.
+        boolean truncated = payload.path("truncated").asBoolean(false);
         Instant resolvedAt = Instant.now(clock);
         for (Campaign campaign : campaignRepository.findAll()) {
             if (!segmentId.equals(campaign.getSegmentId())
@@ -229,9 +233,14 @@ public class CustomerEventsListener {
                             .campaignId(campaignId)
                             .partyId(partyId)
                             .resolvedAt(resolvedAt)
+                            .truncated(truncated)
                             .build())
                     .toList());
-            log.info("Campaign {} audience snapshot refreshed: {} member(s)", campaignId, partyIds.size());
+            log.info(
+                    "Campaign {} audience snapshot refreshed: {} member(s){}",
+                    campaignId,
+                    partyIds.size(),
+                    truncated ? " (truncated by the CRM's candidate ceiling)" : "");
         }
     }
 

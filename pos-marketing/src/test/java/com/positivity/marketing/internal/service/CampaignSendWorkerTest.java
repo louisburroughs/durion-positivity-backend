@@ -173,6 +173,29 @@ class CampaignSendWorkerTest {
     }
 
     @Test
+    @DisplayName("re-reads the addressed contact from the send-time decision rather than trusting dispatch")
+    void refreshesResolvedContactAtSendTime() {
+        UUID contact = UUID.randomUUID();
+        givenOneQueuedSend();
+        when(eligibilityService.decide(PARTY, CampaignChannel.EMAIL))
+                .thenReturn(new AudienceEligibilityService.Decision(true, "OPT_IN", contact));
+        when(messageChannel.send(any())).thenReturn(MessageChannelPort.SendOutcome.accepted("provider-1", null));
+
+        worker().drain();
+
+        // An account can change who speaks for it between queueing and delivery, and the sender
+        // resolves the address from whatever this row names.
+        ArgumentCaptor<MessageChannelPort.OutboundMessage> outbound =
+                ArgumentCaptor.forClass(MessageChannelPort.OutboundMessage.class);
+        verify(messageChannel).send(outbound.capture());
+        assertThat(outbound.getValue().contactId()).isEqualTo(contact);
+
+        ArgumentCaptor<CampaignSend> saved = ArgumentCaptor.forClass(CampaignSend.class);
+        verify(sendRepository).save(saved.capture());
+        assertThat(saved.getValue().getContactId()).isEqualTo(contact);
+    }
+
+    @Test
     @DisplayName("an allowed decision does send, and records the provider id")
     void allowedRecipientIsContacted() {
         givenOneQueuedSend();

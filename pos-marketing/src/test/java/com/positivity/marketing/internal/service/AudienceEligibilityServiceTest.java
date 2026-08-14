@@ -3,7 +3,9 @@ package com.positivity.marketing.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.marketing.internal.entity.PartyConsentReplica;
@@ -15,8 +17,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -120,24 +124,103 @@ class AudienceEligibilityServiceTest {
     }
 
     @Test
-    @DisplayName("bulk counting applies the same staleness and suppression rules")
-    void bulkCountMatchesSingleDecision() {
+    @DisplayName("a decision carries the contact whose consent governed it")
+    void decisionCarriesGoverningContact() {
+        UUID contact = UUID.fromString("01960003-0000-7000-8000-000000000042");
+        PartyConsentReplica consent = consent(true, NOW.minus(Duration.ofHours(1)));
+        consent.setGoverningPartyId(contact);
+        when(suppressionRepository.existsByPartyIdAndChannel(any(), anyString()))
+                .thenReturn(false);
+        when(consentRepository.findByPartyIdAndChannel(PARTY, "EMAIL")).thenReturn(Optional.of(consent));
+
+        // For a commercial account this is the contact the CRM designates to speak for it; the
+        // send row records it so the sender addresses the right person.
+        assertThat(service().decide(PARTY, CampaignChannel.EMAIL).contactPartyId())
+                .isEqualTo(contact);
+    }
+
+    @Test
+    @DisplayName("bulk decisions apply the same staleness rule as a single one")
+    void bulkMatchesSingleDecisionOnStaleness() {
         UUID stalePartyId = UUID.fromString("01960003-0000-7000-8000-000000000041");
         PartyConsentReplica fresh = consent(true, NOW.minus(Duration.ofHours(1)));
-        PartyConsentReplica stale = PartyConsentReplica.builder()
-                .consentKey(PartyConsentReplica.keyOf(stalePartyId, "EMAIL"))
-                .partyId(stalePartyId)
+        PartyConsentReplica stale = consentFor(stalePartyId, NOW.minus(Duration.ofDays(3)));
+        when(consentRepository.findByChannelAndPartyIdIn(anyString(), any())).thenReturn(List.of(fresh, stale));
+        when(suppressionRepository.findPartyIdsByChannelAndPartyIdIn(anyString(), any()))
+                .thenReturn(List.of());
+
+        Map<UUID, AudienceEligibilityService.Decision> decisions =
+                service().decideAll(List.of(PARTY, stalePartyId), CampaignChannel.EMAIL);
+
+        assertThat(decisions.get(PARTY).allowed()).isTrue();
+        assertThat(decisions.get(stalePartyId).reason()).isEqualTo(AudienceEligibilityService.REASON_CONSENT_STALE);
+    }
+
+    @Test
+    @DisplayName("bulk decisions let suppression outrank a fresh opt-in, as the single decision does")
+    void bulkAppliesSuppression() {
+        UUID suppressedPartyId = UUID.fromString("01960003-0000-7000-8000-000000000043");
+        when(consentRepository.findByChannelAndPartyIdIn(anyString(), any()))
+                .thenReturn(List.of(
+                        consent(true, NOW.minus(Duration.ofHours(1))),
+                        consentFor(suppressedPartyId, NOW.minus(Duration.ofHours(1)))));
+        when(suppressionRepository.findPartyIdsByChannelAndPartyIdIn(anyString(), any()))
+                .thenReturn(List.of(suppressedPartyId));
+
+        Map<UUID, AudienceEligibilityService.Decision> decisions =
+                service().decideAll(List.of(PARTY, suppressedPartyId), CampaignChannel.EMAIL);
+
+        assertThat(decisions.get(suppressedPartyId).reason()).isEqualTo(AudienceEligibilityService.REASON_SUPPRESSED);
+        assertThat(service().countEligible(List.of(PARTY, suppressedPartyId), CampaignChannel.EMAIL))
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a party the CRM has said nothing about still gets a decision, refusing it")
+    void bulkCoversPartiesWithNoReplicatedDecision() {
+        UUID unknown = UUID.fromString("01960003-0000-7000-8000-000000000044");
+        when(consentRepository.findByChannelAndPartyIdIn(anyString(), any()))
+                .thenReturn(List.of(consent(true, NOW.minus(Duration.ofHours(1)))));
+        when(suppressionRepository.findPartyIdsByChannelAndPartyIdIn(anyString(), any()))
+                .thenReturn(List.of());
+
+        // Every member of the snapshot must appear, or a preview would silently undercount.
+        Map<UUID, AudienceEligibilityService.Decision> decisions =
+                service().decideAll(List.of(PARTY, unknown), CampaignChannel.EMAIL);
+
+        assertThat(decisions).containsOnlyKeys(PARTY, unknown);
+        assertThat(decisions.get(unknown).reason()).isEqualTo(AudienceEligibilityService.REASON_NO_CONSENT_DATA);
+    }
+
+    @Test
+    @DisplayName("an audience larger than one IN clause is looked up in batches, not one statement")
+    void largeAudienceIsBatched() {
+        List<UUID> audience = Stream.generate(UUID::randomUUID).limit(2_500).toList();
+        when(consentRepository.findByChannelAndPartyIdIn(anyString(), any())).thenReturn(List.of());
+        when(suppressionRepository.findPartyIdsByChannelAndPartyIdIn(anyString(), any()))
+                .thenReturn(List.of());
+
+        // PostgreSQL caps a statement at 65535 bind parameters, so a whole-snapshot IN clause
+        // would fail on exactly the campaigns that matter most.
+        assertThat(service().decideAll(audience, CampaignChannel.EMAIL)).hasSize(2_500);
+        verify(consentRepository, times(3)).findByChannelAndPartyIdIn(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("an empty audience asks the database nothing")
+    void emptyAudienceSkipsQueries() {
+        assertThat(service().decideAll(List.of(), CampaignChannel.EMAIL)).isEmpty();
+        verifyNoInteractions(consentRepository, suppressionRepository);
+    }
+
+    private static PartyConsentReplica consentFor(UUID partyId, Instant decidedAt) {
+        return PartyConsentReplica.builder()
+                .consentKey(PartyConsentReplica.keyOf(partyId, "EMAIL"))
+                .partyId(partyId)
                 .channel("EMAIL")
                 .allowed(true)
                 .reason("OPT_IN")
-                .decidedAt(NOW.minus(Duration.ofDays(3)))
+                .decidedAt(decidedAt)
                 .build();
-        when(consentRepository.findByChannelAndPartyIdIn(anyString(), any())).thenReturn(List.of(fresh, stale));
-        lenient()
-                .when(suppressionRepository.existsByPartyIdAndChannel(any(), anyString()))
-                .thenReturn(false);
-
-        assertThat(service().countEligible(List.of(PARTY, stalePartyId), CampaignChannel.EMAIL))
-                .isEqualTo(1);
     }
 }

@@ -7,12 +7,19 @@ import com.positivity.marketing.internal.repository.SuppressionReplicaRepository
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +49,13 @@ public class AudienceEligibilityService {
     public static final String REASON_CONSENT_STALE = "CONSENT_STALE";
 
     public static final String REASON_SUPPRESSED = "SUPPRESSED";
+
+    /**
+     * Ceiling on the identifiers sent in one {@code IN (...)} predicate. An audience snapshot can
+     * run to tens of thousands of parties and PostgreSQL caps a statement at 65535 bind
+     * parameters, so a whole-snapshot query would fail on exactly the campaigns that matter most.
+     */
+    private static final int LOOKUP_BATCH_SIZE = 1_000;
 
     private final Clock clock;
     private final PartyConsentReplicaRepository consentRepository;
@@ -78,7 +92,40 @@ public class AudienceEligibilityService {
                     maxConsentAge);
             return new Decision(false, REASON_CONSENT_STALE);
         }
-        return new Decision(consent.isAllowed(), consent.getReason());
+        return new Decision(consent.isAllowed(), consent.getReason(), consent.getGoverningPartyId());
+    }
+
+    /**
+     * Decide for a whole audience snapshot in a fixed number of queries.
+     *
+     * <p>Audience preview evaluates every member of a snapshot and would otherwise issue two
+     * queries per party. The batched form answers identically to {@link #decide} — same
+     * precedence, same reason codes — because a preview that disagreed with the send worker
+     * would report reach the campaign never achieves.
+     *
+     * @return one decision per distinct id, in the order the ids were given
+     */
+    @Transactional(readOnly = true)
+    public @NonNull Map<UUID, Decision> decideAll(
+            @NonNull Collection<UUID> partyIds, @NonNull CampaignChannel channel) {
+        List<UUID> distinct = partyIds.stream().distinct().toList();
+        if (distinct.isEmpty()) {
+            return Map.of();
+        }
+        Set<UUID> suppressed = new HashSet<>();
+        Map<UUID, PartyConsentReplica> consents = new HashMap<>();
+        for (List<UUID> batch : partition(distinct)) {
+            suppressed.addAll(suppressionRepository.findPartyIdsByChannelAndPartyIdIn(channel.name(), batch));
+            for (PartyConsentReplica consent : consentRepository.findByChannelAndPartyIdIn(channel.name(), batch)) {
+                consents.put(consent.getPartyId(), consent);
+            }
+        }
+
+        Map<UUID, Decision> decisions = new LinkedHashMap<>();
+        for (UUID partyId : distinct) {
+            decisions.put(partyId, decideFrom(partyId, channel, suppressed, consents.get(partyId)));
+        }
+        return decisions;
     }
 
     /**
@@ -87,16 +134,36 @@ public class AudienceEligibilityService {
      */
     @Transactional(readOnly = true)
     public long countEligible(@NonNull Collection<UUID> partyIds, @NonNull CampaignChannel channel) {
-        if (partyIds.isEmpty()) {
-            return 0;
-        }
-        List<PartyConsentReplica> decisions = consentRepository.findByChannelAndPartyIdIn(channel.name(), partyIds);
-        return decisions.stream()
-                .filter(PartyConsentReplica::isAllowed)
-                .filter(consent -> !isStale(consent))
-                .filter(consent ->
-                        !suppressionRepository.existsByPartyIdAndChannel(consent.getPartyId(), channel.name()))
+        return decideAll(partyIds, channel).values().stream()
+                .filter(Decision::allowed)
                 .count();
+    }
+
+    private Decision decideFrom(
+            UUID partyId, CampaignChannel channel, Set<UUID> suppressed, @Nullable PartyConsentReplica consent) {
+        if (suppressed.contains(partyId)) {
+            return new Decision(false, REASON_SUPPRESSED);
+        }
+        if (consent == null) {
+            return new Decision(false, REASON_NO_CONSENT_DATA);
+        }
+        if (isStale(consent)) {
+            log.warn(
+                    "Consent replica for party {} on {} is older than {}; refusing to send",
+                    partyId,
+                    channel,
+                    maxConsentAge);
+            return new Decision(false, REASON_CONSENT_STALE);
+        }
+        return new Decision(consent.isAllowed(), consent.getReason(), consent.getGoverningPartyId());
+    }
+
+    private static List<List<UUID>> partition(List<UUID> ids) {
+        List<List<UUID>> batches = new ArrayList<>();
+        for (int start = 0; start < ids.size(); start += LOOKUP_BATCH_SIZE) {
+            batches.add(ids.subList(start, Math.min(start + LOOKUP_BATCH_SIZE, ids.size())));
+        }
+        return batches;
     }
 
     private boolean isStale(PartyConsentReplica consent) {
@@ -104,6 +171,20 @@ public class AudienceEligibilityService {
                 || consent.getDecidedAt().isBefore(Instant.now(clock).minus(maxConsentAge));
     }
 
-    /** @param reason machine-readable code, recorded on the send row when denied */
-    public record Decision(boolean allowed, @NonNull String reason) {}
+    /**
+     * @param reason machine-readable code, recorded on the send row when denied
+     * @param contactPartyId the party whose personal consent governed the decision — for a
+     *     commercial account the contact the CRM designates for it, for an individual the person
+     *     themselves. Null when the CRM reported no decision, or replicated one before this field
+     *     existed.
+     */
+    public record Decision(
+            boolean allowed,
+            @NonNull String reason,
+            @Nullable UUID contactPartyId) {
+
+        public Decision(boolean allowed, @NonNull String reason) {
+            this(allowed, reason, null);
+        }
+    }
 }

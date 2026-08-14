@@ -3,7 +3,7 @@ package com.positivity.marketing.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -22,7 +22,6 @@ import com.positivity.marketing.internal.enums.ScheduleType;
 import com.positivity.marketing.internal.exception.MarketingDuplicateResourceException;
 import com.positivity.marketing.internal.exception.MarketingResourceNotFoundException;
 import com.positivity.marketing.internal.exception.MarketingUnprocessableEntityException;
-import com.positivity.marketing.internal.repository.CampaignAudienceMemberRepository;
 import com.positivity.marketing.internal.repository.CampaignRepository;
 import com.positivity.marketing.internal.repository.MessageTemplateRepository;
 import com.positivity.marketing.internal.repository.SegmentReplicaRepository;
@@ -31,12 +30,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -69,6 +70,7 @@ class CampaignServiceImplTest {
     private static final UUID CAMPAIGN_ID = UUID.randomUUID();
     private static final UUID SEGMENT_ID = UUID.randomUUID();
     private static final UUID EMAIL_TEMPLATE_ID = UUID.randomUUID();
+    private static final UUID OFFER_ID = UUID.randomUUID();
 
     @Mock
     private CampaignRepository campaignRepository;
@@ -80,19 +82,25 @@ class CampaignServiceImplTest {
     private SegmentReplicaRepository segmentReplicaRepository;
 
     @Mock
-    private CampaignAudienceMemberRepository audienceRepository;
+    private AudienceResolutionService audienceResolutionService;
 
     @Mock
-    private AudienceEligibilityService eligibilityService;
-
-    @Mock
-    private SegmentResolveRequester resolveRequester;
+    private CampaignReferenceValidator referenceValidator;
 
     @Mock
     private MarketingFactPublisher factPublisher;
 
     @InjectMocks
     private CampaignServiceImpl sut;
+
+    /**
+     * Offer and catalog references are checked on every readiness pass, so the default is a
+     * clean bill of health; the tests that care about them override it.
+     */
+    @BeforeEach
+    void referencesAreValid() {
+        lenient().when(referenceValidator.problems(any())).thenReturn(List.of());
+    }
 
     private static Campaign campaign(CampaignStatus status) {
         return Campaign.builder()
@@ -395,6 +403,19 @@ class CampaignServiceImplTest {
         }
 
         @Test
+        @DisplayName("refuses to schedule a campaign whose promotion offer is not running")
+        void schedule_whenOfferNotActive_reportsProblem() {
+            when(campaignRepository.findById(CAMPAIGN_ID)).thenReturn(Optional.of(campaign(CampaignStatus.DRAFT)));
+            campaignIsReady();
+            when(referenceValidator.problems(any()))
+                    .thenReturn(List.of("promotion offer " + OFFER_ID + " is EXPIRED, not ACTIVE"));
+
+            // Advertising a discount that will not apply cannot be recalled once sent.
+            assertThatThrownBy(() -> sut.schedule(CAMPAIGN_ID)).hasMessageContaining("is EXPIRED, not ACTIVE");
+            verify(factPublisher, never()).campaignScheduled(any());
+        }
+
+        @Test
         @DisplayName("treats a dangling template id as a missing template")
         void schedule_whenTemplateDangling_reportsProblem() {
             when(campaignRepository.findById(CAMPAIGN_ID)).thenReturn(Optional.of(campaign(CampaignStatus.DRAFT)));
@@ -446,57 +467,62 @@ class CampaignServiceImplTest {
     @DisplayName("previewAudience")
     class PreviewAudience {
 
+        /**
+         * Preview itself lives in {@link AudienceResolutionService}; what this class owns is
+         * the campaign-shaped context handed to it — which channels actually have a usable
+         * template, and the readiness problems that ride along as warnings.
+         */
         @Test
-        @DisplayName("reports the last snapshot with its age and asks for a fresher one")
-        void preview_reportsSnapshotAndRequestsRefresh() {
-            Instant resolvedAt = Instant.parse("2026-08-11T11:00:00Z");
-            when(campaignRepository.findById(CAMPAIGN_ID)).thenReturn(Optional.of(campaign(CampaignStatus.DRAFT)));
-            when(audienceRepository.findPartyIdsByCampaignId(CAMPAIGN_ID))
-                    .thenReturn(List.of(UUID.randomUUID(), UUID.randomUUID()));
-            when(audienceRepository.findResolvedAt(CAMPAIGN_ID)).thenReturn(Optional.of(resolvedAt));
-            when(eligibilityService.countEligible(anyCollection(), any())).thenReturn(1L);
+        @DisplayName("hands the resolver the campaign's usable templates and its readiness problems")
+        void preview_delegatesWithTemplatesAndWarnings() {
+            Campaign existing = campaign(CampaignStatus.DRAFT);
+            when(campaignRepository.findById(CAMPAIGN_ID)).thenReturn(Optional.of(existing));
             campaignIsReady();
+            when(audienceResolutionService.preview(any(), any(), any())).thenReturn(preview());
 
-            AudiencePreviewResponse preview = sut.previewAudience(CAMPAIGN_ID);
+            assertThat(sut.previewAudience(CAMPAIGN_ID)).isNotNull();
 
-            // The snapshot's age travels with the numbers so a marketer can see how
-            // current they are rather than assuming they are live.
-            assertThat(preview.segmentMatched()).isEqualTo(2);
-            assertThat(preview.resolvedAt()).isEqualTo(resolvedAt);
-            verify(resolveRequester).requestResolve(CAMPAIGN_ID, SEGMENT_ID);
+            ArgumentCaptor<Set<CampaignChannel>> templates = ArgumentCaptor.captor();
+            ArgumentCaptor<List<String>> warnings = ArgumentCaptor.captor();
+            verify(audienceResolutionService).preview(eq(existing), templates.capture(), warnings.capture());
+            assertThat(templates.getValue()).containsExactly(CampaignChannel.EMAIL);
+            assertThat(warnings.getValue()).isEmpty();
         }
 
         @Test
-        @DisplayName("reports per-channel eligibility and whether a template is attached")
-        void preview_reportsPerChannelDetail() {
+        @DisplayName("reports a dangling template as a channel without one, and warns about it")
+        void preview_whenTemplateDangling_reportsChannelWithoutTemplate() {
             when(campaignRepository.findById(CAMPAIGN_ID)).thenReturn(Optional.of(campaign(CampaignStatus.DRAFT)));
-            when(audienceRepository.findPartyIdsByCampaignId(CAMPAIGN_ID)).thenReturn(List.of(UUID.randomUUID()));
-            when(audienceRepository.findResolvedAt(CAMPAIGN_ID)).thenReturn(Optional.empty());
-            when(eligibilityService.countEligible(anyCollection(), any())).thenReturn(0L);
-            campaignIsReady();
-
-            AudiencePreviewResponse preview = sut.previewAudience(CAMPAIGN_ID);
-
-            assertThat(preview.channels()).singleElement().satisfies(channel -> {
-                assertThat(channel.channel()).isEqualTo("EMAIL");
-                assertThat(channel.targeted()).isEqualTo(1);
-                assertThat(channel.eligible()).isZero();
-                assertThat(channel.templateAttached()).isTrue();
-            });
-        }
-
-        @Test
-        @DisplayName("does not request a refresh once the audience is frozen")
-        void preview_whenAudienceImmutable_doesNotRequestRefresh() {
-            when(campaignRepository.findById(CAMPAIGN_ID)).thenReturn(Optional.of(campaign(CampaignStatus.SENT)));
-            when(audienceRepository.findPartyIdsByCampaignId(CAMPAIGN_ID)).thenReturn(List.of());
-            when(audienceRepository.findResolvedAt(CAMPAIGN_ID)).thenReturn(Optional.empty());
-            when(eligibilityService.countEligible(anyCollection(), any())).thenReturn(0L);
-            campaignIsReady();
+            when(segmentReplicaRepository.findById(SEGMENT_ID))
+                    .thenReturn(Optional.of(segmentReplica(true, "COMMERCIAL")));
+            // Set on the campaign but no longer resolvable: as broken as absent.
+            when(templateRepository.findById(EMAIL_TEMPLATE_ID)).thenReturn(Optional.empty());
+            when(audienceResolutionService.preview(any(), any(), any())).thenReturn(preview());
 
             sut.previewAudience(CAMPAIGN_ID);
 
-            verify(resolveRequester, never()).requestResolve(any(), any());
+            ArgumentCaptor<Set<CampaignChannel>> templates = ArgumentCaptor.captor();
+            ArgumentCaptor<List<String>> warnings = ArgumentCaptor.captor();
+            verify(audienceResolutionService).preview(any(), templates.capture(), warnings.capture());
+            assertThat(templates.getValue()).isEmpty();
+            assertThat(warnings.getValue()).contains("no EMAIL template attached");
+        }
+
+        @Test
+        @DisplayName("carries an invalid promotion offer through as a warning rather than an error")
+        void preview_whenOfferInvalid_warnsWithoutThrowing() {
+            when(campaignRepository.findById(CAMPAIGN_ID)).thenReturn(Optional.of(campaign(CampaignStatus.DRAFT)));
+            campaignIsReady();
+            when(referenceValidator.problems(any())).thenReturn(List.of("promotion offer is EXPIRED, not ACTIVE"));
+            when(audienceResolutionService.preview(any(), any(), any())).thenReturn(preview());
+
+            // A preview is where a marketer goes to find out what is wrong, so an unusable
+            // offer is reported alongside the counts instead of replacing them with a 422.
+            sut.previewAudience(CAMPAIGN_ID);
+
+            ArgumentCaptor<List<String>> warnings = ArgumentCaptor.captor();
+            verify(audienceResolutionService).preview(any(), any(), warnings.capture());
+            assertThat(warnings.getValue()).contains("promotion offer is EXPIRED, not ACTIVE");
         }
 
         @Test
@@ -509,6 +535,12 @@ class CampaignServiceImplTest {
             assertThatThrownBy(() -> sut.previewAudience(CAMPAIGN_ID))
                     .isInstanceOf(MarketingUnprocessableEntityException.class)
                     .hasMessageContaining("nothing to preview");
+            verify(audienceResolutionService, never()).preview(any(), any(), any());
+        }
+
+        private AudiencePreviewResponse preview() {
+            return new AudiencePreviewResponse(
+                    CAMPAIGN_ID, SEGMENT_ID, "COMMERCIAL", 0, null, false, List.of(), List.of());
         }
     }
 

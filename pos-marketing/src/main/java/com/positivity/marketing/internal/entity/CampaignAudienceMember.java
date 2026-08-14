@@ -51,4 +51,14 @@ public class CampaignAudienceMember {
 
     @Column(name = "resolved_at", nullable = false)
     private Instant resolvedAt;
+
+    /**
+     * Whether the CRM's candidate scan hit its ceiling, making this snapshot partial. A
+     * property of the snapshot rather than of the member, so every row from one resolution
+     * carries the same value — surfaced in the preview so a short count is never mistaken for
+     * a small audience.
+     */
+    @Column(name = "truncated", nullable = false)
+    @Builder.Default
+    private boolean truncated = false;
 }

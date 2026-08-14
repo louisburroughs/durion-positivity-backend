@@ -108,13 +108,23 @@ public class CampaignSendWorker {
             return;
         }
 
-        String denial = denialReason(send);
-        if (denial != null) {
+        // Fails closed on missing or stale replicated data: with no synchronous CRM call
+        // available, a replica that has fallen behind is the one way this worker could mail
+        // someone who has since opted out, so absence of a fresh answer is refusal.
+        AudienceEligibilityService.Decision decision =
+                eligibilityService.decide(send.getRecipientPartyId(), send.getChannel());
+        if (!decision.allowed()) {
             send.setStatus(SendStatus.SUPPRESSED);
-            send.setFailureReason(denial);
+            send.setFailureReason(decision.reason());
             touch(send);
             sendRepository.save(send);
             return;
+        }
+        // The addressed contact is re-read from the send-time decision, not trusted from
+        // dispatch: an account can change who speaks for it between queueing and delivery, and
+        // the sender resolves the address from whatever this row names.
+        if (decision.contactPartyId() != null) {
+            send.setContactId(decision.contactPartyId());
         }
 
         Map<String, String> tokens = tokenValues(campaign);
@@ -156,21 +166,6 @@ public class CampaignSendWorker {
             return;
         }
         fail(send, outcome.failureReason() != null ? outcome.failureReason() : "Provider rejected the message");
-    }
-
-    /**
-     * Why this recipient must not be contacted right now, or null if they may be.
-     *
-     * <p>Delegates to {@link AudienceEligibilityService}, which reads the replicated CRM
-     * decision and <strong>fails closed on missing or stale data</strong>. That matters here:
-     * with no synchronous CRM call available, a replica that has fallen behind is the one way
-     * this worker could mail someone who has since opted out, so absence of a fresh answer is
-     * treated as refusal rather than permission.
-     */
-    private String denialReason(CampaignSend send) {
-        AudienceEligibilityService.Decision decision =
-                eligibilityService.decide(send.getRecipientPartyId(), send.getChannel());
-        return decision.allowed() ? null : decision.reason();
     }
 
     private Map<String, String> tokenValues(Campaign campaign) {

@@ -23,4 +23,11 @@ public interface CampaignAudienceMemberRepository extends JpaRepository<Campaign
     /** Age of the snapshot, so a preview can state how current its numbers are. */
     @Query("SELECT MAX(m.resolvedAt) FROM CampaignAudienceMember m WHERE m.campaignId = :campaignId")
     Optional<Instant> findResolvedAt(@Param("campaignId") UUID campaignId);
+
+    /**
+     * Whether the snapshot is partial. Every row from one resolution carries the same value, so
+     * any true means the CRM cut the scan short.
+     */
+    @Query("SELECT COUNT(m) > 0 FROM CampaignAudienceMember m WHERE m.campaignId = :campaignId AND m.truncated = TRUE")
+    boolean isTruncated(@Param("campaignId") UUID campaignId);
 }
