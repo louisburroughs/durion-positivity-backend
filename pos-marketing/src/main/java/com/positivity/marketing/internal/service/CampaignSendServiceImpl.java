@@ -16,7 +16,9 @@ import com.positivity.marketing.service.CampaignSendService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +50,7 @@ public class CampaignSendServiceImpl implements CampaignSendService {
     private final CampaignRepository campaignRepository;
     private final CampaignSendRepository sendRepository;
     private final CampaignAudienceMemberRepository audienceRepository;
+    private final AudienceEligibilityService eligibilityService;
     private final SegmentResolveRequester resolveRequester;
 
     @Override
@@ -76,6 +79,17 @@ public class CampaignSendServiceImpl implements CampaignSendService {
         Instant now = Instant.now(clock);
         List<CampaignSend> queued = new ArrayList<>();
 
+        // Who actually gets addressed within each party: for a commercial account the contact
+        // the CRM designates to speak for it, for an individual the person themselves. The CRM
+        // resolves that when it decides consent, so the answer travels on the decision rather
+        // than being re-derived here — re-deriving it would guarantee the two copies drift.
+        // Batched per channel because a snapshot can run to tens of thousands of parties.
+        Map<CampaignChannel, Map<UUID, AudienceEligibilityService.Decision>> decisions =
+                new EnumMap<>(CampaignChannel.class);
+        for (CampaignChannel channel : campaign.getChannels()) {
+            decisions.put(channel, eligibilityService.decideAll(recipients, channel));
+        }
+
         for (UUID partyId : recipients) {
             for (CampaignChannel channel : campaign.getChannels()) {
                 // The uniqueness constraint is the real guarantee; this check just avoids
@@ -85,9 +99,12 @@ public class CampaignSendServiceImpl implements CampaignSendService {
                         .isPresent()) {
                     continue;
                 }
+                AudienceEligibilityService.Decision decision =
+                        decisions.get(channel).get(partyId);
                 queued.add(CampaignSend.builder()
                         .campaignId(campaignId)
                         .recipientPartyId(partyId)
+                        .contactId(decision == null ? null : decision.contactPartyId())
                         .channel(channel)
                         .status(SendStatus.PENDING)
                         .queuedAt(now)

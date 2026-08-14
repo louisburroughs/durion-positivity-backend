@@ -11,13 +11,11 @@ import com.positivity.marketing.internal.enums.ScheduleType;
 import com.positivity.marketing.internal.exception.MarketingDuplicateResourceException;
 import com.positivity.marketing.internal.exception.MarketingResourceNotFoundException;
 import com.positivity.marketing.internal.exception.MarketingUnprocessableEntityException;
-import com.positivity.marketing.internal.repository.CampaignAudienceMemberRepository;
 import com.positivity.marketing.internal.repository.CampaignRepository;
 import com.positivity.marketing.internal.repository.MessageTemplateRepository;
 import com.positivity.marketing.internal.repository.SegmentReplicaRepository;
 import com.positivity.marketing.service.CampaignService;
 import com.positivity.security.common.SecurityContextHelper;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -42,9 +40,8 @@ public class CampaignServiceImpl implements CampaignService {
     private final CampaignRepository campaignRepository;
     private final MessageTemplateRepository templateRepository;
     private final SegmentReplicaRepository segmentReplicaRepository;
-    private final CampaignAudienceMemberRepository audienceRepository;
-    private final AudienceEligibilityService eligibilityService;
-    private final SegmentResolveRequester resolveRequester;
+    private final AudienceResolutionService audienceResolutionService;
+    private final CampaignReferenceValidator referenceValidator;
     private final MarketingFactPublisher factPublisher;
 
     @Override
@@ -183,42 +180,17 @@ public class CampaignServiceImpl implements CampaignService {
         if (campaign.getSegmentId() == null) {
             throw new MarketingUnprocessableEntityException("Campaign has no segment bound; nothing to preview");
         }
-        // Membership arrives asynchronously, so a preview reports the last snapshot and asks for
-        // a fresher one. The snapshot's age travels with the numbers so a marketer can see how
-        // current they are rather than assuming they are live.
-        List<UUID> members = audienceRepository.findPartyIdsByCampaignId(campaignId);
-        Instant resolvedAt = audienceRepository.findResolvedAt(campaignId).orElse(null);
-        if (campaign.getStatus().audienceIsMutable()) {
-            resolveRequester.requestResolve(campaignId, campaign.getSegmentId());
-        }
-
-        List<AudiencePreviewResponse.ChannelPreview> channels = campaign.getChannels().stream()
-                .map(channel -> new AudiencePreviewResponse.ChannelPreview(
-                        channel.name(),
-                        members.size(),
-                        eligibilityService.countEligible(members, channel),
-                        templateFor(campaign, channel).isPresent()))
-                .toList();
-
-        return new AudiencePreviewResponse(
-                campaignId,
-                campaign.getSegmentId(),
-                campaign.getAudienceType().name(),
-                members.size(),
-                resolvedAt,
-                false,
-                channels,
-                readinessProblems(campaign));
+        return audienceResolutionService.preview(campaign, channelsWithTemplate(campaign), readinessProblems(campaign));
     }
 
     /**
      * Everything that would stop this campaign from going out, gathered rather than thrown one at
      * a time — a marketer fixing a campaign wants the whole list, not a game of whack-a-mole.
      *
-     * <p>The segment is checked against the {@code ext_segment} replica. Offer and catalog
-     * validation is deliberately absent: pos-price publishes no events, so there is no fact to
-     * replicate and no synchronous read permitted across the domain wall. That check returns
-     * with FI-1 (#1134), which is the pos-price side of the work.
+     * <p>The segment is checked against the {@code ext_segment} replica; the promotion offer and
+     * catalog reference are checked by {@link CampaignReferenceValidator}, which reads pricing
+     * directly because a campaign advertising an offer that stopped running is a mistake nobody
+     * can recall once it has been sent.
      */
     private List<String> readinessProblems(Campaign campaign) {
         List<String> problems = new ArrayList<>();
@@ -252,7 +224,15 @@ public class CampaignServiceImpl implements CampaignService {
                 problems.add("no " + channel + " template attached");
             }
         }
+        problems.addAll(referenceValidator.problems(campaign));
         return problems;
+    }
+
+    /** The channels whose template both exists and still resolves. */
+    private Set<CampaignChannel> channelsWithTemplate(Campaign campaign) {
+        return campaign.getChannels().stream()
+                .filter(channel -> templateFor(campaign, channel).isPresent())
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
     }
 
     private Optional<UUID> templateFor(Campaign campaign, CampaignChannel channel) {

@@ -89,6 +89,12 @@ pos:
       # Shared platform sender endpoint + shared secret; only read when transport=platform-sender.
       base-url: ${POS_MARKETING_SENDER_BASE_URL:http://localhost:8085}
       api-secret: ${POS_MARKETING_SENDER_API_SECRET:}
+    preview:
+      # How many per-channel decisions an audience preview returns alongside the counts
+      # (Story #1148). Refusals are sampled first, because they are what explains the gap
+      # between targeted and eligible. Identifiers and reason codes only — this module holds
+      # no names or addresses to leak. Clamped to 50.
+      sample-size: ${POS_MARKETING_PREVIEW_SAMPLE_SIZE:10}
     send:
       # Send-worker pacing (Story #1149). The batch size bounds how many recipients one
       # drain locks; the delay paces the provider so a large campaign does not burst.
@@ -109,6 +115,15 @@ pos:
     api-secret: ${POS_EVENTS_API_SECRET:}
   security:
     base-url: ${POS_SECURITY_BASE_URL:http://pos-security-service:8080}
-  # No outbound sibling-service clients: integration with pos-customer is entirely
-  # customer.events.v1 replicas plus one asynchronous command (ADR-0044 R3). pos-price and
-  # pos-catalog validation returns with FI-1 (#1134), which adds the events to replicate.
+  price:
+    # Promotion-offer validation at preview and schedule time (Story #1148). Pricing is an
+    # ADR-0044 §1 utility, so this synchronous edge is permitted — and it is the right shape:
+    # offer status changes on its own schedule with no fact to replicate from, and the answer
+    # is only needed at those two moments rather than continuously. Resolved through Eureka by
+    # the @LoadBalanced builder; the value is a service id, not a URL.
+    service-id: ${POS_PRICE_SERVICE_ID:price}
+    promotion-offers-base-path: ${POS_PRICE_PROMOTION_OFFERS_BASE_PATH:/v1/promotions/offers}
+  # Integration with pos-customer is entirely customer.events.v1 replicas plus one asynchronous
+  # command (ADR-0044 R3) — there is no synchronous edge to the CRM. The catalog reference on a
+  # campaign is grammar-checked only, for the same reason: no synchronous edge is permitted and
+  # catalog.events.v1 carries products, nothing for the service: form campaigns most often use.

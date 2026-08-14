@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -28,6 +29,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -77,6 +79,8 @@ class CampaignSendServiceImplTest {
     private static final UUID SEGMENT_ID = UUID.randomUUID();
     private static final UUID PARTY_A = UUID.randomUUID();
     private static final UUID PARTY_B = UUID.randomUUID();
+    private static final UUID CONTACT_A = UUID.randomUUID();
+    private static final UUID CONTACT_B = UUID.randomUUID();
     private static final Instant NOW = Instant.parse("2026-08-11T10:15:30Z");
 
     @Mock
@@ -87,6 +91,9 @@ class CampaignSendServiceImplTest {
 
     @Mock
     private CampaignAudienceMemberRepository audienceRepository;
+
+    @Mock
+    private AudienceEligibilityService eligibilityService;
 
     @Mock
     private SegmentResolveRequester resolveRequester;
@@ -100,7 +107,16 @@ class CampaignSendServiceImplTest {
                 campaignRepository,
                 sendRepository,
                 audienceRepository,
+                eligibilityService,
                 resolveRequester);
+    }
+
+    /** Both parties reachable, each resolving to the contact the CRM designated for it. */
+    private void bothPartiesReachable() {
+        when(eligibilityService.decideAll(anyCollection(), any()))
+                .thenReturn(Map.of(
+                        PARTY_A, new AudienceEligibilityService.Decision(true, "OPT_IN", CONTACT_A),
+                        PARTY_B, new AudienceEligibilityService.Decision(true, "OPT_IN", CONTACT_B)));
     }
 
     private static Campaign campaign(CampaignStatus status, UUID segmentId, CampaignChannel... channels) {
@@ -183,6 +199,7 @@ class CampaignSendServiceImplTest {
                     campaign(CampaignStatus.SCHEDULED, SEGMENT_ID, CampaignChannel.EMAIL, CampaignChannel.SMS);
             when(campaignRepository.findById(CAMPAIGN_ID)).thenReturn(Optional.of(scheduled));
             when(audienceRepository.findPartyIdsByCampaignId(CAMPAIGN_ID)).thenReturn(List.of(PARTY_A, PARTY_B));
+            bothPartiesReachable();
             when(sendRepository.findByCampaignIdAndRecipientPartyIdAndChannel(eq(CAMPAIGN_ID), any(), any()))
                     .thenReturn(Optional.empty());
 
@@ -210,11 +227,53 @@ class CampaignSendServiceImplTest {
         }
 
         @Test
+        @DisplayName("records the contact the CRM resolved for each party on the queued row")
+        void stampsResolvedContact() {
+            when(campaignRepository.findById(CAMPAIGN_ID))
+                    .thenReturn(Optional.of(campaign(CampaignStatus.SENDING, SEGMENT_ID, CampaignChannel.EMAIL)));
+            when(audienceRepository.findPartyIdsByCampaignId(CAMPAIGN_ID)).thenReturn(List.of(PARTY_A, PARTY_B));
+            bothPartiesReachable();
+            when(sendRepository.findByCampaignIdAndRecipientPartyIdAndChannel(eq(CAMPAIGN_ID), any(), any()))
+                    .thenReturn(Optional.empty());
+
+            service.dispatch(CAMPAIGN_ID);
+
+            // For a commercial account the CRM designates who speaks for it; for an individual
+            // it is the person themselves. Either way the sender addresses this contact, so the
+            // answer is carried from the consent decision rather than re-derived here.
+            ArgumentCaptor<CampaignSend> saved = ArgumentCaptor.forClass(CampaignSend.class);
+            verify(sendRepository, times(2)).saveAndFlush(saved.capture());
+            assertThat(saved.getAllValues())
+                    .extracting(CampaignSend::getRecipientPartyId, CampaignSend::getContactId)
+                    .containsExactlyInAnyOrder(tuple(PARTY_A, CONTACT_A), tuple(PARTY_B, CONTACT_B));
+        }
+
+        @Test
+        @DisplayName("queues a party the CRM has said nothing about, leaving its contact unresolved")
+        void queuesWithoutContactWhenUndecided() {
+            when(campaignRepository.findById(CAMPAIGN_ID))
+                    .thenReturn(Optional.of(campaign(CampaignStatus.SENDING, SEGMENT_ID, CampaignChannel.EMAIL)));
+            when(audienceRepository.findPartyIdsByCampaignId(CAMPAIGN_ID)).thenReturn(List.of(PARTY_A));
+            when(eligibilityService.decideAll(anyCollection(), any())).thenReturn(Map.of());
+            when(sendRepository.findByCampaignIdAndRecipientPartyIdAndChannel(eq(CAMPAIGN_ID), any(), any()))
+                    .thenReturn(Optional.empty());
+
+            // Dispatch does not filter — the worker re-checks eligibility at send time, and a
+            // row with no contact is refused there rather than silently dropped here.
+            assertThat(service.dispatch(CAMPAIGN_ID)).isEqualTo(1);
+
+            ArgumentCaptor<CampaignSend> saved = ArgumentCaptor.forClass(CampaignSend.class);
+            verify(sendRepository).saveAndFlush(saved.capture());
+            assertThat(saved.getValue().getContactId()).isNull();
+        }
+
+        @Test
         @DisplayName("skips a recipient-channel pair that is already queued")
         void skipsAlreadyQueuedPairs() {
             Campaign sending = campaign(CampaignStatus.SENDING, SEGMENT_ID, CampaignChannel.EMAIL);
             when(campaignRepository.findById(CAMPAIGN_ID)).thenReturn(Optional.of(sending));
             when(audienceRepository.findPartyIdsByCampaignId(CAMPAIGN_ID)).thenReturn(List.of(PARTY_A, PARTY_B));
+            bothPartiesReachable();
             when(sendRepository.findByCampaignIdAndRecipientPartyIdAndChannel(
                             CAMPAIGN_ID, PARTY_A, CampaignChannel.EMAIL))
                     .thenReturn(Optional.of(new CampaignSend()));
@@ -237,6 +296,7 @@ class CampaignSendServiceImplTest {
             when(campaignRepository.findById(CAMPAIGN_ID))
                     .thenReturn(Optional.of(campaign(CampaignStatus.SENDING, SEGMENT_ID, CampaignChannel.EMAIL)));
             when(audienceRepository.findPartyIdsByCampaignId(CAMPAIGN_ID)).thenReturn(List.of(PARTY_A, PARTY_B));
+            bothPartiesReachable();
             when(sendRepository.findByCampaignIdAndRecipientPartyIdAndChannel(eq(CAMPAIGN_ID), any(), any()))
                     .thenReturn(Optional.empty());
             when(sendRepository.saveAndFlush(any()))

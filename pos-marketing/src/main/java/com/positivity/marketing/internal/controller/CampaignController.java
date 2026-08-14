@@ -264,9 +264,11 @@ public class CampaignController {
     }
 
     @Operation(operationId = "previewCampaignAudience", summary = "Preview Campaign Audience", description = """
-                    Reports the campaign's last resolved audience snapshot: total segment members, per-channel \
-                    eligible counts after consent, staleness and suppression checks, whether each channel has a \
-                    template, and the readiness problems that would block scheduling.
+                    Reports the campaign's last resolved audience snapshot: total segment members, whether that \
+                    snapshot was truncated by the CRM's candidate ceiling, per-channel eligible counts after \
+                    consent, staleness and suppression checks, a bounded per-channel sample of the individual \
+                    decisions behind those counts, whether each channel has a template, and the readiness \
+                    problems that would block scheduling.
                     Use this tool to gauge reach before scheduling or dispatch; do not use dispatchCampaign, \
                     which actually queues messages for delivery.
                     Preconditions: the campaign must exist and have a segmentId bound; membership is \
@@ -276,6 +278,13 @@ public class CampaignController {
                     Emits a MARKETING_AUDIENCE_PREVIEW audit event and, while the campaign is still DRAFT, \
                     SCHEDULED or PAUSED, asynchronously requests a fresher membership snapshot from \
                     pos-customer; the campaign itself is not modified.
+                    Each sample entry carries the party id, the contact resolved to receive the message (the \
+                    CRM's designated contact for a commercial account, the person themselves for an \
+                    individual), and the machine-readable decision code; it never carries names, addresses or \
+                    contact details, which this module does not hold.
+                    Problems with the campaign's promotionOfferId or catalogFocusRef are reported in warnings \
+                    rather than as errors, because a preview is where a marketer goes to find out what is \
+                    wrong.
                     Returns 404 when the campaign does not exist, and 422 when no segment is bound so there \
                     is nothing to preview.
                     """)
@@ -315,7 +324,10 @@ public class CampaignController {
                     the actual sends and only accepts a campaign that is already SCHEDULED or SENDING.
                     Preconditions: the campaign must exist and be in DRAFT or PAUSED; it must have at least \
                     one channel, a bound segment that is known to this module, active, and matching the \
-                    campaign's audienceType, and an existing template attached for every selected channel.
+                    campaign's audienceType, and an existing template attached for every selected channel; \
+                    any promotionOfferId must resolve in pos-price to an ACTIVE offer whose date window \
+                    includes today, and any catalogFocusRef must be written as kind:value using one of \
+                    product, sku, service or category.
                     Required inputs: campaignId (UUID) as a path parameter; there is no request body.
                     Emits a MARKETING_CAMPAIGN_SCHEDULE event and publishes a campaign-scheduled fact through \
                     the transactional outbox.

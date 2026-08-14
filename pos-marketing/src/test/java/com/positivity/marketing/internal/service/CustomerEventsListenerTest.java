@@ -371,7 +371,28 @@ class CustomerEventsListenerTest {
                     .allSatisfy(members -> assertThat(members).singleElement().satisfies(member -> {
                         assertThat(member.getPartyId()).isEqualTo(PARTY_ID);
                         assertThat(member.getResolvedAt()).isEqualTo(NOW);
+                        assertThat(member.isTruncated()).isFalse();
                     }));
+        }
+
+        @Test
+        @DisplayName("carries the owner's truncation flag onto the snapshot it describes")
+        void carriesTruncationFlag() {
+            expectUnprocessed("evt-r5");
+            when(campaignRepository.findAll())
+                    .thenReturn(List.of(campaign(CAMPAIGN_ID, SEGMENT_ID, CampaignStatus.SCHEDULED)));
+
+            listener.onCustomerEvent(
+                    envelope("evt-r5", CustomerSegmentResolvedV1.EVENT_TYPE, """
+                    {"segmentId":"%s","partyIds":["%s"],"truncated":true}""".formatted(SEGMENT_ID, PARTY_ID)));
+
+            // Dropped, a preview would report a cut-off audience as complete and a marketer
+            // would read the short count as a small audience.
+            ArgumentCaptor<List<CampaignAudienceMember>> captor = ArgumentCaptor.captor();
+            verify(audienceRepository).saveAll(captor.capture());
+            assertThat(captor.getValue())
+                    .singleElement()
+                    .satisfies(member -> assertThat(member.isTruncated()).isTrue());
         }
 
         @Test
