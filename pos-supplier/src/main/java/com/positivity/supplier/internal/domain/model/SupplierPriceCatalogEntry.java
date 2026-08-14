@@ -25,9 +25,13 @@ import org.jspecify.annotations.Nullable;
  * @param effectiveFrom first day the row applies
  * @param countryCode ISO 3166-1 alpha-2 market scope of the row
  * @param currency ISO 4217 currency of the price fields
+ * @param taxRate tax rate the vendor stated for the row, when stated (ADR-0053 §2)
+ * @param recyclingFee recycling fee amount the vendor stated, when stated
  * @param sourceDocumentId vendor catalog document id the row came from, when stated
  * @param sourceDocumentDate vendor catalog document date, when stated
  * @param importManifestId identity of the import run that produced this row
+ * @param positionNumber 1-based line position within the vendor document, when stated; lets a
+ *     staged row or a quarantined line be cited back to the vendor by document position
  */
 public record SupplierPriceCatalogEntry(
         @Nullable String articleEan,
@@ -36,12 +40,15 @@ public record SupplierPriceCatalogEntry(
         @Nullable BigDecimal suggestedRetailPrice,
         @Nullable BigDecimal grossPrice,
         @Nullable BigDecimal netPrice,
+        @Nullable BigDecimal taxRate,
+        @Nullable BigDecimal recyclingFee,
         @NonNull LocalDate effectiveFrom,
         @NonNull String countryCode,
         @NonNull String currency,
         @Nullable String sourceDocumentId,
         @Nullable LocalDate sourceDocumentDate,
-        @NonNull UUID importManifestId) {
+        @NonNull UUID importManifestId,
+        @Nullable Integer positionNumber) {
 
     public SupplierPriceCatalogEntry {
         Objects.requireNonNull(effectiveFrom, "effectiveFrom must not be null");

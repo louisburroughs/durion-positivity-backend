@@ -69,6 +69,20 @@ public final class SupplierEventTypes {
                         .build(),
                 EventTypeRegistration.fastRead(
                                 "SUPPLIER_AUDIT_ACCESS_LIST", "List who read one exchange's payload content")
+                        .build(),
+                // Price catalog (ADR-0053). The trigger is registered as an approval-grade budget
+                // rather than a write: it fetches a whole vendor catalog and stages every line, so a
+                // write threshold would alert on every healthy large import.
+                EventTypeRegistration.approval(
+                                "SUPPLIER_PRICECATALOG_IMPORT_TRIGGER",
+                                "Trigger an on-demand vendor price-catalog (PRICAT) import")
+                        .build(),
+                EventTypeRegistration.search(
+                                "SUPPLIER_PRICECATALOG_IMPORT_LIST", "List vendor price-catalog import runs")
+                        .build(),
+                EventTypeRegistration.search(
+                                "SUPPLIER_PRICECATALOG_UNMATCHED_LIST",
+                                "List price-catalog lines quarantined for catalog review")
                         .build());
     }
 }

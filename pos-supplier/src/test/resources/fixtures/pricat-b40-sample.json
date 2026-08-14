@@ -1,0 +1,56 @@
+{
+  "envelopeHeader": {
+    "documentId": "PRICAT-4046266_202305120844",
+    "date": "202305120844",
+    "receiverId": "4046266",
+    "currency": "SEK",
+    "countryCode": "SE",
+    "ediwheelVersion": "B4.0",
+    "errorCode": "0"
+  },
+  "articles": [
+    {
+      "pos": 1,
+      "ean": "3528709999083",
+      "supplierCode": "999908",
+      "description1": "255/55R19 111VXL PS4 SUV",
+      "brandText": "MICHELIN",
+      "prodCycle": "W2",
+      "tax": "25",
+      "suggestedPrice": "3195.00",
+      "grossPrice": "2895.50",
+      "grossPriceValidFrom": "20210101",
+      "netValue": "2450.25",
+      "netValueValidFrom": "20260201",
+      "recyclingFee": "35.00",
+      "xReferenceCode": "",
+      "nonGradingEligibility": "N"
+    },
+    {
+      "pos": 2,
+      "ean": "",
+      "supplierCode": "888801",
+      "description1": "205/55R16 91V PRIMACY 4",
+      "grossPrice": "1450,00",
+      "grossPriceValidFrom": "20260115",
+      "netValue": "",
+      "netValueValidFrom": "",
+      "xReferenceCode": "0123456789012"
+    },
+    {
+      "pos": 3,
+      "ean": "3528709999999",
+      "supplierCode": "777701",
+      "grossPrice": "not-a-number",
+      "grossPriceValidFrom": "20260101"
+    },
+    {
+      "pos": 4,
+      "ean": "",
+      "supplierCode": "",
+      "xReferenceCode": "",
+      "grossPrice": "999.00",
+      "grossPriceValidFrom": "20260101"
+    }
+  ]
+}

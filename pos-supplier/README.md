@@ -11,14 +11,16 @@ supplier APIs, and the exchange audit trail of what was sent and received.
 | Compose port | `8096` → container `8080` |
 | Governing ADRs | ADR-0050 (vendor profile configuration), ADR-0051 (protocol adapter versioning), ADR-0052 (outbound idempotency / duplicate-order prevention) |
 
-This module owns **how** we reach a supplier, not **what** we say to them. Protocol codecs
-(EDIWheel, Michelin S2S) arrive in CAP-318 and plug into the SPI ports in `internal.spi`.
+This module owns **how** we reach a supplier, and — as CAP-318 lands its codecs — **what** we say to
+them for each capability. The first codec is EDIWheel PRICAT B4.0 (`internal.adapter.ediwheelb`,
+issue #1224); the remaining capabilities still have SPI ports in `internal.spi` and no codec behind
+them. ADR-0053 governs the price-catalog behaviour described below.
 
 ---
 
 ## API surface
 
-Two surfaces, two permissions. Everything is under `/v1/supplier/admin`.
+Three surfaces, four permissions. Everything is under `/v1/supplier/admin`.
 
 ### Vendor profile administration — `supplier:profile:read` / `supplier:profile:write`
 
@@ -49,6 +51,35 @@ the row an investigation needs must not be the row that breaks the listing.
 `readPayload` records the access **in the same transaction as the read**, with no catch. If the access
 record cannot be written the read fails and returns nothing. ADR-0050 §7 makes the record a
 precondition of access, not a side effect of it — see [Three failure semantics](#three-failure-semantics).
+
+### Price catalog (PRICAT) — `supplier:pricecatalog:read` / `supplier:pricecatalog:import`
+
+Two authorities, because triggering a run is not the same act as reading its results: a trigger calls a
+trading partner and publishes an import's worth of events.
+
+| Route | Operation | Notes |
+| --- | --- | --- |
+| `POST …/price-catalog/{vendorProfileId}/imports` | `triggerSupplierPriceCatalogImport` | Synchronous. Returns a terminal summary whose status may be `COMPLETED`, `EMPTY` or `FAILED` |
+| `GET …/price-catalog/{vendorProfileId}/imports` | `listSupplierPriceCatalogImports` | Run history including failures, newest first, `size` ≤ 200 |
+| `GET …/price-catalog/{vendorProfileId}/unmatched-lines` | `listSupplierPriceCatalogUnmatchedLines` | The open quarantine worklist, newest first |
+
+**No prices are served here.** Vendor price rows leave this module only as
+`supplier.pricecatalog.updated` events on `supplier.events.v1`, which is what makes ADR-0053 §4 —
+supplier cost participates in no sell-price resolution — structural rather than a rule to remember.
+
+A failed or empty fetch never destroys data. Staging is append-only, no path deletes or supersedes
+prior entries, and a failed exchange records a `FAILED` import row and stops: a vendor outage is not a
+statement that the catalog is empty.
+
+Every line the vendor sent is accounted for. A line becomes either a staged entry with a matched
+product or a quarantine row with a reason, and the writer asserts
+`matched + unmatched + duplicate == fetched` before marking an import complete, so a silent drop fails
+the import rather than under-reporting it.
+
+Matching is deterministic and exact (ADR-0053 §5): EAN against pos-catalog product codes of type EAN,
+then the line's `xReferenceCode` against type UPC. `supplierCode` is stored as a display alias and is
+never a match key. An unreachable catalog quarantines as `CATALOG_UNAVAILABLE` rather than
+`NO_CATALOG_MATCH`, because those lines are worth retrying and a miss is catalog work.
 
 ### Gateway routing
 
@@ -325,9 +356,12 @@ nothing), then update the Angular SDK.
 
 ### Known gaps
 
-- Per-binding, data-classification-driven body-field redaction (ADR-0050 §7) — owed by CAP-318.
-- Inbound `X-Correlation-Id` reuse is not wired; only outbound correlation is scoped. Needs a
-  `OncePerRequestFilter` across the module's endpoints.
+- PRICAT re-application from the quarantine after a catalog fix is not yet automated: the rows carry
+  the values needed for it (ADR-0053 §5), but today a re-import is what closes them.
+- Manufacturer-part matching, ADR-0053 §5's third match step, needs a supplier-to-manufacturer mapping
+  that no vendor profile carries yet.
+- The 500-line chunk default is ADR-0053's estimate and is still owed a validation against the first
+  Michelin sandbox pull.
 - V5 (`protocol_version` widened to 64) has run against H2 in PostgreSQL mode only; this environment has
   no Docker daemon for `FlywayMigrationIT`.
 - `EndpointBindingRequest.version` is bounded but not validated against the adapter registry.

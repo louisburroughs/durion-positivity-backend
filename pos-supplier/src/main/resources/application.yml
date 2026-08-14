@@ -108,6 +108,25 @@ pos:
     # ── Scheduler lease (binding decision 4) ────────────────────────────────────────────
     schedule:
       lease-duration-seconds: ${SUPPLIER_SCHEDULE_LEASE_DURATION_SECONDS:600}
+    # ── Price catalog / PRICAT (ADR-0053 §7) ────────────────────────────────────────────
+    #
+    # chunk-size is the deployment default; a binding may override it, because how many lines fit a
+    # broker message depends on how wide that vendor's lines are. 500 is ADR-0053's figure and MUST be
+    # validated against the first Michelin sandbox pull and recorded there.
+    pricat:
+      chunk-size: ${SUPPLIER_PRICAT_CHUNK_SIZE:500}
+      # How often due bindings are checked, NOT how often a catalog is fetched -- that is the
+      # binding's own cron.
+      poll-interval-ms: ${SUPPLIER_PRICAT_POLL_INTERVAL_MS:60000}
+      scheduler-enabled: ${SUPPLIER_PRICAT_SCHEDULER_ENABLED:true}
+    # ── Event outbox drain (ADR-0044 §4) ────────────────────────────────────────────────
+    outbox:
+      poll-interval-ms: ${SUPPLIER_OUTBOX_POLL_INTERVAL_MS:1000}
+      send-timeout-ms: ${SUPPLIER_OUTBOX_SEND_TIMEOUT_MS:10000}
+    kafka:
+      # Off by default so a deployment without a broker starts cleanly; the outbox still records
+      # events, and they drain once this is enabled.
+      enabled: ${SUPPLIER_KAFKA_ENABLED:false}
   # @EmitEvent event-type registration with pos-event-receiver at startup (AGENTS.md)
   events:
     base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}

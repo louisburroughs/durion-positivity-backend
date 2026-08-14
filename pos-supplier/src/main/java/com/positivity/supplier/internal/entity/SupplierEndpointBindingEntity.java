@@ -101,6 +101,18 @@ public class SupplierEndpointBindingEntity {
     @Column(name = "enabled", nullable = false)
     private boolean enabled;
 
+    /**
+     * Per-binding chunk size for catalog-style batch capabilities (ADR-0053 §7); {@code null} uses
+     * the deployment default {@code pos.supplier.pricat.chunk-size}.
+     *
+     * <p>Lives on the binding rather than in configuration alone because the right value is a
+     * property of one vendor's documents — how many lines fit a broker message depends on how wide
+     * that vendor's lines are — and a deployment talking to two vendors should not have to pick one
+     * number for both.
+     */
+    @Column(name = "pricat_chunk_size")
+    private Integer pricatChunkSize;
+
     /** Exchange-audit payload capture level (ADR-0050 §7); {@code null} = deployment default. */
     @Enumerated(EnumType.STRING)
     @Column(name = "capture_level", length = 32)

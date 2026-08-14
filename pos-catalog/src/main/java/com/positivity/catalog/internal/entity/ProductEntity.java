@@ -22,7 +22,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @UniqueConstraint(name = "uk_product_sku", columnNames = "sku"),
             @UniqueConstraint(
                     name = "uk_product_manufacturer_mpn",
-                    columnNames = {"manufacturer_id", "manufacturer_part_number"})
+                    columnNames = {"manufacturer_id", "manufacturer_part_number"}),
+            // Per-type product-code uniqueness (ADR-0053 §5): a given EAN or UPC identifies at
+            // most one product, which is what makes deterministic PRICAT matching possible.
+            @UniqueConstraint(
+                    name = "uk_product_code_type_value",
+                    columnNames = {"product_code_type", "product_code"})
         },
         indexes = {@Index(name = "idx_product_manufacturer_part_number", columnList = "manufacturer_part_number")})
 @Schema(description = "Represents a product in the catalog")

@@ -139,6 +139,17 @@
             <artifactId>pos-shared-dtos</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Cross-module event contracts: supplier.pricecatalog.* payloads (ADR-0044 §3, CAP-318) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-domain-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Kafka producer for the transactional outbox drain (ADR-0044 §4) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka</artifactId>
+        </dependency>
         <!-- JSpecify for null safety annotations -->
         <dependency>
             <groupId>org.jspecify</groupId>

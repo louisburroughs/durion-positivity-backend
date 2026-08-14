@@ -33,6 +33,9 @@ public final class CatalogEventTypes {
                 EventTypeRegistration.fastRead(
                                 "CATALOG_PRODUCT_LIFECYCLE_GET", "Get product lifecycle and replacement suggestions")
                         .build(),
+                EventTypeRegistration.fastRead(
+                                "CATALOG_PRODUCT_CODE_LOOKUP", "Resolve a product by exact EAN or UPC product code")
+                        .build(),
                 EventTypeRegistration.write(
                                 "CATALOG_PRODUCT_LIFECYCLE_UPDATE", "Set product lifecycle state with effective date")
                         .build(),

@@ -57,7 +57,7 @@ class ProductMasterContractBehaviorIT extends BaseContractIntegrationTest {
                         UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
                 "sku", "SKU-CHANGED",
                 "mpn", "MPN-165-IMM",
-                "upc", "1000000000001",
+                "upc", upcFor("SKU-CHANGED"),
                 "attributes", "{\"size\":\"XL\"}");
 
         mockMvc.perform(withAuth(put("/v1/products/{productId}", productId)
@@ -105,8 +105,17 @@ class ProductMasterContractBehaviorIT extends BaseContractIntegrationTest {
                 "mpn",
                 mpn,
                 "upc",
-                "1000000000000",
+                upcFor(sku),
                 "attributes",
                 "{\"color\":\"black\"}");
+    }
+
+    /**
+     * A distinct UPC per SKU. A UPC identifies at most one product (#1232), so fixtures that create
+     * several products cannot share one literal — sharing it made the fixture, not the assertion, the
+     * thing under test.
+     */
+    private static String upcFor(String sku) {
+        return String.format("1%012d", Math.abs(sku.hashCode()) % 1_000_000_000_000L);
     }
 }

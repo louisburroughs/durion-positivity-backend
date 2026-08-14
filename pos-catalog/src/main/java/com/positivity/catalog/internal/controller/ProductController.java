@@ -7,6 +7,8 @@ import com.positivity.catalog.internal.dto.LocationPriceOverrideCreateRequestDto
 import com.positivity.catalog.internal.dto.LocationPriceOverrideDecisionRequestDto;
 import com.positivity.catalog.internal.dto.LocationPriceOverrideResponseDto;
 import com.positivity.catalog.internal.dto.NonInventoryProductDto;
+import com.positivity.catalog.internal.dto.ProductCodeKind;
+import com.positivity.catalog.internal.dto.ProductCodeMatch;
 import com.positivity.catalog.internal.dto.ProductCreateRequestDto;
 import com.positivity.catalog.internal.dto.ProductDetailView;
 import com.positivity.catalog.internal.dto.ProductDto;
@@ -18,6 +20,7 @@ import com.positivity.catalog.internal.dto.ProductUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ServiceDto;
 import com.positivity.catalog.service.CatalogService;
 import com.positivity.catalog.service.LocationPriceOverrideService;
+import com.positivity.catalog.service.ProductCodeLookupService;
 import com.positivity.catalog.service.ProductDetailService;
 import com.positivity.catalog.service.ProductLifecycleService;
 import com.positivity.catalog.service.ProductMasterDataService;
@@ -62,6 +65,7 @@ public class ProductController {
     private final LocationPriceOverrideService locationPriceOverrideService;
     private final ProductMasterDataService productMasterDataService;
     private final ProductSearchService productSearchService;
+    private final ProductCodeLookupService productCodeLookupService;
 
     @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -553,6 +557,56 @@ public class ProductController {
             @Parameter(description = "ID of the product to be obtained") @PathVariable UUID productId) {
         return catalogService
                 .getProductById(productId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW"})
+    @GetMapping("/by-code")
+    @EmitEvent(id = "CATALOG_PRODUCT_CODE_LOOKUP", apiVersion = "1")
+    @Operation(operationId = "findProductByCode", summary = "Find a Product by Exact EAN or UPC", description = """
+            Resolves the single product carrying an exact product code under one code scheme, EAN or UPC, \
+            which is the deterministic matching step supplier price-catalog ingestion runs before it applies \
+            a vendor line to a product.
+            Use this tool when a code from a vendor document or a scanner must be turned into a product id; \
+            use searchCatalogProducts instead for partial text or filters, and getProductById when the id is \
+            already known.
+            Preconditions: EAN and UPC values are unique per scheme, so a match is either absent or unique; \
+            surrounding whitespace is trimmed but no other normalisation is applied, so a code differing by a \
+            leading zero is a different code and will not match.
+            Required inputs: codeType (EAN or UPC) and code, both query parameters; there is no request body \
+            and no fuzzy fallback — an unmatched code is reported as a miss, never as a near match.
+            Emits a CATALOG_PRODUCT_CODE_LOOKUP event; no state changes.
+            Returns 404 when no product carries the code, 400 when codeType is not EAN or UPC, and 409 on a \
+            schema whose duplicate codes have not yet been cleaned up, in which case the value is ambiguous \
+            and matching is refused rather than guessed.
+            """)
+    @ApiResponse(
+            responseCode = "200",
+            description = "The single product carrying the supplied code",
+            content =
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = ProductCodeMatch.class)))
+    @ApiResponse(responseCode = "400", description = "codeType is not a supported code scheme")
+    @ApiResponse(responseCode = "404", description = "No product carries the supplied code")
+    @ApiResponse(responseCode = "409", description = "The code is carried by more than one product")
+    public ResponseEntity<ProductCodeMatch> findProductByCode(
+            @Parameter(
+                            description = "Code scheme to match within; EAN and UPC are matched independently",
+                            required = true,
+                            schema = @Schema(implementation = ProductCodeKind.class))
+                    @RequestParam
+                    ProductCodeKind codeType,
+            @Parameter(
+                            description = "Exact code value; trimmed, otherwise matched verbatim",
+                            required = true,
+                            example = "0123456789012")
+                    @RequestParam
+                    String code) {
+        return productCodeLookupService
+                .findByProductCode(codeType, code)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

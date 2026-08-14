@@ -74,6 +74,20 @@ public class ArchitectureTest {
             .because("adapter code may depend on internal.spi and internal.domain model types only (ADR-0051 §2)");
 
     @ArchTest
+    static final ArchRule vendor_wire_types_should_not_escape_their_adapter_package = classes()
+            .that()
+            .resideInAPackage("..internal.adapter..")
+            .and()
+            .haveSimpleNameEndingWith("Wire")
+            .should()
+            .notBePublic()
+            .allowEmptyShould(true)
+            .because("vendor wire types model one vendor's document literally — vendor field names, vendor date"
+                    + " formats, vendor string-typed amounts — and a public one would let that shape reach the"
+                    + " domain, an event payload, or an API contract, where a vendor norm change would then be a"
+                    + " breaking change for consumers (ADR-0051 §2)");
+
+    @ArchTest
     static final ArchRule controllers_should_not_access_repositories_directly = noClasses()
             .that()
             .resideInAPackage("..internal.controller..")

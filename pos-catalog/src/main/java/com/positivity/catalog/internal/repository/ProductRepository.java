@@ -1,5 +1,6 @@
 package com.positivity.catalog.internal.repository;
 
+import com.positivity.catalog.internal.entity.ProductCodeType;
 import com.positivity.catalog.internal.entity.ProductEntity;
 import java.util.List;
 import java.util.UUID;
@@ -19,6 +20,31 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
 
     boolean existsByManufacturerIdAndManufacturerPartNumberIgnoreCaseAndIdNot(
             UUID manufacturerId, String manufacturerPartNumber, UUID id);
+
+    /**
+     * Exact match on a product code within its scheme (ADR-0053 §5). Returns a list rather than an
+     * {@link java.util.Optional} so that dirty data predating the uniqueness constraint surfaces as
+     * a detectable conflict instead of an arbitrary pick.
+     */
+    List<ProductEntity> findByProductCodeTypeAndProductCode(ProductCodeType productCodeType, String productCode);
+
+    boolean existsByProductCodeTypeAndProductCode(ProductCodeType productCodeType, String productCode);
+
+    boolean existsByProductCodeTypeAndProductCodeAndIdNot(ProductCodeType productCodeType, String productCode, UUID id);
+
+    /**
+     * Product-code values carried by more than one product, as {@code [codeType, code, count]}
+     * rows. Mirrors the pre-constraint duplicate report produced by Flyway.
+     */
+    @Query("""
+      SELECT p.productCodeType, p.productCode, COUNT(p)
+      FROM ProductEntity p
+      WHERE p.productCodeType IS NOT NULL AND p.productCode IS NOT NULL
+      GROUP BY p.productCodeType, p.productCode
+      HAVING COUNT(p) > 1
+      ORDER BY p.productCodeType, p.productCode
+      """)
+    List<Object[]> findDuplicateProductCodeGroups();
 
     @Query("""
       SELECT p FROM ProductEntity p

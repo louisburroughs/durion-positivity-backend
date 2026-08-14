@@ -2,8 +2,10 @@ package com.positivity.supplier.internal.config;
 
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
@@ -39,7 +41,30 @@ public class RestClientConfig {
     private int readTimeoutMs;
 
     @Bean
+    @Primary
     public RestClient.Builder restClientBuilder() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
+        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
+        return RestClient.builder().requestFactory(factory);
+    }
+
+    /**
+     * Eureka-resolved builder for calls to sibling domain services — today the pos-catalog
+     * product-code lookup PRICAT matching depends on (ADR-0053 §5).
+     *
+     * <p>Injected by qualifier, never by type: {@link #restClientBuilder()} stays {@code @Primary}
+     * so the platform registrations keep the builder they were written against, and a
+     * service-to-service caller has to say which one it means.
+     *
+     * <p>The same timeouts apply. A sibling service is on the same network as the platform
+     * services, and a slow catalog must not hold a PRICAT import thread indefinitely — an
+     * unreachable catalog quarantines the line as re-appliable, which is a better outcome than a
+     * hung import.
+     */
+    @Bean
+    @LoadBalanced
+    public RestClient.Builder loadBalancedRestClientBuilder() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
         factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
