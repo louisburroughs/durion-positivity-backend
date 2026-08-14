@@ -188,7 +188,7 @@ class ProductDetailContractBehaviorIT extends BaseContractIntegrationTest {
                 "mpn",
                 mpn,
                 "upc",
-                "1000000000000",
+                upcFor(sku),
                 "attributes",
                 "{}");
 
@@ -200,5 +200,14 @@ class ProductDetailContractBehaviorIT extends BaseContractIntegrationTest {
 
         JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
         return UUID.fromString(response.get("id").asString());
+    }
+
+    /**
+     * A distinct UPC per SKU. A UPC identifies at most one product (#1232), so fixtures that create
+     * several products cannot share one literal — sharing it made the fixture, not the assertion, the
+     * thing under test.
+     */
+    private static String upcFor(String sku) {
+        return String.format("1%012d", Math.abs(sku.hashCode()) % 1_000_000_000_000L);
     }
 }

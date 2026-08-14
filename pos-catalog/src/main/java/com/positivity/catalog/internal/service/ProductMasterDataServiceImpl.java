@@ -34,6 +34,7 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
     private final CategoryRepository categoryRepository;
     private final ProductDetailCacheInvalidationPublisher productDetailCacheInvalidationPublisher;
     private final CatalogFactPublisher catalogFactPublisher;
+    private final ProductCodeUniquenessGuard productCodeUniquenessGuard;
 
     @Override
     @Transactional
@@ -49,9 +50,11 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
         entity.setManufacturerId(request.getManufacturerId());
         entity.setSku(request.getSku());
         entity.setManufacturerPartNumber(request.getMpn());
-        entity.setUpc(request.getUpc());
-        entity.setProductCode(request.getUpc());
-        entity.setProductCodeType(request.getUpc() == null ? null : ProductCodeType.UPC);
+        String upc = ProductCodeNormalizer.normalize(request.getUpc());
+        productCodeUniquenessGuard.assertUnique(ProductCodeType.UPC, upc, null);
+        entity.setUpc(upc);
+        entity.setProductCode(upc);
+        entity.setProductCodeType(upc == null ? null : ProductCodeType.UPC);
         entity.setAttributes(request.getAttributes());
         entity.setSpecifications(request.getAttributes());
         entity.setStatus(ProductStatus.ACTIVE);
@@ -86,9 +89,11 @@ public class ProductMasterDataServiceImpl implements ProductMasterDataService {
         entity.setUnitOfMeasure(request.getUnitOfMeasure());
         entity.setManufacturerId(request.getManufacturerId());
         entity.setManufacturerPartNumber(request.getMpn());
-        entity.setUpc(request.getUpc());
-        entity.setProductCode(request.getUpc());
-        entity.setProductCodeType(request.getUpc() == null ? null : ProductCodeType.UPC);
+        String upc = ProductCodeNormalizer.normalize(request.getUpc());
+        productCodeUniquenessGuard.assertUnique(ProductCodeType.UPC, upc, productId);
+        entity.setUpc(upc);
+        entity.setProductCode(upc);
+        entity.setProductCodeType(upc == null ? null : ProductCodeType.UPC);
         entity.setAttributes(request.getAttributes());
         entity.setSpecifications(request.getAttributes());
         entity.setCategory(resolveCategory(request.getCategoryId()));

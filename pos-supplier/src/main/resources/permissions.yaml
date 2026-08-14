@@ -8,3 +8,7 @@ permissions:
     description: "View vendor profiles, auth configs, commercial accounts, and endpoint bindings"
   - name: "supplier:profile:write"
     description: "Create and edit vendor profiles, auth configs, commercial accounts, and endpoint bindings"
+  - name: "supplier:pricecatalog:read"
+    description: "View vendor price-catalog import bookkeeping and the unmatched-line quarantine"
+  - name: "supplier:pricecatalog:import"
+    description: "Trigger an on-demand vendor price-catalog (PRICAT) import"

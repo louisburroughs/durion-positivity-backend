@@ -269,6 +269,8 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalogs~1{catalogId}
   /v1/products:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products
+  /v1/products/by-code:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1by-code
   /v1/products/items/{itemId}/costs:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1items~1{itemId}~1costs
   /v1/products/items/{itemId}/costs/audit:
@@ -1269,6 +1271,10 @@ paths:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1audit~1exchanges~1{exchangeAuditId}~1accesses
   /v1/supplier/admin/audit/exchanges/{exchangeAuditId}/payload:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1audit~1exchanges~1{exchangeAuditId}~1payload
+  /v1/supplier/admin/price-catalog/{vendorProfileId}/imports:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1price-catalog~1{vendorProfileId}~1imports
+  /v1/supplier/admin/price-catalog/{vendorProfileId}/unmatched-lines:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1price-catalog~1{vendorProfileId}~1unmatched-lines
   /v1/supplier/admin/profiles:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1profiles
   /v1/supplier/admin/profiles/{vendorProfileId}:

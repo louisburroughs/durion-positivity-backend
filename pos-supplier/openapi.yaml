@@ -12,6 +12,8 @@ servers:
 tags:
 - name: Supplier Auth Configs
   description: Admin CRUD over vendor auth configs — secret references only, never plaintext credentials
+- name: Supplier Price Catalog
+  description: Trigger vendor PRICAT imports and read their bookkeeping and unmatched-line quarantine. No vendor prices are served here; they travel as supplier.pricecatalog.updated events.
 - name: Supplier Commercial Accounts
   description: Admin CRUD over vendor commercial accounts — billing and per-location delivery numbers
 - name: Supplier Endpoint Bindings
@@ -1375,6 +1377,248 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - supplier:profile:write
+  /v1/supplier/admin/price-catalog/{vendorProfileId}/imports:
+    get:
+      tags:
+      - Supplier Price Catalog
+      summary: List vendor price-catalog imports
+      description: 'Returns a page of PRICAT import runs for one vendor profile, newest first, including failed and
+
+        empty runs with their line counters.
+
+        Use this tool to answer whether a catalog feed is healthy and how much of it matched; do not use
+
+        it to see which specific lines are waiting on catalog work, which is
+
+        listSupplierPriceCatalogUnmatchedLines instead.
+
+        Preconditions: the caller must hold supplier:pricecatalog:read; the profile need not have imported
+
+        anything, in which case the page is empty.
+
+        Required inputs: vendorProfileId (UUIDv7) path parameter; page defaults to 0 and size defaults to
+
+        50 with a maximum of 200.
+
+        Emits a SUPPLIER_PRICECATALOG_IMPORT_LIST event; no state changes and no vendor call is made.
+
+        Returns 200 with an empty items array when the profile has never imported, so an empty result is
+
+        not an error, and 400 when the page size is outside the permitted range.
+
+        '
+      operationId: listSupplierPriceCatalogImports
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Vendor profile whose imports to list (UUIDv7).
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      - name: page
+        in: query
+        description: Zero-based page index.
+        required: false
+        schema:
+          type: integer
+          example: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: Page size, 1–200.
+        required: false
+        schema:
+          type: integer
+          default: 50
+          example: 50
+          maximum: 200
+          minimum: 1
+      responses:
+        '200':
+          description: A page of import summaries, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponse'
+        '400':
+          description: Page size outside the permitted range.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks supplier:pricecatalog:read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:pricecatalog:read
+    post:
+      tags:
+      - Supplier Price Catalog
+      summary: Trigger a vendor price-catalog import
+      description: 'Fetches the vendor''s current PRICAT document for a profile''s buyer account, stages every line, and
+
+        publishes the matched lines as chunked supplier.pricecatalog.updated events plus one
+
+        supplier.pricecatalog.import.completed event.
+
+        Use this tool to pull a catalog now — after a vendor price change or a catalog fix that should
+
+        make quarantined lines matchable; do not use it to read results, which is listSupplierPriceCatalogImports.
+
+        Preconditions: the profile must exist and be enabled, its PRICE_CATALOG capability must be bound to
+
+        a registered codec, and it must have a billing account; the run is synchronous and can take minutes
+
+        for a large catalog.
+
+        Required inputs: vendorProfileId (UUIDv7) as a path parameter; there is no request body and no
+
+        partial-catalog option — B4.0 returns the whole catalog for the buyer account.
+
+        Emits a SUPPLIER_PRICECATALOG_IMPORT_TRIGGER event, writes exchange-audit rows for the vendor call,
+
+        and appends staged lines; nothing is ever deleted or overwritten, so a failed or empty fetch leaves
+
+        the previous import as the latest word on this vendor''s prices.
+
+        Returns 200 with a terminal summary whose status may be FAILED or EMPTY — a vendor outage is
+
+        reported in the summary rather than as an error — 404 when the profile does not exist, and 409 when
+
+        the capability is not configured for the profile.
+
+        '
+      operationId: triggerSupplierPriceCatalogImport
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Vendor profile to import for (UUIDv7).
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      responses:
+        '200':
+          description: Terminal summary of the run, including FAILED and EMPTY outcomes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceCatalogImportSummary'
+        '404':
+          description: No vendor profile exists with the supplied id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: The profile is disabled, or PRICE_CATALOG is not bound to a registered codec.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks supplier:pricecatalog:import.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:pricecatalog:import
+  /v1/supplier/admin/price-catalog/{vendorProfileId}/unmatched-lines:
+    get:
+      tags:
+      - Supplier Price Catalog
+      summary: List quarantined price-catalog lines
+      description: 'Returns a page of PRICAT lines that could not be attached to a catalog product and are still open,
+
+        newest first, each with the reason it was quarantined.
+
+        Use this tool to work the catalog-data backlog a vendor catalog exposes; do not use it for the
+
+        run-level totals those lines roll up into, which is listSupplierPriceCatalogImports instead.
+
+        Preconditions: the caller must hold supplier:pricecatalog:read; a line stays listed until a later
+
+        import or re-application matches it, so an empty page means nothing is waiting.
+
+        Required inputs: vendorProfileId (UUIDv7) path parameter; page defaults to 0 and size defaults to
+
+        50 with a maximum of 200.
+
+        Emits a SUPPLIER_PRICECATALOG_UNMATCHED_LIST event; no state changes and no vendor call is made.
+
+        Returns 200 with an empty items array when the quarantine is clear, and 400 when the page size is
+
+        outside the permitted range.
+
+        '
+      operationId: listSupplierPriceCatalogUnmatchedLines
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Vendor profile whose quarantine to list (UUIDv7).
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      - name: page
+        in: query
+        description: Zero-based page index.
+        required: false
+        schema:
+          type: integer
+          example: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: Page size, 1–200.
+        required: false
+        schema:
+          type: integer
+          default: 50
+          example: 50
+          maximum: 200
+          minimum: 1
+      responses:
+        '200':
+          description: A page of open quarantined lines, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResponse'
+        '400':
+          description: Page size outside the permitted range.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks supplier:pricecatalog:read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:pricecatalog:read
   /v1/supplier/admin/audit/exchanges:
     get:
       tags:
@@ -2179,6 +2423,113 @@ components:
           format: uuid
           description: pos-location identifier this delivery account belongs to. Required for DELIVERY, must be absent for BILLING.
           example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a70
+    PriceCatalogImportSummary:
+      type: object
+      description: Bookkeeping summary of one vendor PRICAT import run.
+      properties:
+        importManifestId:
+          type: string
+          format: uuid
+          description: Identity of the import run; the aggregate id of its events.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        vendorProfileId:
+          type: string
+          format: uuid
+          description: Vendor profile the catalog was fetched for.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+        supplierRef:
+          type: string
+          description: Profile alias at fetch time; descriptive only.
+          example: michelin-eu
+        status:
+          type: string
+          description: Terminal or in-flight state of the run.
+          enum:
+          - IN_PROGRESS
+          - COMPLETED
+          - EMPTY
+          - FAILED
+          example: COMPLETED
+        fetchedAt:
+          type: string
+          format: date-time
+          description: When the vendor was called.
+        completedAt:
+          type: string
+          format: date-time
+          description: When staging committed; null while in progress or after a failed fetch.
+        linesFetched:
+          type: integer
+          format: int32
+          description: Lines the vendor sent.
+          example: 12500
+        linesMatched:
+          type: integer
+          format: int32
+          description: Lines resolved to a catalog product and published.
+          example: 12310
+        linesUnmatched:
+          type: integer
+          format: int32
+          description: Lines quarantined for review.
+          example: 182
+        linesDuplicate:
+          type: integer
+          format: int32
+          description: Lines deduplicated within the document.
+          example: 8
+        chunkCount:
+          type: integer
+          format: int32
+          description: Number of chunk events published for the import.
+          example: 25
+        sourceDocumentId:
+          type: string
+          description: Vendor catalog document id, when stated.
+          example: PRICAT-4046266_202305120844
+        sourceDocumentDate:
+          type: string
+          format: date
+          description: Vendor catalog document date, when stated.
+          example: 2026-05-12
+        countryCode:
+          type: string
+          description: Market the catalog was fetched for, when stated.
+          example: SE
+        currency:
+          type: string
+          description: Currency of the catalog, when stated.
+          example: SEK
+        failureDetail:
+          type: string
+          description: Operator-facing failure summary for a failed import.
+    PagedResponse:
+      type: object
+      description: A page of results.
+      properties:
+        items:
+          type: array
+          description: Items on this page, in the order documented by the endpoint.
+        page:
+          type: integer
+          format: int32
+          description: Zero-based index of this page.
+          example: 0
+        size:
+          type: integer
+          format: int32
+          description: Requested page size.
+          example: 50
+        totalElements:
+          type: integer
+          format: int64
+          description: Total number of matching items across all pages.
+          example: 137
+        totalPages:
+          type: integer
+          format: int32
+          description: Total number of pages available for this page size.
+          example: 3
     ExchangeAuditSummary:
       type: object
       description: One outbound supplier attempt, without payload content. Reading the payload is a separate, individually audited call.
