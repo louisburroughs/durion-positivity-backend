@@ -141,6 +141,40 @@ A re-application creates **its own manifest** referencing the import it healed
 what the vendor sent and how much matched *at the time*, and a fourth chunk of a three-chunk import
 is not something a consumer's completeness check can accept.
 
+### Re-publication on consumer request
+
+pos-catalog publishes `supplier.pricecatalog.republish.requested` on `supplier.commands.v1` when it
+applied fewer chunks than an import's completion event declared. This module answers it by re-emitting
+that import's chunk events, followed by its completion event, from the staged lines (ADR-0044 §4).
+
+The consumer cannot fetch what it missed — ADR-0044 R1 forbids the synchronous read — so recovery is
+a request to the owner and a re-publication down the same path the original import took. The request
+names the **import**, not the missing chunks, because a consumer only knows how many it is short. So
+the whole import is re-emitted: a chunk the consumer already applied is skipped on its applied-chunk
+log, whereas re-emitting too little would leave the gap that prompted the request.
+
+Two things make this safe to run against a live topic:
+
+- **`supplier_pricat_entry.chunk_sequence`** is recorded at staging, so a re-emit reproduces the
+  original chunk boundaries exactly. The consumer deduplicates on `(importManifestId, chunkSequence)`
+  — a re-emit carries new event ids, so its ordinary event-id guard cannot fire — and a boundary that
+  moved would make it skip a sequence it had already applied, losing the very lines being re-sent.
+- **A cooldown and an attempt cap** (`pos.supplier.pricat.republish-cooldown`,
+  `…-republish-max-attempts`). Serving a request does not guarantee recovery; a consumer that stays
+  short asks again on its next completion event. The cooldown collapses a burst into one re-emit; the
+  cap stops a genuinely broken consumer and logs at error, leaving an operator a visible stuck import
+  rather than a broker quietly drowning in re-published catalogues.
+
+Refused, with the reason logged: an import that was never staged here, a request naming a profile
+that does not own the import, and a `FAILED` import — which staged no lines, so only the vendor's
+next fetch can help.
+
+`supplier.commands.v1` has exactly **one** consumer group in this module
+(`internal.command.service.SupplierCommandListener`), which dispatches by event type. `processed_events`
+is keyed by event id alone and every consumer records every event it sees, so a second group on this
+topic would record ids the first group still had to act on — silently dropping purchase orders or
+recoveries depending on which group won the race.
+
 ### Gateway routing
 
 `Path=/supplier/**` with `StripPrefix=1`, plus the gateway's global `ApiVersionHeaderToPathFilter`:
@@ -423,8 +457,9 @@ nothing), then update the Angular SDK.
 - The `ext_product_code` replica is seeded by pos-catalog's product-fact replay
   (`POST /v1/products/facts/replay`, #1309); a first deployment must run it before PRICAT lines can
   match, because the replica holds only facts published after its consumer started.
-- Stock-report snapshots are published but not yet consumed: the pos-inventory hint representation is
-  a domain decision (#1312) and the consumer waits on it.
+- Re-publication accounting (`republish_count`, `last_republished_at`) is visible only in the logs and
+  the table. An import stuck at the attempt cap is the signal an operator most needs and the admin API
+  does not surface it yet.
 - V5 (`protocol_version` widened to 64) has run against H2 in PostgreSQL mode only; this environment has
   no Docker daemon for `FlywayMigrationIT`.
 - `EndpointBindingRequest.version` is bounded but not validated against the adapter registry.

@@ -71,6 +71,17 @@ public class PriceCatalogEntryEntity {
     @Column(name = "position_number", updatable = false)
     private Integer positionNumber;
 
+    /**
+     * 1-based chunk event this line was published in, fixed when the import was staged.
+     *
+     * <p>Stored rather than recomputed because a re-emit (ADR-0044 §4) must reproduce the original
+     * chunk boundaries exactly: the consumer deduplicates re-emitted chunks on
+     * {@code (importManifestId, chunkSequence)}, so a boundary that moved would make it skip a
+     * sequence it already applied and lose the lines the re-emit was sent to deliver.
+     */
+    @Column(name = "chunk_sequence", nullable = false, updatable = false)
+    private int chunkSequence;
+
     // ── Product identity as the vendor stated it ────────────────────────────────────────────
 
     @Column(name = "article_ean", updatable = false, length = 64)

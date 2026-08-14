@@ -185,6 +185,20 @@ class PriceCatalogStagingWriterTest {
         }
 
         @Test
+        void stagesEachLineWithTheChunkItWasPublishedIn() {
+            commit(new PreparedImport(matchedLines(5), List.of(), 0), 5, 2);
+
+            // Recorded, not recomputed. A later re-emit has to reproduce these boundaries exactly:
+            // the consumer skips chunk sequences it already applied, so a line that moved across a
+            // boundary would be dropped permanently rather than re-delivered (ADR-0044 §4).
+            ArgumentCaptor<PriceCatalogEntryEntity> captor = ArgumentCaptor.forClass(PriceCatalogEntryEntity.class);
+            verify(entryRepository, org.mockito.Mockito.times(5)).save(captor.capture());
+            assertThat(captor.getAllValues())
+                    .extracting(PriceCatalogEntryEntity::getChunkSequence)
+                    .containsExactly(1, 1, 2, 2, 3);
+        }
+
+        @Test
         void producesNoTrailingEmptyChunkOnAnExactMultiple() {
             commit(new PreparedImport(matchedLines(1000), List.of(), 0), 1000, 500);
 

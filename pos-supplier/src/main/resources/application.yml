@@ -125,6 +125,12 @@ pos:
       reapply-batch-size: ${SUPPLIER_PRICAT_REAPPLY_BATCH_SIZE:2000}
       reapply-cron: ${SUPPLIER_PRICAT_REAPPLY_CRON:0 15 * * * *}
       reapply-enabled: ${SUPPLIER_PRICAT_REAPPLY_ENABLED:true}
+      # Re-publication on consumer request (ADR-0044 §4). Both bounds exist because serving a
+      # request does not guarantee the consumer recovers: if it stays short it asks again, and an
+      # unbounded answer would re-emit an entire vendor catalogue in a loop. The cooldown collapses
+      # a burst of requests for one import; the cap stops a genuinely broken consumer, loudly.
+      republish-cooldown: ${SUPPLIER_PRICAT_REPUBLISH_COOLDOWN:PT10M}
+      republish-max-attempts: ${SUPPLIER_PRICAT_REPUBLISH_MAX_ATTEMPTS:3}
     # ── Stock report / B2.1 (CAP-322) ───────────────────────────────────────────────────
     #
     # Same chunking problem as PRICAT: a country-level report is as wide as a catalog. A binding
@@ -172,11 +178,16 @@ pos:
       enabled: ${SUPPLIER_KAFKA_ENABLED:false}
       catalog-events-topic: ${SUPPLIER_CATALOG_EVENTS_TOPIC:catalog.events.v1}
       catalog-events-consumer-group: ${SUPPLIER_CATALOG_EVENTS_CONSUMER_GROUP:pos-supplier-catalog-events}
-      # Inbound purchase-order commands (ADR-0049 §3). Also gated by `enabled` above: with Kafka
+      # Inbound commands (ADR-0049 §3): purchase-order transmission requests from pos-order and
+      # PRICAT re-publication requests from pos-catalog. Also gated by `enabled` above: with Kafka
       # off nothing is consumed and no order is transmitted, which is the safe direction — the
       # alternative would be orders placed by a deployment that cannot report the results.
+      #
+      # ONE group for the whole topic, deliberately. processed_events is keyed by event id alone, so
+      # a second consumer group here would record ids the first group still had to act on and the
+      # two would suppress each other's commands.
       supplier-commands-topic: ${SUPPLIER_COMMANDS_TOPIC:supplier.commands.v1}
-      supplier-commands-consumer-group: ${SUPPLIER_COMMANDS_CONSUMER_GROUP:pos-supplier-order-commands}
+      supplier-commands-consumer-group: ${SUPPLIER_COMMANDS_CONSUMER_GROUP:pos-supplier-commands}
   # @EmitEvent event-type registration with pos-event-receiver at startup (AGENTS.md)
   events:
     base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}

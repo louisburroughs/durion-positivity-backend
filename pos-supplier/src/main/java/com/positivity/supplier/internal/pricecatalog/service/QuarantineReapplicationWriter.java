@@ -1,11 +1,9 @@
 package com.positivity.supplier.internal.pricecatalog.service;
 
-import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogImportCompletedV1;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogLine;
 import com.positivity.domainevents.supplier.SupplierPriceCatalogUpdatedV1;
-import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.supplier.internal.audit.SupplierCorrelationContext;
 import com.positivity.supplier.internal.domain.model.SupplierPriceCatalogEntry;
 import com.positivity.supplier.internal.entity.PriceCatalogEntryEntity;
@@ -104,12 +102,18 @@ public class QuarantineReapplicationWriter {
                 .reappliedFromImportId(first.getImportManifestId())
                 .build());
 
-        for (ResolvedLine line : resolved) {
-            entryRepository.save(toEntryEntity(line, manifest));
-            PriceCatalogUnmatchedLineEntity row = line.quarantineRow();
-            row.setResolvedAt(appliedAt);
-            row.setResolvedProductId(line.productId());
-            unmatchedLineRepository.save(row);
+        // Iterated by chunk rather than over the flat list, so each staged entry records the chunk
+        // it is published in and a later re-emit can reproduce these boundaries exactly. This path
+        // needs that more than the import path does: these lines are staged in quarantine-query
+        // order, which is not position order, so the boundaries are not otherwise recoverable.
+        for (int index = 0; index < chunks.size(); index++) {
+            for (ResolvedLine line : chunks.get(index)) {
+                entryRepository.save(toEntryEntity(line, manifest, index + 1));
+                PriceCatalogUnmatchedLineEntity row = line.quarantineRow();
+                row.setResolvedAt(appliedAt);
+                row.setResolvedProductId(line.productId());
+                unmatchedLineRepository.save(row);
+            }
         }
 
         publish(manifest, chunks, appliedAt);
@@ -118,69 +122,34 @@ public class QuarantineReapplicationWriter {
 
     private void publish(PriceCatalogImportEntity manifest, List<List<ResolvedLine>> chunks, Instant completedAt) {
         String topic = DomainTopics.events("supplier");
+        Instant occurredAt = Instant.now(clock);
         int sequence = 0;
         for (List<ResolvedLine> chunk : chunks) {
             sequence++;
-            SupplierPriceCatalogUpdatedV1 payload = new SupplierPriceCatalogUpdatedV1(
-                    manifest.getImportManifestId(),
-                    manifest.getVendorProfileId(),
-                    manifest.getSupplierRef(),
+            SupplierPriceCatalogUpdatedV1 payload = PriceCatalogEventFactory.chunkPayload(
+                    manifest,
                     sequence,
                     chunks.size(),
-                    manifest.getSourceDocumentId(),
-                    manifest.getSourceDocumentDate(),
-                    manifest.getBuyerAccountNumber(),
-                    manifest.getCountryCode(),
-                    manifest.getCurrency(),
-                    manifest.getProtocolVersion(),
-                    manifest.getFetchedAt(),
                     chunk.stream()
                             .map(QuarantineReapplicationWriter::toEventLine)
                             .toList());
             outboxWriter.publish(
-                    topic, envelope(manifest, SupplierPriceCatalogUpdatedV1.EVENT_TYPE, sequence, payload));
+                    topic,
+                    PriceCatalogEventFactory.envelope(
+                            manifest, SupplierPriceCatalogUpdatedV1.EVENT_TYPE, sequence, occurredAt, payload));
         }
 
         // A completion event with its own chunkCount, so a consumer can confirm the re-application
         // whole exactly as it confirms an import. Without it the consumer would hold chunks of a
         // manifest that never declares a total and could never be marked complete.
-        SupplierPriceCatalogImportCompletedV1 completion = new SupplierPriceCatalogImportCompletedV1(
-                manifest.getImportManifestId(),
-                manifest.getVendorProfileId(),
-                manifest.getSupplierRef(),
-                manifest.getStatus().name(),
-                manifest.getLinesFetched(),
-                manifest.getLinesMatched(),
-                manifest.getLinesUnmatched(),
-                manifest.getLinesDuplicate(),
-                manifest.getChunkCount(),
-                manifest.getChunkSize(),
-                null,
-                manifest.getSourceDocumentId(),
-                manifest.getSourceDocumentDate(),
-                manifest.getBuyerAccountNumber(),
-                manifest.getCountryCode(),
-                manifest.getCurrency(),
-                manifest.getFetchedAt(),
-                completedAt);
         outboxWriter.publish(
                 topic,
-                envelope(manifest, SupplierPriceCatalogImportCompletedV1.EVENT_TYPE, chunks.size() + 1L, completion));
-    }
-
-    private <T> DomainEventEnvelope<T> envelope(
-            PriceCatalogImportEntity manifest, String eventType, long aggregateVersion, T payload) {
-        return new DomainEventEnvelope<>(
-                UUIDv7Generator.generate(),
-                eventType,
-                1,
-                manifest.getImportManifestId(),
-                aggregateVersion,
-                Instant.now(clock),
-                "pos-supplier",
-                manifest.getCorrelationId(),
-                manifest.getCreatedBy(),
-                payload);
+                PriceCatalogEventFactory.envelope(
+                        manifest,
+                        SupplierPriceCatalogImportCompletedV1.EVENT_TYPE,
+                        chunks.size() + 1L,
+                        occurredAt,
+                        PriceCatalogEventFactory.completionPayload(manifest, completedAt)));
     }
 
     private static SupplierPriceCatalogLine toEventLine(ResolvedLine line) {
@@ -200,12 +169,14 @@ public class QuarantineReapplicationWriter {
                 entry.positionNumber());
     }
 
-    private static PriceCatalogEntryEntity toEntryEntity(ResolvedLine line, PriceCatalogImportEntity manifest) {
+    private static PriceCatalogEntryEntity toEntryEntity(
+            ResolvedLine line, PriceCatalogImportEntity manifest, int chunkSequence) {
         SupplierPriceCatalogEntry entry = line.entry();
         return PriceCatalogEntryEntity.builder()
                 .importManifestId(manifest.getImportManifestId())
                 .vendorProfileId(manifest.getVendorProfileId())
                 .positionNumber(entry.positionNumber())
+                .chunkSequence(chunkSequence)
                 .articleEan(entry.articleEan())
                 .supplierArticleCode(entry.supplierArticleCode())
                 .xReferenceCode(entry.xReferenceCode())

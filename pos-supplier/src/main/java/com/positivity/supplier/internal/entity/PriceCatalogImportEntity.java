@@ -157,6 +157,22 @@ public class PriceCatalogImportEntity {
     @Column(name = "reapplied_from_import_id", updatable = false)
     private UUID reappliedFromImportId;
 
+    /**
+     * How many times this import's events have been re-emitted on a consumer's request (ADR-0044
+     * §4), and when the last re-emit happened.
+     *
+     * <p>Bounded on purpose. A consumer that is still short after a re-emit asks again, so without
+     * a cap a permanently broken consumer would drive an unbounded re-publication of an entire
+     * vendor catalogue. Refusing loudly at the cap leaves an operator a visible stuck import
+     * instead of a broker flooded by a loop nobody can see.
+     */
+    @Column(name = "republish_count", nullable = false)
+    @Builder.Default
+    private int republishCount = 0;
+
+    @Column(name = "last_republished_at")
+    private Instant lastRepublishedAt;
+
     /** Operator-facing failure summary for a FAILED import; never a credential. */
     @Column(name = "failure_detail", length = 2000)
     private String failureDetail;
