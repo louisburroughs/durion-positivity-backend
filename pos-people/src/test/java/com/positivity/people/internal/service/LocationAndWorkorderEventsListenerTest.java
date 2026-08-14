@@ -31,6 +31,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -77,10 +78,18 @@ class LocationAndWorkorderEventsListenerTest {
 
     @BeforeEach
     void setUp() {
-        locationListener =
-                new LocationEventsListener(clock, objectMapper, processedEventRepository, extLocationReplicaRepository);
-        workorderListener =
-                new WorkorderEventsListener(clock, objectMapper, processedEventRepository, extJobTimeReplicaRepository);
+        locationListener = new LocationEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                extLocationReplicaRepository,
+                org.mockito.Mockito.mock(ObjectProvider.class));
+        workorderListener = new WorkorderEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                extJobTimeReplicaRepository,
+                org.mockito.Mockito.mock(ObjectProvider.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(extLocationReplicaRepository.findById(any())).thenReturn(Optional.empty());
     }

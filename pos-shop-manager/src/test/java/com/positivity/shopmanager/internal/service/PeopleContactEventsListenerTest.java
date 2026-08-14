@@ -19,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import tools.jackson.databind.ObjectMapper;
 
 class PeopleContactEventsListenerTest {
@@ -33,7 +34,11 @@ class PeopleContactEventsListenerTest {
     @BeforeEach
     void setUp() {
         listener = new PeopleContactEventsListener(
-                TEST_CLOCK, new ObjectMapper(), processedEventRepository, extPersonReplicaRepository);
+                TEST_CLOCK,
+                new ObjectMapper(),
+                processedEventRepository,
+                extPersonReplicaRepository,
+                org.mockito.Mockito.mock(ObjectProvider.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
     }
 

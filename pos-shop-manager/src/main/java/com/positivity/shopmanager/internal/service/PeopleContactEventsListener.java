@@ -6,16 +6,19 @@ import com.positivity.shopmanager.internal.entity.ExtPersonReplica;
 import com.positivity.shopmanager.internal.entity.ProcessedEvent;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ProcessedEventRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -30,7 +33,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.shop-manager.kafka", name = "enabled", havingValue = "true")
 public class PeopleContactEventsListener {
 
@@ -40,6 +42,28 @@ public class PeopleContactEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
+    private final Counter payloadRejectedCounter;
+
+    public PeopleContactEventsListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            ExtPersonReplicaRepository extPersonReplicaRepository,
+            ObjectProvider<MeterRegistry> meterRegistry) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.extPersonReplicaRepository = extPersonReplicaRepository;
+        MeterRegistry registry = meterRegistry.getIfAvailable();
+        this.payloadRejectedCounter = registry == null
+                ? null
+                : Counter.builder("replica.payload.rejected")
+                        .description(
+                                "Replica event payloads rejected due to Jackson databind failures (e.g. omitted primitive fields)")
+                        .tag("owner", "people-contact")
+                        .tag("entity", "people-contact-events")
+                        .register(registry);
+    }
 
     @KafkaListener(
             topics = "${pos.shop-manager.kafka.people-contact-events-topic:people-contact.events.v1}",
@@ -75,6 +99,11 @@ public class PeopleContactEventsListener {
             }
         } catch (TransientDataAccessException e) {
             throw e;
+        } catch (DatabindException e) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.error("Rejected malformed people-contact event payload eventId={}: {}", eventId, e.getMessage(), e);
         } catch (Exception e) {
             log.warn("Skipping malformed people-contact event eventId={}", eventId, e);
         }

@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -53,7 +54,8 @@ class WorkorderEventsListenerTest {
                 processedEvents,
                 autoRegistrationService,
                 extWorkorderReplica,
-                extWorkorderLineReplica);
+                extWorkorderLineReplica,
+                mock(ObjectProvider.class));
     }
 
     private static String updatedEvent(String eventId) {

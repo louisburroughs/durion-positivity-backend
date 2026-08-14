@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -39,7 +40,12 @@ class WarrantyEventsListenerTest {
 
     @BeforeEach
     void setUp() {
-        listener = new WarrantyEventsListener(TEST_CLOCK, new ObjectMapper(), processedEvents, expectations);
+        listener = new WarrantyEventsListener(
+                TEST_CLOCK,
+                new ObjectMapper(),
+                processedEvents,
+                expectations,
+                org.mockito.Mockito.mock(ObjectProvider.class));
     }
 
     private String submitted(String eventId, long version) {

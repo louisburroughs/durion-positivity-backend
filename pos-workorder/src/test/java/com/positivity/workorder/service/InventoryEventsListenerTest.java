@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -42,7 +43,8 @@ class InventoryEventsListenerTest {
 
     @BeforeEach
     void setUp() {
-        listener = new InventoryEventsListener(TEST_CLOCK, new ObjectMapper(), processedEvents, pickLists, pickTasks);
+        listener = new InventoryEventsListener(
+                TEST_CLOCK, new ObjectMapper(), processedEvents, pickLists, pickTasks, mock(ObjectProvider.class));
     }
 
     private String pickListEvent(String eventId, long version) {

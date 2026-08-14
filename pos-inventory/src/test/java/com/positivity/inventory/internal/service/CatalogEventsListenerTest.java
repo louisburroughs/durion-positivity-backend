@@ -27,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -54,7 +55,13 @@ class CatalogEventsListenerTest {
     @BeforeEach
     void setUp() {
         listener = new CatalogEventsListener(
-                TEST_CLOCK, new ObjectMapper(), processedEvents, extProduct, extProductUom, extProductSubstitution);
+                TEST_CLOCK,
+                new ObjectMapper(),
+                processedEvents,
+                extProduct,
+                extProductUom,
+                extProductSubstitution,
+                org.mockito.Mockito.mock(ObjectProvider.class));
     }
 
     /** Full schema-v2 fact: base UoM, tracking level, conversion set, substitution group. */

@@ -125,11 +125,20 @@ class ReplicaAndManifestListenerContractTest {
                 processedEventRepository,
                 personRepository,
                 userLinkRepository,
-                assignmentRepository);
-        customerListener =
-                new CustomerEventsListener(clock, objectMapper, processedEventRepository, customerRepository);
-        locationListener =
-                new LocationEventsListener(clock, objectMapper, processedEventRepository, locationRepository);
+                assignmentRepository,
+                org.mockito.Mockito.mock(ObjectProvider.class));
+        customerListener = new CustomerEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                customerRepository,
+                org.mockito.Mockito.mock(ObjectProvider.class));
+        locationListener = new LocationEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                locationRepository,
+                org.mockito.Mockito.mock(ObjectProvider.class));
     }
 
     private static String envelope(String eventId, String eventType, String payload) {

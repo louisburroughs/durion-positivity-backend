@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -49,7 +50,8 @@ class WorkorderEventsListenerTest {
 
     @BeforeEach
     void setUp() {
-        listener = new WorkorderEventsListener(TEST_CLOCK, MAPPER, processedEvents, serviceHistory, followUps);
+        listener = new WorkorderEventsListener(
+                TEST_CLOCK, MAPPER, processedEvents, serviceHistory, followUps, mock(ObjectProvider.class));
     }
 
     private String completedEvent(String eventId) {

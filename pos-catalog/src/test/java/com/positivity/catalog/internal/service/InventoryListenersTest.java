@@ -102,7 +102,12 @@ class InventoryListenersTest {
         when(availabilityRepository.findById(any())).thenReturn(Optional.empty());
         when(leadTimeRepository.findById(any())).thenReturn(Optional.empty());
         listener = new InventoryEventsListener(
-                clock, objectMapper, processedEventRepository, availabilityRepository, leadTimeRepository);
+                clock,
+                objectMapper,
+                processedEventRepository,
+                availabilityRepository,
+                leadTimeRepository,
+                org.mockito.Mockito.mock(ObjectProvider.class));
     }
 
     private static String availability(String eventId, long version, int atp) {

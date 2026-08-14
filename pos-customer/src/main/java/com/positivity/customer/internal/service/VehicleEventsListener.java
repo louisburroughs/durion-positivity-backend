@@ -13,19 +13,22 @@ import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.customer.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.vehicle.VehicleCarePreferenceUpdatedV1;
 import com.positivity.domainevents.vehicle.VehicleUpdatedV1;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -47,7 +50,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.customer.kafka", name = "enabled", havingValue = "true")
 public class VehicleEventsListener {
 
@@ -60,6 +62,34 @@ public class VehicleEventsListener {
     private final ExtVehicleCarePreferenceRepository extVehicleCarePreferenceRepository;
     private final PersonPartyRepository personPartyRepository;
     private final CommercialPartyRepository commercialPartyRepository;
+    private final Counter payloadRejectedCounter;
+
+    public VehicleEventsListener(
+            Clock clock,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository,
+            ExtVehicleRepository extVehicleRepository,
+            ExtVehicleCarePreferenceRepository extVehicleCarePreferenceRepository,
+            PersonPartyRepository personPartyRepository,
+            CommercialPartyRepository commercialPartyRepository,
+            ObjectProvider<MeterRegistry> meterRegistry) {
+        this.clock = clock;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
+        this.extVehicleRepository = extVehicleRepository;
+        this.extVehicleCarePreferenceRepository = extVehicleCarePreferenceRepository;
+        this.personPartyRepository = personPartyRepository;
+        this.commercialPartyRepository = commercialPartyRepository;
+        MeterRegistry registry = meterRegistry.getIfAvailable();
+        this.payloadRejectedCounter = registry == null
+                ? null
+                : Counter.builder("replica.payload.rejected")
+                        .description("Replica event payloads rejected due to Jackson databind failures"
+                                + " (e.g. omitted primitive fields)")
+                        .tag("owner", "vehicle")
+                        .tag("entity", "vehicle-events")
+                        .register(registry);
+    }
 
     @KafkaListener(
             topics = "${pos.customer.kafka.vehicle-events-topic:vehicle.events.v1}",
@@ -97,6 +127,11 @@ public class VehicleEventsListener {
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
             throw e;
+        } catch (DatabindException e) {
+            if (payloadRejectedCounter != null) {
+                payloadRejectedCounter.increment();
+            }
+            log.error("Rejected malformed vehicle event payload eventId={}: {}", eventId, e.getMessage(), e);
         } catch (Exception e) {
             log.warn("Skipping malformed vehicle event eventId={}", eventId, e);
         }

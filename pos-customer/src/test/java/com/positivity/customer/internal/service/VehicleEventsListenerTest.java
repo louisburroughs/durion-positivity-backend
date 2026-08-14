@@ -27,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -60,7 +61,8 @@ class VehicleEventsListenerTest {
                 replica,
                 carePreferenceReplica,
                 personParties,
-                commercialParties);
+                commercialParties,
+                mock(ObjectProvider.class));
     }
 
     private String carePreferenceEvent(String eventId, long version, Integer intervalMonths, boolean deleted) {
