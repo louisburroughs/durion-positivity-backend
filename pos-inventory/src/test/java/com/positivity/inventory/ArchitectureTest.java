@@ -189,6 +189,58 @@ public class ArchitectureTest {
                     + " stock summary read model stays consistent (#1024, A1) and the negative-stock"
                     + " policy matrix has a single enforcement point (#1027, K1)");
 
+    /**
+     * The classes that own supplier availability hints. Everything else in the module — every
+     * valuation, costing, ledger, stock-summary and availability path included — is held away from
+     * the hint tables by {@link #supplier_stock_hints_must_not_be_read_outside_their_own_slice}.
+     */
+    private static final String[] SUPPLIER_HINT_CLASSES = {
+        "com.positivity.inventory.internal.service.SupplierStockHintEventsListener",
+        "com.positivity.inventory.internal.service.SupplierStockHintServiceImpl",
+        "com.positivity.inventory.internal.service.SupplierStockHintResolver"
+    };
+
+    @ArchTest
+    static final ArchRule supplier_stock_hints_must_not_be_read_outside_their_own_slice = noClasses()
+            .that()
+            .resideOutsideOfPackages("..internal.repository..", "..internal.entity..")
+            .and()
+            .doNotHaveFullyQualifiedName(SUPPLIER_HINT_CLASSES[0])
+            .and()
+            .doNotHaveFullyQualifiedName(SUPPLIER_HINT_CLASSES[1])
+            .and()
+            .doNotHaveFullyQualifiedName(SUPPLIER_HINT_CLASSES[2])
+            .should()
+            .dependOnClassesThat()
+            .haveFullyQualifiedName("com.positivity.inventory.internal.repository.SupplierStockHintRepository")
+            .allowEmptyShould(true)
+            .because("supplier availability is what a VENDOR says about ITS OWN stock (CAP-322, #1312):"
+                    + " it is not owned stock, so no valuation path (ADR-0048) and no on-hand ATP path may"
+                    + " read it. Keeping the hints in their own tables makes that structural — nothing"
+                    + " joins them — and this rule is what keeps it structural as the module grows");
+
+    @ArchTest
+    static final ArchRule valuation_and_atp_must_not_read_supplier_stock_hints = noClasses()
+            .that()
+            .haveSimpleNameContaining("Valuation")
+            .or()
+            .haveSimpleNameContaining("Costing")
+            .or()
+            .haveSimpleNameContaining("Availability")
+            .or()
+            .haveSimpleNameContaining("StockSummary")
+            .or()
+            .haveSimpleNameContaining("LedgerPosting")
+            .or()
+            .haveSimpleNameContaining("Revaluation")
+            .should()
+            .dependOnClassesThat()
+            .haveNameMatching("com\\.positivity\\.inventory\\.internal\\.(repository|entity)\\.SupplierStockHint.*")
+            .allowEmptyShould(true)
+            .because("a vendor's warehouse must never be mistaken for ours: valuation figures and"
+                    + " availability-to-promise are computed from owned stock alone, and a supplier hint"
+                    + " reaching either of them would misstate what we own and what we can promise");
+
     @ArchTest
     static final ArchRule entities_should_not_call_uuid_randomUUID = noClasses()
             .that()

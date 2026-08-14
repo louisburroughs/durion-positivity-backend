@@ -143,6 +143,11 @@ pos:
       # Counter-sale stock consumption (order parity story H2, #1079)
       order-events-topic: ${POS_INVENTORY_ORDER_EVENTS_TOPIC:order.events.v1}
       order-events-consumer-group: ${POS_INVENTORY_ORDER_EVENTS_CONSUMER_GROUP:pos-inventory-order-events}
+      # Supplier stock-report snapshots consumed as availability hints (CAP-322, #1312;
+      # producer #1228). The PRICAT feed shares this topic and belongs to pos-catalog, so
+      # this consumer group is its own and unrelated types are skipped, not applied.
+      supplier-events-topic: ${POS_INVENTORY_SUPPLIER_EVENTS_TOPIC:supplier.events.v1}
+      supplier-events-consumer-group: ${POS_INVENTORY_SUPPLIER_EVENTS_CONSUMER_GROUP:pos-inventory-supplier-events}
       # Own fact publishing (ADR-0044 §6, #899): availability / storage-location on-hand /
       # lead-time facts via the transactional outbox, with manifests and replay commands.
       events-topic: ${POS_INVENTORY_EVENTS_TOPIC:inventory.events.v1}
@@ -178,5 +183,22 @@ pos:
         enabled: ${POS_INVENTORY_CYCLE_COUNT_SCHEDULE_ENABLED:false}
         interval-ms: ${POS_INVENTORY_CYCLE_COUNT_SCHEDULE_INTERVAL_MS:3600000}
         initial-delay-ms: ${POS_INVENTORY_CYCLE_COUNT_SCHEDULE_INITIAL_DELAY_MS:600000}
+    supplier-hints:
+      # Supplier availability hints (CAP-322, #1312). Past this age a hint's quantity is
+      # suppressed and it reads as STALE_UNKNOWN — never as zero. The meaningful ceiling is a
+      # function of how often we actually poll a vendor, which is a per-binding schedule owned
+      # by pos-supplier, so a vendor on a different cadence gets an override keyed by its
+      # vendorProfileId:
+      #   vendor-staleness-ceiling:
+      #     "[018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b]": PT6H
+      staleness-ceiling: ${POS_INVENTORY_SUPPLIER_HINT_STALENESS_CEILING:PT24H}
+      resolution:
+        # Ties hints to catalog products through pos-catalog's exact-match EAN lookup. Off by
+        # default: an environment with no catalog to reach should store hints unresolved
+        # rather than log a failed pass, and unresolved hints stay fully visible.
+        enabled: ${POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_ENABLED:false}
+        batch-size: ${POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_BATCH_SIZE:200}
+        interval-ms: ${POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_INTERVAL_MS:300000}
+        initial-delay-ms: ${POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_INITIAL_DELAY_MS:60000}
   workorder:
     service-id: ${POS_WORKORDER_SERVICE_ID:workorder}
