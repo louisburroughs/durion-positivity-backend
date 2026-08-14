@@ -17,6 +17,14 @@ them for each capability. Two codecs exist today, both in `internal.adapter.ediw
 `internal.spi` and no codec behind them. ADR-0053 governs the price-catalog behaviour described
 below.
 
+**Shipment tracking is out of scope for this module**, and not as a gap awaiting a codec (#1313).
+EDIWheel shipment tracking is an exchange between logistics providers and suppliers; a service
+provider is not a party to it in either direction. That is why the LEX v1 document offers a single
+`POST /shipment-tracking` — a write, for a carrier announcing a notice — and no read at all. There
+is no `SHIPMENT_TRACKING` capability, port or service here, and V12 dropped the key from the
+bindable set. Shipment milestones from some non-EDIWheel source later (a carrier API, a Michelin
+S2S operation) would be a new capability with its own spec, not a revival of this one.
+
 ---
 
 ## API surface
@@ -118,6 +126,21 @@ least one usable line), `EMPTY` (the vendor sent no lines), `REJECTED` (the vend
 none of them decoded — a codec or vendor-format break, not a quiet warehouse), `FAILED` (no usable
 answer at all).
 
+### Quarantine re-application
+
+`POST …/price-catalog/{vendorProfileId}/quarantine/reapply` re-matches the profile's open quarantine
+against the current product-code replica and applies whatever now resolves — **with no vendor call**
+(ADR-0053 §5). An hourly sweep does the same for every enabled profile; the cadence is its own,
+because what makes a line matchable is a change in the catalog, not the vendor's next fetch.
+
+Skipped on purpose: `NO_IDENTIFIER` and `MALFORMED_LINE`. No catalog fix rescues a line that carried
+nothing to match on, so retrying them would keep the worklist permanently non-empty.
+
+A re-application creates **its own manifest** referencing the import it healed
+(`reapplied_from_import_id`), rather than editing the original's counters. Those counters record
+what the vendor sent and how much matched *at the time*, and a fourth chunk of a three-chunk import
+is not something a consumer's completeness check can accept.
+
 ### Gateway routing
 
 `Path=/supplier/**` with `StripPrefix=1`, plus the gateway's global `ApiVersionHeaderToPathFilter`:
@@ -215,7 +238,7 @@ A `baseUrl` containing userinfo (`https://user:pass@host/…`) is rejected with
 never persist.
 
 **Valid values.** Capabilities: `ORDER_CREATE`, `ORDER_STATUS`, `STOCK_INQUIRY`, `STOCK_REPORT`,
-`PRICE_CATALOG`, `INVOICE_FETCH`, `SHIPMENT_TRACKING`, `WORKORDER_AUTHORIZATION`, `MARKETING_CATALOG`,
+`PRICE_CATALOG`, `INVOICE_FETCH`, `WORKORDER_AUTHORIZATION`, `MARKETING_CATALOG`,
 `TIRE_IDENTIFICATION`. Families: `EDIWHEEL_A25`, `EDIWHEEL_C1`, `EDIWHEEL_B`, `EDIWHEEL_JSON`,
 `MICHELIN_S2S`. Auth types: `BASIC_PLUS_APIKEY`, `OAUTH2_CLIENT_CREDENTIALS`, `BEARER`. Versions are
 free-form strings matched against the adapter registry — `A2_5`, `B2_1`, `B3_3`, `B4_0`, `C1_0`, `C1_1`,
@@ -393,19 +416,15 @@ nothing), then update the Angular SDK.
 
 ### Known gaps
 
-- PRICAT re-application from the quarantine after a catalog fix is not yet automated: the rows carry
-  the values needed for it (ADR-0053 §5), but today a re-import is what closes them.
 - Manufacturer-part matching, ADR-0053 §5's third match step, needs a supplier-to-manufacturer mapping
   that no vendor profile carries yet.
 - The 500-line chunk default is ADR-0053's estimate and is still owed a validation against the first
   Michelin sandbox pull.
-- The `ext_product_code` replica has no backfill path yet: it is built from facts published after the
-  consumer starts, so a first deployment needs pos-catalog to re-emit (ADR-0044 §4 replay) before
-  PRICAT lines can match.
+- The `ext_product_code` replica is seeded by pos-catalog's product-fact replay
+  (`POST /v1/products/facts/replay`, #1309); a first deployment must run it before PRICAT lines can
+  match, because the replica holds only facts published after its consumer started.
 - Stock-report snapshots are published but not yet consumed: the pos-inventory hint representation is
   a domain decision (#1312) and the consumer waits on it.
-- `SupplierShipmentTrackingPort` has no adapter and cannot get one from the spec we hold: the LEX v1
-  document declares only a write operation, so there is nothing to fetch (#1313).
 - V5 (`protocol_version` widened to 64) has run against H2 in PostgreSQL mode only; this environment has
   no Docker daemon for `FlywayMigrationIT`.
 - `EndpointBindingRequest.version` is bounded but not validated against the adapter registry.

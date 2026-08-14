@@ -14,6 +14,7 @@ import com.positivity.catalog.service.CatalogService;
 import com.positivity.catalog.service.LocationPriceOverrideService;
 import com.positivity.catalog.service.ProductCodeLookupService;
 import com.positivity.catalog.service.ProductDetailService;
+import com.positivity.catalog.service.ProductFactReplayService;
 import com.positivity.catalog.service.ProductLifecycleService;
 import com.positivity.catalog.service.ProductMasterDataService;
 import com.positivity.catalog.service.ProductSearchService;
@@ -69,6 +70,9 @@ class ProductCodeLookupControllerTest {
 
     @MockitoBean
     ProductSearchService productSearchService;
+
+    @MockitoBean
+    ProductFactReplayService productFactReplayService;
 
     @BeforeEach
     void setUpClock() {

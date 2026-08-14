@@ -1377,6 +1377,83 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - supplier:profile:write
+  /v1/supplier/admin/price-catalog/{vendorProfileId}/quarantine/reapply:
+    post:
+      tags:
+      - Supplier Price Catalog
+      summary: Re-apply quarantined price-catalog lines
+      description: 'Re-matches the profile''s open unmatched-line quarantine against the current product-code replica
+
+        and applies whatever now resolves, staging it and publishing it exactly as an import would — with
+
+        no call to the vendor.
+
+        Use this tool after a catalog fix, or after the product-code replica has been seeded, to close
+
+        lines that were quarantined for a reason that no longer holds; do not use it to fetch fresh
+
+        prices, which is triggerSupplierPriceCatalogImport.
+
+        Preconditions: the profile must exist; lines that carried no identifier and lines whose values
+
+        never decoded are skipped, because no catalog fix can rescue them.
+
+        Required inputs: vendorProfileId (UUIDv7) as a path parameter; there is no request body, and the
+
+        batch size is a deployment setting rather than a caller choice.
+
+        Emits a SUPPLIER_PRICECATALOG_REAPPLY event and creates one re-application manifest per origin
+
+        import — a quarantine spans every import that left a line open, and each manifest carries one
+
+        vendor document''s identity — closing the lines it matched and publishing their prices; the
+
+        original imports'' counters are left untouched, because they record what the vendor sent at the time.
+
+        Returns 200 with one summary per healed import, 204 when nothing matched — the healthy steady
+
+        state, not a failure — and 404 when the profile does not exist.
+
+        '
+      operationId: reapplySupplierPriceCatalogQuarantine
+      parameters:
+      - name: vendorProfileId
+        in: path
+        description: Vendor profile whose quarantine to work (UUIDv7).
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      responses:
+        '200':
+          description: One summary per origin import that had lines resolve.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PriceCatalogImportSummary'
+        '204':
+          description: 'Nothing in the quarantine resolved. The response has NO body: an empty result is the healthy steady state, not an error envelope to parse.'
+        '404':
+          description: No vendor profile exists with the supplied id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: Authenticated caller lacks supplier:pricecatalog:import.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:pricecatalog:import
   /v1/supplier/admin/price-catalog/{vendorProfileId}/imports:
     get:
       tags:

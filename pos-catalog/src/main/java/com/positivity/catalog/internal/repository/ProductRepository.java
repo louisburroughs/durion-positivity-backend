@@ -2,6 +2,7 @@ package com.positivity.catalog.internal.repository;
 
 import com.positivity.catalog.internal.entity.ProductCodeType;
 import com.positivity.catalog.internal.entity.ProductEntity;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -20,6 +21,24 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
 
     boolean existsByManufacturerIdAndManufacturerPartNumberIgnoreCaseAndIdNot(
             UUID manufacturerId, String manufacturerPartNumber, UUID id);
+
+    /**
+     * A page of products for fact replay (#1309), ordered by id so a cursor can resume where the
+     * previous page stopped.
+     *
+     * <p>Cursor rather than offset paging on purpose: a replay of a large catalog runs over several
+     * requests, and offsets shift under concurrent product writes — a product created mid-replay
+     * would silently displace another out of the window and leave a replica short of exactly the
+     * fact the replay was meant to deliver.
+     */
+    @Query("""
+      SELECT p FROM ProductEntity p
+      WHERE (:afterId IS NULL OR p.id > :afterId)
+        AND (:updatedSince IS NULL OR p.updatedAt >= :updatedSince)
+      ORDER BY p.id ASC
+      """)
+    List<ProductEntity> findForReplay(
+            @Param("afterId") UUID afterId, @Param("updatedSince") Instant updatedSince, Pageable pageable);
 
     /**
      * Exact match on a product code within its scheme (ADR-0053 §5). Returns a list rather than an

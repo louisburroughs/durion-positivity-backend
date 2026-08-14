@@ -177,6 +177,42 @@ class SupplierPriceCatalogAdminControllerWebMvcTest {
     }
 
     @Nested
+    @DisplayName("POST /quarantine/reapply")
+    class ReapplyQuarantine {
+
+        @Test
+        void returnsTheReapplicationSummaryWhenLinesResolved() throws Exception {
+            when(priceCatalogService.reapplyQuarantine(PROFILE_ID)).thenReturn(List.of(summary("COMPLETED")));
+
+            mockMvc.perform(authed(post(BASE + "/quarantine/reapply"), SupplierPermissions.PRICECATALOG_IMPORT))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].importManifestId").value(MANIFEST_ID.toString()));
+        }
+
+        @Test
+        void returns204WhenNothingResolved() throws Exception {
+            // An empty quarantine sweep is the healthy steady state, not an error.
+            when(priceCatalogService.reapplyQuarantine(PROFILE_ID)).thenReturn(List.of());
+
+            mockMvc.perform(authed(post(BASE + "/quarantine/reapply"), SupplierPermissions.PRICECATALOG_IMPORT))
+                    .andExpect(status().isNoContent());
+        }
+
+        @Test
+        void isDeniedToAReaderWhoCannotTrigger() throws Exception {
+            mockMvc.perform(authed(post(BASE + "/quarantine/reapply"), SupplierPermissions.PRICECATALOG_READ))
+                    .andExpect(status().isForbidden());
+
+            verify(priceCatalogService, never()).reapplyQuarantine(PROFILE_ID);
+        }
+
+        @Test
+        void isRejectedWithoutAuthentication() throws Exception {
+            mockMvc.perform(post(BASE + "/quarantine/reapply")).andExpect(status().isUnauthorized());
+        }
+    }
+
+    @Nested
     @DisplayName("GET /imports")
     class ListImports {
 
