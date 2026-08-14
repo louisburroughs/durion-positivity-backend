@@ -1143,7 +1143,7 @@ paths:
 
         Emits a CUSTOMER_CUSTOMER_CREATE event and publishes a party-changed customer fact.
 
-        Returns 201 with the stored customer on success; field validation is not enforced on this legacy path, so a malformed JSON body producing 400 is the only rejection.
+        Returns 201 with the stored customer on success; returns 400 for a malformed JSON body or when firstName/lastName are blank or absent.
 
         '
       operationId: createCustomer
@@ -4341,13 +4341,13 @@ components:
           minLength: 0
         lastName:
           type: string
-          description: Last name of the customer
+          description: Last name of the customer. For a commercial party (customerType=COMMERCIAL), this field carries the organization's legal/registered name instead. Required when creating a customer (POST); optional on update (PUT), where an absent value leaves the existing name unchanged.
           example: Doe
           maxLength: 100
           minLength: 0
         firstName:
           type: string
-          description: First name of the customer
+          description: First name of the customer. For a commercial party (customerType=COMMERCIAL), this field carries the organization's display name instead. Required when creating a customer (POST); optional on update (PUT), where an absent value leaves the existing name unchanged.
           example: John
           maxLength: 100
           minLength: 0
@@ -4360,7 +4360,7 @@ components:
           minLength: 0
         vehicleVins:
           type: array
-          description: List of vehicle VINs associated with the customer
+          description: List of vehicle VINs associated with the customer. Omitting this field on an update leaves the customer's existing VINs unchanged; sending an empty list clears them.
           example:
           - 1HGCM82633A004352
           items:
@@ -4371,9 +4371,6 @@ components:
           example: retail
           maxLength: 50
           minLength: 0
-      required:
-      - firstName
-      - lastName
     UpsertPartyTagRequest:
       type: object
       description: Request to create or update a CRM party tag
