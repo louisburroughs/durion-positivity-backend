@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.never;
@@ -327,14 +328,38 @@ class PersonPartyServiceImplTest {
             when(customerRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
             for (String type : new String[] {null, "", "person", "COMMERCIAL", "NONSENSE"}) {
-                assertThat(service.createCustomer(
-                                CustomerDTO.builder().customerType(type).build()))
+                assertThat(service.createCustomer(CustomerDTO.builder()
+                                .customerType(type)
+                                .firstName("Ada")
+                                .lastName("Lovelace")
+                                .build()))
                         .isNotNull();
             }
 
             // This service owns person parties only; the type string cannot make it produce another
             // kind, and an unrecognized value must not throw at the API boundary.
             verify(customerRepository, org.mockito.Mockito.times(5)).save(any(PersonParty.class));
+        }
+
+        @Test
+        @DisplayName("rejects a create with a blank firstName or lastName")
+        void createRejectsBlankNames() {
+            for (String blank : new String[] {null, "", "   "}) {
+                assertThatThrownBy(() -> service.createCustomer(CustomerDTO.builder()
+                                .customerType("PERSON")
+                                .firstName(blank)
+                                .lastName("Lovelace")
+                                .build()))
+                        .isInstanceOf(IllegalArgumentException.class);
+                assertThatThrownBy(() -> service.createCustomer(CustomerDTO.builder()
+                                .customerType("PERSON")
+                                .firstName("Ada")
+                                .lastName(blank)
+                                .build()))
+                        .isInstanceOf(IllegalArgumentException.class);
+            }
+
+            verifyNoInteractions(customerRepository);
         }
 
         @Test

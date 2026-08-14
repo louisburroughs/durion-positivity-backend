@@ -13,6 +13,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -132,6 +133,9 @@ public class PersonPartyServiceImpl implements CustomerService {
     @Transactional
     public CustomerDTO createCustomer(@NonNull CustomerDTO dto) {
         log.debug("Creating new customer: {}", dto);
+        if (isBlank(dto.getFirstName()) || isBlank(dto.getLastName())) {
+            throw new IllegalArgumentException("firstName and lastName are required to create a customer");
+        }
         PersonParty customer = toEntity(dto);
 
         // Determine party type and save to appropriate repository
@@ -325,5 +329,9 @@ public class PersonPartyServiceImpl implements CustomerService {
      */
     private PartyType determineCustomerType(PersonParty entity) {
         return entity.getPartyType();
+    }
+
+    private static boolean isBlank(@Nullable String value) {
+        return value == null || value.isBlank();
     }
 }

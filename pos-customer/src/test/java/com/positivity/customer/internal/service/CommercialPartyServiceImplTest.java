@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -217,6 +218,8 @@ class CommercialPartyServiceImplTest {
             service.createCustomer(CustomerDTO.builder()
                     .customerType("COMMERCIAL")
                     .customerNumber("C-2001")
+                    .lastName("Fleet Co LLC")
+                    .firstName("Fleet Co")
                     .primaryAddress("1 Depot Rd")
                     .vehicleVins(List.of("VIN-1"))
                     .build());
@@ -234,14 +237,38 @@ class CommercialPartyServiceImplTest {
             when(commercialRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
             for (String type : new String[] {null, "", "commercial", "PERSON", "NONSENSE"}) {
-                assertThat(service.createCustomer(
-                                CustomerDTO.builder().customerType(type).build()))
+                assertThat(service.createCustomer(CustomerDTO.builder()
+                                .customerType(type)
+                                .lastName("Fleet Co LLC")
+                                .firstName("Fleet Co")
+                                .build()))
                         .isNotNull();
             }
 
             // This service owns commercial parties only, and an unrecognized type string must not
             // throw at the API boundary.
             verify(commercialRepository, org.mockito.Mockito.times(5)).save(any(CommercialParty.class));
+        }
+
+        @Test
+        @DisplayName("rejects a create with a blank firstName or lastName")
+        void createRejectsBlankNames() {
+            for (String blank : new String[] {null, "", "   "}) {
+                assertThatThrownBy(() -> service.createCustomer(CustomerDTO.builder()
+                                .customerType("COMMERCIAL")
+                                .firstName(blank)
+                                .lastName("Fleet Co LLC")
+                                .build()))
+                        .isInstanceOf(IllegalArgumentException.class);
+                assertThatThrownBy(() -> service.createCustomer(CustomerDTO.builder()
+                                .customerType("COMMERCIAL")
+                                .firstName("Fleet Co")
+                                .lastName(blank)
+                                .build()))
+                        .isInstanceOf(IllegalArgumentException.class);
+            }
+
+            verifyNoInteractions(commercialRepository);
         }
 
         @Test

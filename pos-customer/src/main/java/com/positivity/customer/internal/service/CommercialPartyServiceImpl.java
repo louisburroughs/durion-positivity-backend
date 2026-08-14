@@ -12,6 +12,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -127,6 +128,9 @@ public class CommercialPartyServiceImpl implements CustomerService {
     @Transactional
     public CustomerDTO createCustomer(@NonNull CustomerDTO dto) {
         log.debug("Creating new customer: {}", dto);
+        if (isBlank(dto.getFirstName()) || isBlank(dto.getLastName())) {
+            throw new IllegalArgumentException("firstName and lastName are required to create a customer");
+        }
         CommercialParty customer = toEntity(dto);
 
         // Determine party type and save to appropriate repository
@@ -295,5 +299,9 @@ public class CommercialPartyServiceImpl implements CustomerService {
      */
     private PartyType determineCustomerType(CommercialParty entity) {
         return entity.getPartyType();
+    }
+
+    private static boolean isBlank(@Nullable String value) {
+        return value == null || value.isBlank();
     }
 }
