@@ -10,11 +10,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -63,6 +65,21 @@ public class SupplierTransmissionController {
             + " invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless"
             + " status, so clients must not attempt to parse an error envelope here.";
 
+    private static final String CONFIRM_EXAMPLE = """
+            {
+              "action": "CONFIRM_WITH_VENDOR_REFERENCE",
+              "evidence": "Called Michelin order desk 2026-08-14 09:40; they hold the order under MICH-770412 and \
+            confirmed the delivery is scheduled.",
+              "supplierOrderNumber": "MICH-770412"
+            }""";
+
+    private static final String NOT_RECEIVED_EXAMPLE = """
+            {
+              "action": "MARK_NOT_RECEIVED",
+              "evidence": "Michelin order desk searched by our reference and by buyer account for 2026-08-14 and \
+            found nothing; re-ordering will be raised as a new purchase-order revision."
+            }""";
+
     private final SupplierOrderService orderService;
 
     @Operation(
@@ -75,6 +92,8 @@ public class SupplierTransmissionController {
                     Use this tool to answer "did this order actually reach the vendor, and what did they say"; do not
                     use it to read delivery schedules or despatches, which reach the ordering domain as
                     supplier.orderstatus.changed events and belong on the purchase-order timeline.
+                    Preconditions: the caller must hold supplier:transmission:read; the purchase order need not exist
+                    in this module, and an order that was never transmitted is a normal empty answer.
                     Required inputs: purchaseOrderId (UUIDv7) as a path parameter; there is no request body.
                     Emits a SUPPLIER_TRANSMISSION_LIST event. Read-only: nothing is transmitted, retried or changed.
                     Returns 200 with an empty array when the purchase order was never transmitted — that is a normal
@@ -107,8 +126,11 @@ public class SupplierTransmissionController {
     @Operation(operationId = "getSupplierTransmission", summary = "Get one vendor transmission", description = """
                     Returns the current state of one transmission intent, including the wire document id an operator
                     would quote to a vendor and, when the transmission is stuck, why.
-                    Use this tool when working a single transmission; use listSupplierTransmissionsForPurchaseOrder to
-                    see a purchase order's whole transmission history.
+                    Use this tool when working a single transmission; do not use it to survey a purchase order's
+                    transmission history, which is listSupplierTransmissionsForPurchaseOrder instead.
+                    Preconditions: the caller must hold supplier:transmission:read and the transmission intent must
+                    exist; a transmission is created only by pos-supplier consuming a supplier.order.requested
+                    command, never by this API.
                     Required inputs: transmissionIntentId (UUIDv7) as a path parameter; there is no request body.
                     Emits a SUPPLIER_TRANSMISSION_GET event. Read-only.
                     Returns 200 with the transmission, or 404 when no transmission exists with that id.
@@ -152,6 +174,10 @@ public class SupplierTransmissionController {
                     transmission, which no endpoint offers because a blind re-send is how a purchase order becomes two
                     deliveries. Re-ordering after mark-not-received is a fresh request from the ordering domain, which
                     mints a new transmission intent and a new vendor document id.
+                    Preconditions: the caller must hold supplier:transmission:resolve, the transmission must exist and
+                    be in state MANUAL_REVIEW, and the operator must have established the facts with the vendor —
+                    every other state either has a definite outcome already or is still being worked on
+                    automatically.
                     Required inputs: transmissionIntentId (UUIDv7) as a path parameter, and a body carrying the action
                     plus free-text evidence; supplierOrderNumber is additionally required when confirming.
                     Emits a SUPPLIER_TRANSMISSION_RESOLVE event, records the actor and their evidence on the
@@ -193,7 +219,26 @@ public class SupplierTransmissionController {
     public ResponseEntity<OrderTransmissionStatus> resolveTransmission(
             @Parameter(description = "Transmission intent id (UUIDv7).", required = true) @PathVariable
                     UUID transmissionIntentId,
-            @Valid @RequestBody TransmissionResolutionRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The resolution to apply and the operator's evidence for it. The evidence is"
+                                    + " stored and published on the resulting event: weeks later it is the only record"
+                                    + " of why the system believes a vendor did or did not receive this order.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = {
+                                                @ExampleObject(
+                                                        name = "Vendor confirmed by phone",
+                                                        value = CONFIRM_EXAMPLE),
+                                                @ExampleObject(
+                                                        name = "Vendor never received it",
+                                                        value = NOT_RECEIVED_EXAMPLE)
+                                            }))
+                    @Valid
+                    @NotNull
+                    @RequestBody
+                    TransmissionResolutionRequest request) {
         return ResponseEntity.ok(orderService.resolveTransmission(transmissionIntentId, request));
     }
 }
