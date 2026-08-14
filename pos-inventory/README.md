@@ -134,11 +134,14 @@ What the feed's shape forces, and how each is handled:
 - **Staleness ceiling.** Past `pos.inventory.supplier-hints.staleness-ceiling` (per-vendor
   override available) a hint reads as `STALE_UNKNOWN` with its quantity suppressed — never as
   zero.
-- **Resolution is out of band.** `SupplierStockHintResolver` sweeps `PENDING` hints against
-  pos-catalog's exact-match EAN lookup (`GET /v1/products/by-code`, ADR-0053 §5), the same
-  matching foundation the PRICAT consumer uses. Only EAN is matched; vendor and buyer article
-  codes carry no uniqueness guarantee and are never guessed at. Unresolved hints are retained and
-  remain readable by code.
+- **Resolution is out of band, against a local replica.** `SupplierStockHintResolver` sweeps
+  `PENDING` hints against `ext_product_code` — this module's own copy of pos-catalog's product
+  identity codes, maintained by `CatalogEventsListener` from `catalog.product.updated` facts.
+  Never a synchronous call to pos-catalog: ADR-0044 R1 forbids it and R3 makes the replica the
+  sanctioned read path, and pos-supplier resolves PRICAT lines the same way against its own copy
+  (CAP-318 #1224). Only EAN is matched; vendor and buyer article codes carry no uniqueness
+  guarantee and are never guessed at. Unresolved hints are retained and remain readable by code,
+  and an unseeded replica defers rather than reporting every hint as a catalog miss.
 
 Read path: `GET /v1/inventory/supplierStockHints/byProduct/{productId}` and
 `GET /v1/inventory/supplierStockHints/byCode` (`inventory:supplier_stock_hint:view`). Results are

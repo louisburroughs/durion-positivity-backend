@@ -8,31 +8,31 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.inventory.internal.client.CatalogProductCodeClient;
 import com.positivity.inventory.internal.config.SupplierStockHintProperties;
+import com.positivity.inventory.internal.entity.ExtProductCodeReplica;
 import com.positivity.inventory.internal.entity.SupplierStockHint;
 import com.positivity.inventory.internal.enums.SupplierHintAsOfSource;
 import com.positivity.inventory.internal.enums.SupplierHintIdentityKind;
 import com.positivity.inventory.internal.enums.SupplierHintResolutionStatus;
+import com.positivity.inventory.internal.repository.ExtProductCodeReplicaRepository;
 import com.positivity.inventory.internal.repository.SupplierStockHintRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Limit;
-import org.springframework.web.client.ResourceAccessException;
 
 /**
  * Article resolution against pos-catalog's exact-match EAN lookup (CAP-322, #1312).
  *
- * <p>The contract worth holding: an article that cannot be resolved is retained and visible in
- * every case, and the reason it is unresolved is recorded rather than flattened — catalog does not
- * carry it, the vendor stated no EAN, or we could not ask.
+ * <p>Resolution reads the local ext_product_code replica, never pos-catalog directly (ADR-0044
+ * R1/R3). The contract worth holding: an article that cannot be resolved is retained and visible in
+ * every case, and the reason is recorded rather than flattened — the replica does not carry the
+ * code, it carries it twice, the vendor stated no EAN, or the replica cannot answer at all.
  */
 class SupplierStockHintResolverTest {
 
@@ -42,14 +42,14 @@ class SupplierStockHintResolverTest {
     private static final UUID VENDOR_ID = UUID.fromString("018f0000-0000-7000-8000-000000000702");
 
     private final SupplierStockHintRepository hints = mock(SupplierStockHintRepository.class);
-    private final CatalogProductCodeClient catalog = mock(CatalogProductCodeClient.class);
+    private final ExtProductCodeReplicaRepository productCodes = mock(ExtProductCodeReplicaRepository.class);
     private final SupplierStockHintProperties properties = new SupplierStockHintProperties();
 
     private SupplierStockHintResolver resolver;
 
     @BeforeEach
     void setUp() {
-        resolver = new SupplierStockHintResolver(hints, catalog, properties, TEST_CLOCK);
+        resolver = new SupplierStockHintResolver(hints, productCodes, properties, TEST_CLOCK);
     }
 
     private static SupplierStockHint pending(String ean) {
@@ -71,6 +71,22 @@ class SupplierStockHintResolverTest {
                 .build();
     }
 
+    private static ExtProductCodeReplica productCode(UUID productId, String ean) {
+        return ExtProductCodeReplica.builder()
+                .productId(productId)
+                .codeType("EAN")
+                .code(ean)
+                .aggregateVersion(1L)
+                .updatedAt(NOW.minusSeconds(600))
+                .build();
+    }
+
+    /** A seeded replica; the empty case is its own test, since it defers rather than resolves. */
+    private void replicaHolds(String ean, ExtProductCodeReplica... rows) {
+        when(productCodes.count()).thenReturn(1L);
+        when(productCodes.findByCodeTypeAndCode("EAN", ean)).thenReturn(List.of(rows));
+    }
+
     private void backlog(SupplierStockHint... pending) {
         when(hints.findByResolutionStatusOrderByFetchedAtAsc(
                         eq(SupplierHintResolutionStatus.PENDING), any(Limit.class)))
@@ -82,9 +98,7 @@ class SupplierStockHintResolverTest {
     void matched_ean_resolves() {
         SupplierStockHint hint = pending("4012345678901");
         backlog(hint);
-        when(catalog.findByCode("EAN", "4012345678901"))
-                .thenReturn(Optional.of(new CatalogProductCodeClient.ProductCodeMatchDto(
-                        PRODUCT_ID, "SKU-1", "Tyre", "EAN", "4012345678901")));
+        replicaHolds("4012345678901", productCode(PRODUCT_ID, "4012345678901"));
 
         SupplierStockHintResolver.ResolutionPassResult result = resolver.runResolutionPass();
 
@@ -101,7 +115,7 @@ class SupplierStockHintResolverTest {
     void unmatched_ean_stays_unresolved() {
         SupplierStockHint hint = pending("4012345678999");
         backlog(hint);
-        when(catalog.findByCode("EAN", "4012345678999")).thenReturn(Optional.empty());
+        replicaHolds("4012345678999");
 
         SupplierStockHintResolver.ResolutionPassResult result = resolver.runResolutionPass();
 
@@ -118,29 +132,50 @@ class SupplierStockHintResolverTest {
     void article_without_ean_is_not_resolvable() {
         SupplierStockHint hint = pending(null);
         backlog(hint);
+        when(productCodes.count()).thenReturn(1L);
 
         SupplierStockHintResolver.ResolutionPassResult result = resolver.runResolutionPass();
 
         assertThat(result.notResolvable()).isEqualTo(1);
         assertThat(hint.getResolutionStatus()).isEqualTo(SupplierHintResolutionStatus.NOT_RESOLVABLE);
         // Vendor and buyer article codes carry no uniqueness guarantee; nothing is guessed from them.
-        verify(catalog, never()).findByCode(any(), any());
+        verify(productCodes, never()).findByCodeTypeAndCode(any(), any());
     }
 
     @Test
-    @DisplayName("a catalog that cannot be reached leaves the hint pending for the next pass")
-    void unreachable_catalog_defers() {
+    @DisplayName("an unseeded replica defers the pass instead of calling every hint unresolved")
+    void empty_replica_defers() {
         SupplierStockHint hint = pending("4012345678901");
         backlog(hint);
-        when(catalog.findByCode("EAN", "4012345678901")).thenThrow(new ResourceAccessException("connection refused"));
+        when(productCodes.count()).thenReturn(0L);
 
         SupplierStockHintResolver.ResolutionPassResult result = resolver.runResolutionPass();
 
         assertThat(result.deferred()).isEqualTo(1);
-        // Still PENDING: an outage says nothing about our catalog data, so it must not be recorded
-        // as though it did.
+        // Still PENDING: "we have not been sent the codes" says nothing about our catalog data, so
+        // it must not be recorded as though it did.
         assertThat(hint.getResolutionStatus()).isEqualTo(SupplierHintResolutionStatus.PENDING);
         verify(hints, never()).save(any());
+        verify(productCodes, never()).findByCodeTypeAndCode(any(), any());
+    }
+
+    @Test
+    @DisplayName("a code the replica holds twice is refused rather than guessed at")
+    void duplicated_code_is_refused() {
+        SupplierStockHint hint = pending("4012345678901");
+        backlog(hint);
+        replicaHolds(
+                "4012345678901",
+                productCode(PRODUCT_ID, "4012345678901"),
+                productCode(UUID.fromString("018f0000-0000-7000-8000-000000000705"), "4012345678901"));
+
+        SupplierStockHintResolver.ResolutionPassResult result = resolver.runResolutionPass();
+
+        // pos-catalog constrains (codeType, code) at the source, so two rows is a replication
+        // defect. Picking either product would attach a vendor's stock to the wrong article.
+        assertThat(result.unresolved()).isEqualTo(1);
+        assertThat(hint.getResolutionStatus()).isEqualTo(SupplierHintResolutionStatus.UNRESOLVED);
+        assertThat(hint.getResolvedProductId()).isNull();
     }
 
     @Test
@@ -152,7 +187,7 @@ class SupplierStockHintResolverTest {
         hint.setResolvedAt(NOW.minusSeconds(7200));
         hint.setResolvedBy("catalog:EAN");
         backlog(hint);
-        when(catalog.findByCode("EAN", "4012345678999")).thenReturn(Optional.empty());
+        replicaHolds("4012345678999");
 
         resolver.runResolutionPass();
 
@@ -183,7 +218,8 @@ class SupplierStockHintResolverTest {
     @DisplayName("a pass is bounded by the configured batch size")
     void pass_is_bounded() {
         properties.getResolution().setBatchSize(50);
-        backlog();
+        backlog(pending("4012345678901"));
+        replicaHolds("4012345678901");
 
         resolver.runResolutionPass();
 
