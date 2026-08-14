@@ -20,8 +20,8 @@ tags:
   description: API for products, lifecycle, and pricing
 - name: Item Cost API
   description: Manage standard, last, and average item costs
-- name: Supplier Item Cost API
-  description: Manage supplier item costs with volume tiers
+- name: Supplier Prices
+  description: 'Vendor price entries applied from supplier PRICAT imports: latest applicable cost, full cost history, and import application state. Read-only.'
 - name: Product MSRP API
   description: Manage MSRP values with effective dates
 - name: Catalog API
@@ -32,8 +32,6 @@ tags:
   description: Per-product unit-of-measure conversion set (purchase/pack UoMs with factor to base UoM)
 - name: Catalog Items API
   description: API for managing catalog items by type
-- name: Supplier Item Cost List API
-  description: Query supplier item cost structures
 paths:
   /v1/products/{productId}:
     get:
@@ -676,146 +674,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-  /v1/products/supplier-costs/{id}:
-    get:
-      tags:
-      - Supplier Item Cost API
-      summary: Get Supplier Cost Structure
-      description: 'Returns one supplier item cost structure with its base cost and volume tiers sorted by minimum quantity.
-
-        Use this tool when the cost structure id is already known; use listSupplierItemCosts instead to find structures by itemId or supplierId.
-
-        Preconditions: the cost structure must exist.
-
-        Required inputs: id (UUID) as a path parameter; there is no request body.
-
-        No events are emitted and no state changes; this is a read-only projection.
-
-        Returns 404 when no cost structure exists for the supplied id.
-
-        '
-      operationId: getSupplierItemCost
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SupplierItemCostDto'
-        '404':
-          description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SupplierItemCostDto'
-      security:
-      - bearerAuth:
-        - catalog:supplier_cost:read
-      x-required-permissions:
-      - catalog:supplier_cost:read
-    put:
-      tags:
-      - Supplier Item Cost API
-      summary: Update Supplier Cost Structure
-      description: 'Replaces a supplier item cost structure wholesale — supplier, item, currency, base cost and the entire tier list are overwritten with the submitted values.
-
-        Use this tool to reprice or re-tier an existing structure; do not use createSupplierItemCost, which adds a structure for a pair that has none yet.
-
-        Preconditions: the structure must exist, and repointing it at a different supplier and item pair must not collide with another structure for that pair; tiers follow the same contiguity rules as creation.
-
-        Required inputs: id (UUID) path parameter plus supplierId, itemId and a 3-letter currencyCode; the tier list submitted replaces the previous one entirely.
-
-        Emits a CATALOG_SUPPLIER_COST_UPDATE event; no item or catalog pricing records are touched.
-
-        Returns 404 when no cost structure exists for the supplied id, 409 when the supplier and item pair collides with another structure, and 400 when the currency code or tier structure is invalid.
-
-        '
-      operationId: updateSupplierItemCost
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        description: Full replacement of the structure; the submitted tier list overwrites the stored tiers entirely.
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SupplierItemCostUpdateRequestDto'
-            examples:
-              Reprice base cost:
-                description: Reprice base cost
-                value:
-                  supplierId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
-                  itemId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
-                  currencyCode: USD
-                  baseCost: 11.0
-                  tiers:
-                  - minQuantity: 1
-                    unitCost: 11.0
-        required: true
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SupplierItemCostDto'
-        '404':
-          description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SupplierItemCostDto'
-      security:
-      - bearerAuth:
-        - catalog:supplier_cost:write
-      x-required-permissions:
-      - catalog:supplier_cost:write
-    delete:
-      tags:
-      - Supplier Item Cost API
-      summary: Delete Supplier Cost Structure
-      description: 'Permanently deletes a supplier item cost structure and its volume tiers; there is no soft delete or history.
-
-        Use this tool when a supplier no longer offers the item; use updateSupplierItemCost instead to change prices while keeping the structure.
-
-        Preconditions: the cost structure must exist.
-
-        Required inputs: id (UUID) as a path parameter; there is no request body.
-
-        Emits a CATALOG_SUPPLIER_COST_DELETE event; item costs recorded elsewhere are unaffected.
-
-        Returns 204 on success, and 404 when no cost structure exists for the supplied id.
-
-        '
-      operationId: deleteSupplierItemCost
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '204':
-          description: Deleted
-        '404':
-          description: Not found
-      security:
-      - bearerAuth:
-        - catalog:supplier_cost:write
-      x-required-permissions:
-      - catalog:supplier_cost:write
   /v1/products/price-books/{priceBookId}:
     get:
       tags:
@@ -1820,70 +1678,6 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_EDIT
-  /v1/products/supplier-costs:
-    post:
-      tags:
-      - Supplier Item Cost API
-      summary: Create Supplier Cost Structure
-      description: 'Creates the cost structure one supplier charges for one item: a base cost plus optional volume tiers, unique per supplier and item pair.
-
-        Use this tool to record supplier purchasing costs; do not use updateStandardItemCost, which sets the item''s internal standard cost, and use updateSupplierItemCost to change a structure that already exists.
-
-        Preconditions: no cost structure may already exist for the supplier and item pair; tiers, when supplied, must start at minQuantity 1, be contiguous and non-overlapping, and only the final tier may leave maxQuantity null, which it must.
-
-        Required inputs: supplierId (UUID), itemId (UUID) and a 3-letter currencyCode; baseCost is optional but cannot be negative, and each tier needs minQuantity and a positive unitCost.
-
-        Emits a CATALOG_SUPPLIER_COST_CREATE event; no item or catalog pricing records are touched.
-
-        Returns 409 when a structure already exists for the supplier and item pair, and 400 when the currency code is invalid or the tier structure violates the contiguity rules.
-
-        '
-      operationId: createSupplierItemCost
-      requestBody:
-        description: 'Cost structure for one supplier and item pair: base cost plus contiguous volume tiers whose final tier is open-ended.'
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SupplierItemCostCreateRequestDto'
-            examples:
-              Two-tier structure:
-                description: Two-tier structure
-                value:
-                  supplierId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
-                  itemId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
-                  currencyCode: USD
-                  baseCost: 10.5
-                  tiers:
-                  - minQuantity: 1
-                    maxQuantity: 49
-                    unitCost: 10.5
-                  - minQuantity: 50
-                    unitCost: 9.25
-        required: true
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SupplierItemCostDto'
-        '400':
-          description: Invalid payload
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SupplierItemCostDto'
-        '409':
-          description: Duplicate supplier and item combination
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SupplierItemCostDto'
-      security:
-      - bearerAuth:
-        - catalog:supplier_cost:write
-      x-required-permissions:
-      - catalog:supplier_cost:write
   /v1/products/substitution-groups:
     get:
       tags:
@@ -3451,78 +3245,186 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
-  /v1/catalog/supplier-item-costs:
+  /v1/catalog/supplier-prices/latest:
     get:
       tags:
-      - Supplier Item Cost List API
-      summary: List Supplier Cost Structures
-      description: 'Returns a page of supplier item cost structures filtered by item, by supplier, or by both combined with AND semantics.
+      - Supplier Prices
+      summary: Get the Applicable Vendor Price for a Product
+      description: 'Returns the vendor price that applies to a product in one market as at a day: the greatest effective-from date not after that day, with ties broken by the vendor document''s date and then by fetch time so two readers never disagree about today''s cost.
 
-        Use this tool to find which suppliers price an item or which items a supplier prices; use getSupplierItemCost instead when the structure id is already known.
+        Use this tool for purchasing and margin context; do not use it as a pricing input — supplier cost participates in no sell-price resolution, and the suggested retail price it carries is vendor reference data that must be labelled with its PRICAT source wherever it is shown.
 
-        Preconditions: at least one of itemId or supplierId must be supplied; an unfiltered listing is deliberately not offered.
+        Preconditions: a PRICAT import must have applied for that vendor, product and market; a product with no vendor price simply has none, which is not an error.
 
-        Required inputs: itemId or supplierId (UUIDs) as query parameters, plus standard Spring page, size and sort parameters.
+        Required inputs: productId, countryCode and currency; vendorProfileId narrows to one vendor and asOf evaluates a past day, both optional, with asOf defaulting to today.
 
-        Emits a CATALOG_SUPPLIER_COST_LIST audit event; no cost data changes.
+        Emits a CATALOG_SUPPLIER_PRICE_LATEST event; no state changes.
 
-        Returns 400 when neither itemId nor supplierId is provided, and 200 with an empty page when the filters match nothing.
+        Returns 404 when no entry applies, and 400 when a parameter is malformed. Money fields may be null, meaning the vendor did not state that value — null is never zero.
 
         '
-      operationId: listSupplierItemCosts
+      operationId: getLatestSupplierPrice
       parameters:
-      - name: itemId
+      - name: productId
         in: query
-        description: Filter by catalog item ID
-        required: false
-        schema:
-          type: string
-          format: uuid
-      - name: supplierId
-        in: query
-        description: Filter by supplier ID
-        required: false
-        schema:
-          type: string
-          format: uuid
-      - name: pageable
-        in: query
+        description: Product to price.
         required: true
         schema:
-          $ref: '#/components/schemas/Pageable'
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      - name: countryCode
+        in: query
+        description: Market of interest (ISO 3166-1 alpha-2).
+        required: true
+        schema:
+          type: string
+        example: SE
+      - name: currency
+        in: query
+        description: Currency of interest (ISO 4217).
+        required: true
+        schema:
+          type: string
+        example: SEK
+      - name: vendorProfileId
+        in: query
+        description: Restrict to one vendor profile; omit to consider every vendor's entries.
+        required: false
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+      - name: asOf
+        in: query
+        description: Day to evaluate; defaults to today. A past day answers what applied then.
+        required: false
+        schema:
+          type: string
+          format: date
+          example: 2026-08-14
       responses:
         '200':
-          description: OK
+          description: The applicable vendor price entry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierPriceEntryDto'
+        '400':
+          description: A parameter is missing or malformed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: 'No vendor price applies to that product, market and day. The response has NO body: absence is an expected outcome, not an error envelope to parse.'
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:supplier_cost:read
+      x-required-permissions:
+      - catalog:supplier_cost:read
+  /v1/catalog/supplier-prices/imports/incomplete:
+    get:
+      tags:
+      - Supplier Prices
+      summary: List Vendor Price Imports This Module Could Not Complete
+      description: 'Returns PRICAT imports whose completion event declared more chunks than this module applied, newest first, each with the counts that disagree.
+
+        Use this tool when vendor prices look stale or partial; do not use it to check a specific product, which is listSupplierPriceHistory.
+
+        Preconditions: none; an empty list is the healthy state and means every import applied whole.
+
+        Required inputs: none.
+
+        Emits a CATALOG_SUPPLIER_PRICE_IMPORT_GAPS event; no state changes. A re-emit was already requested on the supplier command topic when each gap was detected, so an entry here is a feed that did not self-heal rather than one nobody has chased.
+
+        Returns 200 with an empty array when there are no gaps.
+
+        '
+      operationId: listIncompleteSupplierPriceImports
+      responses:
+        '200':
+          description: Imports with unapplied chunks, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierPriceImportStatusDto'
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:supplier_cost:read
+      x-required-permissions:
+      - catalog:supplier_cost:read
+  /v1/catalog/supplier-prices/history:
+    get:
+      tags:
+      - Supplier Prices
+      summary: List Vendor Price History for a Product
+      description: 'Returns every vendor price recorded for a product, newest effective date first, including superseded entries with the vendor document and import each came from.
+
+        Use this tool to answer what a vendor charged over time and where a cost came from; do not use it to find today''s cost, which is getLatestSupplierPrice and applies the effective-dating rules.
+
+        Preconditions: none; a product with no imported vendor prices returns an empty page.
+
+        Required inputs: productId; vendorProfileId narrows to one vendor, and page and size are optional with size defaulting to 50 and capped at 200.
+
+        Emits a CATALOG_SUPPLIER_PRICE_HISTORY event; no state changes.
+
+        Returns 200 with an empty items array when nothing has been imported, so an empty result is not an error condition, and 400 when the page size is out of range.
+
+        '
+      operationId: listSupplierPriceHistory
+      parameters:
+      - name: productId
+        in: query
+        description: Product whose vendor price history to list.
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      - name: vendorProfileId
+        in: query
+        description: Restrict to one vendor profile; omit for every vendor.
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        description: Zero-based page index.
+        required: false
+        schema:
+          type: integer
+          example: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: Page size, 1–200.
+        required: false
+        schema:
+          type: integer
+          default: 50
+          example: 50
+          maximum: 200
+          minimum: 1
+      responses:
+        '200':
+          description: A page of vendor price entries, newest effective date first.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Page'
         '400':
-          description: At least one filter is required
+          description: A parameter is missing, malformed, or the page size is out of range.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PageSupplierItemCostDto'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PageSupplierItemCostDto'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PageSupplierItemCostDto'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PageSupplierItemCostDto'
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
+        - ROLE_ADMIN
         - catalog:supplier_cost:read
       x-required-permissions:
       - catalog:supplier_cost:read
@@ -4238,97 +4140,6 @@ components:
       - fromUomCode
       - id
       - toUomCode
-    CostTierDto:
-      type: object
-      description: Supplier item cost tier
-      properties:
-        minQuantity:
-          type: integer
-          format: int32
-          description: Inclusive minimum quantity
-          example: 1
-          minimum: 1
-        maxQuantity:
-          type:
-          - integer
-          - 'null'
-          format: int32
-          description: Inclusive maximum quantity; null means and above
-          example: 10
-        unitCost:
-          type: number
-          description: Per-unit cost for this quantity range
-          example: 5.0
-          minimum: 0
-      required:
-      - minQuantity
-      - unitCost
-    SupplierItemCostUpdateRequestDto:
-      type: object
-      description: Request payload for updating supplier-item cost tiers
-      properties:
-        supplierId:
-          type: string
-          format: uuid
-          description: Supplier identifier
-        itemId:
-          type: string
-          format: uuid
-          description: Inventory item identifier
-        currencyCode:
-          type: string
-          description: ISO 4217 currency code
-          example: USD
-          minLength: 1
-        baseCost:
-          type: number
-          description: Optional fallback base cost when no tiers apply
-          example: 6.25
-        tiers:
-          type: array
-          description: Ordered quantity-based cost tiers
-          items:
-            $ref: '#/components/schemas/CostTierDto'
-      required:
-      - currencyCode
-      - itemId
-      - supplierId
-    SupplierItemCostDto:
-      type: object
-      description: Supplier-item cost structure with optional quantity-based tiers
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Supplier-item cost identifier
-        supplierId:
-          type: string
-          format: uuid
-          description: Supplier identifier
-        itemId:
-          type: string
-          format: uuid
-          description: Inventory item identifier
-        currencyCode:
-          type: string
-          description: ISO 4217 currency code
-          example: USD
-        baseCost:
-          type: number
-          description: Optional fallback base cost
-        createdAt:
-          type: string
-          format: date-time
-          description: Entity created timestamp
-        updatedAt:
-          type: string
-          format: date-time
-          description: Entity updated timestamp
-        tiers:
-          type: array
-          description: Ordered quantity-based cost tiers
-          items:
-            $ref: '#/components/schemas/CostTierDto'
     PriceBookCreateRequestDto:
       type: object
       description: Request payload for creating a price book
@@ -4939,36 +4750,6 @@ components:
       - conversionFactor
       - fromUomCode
       - toUomCode
-    SupplierItemCostCreateRequestDto:
-      type: object
-      description: Request payload for creating supplier-item cost tiers
-      properties:
-        supplierId:
-          type: string
-          format: uuid
-          description: Supplier identifier
-        itemId:
-          type: string
-          format: uuid
-          description: Inventory item identifier
-        currencyCode:
-          type: string
-          description: ISO 4217 currency code
-          example: USD
-          minLength: 1
-        baseCost:
-          type: number
-          description: Optional fallback base cost when no tiers apply
-          example: 6.25
-        tiers:
-          type: array
-          description: Ordered quantity-based cost tiers
-          items:
-            $ref: '#/components/schemas/CostTierDto'
-      required:
-      - currencyCode
-      - itemId
-      - supplierId
     SubstitutionGroupCreateRequestDto:
       type: object
       description: Request to create a substitution group
@@ -5973,21 +5754,152 @@ components:
       required:
       - field
       - message
-    Pageable:
+    SupplierPriceEntryDto:
       type: object
+      description: A vendor price for a product in one market, effective from a date.
       properties:
-        page:
+        id:
+          type: string
+          format: uuid
+          description: Identity of this price entry.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        vendorProfileId:
+          type: string
+          format: uuid
+          description: Vendor profile that supplied the price.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+        supplierRef:
+          type: string
+          description: Vendor profile alias at import time; descriptive only.
+          example: michelin-eu
+        productId:
+          type: string
+          format: uuid
+          description: Product the price applies to.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
+        matchMethod:
+          type: string
+          description: Which identifier matched the vendor line to the product.
+          enum:
+          - EAN
+          - UPC_XREFERENCE
+          example: EAN
+        articleEan:
+          type: string
+          description: EAN the vendor stated.
+          example: '3528709999083'
+        supplierArticleCode:
+          type: string
+          description: Vendor article code; display alias, never an identifier.
+          example: '999908'
+        buyerAccountNumber:
+          type: string
+          description: Buyer account the price was quoted for.
+          example: '30012456'
+        countryCode:
+          type: string
+          description: Market the price applies to.
+          example: SE
+        currency:
+          type: string
+          description: Currency of every amount here.
+          example: SEK
+        suggestedRetailPrice:
+          type: number
+          description: Vendor-suggested retail price; reference only, never an applied sell price.
+        grossPrice:
+          type: number
+          description: Gross (list) purchase price as stated.
+          example: 2895.5
+        netPrice:
+          type: number
+          description: Net purchase price as stated.
+          example: 2450.25
+        taxRate:
+          type: number
+          description: Tax rate the vendor stated for the line.
+          example: 25.0
+        recyclingFee:
+          type: number
+          description: Recycling fee the vendor stated.
+          example: 35.0
+        effectiveFrom:
+          type: string
+          format: date
+          description: Inclusive first day the values apply; a vendor-local date.
+          example: 2026-02-01
+        sourceDocumentId:
+          type: string
+          description: Vendor document the price came from.
+          example: PRICAT-4046266_202305120844
+        sourceDocumentDate:
+          type: string
+          format: date
+          description: Vendor document date.
+          example: 2026-05-12
+        importManifestId:
+          type: string
+          format: uuid
+          description: Import that produced this entry.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5e
+        fetchedAt:
+          type: string
+          format: date-time
+          description: When the producer fetched the document.
+    SupplierPriceImportStatusDto:
+      type: object
+      description: Application state of one supplier PRICAT import in this module.
+      properties:
+        importManifestId:
+          type: string
+          format: uuid
+          description: The producer's import manifest id.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        vendorProfileId:
+          type: string
+          format: uuid
+          description: Vendor profile the import belongs to.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+        supplierRef:
+          type: string
+          description: Vendor profile alias at import time.
+          example: michelin-eu
+        status:
+          type: string
+          description: Application state.
+          enum:
+          - APPLYING
+          - COMPLETE
+          - INCOMPLETE
+          example: COMPLETE
+        chunksApplied:
           type: integer
           format: int32
-          minimum: 0
-        size:
+          description: Chunk events applied so far.
+          example: 25
+        expectedChunkCount:
           type: integer
           format: int32
-          minimum: 1
-        sort:
-          type: array
-          items:
-            type: string
+          description: Chunk total the producer declared; null until completion.
+          example: 25
+        linesApplied:
+          type: integer
+          format: int32
+          description: Price rows written from this import.
+          example: 12310
+        expectedLineCount:
+          type: integer
+          format: int32
+          description: Matched-line total the producer reported; null until completion.
+          example: 12310
+        completedAt:
+          type: string
+          format: date-time
+          description: When the completion event was applied; null while chunks are in flight.
+        updatedAt:
+          type: string
+          format: date-time
+          description: When this row last changed.
     Page:
       type: object
       properties:
@@ -6024,8 +5936,6 @@ components:
         offset:
           type: integer
           format: int64
-        sort:
-          $ref: '#/components/schemas/SortObject'
         pageNumber:
           type: integer
           format: int32
@@ -6034,6 +5944,8 @@ components:
           format: int32
         paged:
           type: boolean
+        sort:
+          $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
     SortObject:
@@ -6044,38 +5956,6 @@ components:
         sorted:
           type: boolean
         unsorted:
-          type: boolean
-    PageSupplierItemCostDto:
-      type: object
-      properties:
-        totalPages:
-          type: integer
-          format: int32
-        totalElements:
-          type: integer
-          format: int64
-        size:
-          type: integer
-          format: int32
-        content:
-          type: array
-          items:
-            $ref: '#/components/schemas/SupplierItemCostDto'
-        number:
-          type: integer
-          format: int32
-        sort:
-          $ref: '#/components/schemas/SortObject'
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
-        numberOfElements:
-          type: integer
-          format: int32
-        first:
-          type: boolean
-        last:
-          type: boolean
-        empty:
           type: boolean
   securitySchemes:
     bearerAuth:

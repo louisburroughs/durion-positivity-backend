@@ -36,6 +36,18 @@ public final class CatalogEventTypes {
                 EventTypeRegistration.fastRead(
                                 "CATALOG_PRODUCT_CODE_LOOKUP", "Resolve a product by exact EAN or UPC product code")
                         .build(),
+                // Supplier price entries applied from PRICAT imports (ADR-0053, #1308)
+                EventTypeRegistration.fastRead(
+                                "CATALOG_SUPPLIER_PRICE_LATEST",
+                                "Get the applicable vendor price for a product in one market")
+                        .build(),
+                EventTypeRegistration.search(
+                                "CATALOG_SUPPLIER_PRICE_HISTORY", "List vendor price history for a product")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "CATALOG_SUPPLIER_PRICE_IMPORT_GAPS",
+                                "List vendor price imports this module could not confirm complete")
+                        .build(),
                 EventTypeRegistration.write(
                                 "CATALOG_PRODUCT_LIFECYCLE_UPDATE", "Set product lifecycle state with effective date")
                         .build(),
@@ -103,18 +115,6 @@ public final class CatalogEventTypes {
                 EventTypeRegistration.approval(
                                 "CATALOG_LOCATION_OVERRIDE_REJECT",
                                 "Reject pending location price override with reason metadata")
-                        .build(),
-                EventTypeRegistration.write(
-                                "CATALOG_SUPPLIER_ITEM_COST_CREATE",
-                                "Create supplier-item cost structure with optional volume tiers")
-                        .build(),
-                EventTypeRegistration.write(
-                                "CATALOG_SUPPLIER_ITEM_COST_UPDATE",
-                                "Update supplier-item cost structure and volume tiers")
-                        .build(),
-                EventTypeRegistration.write(
-                                "CATALOG_SUPPLIER_ITEM_COST_DELETE",
-                                "Delete supplier-item cost structure and all tiers")
                         .build(),
                 EventTypeRegistration.write("CATALOG_MSRP_CREATE", "Create MSRP record")
                         .build(),
