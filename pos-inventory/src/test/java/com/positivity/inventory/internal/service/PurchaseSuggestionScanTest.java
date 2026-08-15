@@ -65,6 +65,9 @@ class PurchaseSuggestionScanTest {
     private NormalizedAvailabilityRepository normalizedAvailabilityRepository;
 
     @Autowired
+    private PurchaseOrderProjectionTestSupport projection;
+
+    @Autowired
     private PurchaseOrderService purchaseOrderService;
 
     @Autowired
@@ -278,6 +281,9 @@ class PurchaseSuggestionScanTest {
         jdbcTemplate.update(
                 "UPDATE purchase_order SET status = 'APPROVED' WHERE purchase_order_id = ?",
                 converted.getPurchaseOrderId());
+        // Approval is what turns the order into expected supply, and expected supply is read from
+        // the projection — so the approval has to reach it, as a published fact would.
+        projection.project(converted.getPurchaseOrderId());
         assertThat(replenishmentService
                         .evaluatePickFaceForReplenishment(sku, location)
                         .getStatus())
@@ -296,6 +302,9 @@ class PurchaseSuggestionScanTest {
         jdbcTemplate.update(
                 "UPDATE purchase_order_line SET open_quantity_decimal = 5 WHERE purchase_order_id = ?",
                 converted.getPurchaseOrderId());
+        // The receipt is what changes supply, and supply is read from the projection — so the
+        // change has to reach it, exactly as a published fact would in the running system.
+        projection.project(converted.getPurchaseOrderId());
         post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 15, 15);
         post(sku, location, InventoryLedgerEventType.GOODS_ISSUE, -12, 3);
 

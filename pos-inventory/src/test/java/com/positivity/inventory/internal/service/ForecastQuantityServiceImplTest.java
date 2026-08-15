@@ -53,6 +53,9 @@ class ForecastQuantityServiceImplTest {
     private ExpectedSupplyService expectedSupplyService;
 
     @Autowired
+    private PurchaseOrderProjectionTestSupport projection;
+
+    @Autowired
     private PurchaseOrderRepository purchaseOrderRepository;
 
     @Autowired
@@ -321,7 +324,11 @@ class ForecastQuantityServiceImplTest {
             line.setPurchaseOrder(po);
             po.getLines().add(line);
         }
-        return purchaseOrderRepository.save(po);
+        PurchaseOrderEntity saved = purchaseOrderRepository.save(po);
+        // Supply is read from the projection, so seeding the aggregate alone would describe a
+        // state the running system never reaches (#1333).
+        projection.project(saved);
+        return saved;
     }
 
     private AsnLineEntity asnLine(PurchaseOrderEntity po, UUID skuId, String shipped, String received) {

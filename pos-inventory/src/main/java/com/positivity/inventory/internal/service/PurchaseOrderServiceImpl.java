@@ -53,6 +53,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final PurchaseOrderLineRepository purchaseOrderLineRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final InventoryFactPublisher inventoryFactPublisher;
+    private final PurchaseOrderFactPublisher purchaseOrderFactPublisher;
     private final DocumentQuantityConverter documentQuantityConverter;
     private final InventoryLotCaptureService lotCaptureService;
     private final Clock clock;
@@ -92,6 +93,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         purchaseOrder.setLines(lines);
 
         PurchaseOrderEntity saved = purchaseOrderRepository.save(purchaseOrder);
+        purchaseOrderFactPublisher.publish(saved, saved.getLines());
         eventPublisher.publishEvent(Map.of(
                 EVENT_TYPE,
                 "PurchaseOrderCreated",
@@ -167,6 +169,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setApprovalTimestamp(now);
         po.setApprovalNotes(request.getApprovalNotes());
         PurchaseOrderEntity saved = purchaseOrderRepository.save(po);
+        purchaseOrderFactPublisher.publish(saved, saved.getLines());
 
         eventPublisher.publishEvent(Map.of(
                 EVENT_TYPE,
@@ -240,6 +243,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         });
 
         PurchaseOrderEntity saved = purchaseOrderRepository.save(po);
+        purchaseOrderFactPublisher.publish(saved, saved.getLines());
         eventPublisher.publishEvent(Map.of(
                 EVENT_TYPE,
                 "PurchaseOrderRevised",
@@ -270,6 +274,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         PurchaseOrderStatus priorStatus = po.getStatus();
         po.setStatus(PurchaseOrderStatus.CANCELLED);
         PurchaseOrderEntity saved = purchaseOrderRepository.save(po);
+        purchaseOrderFactPublisher.publish(saved, saved.getLines());
         emitExpectedSupplyDropped(saved, priorStatus, ExpectedSupplyDroppedV1.REASON_CANCELLED);
         eventPublisher.publishEvent(Map.of(
                 EVENT_TYPE,
@@ -326,6 +331,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 request.getLines(), poLinesById, safeLong(po.getOpenBalanceMinor()), po.getVendorId());
         updateReceiptStatus(po, openBalanceMinor);
         purchaseOrderRepository.save(po);
+        // Receipt moves open quantities, which is supply leaving the incoming figure — the fact
+        // must go out here too or ATP keeps counting goods that have already arrived.
+        purchaseOrderFactPublisher.publish(po, po.getLines());
         publishReceiptEvent(po, actorId);
         List<ReceivePurchaseOrderResponse.ReceivePurchaseOrderLineDetail> lineDetails = buildReceiveLineDetails(po);
 

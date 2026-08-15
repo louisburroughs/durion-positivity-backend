@@ -56,6 +56,9 @@ class BatchReplenishmentScanTest {
     private LedgerPostingService ledgerPostingService;
 
     @Autowired
+    private PurchaseOrderProjectionTestSupport projection;
+
+    @Autowired
     private PurchaseOrderRepository purchaseOrderRepository;
 
     @Autowired
@@ -290,5 +293,7 @@ class BatchReplenishmentScanTest {
         line.setPurchaseOrder(po);
         po.getLines().add(line);
         purchaseOrderRepository.save(po);
+        // Supply is read from the projection (#1333).
+        projection.project(po);
     }
 }

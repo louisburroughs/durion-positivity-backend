@@ -1,10 +1,10 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.domainevents.order.PurchaseOrderUpdatedV1;
 import com.positivity.inventory.internal.enums.AsnStatus;
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
 import com.positivity.inventory.internal.enums.TransferOrderStatus;
 import com.positivity.inventory.internal.repository.AsnLineRepository;
-import com.positivity.inventory.internal.repository.PurchaseOrderLineRepository;
+import com.positivity.inventory.internal.repository.ExtPurchaseOrderLineRepository;
 import com.positivity.inventory.internal.repository.TransferOrderRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -26,9 +26,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ExpectedSupplyServiceImpl implements ExpectedSupplyService {
 
-    /** PO statuses whose open line quantity counts as expected supply. */
-    private static final List<PurchaseOrderStatus> OPEN_PO_STATUSES =
-            List.of(PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.PARTIALLY_RECEIVED);
+    /**
+     * PO statuses whose open line quantity counts as expected supply.
+     *
+     * <p>Taken from the published contract rather than declared here, because this reads the
+     * projection now: the set that decides what counts must be the one the owning domain states,
+     * or the two drift and supply is quietly over- or under-counted.
+     */
+    private static final List<String> OPEN_PO_STATUSES = PurchaseOrderUpdatedV1.OPEN_SUPPLY_STATUSES;
 
     /** ASN statuses whose un-received remainder counts as expected supply. */
     private static final List<AsnStatus> OPEN_ASN_STATUSES =
@@ -38,7 +43,7 @@ public class ExpectedSupplyServiceImpl implements ExpectedSupplyService {
     private static final List<TransferOrderStatus> IN_TRANSIT_TRANSFER_STATUSES =
             List.of(TransferOrderStatus.DISPATCHED, TransferOrderStatus.PARTIALLY_RECEIVED);
 
-    private final PurchaseOrderLineRepository purchaseOrderLineRepository;
+    private final ExtPurchaseOrderLineRepository purchaseOrderLineRepository;
     private final AsnLineRepository asnLineRepository;
     private final TransferOrderRepository transferOrderRepository;
 

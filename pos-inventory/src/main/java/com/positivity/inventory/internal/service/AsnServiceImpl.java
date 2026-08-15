@@ -57,6 +57,7 @@ public class AsnServiceImpl implements AsnService {
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
+    private final PurchaseOrderFactPublisher purchaseOrderFactPublisher;
     private final ApplicationEventPublisher eventPublisher;
     private final DocumentQuantityConverter documentQuantityConverter;
     private final InventoryLotCaptureService lotCaptureService;
@@ -296,6 +297,11 @@ public class AsnServiceImpl implements AsnService {
         purchaseOrder.setStatus(
                 nextOpenBalance == 0L ? PurchaseOrderStatus.FULLY_RECEIVED : PurchaseOrderStatus.PARTIALLY_RECEIVED);
         purchaseOrderRepository.save(purchaseOrder);
+        // This is the second path that changes a purchase order's state, and the consequential one
+        // for availability-to-promise: it is what takes an order out of open supply once it is
+        // fully received. Without the fact, the projection would go on counting a delivered order
+        // as still incoming, over-promising stock that is already on the shelf.
+        purchaseOrderFactPublisher.publish(purchaseOrder, purchaseOrder.getLines());
 
         if (asn != null) {
             applyReceiptToAsn(asn, computedLines);
