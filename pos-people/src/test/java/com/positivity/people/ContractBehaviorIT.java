@@ -348,7 +348,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         policy.setScopeType(TimekeepingPolicyScopeType.GLOBAL);
         policy.setJobTimeDiscrepancyThresholdMinutes(thresholdMinutes);
         policy.setUpdatedBy("test");
-        policy.setUpdatedAt(Instant.parse("2026-01-01T00:00:00Z"));
+        // updatedAt is stamped by @LastModifiedDate auditing on save.
         timekeepingPolicyRepository.save(policy);
     }
 
@@ -358,7 +358,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         policy.setScopeId(locationId);
         policy.setJobTimeDiscrepancyThresholdMinutes(thresholdMinutes);
         policy.setUpdatedBy("test");
-        policy.setUpdatedAt(Instant.parse("2026-01-02T00:00:00Z"));
+        // updatedAt is stamped by @LastModifiedDate auditing on save.
         timekeepingPolicyRepository.save(policy);
     }
 

@@ -1,7 +1,6 @@
 package com.positivity.workorder.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -11,7 +10,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.security.common.GatewaySecurityConstants;
-import com.positivity.security.common.MissingPersonIdException;
 import com.positivity.workorder.internal.dto.WorkexecJobTimeTotalResponse;
 import com.positivity.workorder.internal.dto.WorkexecLaborPerformedRequest;
 import com.positivity.workorder.internal.dto.WorkexecLaborPerformedResponse;
@@ -340,18 +338,30 @@ class WorkexecTimeTrackingControllerTest {
         }
 
         @Test
-        void surfacesAContextWithoutAUuidUserIdRatherThanGuessingAMechanic() {
-            // SecurityContextHelper is fail-fast here: a gateway-authenticated request always
-            // carries a UUID user id, so a missing one is an integration fault, not a 400.
+        void rejectsAContextWithoutAUuidUserIdAsABadRequest() {
+            // SecurityContextHelper is fail-fast: it raises MissingPersonIdException rather than
+            // returning an empty Optional. The controller catches it so the caller gets the 400
+            // these endpoints document, not the 409 the module's IllegalStateException advice
+            // would otherwise produce.
             authenticateWithoutAUserId();
             WorkexecTimerStartRequest request = WorkexecTimerStartRequest.builder()
                     .workorderId(WORKORDER_ID)
                     .build();
 
-            assertThatThrownBy(() -> controller.getActiveTimerEntries()).isInstanceOf(MissingPersonIdException.class);
-            assertThatThrownBy(() -> controller.startTimer(null, request)).isInstanceOf(MissingPersonIdException.class);
-            assertThatThrownBy(() -> controller.stopTimers()).isInstanceOf(MissingPersonIdException.class);
+            assertThat(controller.getActiveTimerEntries()).satisfies(this::isUserIdRequiredBadRequest);
+            assertThat(controller.startTimer(null, request)).satisfies(this::isUserIdRequiredBadRequest);
+            assertThat(controller.stopTimers()).satisfies(this::isUserIdRequiredBadRequest);
             verify(service, never()).getActiveTimers(any());
+            verify(service, never()).startTimer(any(), any(), any());
+            verify(service, never()).stopTimers(any());
+        }
+
+        private void isUserIdRequiredBadRequest(ResponseEntity<Object> response) {
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody())
+                    .isEqualTo(Map.of(
+                            "code", "WORKEXEC_INVALID_REQUEST",
+                            "message", "Authenticated user id must be a valid UUID"));
         }
     }
 }

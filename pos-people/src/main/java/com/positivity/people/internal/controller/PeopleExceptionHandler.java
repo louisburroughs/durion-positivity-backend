@@ -156,25 +156,4 @@ public class PeopleExceptionHandler {
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
         return problem;
     }
-
-    private HttpStatus determineHttpStatus(int statusCode) {
-
-        return switch (statusCode) {
-            case 400 -> HttpStatus.BAD_REQUEST;
-            case 401 -> HttpStatus.UNAUTHORIZED;
-            case 403 -> HttpStatus.FORBIDDEN;
-            case 404 -> HttpStatus.NOT_FOUND;
-            case 409 -> HttpStatus.CONFLICT;
-            case 503 -> HttpStatus.SERVICE_UNAVAILABLE;
-            default -> {
-                if (statusCode >= 500 && statusCode < 600) {
-                    yield HttpStatus.INTERNAL_SERVER_ERROR;
-                }
-                if (statusCode >= 400 && statusCode < 500) {
-                    yield HttpStatus.BAD_REQUEST;
-                }
-                yield HttpStatus.INTERNAL_SERVER_ERROR;
-            }
-        };
-    }
 }
