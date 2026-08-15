@@ -110,8 +110,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
      */
     @Transactional
     public void reconcile(@Nullable SupplierProfileProperties configuration) {
-        List<ProfileSpec> specs = configuration == null || configuration.profiles() == null ? List.of()
-                : configuration.profiles();
+        List<ProfileSpec> specs =
+                configuration == null || configuration.profiles() == null ? List.of() : configuration.profiles();
         validate(specs);
         AuditActorContext.withActor(BOOTSTRAP_ACTOR, () -> {
             Set<String> yamlKeys = new HashSet<>();
@@ -132,8 +132,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     // ──────────────────────────────────────────────────────────────
 
     private void reconcileProfile(@NonNull ProfileSpec spec) {
-        SupplierProfileEntity profile = profileRepository.findBySupplierRef(spec.key())
-                .orElseGet(SupplierProfileEntity::new);
+        SupplierProfileEntity profile =
+                profileRepository.findBySupplierRef(spec.key()).orElseGet(SupplierProfileEntity::new);
         if (profile.getVendorProfileId() != null && profile.getSourceOfTruth() == ProfileSourceOfTruth.ADMIN) {
             throw invalid("YAML profile '" + spec.key() + "' collides with an existing ADMIN-managed profile"
                     + " of the same supplierRef; remove one configuration source (ADR-0050 §6)");
@@ -151,11 +151,10 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             profile.setReadTimeoutMs(spec.protocolDefaults().readTimeoutMs());
             var retry = spec.protocolDefaults().retry();
             profile.setRetryMaxAttempts(retry == null ? null : retry.maxAttempts());
-            profile.setRetryBackoff(
-                    Optional.ofNullable(retry)
-                            .map(retrySpec -> retrySpec.backoff())
-                            .map(SupplierYamlBootstrap::parseBackoff)
-                            .orElse(null));
+            profile.setRetryBackoff(Optional.ofNullable(retry)
+                    .map(retrySpec -> retrySpec.backoff())
+                    .map(SupplierYamlBootstrap::parseBackoff)
+                    .orElse(null));
         } else {
             profile.setConnectTimeoutMs(null);
             profile.setReadTimeoutMs(null);
@@ -197,9 +196,10 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
 
     private void reconcileAccounts(@NonNull UUID vendorProfileId, @NonNull ProfileSpec spec) {
         var billingSpec = spec.accounts() == null ? null : spec.accounts().billing();
-        List<Delivery> deliverySpecs = spec.accounts() == null || spec.accounts().delivery() == null
-                ? List.of()
-                : spec.accounts().delivery();
+        List<Delivery> deliverySpecs =
+                spec.accounts() == null || spec.accounts().delivery() == null
+                        ? List.of()
+                        : spec.accounts().delivery();
         Map<String, SupplierAccountEntity> existing = byKey(
                 accountRepository.findByVendorProfileIdOrderByRoleAscAccountNumberAsc(vendorProfileId),
                 SupplierYamlBootstrap::accountKey);
@@ -215,8 +215,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             accountRepository.save(billing);
         }
         for (Delivery deliverySpec : deliverySpecs) {
-            SupplierAccountEntity delivery = existing
-                    .remove(accountKey(SupplierAccountRole.DELIVERY, deliverySpec.locationId()));
+            SupplierAccountEntity delivery =
+                    existing.remove(accountKey(SupplierAccountRole.DELIVERY, deliverySpec.locationId()));
             if (delivery == null) {
                 delivery = new SupplierAccountEntity();
                 delivery.setVendorProfileId(vendorProfileId);
@@ -232,7 +232,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
 
     private void reconcileBindings(@NonNull UUID vendorProfileId, @NonNull ProfileSpec spec) {
         List<BindingSpec> bindingSpecs = spec.bindings() == null ? List.of() : spec.bindings();
-        String defaultFamily = spec.protocolDefaults() == null ? null : spec.protocolDefaults().family();
+        String defaultFamily =
+                spec.protocolDefaults() == null ? null : spec.protocolDefaults().family();
         Map<String, SupplierEndpointBindingEntity> existing = byKey(
                 bindingRepository.findByVendorProfileIdOrderByCapabilityAsc(vendorProfileId),
                 binding -> binding.getCapability().name());
@@ -383,7 +384,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             throw invalid("profile '" + spec.key() + "': accounts.billing.accountNumber must not be blank");
         }
         Set<UUID> locations = new HashSet<>();
-        List<Delivery> deliveries = spec.accounts().delivery() == null ? List.of() : spec.accounts().delivery();
+        List<Delivery> deliveries =
+                spec.accounts().delivery() == null ? List.of() : spec.accounts().delivery();
         for (Delivery delivery : deliveries) {
             if (delivery.locationId() == null) {
                 throw invalid("profile '" + spec.key() + "': accounts.delivery[].locationId is required");
@@ -401,7 +403,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
 
     private void validateBindings(@NonNull ProfileSpec spec, @NonNull Set<String> authNames) {
         List<BindingSpec> bindingSpecs = spec.bindings() == null ? List.of() : spec.bindings();
-        String defaultFamily = spec.protocolDefaults() == null ? null : spec.protocolDefaults().family();
+        String defaultFamily =
+                spec.protocolDefaults() == null ? null : spec.protocolDefaults().family();
         Set<String> capabilities = new HashSet<>();
         for (BindingSpec binding : bindingSpecs) {
             String where = "profile '" + spec.key() + "', binding '" + binding.capability() + "': ";
