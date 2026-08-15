@@ -1,6 +1,7 @@
 package com.positivity.documents.internal.controller;
 
 import com.positivity.documents.internal.dto.RenderRequest;
+import com.positivity.documents.internal.security.DocumentsPermissions;
 import com.positivity.documents.service.PdfRenderingService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,7 +36,7 @@ public class DocumentRenderController {
 
     @PostMapping(value = "/render", produces = MediaType.APPLICATION_PDF_VALUE)
     @EmitEvent(id = "DOCUMENT_RENDER", apiVersion = "1")
-    @PreAuthorize("hasAuthority('documents:render')")
+    @PreAuthorize("hasAuthority('" + DocumentsPermissions.RENDER + "')")
     @Operation(
             operationId = "renderDocument",
             summary = "Render document to PDF",

@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.InvoiceLineSearchResult;
 import com.positivity.invoice.internal.dto.InvoiceSearchResult;
+import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.service.InvoiceSearchService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -70,7 +71,7 @@ public class InvoiceSearchController {
                 content = @Content(schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/search")
-    @PreAuthorize("hasAuthority('invoice:manage')")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
     @EmitEvent(id = "INVOICE_SEARCH", apiVersion = "1")
     public Page<InvoiceSearchResult> searchInvoices(
             @Parameter(
@@ -109,7 +110,7 @@ public class InvoiceSearchController {
                 content = @Content(schema = @Schema(implementation = ApiError.class)))
     })
     @GetMapping("/items/search")
-    @PreAuthorize("hasAuthority('invoice:manage')")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
     @EmitEvent(id = "INVOICE_ITEM_SEARCH", apiVersion = "1")
     public List<InvoiceLineSearchResult> searchInvoiceLines(
             @Parameter(description = "Customer party identifier owning the invoices (required)") @RequestParam @NonNull

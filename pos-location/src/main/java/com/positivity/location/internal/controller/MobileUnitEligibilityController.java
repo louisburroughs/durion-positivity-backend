@@ -1,6 +1,7 @@
 package com.positivity.location.internal.controller;
 
 import com.positivity.location.internal.dto.EligibleMobileUnitResponse;
+import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.service.MobileUnitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -44,7 +45,7 @@ public class MobileUnitEligibilityController {
                     Returns 200 with the eligible units, empty when nothing covers the address on that date.
                     """)
     @ApiResponse(responseCode = "200", description = "Eligible mobile units returned.")
-    @PreAuthorize("hasAuthority('location:mobile-unit:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_READ + "')")
     @GetMapping("/v1/mobile-units:eligible")
     public ResponseEntity<List<EligibleMobileUnitResponse>> findEligibleMobileUnits(
             @RequestParam String postalCode, @RequestParam String countryCode, @RequestParam Instant at) {

@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.dto.CreditMemoResponse;
 import com.positivity.accounting.internal.dto.VoidCreditMemoRequest;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.CreditMemoService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
@@ -74,7 +75,7 @@ public class CreditMemoController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:credit-memo:create"})
-    @PreAuthorize("hasAuthority('accounting:credit-memo:create')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.CREDIT_MEMO_CREATE + "')")
     @Operation(
             operationId = "createCreditMemo",
             summary = "Create Credit Memo",
@@ -148,7 +149,7 @@ public class CreditMemoController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:credit-memo:void"})
-    @PreAuthorize("hasAuthority('accounting:credit-memo:void')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.CREDIT_MEMO_VOID + "')")
     @Operation(
             operationId = "voidCreditMemo",
             summary = "Void Credit Memo",
@@ -227,7 +228,7 @@ public class CreditMemoController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:credit-memo:read"})
-    @PreAuthorize("hasAuthority('accounting:credit-memo:read')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.CREDIT_MEMO_READ + "')")
     @Operation(
             operationId = "listCreditMemos",
             summary = "List Credit Memos",
@@ -278,7 +279,7 @@ public class CreditMemoController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:credit-memo:read"})
-    @PreAuthorize("hasAuthority('accounting:credit-memo:read')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.CREDIT_MEMO_READ + "')")
     @Operation(
             operationId = "getCreditMemo",
             summary = "Get Credit Memo",

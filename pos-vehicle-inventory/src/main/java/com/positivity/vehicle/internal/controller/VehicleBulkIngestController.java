@@ -7,6 +7,7 @@ import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.dto.CreateVehicleRequest;
 import com.positivity.vehicle.internal.dto.VehicleBulkIngestRecord;
+import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
 import com.positivity.vehicle.service.VehicleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -33,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/vehicles")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasAuthority('vehicle-inventory:registry:create')")
+@PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.REGISTRY_CREATE + "')")
 @Tag(name = "Vehicle Bulk Ingest API", description = "Bulk import vehicle records")
 public class VehicleBulkIngestController extends AbstractBulkIngestController<VehicleBulkIngestRecord> {
 
@@ -78,7 +79,7 @@ public class VehicleBulkIngestController extends AbstractBulkIngestController<Ve
     @ApiResponse(responseCode = "400", description = "Invalid request envelope.")
     @Override
     @PostMapping("/bulk-ingest")
-    @PreAuthorize("hasAuthority('vehicle-inventory:registry:create')")
+    @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.REGISTRY_CREATE + "')")
     @EmitEvent(id = "VEHICLE_BULK_INGEST", apiVersion = "1")
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

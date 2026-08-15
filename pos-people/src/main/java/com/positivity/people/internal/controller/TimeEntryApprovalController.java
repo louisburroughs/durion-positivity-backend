@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.TimeEntryDecisionBatchRequest;
 import com.positivity.people.internal.dto.TimeEntryDecisionResponse;
 import com.positivity.people.internal.dto.TimeEntryDecisionResult;
+import com.positivity.people.internal.security.PeoplePermissions;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -52,7 +53,7 @@ public class TimeEntryApprovalController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timeEntry:approve"})
-    @PreAuthorize("hasAuthority('people:timeEntry:approve')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEENTRY_APPROVE + "')")
     public ResponseEntity<Object> approveTimeEntries(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
@@ -106,7 +107,7 @@ public class TimeEntryApprovalController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timeEntry:reject"})
-    @PreAuthorize("hasAuthority('people:timeEntry:reject')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEENTRY_REJECT + "')")
     public ResponseEntity<Object> rejectTimeEntries(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =

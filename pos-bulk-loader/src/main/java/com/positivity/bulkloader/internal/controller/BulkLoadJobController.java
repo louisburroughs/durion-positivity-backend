@@ -2,6 +2,7 @@ package com.positivity.bulkloader.internal.controller;
 
 import com.positivity.bulkloader.internal.dto.BulkLoadJobCreateRequest;
 import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
+import com.positivity.bulkloader.internal.security.BulkImportPermissions;
 import com.positivity.bulkloader.service.BulkLoadJobService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,7 +42,7 @@ public class BulkLoadJobController {
     private final BulkLoadJobService bulkLoadJobService;
 
     @PostMapping
-    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @EmitEvent(id = "BULK_LOADER_JOB_CREATE", apiVersion = "1")
     @Operation(operationId = "createBulkLoadJob", summary = "Create a New Bulk Load Job", description = """
                     Creates a bulk load import job owned by the authenticated operator, starting in CREATED state \
@@ -84,7 +85,7 @@ public class BulkLoadJobController {
     }
 
     @GetMapping("/{jobId}")
-    @PreAuthorize("hasAuthority('bulkImport:status:read')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.STATUS_READ + "')")
     @Operation(operationId = "getBulkLoadJob", summary = "Get a Bulk Load Job by ID", description = """
                     Returns the current state of a single bulk load job, including status, row counts and success \
                     and failure totals.
@@ -105,7 +106,7 @@ public class BulkLoadJobController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('bulkImport:status:read')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.STATUS_READ + "')")
     @Operation(operationId = "listBulkLoadJobs", summary = "List Bulk Load Jobs for Operator", description = """
                     Returns a paginated list of the authenticated operator's bulk load jobs with their statuses and \
                     progress counters.
@@ -126,7 +127,7 @@ public class BulkLoadJobController {
     }
 
     @PostMapping("/{jobId}/cancel")
-    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @EmitEvent(id = "BULK_LOADER_JOB_CANCEL", apiVersion = "1")
     @Operation(operationId = "cancelBulkLoadJob", summary = "Cancel a Running Bulk Load Job", description = """
                     Cancels an in-flight bulk load job by moving it to the terminal CANCELLED state.
@@ -150,7 +151,7 @@ public class BulkLoadJobController {
     }
 
     @PostMapping("/{jobId}/retry")
-    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @EmitEvent(id = "BULK_LOADER_JOB_RETRY", apiVersion = "1")
     @Operation(operationId = "retryBulkLoadJob", summary = "Retry a Failed Bulk Load Job", description = """
                     Resets a FAILED bulk load job back to CREATED and clears its progress counters so it can be \

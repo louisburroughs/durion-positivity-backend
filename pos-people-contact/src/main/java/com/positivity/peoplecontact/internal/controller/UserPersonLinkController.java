@@ -5,6 +5,7 @@ import com.positivity.peoplecontact.internal.dto.CreateUserLinkRequest;
 import com.positivity.peoplecontact.internal.dto.LinkUserToPersonRequest;
 import com.positivity.peoplecontact.internal.dto.PersonResponse;
 import com.positivity.peoplecontact.internal.dto.UserPersonLinkResponse;
+import com.positivity.peoplecontact.internal.security.PeopleContactPermissions;
 import com.positivity.peoplecontact.service.UserPersonLinkService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -62,7 +63,7 @@ public class UserPersonLinkController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:userLink:write"})
-    @PreAuthorize("hasAuthority('people-contact:userLink:write')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.USERLINK_WRITE + "')")
     public ResponseEntity<UserPersonLinkResponse> linkUserToPerson(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "User-person pair to link, with optional link classification and notes.",
@@ -120,7 +121,7 @@ public class UserPersonLinkController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:userLink:write"})
-    @PreAuthorize("hasAuthority('people-contact:userLink:write')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.USERLINK_WRITE + "')")
     public ResponseEntity<UserPersonLinkResponse> createUserPersonLink(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Minimal user-person pair to link; the link is stored as PRIMARY.",
@@ -162,7 +163,7 @@ public class UserPersonLinkController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:userLink:write"})
-    @PreAuthorize("hasAuthority('people-contact:userLink:write')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.USERLINK_WRITE + "')")
     public ResponseEntity<Void> unlinkUserFromPerson(
             @Parameter(description = "Username", required = true) @PathVariable String username) {
 
@@ -191,7 +192,7 @@ public class UserPersonLinkController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:userLink:view"})
-    @PreAuthorize("hasAuthority('people-contact:userLink:view')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.USERLINK_VIEW + "')")
     public ResponseEntity<PersonResponse> getPersonByUsername(
             @Parameter(description = "Username", required = true) @PathVariable String username) {
 
@@ -214,7 +215,7 @@ public class UserPersonLinkController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:userLink:view"})
-    @PreAuthorize("hasAuthority('people-contact:userLink:view')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.USERLINK_VIEW + "')")
     public ResponseEntity<List<String>> getUsernamesByPersonId(
             @Parameter(description = "Person ID", required = true) @PathVariable UUID personId) {
 
@@ -242,7 +243,7 @@ public class UserPersonLinkController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:userLink:view"})
-    @PreAuthorize("hasAuthority('people-contact:userLink:view')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.USERLINK_VIEW + "')")
     public ResponseEntity<List<UserPersonLinkResponse>> getLinksByPersonId(
             @Parameter(description = "Person ID", required = true) @PathVariable UUID personId) {
         return ResponseEntity.ok(linkService.getUserLinks(personId));

@@ -8,6 +8,7 @@ import com.positivity.workorder.internal.dto.WorkexecLaborPerformedResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerEntryResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerStartRequest;
 import com.positivity.workorder.internal.dto.WorkexecTimerStopResponse;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.WorkexecTimeTrackingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -58,7 +59,7 @@ public class WorkexecTimeTrackingController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:labor:view"})
-    @PreAuthorize("hasAuthority('workorder:labor:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.LABOR_VIEW + "')")
     @Operation(operationId = "getJobTimeTotals", summary = "Get Aggregated Job Time Totals", description = """
                     Returns tracked job minutes aggregated per technician, location, and local calendar day over \
                     an inclusive date range interpreted in the supplied timezone.
@@ -120,7 +121,7 @@ public class WorkexecTimeTrackingController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:labor:add"})
-    @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.LABOR_ADD + "')")
     @Operation(operationId = "createLaborPerformed", summary = "Record Labor Performed Quantity", description = """
                     Records a completed quantity of labor hours against a workorder as a closed labor entry, \
                     back-dating the start time from performedAt by the reported quantity.
@@ -204,7 +205,7 @@ public class WorkexecTimeTrackingController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:labor:view"})
-    @PreAuthorize("hasAuthority('workorder:labor:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.LABOR_VIEW + "')")
     @Operation(operationId = "getActiveTimers", summary = "Get Authenticated Mechanic Active Timers", description = """
                     Returns the authenticated mechanic's currently running timer entries, each with its \
                     workorder, workorder item, labor code, and start time.
@@ -240,7 +241,8 @@ public class WorkexecTimeTrackingController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:labor:add", "workorder:labor:add_on_behalf"})
-    @PreAuthorize("hasAnyAuthority('workorder:labor:add','workorder:labor:add_on_behalf')")
+    @PreAuthorize("hasAnyAuthority('" + WorkorderPermissions.LABOR_ADD + "','"
+            + WorkorderPermissions.LABOR_ADD_ON_BEHALF + "')")
     @Operation(operationId = "startTimer", summary = "Start Workexec Labor Timer", description = """
                     Starts a live labor timer on a workorder, attributing the tracked time to the requested \
                     technician, the current assignment, or the caller, and creating a service line when the \
@@ -318,7 +320,7 @@ public class WorkexecTimeTrackingController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:labor:add"})
-    @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.LABOR_ADD + "')")
     @Operation(operationId = "stopTimers", summary = "Stop Authenticated Mechanic Timers", description = """
                     Stops every active timer the authenticated mechanic is tracked on or initiated, stamping the \
                     stop time and returning the closed entries with their durations.

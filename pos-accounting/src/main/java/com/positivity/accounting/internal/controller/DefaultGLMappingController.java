@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.DefaultGLMappingListResponse;
 import com.positivity.accounting.internal.dto.DefaultGLMappingRequest;
 import com.positivity.accounting.internal.dto.DefaultGLMappingResponse;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.DefaultGLMappingService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -61,7 +62,7 @@ public class DefaultGLMappingController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:default-mapping:create"})
-    @PreAuthorize("hasAuthority('accounting:default-mapping:create')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.DEFAULT_MAPPING_CREATE + "')")
     @Operation(
             operationId = "createDefaultMapping",
             summary = "Create Default GL Mapping",
@@ -115,7 +116,7 @@ public class DefaultGLMappingController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:default-mapping:edit"})
-    @PreAuthorize("hasAuthority('accounting:default-mapping:edit')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.DEFAULT_MAPPING_EDIT + "')")
     @Operation(
             operationId = "updateDefaultMapping",
             summary = "Update Default GL Mapping",
@@ -164,7 +165,7 @@ public class DefaultGLMappingController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:default-mapping:delete"})
-    @PreAuthorize("hasAuthority('accounting:default-mapping:delete')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.DEFAULT_MAPPING_DELETE + "')")
     @Operation(
             operationId = "deactivateDefaultMapping",
             summary = "Deactivate Default GL Mapping",
@@ -196,7 +197,7 @@ public class DefaultGLMappingController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:default-mapping:view"})
-    @PreAuthorize("hasAuthority('accounting:default-mapping:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.DEFAULT_MAPPING_VIEW + "')")
     @Operation(
             operationId = "getDefaultMapping",
             summary = "Get Default GL Mapping",
@@ -226,7 +227,7 @@ public class DefaultGLMappingController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:default-mapping:view"})
-    @PreAuthorize("hasAuthority('accounting:default-mapping:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.DEFAULT_MAPPING_VIEW + "')")
     @Operation(
             operationId = "listDefaultMappings",
             summary = "List Default GL Mappings",
@@ -256,7 +257,7 @@ public class DefaultGLMappingController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:default-mapping:view"})
-    @PreAuthorize("hasAuthority('accounting:default-mapping:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.DEFAULT_MAPPING_VIEW + "')")
     @Operation(
             operationId = "searchDefaultMappings",
             summary = "Search Default GL Mappings",
@@ -296,7 +297,7 @@ public class DefaultGLMappingController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:default-mapping:view"})
-    @PreAuthorize("hasAuthority('accounting:default-mapping:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.DEFAULT_MAPPING_VIEW + "')")
     @Operation(
             operationId = "listGlobalDefaultMappings",
             summary = "List Global Default Mappings",
@@ -323,7 +324,7 @@ public class DefaultGLMappingController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:default-mapping:view"})
-    @PreAuthorize("hasAuthority('accounting:default-mapping:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.DEFAULT_MAPPING_VIEW + "')")
     @Operation(
             operationId = "resolveDefaultMapping",
             summary = "Resolve Default Mapping For Event",

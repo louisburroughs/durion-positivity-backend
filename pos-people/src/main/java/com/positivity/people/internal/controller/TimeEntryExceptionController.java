@@ -6,6 +6,7 @@ import com.positivity.people.internal.dto.TimeEntryExceptionRequest;
 import com.positivity.people.internal.dto.TimeEntryExceptionResolveRequest;
 import com.positivity.people.internal.dto.TimeEntryExceptionResponse;
 import com.positivity.people.internal.dto.TimeEntryExceptionWaiveRequest;
+import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.service.TimeEntryExceptionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -45,7 +46,7 @@ public class TimeEntryExceptionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timeException:create"})
-    @PreAuthorize("hasAuthority('people:timeException:create')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEEXCEPTION_CREATE + "')")
     public ResponseEntity<TimeEntryExceptionResponse> createException(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Timekeeping anomaly to record against an employee, optionally tied to a"
@@ -87,7 +88,7 @@ public class TimeEntryExceptionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timeException:view"})
-    @PreAuthorize("hasAuthority('people:timeException:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEEXCEPTION_VIEW + "')")
     public ResponseEntity<List<TimeEntryException>> listByEmployee(@RequestParam(required = false) String employeeId) {
         List<TimeEntryException> list = exceptionService.listByEmployee(employeeId);
         return ResponseEntity.ok(list);
@@ -115,7 +116,7 @@ public class TimeEntryExceptionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timeException:acknowledge"})
-    @PreAuthorize("hasAuthority('people:timeException:acknowledge')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEEXCEPTION_ACKNOWLEDGE + "')")
     public ResponseEntity<Object> acknowledgeException(
             @PathVariable java.util.UUID exceptionId,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
@@ -143,7 +144,7 @@ public class TimeEntryExceptionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timeException:resolve"})
-    @PreAuthorize("hasAuthority('people:timeException:resolve')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEEXCEPTION_RESOLVE + "')")
     public ResponseEntity<Object> resolveException(
             @PathVariable java.util.UUID exceptionId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -186,7 +187,7 @@ public class TimeEntryExceptionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timeException:resolve"})
-    @PreAuthorize("hasAuthority('people:timeException:resolve')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEEXCEPTION_RESOLVE + "')")
     public ResponseEntity<Object> waiveException(
             @PathVariable java.util.UUID exceptionId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

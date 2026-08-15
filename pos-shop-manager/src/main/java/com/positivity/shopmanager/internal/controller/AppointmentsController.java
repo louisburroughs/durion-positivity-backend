@@ -6,6 +6,7 @@ import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
 import com.positivity.shopmanager.internal.dto.CancelAppointmentRequest;
 import com.positivity.shopmanager.internal.dto.RescheduleAppointmentRequest;
+import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.service.AppointmentsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -86,7 +87,8 @@ public class AppointmentsController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"appointments:create", "shop:schedule:edit"})
-    @PreAuthorize("hasAnyAuthority('appointments:create','shop:schedule:edit')")
+    @PreAuthorize(
+            "hasAnyAuthority('" + ShopPermissions.APPOINTMENTS_CREATE + "','" + ShopPermissions.SCHEDULE_EDIT + "')")
     public ResponseEntity<AppointmentResponse> createAppointment(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
@@ -154,7 +156,8 @@ public class AppointmentsController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"appointments:view", "shop:schedule:view"})
-    @PreAuthorize("hasAnyAuthority('appointments:view','shop:schedule:view')")
+    @PreAuthorize(
+            "hasAnyAuthority('" + ShopPermissions.APPOINTMENTS_VIEW + "','" + ShopPermissions.SCHEDULE_VIEW + "')")
     public ResponseEntity<AppointmentResponse> getAppointment(
             @Parameter(description = "Appointment ID (UUID)", example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b")
                     @PathVariable
@@ -207,7 +210,7 @@ public class AppointmentsController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"appointments:reschedule"})
-    @PreAuthorize("hasAuthority('appointments:reschedule')")
+    @PreAuthorize("hasAuthority('" + ShopPermissions.APPOINTMENTS_RESCHEDULE + "')")
     @EmitEvent(id = "SHOPMGR_APPOINTMENT_RESCHEDULE", apiVersion = "1")
     public ResponseEntity<AppointmentResponse> rescheduleAppointment(
             @PathVariable UUID appointmentId,
@@ -264,7 +267,7 @@ public class AppointmentsController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"appointments:cancel"})
-    @PreAuthorize("hasAuthority('appointments:cancel')")
+    @PreAuthorize("hasAuthority('" + ShopPermissions.APPOINTMENTS_CANCEL + "')")
     @EmitEvent(id = "SHOPMGR_APPOINTMENT_CANCEL", apiVersion = "1")
     public ResponseEntity<AppointmentResponse> cancelAppointment(
             @PathVariable UUID appointmentId,

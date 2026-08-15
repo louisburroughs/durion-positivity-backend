@@ -6,6 +6,7 @@ import com.positivity.workorder.internal.dto.ChangeRequestResponse;
 import com.positivity.workorder.internal.dto.CreateChangeRequestDTO;
 import com.positivity.workorder.internal.dto.DeclineChangeRequestDTO;
 import com.positivity.workorder.internal.dto.EmergencyOverrideDTO;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.ChangeRequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -78,7 +79,7 @@ public class ChangeRequestController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:change_request:create"})
-    @PreAuthorize("hasAuthority('workorder:change_request:create')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.CHANGE_REQUEST_CREATE + "')")
     public ResponseEntity<ChangeRequestResponse> createChangeRequest(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -131,7 +132,7 @@ public class ChangeRequestController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:change_request:approve"})
-    @PreAuthorize("hasAuthority('workorder:change_request:approve')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.CHANGE_REQUEST_APPROVE + "')")
     public ResponseEntity<ChangeRequestResponse> approveChangeRequest(
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -180,7 +181,7 @@ public class ChangeRequestController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:change_request:decline"})
-    @PreAuthorize("hasAuthority('workorder:change_request:decline')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.CHANGE_REQUEST_DECLINE + "')")
     public ResponseEntity<ChangeRequestResponse> declineChangeRequest(
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -267,7 +268,7 @@ public class ChangeRequestController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:change_request:emergency_override"})
-    @PreAuthorize("hasAuthority('workorder:change_request:emergency_override')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.CHANGE_REQUEST_EMERGENCY_OVERRIDE + "')")
     public ResponseEntity<ChangeRequestResponse> applyEmergencyOverride(
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -298,7 +299,7 @@ public class ChangeRequestController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:change_request:view"})
-    @PreAuthorize("hasAuthority('workorder:change_request:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.CHANGE_REQUEST_VIEW + "')")
     public ResponseEntity<ChangeRequestResponse> getChangeRequestById(
             @Parameter(description = "ID of the change request", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -328,7 +329,7 @@ public class ChangeRequestController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:change_request:view"})
-    @PreAuthorize("hasAuthority('workorder:change_request:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.CHANGE_REQUEST_VIEW + "')")
     public ResponseEntity<List<ChangeRequestResponse>> getChangeRequestsByWorkorder(
             @Parameter(description = "ID of the work order", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable

@@ -6,6 +6,7 @@ import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
 import com.positivity.securityservice.internal.dto.TokenPairRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.dto.TokenResponse;
+import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.service.JwtService;
 import com.positivity.securityservice.service.UserService;
 import com.positivity.shared.error.ApiError;
@@ -97,7 +98,7 @@ public class JwtController {
             name = "bearerAuth",
             scopes = {"security:token:issue_internal"})
     @EmitEvent(id = "SECURITY_AUTH_INTERNAL_TOKEN_ISSUE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('security:token:issue_internal')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.TOKEN_ISSUE_INTERNAL + "')")
     @PostMapping("/internal/token")
     public ResponseEntity<TokenResponse> issueInternalToken(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -171,7 +172,7 @@ public class JwtController {
             name = "bearerAuth",
             scopes = {"security:token:issue_internal"})
     @EmitEvent(id = "SECURITY_AUTH_TOKEN_PAIR", apiVersion = "1")
-    @PreAuthorize("hasAuthority('security:token:issue_internal')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.TOKEN_ISSUE_INTERNAL + "')")
     @PostMapping("/token-pair")
     public ResponseEntity<TokenPairResponse> generateTokenPair(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

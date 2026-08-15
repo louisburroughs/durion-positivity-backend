@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.ReportExportArtifact;
 import com.positivity.accounting.internal.dto.ReportExportRequest;
 import com.positivity.accounting.internal.dto.ReportExportResponse;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.ReportExportService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -66,7 +67,7 @@ public class ReportExportController {
      * Poll {@code GET /v1/accounting/reports/export/{exportId}} for completion.
      */
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('accounting:report:export')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORT_EXPORT + "')")
     @EmitEvent(id = "ACCOUNTING_REPORT_EXPORT_REQUEST", apiVersion = "1")
     @Operation(
             operationId = "requestReportExport",
@@ -121,7 +122,7 @@ public class ReportExportController {
      * Get the current status of an export job.
      */
     @GetMapping(value = "/{exportId}", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('accounting:report:export')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORT_EXPORT + "')")
     @EmitEvent(id = "ACCOUNTING_REPORT_EXPORT_STATUS", apiVersion = "1")
     @Operation(
             operationId = "getReportExportStatus",
@@ -163,7 +164,7 @@ public class ReportExportController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"reporting:view:financial-statements"})
-    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "')")
     @EmitEvent(id = "ACCOUNTING_REPORT_EXPORT_DOWNLOAD", apiVersion = "1")
     @Operation(
             operationId = "downloadReportExport",
@@ -211,7 +212,7 @@ public class ReportExportController {
      * List export history (paginated, most recent first).
      */
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('accounting:report:export')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORT_EXPORT + "')")
     @EmitEvent(id = "ACCOUNTING_REPORT_EXPORT_LIST", apiVersion = "1")
     @Operation(
             operationId = "listReportExports",

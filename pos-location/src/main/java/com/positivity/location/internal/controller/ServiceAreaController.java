@@ -3,6 +3,7 @@ package com.positivity.location.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.ServiceAreaRequest;
 import com.positivity.location.internal.dto.ServiceAreaResponse;
+import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.service.ServiceAreaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -60,7 +61,7 @@ public class ServiceAreaController {
     @ApiResponse(responseCode = "201", description = "Service area created")
     @ApiResponse(responseCode = "409", description = "Service area name already taken")
     @EmitEvent(id = "LOCATION_SERVICE_AREA_CREATE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('location:service-area:manage')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.SERVICE_AREA_MANAGE + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:service-area:manage"})
@@ -90,7 +91,7 @@ public class ServiceAreaController {
                     Returns 200 with the full unpaginated list.
                     """)
     @ApiResponse(responseCode = "200", description = "Service areas listed")
-    @PreAuthorize("hasAuthority('location:service-area:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.SERVICE_AREA_READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:service-area:read"})
@@ -112,7 +113,7 @@ public class ServiceAreaController {
     @ApiResponse(responseCode = "200", description = "Service area patched")
     @ApiResponse(responseCode = "400", description = "Invalid service area id")
     @ApiResponse(responseCode = "404", description = "Service area not found")
-    @PreAuthorize("hasAuthority('location:service-area:manage')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.SERVICE_AREA_MANAGE + "')")
     @EmitEvent(id = "LOCATION_SERVICE_AREA_PATCH", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",

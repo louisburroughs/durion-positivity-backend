@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.audit.controller;
 import com.positivity.accounting.internal.audit.dto.*;
 import com.positivity.accounting.internal.audit.entity.ExceptionType;
 import com.positivity.accounting.internal.exception.AuditTrailAuthorizationException;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.AuditTrailQueryService;
 import com.positivity.accounting.service.AuditTrailService;
 import com.positivity.events.EmitEvent;
@@ -88,7 +89,7 @@ public class AuditTrailController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:submit"})
-    @PreAuthorize("hasAuthority('accounting:events:submit')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_SUBMIT + "')")
     public ResponseEntity<Object> recordPriceOverride(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Price override exception with the acting role and audit reason.",
@@ -165,7 +166,7 @@ public class AuditTrailController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:submit"})
-    @PreAuthorize("hasAuthority('accounting:events:submit')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_SUBMIT + "')")
     public ResponseEntity<Object> recordRefund(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Refund exception details with type, amount and original payment status.",
@@ -237,7 +238,7 @@ public class AuditTrailController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:submit"})
-    @PreAuthorize("hasAuthority('accounting:events:submit')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_SUBMIT + "')")
     public ResponseEntity<Object> recordCancellation(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Cancellation exception with before and after document snapshots.",
@@ -300,7 +301,7 @@ public class AuditTrailController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:view"})
-    @PreAuthorize("hasAuthority('accounting:events:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_VIEW + "')")
     public ResponseEntity<List<AuditTrailResponse>> getByOrderId(
             @Parameter(description = "Order ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -338,7 +339,7 @@ public class AuditTrailController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:view"})
-    @PreAuthorize("hasAuthority('accounting:events:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_VIEW + "')")
     public ResponseEntity<List<AuditTrailResponse>> getByInvoiceId(
             @Parameter(description = "Invoice ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -377,7 +378,7 @@ public class AuditTrailController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:view"})
-    @PreAuthorize("hasAuthority('accounting:events:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_VIEW + "')")
     public ResponseEntity<List<AuditTrailResponse>> getByType(
             @Parameter(description = "Exception type", required = true) @PathVariable ExceptionType type,
             @Parameter(description = "Start date in ISO 8601 format", required = true, example = "2026-01-01T00:00:00Z")
@@ -423,7 +424,7 @@ public class AuditTrailController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:view"})
-    @PreAuthorize("hasAuthority('accounting:events:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_VIEW + "')")
     public ResponseEntity<List<AuditTrailResponse>> getByActor(
             @Parameter(description = "Actor (User) ID", required = true, example = "person-12345") @PathVariable
                     String actorId,
@@ -467,7 +468,7 @@ public class AuditTrailController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:view"})
-    @PreAuthorize("hasAuthority('accounting:events:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_VIEW + "')")
     public ResponseEntity<List<AuditTrailResponse>> getByDateRange(
             @Parameter(description = "Start date in ISO 8601 format", required = true, example = "2026-01-01T00:00:00Z")
                     @RequestParam

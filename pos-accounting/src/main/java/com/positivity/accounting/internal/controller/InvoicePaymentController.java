@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.BillingRuleRefResponse;
 import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
 import com.positivity.accounting.internal.dto.RegenerateInvoiceFromWorkorderRequest;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.InvoiceRegenerationServiceImpl;
 import com.positivity.accounting.service.BillingRulesService;
 import com.positivity.accounting.service.InvoicePaymentStatusService;
@@ -66,7 +67,7 @@ public class InvoicePaymentController {
      * @return Current invoice status
      */
     @GetMapping("/v1/accounting/invoice/{invoiceId}/status")
-    @PreAuthorize("hasAuthority('accounting:ap:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
     @Operation(
             operationId = "getInvoiceStatus",
             summary = "Get Invoice Payment Status",
@@ -110,7 +111,7 @@ public class InvoicePaymentController {
     }
 
     @PostMapping("/v1/accounting/invoice/invoices")
-    @PreAuthorize("hasAuthority('accounting:ap:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
     @Operation(
             operationId = "regenerateInvoiceFromWorkorder",
             summary = "Regenerate Invoice From Workorder",
@@ -160,7 +161,7 @@ public class InvoicePaymentController {
     }
 
     @GetMapping("/v1/accounting/invoice/rules/{customerId}")
-    @PreAuthorize("hasAuthority('accounting:ap:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
     @Operation(
             operationId = "getAccountingBillingRules",
             summary = "Get Customer Billing Rules",

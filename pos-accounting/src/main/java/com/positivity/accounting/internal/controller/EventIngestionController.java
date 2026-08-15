@@ -8,6 +8,7 @@ import com.positivity.accounting.internal.dto.EventProcessingLogEntry;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.dto.ReprocessingAttemptHistoryResponse;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.EventIngestionService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -64,7 +65,7 @@ public class EventIngestionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:view"})
-    @PreAuthorize("hasAuthority('accounting:events:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_VIEW + "')")
     @Operation(
             operationId = "listAccountingEvents",
             summary = "List Accounting Events",
@@ -135,7 +136,7 @@ public class EventIngestionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:view"})
-    @PreAuthorize("hasAuthority('accounting:events:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_VIEW + "')")
     @Operation(
             operationId = "getAccountingEvent",
             summary = "Get Accounting Event",
@@ -163,7 +164,7 @@ public class EventIngestionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:submit"})
-    @PreAuthorize("hasAuthority('accounting:events:submit')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_SUBMIT + "')")
     @Operation(
             operationId = "submitAccountingEvent",
             summary = "Submit Accounting Event",
@@ -214,7 +215,7 @@ public class EventIngestionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:retry"})
-    @PreAuthorize("hasAuthority('accounting:events:retry')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_RETRY + "')")
     @Operation(
             operationId = "retryAccountingEvent",
             summary = "Retry Accounting Event Processing",
@@ -254,7 +255,7 @@ public class EventIngestionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:reprocess"})
-    @PreAuthorize("hasAuthority('accounting:events:reprocess')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_REPROCESS + "')")
     @Operation(
             operationId = "reprocessSuspendedEvent",
             summary = "Reprocess Suspended Event",
@@ -304,7 +305,7 @@ public class EventIngestionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:view"})
-    @PreAuthorize("hasAuthority('accounting:events:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_VIEW + "')")
     @Operation(
             operationId = "getEventReprocessingHistory",
             summary = "Get Event Reprocessing History",
@@ -331,7 +332,7 @@ public class EventIngestionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:view"})
-    @PreAuthorize("hasAuthority('accounting:events:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_VIEW + "')")
     @Operation(
             operationId = "getEventProcessingLog",
             summary = "Get Event Processing Log",
@@ -357,7 +358,7 @@ public class EventIngestionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:events:view"})
-    @PreAuthorize("hasAuthority('accounting:events:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_VIEW + "')")
     @Operation(
             operationId = "getEventContract",
             summary = "Get Event Envelope Contract",

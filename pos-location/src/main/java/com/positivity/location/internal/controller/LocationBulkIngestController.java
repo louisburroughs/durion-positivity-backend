@@ -8,6 +8,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.LocationBulkIngestRecord;
 import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationTypeDTO;
+import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.service.LocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -73,7 +74,7 @@ public class LocationBulkIngestController extends AbstractBulkIngestController<L
                     """)
     @ApiResponse(responseCode = "200", description = "Batch processed (check per-record success/failure in response)")
     @ApiResponse(responseCode = "400", description = "Invalid request payload")
-    @PreAuthorize("hasAuthority('location:write')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @EmitEvent(id = "LOCATION_BULK_INGEST", apiVersion = "1")
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

@@ -563,7 +563,7 @@ public final class DownstreamPermissionCatalog {
         "PERM_inventory:replenishment:manage", // 454
 
         // ── New batch (bits 455–455) ──────────────────────────────────────────
-        "PERM_catalog:item_cost:update"                     // 455
+        "PERM_catalog:item_cost:update" // 455
     };
 
     public static String authorityForBit(int bitIndex) {

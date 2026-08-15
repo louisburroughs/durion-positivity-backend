@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.DashboardResponse;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.DashboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,7 +30,7 @@ public class DashboardController {
     private final Clock clock;
 
     @GetMapping("/today")
-    @PreAuthorize("hasAuthority('workorder:dashboard:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.DASHBOARD_VIEW + "')")
     @EmitEvent(id = "WORKEXEC_DASHBOARD_TODAY_GET", apiVersion = "1")
     @Operation(operationId = "getDispatchDashboard", summary = "Get Daily Dispatch Board Dashboard", description = """
                     Returns the aggregated dispatch board for one location and one date: workorder summaries, \

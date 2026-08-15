@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.dto.GLMappingResolveRequest;
 import com.positivity.accounting.internal.dto.GLMappingResolveResponse;
 import com.positivity.accounting.internal.dto.MappingResolutionTestRequest;
 import com.positivity.accounting.internal.dto.MappingResolutionTestResponse;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.GLMappingService;
 import com.positivity.accounting.service.MappingResolutionTestService;
 import com.positivity.events.EmitEvent;
@@ -51,7 +52,7 @@ public class GLMappingController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:gl-mapping:create"})
-    @PreAuthorize("hasAuthority('accounting:gl-mapping:create')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.GL_MAPPING_CREATE + "')")
     @EmitEvent(id = "ACCOUNTING_GL_MAPPING_CREATE", apiVersion = "1")
     @Operation(
             operationId = "createGLMapping",
@@ -114,7 +115,7 @@ public class GLMappingController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:gl-mapping:resolve"})
-    @PreAuthorize("hasAuthority('accounting:gl-mapping:resolve')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.GL_MAPPING_RESOLVE + "')")
     @EmitEvent(id = "ACCOUNTING_GL_MAPPING_RESOLVE", apiVersion = "1")
     @Operation(
             operationId = "resolveGLMapping",
@@ -176,7 +177,7 @@ public class GLMappingController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:posting_rules:view"})
-    @PreAuthorize("hasAuthority('accounting:posting_rules:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.POSTING_RULES_VIEW + "')")
     @EmitEvent(id = "ACCOUNTING_MAPPING_RESOLVE_TEST", apiVersion = "1")
     @Operation(
             operationId = "resolveTestMapping",

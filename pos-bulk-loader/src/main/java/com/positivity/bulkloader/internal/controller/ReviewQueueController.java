@@ -5,6 +5,7 @@ import com.positivity.bulkloader.internal.dto.BulkCorrectionItem;
 import com.positivity.bulkloader.internal.dto.BulkCorrectionRequest;
 import com.positivity.bulkloader.internal.dto.BulkCorrectionResponse;
 import com.positivity.bulkloader.internal.dto.CorrectionResultDto;
+import com.positivity.bulkloader.internal.security.BulkImportPermissions;
 import com.positivity.bulkloader.service.BulkLoadJobService;
 import com.positivity.bulkloader.service.ReviewQueueService;
 import com.positivity.events.EmitEvent;
@@ -50,7 +51,7 @@ public class ReviewQueueController {
     private final ReviewQueueService reviewQueueService;
 
     @GetMapping("/{jobId}/audit")
-    @PreAuthorize("hasAuthority('bulkImport:status:read')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.STATUS_READ + "')")
     @Operation(operationId = "listAuditRecords", summary = "Get Audit Records for Job", description = """
                     Returns every row-level audit record captured for a bulk load job, including review status, \
                     reason codes and the original source values.
@@ -84,7 +85,7 @@ public class ReviewQueueController {
     }
 
     @GetMapping("/{jobId}/error-report")
-    @PreAuthorize("hasAuthority('bulkImport:status:read')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.STATUS_READ + "')")
     @Operation(operationId = "downloadErrorReport", summary = "Download Error Report as CSV", description = """
                     Generates a CSV export of the audit records for a bulk load job and returns it as a text/csv \
                     attachment.
@@ -122,7 +123,7 @@ public class ReviewQueueController {
     }
 
     @PostMapping("/{jobId}/corrections")
-    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @EmitEvent(id = "BULK_LOADER_CORRECTION_SUBMIT", apiVersion = "1")
     @Operation(operationId = "submitCorrections", summary = "Submit Corrected Records for Job", description = """
                     Submits corrected field values for one or more audit records of a FAILED bulk load job, marking \
@@ -193,7 +194,7 @@ public class ReviewQueueController {
     }
 
     @PostMapping("/{jobId}/corrections/single")
-    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @EmitEvent(id = "BULK_LOADER_CORRECTION_SUBMIT_SINGLE", apiVersion = "1")
     @Operation(operationId = "submitSingleCorrection", summary = "Submit a Single Correction Record", description = """
                     Submits corrected field values for exactly one audit record of a FAILED bulk load job and \

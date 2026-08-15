@@ -8,6 +8,7 @@ import com.positivity.invoice.internal.dto.InvoiceRefundResponse;
 import com.positivity.invoice.internal.dto.RefundPaymentResponse;
 import com.positivity.invoice.internal.enums.RefundReason;
 import com.positivity.invoice.internal.enums.VoidReason;
+import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.service.PaymentReversalService;
 import com.positivity.invoice.service.RefundPaymentResult;
 import io.swagger.v3.oas.annotations.Operation;
@@ -153,7 +154,7 @@ public class PaymentReversalController {
     }
 
     @GetMapping("/{invoiceId}/refunds")
-    @PreAuthorize("hasAuthority('invoice:manage')")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
     @EmitEvent(id = "INVOICE_REFUND_LIST", apiVersion = "1")
     @Operation(operationId = "listInvoiceRefunds", summary = "List Refunds for an Invoice", description = """
                     Returns every refund record anchored to the invoice — refunds of captured payment intents and \

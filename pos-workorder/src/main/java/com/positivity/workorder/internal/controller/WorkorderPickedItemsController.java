@@ -5,6 +5,7 @@ import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.pick.ConsumePickedItemsRequest;
 import com.positivity.workorder.internal.dto.pick.ConsumePickedItemsResponse;
 import com.positivity.workorder.internal.dto.pick.WorkorderPickedItemResponse;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.WorkorderPickFacadeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -43,7 +44,7 @@ public class WorkorderPickedItemsController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:pick_list:view"})
-    @PreAuthorize("hasAuthority('inventory:pick_list:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.INVENTORY_PICK_LIST_VIEW + "')")
     @Operation(operationId = "getPickedItems", summary = "Get Picked Items for Workorder", description = """
                     Returns the items already picked for a workorder from the local pick replica, showing picked \
                     and consumed quantities before installation.
@@ -80,7 +81,7 @@ public class WorkorderPickedItemsController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:parts:consume"})
-    @PreAuthorize("hasAuthority('workorder:parts:consume')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.PARTS_CONSUME + "')")
     @EmitEvent(id = "WORKORDER_PICKED_ITEMS_CONSUME", apiVersion = "1")
     @Operation(
             operationId = "consumeWorkorderPickedItems",

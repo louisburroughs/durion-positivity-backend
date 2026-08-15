@@ -6,6 +6,7 @@ import com.positivity.people.internal.dto.DisableEmployeeRequestDto;
 import com.positivity.people.internal.dto.EmployeeIdentityDto;
 import com.positivity.people.internal.dto.EmployeeProfileDto;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
+import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.service.EmployeeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -63,7 +64,7 @@ public class EmployeeController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:create"})
-    @PreAuthorize("hasAuthority('people:employee:create')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_CREATE + "')")
     public ResponseEntity<EmployeeProfileDto> createEmployee(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
@@ -116,7 +117,7 @@ public class EmployeeController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:edit"})
-    @PreAuthorize("hasAuthority('people:employee:edit')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_EDIT + "')")
     public ResponseEntity<EmployeeProfileDto> updateEmployee(
             @PathVariable UUID employeeId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -158,7 +159,7 @@ public class EmployeeController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:view"})
-    @PreAuthorize("hasAuthority('people:employee:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
     public ResponseEntity<EmployeeProfileDto> getEmployee(@PathVariable UUID employeeId) {
         return ResponseEntity.ok(employeeService.getEmployee(employeeId));
     }
@@ -182,7 +183,7 @@ public class EmployeeController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:view"})
-    @PreAuthorize("hasAuthority('people:employee:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
     public ResponseEntity<EmployeeIdentityDto> resolveByNumber(@PathVariable @NonNull String employeeNumber) {
         return employeeService
                 .resolveByEmployeeNumber(employeeNumber)
@@ -215,7 +216,7 @@ public class EmployeeController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:deactivate"})
-    @PreAuthorize("hasAuthority('people:employee:deactivate')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_DEACTIVATE + "')")
     public ResponseEntity<EmployeeProfileDto> disableEmployee(
             @PathVariable UUID employeeId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

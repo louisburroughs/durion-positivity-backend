@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.VendorResponse;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.VendorDirectoryService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -63,7 +64,7 @@ public class VendorDirectoryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:view"})
-    @PreAuthorize("hasAuthority('accounting:ap:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
     @Operation(
             operationId = "searchVendors",
             summary = "Search Vendors By Name",
@@ -109,7 +110,7 @@ public class VendorDirectoryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:view"})
-    @PreAuthorize("hasAuthority('accounting:ap:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
     @Operation(
             operationId = "getVendorById",
             summary = "Get Vendor By Id",

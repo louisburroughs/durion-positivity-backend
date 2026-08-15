@@ -8,6 +8,7 @@ import com.positivity.securityservice.internal.dto.RoleDefaultPermissionsRespons
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.dto.RolePermissionGrantRequest;
 import com.positivity.securityservice.internal.dto.RolePermissionsRequest;
+import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.service.RoleAuthorityService;
 import com.positivity.securityservice.service.RoleManagementService;
 import com.positivity.securityservice.service.RolePermissionService;
@@ -59,7 +60,7 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:create"})
-    @PreAuthorize("hasAuthority('security:role:create')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_CREATE + "')")
     @Operation(operationId = "createRole", summary = "Create a New Role", description = """
                     Creates a new role with the given name and optional description; the role starts with no \
                     permissions and no user assignments.
@@ -112,7 +113,7 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:edit"})
-    @PreAuthorize("hasAuthority('security:role:edit')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_EDIT + "')")
     @Operation(operationId = "grantRolePermission", summary = "Grant a Permission to a Role", description = """
                     Grants a single permission key to a role, auto-registering the key in the permission registry \
                     when it is not yet known.
@@ -165,7 +166,7 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:edit"})
-    @PreAuthorize("hasAuthority('security:role:edit')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_EDIT + "')")
     @Operation(operationId = "revokeRolePermission", summary = "Revoke a Permission From a Role", description = """
                     Removes a permission key from a role's grant set.
                     Use this tool to take one permission away from a role; do not use deleteRole, which removes the \
@@ -196,7 +197,7 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:edit"})
-    @PreAuthorize("hasAuthority('security:role:edit')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_EDIT + "')")
     @Operation(
             operationId = "assignRolePermissionByKey",
             summary = "Assign a Registered Permission to a Role",
@@ -231,7 +232,7 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:edit"})
-    @PreAuthorize("hasAuthority('security:role:edit')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_EDIT + "')")
     @Operation(operationId = "updateRolePermissions", summary = "Replace a Role's Permission Set", description = """
                     Replaces a role's entire permission set with the supplied list of permission names.
                     Use this tool for wholesale permission resets; do not use grantRolePermission or \
@@ -274,7 +275,7 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:assign"})
-    @PreAuthorize("hasAuthority('security:role:assign')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_ASSIGN + "')")
     @Operation(operationId = "createRoleAssignment", summary = "Create a Scoped Role Assignment", description = """
                     Assigns a role to a user with a scope (GLOBAL or LOCATION) and an optional effective date \
                     window.
@@ -324,7 +325,7 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:view"})
-    @PreAuthorize("hasAuthority('security:role:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_VIEW + "')")
     @Operation(operationId = "listUserRoleAssignments", summary = "List a User's Role Assignments", description = """
                     Returns a user's role assignments with their scope and effective window, limited to currently \
                     effective assignments by default.
@@ -358,7 +359,7 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:permission:view"})
-    @PreAuthorize("hasAuthority('security:permission:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_VIEW + "')")
     @Operation(
             operationId = "getUserPermissionsLegacy",
             summary = "Get User Permissions at Legacy Path",
@@ -392,7 +393,7 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:view"})
-    @PreAuthorize("hasAuthority('security:role:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_VIEW + "')")
     @Operation(
             operationId = "getRoleDefaultPermissions",
             summary = "Get a Role's Default Authority Expansion",
@@ -424,7 +425,7 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:permission:view"})
-    @PreAuthorize("hasAuthority('security:permission:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_VIEW + "')")
     @Operation(
             operationId = "checkUserPermission",
             summary = "Check One User Permission at a Location",
@@ -462,7 +463,7 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:assign"})
-    @PreAuthorize("hasAuthority('security:role:assign')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_ASSIGN + "')")
     @Operation(operationId = "revokeRoleAssignment", summary = "Revoke a Role Assignment by Id", description = """
                     Revokes a role assignment by setting its effective end date, preserving the row for history.
                     Use this tool when the assignment id is known or a past or future end date is needed; do not \
@@ -499,7 +500,7 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:view"})
-    @PreAuthorize("hasAuthority('security:role:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_VIEW + "')")
     @Operation(operationId = "listRoles", summary = "List All Roles in the System", description = """
                     Returns every role in the system with its permission set and audit metadata.
                     Use this tool to enumerate roles; use getRoleById or getRoleByName instead for a single known \
@@ -521,7 +522,7 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:view"})
-    @PreAuthorize("hasAuthority('security:role:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_VIEW + "')")
     @Operation(operationId = "getRoleByName", summary = "Get a Single Role by Name", description = """
                     Returns a single role looked up by its exact name, including its permission set.
                     Use this tool when only the role name is known; use getRoleById instead when the UUID is \
@@ -548,7 +549,7 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:view"})
-    @PreAuthorize("hasAuthority('security:role:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_VIEW + "')")
     @Operation(operationId = "getRoleById", summary = "Get a Single Role by UUID", description = """
                     Returns a single role looked up by its UUID, including its permission set and audit metadata.
                     Use this tool when the role id is known; use getRoleByName instead when only the name is \
@@ -578,7 +579,7 @@ public class RoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:delete"})
-    @PreAuthorize("hasAuthority('security:role:delete')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_DELETE + "')")
     @Operation(operationId = "deleteRole", summary = "Delete a Role and Its Associations", description = """
                     Deletes a role by UUID, clearing its permission grants and deleting all of its role assignments \
                     in the same transaction.

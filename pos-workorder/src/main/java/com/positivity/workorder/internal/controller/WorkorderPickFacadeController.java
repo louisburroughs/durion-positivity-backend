@@ -8,6 +8,7 @@ import com.positivity.workorder.internal.dto.pick.ResolveScanRequest;
 import com.positivity.workorder.internal.dto.pick.ResolveScanResponse;
 import com.positivity.workorder.internal.dto.pick.WorkorderPickListResponse;
 import com.positivity.workorder.internal.dto.pick.WorkorderPickTaskResponse;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.WorkorderPickFacadeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -46,7 +47,7 @@ public class WorkorderPickFacadeController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:pick_list:view"})
-    @PreAuthorize("hasAuthority('inventory:pick_list:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.INVENTORY_PICK_LIST_VIEW + "')")
     @Operation(operationId = "getWorkorderPickList", summary = "Get Pick List for Workorder", description = """
                     Returns the workorder's primary pick list header from the local inventory replica so parts \
                     can be staged and fulfilled.
@@ -84,7 +85,7 @@ public class WorkorderPickFacadeController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:pick_list:view"})
-    @PreAuthorize("hasAuthority('inventory:pick_list:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.INVENTORY_PICK_LIST_VIEW + "')")
     @Operation(operationId = "getPickTasks", summary = "Get Pick Tasks for Workorder", description = """
                     Returns the pick tasks of the workorder's primary pick list in sort order, each with its \
                     SKU, location, required and picked quantities, and status.
@@ -124,7 +125,7 @@ public class WorkorderPickFacadeController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:pick_list:execute"})
-    @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.INVENTORY_PICK_LIST_EXECUTE + "')")
     @EmitEvent(id = "WORKORDER_PICK_FACADE_RESOLVE_SCAN", apiVersion = "1")
     @Operation(operationId = "resolvePickScan", summary = "Resolve Scan Against Pick Task", description = """
                     Checks a scanned SKU and location against a pick task's expected SKU and location, returning \
@@ -188,7 +189,7 @@ public class WorkorderPickFacadeController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:pick_list:execute"})
-    @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.INVENTORY_PICK_LIST_EXECUTE + "')")
     @EmitEvent(id = "WORKORDER_PICK_FACADE_CONFIRM_LINE", apiVersion = "1")
     @Operation(operationId = "confirmPickLine", summary = "Confirm Pick Line Quantity", description = """
                     Queues asynchronous confirmation of a picked quantity on one pick line over the Kafka \
@@ -262,7 +263,7 @@ public class WorkorderPickFacadeController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:pick_list:execute"})
-    @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.INVENTORY_PICK_LIST_EXECUTE + "')")
     @EmitEvent(id = "WORKORDER_PICK_FACADE_COMPLETE_TASK", apiVersion = "1")
     @Operation(operationId = "completePickTask", summary = "Complete a Workorder Pick Task", description = """
                     Queues asynchronous completion of a pick task by confirming its full required quantity over \

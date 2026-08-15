@@ -1,6 +1,7 @@
 package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.service.ConflictOverrideService;
 import com.positivity.shopmanager.service.dto.ConflictOverrideRequest;
 import com.positivity.shopmanager.service.dto.ConflictOverrideResponse;
@@ -46,7 +47,8 @@ public class ConflictOverrideController {
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyAuthority('shop:schedule:edit', 'appointments:reschedule')")
+    @PreAuthorize("hasAnyAuthority('" + ShopPermissions.SCHEDULE_EDIT + "', '" + ShopPermissions.APPOINTMENTS_RESCHEDULE
+            + "')")
     @EmitEvent(id = "SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE", apiVersion = "1")
     @Operation(
             operationId = "executeConflictOverride",

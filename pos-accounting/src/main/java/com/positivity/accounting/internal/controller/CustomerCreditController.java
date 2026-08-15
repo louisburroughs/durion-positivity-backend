@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.dto.CustomerCreditRefundRequest;
 import com.positivity.accounting.internal.dto.CustomerCreditResponse;
 import com.positivity.accounting.internal.dto.CustomerCreditTransactionResponse;
 import com.positivity.accounting.internal.enums.CustomerCreditStatus;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.CustomerCreditService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
@@ -67,7 +68,7 @@ public class CustomerCreditController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:customer-credit:view"})
-    @PreAuthorize("hasAuthority('accounting:customer-credit:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.CUSTOMER_CREDIT_VIEW + "')")
     @Operation(
             operationId = "listCustomerCredits",
             summary = "List Customer Credits",
@@ -97,7 +98,7 @@ public class CustomerCreditController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:customer-credit:view"})
-    @PreAuthorize("hasAuthority('accounting:customer-credit:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.CUSTOMER_CREDIT_VIEW + "')")
     @Operation(
             operationId = "getCustomerCredit",
             summary = "Get Customer Credit",
@@ -127,7 +128,7 @@ public class CustomerCreditController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:customer-credit:apply"})
-    @PreAuthorize("hasAuthority('accounting:customer-credit:apply')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.CUSTOMER_CREDIT_APPLY + "')")
     @Operation(
             operationId = "applyCustomerCredit",
             summary = "Apply Customer Credit To Invoice",
@@ -190,7 +191,7 @@ public class CustomerCreditController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:customer-credit:refund"})
-    @PreAuthorize("hasAuthority('accounting:customer-credit:refund')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.CUSTOMER_CREDIT_REFUND + "')")
     @Operation(
             operationId = "refundCustomerCredit",
             summary = "Refund Customer Credit",

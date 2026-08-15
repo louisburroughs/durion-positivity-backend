@@ -6,6 +6,7 @@ import com.positivity.workorder.internal.dto.AssignTechnicianRequest;
 import com.positivity.workorder.internal.dto.ReassignTechnicianRequest;
 import com.positivity.workorder.internal.dto.TechnicianAssignmentMapper;
 import com.positivity.workorder.internal.dto.TechnicianAssignmentResponse;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.TechnicianAssignmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -93,7 +94,7 @@ public class TechnicianAssignmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:workorder:assign-technician"})
-    @PreAuthorize("hasAuthority('workorder:workorder:assign-technician')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_ASSIGN_TECHNICIAN + "')")
     public ResponseEntity<TechnicianAssignmentResponse> assignTechnician(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001")
                     @PathVariable
@@ -195,7 +196,7 @@ public class TechnicianAssignmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:workorder:assign-technician"})
-    @PreAuthorize("hasAuthority('workorder:workorder:assign-technician')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_ASSIGN_TECHNICIAN + "')")
     public ResponseEntity<TechnicianAssignmentResponse> reassignTechnician(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001")
                     @PathVariable
@@ -273,7 +274,7 @@ public class TechnicianAssignmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:workorder:view"})
-    @PreAuthorize("hasAuthority('workorder:workorder:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_VIEW + "')")
     public ResponseEntity<TechnicianAssignmentResponse> getTechnicianAssignment(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001")
                     @PathVariable

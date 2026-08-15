@@ -6,6 +6,7 @@ import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
 import com.positivity.workorder.internal.dto.OperationalContextResponse;
 import com.positivity.workorder.internal.dto.StartWorkorderRequest;
 import com.positivity.workorder.internal.dto.WorkorderStartResponse;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.WorkorderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -55,7 +56,7 @@ public class OperationalContextController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:operationalContext:override"})
-    @PreAuthorize("hasAuthority('workorder:operationalContext:override')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.OPERATIONALCONTEXT_OVERRIDE + "')")
     @EmitEvent(id = "WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE", apiVersion = "1")
     @Operation(
             operationId = "overrideOperationalContext",
@@ -108,7 +109,7 @@ public class OperationalContextController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:start"})
-    @PreAuthorize("hasAuthority('workorder:start')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.START + "')")
     @EmitEvent(id = "WORKORDER_START", apiVersion = "1")
     @Operation(
             operationId = "startWorkorder",

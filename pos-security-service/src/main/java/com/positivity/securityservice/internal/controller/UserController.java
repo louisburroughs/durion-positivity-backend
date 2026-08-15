@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.dto.UserUpdateRequest;
+import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -46,7 +47,7 @@ public class UserController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:user:create"})
-    @PreAuthorize("hasAuthority('security:user:create')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_CREATE + "')")
     @PostMapping
     public ResponseEntity<UserDto> createUser(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -83,7 +84,7 @@ public class UserController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:user:view"})
-    @PreAuthorize("hasAuthority('security:user:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_VIEW + "')")
     @GetMapping
     public List<UserDto> getAllUsers() {
         return userService.getAllUsers();
@@ -104,7 +105,7 @@ public class UserController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:user:view"})
-    @PreAuthorize("hasAuthority('security:user:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_VIEW + "')")
     @GetMapping("/{id}")
     public ResponseEntity<UserDto> getUserById(
             @Parameter(description = "ID of the user to retrieve", example = "123e4567-e89b-12d3-a456-426614174000")
@@ -137,7 +138,7 @@ public class UserController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:user:edit"})
-    @PreAuthorize("hasAuthority('security:user:edit')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_EDIT + "')")
     @PutMapping("/{id}")
     public ResponseEntity<UserDto> updateUser(
             @Parameter(description = "ID of the user to update", example = "123e4567-e89b-12d3-a456-426614174000")
@@ -176,7 +177,7 @@ public class UserController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:user:delete"})
-    @PreAuthorize("hasAuthority('security:user:delete')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_DELETE + "')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUser(
             @Parameter(description = "ID of the user to delete", example = "123e4567-e89b-12d3-a456-426614174000")
@@ -210,7 +211,7 @@ public class UserController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:assign"})
-    @PreAuthorize("hasAuthority('security:role:assign')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_ASSIGN + "')")
     @PutMapping("/{username}/roles")
     public ResponseEntity<UserDto> assignRoles(
             @Parameter(description = "Username of the user whose roles are being assigned") @PathVariable

@@ -5,6 +5,7 @@ import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.dto.RevertRequest;
+import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.service.InvoiceFinalizationService;
 import com.positivity.invoice.service.InvoiceService;
 import com.positivity.invoice.service.OrderInvoiceService;
@@ -34,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/invoices")
 @Tag(name = "Invoice", description = "Invoice generation and lifecycle management")
-@PreAuthorize("hasAuthority('invoice:manage')")
+@PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
 public class InvoiceController {
 
     private final InvoiceService invoiceService;
@@ -257,7 +258,7 @@ public class InvoiceController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"invoice:finalize"})
-    @PreAuthorize("hasAuthority('invoice:finalize')")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.FINALIZE + "')")
     public ResponseEntity<InvoiceDetailsResponse> finalizeInvoice(
             @PathVariable @NonNull UUID invoiceId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -302,7 +303,7 @@ public class InvoiceController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"invoice:finalize"})
-    @PreAuthorize("hasAuthority('invoice:finalize')")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.FINALIZE + "')")
     public ResponseEntity<InvoiceDetailsResponse> revertInvoice(
             @PathVariable @NonNull UUID invoiceId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

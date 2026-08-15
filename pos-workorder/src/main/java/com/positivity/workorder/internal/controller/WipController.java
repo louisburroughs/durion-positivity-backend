@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.WorkorderStatusDetail;
 import com.positivity.workorder.internal.dto.WorkorderStatusView;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.WipService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -63,7 +64,7 @@ public class WipController {
                     requested without workorder:wip:view_all_locations.
                     """)
     @GetMapping
-    @PreAuthorize("hasAuthority('workorder:wip:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WIP_VIEW + "')")
     @EmitEvent(id = "WORKORDER_WIP_LIST", apiVersion = "1")
     public ResponseEntity<Page<WorkorderStatusView>> listWip(
             @Parameter(description = "Location ID to filter workorders by") @RequestParam String locationId,
@@ -102,7 +103,7 @@ public class WipController {
                     case surfaces as 400 rather than 404 in this operation.
                     """)
     @GetMapping("/{workorderId}")
-    @PreAuthorize("hasAuthority('workorder:wip:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WIP_VIEW + "')")
     @EmitEvent(id = "WORKORDER_WIP_VIEW", apiVersion = "1")
     public ResponseEntity<WorkorderStatusDetail> getWipDetail(
             @Parameter(description = "UUID of the workorder") @PathVariable UUID workorderId) {

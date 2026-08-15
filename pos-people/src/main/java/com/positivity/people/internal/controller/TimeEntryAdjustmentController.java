@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.TimeEntryAdjustment;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentRequest;
 import com.positivity.people.internal.dto.TimeEntryAdjustmentResponse;
+import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.service.TimeEntryAdjustmentService;
 import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -62,7 +63,7 @@ public class TimeEntryAdjustmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timeAdjustment:create"})
-    @PreAuthorize("hasAuthority('people:timeAdjustment:create')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEADJUSTMENT_CREATE + "')")
     public ResponseEntity<TimeEntryAdjustmentResponse> createAdjustment(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Proposed correction for one time entry: replacement start/end timestamps"
@@ -101,7 +102,7 @@ public class TimeEntryAdjustmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timeAdjustment:view"})
-    @PreAuthorize("hasAuthority('people:timeAdjustment:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEADJUSTMENT_VIEW + "')")
     public ResponseEntity<List<TimeEntryAdjustment>> listForTimeEntry(@PathVariable UUID timeEntryId) {
         List<TimeEntryAdjustment> list = adjustmentService.listForTimeEntry(timeEntryId);
         return ResponseEntity.ok(list);
@@ -131,7 +132,7 @@ public class TimeEntryAdjustmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timeAdjustment:approve"})
-    @PreAuthorize("hasAuthority('people:timeAdjustment:approve')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEADJUSTMENT_APPROVE + "')")
     public ResponseEntity<Object> approveAdjustment(
             @PathVariable java.util.UUID adjustmentId,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {

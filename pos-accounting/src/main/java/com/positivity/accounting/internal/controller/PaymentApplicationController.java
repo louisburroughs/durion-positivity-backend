@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalRequest;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.PaymentApplicationService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -51,7 +52,7 @@ public class PaymentApplicationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:pay"})
-    @PreAuthorize("hasAuthority('accounting:ap:pay')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
     @Operation(
             operationId = "voidPaymentApplication",
             summary = "Void Payment",
@@ -93,7 +94,7 @@ public class PaymentApplicationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:pay"})
-    @PreAuthorize("hasAuthority('accounting:ap:pay')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
     @Operation(
             operationId = "reversePayment",
             summary = "Reverse Payment",
@@ -161,7 +162,7 @@ public class PaymentApplicationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:payment:apply"})
-    @PreAuthorize("hasAuthority('accounting:payment:apply')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.PAYMENT_APPLY + "')")
     @Operation(
             operationId = "applyPayment",
             summary = "Apply Payment To Invoices",
@@ -247,7 +248,7 @@ public class PaymentApplicationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:payment:reverse", "ACCOUNTING_ADMIN", "AR_MANAGER"})
-    @PreAuthorize("hasAnyAuthority('accounting:payment:reverse', 'ACCOUNTING_ADMIN', 'AR_MANAGER')")
+    @PreAuthorize("hasAnyAuthority('" + AccountingPermissions.PAYMENT_REVERSE + "', 'ACCOUNTING_ADMIN', 'AR_MANAGER')")
     @Operation(
             operationId = "reversePaymentApplication",
             summary = "Reverse Payment Application",

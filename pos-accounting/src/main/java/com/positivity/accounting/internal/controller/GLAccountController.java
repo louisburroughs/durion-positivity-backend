@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
 import com.positivity.accounting.internal.dto.GLAccountListResponse;
 import com.positivity.accounting.internal.dto.GLAccountResponse;
 import com.positivity.accounting.internal.dto.GLAccountUpdateRequest;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.GLAccountService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -55,7 +56,7 @@ public class GLAccountController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:coa:view"})
-    @PreAuthorize("hasAuthority('accounting:coa:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.COA_VIEW + "')")
     @Operation(
             operationId = "listGLAccounts",
             summary = "List GL Accounts",
@@ -97,7 +98,7 @@ public class GLAccountController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:coa:view"})
-    @PreAuthorize("hasAuthority('accounting:coa:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.COA_VIEW + "')")
     @Operation(
             operationId = "getGLAccount",
             summary = "Get GL Account",
@@ -125,7 +126,7 @@ public class GLAccountController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:coa:create"})
-    @PreAuthorize("hasAuthority('accounting:coa:create')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.COA_CREATE + "')")
     @Operation(
             operationId = "createGLAccount",
             summary = "Create GL Account",
@@ -176,7 +177,7 @@ public class GLAccountController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:coa:edit"})
-    @PreAuthorize("hasAuthority('accounting:coa:edit')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.COA_EDIT + "')")
     @Operation(
             operationId = "updateGLAccount",
             summary = "Update GL Account",
@@ -225,7 +226,7 @@ public class GLAccountController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:coa:edit"})
-    @PreAuthorize("hasAuthority('accounting:coa:edit')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.COA_EDIT + "')")
     @Operation(
             operationId = "activateGLAccount",
             summary = "Activate GL Account",
@@ -270,7 +271,7 @@ public class GLAccountController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:coa:deactivate"})
-    @PreAuthorize("hasAuthority('accounting:coa:deactivate')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.COA_DEACTIVATE + "')")
     @Operation(
             operationId = "deactivateGLAccount",
             summary = "Deactivate GL Account",
@@ -311,7 +312,7 @@ public class GLAccountController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:coa:deactivate"})
-    @PreAuthorize("hasAuthority('accounting:coa:deactivate')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.COA_DEACTIVATE + "')")
     @Operation(
             operationId = "archiveGLAccount",
             summary = "Archive GL Account",
@@ -351,7 +352,7 @@ public class GLAccountController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:coa:view"})
-    @PreAuthorize("hasAuthority('accounting:coa:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.COA_VIEW + "')")
     @Operation(
             operationId = "getGLAccountBalance",
             summary = "Get GL Account Balance",

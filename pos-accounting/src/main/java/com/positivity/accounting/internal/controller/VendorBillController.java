@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillMatchCandidateResponse;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.VendorBillService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -64,7 +65,7 @@ public class VendorBillController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:pay"})
-    @PreAuthorize("hasAuthority('accounting:ap:pay')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
     @Operation(
             operationId = "createVendorBillFromGoodsReceived",
             summary = "Create Vendor Bill From Goods Received",
@@ -136,7 +137,7 @@ public class VendorBillController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:pay"})
-    @PreAuthorize("hasAuthority('accounting:ap:pay')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
     @Operation(
             operationId = "matchVendorInvoice",
             summary = "Match Vendor Invoice",
@@ -211,7 +212,7 @@ public class VendorBillController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:pay"})
-    @PreAuthorize("hasAuthority('accounting:ap:pay')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
     @Operation(
             operationId = "resolveVendorBillMatchException",
             summary = "Resolve Vendor Bill Match Exception",
@@ -279,7 +280,7 @@ public class VendorBillController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:view"})
-    @PreAuthorize("hasAuthority('accounting:ap:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
     @Operation(
             operationId = "getVendorBillById",
             summary = "Get Vendor Bill By Id",
@@ -325,7 +326,7 @@ public class VendorBillController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:view"})
-    @PreAuthorize("hasAuthority('accounting:ap:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
     @Operation(
             operationId = "getVendorBillByOriginEventId",
             summary = "Get Vendor Bill By Origin Event",
@@ -372,7 +373,7 @@ public class VendorBillController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:view"})
-    @PreAuthorize("hasAuthority('accounting:ap:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
     @Operation(
             operationId = "listVendorBillMatchCandidates",
             summary = "List Vendor Bill Match Candidates",
@@ -419,7 +420,7 @@ public class VendorBillController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:pay"})
-    @PreAuthorize("hasAuthority('accounting:ap:pay')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
     @Operation(
             operationId = "selectVendorBillMatchCandidate",
             summary = "Select Vendor Bill Match Candidate",

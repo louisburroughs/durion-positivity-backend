@@ -6,6 +6,7 @@ import com.positivity.workorder.internal.dto.AdjustLaborRequest;
 import com.positivity.workorder.internal.dto.StartLaborRequest;
 import com.positivity.workorder.internal.dto.WorkorderLaborEntryResponse;
 import com.positivity.workorder.internal.dto.WorkorderLaborMapper;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.WorkorderLaborService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -103,7 +104,7 @@ public class WorkorderLaborController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:labor:add"})
-    @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.LABOR_ADD + "')")
     public ResponseEntity<WorkorderLaborEntryResponse> startLaborSession(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001")
                     @PathVariable
@@ -182,7 +183,7 @@ public class WorkorderLaborController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:labor:add"})
-    @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.LABOR_ADD + "')")
     public ResponseEntity<WorkorderLaborEntryResponse> stopLaborSession(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001")
                     @PathVariable
@@ -242,7 +243,7 @@ public class WorkorderLaborController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:labor:view"})
-    @PreAuthorize("hasAuthority('workorder:labor:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.LABOR_VIEW + "')")
     public ResponseEntity<List<WorkorderLaborEntryResponse>> getLaborHistory(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001")
                     @PathVariable
@@ -303,7 +304,7 @@ public class WorkorderLaborController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:labor:add"})
-    @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.LABOR_ADD + "')")
     public ResponseEntity<WorkorderLaborEntryResponse> adjustLaborHours(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001")
                     @PathVariable

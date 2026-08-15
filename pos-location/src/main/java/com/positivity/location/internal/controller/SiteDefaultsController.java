@@ -3,6 +3,7 @@ package com.positivity.location.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.SiteDefaultsRequest;
 import com.positivity.location.internal.dto.SiteDefaultsResponse;
+import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.service.SiteDefaultsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -65,7 +66,7 @@ public class SiteDefaultsController {
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @ApiResponse(responseCode = "404", description = "Location not found")
     @ApiResponse(responseCode = "422", description = "Default storage location does not belong to the site")
-    @PreAuthorize("hasAuthority('location:write')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @EmitEvent(id = "LOCATION_SITE_DEFAULTS_PUT", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -110,7 +111,7 @@ public class SiteDefaultsController {
                             schema = @Schema(implementation = SiteDefaultsResponse.class)))
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @ApiResponse(responseCode = "404", description = "Location not found")
-    @PreAuthorize("hasAuthority('location:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @EmitEvent(id = "LOCATION_SITE_DEFAULTS_GET", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",

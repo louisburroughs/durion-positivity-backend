@@ -13,6 +13,7 @@ import com.positivity.workorder.internal.dto.UpdateEstimateItemRequest;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.EstimateService;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkorderService;
@@ -80,7 +81,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:view"})
-    @PreAuthorize("hasAuthority('workorder:estimate:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_VIEW + "')")
     public List<EstimateResponse> getAllEstimates() {
         return estimateService.getAllEstimates();
     }
@@ -101,7 +102,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:view"})
-    @PreAuthorize("hasAuthority('workorder:estimate:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_VIEW + "')")
     public ResponseEntity<EstimateResponse> getEstimateById(
             @Parameter(description = "ID of the estimate to retrieve", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -128,7 +129,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:view"})
-    @PreAuthorize("hasAuthority('workorder:estimate:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_VIEW + "')")
     public List<EstimateResponse> getEstimatesByCustomer(
             @Parameter(description = "ID of the customer", example = "550e8400-e29b-41d4-a716-446655440010")
                     @PathVariable
@@ -153,7 +154,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:view"})
-    @PreAuthorize("hasAuthority('workorder:estimate:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_VIEW + "')")
     public List<EstimateResponse> getEstimatesByShop(
             @Parameter(description = "ID of the shop", example = "550e8400-e29b-41d4-a716-446655440020") @PathVariable
                     UUID locationId) {
@@ -176,7 +177,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:view"})
-    @PreAuthorize("hasAuthority('workorder:estimate:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_VIEW + "')")
     public List<EstimateResponse> getEstimatesByLocation(
             @Parameter(description = "ID of the location", example = "550e8400-e29b-41d4-a716-446655440020")
                     @PathVariable
@@ -225,7 +226,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:create"})
-    @PreAuthorize("hasAuthority('workorder:estimate:create')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_CREATE + "')")
     public ResponseEntity<Object> createEstimate(
             @Parameter(description = "Estimate creation request with customer and vehicle IDs") @Valid @RequestBody
                     CreateEstimateRequest request,
@@ -317,7 +318,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:edit"})
-    @PreAuthorize("hasAuthority('workorder:estimate:edit')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_EDIT + "')")
     public ResponseEntity<Object> patchEstimateStatus(
             @PathVariable UUID estimateId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -377,7 +378,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:decline"})
-    @PreAuthorize("hasAuthority('workorder:estimate:decline')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_DECLINE + "')")
     public ResponseEntity<EstimateResponse> declineEstimate(
             @Parameter(description = "ID of the estimate to decline", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -413,7 +414,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:reopen"})
-    @PreAuthorize("hasAuthority('workorder:estimate:reopen')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_REOPEN + "')")
     public ResponseEntity<EstimateResponse> reopenEstimate(
             @Parameter(description = "ID of the estimate to reopen", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -465,7 +466,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:approve"})
-    @PreAuthorize("hasAuthority('workorder:estimate:approve')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_APPROVE + "')")
     public ResponseEntity<EstimateResponse> approveEstimate(
             @Parameter(description = "ID of the estimate to approve", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -525,7 +526,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:promote"})
-    @PreAuthorize("hasAuthority('workorder:estimate:promote')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_PROMOTE + "')")
     public ResponseEntity<WorkorderResponse> promoteEstimateToWorkorder(
             @Parameter(description = "ID of the estimate to promote", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -693,7 +694,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:submit"})
-    @PreAuthorize("hasAuthority('workorder:estimate:submit')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_SUBMIT + "')")
     public ResponseEntity<EstimateResponse> submitForApproval(
             @Parameter(description = "ID of the estimate to submit", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -730,7 +731,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:delete"})
-    @PreAuthorize("hasAuthority('workorder:estimate:delete')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_DELETE + "')")
     public ResponseEntity<Void> deleteEstimate(
             @Parameter(description = "ID of the estimate to delete", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -779,7 +780,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate_item:add"})
-    @PreAuthorize("hasAuthority('workorder:estimate_item:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_ITEM_ADD + "')")
     public ResponseEntity<EstimateItemResponse> addEstimateItem(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -849,7 +850,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate_item:edit"})
-    @PreAuthorize("hasAuthority('workorder:estimate_item:edit')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_ITEM_EDIT + "')")
     public ResponseEntity<EstimateItemResponse> updateEstimateItem(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -898,7 +899,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate_item:delete"})
-    @PreAuthorize("hasAuthority('workorder:estimate_item:delete')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_ITEM_DELETE + "')")
     public ResponseEntity<Void> deleteEstimateItem(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -948,7 +949,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:calculate"})
-    @PreAuthorize("hasAuthority('workorder:estimate:calculate')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_CALCULATE + "')")
     public ResponseEntity<Map<String, Object>> calculateEstimateTotals(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -995,7 +996,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:view"})
-    @PreAuthorize("hasAuthority('workorder:estimate:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_VIEW + "')")
     public ResponseEntity<EstimateSummaryResponse> getEstimateSummary(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -1042,7 +1043,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate:view"})
-    @PreAuthorize("hasAuthority('workorder:estimate:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_VIEW + "')")
     public ResponseEntity<byte[]> generateEstimatePdf(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -1089,7 +1090,7 @@ public class EstimateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:estimate_snapshot:create"})
-    @PreAuthorize("hasAuthority('workorder:estimate_snapshot:create')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_SNAPSHOT_CREATE + "')")
     public ResponseEntity<EstimateSnapshotResponse> createEstimateSnapshot(
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable

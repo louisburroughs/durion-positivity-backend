@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.BayPatchRequest;
 import com.positivity.location.internal.dto.BayRequest;
 import com.positivity.location.internal.dto.BayResponse;
+import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.service.BayService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -64,7 +65,7 @@ public class BayController {
                     """)
     @ApiResponse(responseCode = "200", description = "Bays retrieved successfully.")
     @ApiResponse(responseCode = "404", description = "Location not found.")
-    @PreAuthorize("hasAuthority('location:bay:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:bay:read"})
@@ -91,7 +92,7 @@ public class BayController {
                     """)
     @ApiResponse(responseCode = "200", description = "Bay retrieved successfully.")
     @ApiResponse(responseCode = "404", description = "Bay not found.")
-    @PreAuthorize("hasAuthority('location:bay:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:bay:read"})
@@ -122,7 +123,7 @@ public class BayController {
     @ApiResponse(responseCode = "404", description = "Location not found.")
     @ApiResponse(responseCode = "409", description = "Bay name already taken at this location.")
     @EmitEvent(id = "LOCATION_BAY_CREATE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('location:bay:manage')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_MANAGE + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:bay:manage"})
@@ -163,7 +164,7 @@ public class BayController {
     @ApiResponse(responseCode = "404", description = "Location or bay not found.")
     @ApiResponse(responseCode = "409", description = "Bay name already taken at this location.")
     @EmitEvent(id = "LOCATION_BAY_UPDATE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('location:bay:manage')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_MANAGE + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:bay:manage"})

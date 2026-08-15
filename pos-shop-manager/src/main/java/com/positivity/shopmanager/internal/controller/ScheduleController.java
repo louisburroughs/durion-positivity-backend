@@ -3,6 +3,7 @@ package com.positivity.shopmanager.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.shopmanager.internal.dto.ScheduleViewRequest;
 import com.positivity.shopmanager.internal.dto.ScheduleViewResponse;
+import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.service.AppointmentsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -54,7 +55,7 @@ public class ScheduleController {
     @ApiResponse(responseCode = "404", description = "Location or resource not found")
     @GetMapping("/schedules/view")
     @EmitEvent(id = "SHOPMGR_SCHEDULE_VIEW", apiVersion = "1")
-    @PreAuthorize("hasAuthority('shop:schedule:view')")
+    @PreAuthorize("hasAuthority('" + ShopPermissions.SCHEDULE_VIEW + "')")
     public ResponseEntity<ScheduleViewResponse> viewSchedule(
             @Parameter(description = "Location ID", required = true) @RequestParam UUID locationId,
             @Parameter(description = "Date in YYYY-MM-DD", required = true) @RequestParam LocalDate date,

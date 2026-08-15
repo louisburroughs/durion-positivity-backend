@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.APPaymentService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -95,7 +96,7 @@ public class APPaymentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:pay"})
-    @PreAuthorize("hasAuthority('accounting:ap:pay')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
     public @NonNull ResponseEntity<APPaymentResponse> executePayment(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
@@ -162,7 +163,7 @@ public class APPaymentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:view"})
-    @PreAuthorize("hasAuthority('accounting:ap:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
     public @NonNull ResponseEntity<APPaymentResponse> getPayment(
             @PathVariable
                     @Parameter(description = "Payment UUID", example = "01936e5c-7890-7a3d-8b6e-2b3456789012")
@@ -196,7 +197,7 @@ public class APPaymentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:view"})
-    @PreAuthorize("hasAuthority('accounting:ap:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
     public @NonNull ResponseEntity<APPaymentResponse> getPaymentByRef(
             @PathVariable
                     @Parameter(
@@ -235,7 +236,7 @@ public class APPaymentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:ap:view"})
-    @PreAuthorize("hasAuthority('accounting:ap:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
     public @NonNull ResponseEntity<Page<VendorBillSummaryResponse>> listBills(
             @RequestParam(required = false)
                     @Parameter(

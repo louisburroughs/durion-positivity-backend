@@ -9,6 +9,7 @@ import com.positivity.accounting.internal.dto.IncomeStatementReport;
 import com.positivity.accounting.internal.dto.JournalLineDrilldownResponse;
 import com.positivity.accounting.internal.dto.TaxLiabilityReport;
 import com.positivity.accounting.internal.dto.TrialBalanceReport;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.FinancialReportingService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
@@ -66,7 +67,7 @@ public class FinancialReportingController {
      * Generate Income Statement (Profit & Loss) for a date range.
      */
     @GetMapping(value = "/income-statement", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "')")
     @EmitEvent(id = "REPORT_INCOME_STATEMENT_GENERATE", apiVersion = "1")
     @Operation(
             operationId = "generateIncomeStatement",
@@ -120,7 +121,7 @@ public class FinancialReportingController {
      * Generate Balance Sheet as of a specific date.
      */
     @GetMapping(value = "/balance-sheet", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "')")
     @EmitEvent(id = "REPORT_BALANCE_SHEET_GENERATE", apiVersion = "1")
     @Operation(
             operationId = "generateBalanceSheet",
@@ -159,7 +160,7 @@ public class FinancialReportingController {
      * Generate Trial Balance as of a specific date.
      */
     @GetMapping(value = "/trial-balance", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "')")
     @EmitEvent(id = "REPORT_TRIAL_BALANCE_GENERATE", apiVersion = "1")
     @Operation(
             operationId = "generateTrialBalance",
@@ -210,7 +211,7 @@ public class FinancialReportingController {
      * Drill down from statement line to contributing GL accounts.
      */
     @GetMapping(value = "/drilldown/accounts/{statementLineCode}", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "')")
     @EmitEvent(id = "REPORT_DRILLDOWN_ACCOUNTS", apiVersion = "1")
     @Operation(
             operationId = "drilldownToAccounts",
@@ -277,7 +278,7 @@ public class FinancialReportingController {
      * Drill down from GL account to source journal lines.
      */
     @GetMapping(value = "/drilldown/journal-lines/{accountId}", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "')")
     @EmitEvent(id = "REPORT_DRILLDOWN_JOURNAL_LINES", apiVersion = "1")
     @Operation(
             operationId = "drilldownToJournalLines",
@@ -349,7 +350,7 @@ public class FinancialReportingController {
      * single account (Story G2, Issue #960).
      */
     @GetMapping(value = "/general-ledger", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "')")
     @EmitEvent(id = "REPORT_GENERAL_LEDGER_GENERATE", apiVersion = "1")
     @Operation(
             operationId = "generateGeneralLedger",
@@ -419,7 +420,7 @@ public class FinancialReportingController {
      * Generate the Aged Receivables report as of a date (Story G2, Issue #960).
      */
     @GetMapping(value = "/aged-receivables", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "')")
     @EmitEvent(id = "REPORT_AGED_RECEIVABLES_GENERATE", apiVersion = "1")
     @Operation(
             operationId = "generateAgedReceivables",
@@ -469,7 +470,7 @@ public class FinancialReportingController {
      * Generate the Aged Payables report as of a date (Story G2, Issue #960).
      */
     @GetMapping(value = "/aged-payables", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "')")
     @EmitEvent(id = "REPORT_AGED_PAYABLES_GENERATE", apiVersion = "1")
     @Operation(
             operationId = "generateAgedPayables",
@@ -521,7 +522,7 @@ public class FinancialReportingController {
      * #966).
      */
     @GetMapping(value = "/tax-liability", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "')")
     @EmitEvent(id = "REPORT_TAX_LIABILITY_GENERATE", apiVersion = "1")
     @Operation(
             operationId = "generateTaxLiabilityReport",

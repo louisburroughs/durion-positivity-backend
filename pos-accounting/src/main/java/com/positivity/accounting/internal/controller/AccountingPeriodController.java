@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.dto.AccountingPeriodReopenRequest;
 import com.positivity.accounting.internal.dto.AccountingPeriodResponse;
 import com.positivity.accounting.internal.dto.HardLockDateResponse;
 import com.positivity.accounting.internal.dto.HardLockDateUpdateRequest;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.AccountingConfigurationService;
 import com.positivity.accounting.service.AccountingPeriodService;
 import com.positivity.events.EmitEvent;
@@ -66,7 +67,7 @@ public class AccountingPeriodController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:period:view"})
-    @PreAuthorize("hasAuthority('accounting:period:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.PERIOD_VIEW + "')")
     @EmitEvent(id = "ACCOUNTING_PERIOD_LIST", apiVersion = "1")
     @Operation(
             operationId = "listAccountingPeriods",
@@ -101,7 +102,7 @@ public class AccountingPeriodController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:period:close"})
-    @PreAuthorize("hasAuthority('accounting:period:close')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.PERIOD_CLOSE + "')")
     @EmitEvent(id = "ACCOUNTING_PERIOD_CLOSE", apiVersion = "1")
     @Operation(
             operationId = "closeAccountingPeriod",
@@ -163,7 +164,7 @@ public class AccountingPeriodController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:period:reopen"})
-    @PreAuthorize("hasAuthority('accounting:period:reopen')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.PERIOD_REOPEN + "')")
     @EmitEvent(id = "ACCOUNTING_PERIOD_REOPEN", apiVersion = "1")
     @Operation(
             operationId = "reopenAccountingPeriod",
@@ -234,7 +235,7 @@ public class AccountingPeriodController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:period:view"})
-    @PreAuthorize("hasAuthority('accounting:period:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.PERIOD_VIEW + "')")
     @EmitEvent(id = "ACCOUNTING_PERIOD_HARD_LOCK_VIEW", apiVersion = "1")
     @Operation(
             operationId = "getAccountingHardLockDate",
@@ -270,7 +271,7 @@ public class AccountingPeriodController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:period:hard_lock"})
-    @PreAuthorize("hasAuthority('accounting:period:hard_lock')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.PERIOD_HARD_LOCK + "')")
     @EmitEvent(id = "ACCOUNTING_PERIOD_HARD_LOCK_SET", apiVersion = "1")
     @Operation(
             operationId = "setAccountingHardLockDate",

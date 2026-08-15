@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.peoplecontact.internal.dto.Person;
 import com.positivity.peoplecontact.internal.dto.ResolvePersonRequest;
 import com.positivity.peoplecontact.internal.dto.ResolvePersonResponse;
+import com.positivity.peoplecontact.internal.security.PeopleContactPermissions;
 import com.positivity.peoplecontact.service.PersonService;
 import com.positivity.peoplecontact.service.UserPersonTranslationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -67,7 +68,7 @@ public class PersonController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:person:view"})
-    @PreAuthorize("hasAuthority('people-contact:person:view')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.PERSON_VIEW + "')")
     public Person getCurrentPerson() {
         UUID personId = userPersonTranslationService.getPersonUuidForCurrentUser();
         return personService
@@ -93,7 +94,7 @@ public class PersonController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:person:view"})
-    @PreAuthorize("hasAuthority('people-contact:person:view')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.PERSON_VIEW + "')")
     public List<Person> getAllPeople(@RequestParam(name = "q", required = false) String q) {
         return personService.getAllPeople(q);
     }
@@ -120,7 +121,7 @@ public class PersonController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:person:view"})
-    @PreAuthorize("hasAuthority('people-contact:person:view')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.PERSON_VIEW + "')")
     public ResponseEntity<Person> getPersonById(
             @Parameter(description = "ID of the person to retrieve", example = "123e4567-e89b-12d3-a456-426614174000")
                     @PathVariable
@@ -149,7 +150,7 @@ public class PersonController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:person:view"})
-    @PreAuthorize("hasAuthority('people-contact:person:view')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.PERSON_VIEW + "')")
     public List<Person> getPeopleByIds(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "JSON array of person UUIDs to resolve in one batch.",
@@ -186,7 +187,7 @@ public class PersonController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:person:edit"})
-    @PreAuthorize("hasAuthority('people-contact:person:edit')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.PERSON_EDIT + "')")
     public ResponseEntity<Void> replaceContactPoints(
             @Parameter(description = "Person id") @PathVariable UUID personId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -230,7 +231,7 @@ public class PersonController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:person:create"})
-    @PreAuthorize("hasAuthority('people-contact:person:create')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.PERSON_CREATE + "')")
     public ResponseEntity<Person> createPerson(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Identity fields of the person to create; contact data is stored as"
@@ -274,7 +275,7 @@ public class PersonController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:person:create"})
-    @PreAuthorize("hasAuthority('people-contact:person:create')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.PERSON_CREATE + "')")
     public ResponseEntity<ResolvePersonResponse> resolvePerson(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Weighted matching criteria used to find or create the person.",
@@ -324,7 +325,7 @@ public class PersonController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:person:edit"})
-    @PreAuthorize("hasAuthority('people-contact:person:edit')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.PERSON_EDIT + "')")
     public ResponseEntity<Person> updatePerson(
             @Parameter(description = "ID of the person to update", example = "123e4567-e89b-12d3-a456-426614174000")
                     @PathVariable
@@ -385,7 +386,7 @@ public class PersonController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:person:delete"})
-    @PreAuthorize("hasAuthority('people-contact:person:delete')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.PERSON_DELETE + "')")
     public ResponseEntity<Void> deletePerson(
             @Parameter(description = "ID of the person to delete", example = "123e4567-e89b-12d3-a456-426614174000")
                     @PathVariable

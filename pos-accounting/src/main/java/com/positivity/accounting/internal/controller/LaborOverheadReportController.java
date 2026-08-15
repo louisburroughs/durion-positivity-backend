@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.LaborOverheadCostReport;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.LaborOverheadReportService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -53,7 +54,7 @@ public class LaborOverheadReportController {
      * Generate the Labor &amp; Overhead Cost Report for a location and fiscal year.
      */
     @GetMapping(value = "/labor-overhead", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "')")
     @EmitEvent(id = "REPORT_LABOR_OVERHEAD_GENERATE", apiVersion = "1")
     @Operation(
             operationId = "generateLaborOverheadReport",

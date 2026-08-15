@@ -2,6 +2,7 @@ package com.positivity.invoice.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.BillingRulesDTO;
+import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.service.BillingRulesService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -34,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"invoice:billing-rules"})
 @RequestMapping("/v1/billing/rules")
 @Tag(name = "Billing Rules", description = "Manage billing rules for commercial accounts")
-@PreAuthorize("hasAuthority('invoice:billing-rules')")
+@PreAuthorize("hasAuthority('" + InvoicePermissions.BILLING_RULES + "')")
 public class BillingRulesController {
 
     private static final Logger log = LoggerFactory.getLogger(BillingRulesController.class);

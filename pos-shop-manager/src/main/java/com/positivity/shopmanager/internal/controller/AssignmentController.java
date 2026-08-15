@@ -1,6 +1,7 @@
 package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.service.AssignmentService;
 import com.positivity.shopmanager.service.dto.AssignmentResponse;
 import com.positivity.shopmanager.service.dto.CreateAssignmentRequest;
@@ -41,7 +42,7 @@ public class AssignmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"shop:bay:assign"})
-    @PreAuthorize("hasAuthority('shop:bay:assign')")
+    @PreAuthorize("hasAuthority('" + ShopPermissions.BAY_ASSIGN + "')")
     @EmitEvent(id = "SHOPMGR_ASSIGNMENT_CREATED", apiVersion = "1")
     @Operation(
             operationId = "createAssignment",
@@ -107,7 +108,8 @@ public class AssignmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"appointments:view", "shop:schedule:view"})
-    @PreAuthorize("hasAnyAuthority('appointments:view', 'shop:schedule:view')")
+    @PreAuthorize(
+            "hasAnyAuthority('" + ShopPermissions.APPOINTMENTS_VIEW + "', '" + ShopPermissions.SCHEDULE_VIEW + "')")
     @EmitEvent(id = "SHOPMGR_ASSIGNMENT_LIST_FETCHED", apiVersion = "1")
     @Operation(operationId = "listAssignments", summary = "List Assignments for an Appointment", description = """
                     Returns all assignments recorded for an appointment, including each mechanic's role, the \
