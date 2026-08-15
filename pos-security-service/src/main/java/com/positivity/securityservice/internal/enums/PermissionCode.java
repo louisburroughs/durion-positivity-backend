@@ -591,13 +591,15 @@ public enum PermissionCode {
     // ── Supplier (new) ─────────────────────────────────────────────────────────
     SUPPLIER__TRANSMISSION__READ(451, "supplier:transmission:read"),
     SUPPLIER__TRANSMISSION__RESOLVE(452, "supplier:transmission:resolve"),
-    SUPPLIER__STOCK__INQUIRE(453, "supplier:stock:inquire");
+    SUPPLIER__STOCK__INQUIRE(453, "supplier:stock:inquire"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__REPLENISHMENT__MANAGE(454, "inventory:replenishment:manage");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 46;
+    public static final int CATALOG_VERSION = 47;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

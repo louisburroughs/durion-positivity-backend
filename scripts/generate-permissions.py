@@ -27,6 +27,17 @@ from pathlib import Path
 PERM_RE = re.compile(
     r"'([A-Za-z][A-Za-z0-9_-]*:[A-Za-z][A-Za-z0-9_-]*(?::[A-Za-z][A-Za-z0-9_-]*)?)'"
 )
+
+# The same permission shape as PERM_RE, but as the value of a Java string constant
+# rather than a SpEL literal — e.g. public static final String X = "supplier:stock:inquire";
+PERM_CONST_DECL_RE = re.compile(
+    r"static\s+final\s+String\s+([A-Z][A-Z0-9_]*)\s*=\s*"
+    r'"([A-Za-z][A-Za-z0-9_-]*:[A-Za-z][A-Za-z0-9_-]*(?::[A-Za-z][A-Za-z0-9_-]*)?)"'
+)
+
+# A constant reference inside @PreAuthorize: either qualified (SupplierPermissions.STOCK_INQUIRE)
+# or bare (STOCK_INQUIRE, when the holder is statically imported or the same class).
+CONST_REF_RE = re.compile(r"\b(?:([A-Z][A-Za-z0-9_]*)\.)?([A-Z][A-Z0-9_]{2,})\b")
 ENUM_ENTRY_RE = re.compile(r'\((\d+),\s*"([^"]+)"\)')
 
 PERMISSION_CODE_RELPATH = (
@@ -64,6 +75,66 @@ def extract_preauthorize_blocks(text: str) -> list[str]:
     return blocks
 
 
+def build_permission_constant_map(root: Path) -> dict[str, str]:
+    """
+    Map every permission-valued Java string constant to its literal.
+
+    Keyed twice: qualified ("SupplierPermissions.STOCK_INQUIRE") and bare
+    ("STOCK_INQUIRE"). Modules write @PreAuthorize either way, and the qualified form
+    is what disambiguates when two holders happen to share a constant name.
+
+    Discovery is by declaration shape, not by file name. The repo uses at least two
+    conventions — *Permissions.java and *PermissionRegistry.java — and a filename
+    allowlist would silently miss the next one somebody invents.
+    """
+    qualified: dict[str, str] = {}
+    bare: dict[str, set[str]] = {}
+    for java_root in sorted(root.glob("pos-*/src/main/java")):
+        for java_file in java_root.rglob("*.java"):
+            text = java_file.read_text(encoding="utf-8", errors="replace")
+            if "static final String" not in text:
+                continue
+            class_name = java_file.stem
+            for m in PERM_CONST_DECL_RE.finditer(text):
+                const_name, perm = m.group(1), m.group(2)
+                qualified[f"{class_name}.{const_name}"] = perm
+                bare.setdefault(const_name, set()).add(perm)
+
+    # A bare name is only usable when it means one thing repo-wide. Two holders
+    # disagreeing about STATUS_READ must not silently resolve to whichever was scanned
+    # last — that would register a permission the annotation never referenced.
+    for const_name, values in bare.items():
+        if len(values) == 1:
+            qualified.setdefault(const_name, next(iter(values)))
+    return qualified
+
+
+def resolve_constants(block: str, const_map: dict[str, str]) -> str:
+    """
+    Rewrite constant references in an @PreAuthorize block into SpEL literals.
+
+    Emits 'value' so the existing PERM_RE picks them up unchanged — the scanner keeps
+    one way of recognising a permission, and this only widens what reaches it.
+    """
+    if not const_map:
+        return block
+
+    def repl(m: re.Match) -> str:
+        holder, const_name = m.group(1), m.group(2)
+        if holder:
+            perm = const_map.get(f"{holder}.{const_name}")
+            if perm is None:
+                # Qualified but unknown: do NOT fall back to the bare name. The holder
+                # was named for a reason, and guessing past it is how a permission gets
+                # attributed to the wrong constant.
+                return m.group(0)
+        else:
+            perm = const_map.get(const_name)
+        return f"'{perm}'" if perm else m.group(0)
+
+    return CONST_REF_RE.sub(repl, block)
+
+
 def normalize_domain_key(value: str) -> str:
     """Normalize ownership keys for tolerant domain/prefix matching."""
     return re.sub(r"[^a-z0-9]", "", value.lower())
@@ -77,7 +148,9 @@ def permission_belongs_to_domain(permission: str, domain: str) -> bool:
     return normalize_domain_key(prefix) == normalize_domain_key(domain)
 
 
-def scan_module(module_path: Path, domain: str) -> tuple[set[str], set[str]]:
+def scan_module(
+    module_path: Path, domain: str, const_map: dict[str, str] | None = None
+) -> tuple[set[str], set[str]]:
     """
     Scan all .java files under <module>/src/main/java.
     Returns (own_perms, cross_domain_perms).
@@ -87,9 +160,11 @@ def scan_module(module_path: Path, domain: str) -> tuple[set[str], set[str]]:
     cross: set[str] = set()
     if not java_root.exists():
         return own, cross
+    const_map = const_map or {}
     for java_file in java_root.rglob("*.java"):
         text = java_file.read_text(encoding="utf-8", errors="replace")
         for block in extract_preauthorize_blocks(text):
+            block = resolve_constants(block, const_map)
             for m in PERM_RE.finditer(block):
                 perm = m.group(1)
                 if perm.startswith("ROLE_"):
@@ -148,7 +223,7 @@ def write_permissions_yaml(
 
 
 def process_module(
-    module_path: Path, dry_run: bool, check: bool
+    module_path: Path, dry_run: bool, check: bool, const_map: dict[str, str] | None = None
 ) -> dict | None:
     yaml_path = module_path / "src" / "main" / "resources" / "permissions.yaml"
     if not yaml_path.exists():
@@ -165,7 +240,7 @@ def process_module(
         if isinstance(e, dict) and "name" in e
     }
 
-    own_perms, cross_perms = scan_module(module_path, domain)
+    own_perms, cross_perms = scan_module(module_path, domain, const_map)
 
     added = own_perms - existing_descs.keys()
     # Additive-only: never remove existing entries. Permissions may be enforced
@@ -204,13 +279,15 @@ def discover_modules(root: Path) -> list[Path]:
 # step with @PreAuthorize annotations without manual bit-index bookkeeping.
 # ──────────────────────────────────────────────────────────────────────────────
 
-def scan_all_preauthorize(root: Path) -> set[str]:
+def scan_all_preauthorize(root: Path, const_map: dict[str, str] | None = None) -> set[str]:
     """Collect every permission string from @PreAuthorize across all pos-* modules."""
     all_perms: set[str] = set()
+    const_map = const_map if const_map is not None else build_permission_constant_map(root)
     for java_root in sorted(root.glob("pos-*/src/main/java")):
         for java_file in java_root.rglob("*.java"):
             text = java_file.read_text(encoding="utf-8", errors="replace")
             for block in extract_preauthorize_blocks(text):
+                block = resolve_constants(block, const_map)
                 for m in PERM_RE.finditer(block):
                     perm = m.group(1)
                     if not perm.startswith("ROLE_"):
@@ -416,10 +493,15 @@ def main() -> None:
 
     root = Path(args.root).resolve()
 
+    # Built once and shared: resolving constant-based @PreAuthorize means reading every
+    # module's permission constants, and doing that per module would re-read the repo
+    # once for each of them.
+    const_map = build_permission_constant_map(root)
+
     catalog_error = False
 
     if args.sync:
-        annotated = scan_all_preauthorize(root)
+        annotated = scan_all_preauthorize(root, const_map)
         registered, max_bit = parse_permission_code_java(root)
         new_perms = sorted(annotated - registered)
 
@@ -457,7 +539,7 @@ def main() -> None:
 
     any_yaml_changed = False
     for module_path in module_paths:
-        result = process_module(module_path, args.dry_run, args.check)
+        result = process_module(module_path, args.dry_run, args.check, const_map)
         if result is None:
             continue
 
