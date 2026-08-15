@@ -163,6 +163,18 @@ class ProductDetailSupplierAvailabilityTest {
         assertThat(info.getStatus()).isEqualTo(DataStatus.UNAVAILABLE);
         assertThat(info.getAvailableQuantity()).isNull();
         assertThat(info.getVendorStatus()).isNull();
+        // No timestamp either: dating "we could not find out" would present it as a fact obtained
+        // just now, the same fabrication as defaulting an unstated quantity to zero.
+        assertThat(info.getAsOf()).isNull();
+    }
+
+    @Test
+    void leavesAnUnansweredLineUndatedEvenWhenTheVendorReplied() {
+        vendorAnswers("NOT_ANSWERED", null, null);
+
+        // The vendor replied, so there is an answer document — but it said nothing about this
+        // article, and asOf dates a vendor statement rather than a round trip.
+        assertThat(component().getAsOf()).isNull();
     }
 
     @Test

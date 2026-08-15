@@ -202,8 +202,9 @@ public class ProductDetailView {
         private DataStatus status;
 
         @Schema(
-                description = "When the vendor stated this. A cached answer carries the age of the fact, not of"
-                        + " the cache hit.",
+                description = "When the supplier fact was obtained. Present only when the vendor answered — a"
+                        + " degraded component carries no timestamp, because there is no vendor statement to date."
+                        + " A cached answer carries the age of the fact, not of the cache hit.",
                 example = "2026-08-14T12:00:00Z",
                 requiredMode = NOT_REQUIRED)
         private Instant asOf;

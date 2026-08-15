@@ -2881,16 +2881,6 @@ components:
           format: date-time
         failureDetail:
           type: string
-    Line:
-      type: object
-      properties:
-        articleEan:
-          type: string
-        supplierArticleCode:
-          type: string
-        requestedQuantity:
-          type: integer
-          format: int32
     StockInquiryRequest:
       type: object
       properties:
@@ -2906,7 +2896,18 @@ components:
         lines:
           type: array
           items:
-            $ref: '#/components/schemas/Line'
+            $ref: '#/components/schemas/StockInquiryRequestLine'
+    StockInquiryRequestLine:
+      type: object
+      description: One inquired article. Named explicitly because an unqualified "Line" collides with other modules' schemas of the same name when specs are merged for SDK generation.
+      properties:
+        articleEan:
+          type: string
+        supplierArticleCode:
+          type: string
+        requestedQuantity:
+          type: integer
+          format: int32
     StockInquiryLine:
       type: object
       description: The vendor's answer about one inquired article.

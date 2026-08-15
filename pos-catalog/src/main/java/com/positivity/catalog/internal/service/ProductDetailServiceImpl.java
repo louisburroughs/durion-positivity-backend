@@ -156,10 +156,12 @@ public class ProductDetailServiceImpl implements ProductDetailService {
         }
 
         if (answer.isEmpty() || answer.get().lines().isEmpty()) {
+            // No asOf: there is no vendor statement to date. Stamping the render time here would
+            // present "we could not find out" as a fact obtained just now, which is the same class of
+            // fabrication as defaulting an unstated quantity to zero.
             return SupplierAvailabilityInfo.builder()
                     .status(DataStatus.UNAVAILABLE)
                     .confidence(DataConfidence.LOW)
-                    .asOf(requestTime)
                     .build();
         }
 
@@ -177,7 +179,16 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                 .earliestDeliveryDate(line.earliestDeliveryDate())
                 .vendorStatus(vendorStatus)
                 .status(answered ? DataStatus.OK : DataStatus.UNAVAILABLE)
-                .asOf(answer.get().asOf() == null ? requestTime : answer.get().asOf())
+                // Dated only when the vendor actually said something. The supplier's own asOf is
+                // preferred because it carries the age of a cached answer; the request time is the
+                // fallback for an answered line the supplier left undated, where "obtained now" is
+                // true. An unanswered line is left undated entirely.
+                .asOf(
+                        answered
+                                ? (answer.get().asOf() == null
+                                        ? requestTime
+                                        : answer.get().asOf())
+                                : null)
                 .confidence(answered ? DataConfidence.HIGH : DataConfidence.LOW)
                 .build();
     }
