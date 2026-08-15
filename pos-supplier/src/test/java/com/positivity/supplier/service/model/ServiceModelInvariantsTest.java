@@ -123,17 +123,32 @@ class ServiceModelInvariantsTest {
             // Degradation contract of the single approved synchronous supplier read
             // (ADR-0049 §4): "vendor did not state" must remain distinguishable from
             // "vendor stated zero".
-            StockInquiryResponse.Line unstated = new StockInquiryResponse.Line("4019238001234", null, null, null, null);
+            StockInquiryResponse.Line unstated = new StockInquiryResponse.Line(
+                    "4019238001234", null, StockInquiryResponse.LineStatus.NOT_ANSWERED, null, null, null, null);
 
             assertThat(unstated.availableQuantity()).isNull();
             assertThat(unstated.quotedUnitPrice()).isNull();
         }
 
         @Test
+        void aVendorStatedZeroIsDistinguishableFromAVendorSayingNothing() {
+            // The pair the whole degradation contract turns on: only the first justifies telling a
+            // customer the article is out of stock.
+            StockInquiryResponse.Line statedNone = new StockInquiryResponse.Line(
+                    "4019238001234", null, StockInquiryResponse.LineStatus.UNAVAILABLE, 0, null, null, null);
+            StockInquiryResponse.Line saidNothing = new StockInquiryResponse.Line(
+                    "4019238001234", null, StockInquiryResponse.LineStatus.NOT_ANSWERED, null, null, null, null);
+
+            assertThat(statedNone.availableQuantity()).isZero();
+            assertThat(saidNothing.availableQuantity()).isNull();
+        }
+
+        @Test
         void echoesInquiryIdAndCopiesLines() {
             UUID inquiryId = UUID.randomUUID();
             List<StockInquiryResponse.Line> source = new ArrayList<>();
-            source.add(new StockInquiryResponse.Line(null, "MICH-123", 0, null, null));
+            source.add(new StockInquiryResponse.Line(
+                    null, "MICH-123", StockInquiryResponse.LineStatus.UNAVAILABLE, 0, null, null, null));
             StockInquiryResponse response =
                     new StockInquiryResponse(inquiryId, StockInquiryResponse.Status.OK, source, null);
 

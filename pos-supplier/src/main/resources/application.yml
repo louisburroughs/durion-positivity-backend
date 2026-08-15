@@ -131,6 +131,17 @@ pos:
       # a burst of requests for one import; the cap stops a genuinely broken consumer, loudly.
       republish-cooldown: ${SUPPLIER_PRICAT_REPUBLISH_COOLDOWN:PT10M}
       republish-max-attempts: ${SUPPLIER_PRICAT_REPUBLISH_MAX_ATTEMPTS:3}
+    # ── Live stock inquiry / A2.5 (CAP-319) ─────────────────────────────────────────────
+    #
+    # The one synchronous supplier read the platform allows (ADR-0044 amendment). A customer is
+    # waiting on it, so the profile's connect/read timeouts govern how long a page can be held up:
+    # a profile bound to STOCK_INQUIRY wants short ones, not the generous budgets a nightly batch
+    # can afford.
+    stockinquiry:
+      # Absorbs the repeat views of one product page. Short on purpose: an availability is only
+      # worth repeating while it is still plausibly true.
+      cache-ttl: ${SUPPLIER_STOCKINQUIRY_CACHE_TTL:PT60S}
+      cache-enabled: ${SUPPLIER_STOCKINQUIRY_CACHE_ENABLED:true}
     # ── Stock report / B2.1 (CAP-322) ───────────────────────────────────────────────────
     #
     # Same chunking problem as PRICAT: a country-level report is as wide as a catalog. A binding
