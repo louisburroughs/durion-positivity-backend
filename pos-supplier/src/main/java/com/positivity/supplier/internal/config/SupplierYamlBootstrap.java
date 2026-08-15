@@ -46,16 +46,26 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Startup YAML reconciliation (ADR-0050 §6): on <em>every</em> startup the deployment YAML is
- * authoritative for {@code YAML}-managed profiles — the database is reconciled to it
- * (create/update/overwrite children by natural key), profiles previously YAML-sourced but
- * absent from the current YAML are <strong>disabled, never deleted</strong>, and
- * {@code ADMIN}-managed profiles are never touched. All writes carry the audit actor
- * {@link #BOOTSTRAP_ACTOR}. A second run against unchanged YAML is a no-op (idempotent).
+ * Startup YAML reconciliation (ADR-0050 §6): on <em>every</em> startup the
+ * deployment YAML is
+ * authoritative for {@code YAML}-managed profiles — the database is reconciled
+ * to it
+ * (create/update/overwrite children by natural key), profiles previously
+ * YAML-sourced but
+ * absent from the current YAML are <strong>disabled, never deleted</strong>,
+ * and
+ * {@code ADMIN}-managed profiles are never touched. All writes carry the audit
+ * actor
+ * {@link #BOOTSTRAP_ACTOR}. A second run against unchanged YAML is a no-op
+ * (idempotent).
  *
- * <p>Validation is all-or-nothing before any write: unknown canonical keys, malformed or
- * plaintext-looking secret references, dangling auth names, and duplicate keys fail startup
- * with a clear {@link SupplierConfigurationException} — a partially applied YAML never
+ * <p>
+ * Validation is all-or-nothing before any write: unknown canonical keys,
+ * malformed or
+ * plaintext-looking secret references, dangling auth names, and duplicate keys
+ * fail startup
+ * with a clear {@link SupplierConfigurationException} — a partially applied
+ * YAML never
  * reaches the database.
  */
 @Component
@@ -83,20 +93,25 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     }
 
     /**
-     * Reconciles the database to the given YAML configuration. Runs inside the startup
+     * Reconciles the database to the given YAML configuration. Runs inside the
+     * startup
      * transaction of {@link #run(ApplicationArguments)}; flushes before leaving the
-     * {@link AuditActorContext} scope so {@code @PreUpdate} auditing records the bootstrap
+     * {@link AuditActorContext} scope so {@code @PreUpdate} auditing records the
+     * bootstrap
      * actor.
      *
-     * @param configuration the bound {@code supplier.profiles} configuration; {@code null}
-     *     profiles list means "no YAML-managed profiles"
-     * @throws SupplierConfigurationException {@code SUPPLIER_YAML_BOOTSTRAP_INVALID} when the
-     *     YAML is invalid or collides with an {@code ADMIN}-managed profile
+     * @param configuration the bound {@code supplier.profiles} configuration;
+     *                      {@code null}
+     *                      profiles list means "no YAML-managed profiles"
+     * @throws SupplierConfigurationException {@code SUPPLIER_YAML_BOOTSTRAP_INVALID}
+     *                                        when the
+     *                                        YAML is invalid or collides with an
+     *                                        {@code ADMIN}-managed profile
      */
     @Transactional
     public void reconcile(@Nullable SupplierProfileProperties configuration) {
-        List<ProfileSpec> specs =
-                configuration == null || configuration.profiles() == null ? List.of() : configuration.profiles();
+        List<ProfileSpec> specs = configuration == null || configuration.profiles() == null ? List.of()
+                : configuration.profiles();
         validate(specs);
         AuditActorContext.withActor(BOOTSTRAP_ACTOR, () -> {
             Set<String> yamlKeys = new HashSet<>();
@@ -113,11 +128,12 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
         }
     }
 
-    // ── Reconciliation ──────────────────────────────────────────────────────────────
+    // ── Reconciliation
+    // ──────────────────────────────────────────────────────────────
 
     private void reconcileProfile(@NonNull ProfileSpec spec) {
-        SupplierProfileEntity profile =
-                profileRepository.findBySupplierRef(spec.key()).orElseGet(SupplierProfileEntity::new);
+        SupplierProfileEntity profile = profileRepository.findBySupplierRef(spec.key())
+                .orElseGet(SupplierProfileEntity::new);
         if (profile.getVendorProfileId() != null && profile.getSourceOfTruth() == ProfileSourceOfTruth.ADMIN) {
             throw invalid("YAML profile '" + spec.key() + "' collides with an existing ADMIN-managed profile"
                     + " of the same supplierRef; remove one configuration source (ADR-0050 §6)");
@@ -135,7 +151,11 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             profile.setReadTimeoutMs(spec.protocolDefaults().readTimeoutMs());
             var retry = spec.protocolDefaults().retry();
             profile.setRetryMaxAttempts(retry == null ? null : retry.maxAttempts());
-            profile.setRetryBackoff(retry == null || retry.backoff() == null ? null : parseBackoff(retry.backoff()));
+            profile.setRetryBackoff(
+                    Optional.ofNullable(retry)
+                            .map(retrySpec -> retrySpec.backoff())
+                            .map(SupplierYamlBootstrap::parseBackoff)
+                            .orElse(null));
         } else {
             profile.setConnectTimeoutMs(null);
             profile.setReadTimeoutMs(null);
@@ -177,10 +197,9 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
 
     private void reconcileAccounts(@NonNull UUID vendorProfileId, @NonNull ProfileSpec spec) {
         var billingSpec = spec.accounts() == null ? null : spec.accounts().billing();
-        List<Delivery> deliverySpecs =
-                spec.accounts() == null || spec.accounts().delivery() == null
-                        ? List.of()
-                        : spec.accounts().delivery();
+        List<Delivery> deliverySpecs = spec.accounts() == null || spec.accounts().delivery() == null
+                ? List.of()
+                : spec.accounts().delivery();
         Map<String, SupplierAccountEntity> existing = byKey(
                 accountRepository.findByVendorProfileIdOrderByRoleAscAccountNumberAsc(vendorProfileId),
                 SupplierYamlBootstrap::accountKey);
@@ -196,8 +215,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             accountRepository.save(billing);
         }
         for (Delivery deliverySpec : deliverySpecs) {
-            SupplierAccountEntity delivery =
-                    existing.remove(accountKey(SupplierAccountRole.DELIVERY, deliverySpec.locationId()));
+            SupplierAccountEntity delivery = existing
+                    .remove(accountKey(SupplierAccountRole.DELIVERY, deliverySpec.locationId()));
             if (delivery == null) {
                 delivery = new SupplierAccountEntity();
                 delivery.setVendorProfileId(vendorProfileId);
@@ -213,8 +232,7 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
 
     private void reconcileBindings(@NonNull UUID vendorProfileId, @NonNull ProfileSpec spec) {
         List<BindingSpec> bindingSpecs = spec.bindings() == null ? List.of() : spec.bindings();
-        String defaultFamily =
-                spec.protocolDefaults() == null ? null : spec.protocolDefaults().family();
+        String defaultFamily = spec.protocolDefaults() == null ? null : spec.protocolDefaults().family();
         Map<String, SupplierEndpointBindingEntity> existing = byKey(
                 bindingRepository.findByVendorProfileIdOrderByCapabilityAsc(vendorProfileId),
                 binding -> binding.getCapability().name());
@@ -245,7 +263,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             if (entity.getRedactionClassifications() == null) {
                 entity.setRedactionClassifications(new HashSet<>(redactions));
             } else {
-                // In place, not replaced: Hibernate owns the @ElementCollection instance on a managed row.
+                // In place, not replaced: Hibernate owns the @ElementCollection instance on a
+                // managed row.
                 entity.getRedactionClassifications().retainAll(redactions);
                 entity.getRedactionClassifications().addAll(redactions);
             }
@@ -254,7 +273,10 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
         bindingRepository.deleteAll(existing.values());
     }
 
-    /** ADR-0050 §6: previously-YAML profiles absent from current YAML are disabled, never deleted. */
+    /**
+     * ADR-0050 §6: previously-YAML profiles absent from current YAML are disabled,
+     * never deleted.
+     */
     private void disableRemovedYamlProfiles(@NonNull Set<String> yamlKeys) {
         for (SupplierProfileEntity profile : profileRepository.findBySourceOfTruth(ProfileSourceOfTruth.YAML)) {
             if (!yamlKeys.contains(profile.getSupplierRef()) && profile.isEnabled()) {
@@ -264,7 +286,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
         }
     }
 
-    // ── Validation (all-or-nothing, before any write) ───────────────────────────────
+    // ── Validation (all-or-nothing, before any write)
+    // ───────────────────────────────
 
     private void validate(@NonNull List<ProfileSpec> specs) {
         Set<String> keys = new HashSet<>();
@@ -360,8 +383,7 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             throw invalid("profile '" + spec.key() + "': accounts.billing.accountNumber must not be blank");
         }
         Set<UUID> locations = new HashSet<>();
-        List<Delivery> deliveries =
-                spec.accounts().delivery() == null ? List.of() : spec.accounts().delivery();
+        List<Delivery> deliveries = spec.accounts().delivery() == null ? List.of() : spec.accounts().delivery();
         for (Delivery delivery : deliveries) {
             if (delivery.locationId() == null) {
                 throw invalid("profile '" + spec.key() + "': accounts.delivery[].locationId is required");
@@ -379,8 +401,7 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
 
     private void validateBindings(@NonNull ProfileSpec spec, @NonNull Set<String> authNames) {
         List<BindingSpec> bindingSpecs = spec.bindings() == null ? List.of() : spec.bindings();
-        String defaultFamily =
-                spec.protocolDefaults() == null ? null : spec.protocolDefaults().family();
+        String defaultFamily = spec.protocolDefaults() == null ? null : spec.protocolDefaults().family();
         Set<String> capabilities = new HashSet<>();
         for (BindingSpec binding : bindingSpecs) {
             String where = "profile '" + spec.key() + "', binding '" + binding.capability() + "': ";
@@ -434,7 +455,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
         }
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────────────────────
+    // ── Helpers
+    // ─────────────────────────────────────────────────────────────────────
 
     @NonNull
     private static <T, K> Map<K, T> byKey(@NonNull List<T> entities, @NonNull Function<T, K> key) {
