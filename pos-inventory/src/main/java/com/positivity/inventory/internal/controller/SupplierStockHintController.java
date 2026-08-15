@@ -58,7 +58,8 @@ public class SupplierStockHintController {
                     Preconditions: none; the product need not exist, and hints appear only for articles that \
                     have been resolved to it.
                     Required inputs: productId as a path parameter.
-                    No state changes; this is a read of what vendors reported.
+                    Emits INVENTORY_SUPPLIER_STOCK_HINT_LIST_BY_PRODUCT for audit; this is a read of what \
+                    vendors reported and changes no state.
                     Returns 200 with an empty array when no vendor has reported the product, which means no \
                     vendor has said anything about it — NOT that it is unavailable. Read each entry's \
                     availability field: REPORTED carries the vendor's quantity (0 meaning the vendor \
@@ -100,7 +101,8 @@ public class SupplierStockHintController {
                     Preconditions: none; an unknown code simply matches nothing.
                     Required inputs: identityKind (EAN, BUYER_ARTICLE or SUPPLIER_ARTICLE) and value, matched \
                     exactly after trimming.
-                    No state changes; this is a read of what vendors reported.
+                    Emits INVENTORY_SUPPLIER_STOCK_HINT_LIST_BY_CODE for audit; this is a read of what \
+                    vendors reported and changes no state.
                     Returns 200 with an empty array when no vendor stated that code. The availability, \
                     snapshotAsOf and asOfSource fields carry the same meanings as on the by-product listing, \
                     and an entry with a null resolvedProductId is an article we have not tied to a catalog \

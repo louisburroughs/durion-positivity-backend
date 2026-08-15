@@ -1142,9 +1142,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 48")
+    @DisplayName("CATALOG_VERSION is 49")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(48);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(49);
     }
 
     @Test
@@ -1297,8 +1297,14 @@ class SecurityGatewayConfigTest {
         // Replaces the dotted inventory.cost.standard.update, which named no permission the catalog
         // ever held and so gated nothing.
         assertThat(GatewayPermissionCatalog.authorityForBit(455)).isEqualTo("PERM_catalog:item_cost:update");
+        // The ordering half of the purchase-order permissions, which followed the aggregate to
+        // pos-order (CAP-320 #1334). The receiving half stayed as inventory:purchase_order:receive,
+        // because recording what arrived is a different job done by different people.
+        assertThat(GatewayPermissionCatalog.authorityForBit(456)).isEqualTo("PERM_order:purchase_order:approve");
+        assertThat(GatewayPermissionCatalog.authorityForBit(457)).isEqualTo("PERM_order:purchase_order:create");
+        assertThat(GatewayPermissionCatalog.authorityForBit(458)).isEqualTo("PERM_order:purchase_order:view");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(456)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(459)).isNull();
     }
 
     @Test
