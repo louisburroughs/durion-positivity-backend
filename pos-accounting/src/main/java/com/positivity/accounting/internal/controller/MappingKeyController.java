@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.dto.MappingKeyCreateRequest;
 import com.positivity.accounting.internal.dto.MappingKeyListResponse;
 import com.positivity.accounting.internal.dto.MappingKeyResponse;
 import com.positivity.accounting.internal.dto.MappingKeyUpdateRequest;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.MappingKeyService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.LogSanitizer;
@@ -55,7 +56,7 @@ public class MappingKeyController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:mapping-key:create"})
-    @PreAuthorize("hasAuthority('accounting:mapping-key:create')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.MAPPING_KEY_CREATE + "')")
     @Operation(
             operationId = "createMappingKey",
             summary = "Create Mapping Key",
@@ -101,7 +102,7 @@ public class MappingKeyController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:mapping-key:view"})
-    @PreAuthorize("hasAuthority('accounting:mapping-key:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.MAPPING_KEY_VIEW + "')")
     @Operation(
             operationId = "getMappingKey",
             summary = "Get Mapping Key",
@@ -128,7 +129,7 @@ public class MappingKeyController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:mapping-key:edit"})
-    @PreAuthorize("hasAuthority('accounting:mapping-key:edit')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.MAPPING_KEY_EDIT + "')")
     @Operation(
             operationId = "updateMappingKey",
             summary = "Update Mapping Key",
@@ -174,7 +175,7 @@ public class MappingKeyController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:mapping-key:view"})
-    @PreAuthorize("hasAuthority('accounting:mapping-key:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.MAPPING_KEY_VIEW + "')")
     @Operation(
             operationId = "listMappingKeysByCategory",
             summary = "List Mapping Keys By Category",
@@ -218,7 +219,7 @@ public class MappingKeyController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:mapping-key:deactivate"})
-    @PreAuthorize("hasAuthority('accounting:mapping-key:deactivate')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.MAPPING_KEY_DEACTIVATE + "')")
     @Operation(
             operationId = "deactivateMappingKey",
             summary = "Deactivate Mapping Key",

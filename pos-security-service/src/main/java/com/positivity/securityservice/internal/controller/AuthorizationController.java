@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.securityservice.internal.dto.AuthorizationDecisionResponse;
+import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.service.AuthorizationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,7 +33,7 @@ public class AuthorizationController {
     private final AuthorizationService authorizationService;
 
     @GetMapping("/authorization/decision")
-    @PreAuthorize("hasAuthority('security:authorization:decide')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.AUTHORIZATION_DECIDE + "')")
     @Operation(
             operationId = "getAuthorizationDecision",
             summary = "Get Authorization Decision for a Principal",
@@ -63,7 +64,7 @@ public class AuthorizationController {
     }
 
     @GetMapping("/authorization/person-decision")
-    @PreAuthorize("hasAuthority('security:authorization:decide')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.AUTHORIZATION_DECIDE + "')")
     @Operation(
             operationId = "getPersonAuthorizationDecision",
             summary = "Get Authorization Decision for a Person",

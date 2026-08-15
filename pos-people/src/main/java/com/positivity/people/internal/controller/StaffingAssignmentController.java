@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
 import com.positivity.people.internal.dto.UpdateStaffingAssignmentRequest;
+import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.service.StaffingAssignmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -70,7 +71,7 @@ public class StaffingAssignmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:edit"})
-    @PreAuthorize("hasAuthority('people:employee:edit')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_EDIT + "')")
     public ResponseEntity<StaffingAssignmentResponse> createAssignment(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Staffing assignment to create, binding one person to one location for a"
@@ -116,7 +117,7 @@ public class StaffingAssignmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:view"})
-    @PreAuthorize("hasAuthority('people:employee:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
     public List<StaffingAssignmentResponse> getAssignments(@RequestParam @NonNull UUID personId) {
         return staffingAssignmentService.findByPersonId(personId);
     }
@@ -139,7 +140,7 @@ public class StaffingAssignmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:view"})
-    @PreAuthorize("hasAuthority('people:employee:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
     public List<StaffingAssignmentResponse> getAssignmentsByPath(@PathVariable @NonNull UUID personId) {
         return staffingAssignmentService.findByPersonId(personId);
     }
@@ -159,7 +160,7 @@ public class StaffingAssignmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:view"})
-    @PreAuthorize("hasAuthority('people:employee:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
     public ResponseEntity<StaffingAssignmentResponse> getAssignment(@PathVariable @NonNull UUID assignmentId) {
         return staffingAssignmentService
                 .findById(assignmentId)
@@ -194,7 +195,7 @@ public class StaffingAssignmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:edit"})
-    @PreAuthorize("hasAuthority('people:employee:edit')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_EDIT + "')")
     public ResponseEntity<StaffingAssignmentResponse> updateAssignment(
             @PathVariable @NonNull UUID assignmentId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -241,7 +242,7 @@ public class StaffingAssignmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:edit"})
-    @PreAuthorize("hasAuthority('people:employee:edit')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_EDIT + "')")
     public ResponseEntity<Void> endAssignment(@PathVariable @NonNull UUID assignmentId) {
         staffingAssignmentService.end(assignmentId);
         return ResponseEntity.noContent().build();

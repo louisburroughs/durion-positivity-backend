@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.PermissionDto;
+import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.service.RoleManagementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,7 +39,7 @@ public class UserRoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:assign"})
-    @PreAuthorize("hasAuthority('security:role:assign')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_ASSIGN + "')")
     @Operation(operationId = "assignUserRole", summary = "Assign a Role to a User", description = """
                     Creates a GLOBAL-scoped role assignment linking a user to a role, effective immediately with no \
                     end date.
@@ -64,7 +65,7 @@ public class UserRoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:role:assign"})
-    @PreAuthorize("hasAuthority('security:role:assign')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_ASSIGN + "')")
     @Operation(operationId = "revokeUserRole", summary = "Revoke a Role From a User", description = """
                     Ends the first currently effective assignment of a role for a user by setting its end date to \
                     now, preserving the row for history.
@@ -88,7 +89,7 @@ public class UserRoleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:permission:view"})
-    @PreAuthorize("hasAuthority('security:permission:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_VIEW + "')")
     @Operation(operationId = "getUserPermissions", summary = "Get a User's Effective Permissions", description = """
                     Returns the union of permissions granted through a user's currently effective role assignments.
                     Use this tool for a user's flattened effective permission set; use listUserRoleAssignments \

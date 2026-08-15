@@ -6,6 +6,7 @@ import com.positivity.price.internal.dto.RestrictionEvaluationResponse;
 import com.positivity.price.internal.dto.RestrictionEvaluationResult;
 import com.positivity.price.internal.dto.RestrictionOverrideRequest;
 import com.positivity.price.internal.dto.RestrictionOverrideResponse;
+import com.positivity.price.internal.security.PricingPermissions;
 import com.positivity.price.service.RestrictionEvaluationService;
 import com.positivity.price.service.RestrictionOverrideService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -112,7 +113,7 @@ public class PriceRestrictionsController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"pricing:restriction:override"})
-    @PreAuthorize("hasAuthority('pricing:restriction:override')")
+    @PreAuthorize("hasAuthority('" + PricingPermissions.RESTRICTION_OVERRIDE + "')")
     @PostMapping("/restrictions:override")
     public ResponseEntity<RestrictionOverrideResponse> overrideRestrictions(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

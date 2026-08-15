@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.CreateDepositRequest;
 import com.positivity.invoice.internal.dto.DepositCreditResponse;
 import com.positivity.invoice.internal.enums.DepositSourceType;
+import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.service.DepositCreditService;
 import com.positivity.invoice.service.model.CreateDepositCommand;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,7 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/invoices/deposits")
 @RequiredArgsConstructor
 @Tag(name = "Deposit Credits", description = "Deposit / down-payment credits and their application to settlements")
-@PreAuthorize("hasAuthority('invoice:manage')")
+@PreAuthorize("hasAuthority('" + InvoicePermissions.MANAGE + "')")
 public class DepositCreditController {
 
     private final DepositCreditService depositCreditService;

@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.dto.transfer.ReceiveTransferOrderReques
 import com.positivity.inventory.internal.dto.transfer.ShortCloseTransferOrderRequest;
 import com.positivity.inventory.internal.dto.transfer.TransferOrderResponse;
 import com.positivity.inventory.internal.enums.TransferOrderStatus;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.TransferOrderService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -63,7 +64,7 @@ public class TransferOrderController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:transfer:create"})
-    @PreAuthorize("hasAuthority('inventory:transfer:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.TRANSFER_CREATE + "')")
     @Operation(
             operationId = "createTransferOrder",
             summary = "Create transfer order",
@@ -151,7 +152,7 @@ public class TransferOrderController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:transfer:view"})
-    @PreAuthorize("hasAuthority('inventory:transfer:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.TRANSFER_VIEW + "')")
     @Operation(
             operationId = "getTransferOrder",
             summary = "Get transfer order",
@@ -191,7 +192,7 @@ public class TransferOrderController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:transfer:view"})
-    @PreAuthorize("hasAuthority('inventory:transfer:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.TRANSFER_VIEW + "')")
     @Operation(
             operationId = "listTransferOrders",
             summary = "List transfer orders",
@@ -236,7 +237,7 @@ public class TransferOrderController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:transfer:dispatch"})
-    @PreAuthorize("hasAuthority('inventory:transfer:dispatch')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.TRANSFER_DISPATCH + "')")
     @Operation(
             operationId = "approveTransferOrder",
             summary = "Approve transfer order",
@@ -294,7 +295,7 @@ public class TransferOrderController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:transfer:dispatch"})
-    @PreAuthorize("hasAuthority('inventory:transfer:dispatch')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.TRANSFER_DISPATCH + "')")
     @Operation(
             operationId = "dispatchTransferOrder",
             summary = "Dispatch transfer order",
@@ -393,7 +394,7 @@ public class TransferOrderController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:transfer:receive"})
-    @PreAuthorize("hasAuthority('inventory:transfer:receive')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.TRANSFER_RECEIVE + "')")
     @Operation(
             operationId = "receiveTransferOrder",
             summary = "Receive transfer order",
@@ -490,7 +491,7 @@ public class TransferOrderController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:transfer:short_close"})
-    @PreAuthorize("hasAuthority('inventory:transfer:short_close')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.TRANSFER_SHORT_CLOSE + "')")
     @Operation(
             operationId = "shortCloseTransferOrder",
             summary = "Short-close transfer order",
@@ -590,7 +591,7 @@ public class TransferOrderController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:transfer:create"})
-    @PreAuthorize("hasAuthority('inventory:transfer:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.TRANSFER_CREATE + "')")
     @Operation(
             operationId = "cancelTransferOrder",
             summary = "Cancel transfer order",

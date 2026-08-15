@@ -6,6 +6,7 @@ import com.positivity.workorder.internal.dto.BreakSegmentResponse;
 import com.positivity.workorder.internal.dto.StartWorkSessionRequest;
 import com.positivity.workorder.internal.dto.StopWorkSessionRequest;
 import com.positivity.workorder.internal.dto.WorkSessionResponse;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.WorkSessionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -55,7 +56,7 @@ public class WorkSessionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"timekeeping:work_session:create"})
-    @PreAuthorize("hasAuthority('timekeeping:work_session:create')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.TIMEKEEPING_WORK_SESSION_CREATE + "')")
     public ResponseEntity<WorkSessionResponse> startWorkexecWorkSession(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Session start details binding a mechanic to a workorder task and location.",
@@ -100,7 +101,7 @@ public class WorkSessionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"timekeeping:work_session:stop"})
-    @PreAuthorize("hasAuthority('timekeeping:work_session:stop')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.TIMEKEEPING_WORK_SESSION_STOP + "')")
     public ResponseEntity<WorkSessionResponse> stopWorkexecWorkSession(
             @Parameter(description = "ID of the work session to stop", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -145,7 +146,7 @@ public class WorkSessionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"timekeeping:work_session:break_start"})
-    @PreAuthorize("hasAuthority('timekeeping:work_session:break_start')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.TIMEKEEPING_WORK_SESSION_BREAK_START + "')")
     public ResponseEntity<BreakSegmentResponse> addBreakSegment(
             @Parameter(description = "ID of the work session", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -190,7 +191,7 @@ public class WorkSessionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"timekeeping:work_session:break_stop"})
-    @PreAuthorize("hasAuthority('timekeeping:work_session:break_stop')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.TIMEKEEPING_WORK_SESSION_BREAK_STOP + "')")
     public ResponseEntity<BreakSegmentResponse> stopBreakSegment(
             @Parameter(description = "ID of the work session", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable

@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.WorkorderNumberRef;
 import com.positivity.workorder.internal.dto.WorkorderNumberResolveRequest;
 import com.positivity.workorder.internal.dto.WorkorderSearchResult;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.WorkorderSearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -53,7 +54,7 @@ public class WorkorderSearchController {
                     """)
     @ApiResponse(responseCode = "200", description = "Page of workorder search results returned.")
     @GetMapping("/search")
-    @PreAuthorize("hasAuthority('workorder:workorder:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_VIEW + "')")
     @EmitEvent(id = "WORKORDER_SEARCH", apiVersion = "1")
     public Page<WorkorderSearchResult> searchWorkorders(
             @Parameter(description = "Free-text query matching customer name or workorder id (optional)")
@@ -88,7 +89,7 @@ public class WorkorderSearchController {
                     """)
     @ApiResponse(responseCode = "200", description = "Resolved workorder id-to-number pairings returned.")
     @PostMapping("/numbers:resolve")
-    @PreAuthorize("hasAuthority('workorder:workorder:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_VIEW + "')")
     @EmitEvent(id = "WORKORDER_NUMBER_RESOLVE", apiVersion = "1")
     public List<WorkorderNumberRef> resolveNumbers(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

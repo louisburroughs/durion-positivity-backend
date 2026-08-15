@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.controller;
 
 import com.positivity.inventory.internal.dto.traceability.LotTraceabilityResponse;
 import com.positivity.inventory.internal.dto.traceability.SerialTraceabilityResponse;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.InventoryTraceabilityService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -48,7 +49,7 @@ public class InventoryTraceabilityController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:ledger:view"})
-    @PreAuthorize("hasAuthority('inventory:ledger:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LEDGER_VIEW + "')")
     @Operation(
             operationId = "traceInventoryLot",
             summary = "Lot traceability",
@@ -94,7 +95,7 @@ public class InventoryTraceabilityController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:ledger:view"})
-    @PreAuthorize("hasAuthority('inventory:ledger:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LEDGER_VIEW + "')")
     @Operation(
             operationId = "traceSerialUnit",
             summary = "Serial traceability",

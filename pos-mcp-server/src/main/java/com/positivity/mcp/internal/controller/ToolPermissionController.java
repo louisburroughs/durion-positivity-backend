@@ -46,7 +46,7 @@ class ToolPermissionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {McpPermissions.TOOL_VIEW})
-    @PreAuthorize("hasAuthority('mcp:tool:view')")
+    @PreAuthorize("hasAuthority('" + McpPermissions.TOOL_VIEW + "')")
     @Operation(
             operationId = "listToolPermissions",
             summary = "List a Tool's Permission Grants",
@@ -71,7 +71,7 @@ class ToolPermissionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {McpPermissions.TOOL_MANAGE})
-    @PreAuthorize("hasAuthority('mcp:tool:manage')")
+    @PreAuthorize("hasAuthority('" + McpPermissions.TOOL_MANAGE + "')")
     @Operation(
             operationId = "grantToolPermission",
             summary = "Grant a Permission to a Tool",
@@ -117,7 +117,7 @@ class ToolPermissionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {McpPermissions.TOOL_MANAGE})
-    @PreAuthorize("hasAuthority('mcp:tool:manage')")
+    @PreAuthorize("hasAuthority('" + McpPermissions.TOOL_MANAGE + "')")
     @Operation(
             operationId = "revokeToolPermission",
             summary = "Revoke a Permission From a Tool",

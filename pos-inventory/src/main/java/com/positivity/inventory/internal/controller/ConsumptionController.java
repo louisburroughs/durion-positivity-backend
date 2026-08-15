@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.consumption.ConsumeItemsRequest;
 import com.positivity.inventory.internal.dto.consumption.ConsumptionResponse;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.ConsumptionService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,7 +34,7 @@ public class ConsumptionController {
 
     @PostMapping
     @EmitEvent(id = "INVENTORY_WORKORDER_CONSUMPTION_CREATE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_CREATE + "')")
     @Operation(
             operationId = "consumePickedItems",
             summary = "Consume picked items",

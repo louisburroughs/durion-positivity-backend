@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.dto.returns.ReasonCodeDto;
 import com.positivity.inventory.internal.dto.returns.ReturnSubmissionResultDto;
 import com.positivity.inventory.internal.dto.returns.ReturnSubmitRequest;
 import com.positivity.inventory.internal.dto.returns.ReturnableItemDto;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.ReturnService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,7 +40,7 @@ public class ReturnController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:return:view"})
-    @PreAuthorize("hasAuthority('inventory:return:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.RETURN_VIEW + "')")
     @Operation(
             operationId = "listReturnableItems",
             summary = "List Returnable Items",
@@ -79,7 +80,7 @@ public class ReturnController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:return:view"})
-    @PreAuthorize("hasAuthority('inventory:return:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.RETURN_VIEW + "')")
     @Operation(
             operationId = "listReturnReasonCodes",
             summary = "List Return Reason Codes",
@@ -114,7 +115,7 @@ public class ReturnController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:return:write"})
-    @PreAuthorize("hasAuthority('inventory:return:write')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.RETURN_WRITE + "')")
     @Operation(
             operationId = "submitReturnToStock",
             summary = "Submit Return To Stock",

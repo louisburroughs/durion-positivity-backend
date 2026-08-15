@@ -256,8 +256,8 @@ public class PurchaseSuggestionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:replenishment:manage", "inventory:purchase_order:create"})
-    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.REPLENISHMENT_MANAGE
-            + "') and hasAuthority('inventory:purchase_order:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.REPLENISHMENT_MANAGE + "') and hasAuthority('"
+            + InventoryPermissionRegistry.PURCHASE_ORDER_CREATE + "')")
     @EmitEvent(id = "INVENTORY_PURCHASE_SUGGESTION_CONVERT", apiVersion = "1")
     @Operation(
             operationId = "convertPurchaseSuggestions",

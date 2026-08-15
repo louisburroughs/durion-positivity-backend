@@ -8,6 +8,7 @@ import com.positivity.inventory.internal.dto.purchaseorder.PurchaseOrderResponse
 import com.positivity.inventory.internal.dto.purchaseorder.ReceivePurchaseOrderRequest;
 import com.positivity.inventory.internal.dto.purchaseorder.ReceivePurchaseOrderResponse;
 import com.positivity.inventory.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.PurchaseOrderService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
@@ -47,7 +48,7 @@ public class PurchaseOrderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:purchase_order:create"})
-    @PreAuthorize("hasAuthority('inventory:purchase_order:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PURCHASE_ORDER_CREATE + "')")
     @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_CREATE", apiVersion = "1")
     @Operation(
             operationId = "createPurchaseOrder",
@@ -116,7 +117,7 @@ public class PurchaseOrderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:purchase_order:view"})
-    @PreAuthorize("hasAuthority('inventory:purchase_order:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PURCHASE_ORDER_VIEW + "')")
     @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_GET", apiVersion = "1")
     @Operation(
             operationId = "getPurchaseOrder",
@@ -157,7 +158,7 @@ public class PurchaseOrderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:purchase_order:view"})
-    @PreAuthorize("hasAuthority('inventory:purchase_order:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PURCHASE_ORDER_VIEW + "')")
     @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_LIST", apiVersion = "1")
     @Operation(
             operationId = "listPurchaseOrders",
@@ -190,7 +191,7 @@ public class PurchaseOrderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:purchase_order:approve"})
-    @PreAuthorize("hasAuthority('inventory:purchase_order:approve')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PURCHASE_ORDER_APPROVE + "')")
     @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_APPROVE", apiVersion = "1")
     @Operation(
             operationId = "approvePurchaseOrder",
@@ -264,7 +265,7 @@ public class PurchaseOrderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:purchase_order:create"})
-    @PreAuthorize("hasAuthority('inventory:purchase_order:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PURCHASE_ORDER_CREATE + "')")
     @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_REVISE", apiVersion = "1")
     @Operation(
             operationId = "revisePurchaseOrder",
@@ -344,7 +345,7 @@ public class PurchaseOrderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:purchase_order:approve"})
-    @PreAuthorize("hasAuthority('inventory:purchase_order:approve')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PURCHASE_ORDER_APPROVE + "')")
     @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_CANCEL", apiVersion = "1")
     @Operation(
             operationId = "cancelPurchaseOrder",
@@ -394,7 +395,7 @@ public class PurchaseOrderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:purchase_order:receive"})
-    @PreAuthorize("hasAuthority('inventory:purchase_order:receive')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PURCHASE_ORDER_RECEIVE + "')")
     @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_RECEIVE", apiVersion = "1")
     @Operation(
             operationId = "receivePurchaseOrder",

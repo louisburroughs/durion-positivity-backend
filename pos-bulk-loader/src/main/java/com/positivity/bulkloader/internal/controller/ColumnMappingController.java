@@ -2,6 +2,7 @@ package com.positivity.bulkloader.internal.controller;
 
 import com.positivity.bulkloader.internal.dto.ColumnMappingApproveRequest;
 import com.positivity.bulkloader.internal.dto.ColumnMappingResponse;
+import com.positivity.bulkloader.internal.security.BulkImportPermissions;
 import com.positivity.bulkloader.service.ColumnMappingService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,7 +42,7 @@ public class ColumnMappingController {
     private final ColumnMappingService columnMappingService;
 
     @GetMapping("/{jobId}/mappings")
-    @PreAuthorize("hasAuthority('bulkImport:status:read')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.STATUS_READ + "')")
     @Operation(operationId = "getColumnMappings", summary = "Get Proposed Column Mappings for Job", description = """
                     Returns the column mappings currently stored for a bulk load job, covering both auto-suggested \
                     mappings from content detection and operator-approved overrides.
@@ -74,7 +75,7 @@ public class ColumnMappingController {
     }
 
     @PutMapping("/{jobId}/mappings")
-    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @EmitEvent(id = "BULK_LOADER_MAPPING_APPROVE", apiVersion = "1")
     @Operation(
             operationId = "approveColumnMappings",

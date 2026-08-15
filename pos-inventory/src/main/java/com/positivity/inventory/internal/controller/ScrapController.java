@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.dto.scrap.RejectScrapRequest;
 import com.positivity.inventory.internal.dto.scrap.ScrapResponse;
 import com.positivity.inventory.internal.enums.ScrapReasonCode;
 import com.positivity.inventory.internal.enums.ScrapStatus;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.ScrapService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -64,7 +65,7 @@ public class ScrapController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:scrap:create"})
-    @PreAuthorize("hasAuthority('inventory:scrap:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.SCRAP_CREATE + "')")
     @Operation(
             operationId = "createScrap",
             summary = "Create scrap document",
@@ -152,7 +153,7 @@ public class ScrapController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:scrap:approve"})
-    @PreAuthorize("hasAuthority('inventory:scrap:approve')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.SCRAP_APPROVE + "')")
     @Operation(
             operationId = "approveScrap",
             summary = "Approve scrap",
@@ -236,7 +237,7 @@ public class ScrapController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:scrap:approve"})
-    @PreAuthorize("hasAuthority('inventory:scrap:approve')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.SCRAP_APPROVE + "')")
     @Operation(
             operationId = "rejectScrap",
             summary = "Reject scrap",
@@ -296,7 +297,8 @@ public class ScrapController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:scrap:view", "inventory:scrap:approve"})
-    @PreAuthorize("hasAnyAuthority('inventory:scrap:view','inventory:scrap:approve')")
+    @PreAuthorize("hasAnyAuthority('" + InventoryPermissionRegistry.SCRAP_VIEW + "','"
+            + InventoryPermissionRegistry.SCRAP_APPROVE + "')")
     @Operation(
             operationId = "getScrap",
             summary = "Get scrap details",
@@ -338,7 +340,8 @@ public class ScrapController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:scrap:view", "inventory:scrap:approve"})
-    @PreAuthorize("hasAnyAuthority('inventory:scrap:view','inventory:scrap:approve')")
+    @PreAuthorize("hasAnyAuthority('" + InventoryPermissionRegistry.SCRAP_VIEW + "','"
+            + InventoryPermissionRegistry.SCRAP_APPROVE + "')")
     @Operation(
             operationId = "listScraps",
             summary = "List scraps",

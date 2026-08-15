@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.dto.cyclecount.ApproveAdjustmentRequest
 import com.positivity.inventory.internal.dto.cyclecount.CreateAdjustmentRequest;
 import com.positivity.inventory.internal.dto.cyclecount.RejectAdjustmentRequest;
 import com.positivity.inventory.internal.enums.AdjustmentStatus;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.CycleCountAdjustmentService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -70,7 +71,7 @@ public class CycleCountAdjustmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:adjustment:create"})
-    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_CREATE + "')")
     @Operation(
             operationId = "createCycleCountAdjustment",
             summary = "Create cycle count adjustment",
@@ -148,7 +149,7 @@ public class CycleCountAdjustmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:adjustment:approve"})
-    @PreAuthorize("hasAuthority('inventory:adjustment:approve')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_APPROVE + "')")
     @Operation(
             operationId = "approveCycleCountAdjustment",
             summary = "Approve adjustment",
@@ -218,7 +219,7 @@ public class CycleCountAdjustmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:adjustment:approve"})
-    @PreAuthorize("hasAuthority('inventory:adjustment:approve')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_APPROVE + "')")
     @Operation(
             operationId = "rejectCycleCountAdjustment",
             summary = "Reject adjustment",
@@ -273,7 +274,8 @@ public class CycleCountAdjustmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:adjustment:view", "inventory:adjustment:approve"})
-    @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
+    @PreAuthorize("hasAnyAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_VIEW + "','"
+            + InventoryPermissionRegistry.ADJUSTMENT_APPROVE + "')")
     @Operation(
             operationId = "getCycleCountAdjustment",
             summary = "Get adjustment details",
@@ -307,7 +309,8 @@ public class CycleCountAdjustmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:adjustment:view", "inventory:adjustment:approve"})
-    @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
+    @PreAuthorize("hasAnyAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_VIEW + "','"
+            + InventoryPermissionRegistry.ADJUSTMENT_APPROVE + "')")
     @Operation(
             operationId = "listCycleCountAdjustments",
             summary = "List adjustments by status",
@@ -344,7 +347,8 @@ public class CycleCountAdjustmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:adjustment:view", "inventory:adjustment:approve"})
-    @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
+    @PreAuthorize("hasAnyAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_VIEW + "','"
+            + InventoryPermissionRegistry.ADJUSTMENT_APPROVE + "')")
     @Operation(
             operationId = "listPendingCycleCountAdjustments",
             summary = "List pending approvals",
@@ -375,7 +379,8 @@ public class CycleCountAdjustmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:adjustment:view", "inventory:adjustment:approve"})
-    @PreAuthorize("hasAnyAuthority('inventory:adjustment:view','inventory:adjustment:approve')")
+    @PreAuthorize("hasAnyAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_VIEW + "','"
+            + InventoryPermissionRegistry.ADJUSTMENT_APPROVE + "')")
     @Operation(
             operationId = "countPendingCycleCountAdjustments",
             summary = "Count pending approvals",

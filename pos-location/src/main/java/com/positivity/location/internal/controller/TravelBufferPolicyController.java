@@ -3,6 +3,7 @@ package com.positivity.location.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.TravelBufferPolicyRequest;
 import com.positivity.location.internal.dto.TravelBufferPolicyResponse;
+import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.service.TravelBufferPolicyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -55,7 +56,7 @@ public class TravelBufferPolicyController {
     @ApiResponse(responseCode = "201", description = "Travel buffer policy created")
     @ApiResponse(responseCode = "409", description = "Travel buffer policy name already taken")
     @EmitEvent(id = "LOCATION_TRAVEL_BUFFER_POLICY_CREATE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('location:travel-buffer-policy:manage')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.TRAVEL_BUFFER_POLICY_MANAGE + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:travel-buffer-policy:manage"})
@@ -89,7 +90,7 @@ public class TravelBufferPolicyController {
                     Returns 200 with the full unpaginated list.
                     """)
     @ApiResponse(responseCode = "200", description = "Travel buffer policies listed")
-    @PreAuthorize("hasAuthority('location:travel-buffer-policy:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.TRAVEL_BUFFER_POLICY_READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:travel-buffer-policy:read"})
@@ -117,7 +118,7 @@ public class TravelBufferPolicyController {
     @ApiResponse(responseCode = "200", description = "Travel buffer policy patched")
     @ApiResponse(responseCode = "400", description = "Invalid travel buffer policy id")
     @ApiResponse(responseCode = "404", description = "Travel buffer policy not found")
-    @PreAuthorize("hasAuthority('location:travel-buffer-policy:manage')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.TRAVEL_BUFFER_POLICY_MANAGE + "')")
     @EmitEvent(id = "LOCATION_TRAVEL_BUFFER_POLICY_PATCH", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",

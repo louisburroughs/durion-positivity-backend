@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.RecordMovementRequest;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.StockMovementService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
@@ -47,7 +48,7 @@ public class StockMovementController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:stock_movement:create"})
-    @PreAuthorize("hasAuthority('inventory:stock_movement:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.STOCK_MOVEMENT_CREATE + "')")
     @EmitEvent(id = "INVENTORY_STOCK_MOVEMENT_CREATE", apiVersion = "1")
     @Operation(
             operationId = "createStockMovement",
@@ -109,7 +110,7 @@ public class StockMovementController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:adjustment:create"})
-    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_CREATE + "')")
     @EmitEvent(id = "INVENTORY_ADJUSTMENT_REQUEST_CREATE", apiVersion = "1")
     @Operation(
             operationId = "createAdjustmentRequest",
@@ -185,7 +186,7 @@ public class StockMovementController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:adjustment:approve"})
-    @PreAuthorize("hasAuthority('inventory:adjustment:approve')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_APPROVE + "')")
     @EmitEvent(id = "INVENTORY_ADJUSTMENT_REQUEST_APPROVE", apiVersion = "1")
     @Operation(
             operationId = "approveAdjustmentRequest",

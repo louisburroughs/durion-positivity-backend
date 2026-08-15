@@ -8,6 +8,7 @@ import com.positivity.workorder.internal.dto.SubmitTravelSegmentsRequest;
 import com.positivity.workorder.internal.dto.TravelSegmentAdjustmentResponse;
 import com.positivity.workorder.internal.dto.TravelSegmentMapper;
 import com.positivity.workorder.internal.dto.TravelSegmentResponse;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.TravelSegmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -38,7 +39,7 @@ public class TravelSegmentController {
 
     @PostMapping("/start")
     @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_START", apiVersion = "1")
-    @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.LABOR_ADD + "')")
     @Operation(operationId = "startTravelSegment", summary = "Start a Travel Segment", description = """
                     Starts an IN_PROGRESS travel segment for a mobile technician, stamping the start time from \
                     the server clock and recording who created it.
@@ -82,7 +83,7 @@ public class TravelSegmentController {
 
     @PostMapping("/{travelSegmentId}/stop")
     @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_STOP", apiVersion = "1")
-    @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.LABOR_ADD + "')")
     @Operation(operationId = "stopTravelSegment", summary = "Stop an Active Travel Segment", description = """
                     Stops an IN_PROGRESS travel segment, transitioning it to COMPLETED and computing the duration \
                     in whole minutes from the server clock.
@@ -119,7 +120,7 @@ public class TravelSegmentController {
 
     @PostMapping("/submit/{mobileWorkAssignmentId}")
     @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_SUBMIT", apiVersion = "1")
-    @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.LABOR_ADD + "')")
     @Operation(operationId = "submitTravelSegments", summary = "Submit Travel Segments for Approval", description = """
                     Submits the calling technician's IN_PROGRESS and COMPLETED travel segments for a mobile work \
                     assignment, transitioning them all to SUBMITTED for downstream approval.
@@ -158,7 +159,7 @@ public class TravelSegmentController {
 
     @PostMapping("/{travelSegmentId}/adjustments")
     @EmitEvent(id = "WORKORDER_TRAVEL_SEGMENT_ADJUSTMENT", apiVersion = "1")
-    @PreAuthorize("hasAuthority('workorder:labor:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.LABOR_ADD + "')")
     @Operation(
             operationId = "createTravelSegmentAdjustment",
             summary = "Create Post-Approval Travel Adjustment",

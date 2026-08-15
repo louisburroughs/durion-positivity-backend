@@ -7,6 +7,7 @@ import com.positivity.securityservice.internal.dto.PermissionDecodeResponse;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationRequest;
 import com.positivity.securityservice.internal.dto.PermissionRegistrationResponse;
+import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.service.PermissionCatalogVersionService;
 import com.positivity.securityservice.service.PermissionRegistryService;
 import com.positivity.securityservice.service.PermissionService;
@@ -107,7 +108,7 @@ public class PermissionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:permission:view"})
-    @PreAuthorize("hasAuthority('security:permission:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_VIEW + "')")
     public ResponseEntity<PermissionDecodeResponse> decodePermissions(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Encoded permission bitset and the catalog version it was encoded with.",
@@ -158,7 +159,7 @@ public class PermissionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:permission:register"})
-    @PreAuthorize("hasAuthority('security:permission:register')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_REGISTER + "')")
     public ResponseEntity<List<PermissionDto>> registerPermissionsContract(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "RBAC contract payload of permission definitions to upsert.",
@@ -194,7 +195,7 @@ public class PermissionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:permission:view"})
-    @PreAuthorize("hasAuthority('security:permission:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_VIEW + "')")
     public ResponseEntity<PermissionDto> getPermissionById(@PathVariable @NonNull UUID id) {
         return ResponseEntity.ok(permissionService.getPermission(id));
     }
@@ -226,7 +227,7 @@ public class PermissionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:permission:register"})
-    @PreAuthorize("hasAuthority('security:permission:register')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_REGISTER + "')")
     public ResponseEntity<PermissionRegistrationResponse> registerPermissions(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Permission manifest published by one domain service at startup.",
@@ -279,7 +280,7 @@ public class PermissionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:permission:view"})
-    @PreAuthorize("hasAuthority('security:permission:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_VIEW + "')")
     public ResponseEntity<Page<PermissionDto>> listPermissions(
             @Parameter(description = "Optional domain filter", required = false, example = "catalog")
                     @RequestParam(required = false)
@@ -293,7 +294,7 @@ public class PermissionController {
      * Get permissions for a specific domain
      */
     @GetMapping("/domain/{domain}")
-    @PreAuthorize("hasAuthority('security:permission:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_VIEW + "')")
     @Operation(operationId = "listPermissionsByDomain", summary = "List Permissions for One Domain", description = """
                     Returns every registered permission for one domain as an unpaged list.
                     Use this tool when a complete domain snapshot is needed; use listPermissions instead when \
@@ -330,7 +331,7 @@ public class PermissionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:permission:view"})
-    @PreAuthorize("hasAuthority('security:permission:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_VIEW + "')")
     public ResponseEntity<Boolean> validatePermissionName(@PathVariable String permissionName) {
         boolean isValid = permissionRegistryService.isValidPermissionName(permissionName);
         return ResponseEntity.ok(isValid);
@@ -355,7 +356,7 @@ public class PermissionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:permission:view"})
-    @PreAuthorize("hasAuthority('security:permission:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_VIEW + "')")
     public ResponseEntity<Boolean> permissionExists(@PathVariable String permissionName) {
         boolean exists = permissionRegistryService.permissionExists(permissionName);
         return ResponseEntity.ok(exists);

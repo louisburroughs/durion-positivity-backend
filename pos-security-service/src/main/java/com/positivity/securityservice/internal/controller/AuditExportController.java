@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.AuditExportJobResponse;
 import com.positivity.securityservice.internal.dto.AuditExportRequest;
+import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.service.AuditExportService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,7 +38,7 @@ public class AuditExportController {
 
     @EmitEvent(id = "SECURITY_AUDIT_EXPORT_REQUEST", apiVersion = "1")
     @PostMapping
-    @PreAuthorize("hasAuthority('security:audit:export')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.AUDIT_EXPORT + "')")
     /**
      * Note: This endpoint intentionally returns 202 Accepted (not 201 Created)
      * because
@@ -95,7 +96,7 @@ public class AuditExportController {
     }
 
     @GetMapping("/{jobId}")
-    @PreAuthorize("hasAuthority('security:audit:export')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.AUDIT_EXPORT + "')")
     @Operation(operationId = "getAuditExportJob", summary = "Get Audit Export Job Status", description = """
                     Returns the current status of a previously submitted audit export job, including completion \
                     time, download URL, and error message when present.

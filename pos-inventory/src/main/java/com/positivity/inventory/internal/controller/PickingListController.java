@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -22,7 +23,7 @@ public class PickingListController {
 
     @PostMapping("/{id}/confirm")
     @EmitEvent(id = "INVENTORY_PICKING_LIST_CONFIRM", apiVersion = "1")
-    @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PICK_LIST_EXECUTE + "')")
     @Operation(
             operationId = "confirmPickingList",
             summary = "Confirm picking list",

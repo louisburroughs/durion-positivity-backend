@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.AccountStateResponse;
+import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.service.AdminAccountStateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -39,7 +40,7 @@ public class AdminAccountStateController {
             name = "bearerAuth",
             scopes = {"security:user_account_state:manage"})
     @EmitEvent(id = "SECURITY_USER_UNLOCK", apiVersion = "1")
-    @PreAuthorize("hasAuthority('security:user_account_state:manage')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_ACCOUNT_STATE_MANAGE + "')")
     @PostMapping("/{id}/unlock")
     public ResponseEntity<Void> unlock(@PathVariable UUID id) {
         adminAccountStateService.unlock(id);
@@ -61,7 +62,7 @@ public class AdminAccountStateController {
             name = "bearerAuth",
             scopes = {"security:user_account_state:manage"})
     @EmitEvent(id = "SECURITY_USER_ENABLE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('security:user_account_state:manage')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_ACCOUNT_STATE_MANAGE + "')")
     @PostMapping("/{id}/enable")
     public ResponseEntity<Void> enable(@PathVariable UUID id) {
         adminAccountStateService.enable(id);
@@ -83,7 +84,7 @@ public class AdminAccountStateController {
             name = "bearerAuth",
             scopes = {"security:user_account_state:manage"})
     @EmitEvent(id = "SECURITY_USER_DISABLE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('security:user_account_state:manage')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_ACCOUNT_STATE_MANAGE + "')")
     @PostMapping("/{id}/disable")
     public ResponseEntity<Void> disable(@PathVariable UUID id) {
         adminAccountStateService.disable(id);
@@ -107,7 +108,7 @@ public class AdminAccountStateController {
             name = "bearerAuth",
             scopes = {"security:user_account_state:manage"})
     @EmitEvent(id = "SECURITY_USER_EXPIRE_ACCOUNT", apiVersion = "1")
-    @PreAuthorize("hasAuthority('security:user_account_state:manage')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_ACCOUNT_STATE_MANAGE + "')")
     @PostMapping("/{id}/expire-account")
     public ResponseEntity<Void> expireAccount(@PathVariable UUID id) {
         adminAccountStateService.expireAccount(id);
@@ -130,7 +131,7 @@ public class AdminAccountStateController {
             name = "bearerAuth",
             scopes = {"security:user_account_state:manage"})
     @EmitEvent(id = "SECURITY_USER_EXPIRE_CREDENTIALS", apiVersion = "1")
-    @PreAuthorize("hasAuthority('security:user_account_state:manage')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_ACCOUNT_STATE_MANAGE + "')")
     @PostMapping("/{id}/expire-credentials")
     public ResponseEntity<Void> expireCredentials(@PathVariable UUID id) {
         adminAccountStateService.expireCredentials(id);
@@ -151,7 +152,7 @@ public class AdminAccountStateController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:user_account_state:view"})
-    @PreAuthorize("hasAuthority('security:user_account_state:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_ACCOUNT_STATE_VIEW + "')")
     @GetMapping("/{id}/account-state")
     public ResponseEntity<AccountStateResponse> getAccountState(@PathVariable UUID id) {
         return ResponseEntity.ok(adminAccountStateService.getAccountState(id));

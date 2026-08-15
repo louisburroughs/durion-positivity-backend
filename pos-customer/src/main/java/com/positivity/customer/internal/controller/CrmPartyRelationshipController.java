@@ -4,6 +4,7 @@ import com.positivity.customer.internal.dto.CreatePartyRelationshipRequest;
 import com.positivity.customer.internal.dto.CreatePartyRelationshipResponse;
 import com.positivity.customer.internal.dto.GetCommercialAccountContactsResponse;
 import com.positivity.customer.internal.enums.PartyRelationshipRole;
+import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.service.PartyRelationshipService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -82,7 +83,7 @@ public class CrmPartyRelationshipController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"crm:relationship:create"})
-    @PreAuthorize("hasAuthority('crm:relationship:create')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.RELATIONSHIP_CREATE + "')")
     @EmitEvent(id = "CRM_RELATIONSHIP_CREATE", apiVersion = "1")
     @Operation(operationId = "createPartyRelationship", summary = "Create Party Relationship", description = """
                     Creates a dated relationship that links an individual person to a commercial account in \
@@ -160,7 +161,7 @@ public class CrmPartyRelationshipController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"crm:relationship:read"})
-    @PreAuthorize("hasAuthority('crm:relationship:read')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.RELATIONSHIP_READ + "')")
     @EmitEvent(id = "CRM_ACCOUNT_CONTACTS_GET", apiVersion = "1")
     @Operation(
             operationId = "getCommercialAccountContacts",
@@ -216,7 +217,7 @@ public class CrmPartyRelationshipController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"crm:relationship:update"})
-    @PreAuthorize("hasAuthority('crm:relationship:update')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.RELATIONSHIP_UPDATE + "')")
     @EmitEvent(id = "CRM_RELATIONSHIP_PRIMARY_BILLING_UPDATE", apiVersion = "1")
     @Operation(
             operationId = "designatePrimaryBillingContact",
@@ -271,7 +272,7 @@ public class CrmPartyRelationshipController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"crm:relationship:delete"})
-    @PreAuthorize("hasAuthority('crm:relationship:delete')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.RELATIONSHIP_DELETE + "')")
     @EmitEvent(id = "CRM_RELATIONSHIP_DEACTIVATE", apiVersion = "1")
     @Operation(
             operationId = "deactivatePartyRelationship",

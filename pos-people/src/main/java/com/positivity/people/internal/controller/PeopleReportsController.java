@@ -3,6 +3,7 @@ package com.positivity.people.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.ApprovedTimeExportResponse;
 import com.positivity.people.internal.dto.AttendanceDiscrepancyReportResponse;
+import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.service.PeopleReportsService;
 import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -56,7 +57,7 @@ public class PeopleReportsController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:time:export:read", "accounting:time:export"})
-    @PreAuthorize("hasAnyAuthority('people:time:export:read','accounting:time:export')")
+    @PreAuthorize("hasAnyAuthority('people:time:export:read','" + PeoplePermissions.ACCOUNTING_TIME_EXPORT + "')")
     public ResponseEntity<List<AttendanceDiscrepancyReportResponse>> getAttendanceDiscrepancyReport(
             @Parameter(description = "Start date (inclusive)", required = true, example = "2026-02-01") @RequestParam
                     LocalDate startDate,
@@ -103,7 +104,7 @@ public class PeopleReportsController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:time:export:read", "accounting:time:export"})
-    @PreAuthorize("hasAnyAuthority('people:time:export:read','accounting:time:export')")
+    @PreAuthorize("hasAnyAuthority('people:time:export:read','" + PeoplePermissions.ACCOUNTING_TIME_EXPORT + "')")
     @GetMapping("/approvedTime")
     public ResponseEntity<List<ApprovedTimeExportResponse>> getApprovedTimeForExport(
             @Parameter(description = "Start date (inclusive)", required = true, example = "2026-02-01") @RequestParam

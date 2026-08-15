@@ -6,6 +6,7 @@ import com.positivity.bulkingest.BulkIngestResponse;
 import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.events.EmitEvent;
 import com.positivity.vehiclefitment.internal.dto.FitmentBulkIngestRecord;
+import com.positivity.vehiclefitment.internal.security.VehicleFitmentPermissions;
 import com.positivity.vehiclefitment.service.VehicleFitmentService;
 import com.positivity.vehiclefitment.service.dto.CreatePartFitmentRequest;
 import com.positivity.vehiclefitment.service.dto.PartFitmentResponse;
@@ -33,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/fitments")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasAuthority('vehicle-fitment:hint:create')")
+@PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_CREATE + "')")
 @Tag(name = "Vehicle Fitment Bulk Ingest API", description = "Bulk import vehicle fitment records")
 public class VehicleFitmentBulkIngestController extends AbstractBulkIngestController<FitmentBulkIngestRecord> {
 
@@ -77,7 +78,7 @@ public class VehicleFitmentBulkIngestController extends AbstractBulkIngestContro
                     FITMENT_INGEST_FAILED errorCode rather than trusting the status alone.
                     """)
     @PostMapping("/bulk-ingest")
-    @PreAuthorize("hasAuthority('vehicle-fitment:hint:create')")
+    @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_CREATE + "')")
     @EmitEvent(id = "VEHICLE_FITMENT_BULK_INGEST", apiVersion = "1")
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

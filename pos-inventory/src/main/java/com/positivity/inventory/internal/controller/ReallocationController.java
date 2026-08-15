@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.reallocation.ReallocateRequest;
 import com.positivity.inventory.internal.dto.reallocation.ReallocateResponse;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.AllocationReallocationService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"inventory:allocations:reallocate"})
 @RequestMapping("/v1/inventory/allocations")
 @RequiredArgsConstructor
-@PreAuthorize("hasAuthority('inventory:allocations:reallocate')")
+@PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.ALLOCATIONS_REALLOCATE + "')")
 @Tag(name = "Reallocation", description = "Allocation rebalancing endpoints")
 public class ReallocationController {
 

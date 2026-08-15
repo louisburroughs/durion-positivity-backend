@@ -8,6 +8,7 @@ import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.dto.PricingSnapshotCreatedResponse;
 import com.positivity.securityservice.internal.dto.PricingSnapshotDto;
 import com.positivity.securityservice.internal.dto.PricingSnapshotRequest;
+import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.service.AuditEventService;
 import com.positivity.securityservice.service.PricingSnapshotService;
 import com.positivity.shared.error.ApiError;
@@ -56,7 +57,7 @@ public class AuditController {
 
     @EmitEvent(id = "SECURITY_AUDIT_EVENT_CREATE", apiVersion = "1")
     @PostMapping("/events")
-    @PreAuthorize("hasAuthority('security:audit:create')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.AUDIT_CREATE + "')")
     @Operation(operationId = "createAuditEvent", summary = "Record an Immutable Audit Event", description = """
                     Records an immutable audit event and returns the generated event id and server timestamp.
                     Use this tool to persist a write-once audit fact; do not use createPricingSnapshot, which \
@@ -108,7 +109,7 @@ public class AuditController {
     }
 
     @GetMapping("/events/{eventId}")
-    @PreAuthorize("hasAuthority('security:audit:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.AUDIT_VIEW + "')")
     @Operation(operationId = "getAuditEvent", summary = "Get One Audit Event by Id", description = """
                     Returns a previously recorded audit event by its event id.
                     Use this tool when the event id is known; use searchAuditEvents instead to filter by time \
@@ -135,7 +136,7 @@ public class AuditController {
     }
 
     @GetMapping("/events")
-    @PreAuthorize("hasAuthority('security:audit:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.AUDIT_VIEW + "')")
     @Operation(operationId = "searchAuditEvents", summary = "Search Audit Events With Filters", description = """
                     Searches audit events with pagination, filtering by time window, actor, event type, and \
                     aggregate identifier.
@@ -221,7 +222,7 @@ public class AuditController {
     }
 
     @DeleteMapping("/events/**")
-    @PreAuthorize("hasAuthority('security:audit:create')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.AUDIT_CREATE + "')")
     @Operation(operationId = "rejectAuditEventDelete", summary = "Reject Audit Event Deletion", description = """
                     Rejects every attempt to delete audit events, unconditionally answering 405 Method Not Allowed.
                     Use this tool never; audit events are write-once, so use createAuditEvent to record facts and \
@@ -239,7 +240,7 @@ public class AuditController {
     }
 
     @PutMapping("/events/**")
-    @PreAuthorize("hasAuthority('security:audit:create')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.AUDIT_CREATE + "')")
     @Operation(operationId = "rejectAuditEventUpdate", summary = "Reject Audit Event Modification", description = """
                     Rejects every attempt to modify audit events, unconditionally answering 405 Method Not Allowed.
                     Use this tool never; audit events are write-once, so record a new fact with createAuditEvent \
@@ -258,7 +259,7 @@ public class AuditController {
 
     @EmitEvent(id = "SECURITY_AUDIT_PRICING_SNAPSHOT_CREATE", apiVersion = "1")
     @PostMapping("/pricing-snapshots")
-    @PreAuthorize("hasAuthority('security:audit:create')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.AUDIT_CREATE + "')")
     @Operation(
             operationId = "createPricingSnapshot",
             summary = "Record an Immutable Pricing Snapshot",
@@ -308,7 +309,7 @@ public class AuditController {
     }
 
     @GetMapping("/pricing-snapshots/{snapshotId}")
-    @PreAuthorize("hasAuthority('security:audit:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.AUDIT_VIEW + "')")
     @Operation(operationId = "getPricingSnapshot", summary = "Get One Pricing Snapshot by Id", description = """
                     Returns an immutable pricing snapshot with its rule-evaluation steps ordered by rule id.
                     Use this tool when the snapshot id is known; use searchAuditEvents instead for general audit \

@@ -7,6 +7,7 @@ import com.positivity.location.internal.dto.StorageLocationResponse;
 import com.positivity.location.internal.dto.StorageLocationTopologyResponse;
 import com.positivity.location.internal.enums.StorageLocationStatus;
 import com.positivity.location.internal.enums.StorageLocationType;
+import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.service.StorageLocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -56,7 +57,7 @@ public class StorageLocationController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('location:write')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_CREATE", apiVersion = "1")
     @Operation(
             operationId = "createStorageLocation",
@@ -103,7 +104,7 @@ public class StorageLocationController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('location:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_LIST", apiVersion = "1")
     @Operation(operationId = "listStorageLocations", summary = "List Storage Locations of a Site", description = """
                     Lists the storage locations of a site as a page, optionally filtered by type and status.
@@ -134,7 +135,7 @@ public class StorageLocationController {
      * Issue: CAP-214 #655
      */
     @GetMapping("/topology")
-    @PreAuthorize("hasAuthority('location:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_TOPOLOGY", apiVersion = "1")
     @Operation(
             operationId = "getStorageLocationTopology",
@@ -160,7 +161,7 @@ public class StorageLocationController {
     }
 
     @GetMapping("/{storageLocationId}")
-    @PreAuthorize("hasAuthority('location:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_GET", apiVersion = "1")
     @Operation(operationId = "getStorageLocation", summary = "Get a Storage Location by Identifier", description = """
                     Returns a single storage location of a site, including capacity and temperature attributes \
@@ -183,7 +184,7 @@ public class StorageLocationController {
     }
 
     @PatchMapping("/{storageLocationId}")
-    @PreAuthorize("hasAuthority('location:write')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_UPDATE", apiVersion = "1")
     @Operation(operationId = "patchStorageLocation", summary = "Patch Fields of a Storage Location", description = """
                     Applies a partial update to a storage location, covering rename, barcode, reparenting, \

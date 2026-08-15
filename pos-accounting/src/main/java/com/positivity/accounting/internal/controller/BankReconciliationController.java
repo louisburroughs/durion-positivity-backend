@@ -11,6 +11,7 @@ import com.positivity.accounting.internal.dto.ReconciliationReportResponse;
 import com.positivity.accounting.internal.dto.ReconciliationUnmatchRequest;
 import com.positivity.accounting.internal.enums.BankAdjustmentType;
 import com.positivity.accounting.internal.enums.ReconciliationStatus;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.BankReconciliationService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
@@ -78,7 +79,7 @@ public class BankReconciliationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:reconciliation:adjust"})
-    @PreAuthorize("hasAuthority('accounting:reconciliation:adjust')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_ADJUST + "')")
     @EmitEvent(id = "ACCOUNTING_RECONCILIATION_IMPORT", apiVersion = "1")
     @Operation(
             operationId = "importReconciliation",
@@ -145,7 +146,7 @@ public class BankReconciliationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:reconciliation:view"})
-    @PreAuthorize("hasAuthority('accounting:reconciliation:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_VIEW + "')")
     @EmitEvent(id = "ACCOUNTING_RECONCILIATION_ADJUSTMENT_TYPES_LIST", apiVersion = "1")
     @Operation(
             operationId = "listReconciliationAdjustmentTypes",
@@ -182,7 +183,7 @@ public class BankReconciliationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:reconciliation:view"})
-    @PreAuthorize("hasAuthority('accounting:reconciliation:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_VIEW + "')")
     @EmitEvent(id = "ACCOUNTING_RECONCILIATION_LIST", apiVersion = "1")
     @Operation(
             operationId = "listReconciliations",
@@ -222,7 +223,7 @@ public class BankReconciliationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:reconciliation:view"})
-    @PreAuthorize("hasAuthority('accounting:reconciliation:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_VIEW + "')")
     @EmitEvent(id = "ACCOUNTING_RECONCILIATION_GET", apiVersion = "1")
     @Operation(
             operationId = "getReconciliation",
@@ -260,7 +261,7 @@ public class BankReconciliationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:reconciliation:adjust"})
-    @PreAuthorize("hasAuthority('accounting:reconciliation:adjust')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_ADJUST + "')")
     @EmitEvent(id = "ACCOUNTING_RECONCILIATION_MATCH", apiVersion = "1")
     @Operation(
             operationId = "matchReconciliation",
@@ -337,7 +338,7 @@ public class BankReconciliationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:reconciliation:adjust"})
-    @PreAuthorize("hasAuthority('accounting:reconciliation:adjust')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_ADJUST + "')")
     @EmitEvent(id = "ACCOUNTING_RECONCILIATION_UNMATCH", apiVersion = "1")
     @Operation(
             operationId = "unmatchReconciliation",
@@ -404,7 +405,7 @@ public class BankReconciliationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:reconciliation:adjust"})
-    @PreAuthorize("hasAuthority('accounting:reconciliation:adjust')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_ADJUST + "')")
     @EmitEvent(id = "ACCOUNTING_RECONCILIATION_ADJUSTMENT", apiVersion = "1")
     @Operation(
             operationId = "addReconciliationAdjustment",
@@ -486,7 +487,7 @@ public class BankReconciliationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:reconciliation:adjust"})
-    @PreAuthorize("hasAuthority('accounting:reconciliation:adjust')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_ADJUST + "')")
     @EmitEvent(id = "ACCOUNTING_RECONCILIATION_FINALIZE", apiVersion = "1")
     @Operation(
             operationId = "finalizeReconciliation",
@@ -547,7 +548,7 @@ public class BankReconciliationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:reconciliation:view"})
-    @PreAuthorize("hasAuthority('accounting:reconciliation:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_VIEW + "')")
     @EmitEvent(id = "ACCOUNTING_RECONCILIATION_REPORT", apiVersion = "1")
     @Operation(
             operationId = "getReconciliationReport",
@@ -584,7 +585,7 @@ public class BankReconciliationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:reconciliation:view"})
-    @PreAuthorize("hasAuthority('accounting:reconciliation:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_VIEW + "')")
     @EmitEvent(id = "ACCOUNTING_RECONCILIATION_AUDIT", apiVersion = "1")
     @Operation(
             operationId = "getReconciliationAudit",

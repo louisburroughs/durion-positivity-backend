@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.controller;
 import com.positivity.invoice.internal.dto.ElevateRequest;
 import com.positivity.invoice.internal.dto.ElevateResponse;
 import com.positivity.invoice.internal.exception.ElevationDeniedException;
+import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.ElevationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -37,7 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
         name = "bearerAuth",
         scopes = {"invoice:finalize"})
 @Tag(name = "Billing Authorization", description = "Manager-approval elevation for controlled finalization")
-@PreAuthorize("hasAuthority('invoice:finalize')")
+@PreAuthorize("hasAuthority('" + InvoicePermissions.FINALIZE + "')")
 public class ElevationController {
 
     private static final Logger log = LoggerFactory.getLogger(ElevationController.class);

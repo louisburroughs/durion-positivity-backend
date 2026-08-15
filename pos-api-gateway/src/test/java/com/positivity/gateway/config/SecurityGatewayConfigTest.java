@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 46")
+    @DisplayName("CATALOG_VERSION is 48")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(46);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(48);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 453")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 455")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1290,8 +1290,15 @@ class SecurityGatewayConfigTest {
         // Detail. Separate from the pricecatalog permissions because reading a vendor's staged
         // prices and making a live call to that vendor on a customer's page view are different acts.
         assertThat(GatewayPermissionCatalog.authorityForBit(453)).isEqualTo("PERM_supplier:stock:inquire");
+        // Registered by the first --sync run that could see constant-based @PreAuthorize. It gated
+        // five replenishment endpoints with no bit behind it, so no role could hold it and those
+        // endpoints answered 403 to everyone.
+        assertThat(GatewayPermissionCatalog.authorityForBit(454)).isEqualTo("PERM_inventory:replenishment:manage");
+        // Replaces the dotted inventory.cost.standard.update, which named no permission the catalog
+        // ever held and so gated nothing.
+        assertThat(GatewayPermissionCatalog.authorityForBit(455)).isEqualTo("PERM_catalog:item_cost:update");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(454)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(456)).isNull();
     }
 
     @Test

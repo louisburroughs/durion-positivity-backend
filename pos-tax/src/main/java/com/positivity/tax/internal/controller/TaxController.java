@@ -6,6 +6,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxProviderTransactionResult;
+import com.positivity.tax.internal.security.TaxPermissions;
 import com.positivity.tax.internal.service.TaxProviderLifecycleService;
 import com.positivity.tax.service.TaxCalculationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,7 +47,7 @@ public class TaxController {
      * @return the calculated tax response
      */
     @PostMapping("/calculate")
-    @PreAuthorize("hasAuthority('tax:calculate')")
+    @PreAuthorize("hasAuthority('" + TaxPermissions.CALCULATE + "')")
     @EmitEvent(id = "TAX_CALCULATE", apiVersion = "1")
     @Operation(operationId = "calculateTax", summary = "Calculate tax", description = """
                     Calculates tax for the supplied line items against the destination address and returns the
@@ -112,7 +113,7 @@ public class TaxController {
      * @return the recorded lifecycle outcome
      */
     @PostMapping("/transactions/{referenceId}/commit")
-    @PreAuthorize("hasAuthority('tax:commit')")
+    @PreAuthorize("hasAuthority('" + TaxPermissions.COMMIT + "')")
     @EmitEvent(id = "TAX_COMMIT", apiVersion = "1")
     @Operation(operationId = "commitTaxDocument", summary = "Commit tax document", description = """
                     Commits the provider tax document for a finalized invoice so the recorded tax becomes
@@ -146,7 +147,7 @@ public class TaxController {
      * @return the recorded lifecycle outcome
      */
     @PostMapping("/transactions/{referenceId}/void")
-    @PreAuthorize("hasAuthority('tax:commit')")
+    @PreAuthorize("hasAuthority('" + TaxPermissions.COMMIT + "')")
     @EmitEvent(id = "TAX_VOID", apiVersion = "1")
     @Operation(operationId = "voidTaxDocument", summary = "Void tax document", description = """
                     Voids the provider tax document for an invoice that has been reverted to DRAFT, withdrawing the
@@ -190,7 +191,7 @@ public class TaxController {
      * @return response indicating test mode status
      */
     @GetMapping("/mode")
-    @PreAuthorize("hasAuthority('tax:mode:view')")
+    @PreAuthorize("hasAuthority('" + TaxPermissions.MODE_VIEW + "')")
     @Operation(operationId = "getTaxServiceMode", summary = "Get tax service mode", description = """
                     Returns whether the tax service is running against the external provider or against the built-in
                     test calculator.

@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.TaxLiabilitySnapshotResponse;
 import com.positivity.accounting.internal.dto.TaxLiabilitySnapshotSummary;
 import com.positivity.accounting.internal.dto.TaxLiabilitySnapshotVerification;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.TaxLiabilitySnapshotService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
@@ -65,7 +66,7 @@ public class TaxLiabilitySnapshotController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:tax-snapshot:freeze"})
-    @PreAuthorize("hasAuthority('accounting:tax-snapshot:freeze')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.TAX_SNAPSHOT_FREEZE + "')")
     @EmitEvent(id = "TAX_LIABILITY_SNAPSHOT_FREEZE", apiVersion = "1")
     @Operation(
             operationId = "freezeTaxLiabilitySnapshot",
@@ -125,7 +126,7 @@ public class TaxLiabilitySnapshotController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"reporting:view:financial-statements"})
-    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "')")
     @EmitEvent(id = "TAX_LIABILITY_SNAPSHOT_LIST", apiVersion = "1")
     @Operation(
             operationId = "listTaxLiabilitySnapshots",
@@ -168,7 +169,7 @@ public class TaxLiabilitySnapshotController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"reporting:view:financial-statements"})
-    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "')")
     @EmitEvent(id = "TAX_LIABILITY_SNAPSHOT_GET", apiVersion = "1")
     @Operation(
             operationId = "getTaxLiabilitySnapshot",
@@ -211,7 +212,7 @@ public class TaxLiabilitySnapshotController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"reporting:view:financial-statements"})
-    @PreAuthorize("hasAuthority('reporting:view:financial-statements')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "')")
     @EmitEvent(id = "TAX_LIABILITY_SNAPSHOT_VERIFY", apiVersion = "1")
     @Operation(
             operationId = "verifyTaxLiabilitySnapshot",

@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.PeopleAvailabilityResponse;
 import com.positivity.people.internal.dto.PrimaryLocationResponse;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
+import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.service.PeopleAvailabilityService;
 import com.positivity.people.service.StaffingAssignmentService;
 import com.positivity.people.service.UserPersonTranslationService;
@@ -64,7 +65,7 @@ public class PeopleAvailabilityController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:availability:view"})
-    @PreAuthorize("hasAuthority('people:availability:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.AVAILABILITY_VIEW + "')")
     public ResponseEntity<List<PeopleAvailabilityResponse>> getPeopleAvailability(
             @Parameter(description = "Filter by location ID. Defaults to requester location when omitted.")
                     @RequestParam(required = false)
@@ -102,7 +103,7 @@ public class PeopleAvailabilityController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:availability:view"})
-    @PreAuthorize("hasAuthority('people:availability:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.AVAILABILITY_VIEW + "')")
     public ResponseEntity<PrimaryLocationResponse> getCurrentUserPrimaryLocation() {
         UUID locationId = peopleAvailabilityService.resolveCurrentUserPrimaryLocationId();
         log.info("Resolved primary location(mask) {} for current user", maskForLog(locationId));
@@ -138,7 +139,7 @@ public class PeopleAvailabilityController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:availability:view"})
-    @PreAuthorize("hasAuthority('people:availability:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.AVAILABILITY_VIEW + "')")
     public List<StaffingAssignmentResponse> getCurrentUserLocations() {
         return staffingAssignmentService.findActiveByPersonId(
                 userPersonTranslationService.getPersonUuidForCurrentUser());
@@ -164,7 +165,7 @@ public class PeopleAvailabilityController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:view"})
-    @PreAuthorize("hasAuthority('people:employee:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
     public List<StaffingAssignmentResponse> getPersonLocations(
             @Parameter(description = "Person id") @PathVariable UUID personId) {
         return staffingAssignmentService.findActiveByPersonId(personId);
@@ -197,7 +198,7 @@ public class PeopleAvailabilityController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:view"})
-    @PreAuthorize("hasAuthority('people:employee:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
     public ResponseEntity<PrimaryLocationResponse> getPersonPrimaryLocation(
             @Parameter(description = "Person id") @PathVariable UUID personId) {
         UUID locationId = peopleAvailabilityService.resolvePrimaryLocationId(personId);

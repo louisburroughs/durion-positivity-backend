@@ -3,6 +3,7 @@ package com.positivity.bulkloader.internal.controller;
 import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
 import com.positivity.bulkloader.internal.dto.ContentDetectionResult;
 import com.positivity.bulkloader.internal.dto.FileUploadResponse;
+import com.positivity.bulkloader.internal.security.BulkImportPermissions;
 import com.positivity.bulkloader.service.BulkLoadJobService;
 import com.positivity.bulkloader.service.ColumnMappingService;
 import com.positivity.bulkloader.service.FileStorageService;
@@ -52,7 +53,7 @@ public class FileUploadController {
     private final ColumnMappingService columnMappingService;
 
     @PostMapping("/{jobId}/upload")
-    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @EmitEvent(id = "BULK_LOADER_FILE_UPLOAD", apiVersion = "1")
     @Operation(
             operationId = "uploadJobFile",
@@ -139,7 +140,7 @@ public class FileUploadController {
     }
 
     @PostMapping("/{jobId}/process")
-    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @EmitEvent(id = "BULK_LOADER_JOB_START", apiVersion = "1")
     @Operation(operationId = "startJobProcessing", summary = "Launch a Bulk Load Job", description = """
                     Starts asynchronous Spring Batch processing for a bulk load job and transitions it to PROCESSING.

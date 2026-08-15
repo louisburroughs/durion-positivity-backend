@@ -77,7 +77,7 @@ public class CrmSegmentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.SEGMENT_VIEW})
-    @PreAuthorize("hasAuthority('crm:segment:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.SEGMENT_VIEW + "')")
     @EmitEvent(id = "CRM_SEGMENT_LIST", apiVersion = "1")
     public ResponseEntity<List<SegmentResponse>> list(
             @RequestParam(name = "audienceType", required = false) AudienceType audienceType) {
@@ -111,7 +111,7 @@ public class CrmSegmentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.SEGMENT_VIEW})
-    @PreAuthorize("hasAuthority('crm:segment:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.SEGMENT_VIEW + "')")
     @EmitEvent(id = "CRM_SEGMENT_ATTRIBUTES", apiVersion = "1")
     public ResponseEntity<List<SegmentAttributeResponse>> attributeCatalog() {
         return ResponseEntity.ok(segmentService.attributeCatalog());
@@ -139,7 +139,7 @@ public class CrmSegmentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.SEGMENT_VIEW})
-    @PreAuthorize("hasAuthority('crm:segment:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.SEGMENT_VIEW + "')")
     @EmitEvent(id = "CRM_SEGMENT_GET", apiVersion = "1")
     public ResponseEntity<SegmentResponse> get(@PathVariable UUID segmentId) {
         return ResponseEntity.ok(segmentService.get(segmentId));
@@ -171,7 +171,7 @@ public class CrmSegmentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.SEGMENT_MANAGE})
-    @PreAuthorize("hasAuthority('crm:segment:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.SEGMENT_MANAGE + "')")
     @EmitEvent(id = "CRM_SEGMENT_CREATE", apiVersion = "1")
     public ResponseEntity<SegmentResponse> create(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -230,7 +230,7 @@ public class CrmSegmentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.SEGMENT_MANAGE})
-    @PreAuthorize("hasAuthority('crm:segment:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.SEGMENT_MANAGE + "')")
     @EmitEvent(id = "CRM_SEGMENT_UPDATE", apiVersion = "1")
     public ResponseEntity<SegmentResponse> update(
             @PathVariable UUID segmentId,
@@ -276,7 +276,7 @@ public class CrmSegmentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.SEGMENT_MANAGE})
-    @PreAuthorize("hasAuthority('crm:segment:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.SEGMENT_MANAGE + "')")
     @EmitEvent(id = "CRM_SEGMENT_DELETE", apiVersion = "1")
     public ResponseEntity<Void> delete(@PathVariable UUID segmentId) {
         segmentService.delete(segmentId);
@@ -307,7 +307,7 @@ public class CrmSegmentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.SEGMENT_MANAGE})
-    @PreAuthorize("hasAuthority('crm:segment:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.SEGMENT_MANAGE + "')")
     @EmitEvent(id = "CRM_SEGMENT_MEMBERS_ADD", apiVersion = "1")
     public ResponseEntity<SegmentResponse> addMembers(
             @PathVariable UUID segmentId,
@@ -346,7 +346,7 @@ public class CrmSegmentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.SEGMENT_MANAGE})
-    @PreAuthorize("hasAuthority('crm:segment:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.SEGMENT_MANAGE + "')")
     @EmitEvent(id = "CRM_SEGMENT_MEMBER_REMOVE", apiVersion = "1")
     public ResponseEntity<Void> removeMember(@PathVariable UUID segmentId, @PathVariable UUID partyId) {
         segmentService.removeMember(segmentId, partyId);
@@ -379,7 +379,7 @@ public class CrmSegmentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.SEGMENT_RESOLVE})
-    @PreAuthorize("hasAuthority('crm:segment:resolve')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.SEGMENT_RESOLVE + "')")
     @EmitEvent(id = "CRM_SEGMENT_RESOLVE", apiVersion = "1")
     public ResponseEntity<SegmentResolutionResponse> resolve(
             @PathVariable UUID segmentId,

@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.dto.PostingCategoryCreateRequest;
 import com.positivity.accounting.internal.dto.PostingCategoryListResponse;
 import com.positivity.accounting.internal.dto.PostingCategoryResponse;
 import com.positivity.accounting.internal.dto.PostingCategoryUpdateRequest;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.PostingCategoryService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.LogSanitizer;
@@ -53,7 +54,7 @@ public class PostingCategoryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:posting-category:create"})
-    @PreAuthorize("hasAuthority('accounting:posting-category:create')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.POSTING_CATEGORY_CREATE + "')")
     @Operation(
             operationId = "createPostingCategory",
             summary = "Create Posting Category",
@@ -96,7 +97,7 @@ public class PostingCategoryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:posting-category:view"})
-    @PreAuthorize("hasAuthority('accounting:posting-category:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.POSTING_CATEGORY_VIEW + "')")
     @Operation(
             operationId = "getPostingCategory",
             summary = "Get Posting Category",
@@ -123,7 +124,7 @@ public class PostingCategoryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:posting-category:edit"})
-    @PreAuthorize("hasAuthority('accounting:posting-category:edit')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.POSTING_CATEGORY_EDIT + "')")
     @Operation(
             operationId = "updatePostingCategory",
             summary = "Update Posting Category",
@@ -169,7 +170,7 @@ public class PostingCategoryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:posting-category:view"})
-    @PreAuthorize("hasAuthority('accounting:posting-category:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.POSTING_CATEGORY_VIEW + "')")
     @Operation(
             operationId = "listPostingCategories",
             summary = "List Posting Categories",
@@ -210,7 +211,7 @@ public class PostingCategoryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:posting-category:deactivate"})
-    @PreAuthorize("hasAuthority('accounting:posting-category:deactivate')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.POSTING_CATEGORY_DEACTIVATE + "')")
     @Operation(
             operationId = "deactivatePostingCategory",
             summary = "Deactivate Posting Category",

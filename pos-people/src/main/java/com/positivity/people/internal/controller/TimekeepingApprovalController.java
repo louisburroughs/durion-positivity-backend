@@ -6,6 +6,7 @@ import com.positivity.people.internal.dto.TimePeriodApprovalDto;
 import com.positivity.people.internal.dto.TimePeriodDecisionResponse;
 import com.positivity.people.internal.dto.TimePeriodDto;
 import com.positivity.people.internal.dto.TimekeepingEntryDto;
+import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.service.TimekeepingApprovalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -53,7 +54,7 @@ public class TimekeepingApprovalController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timekeeping:view"})
-    @PreAuthorize("hasAuthority('people:timekeeping:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEKEEPING_VIEW + "')")
     public ResponseEntity<List<ApprovalPersonDto>> listApprovalPeople() {
         return ResponseEntity.ok(timekeepingApprovalService.listApprovalPeople());
     }
@@ -77,7 +78,7 @@ public class TimekeepingApprovalController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timekeeping:view"})
-    @PreAuthorize("hasAuthority('people:timekeeping:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEKEEPING_VIEW + "')")
     public ResponseEntity<List<TimePeriodDto>> listTimePeriods(@RequestParam(required = false) UUID tenantId) {
         return ResponseEntity.ok(timekeepingApprovalService.listTimePeriods(tenantId));
     }
@@ -103,7 +104,7 @@ public class TimekeepingApprovalController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timekeeping:view"})
-    @PreAuthorize("hasAuthority('people:timekeeping:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEKEEPING_VIEW + "')")
     public ResponseEntity<List<TimekeepingEntryDto>> listTimekeepingEntries(
             @RequestParam UUID personId, @RequestParam UUID timePeriodId) {
         return ResponseEntity.ok(timekeepingApprovalService.listTimekeepingEntries(personId, timePeriodId));
@@ -127,7 +128,7 @@ public class TimekeepingApprovalController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timekeeping:view"})
-    @PreAuthorize("hasAuthority('people:timekeeping:view')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEKEEPING_VIEW + "')")
     public ResponseEntity<TimePeriodApprovalDto> getTimePeriodApproval(
             @RequestParam UUID personId, @RequestParam UUID timePeriodId) {
         return ResponseEntity.ok(timekeepingApprovalService.getTimePeriodApproval(personId, timePeriodId));
@@ -153,7 +154,7 @@ public class TimekeepingApprovalController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timekeeping:approve"})
-    @PreAuthorize("hasAuthority('people:timekeeping:approve')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEKEEPING_APPROVE + "')")
     public ResponseEntity<TimePeriodDecisionResponse> approvePeriod(
             @PathVariable UUID timePeriodId, @PathVariable UUID personId) {
         return ResponseEntity.ok(timekeepingApprovalService.approvePeriod(timePeriodId, personId));
@@ -179,7 +180,7 @@ public class TimekeepingApprovalController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timekeeping:reject"})
-    @PreAuthorize("hasAuthority('people:timekeeping:reject')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.TIMEKEEPING_REJECT + "')")
     public ResponseEntity<TimePeriodDecisionResponse> rejectPeriod(
             @PathVariable UUID timePeriodId,
             @PathVariable UUID personId,

@@ -3,6 +3,7 @@ package com.positivity.peoplecontact.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.peoplecontact.internal.dto.PostalAddressDto;
 import com.positivity.peoplecontact.internal.enums.PartyType;
+import com.positivity.peoplecontact.internal.security.PeopleContactPermissions;
 import com.positivity.peoplecontact.service.PostalAddressService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -60,7 +61,7 @@ public class PostalAddressController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:person:view"})
-    @PreAuthorize("hasAuthority('people-contact:person:view')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.PERSON_VIEW + "')")
     public ResponseEntity<PostalAddressDto> getPersonAddress(
             @Parameter(description = "Person id") @PathVariable UUID personId) {
         return postalAddressService
@@ -107,7 +108,7 @@ public class PostalAddressController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:person:edit"})
-    @PreAuthorize("hasAuthority('people-contact:person:edit')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.PERSON_EDIT + "')")
     public ResponseEntity<PostalAddressDto> putPersonAddress(
             @Parameter(description = "Person id") @PathVariable UUID personId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -151,7 +152,7 @@ public class PostalAddressController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:person:edit"})
-    @PreAuthorize("hasAuthority('people-contact:person:edit')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.PERSON_EDIT + "')")
     public ResponseEntity<Void> deletePersonAddress(@Parameter(description = "Person id") @PathVariable UUID personId) {
         postalAddressService.deleteAddress(PartyType.PERSON, personId);
         return ResponseEntity.noContent().build();
@@ -185,7 +186,7 @@ public class PostalAddressController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:organization:view"})
-    @PreAuthorize("hasAuthority('people-contact:organization:view')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.ORGANIZATION_VIEW + "')")
     public ResponseEntity<PostalAddressDto> getOrganizationAddress(
             @Parameter(description = "Organization party id") @PathVariable UUID organizationId) {
         return postalAddressService
@@ -223,7 +224,7 @@ public class PostalAddressController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:organization:edit"})
-    @PreAuthorize("hasAuthority('people-contact:organization:edit')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.ORGANIZATION_EDIT + "')")
     public ResponseEntity<PostalAddressDto> putOrganizationAddress(
             @Parameter(description = "Organization party id") @PathVariable UUID organizationId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -267,7 +268,7 @@ public class PostalAddressController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:organization:edit"})
-    @PreAuthorize("hasAuthority('people-contact:organization:edit')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.ORGANIZATION_EDIT + "')")
     public ResponseEntity<Void> deleteOrganizationAddress(
             @Parameter(description = "Organization party id") @PathVariable UUID organizationId) {
         postalAddressService.deleteAddress(PartyType.ORGANIZATION, organizationId);

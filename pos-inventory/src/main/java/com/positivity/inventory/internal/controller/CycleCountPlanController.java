@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPla
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
 import com.positivity.inventory.internal.dto.cyclecount.plan.UpdateCycleCountPlanStatusRequest;
 import com.positivity.inventory.internal.enums.CycleCountPlanStatus;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.CycleCountPlanService;
 import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,7 +48,7 @@ public class CycleCountPlanController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:cycle_count:initiate"})
-    @PreAuthorize("hasAuthority('inventory:cycle_count:initiate')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_INITIATE + "')")
     @Operation(
             operationId = "createCycleCountPlan",
             summary = "Create cycle count plan",
@@ -102,7 +103,7 @@ public class CycleCountPlanController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:cycle_count:view"})
-    @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_VIEW + "')")
     @Operation(
             operationId = "listCycleCountPlans",
             summary = "List cycle count plans",
@@ -141,7 +142,7 @@ public class CycleCountPlanController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:cycle_count:view"})
-    @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_VIEW + "')")
     @Operation(
             operationId = "getCycleCountPlan",
             summary = "Get cycle count plan",
@@ -174,7 +175,7 @@ public class CycleCountPlanController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:cycle_count:complete"})
-    @PreAuthorize("hasAuthority('inventory:cycle_count:complete')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_COMPLETE + "')")
     @Operation(
             operationId = "updateCycleCountPlanStatus",
             summary = "Transition cycle count plan status",

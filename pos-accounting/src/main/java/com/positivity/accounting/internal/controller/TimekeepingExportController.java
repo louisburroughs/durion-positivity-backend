@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.ExportJobRequest;
 import com.positivity.accounting.internal.dto.ExportJobResponse;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.TimekeepingExportService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,7 +45,7 @@ public class TimekeepingExportController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:export:request"})
-    @PreAuthorize("hasAuthority('accounting:export:request')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EXPORT_REQUEST + "')")
     @EmitEvent(id = "ACCOUNTING_EXPORT_REQUEST", apiVersion = "1")
     @Operation(
             operationId = "requestExport",
@@ -88,7 +89,7 @@ public class TimekeepingExportController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:export:view"})
-    @PreAuthorize("hasAuthority('accounting:export:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EXPORT_VIEW + "')")
     @Operation(
             operationId = "getExportStatus",
             summary = "Get Export Job Status",
@@ -115,7 +116,7 @@ public class TimekeepingExportController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:export:view"})
-    @PreAuthorize("hasAuthority('accounting:export:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.EXPORT_VIEW + "')")
     @Operation(
             operationId = "listExportHistory",
             summary = "List Export Job History",

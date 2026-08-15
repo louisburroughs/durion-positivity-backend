@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.service.RolePermissionService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,7 +37,7 @@ public class PrincipalRoleController {
 
     @EmitEvent(id = "SECURITY_PRINCIPAL_ROLE_ASSIGN", apiVersion = "1")
     @PostMapping("/{principalId}/roles/{roleId}")
-    @PreAuthorize("hasAuthority('security:role:assign')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_ASSIGN + "')")
     @Operation(operationId = "assignPrincipalRole", summary = "Assign a Role to a Principal", description = """
                     Links a free-form principal identifier to a role in the RBAC principal matrix consulted by \
                     getAuthorizationDecision.

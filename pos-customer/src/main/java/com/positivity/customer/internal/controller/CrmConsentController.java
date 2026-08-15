@@ -67,7 +67,7 @@ public class CrmConsentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.CONSENT_VIEW})
-    @PreAuthorize("hasAuthority('crm:consent:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONSENT_VIEW + "')")
     @EmitEvent(id = "CRM_MARKETING_CONSENT_GET", apiVersion = "1")
     public ResponseEntity<MarketingConsentSummaryResponse> getConsent(@PathVariable UUID partyId) {
         return ResponseEntity.ok(marketingConsentService.getConsent(partyId));
@@ -102,7 +102,7 @@ public class CrmConsentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.CONSENT_MANAGE})
-    @PreAuthorize("hasAuthority('crm:consent:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONSENT_MANAGE + "')")
     @EmitEvent(id = "CRM_MARKETING_CONSENT_UPDATE", apiVersion = "1")
     public ResponseEntity<MarketingConsentSummaryResponse> updateConsent(
             @PathVariable UUID partyId,
@@ -150,7 +150,7 @@ public class CrmConsentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.CONSENT_MANAGE})
-    @PreAuthorize("hasAuthority('crm:consent:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONSENT_MANAGE + "')")
     @EmitEvent(id = "CRM_MARKETING_ACCOUNT_GATE_SET", apiVersion = "1")
     public ResponseEntity<MarketingConsentSummaryResponse> setAccountGate(
             @PathVariable UUID partyId, @RequestParam(name = "optOut") boolean optOut) {
@@ -182,7 +182,7 @@ public class CrmConsentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.CONSENT_VIEW})
-    @PreAuthorize("hasAuthority('crm:consent:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONSENT_VIEW + "')")
     @EmitEvent(id = "CRM_CONSENT_HISTORY_GET", apiVersion = "1")
     public ResponseEntity<PagedResponse<ConsentEventResponse>> getConsentHistory(
             @PathVariable UUID partyId,
@@ -218,7 +218,7 @@ public class CrmConsentController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.CONSENT_VIEW})
-    @PreAuthorize("hasAuthority('crm:consent:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.CONSENT_VIEW + "')")
     @EmitEvent(id = "CRM_MARKETING_ELIGIBILITY_GET", apiVersion = "1")
     public ResponseEntity<MarketingConsentDecision> resolveEligibility(
             @PathVariable UUID partyId, @RequestParam(name = "channel") MarketingChannel channel) {

@@ -3,6 +3,7 @@ package com.positivity.shopmanager.internal.controller;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shopmanager.internal.dto.ShopAuditEntryResponse;
 import com.positivity.shopmanager.internal.dto.ShopAuditFilter;
+import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.service.ShopAuditService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -46,7 +47,8 @@ public class ShopAuditController {
      * Returns 200 with matching entries in reverse-chronological order.
      */
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('shop:schedule:view', 'appointments:view')")
+    @PreAuthorize(
+            "hasAnyAuthority('" + ShopPermissions.SCHEDULE_VIEW + "', '" + ShopPermissions.APPOINTMENTS_VIEW + "')")
     @Operation(operationId = "searchShopAudit", summary = "Search the Shop Audit Trail", description = """
                     Searches the immutable shop audit trail of schedule and assignment changes, returning matching \
                     entries in reverse-chronological order with actor, event type, change summary and reason.
@@ -82,7 +84,8 @@ public class ShopAuditController {
      * Returns 200 with the entry, or 404 if it does not exist.
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('shop:schedule:view', 'appointments:view')")
+    @PreAuthorize(
+            "hasAnyAuthority('" + ShopPermissions.SCHEDULE_VIEW + "', '" + ShopPermissions.APPOINTMENTS_VIEW + "')")
     @Operation(operationId = "getShopAuditEntry", summary = "Get a Shop Audit Entry by ID", description = """
                     Returns a single immutable shop audit entry, including actor, event type, change summary, \
                     change patch and reason fields.

@@ -9,6 +9,7 @@ import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.EmployeeContactInfoDto;
 import com.positivity.people.internal.dto.PersonBulkIngestRecord;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.service.EmployeeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -37,7 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/people")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasAuthority('people:employee:create')")
+@PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_CREATE + "')")
 @Tag(name = "People Bulk Ingest API", description = "Bulk import employee records")
 public class PersonBulkIngestController extends AbstractBulkIngestController<PersonBulkIngestRecord> {
 
@@ -45,7 +46,7 @@ public class PersonBulkIngestController extends AbstractBulkIngestController<Per
 
     @Override
     @PostMapping("/bulk-ingest")
-    @PreAuthorize("hasAuthority('people:employee:create')")
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_CREATE + "')")
     @EmitEvent(id = "PEOPLE_BULK_INGEST", apiVersion = "1")
     @Operation(
             operationId = "createEmployeesBulk",

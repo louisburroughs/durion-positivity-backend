@@ -2,6 +2,7 @@ package com.positivity.location.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.StorageLocationValidationResponseDTO;
+import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.service.StorageLocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -50,7 +51,7 @@ public class StorageLocationValidationController {
                 @ApiResponse(responseCode = "400", description = "Invalid storageLocationId format"),
                 @ApiResponse(responseCode = "403", description = "Forbidden - missing location:read authority")
             })
-    @PreAuthorize("hasAuthority('location:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @EmitEvent(id = "LOCATION_STORAGE_LOCATION_VALIDATE", apiVersion = "1")
     public StorageLocationValidationResponseDTO validateStorageLocation(
             @Parameter(description = "Storage location identifier", required = true) @PathVariable

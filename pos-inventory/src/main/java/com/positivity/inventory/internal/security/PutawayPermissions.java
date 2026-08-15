@@ -35,24 +35,17 @@ public final class PutawayPermissions {
             InventoryPermissionRegistry.PUTAWAY_OVERRIDE_LOCATION_CAPACITY;
 
     /**
-     * Permission to initiate a cycle count for reconciliation.
-     * Required when source location shows zero on-hand but physical inventory exists.
+     * Reconciliation when the source location shows zero on-hand but stock is physically there is
+     * not a putaway permission: it is a cycle count or an adjustment, and those are
+     * {@code inventory:cycle_count:*} and {@code inventory:adjustment:*} in
+     * {@link InventoryPermissionRegistry}.
      *
-     * <p>Creates a reconciliation task for the source location.
+     * <p>Two constants used to sit here for that, declared as {@code INITIATE_CYCLE_COUNT} and
+     * {@code ADJUST_INVENTORY} — bare words rather than {@code domain:resource:action} names. No
+     * permission of either name has ever existed in the catalog, so neither could be granted to
+     * anyone, and nothing referenced them; they are removed rather than renamed so that a future
+     * reader does not mistake them for an authority the system honours.
      */
-    public static final String INITIATE_CYCLE_COUNT = "INITIATE_CYCLE_COUNT";
-
-    /**
-     * Permission to make inventory adjustments.
-     * Required for exceptional reconciliation when on-hand does not match physical reality.
-     *
-     * <p>Requires:
-     * - Explicit reason code (MISPLACED_STOCK, UNRECORDED_RECEIPT, etc.)
-     * - Manager approval if above threshold
-     * - Adjustment must complete BEFORE putaway proceeds
-     */
-    public static final String ADJUST_INVENTORY = "ADJUST_INVENTORY";
-
     private PutawayPermissions() {
         // Utility class - prevent instantiation
     }

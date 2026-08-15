@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.EstimateSummaryResponse;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.EstimateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -46,7 +47,7 @@ public class EstimateSearchController {
                     """)
     @ApiResponse(responseCode = "200", description = "Page of estimate summaries returned.")
     @GetMapping("/search")
-    @PreAuthorize("hasAuthority('workorder:estimate:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_VIEW + "')")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH", apiVersion = "1")
     public Page<EstimateSummaryResponse> searchEstimates(
             @Parameter(

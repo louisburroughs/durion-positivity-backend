@@ -5,6 +5,7 @@ import com.positivity.securityservice.internal.dto.ResolveSelfRegistrationReview
 import com.positivity.securityservice.internal.dto.SelfRegistrationReviewCaseResponse;
 import com.positivity.securityservice.internal.enums.SelfRegistrationCaseStatus;
 import com.positivity.securityservice.internal.enums.SelfRegistrationCaseType;
+import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.service.SelfRegistrationReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -57,7 +58,7 @@ public class SelfRegistrationReviewController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:user_account_state:view"})
-    @PreAuthorize("hasAuthority('security:user_account_state:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_ACCOUNT_STATE_VIEW + "')")
     public ResponseEntity<List<SelfRegistrationReviewCaseResponse>> listCases(
             @RequestParam(required = false) SelfRegistrationCaseStatus status,
             @RequestParam(required = false) SelfRegistrationCaseType caseType) {
@@ -83,7 +84,7 @@ public class SelfRegistrationReviewController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:user_account_state:view"})
-    @PreAuthorize("hasAuthority('security:user_account_state:view')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_ACCOUNT_STATE_VIEW + "')")
     public ResponseEntity<SelfRegistrationReviewCaseResponse> getCase(@PathVariable UUID caseId) {
         return ResponseEntity.ok(selfRegistrationReviewService.getCase(caseId));
     }
@@ -111,7 +112,7 @@ public class SelfRegistrationReviewController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:user_account_state:manage"})
-    @PreAuthorize("hasAuthority('security:user_account_state:manage')")
+    @PreAuthorize("hasAuthority('" + SecurityPermissions.USER_ACCOUNT_STATE_MANAGE + "')")
     public ResponseEntity<SelfRegistrationReviewCaseResponse> resolveCase(
             @PathVariable UUID caseId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.dto.lot.LotExpirationUpdateRequest;
 import com.positivity.inventory.internal.dto.lot.LotResponse;
 import com.positivity.inventory.internal.dto.lot.LotStatusUpdateRequest;
 import com.positivity.inventory.internal.enums.InventoryLotStatus;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.InventoryLotService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -63,7 +64,7 @@ public class InventoryLotController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:on_hand:view"})
-    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "')")
     @Operation(
             operationId = "listInventoryLots",
             summary = "List lots",
@@ -115,7 +116,7 @@ public class InventoryLotController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:on_hand:view"})
-    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "')")
     @Operation(
             operationId = "getInventoryLot",
             summary = "Get lot details",
@@ -162,7 +163,7 @@ public class InventoryLotController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:lot:manage"})
-    @PreAuthorize("hasAuthority('inventory:lot:manage')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOT_MANAGE + "')")
     @Operation(
             operationId = "updateInventoryLotStatus",
             summary = "Change lot status",
@@ -236,7 +237,7 @@ public class InventoryLotController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:lot:manage"})
-    @PreAuthorize("hasAuthority('inventory:lot:manage')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOT_MANAGE + "')")
     @Operation(
             operationId = "updateInventoryLotExpiration",
             summary = "Set lot expiration",

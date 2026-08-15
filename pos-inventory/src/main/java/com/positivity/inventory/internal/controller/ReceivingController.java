@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.dto.receiving.CrossDockResponse;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsResponse;
 import com.positivity.inventory.internal.dto.receiving.ReceivingSessionResponse;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.ReceivingService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
@@ -45,7 +46,7 @@ public class ReceivingController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:receiving:create"})
-    @PreAuthorize("hasAuthority('inventory:receiving:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.RECEIVING_CREATE + "')")
     @EmitEvent(id = "INVENTORY_RECEIVING_SESSION_CREATE", apiVersion = "1")
     @Operation(
             operationId = "createReceivingSession",
@@ -114,7 +115,7 @@ public class ReceivingController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:receiving:view"})
-    @PreAuthorize("hasAuthority('inventory:receiving:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.RECEIVING_VIEW + "')")
     @EmitEvent(id = "INVENTORY_RECEIVING_SESSION_GET", apiVersion = "1")
     @Operation(
             operationId = "getReceivingSession",
@@ -163,7 +164,7 @@ public class ReceivingController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:receiving:complete"})
-    @PreAuthorize("hasAuthority('inventory:receiving:complete')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.RECEIVING_COMPLETE + "')")
     @EmitEvent(id = "INVENTORY_RECEIVING_SESSION_COMPLETE", apiVersion = "1")
     @Operation(
             operationId = "receiveItemsIntoStaging",
@@ -250,7 +251,8 @@ public class ReceivingController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:receiving:complete", "inventory:issue:parts"})
-    @PreAuthorize("hasAuthority('inventory:receiving:complete') and hasAuthority('inventory:issue:parts')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.RECEIVING_COMPLETE + "') and hasAuthority('"
+            + InventoryPermissionRegistry.ISSUE_PARTS + "')")
     @EmitEvent(id = "INVENTORY_RECEIVING_CROSSDOCK", apiVersion = "1")
     @Operation(
             operationId = "crossDockReceivingLine",

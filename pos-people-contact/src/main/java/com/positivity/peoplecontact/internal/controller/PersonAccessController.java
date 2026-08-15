@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.peoplecontact.internal.client.dto.RoleDto;
 import com.positivity.peoplecontact.internal.client.dto.UserRoleDto;
 import com.positivity.peoplecontact.internal.dto.PersonRoleAssignmentRequest;
+import com.positivity.peoplecontact.internal.security.PeopleContactPermissions;
 import com.positivity.peoplecontact.service.PeopleAccessControlService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -60,7 +61,7 @@ public class PersonAccessController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:role:view"})
-    @PreAuthorize("hasAuthority('people-contact:role:view')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.ROLE_VIEW + "')")
     public ResponseEntity<List<RoleDto>> getRoles(@PathVariable UUID personUuid) {
         return ResponseEntity.ok(peopleAccessControlService.getAvailableRolesForPerson(personUuid));
     }
@@ -84,7 +85,7 @@ public class PersonAccessController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:role:view"})
-    @PreAuthorize("hasAuthority('people-contact:role:view')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.ROLE_VIEW + "')")
     public ResponseEntity<List<UserRoleDto>> getAssignments(
             @PathVariable UUID personUuid,
             @RequestParam(required = false) Boolean includeHistory,
@@ -135,7 +136,7 @@ public class PersonAccessController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:role:assign"})
-    @PreAuthorize("hasAuthority('people-contact:role:assign')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.ROLE_ASSIGN + "')")
     public ResponseEntity<UserRoleDto> createAssignment(
             @PathVariable UUID personUuid,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -205,7 +206,7 @@ public class PersonAccessController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:role:revoke"})
-    @PreAuthorize("hasAuthority('people-contact:role:revoke')")
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.ROLE_REVOKE + "')")
     public ResponseEntity<Void> revokeAssignment(
             @PathVariable UUID personUuid,
             @PathVariable String roleCode,

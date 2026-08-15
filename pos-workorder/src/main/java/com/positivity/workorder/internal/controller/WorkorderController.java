@@ -16,6 +16,7 @@ import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.dto.WorkorderSnapshotResponse;
 import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.WorkorderStateMachine;
 import com.positivity.workorder.service.WorkorderCountService;
 import com.positivity.workorder.service.WorkorderInvoiceService;
@@ -68,7 +69,7 @@ public class WorkorderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:workorder:view"})
-    @PreAuthorize("hasAuthority('workorder:workorder:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_VIEW + "')")
     public List<WorkorderResponse> getAllWorkorders() {
         return workorderService.getAllWorkorders().stream()
                 .map(WorkorderResponse::fromEntity)
@@ -93,7 +94,7 @@ public class WorkorderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:workorder:view"})
-    @PreAuthorize("hasAuthority('workorder:workorder:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_VIEW + "')")
     public CountResponse countWorkorders(
             @Parameter(
                             description = "Count only open (non-terminal) work orders. Ignored when 'status' is "
@@ -134,7 +135,7 @@ public class WorkorderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:workorder:view"})
-    @PreAuthorize("hasAuthority('workorder:workorder:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_VIEW + "')")
     public ResponseEntity<WorkorderResponse> getWorkorderById(
             @Parameter(
                             description = "ID of the work order to retrieve",
@@ -305,7 +306,7 @@ public class WorkorderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:workorder:approve"})
-    @PreAuthorize("hasAuthority('workorder:workorder:approve')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_APPROVE + "')")
     public ResponseEntity<WorkorderResponse> approveWorkorder(
             @Parameter(
                             description = "ID of the work order to approve",
@@ -362,7 +363,7 @@ public class WorkorderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:workorder:complete"})
-    @PreAuthorize("hasAuthority('workorder:workorder:complete')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_COMPLETE + "')")
     public ResponseEntity<CompleteWorkorderResponse> completeWorkorder(
             @Parameter(
                             description = "ID of the work order to complete",
@@ -426,7 +427,7 @@ public class WorkorderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:workorder:generate_invoice"})
-    @PreAuthorize("hasAuthority('workorder:workorder:generate_invoice')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_GENERATE_INVOICE + "')")
     public ResponseEntity<InvoiceGenerationResponse> generateInvoice(
             @Parameter(description = "ID of the completed work order", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
@@ -465,7 +466,7 @@ public class WorkorderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:workorder:complete"})
-    @PreAuthorize("hasAuthority('workorder:workorder:complete')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_COMPLETE + "')")
     public ResponseEntity<CompletionPreconditionsResponse> getCompletionPreconditions(
             @Parameter(
                             description = "ID of the workorder to validate",
@@ -527,7 +528,7 @@ public class WorkorderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:workorder:reopen_completed"})
-    @PreAuthorize("hasAuthority('workorder:workorder:reopen_completed')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_REOPEN_COMPLETED + "')")
     public ResponseEntity<ReopenWorkorderResponse> reopenWorkorder(
             @Parameter(
                             description = "ID of the completed workorder to reopen",
@@ -583,7 +584,7 @@ public class WorkorderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:workorder:complete"})
-    @PreAuthorize("hasAuthority('workorder:workorder:complete')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_COMPLETE + "')")
     public ResponseEntity<WorkorderItemCompletionResponse> completeServiceItem(
             @Parameter(description = "Workorder ID") @PathVariable UUID workorderId,
             @Parameter(description = "Service line ID") @PathVariable UUID serviceLineId) {
@@ -619,7 +620,7 @@ public class WorkorderController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:workorder:complete"})
-    @PreAuthorize("hasAuthority('workorder:workorder:complete')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_COMPLETE + "')")
     public ResponseEntity<WorkorderItemCompletionResponse> completePartItem(
             @Parameter(description = "Workorder ID") @PathVariable UUID workorderId,
             @Parameter(description = "Part ID") @PathVariable UUID partId) {

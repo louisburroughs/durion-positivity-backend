@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.location.internal.dto.CoverageRuleResponse;
 import com.positivity.location.internal.dto.MobileUnitRequest;
 import com.positivity.location.internal.dto.MobileUnitResponse;
+import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.service.MobileUnitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -79,7 +80,7 @@ public class MobileUnitController {
     @ApiResponse(responseCode = "201", description = "Mobile unit created successfully.")
     @ApiResponse(responseCode = "409", description = "Mobile unit name already taken at the base location.")
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_CREATE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('location:mobile-unit:manage')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:mobile-unit:manage"})
@@ -113,7 +114,7 @@ public class MobileUnitController {
                     Returns 200 with a page of mobile units, empty when none exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Mobile units retrieved successfully.")
-    @PreAuthorize("hasAuthority('location:mobile-unit:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:mobile-unit:read"})
@@ -135,7 +136,7 @@ public class MobileUnitController {
                     """)
     @ApiResponse(responseCode = "200", description = "Mobile unit returned.")
     @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
-    @PreAuthorize("hasAuthority('location:mobile-unit:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:mobile-unit:read"})
@@ -165,7 +166,7 @@ public class MobileUnitController {
     @ApiResponse(responseCode = "200", description = "Mobile units managed successfully.")
     @ApiResponse(responseCode = "409", description = "Mobile unit name already taken at the base location.")
     @EmitEvent(id = "LOCATION_MOBILE_UNIT_UPDATE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('location:mobile-unit:manage')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:mobile-unit:manage"})
@@ -209,7 +210,7 @@ public class MobileUnitController {
     @ApiResponse(responseCode = "200", description = "Coverage rules replaced successfully.")
     @ApiResponse(responseCode = "404", description = "Mobile unit not found.")
     @EmitEvent(id = "LOCATION_COVERAGE_RULES_REPLACE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('location:mobile-unit:manage')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_MANAGE + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:mobile-unit:manage"})
@@ -244,7 +245,7 @@ public class MobileUnitController {
                     Returns 200 with the ordered rule list, empty when the unit has no rules or does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Coverage rules returned.")
-    @PreAuthorize("hasAuthority('location:mobile-unit:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.MOBILE_UNIT_READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:mobile-unit:read"})

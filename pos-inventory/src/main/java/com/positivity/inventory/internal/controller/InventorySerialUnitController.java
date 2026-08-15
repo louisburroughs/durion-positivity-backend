@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.controller;
 
 import com.positivity.inventory.internal.dto.serial.SerialUnitResponse;
 import com.positivity.inventory.internal.enums.InventorySerialStatus;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.InventorySerialUnitService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -57,7 +58,7 @@ public class InventorySerialUnitController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:on_hand:view"})
-    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "')")
     @Operation(
             operationId = "listSerialUnits",
             summary = "List serial units",
@@ -110,7 +111,7 @@ public class InventorySerialUnitController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:on_hand:view"})
-    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "')")
     @Operation(
             operationId = "getSerialUnit",
             summary = "Get serial unit",

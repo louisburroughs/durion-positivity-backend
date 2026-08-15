@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.inventory.internal.dto.InventoryLedgerEntryDto;
 import com.positivity.inventory.internal.dto.InventoryLedgerFilterParams;
 import com.positivity.inventory.internal.dto.LedgerPage;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.InventoryLedgerService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,7 +36,7 @@ public class InventoryLedgerController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:ledger:view"})
-    @PreAuthorize("hasAuthority('inventory:ledger:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LEDGER_VIEW + "')")
     @Operation(
             operationId = "listInventoryLedger",
             summary = "List inventory ledger entries",
@@ -101,7 +102,7 @@ public class InventoryLedgerController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:ledger:view"})
-    @PreAuthorize("hasAuthority('inventory:ledger:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LEDGER_VIEW + "')")
     @Operation(
             operationId = "getInventoryLedgerEntry",
             summary = "Get inventory ledger entry",

@@ -66,7 +66,7 @@ public class CampaignStatsController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.STATS_VIEW})
-    @PreAuthorize("hasAuthority('marketing:stats:view')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.STATS_VIEW + "')")
     @EmitEvent(id = "MARKETING_CAMPAIGN_STATS_GET", apiVersion = "1")
     public ResponseEntity<CampaignStatsResponse> campaignStats(@PathVariable UUID campaignId) {
         return ResponseEntity.ok(statsService.campaignStats(campaignId));
@@ -102,7 +102,7 @@ public class CampaignStatsController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.STATS_VIEW})
-    @PreAuthorize("hasAuthority('marketing:stats:view')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.STATS_VIEW + "')")
     @EmitEvent(id = "MARKETING_PROGRAM_STATS_GET", apiVersion = "1")
     public ResponseEntity<ProgramStatsResponse> programStats(@PathVariable UUID campaignProgramId) {
         return ResponseEntity.ok(statsService.programStats(campaignProgramId));

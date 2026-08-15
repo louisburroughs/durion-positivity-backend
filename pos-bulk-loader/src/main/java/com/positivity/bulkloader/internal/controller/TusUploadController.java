@@ -1,5 +1,6 @@
 package com.positivity.bulkloader.internal.controller;
 
+import com.positivity.bulkloader.internal.security.BulkImportPermissions;
 import com.positivity.bulkloader.service.TusUploadService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -81,7 +82,7 @@ public class TusUploadController {
     }
 
     @PostMapping("/bulk-jobs/{jobId}/tus")
-    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @EmitEvent(id = "BULK_LOADER_TUS_UPLOAD_CREATE", apiVersion = "1")
     @Operation(operationId = "createTusUpload", summary = "Create a Resumable Upload", description = """
                     Creates a resumable TUS upload session scoped to a bulk load job and returns its absolute upload \
@@ -142,7 +143,7 @@ public class TusUploadController {
     }
 
     @RequestMapping(value = "/tus/{uploadId}", method = RequestMethod.HEAD)
-    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @Operation(operationId = "getTusUploadOffset", summary = "Get Current Upload Offset", description = """
                     Returns the current byte offset of a TUS upload in the Upload-Offset response header so a client \
                     can resume where the last transfer stopped.
@@ -177,7 +178,7 @@ public class TusUploadController {
     }
 
     @PatchMapping("/tus/{uploadId}")
-    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @EmitEvent(id = "BULK_LOADER_TUS_UPLOAD_CHUNK_APPEND", apiVersion = "1")
     @Operation(operationId = "appendTusUploadChunk", summary = "Upload a Chunk", description = """
                     Appends a contiguous byte range to an in-progress TUS upload and, when the final byte arrives, \
@@ -227,7 +228,7 @@ public class TusUploadController {
     }
 
     @DeleteMapping("/tus/{uploadId}")
-    @PreAuthorize("hasAuthority('bulkImport:upload:execute')")
+    @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @EmitEvent(id = "BULK_LOADER_TUS_UPLOAD_CANCEL", apiVersion = "1")
     @Operation(operationId = "cancelTusUpload", summary = "Cancel a Resumable Upload", description = """
                     Cancels a TUS upload session, permanently deleting both the session record and its temporary \

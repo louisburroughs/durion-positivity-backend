@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.*;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.WorkorderPartUsageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -46,7 +47,7 @@ public class WorkorderPartsUsageController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:parts:add"})
-    @PreAuthorize("hasAuthority('workorder:parts:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.PARTS_ADD + "')")
     @EmitEvent(id = "WORKORDER_PART_ISSUE", apiVersion = "1")
     @Operation(operationId = "issueParts", summary = "Issue Parts to Workorder", description = """
                     Issues a quantity of a part line to the workorder, incrementing the line's quantityIssued and \
@@ -100,7 +101,7 @@ public class WorkorderPartsUsageController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:parts:add"})
-    @PreAuthorize("hasAuthority('workorder:parts:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.PARTS_ADD + "')")
     @EmitEvent(id = "WORKORDER_PART_CONSUME", apiVersion = "1")
     @Operation(operationId = "consumeParts", summary = "Record Part Consumption on Workorder", description = """
                     Records actual consumption of an issued part, incrementing the line's quantityConsumed and \
@@ -156,7 +157,7 @@ public class WorkorderPartsUsageController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:parts:add"})
-    @PreAuthorize("hasAuthority('workorder:parts:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.PARTS_ADD + "')")
     @EmitEvent(id = "WORKORDER_PART_RETURN", apiVersion = "1")
     @Operation(operationId = "returnParts", summary = "Return Unused Parts to Inventory", description = """
                     Returns unused issued quantity of a part line to inventory, incrementing quantityReturned \
@@ -213,7 +214,7 @@ public class WorkorderPartsUsageController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:parts:view"})
-    @PreAuthorize("hasAuthority('workorder:parts:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.PARTS_VIEW + "')")
     @Operation(operationId = "getPartsUsageHistory", summary = "Get Parts Usage History", description = """
                     Returns the ISSUE, CONSUME, and RETURN usage events for a workorder's parts, either for the \
                     whole workorder or filtered to one part line.

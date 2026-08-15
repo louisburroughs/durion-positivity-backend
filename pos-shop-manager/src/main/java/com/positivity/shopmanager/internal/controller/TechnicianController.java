@@ -2,6 +2,7 @@ package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.shopmanager.internal.dto.PersonDTO;
+import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.service.TechnicianPersonService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -43,7 +44,7 @@ public class TechnicianController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"shop:technician:view"})
-    @PreAuthorize("hasAuthority('shop:technician:view')")
+    @PreAuthorize("hasAuthority('" + ShopPermissions.TECHNICIAN_VIEW + "')")
     @GetMapping("/{locationId}/technicians/{personId}/person")
     public ResponseEntity<PersonDTO> getTechnicianPerson(
             @Parameter(description = "Shop location ID", example = "018e1c9f-6b5a-7890-abcd-1234567890ab") @PathVariable

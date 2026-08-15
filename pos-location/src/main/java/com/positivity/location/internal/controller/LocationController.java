@@ -9,6 +9,7 @@ import com.positivity.location.internal.dto.LocationRequestDTO;
 import com.positivity.location.internal.dto.LocationResponseDTO;
 import com.positivity.location.internal.dto.LocationValidationResponseDTO;
 import com.positivity.location.internal.dto.PersonDTO;
+import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.service.LocationRosterService;
 import com.positivity.location.service.LocationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -80,7 +81,7 @@ public class LocationController {
                     Returns 200 with the full list; there are no business error conditions for this operation.
                     """)
     @ApiResponse(responseCode = "200", description = "List of locations returned successfully.")
-    @PreAuthorize("hasAuthority('location:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:read"})
@@ -109,7 +110,7 @@ public class LocationController {
                     than an error.
                     """)
     @ApiResponse(responseCode = "200", description = "Location roster returned successfully.")
-    @PreAuthorize("hasAuthority('location:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @EmitEvent(id = "LOCATION_ROSTER_GET", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -138,7 +139,7 @@ public class LocationController {
                     """)
     @ApiResponse(responseCode = "200", description = "Location found and returned.")
     @ApiResponse(responseCode = "404", description = "Location not found.")
-    @PreAuthorize("hasAuthority('location:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:read"})
@@ -168,7 +169,7 @@ public class LocationController {
                     must inspect the flags rather than the status code.
                     """)
     @ApiResponse(responseCode = "200", description = "Validation result returned.")
-    @PreAuthorize("hasAuthority('location:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:read"})
@@ -198,7 +199,7 @@ public class LocationController {
     @ApiResponse(responseCode = "409", description = "Location name or code already taken.")
     @ApiResponse(responseCode = "422", description = "Invalid timezone or operating hours.")
     @EmitEvent(id = "LOCATION_LOCATION_CREATE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('location:write')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:write"})
@@ -237,7 +238,7 @@ public class LocationController {
     @ApiResponse(responseCode = "409", description = "Location name or code already taken.")
     @ApiResponse(responseCode = "422", description = "Invalid timezone or operating hours.")
     @EmitEvent(id = "LOCATION_LOCATION_UPDATE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('location:write')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:write"})
@@ -284,7 +285,7 @@ public class LocationController {
     @ApiResponse(responseCode = "409", description = "Location name already taken.")
     @ApiResponse(responseCode = "422", description = "Invalid timezone or operating hours.")
     @PatchMapping("/{locationId}")
-    @PreAuthorize("hasAuthority('location:write')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @EmitEvent(id = "LOCATION_PATCH", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -322,7 +323,7 @@ public class LocationController {
                     """)
     @ApiResponse(responseCode = "204", description = "Location deleted successfully.")
     @ApiResponse(responseCode = "404", description = "Location not found.")
-    @PreAuthorize("hasAuthority('location:write')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @DeleteMapping("/{locationId}")
     @EmitEvent(id = "LOCATION_LOCATION_DELETE", apiVersion = "1")
     @SecurityRequirement(
@@ -361,7 +362,7 @@ public class LocationController {
     @ApiResponse(responseCode = "200", description = "Parent relationship added successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid parentType value.")
     @EmitEvent(id = "LOCATION_PARENT_ADD", apiVersion = "1")
-    @PreAuthorize("hasAuthority('location:write')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:write"})
@@ -392,7 +393,7 @@ public class LocationController {
                     Returns 200 with the full unpaginated edge list.
                     """)
     @ApiResponse(responseCode = "200", description = "List of location parents returned successfully.")
-    @PreAuthorize("hasAuthority('location:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:read"})
@@ -415,7 +416,7 @@ public class LocationController {
                     """)
     @ApiResponse(responseCode = "200", description = "List of child locations returned successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid parentType value.")
-    @PreAuthorize("hasAuthority('location:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:read"})
@@ -447,7 +448,7 @@ public class LocationController {
     @ApiResponse(responseCode = "200", description = "Responsible person found and returned.")
     @ApiResponse(responseCode = "404", description = "Responsible person not found.")
     @EmitEvent(id = "LOCATION_RESPONSIBLE_PERSON_GET", apiVersion = "1")
-    @PreAuthorize("hasAuthority('location:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"location:read"})
@@ -487,7 +488,7 @@ public class LocationController {
     @ApiResponse(responseCode = "200", description = "List of descendant locations returned successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid parentType value.")
     @ApiResponse(responseCode = "404", description = "Location not found.")
-    @PreAuthorize("hasAuthority('location:read')")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @EmitEvent(id = "LOCATION_DESCENDANTS_GET", apiVersion = "1")
     @SecurityRequirement(
             name = "bearerAuth",

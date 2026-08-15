@@ -3,6 +3,7 @@ package com.positivity.customer.internal.controller;
 import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CreatePersonResponse;
 import com.positivity.customer.internal.dto.GetPersonResponse;
+import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.service.PersonService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -71,7 +72,7 @@ public class CrmPersonController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"crm:person:create"})
-    @PreAuthorize("hasAuthority('crm:person:create')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PERSON_CREATE + "')")
     @EmitEvent(id = "CRM_PERSON_CREATE", apiVersion = "1")
     @Operation(operationId = "createCrmPerson", summary = "Create Individual Person Record", description = """
                     Creates an individual customer: the canonical person identity is resolved or created in \
@@ -142,7 +143,7 @@ public class CrmPersonController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"crm:person:read"})
-    @PreAuthorize("hasAuthority('crm:person:read')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PERSON_READ + "')")
     @EmitEvent(id = "CRM_PERSON_GET", apiVersion = "1")
     @Operation(operationId = "getPerson", summary = "Get Person By Id", description = """
                     Returns the CRM view of an individual person by their canonical pos-people person id, \
@@ -185,7 +186,7 @@ public class CrmPersonController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"crm:person:read"})
-    @PreAuthorize("hasAuthority('crm:person:read')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PERSON_READ + "')")
     @EmitEvent(id = "CRM_PERSON_SEARCH", apiVersion = "1")
     @Operation(operationId = "searchPersons", summary = "Search Individual Persons", description = """
                     Searches individual customers by delegating the text query to pos-people, which matches \

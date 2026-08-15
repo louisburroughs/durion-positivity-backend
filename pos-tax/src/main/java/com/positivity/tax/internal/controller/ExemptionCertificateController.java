@@ -3,6 +3,7 @@ package com.positivity.tax.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.tax.internal.dto.ExemptionCertificateRequest;
 import com.positivity.tax.internal.dto.ExemptionCertificateResponse;
+import com.positivity.tax.internal.security.TaxPermissions;
 import com.positivity.tax.service.ExemptionCertificateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -52,7 +53,7 @@ public class ExemptionCertificateController {
      * @return the certificates
      */
     @GetMapping
-    @PreAuthorize("hasAuthority('tax:exemption:view')")
+    @PreAuthorize("hasAuthority('" + TaxPermissions.EXEMPTION_VIEW + "')")
     @Operation(operationId = "listExemptionCertificates", summary = "List exemption certificates", description = """
                     Returns the registered tax exemption certificates, newest effective date first, optionally
                     narrowed to a single customer.
@@ -80,7 +81,7 @@ public class ExemptionCertificateController {
      * @return the certificate
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('tax:exemption:view')")
+    @PreAuthorize("hasAuthority('" + TaxPermissions.EXEMPTION_VIEW + "')")
     @Operation(operationId = "getExemptionCertificateById", summary = "Get an exemption certificate", description = """
                     Returns a single tax exemption certificate, including its scope, reason code and validity window.
                     Use this tool when the certificate id is already known; use listExemptionCertificates instead when
@@ -106,7 +107,7 @@ public class ExemptionCertificateController {
      * @return the created certificate
      */
     @PostMapping
-    @PreAuthorize("hasAuthority('tax:exemption:manage')")
+    @PreAuthorize("hasAuthority('" + TaxPermissions.EXEMPTION_MANAGE + "')")
     @EmitEvent(id = "TAX_EXEMPTION_CERT_CREATE", apiVersion = "1")
     @Operation(
             operationId = "createExemptionCertificate",
@@ -161,7 +162,7 @@ public class ExemptionCertificateController {
      * @return the updated certificate
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('tax:exemption:manage')")
+    @PreAuthorize("hasAuthority('" + TaxPermissions.EXEMPTION_MANAGE + "')")
     @EmitEvent(id = "TAX_EXEMPTION_CERT_UPDATE", apiVersion = "1")
     @Operation(
             operationId = "updateExemptionCertificate",

@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.dto.revaluation.CreateRevaluationReques
 import com.positivity.inventory.internal.dto.revaluation.RejectRevaluationRequest;
 import com.positivity.inventory.internal.dto.revaluation.RevaluationResponse;
 import com.positivity.inventory.internal.enums.RevaluationStatus;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.RevaluationService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -62,7 +63,7 @@ public class RevaluationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:valuation:adjust"})
-    @PreAuthorize("hasAuthority('inventory:valuation:adjust')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.VALUATION_ADJUST + "')")
     @Operation(
             operationId = "createRevaluation",
             summary = "Submit cost revaluation",
@@ -132,7 +133,7 @@ public class RevaluationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:valuation:adjust"})
-    @PreAuthorize("hasAuthority('inventory:valuation:adjust')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.VALUATION_ADJUST + "')")
     @Operation(
             operationId = "approveRevaluation",
             summary = "Approve cost revaluation",
@@ -191,7 +192,7 @@ public class RevaluationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:valuation:adjust"})
-    @PreAuthorize("hasAuthority('inventory:valuation:adjust')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.VALUATION_ADJUST + "')")
     @Operation(
             operationId = "rejectRevaluation",
             summary = "Reject cost revaluation",
@@ -252,7 +253,8 @@ public class RevaluationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:valuation:view", "inventory:valuation:adjust"})
-    @PreAuthorize("hasAnyAuthority('inventory:valuation:view','inventory:valuation:adjust')")
+    @PreAuthorize("hasAnyAuthority('" + InventoryPermissionRegistry.VALUATION_VIEW + "','"
+            + InventoryPermissionRegistry.VALUATION_ADJUST + "')")
     @Operation(
             operationId = "getRevaluation",
             summary = "Get revaluation details",
@@ -291,7 +293,8 @@ public class RevaluationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:valuation:view", "inventory:valuation:adjust"})
-    @PreAuthorize("hasAnyAuthority('inventory:valuation:view','inventory:valuation:adjust')")
+    @PreAuthorize("hasAnyAuthority('" + InventoryPermissionRegistry.VALUATION_VIEW + "','"
+            + InventoryPermissionRegistry.VALUATION_ADJUST + "')")
     @Operation(
             operationId = "listRevaluations",
             summary = "List revaluations",

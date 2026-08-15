@@ -3,6 +3,7 @@ package com.positivity.catalog.internal.controller;
 import com.positivity.catalog.internal.dto.ItemCostAuditDto;
 import com.positivity.catalog.internal.dto.ItemCostsDto;
 import com.positivity.catalog.internal.dto.UpdateStandardCostRequestDto;
+import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.service.ItemCostService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,10 +37,11 @@ public class ItemCostController {
     }
 
     @PutMapping("/{itemId}/standard-cost")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER') or hasAuthority('inventory.cost.standard.update')")
+    @PreAuthorize(
+            "hasRole('ADMIN') or hasRole('MANAGER') or hasAuthority('" + CatalogPermissions.ITEM_COST_UPDATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"ROLE_ADMIN", "ROLE_MANAGER", "inventory.cost.standard.update"})
+            scopes = {"ROLE_ADMIN", "ROLE_MANAGER", CatalogPermissions.ITEM_COST_UPDATE})
     @Operation(operationId = "updateStandardItemCost", summary = "Update Standard Item Cost", description = """
             Sets the standard cost of an item to a new value, rounding it to four decimal places, and writes \
             an audit entry recording the old value, new value, actor and reason.

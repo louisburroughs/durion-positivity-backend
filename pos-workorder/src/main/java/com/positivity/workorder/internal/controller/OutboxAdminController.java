@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.OutboxReplayService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -29,7 +30,7 @@ public class OutboxAdminController {
     private final OutboxReplayService outboxReplayService;
 
     @PostMapping("/v1/outbox/replay")
-    @PreAuthorize("hasAuthority('workorder:events:replay')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.EVENTS_REPLAY + "')")
     @EmitEvent(id = "WORKORDER_OUTBOX_REPLAY", apiVersion = "1")
     @Operation(operationId = "replayOutboxEvents", summary = "Replay Published Outbox Events", description = """
                     Marks already-published outbox events created at or after the given instant for \

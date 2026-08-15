@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.SettlementLineResponse;
 import com.positivity.accounting.internal.dto.SettlementManualMatchRequest;
 import com.positivity.accounting.internal.dto.SettlementWriteOffRequest;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.SettlementReconciliationService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
@@ -65,7 +66,7 @@ public class SettlementReconciliationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:reconciliation:view"})
-    @PreAuthorize("hasAuthority('accounting:reconciliation:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_VIEW + "')")
     @EmitEvent(id = "ACCOUNTING_SETTLEMENT_LINES_LIST", apiVersion = "1")
     @Operation(
             operationId = "listSettlementLines",
@@ -119,7 +120,7 @@ public class SettlementReconciliationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:reconciliation:adjust"})
-    @PreAuthorize("hasAuthority('accounting:reconciliation:adjust')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_ADJUST + "')")
     @EmitEvent(id = "ACCOUNTING_SETTLEMENT_LINE_MATCH", apiVersion = "1")
     @Operation(
             operationId = "matchSettlementLine",
@@ -201,7 +202,7 @@ public class SettlementReconciliationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:reconciliation:adjust"})
-    @PreAuthorize("hasAuthority('accounting:reconciliation:adjust')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.RECONCILIATION_ADJUST + "')")
     @EmitEvent(id = "ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF", apiVersion = "1")
     @Operation(
             operationId = "writeOffSettlementLine",

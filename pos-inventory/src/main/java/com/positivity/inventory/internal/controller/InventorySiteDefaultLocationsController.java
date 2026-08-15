@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -31,7 +32,7 @@ public class InventorySiteDefaultLocationsController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:view"})
-    @PreAuthorize("hasAuthority('inventory:location:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOCATION_VIEW + "')")
     @Operation(
             operationId = "getSiteDefaultLocations",
             summary = "Get site default locations",
@@ -69,7 +70,7 @@ public class InventorySiteDefaultLocationsController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:admin"})
-    @PreAuthorize("hasAuthority('inventory:location:admin')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOCATION_ADMIN + "')")
     @Operation(
             operationId = "updateSiteDefaultLocations",
             summary = "Replace site default locations",

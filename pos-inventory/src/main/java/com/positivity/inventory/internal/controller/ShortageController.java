@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.ShortageOptionDto;
 import com.positivity.inventory.internal.dto.ShortageResolutionResultDto;
 import com.positivity.inventory.internal.dto.ShortageResolveRequest;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.ShortageResolutionService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,7 +44,7 @@ public class ShortageController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:shortage:view"})
-    @PreAuthorize("hasAuthority('inventory:shortage:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.SHORTAGE_VIEW + "')")
     @Operation(
             operationId = "listShortageOptions",
             summary = "List computed shortage options",
@@ -97,7 +98,7 @@ public class ShortageController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:shortage:resolve"})
-    @PreAuthorize("hasAuthority('inventory:shortage:resolve')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.SHORTAGE_RESOLVE + "')")
     @Operation(
             operationId = "resolveShortage",
             summary = "Resolve shortage",

@@ -6,6 +6,7 @@ import com.positivity.bulkingest.BulkIngestResponse;
 import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.catalog.internal.dto.CatalogBulkIngestRecord;
 import com.positivity.catalog.internal.dto.ProductCreateRequestDto;
+import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.service.ProductMasterDataService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,7 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/catalog")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasAuthority('catalog:product:create')")
+@PreAuthorize("hasAuthority('" + CatalogPermissions.PRODUCT_CREATE + "')")
 @Tag(name = "Catalog Bulk Ingest API", description = "Bulk import catalog products")
 public class CatalogBulkIngestController extends AbstractBulkIngestController<CatalogBulkIngestRecord> {
 
@@ -41,7 +42,7 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
 
     @Override
     @PostMapping("/bulk-ingest")
-    @PreAuthorize("hasAuthority('catalog:product:create')")
+    @PreAuthorize("hasAuthority('" + CatalogPermissions.PRODUCT_CREATE + "')")
     @Operation(operationId = "bulkIngestCatalogProducts", summary = "Bulk Import Catalog Products", description = """
             Imports a batch of catalog products in one call, creating each record through the same governed \
             path as createProduct and reporting a per-row success or failure verdict.

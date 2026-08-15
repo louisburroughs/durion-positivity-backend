@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.ApprovalConfigurationRequest;
 import com.positivity.workorder.internal.dto.ApprovalConfigurationResponse;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.ApprovalConfigurationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -54,7 +55,7 @@ public class ApprovalConfigurationController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:approval_config:view"})
-    @PreAuthorize("hasAuthority('workorder:approval_config:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.APPROVAL_CONFIG_VIEW + "')")
     public List<ApprovalConfigurationResponse> getAllConfigurations() {
         return approvalConfigurationService.getAllConfigurations();
     }
@@ -78,7 +79,7 @@ public class ApprovalConfigurationController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:approval_config:view"})
-    @PreAuthorize("hasAuthority('workorder:approval_config:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.APPROVAL_CONFIG_VIEW + "')")
     public ResponseEntity<ApprovalConfigurationResponse> getConfigurationById(
             @Parameter(
                             description = "ID of the configuration to retrieve",
@@ -112,7 +113,7 @@ public class ApprovalConfigurationController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:approval_config:view"})
-    @PreAuthorize("hasAuthority('workorder:approval_config:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.APPROVAL_CONFIG_VIEW + "')")
     public ResponseEntity<ApprovalConfigurationResponse> getApplicableConfiguration(
             @Parameter(description = "Location ID", example = "550e8400-e29b-41d4-a716-446655440020")
                     @RequestParam(required = false)
@@ -165,7 +166,7 @@ public class ApprovalConfigurationController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:approval_config:create"})
-    @PreAuthorize("hasAuthority('workorder:approval_config:create')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.APPROVAL_CONFIG_CREATE + "')")
     public ResponseEntity<ApprovalConfigurationResponse> createConfiguration(
             @Parameter(description = "Configuration object to be created") @RequestBody
                     ApprovalConfigurationRequest request) {
@@ -213,7 +214,7 @@ public class ApprovalConfigurationController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:approval_config:edit"})
-    @PreAuthorize("hasAuthority('workorder:approval_config:edit')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.APPROVAL_CONFIG_EDIT + "')")
     public ResponseEntity<ApprovalConfigurationResponse> updateConfiguration(
             @Parameter(
                             description = "ID of the configuration to update",
@@ -252,7 +253,7 @@ public class ApprovalConfigurationController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:approval_config:delete"})
-    @PreAuthorize("hasAuthority('workorder:approval_config:delete')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.APPROVAL_CONFIG_DELETE + "')")
     public ResponseEntity<Void> deleteConfiguration(
             @Parameter(
                             description = "ID of the configuration to delete",

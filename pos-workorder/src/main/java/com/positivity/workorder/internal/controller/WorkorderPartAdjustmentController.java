@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.*;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.WorkorderPartAdjustmentService;
 import com.positivity.workorder.service.WorkorderSubstitutionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -55,7 +56,7 @@ public class WorkorderPartAdjustmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:parts:add"})
-    @PreAuthorize("hasAuthority('workorder:parts:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.PARTS_ADD + "')")
     @EmitEvent(id = "WORKORDER_PART_SUBSTITUTE", apiVersion = "1")
     @Operation(operationId = "substitutePart", summary = "Substitute Part on Workorder", description = """
                     Substitutes one part line with a different part, preserving the original line for audit \
@@ -122,7 +123,7 @@ public class WorkorderPartAdjustmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:parts:add"})
-    @PreAuthorize("hasAuthority('workorder:parts:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.PARTS_ADD + "')")
     @EmitEvent(id = "WORKORDER_PART_RETURN_UNUSED", apiVersion = "1")
     @Operation(operationId = "returnUnusedPartQuantity", summary = "Return Unused Part Quantity", description = """
                     Returns unused part quantity through the adjustment flow, recording a reasoned return \
@@ -185,7 +186,7 @@ public class WorkorderPartAdjustmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:parts:add"})
-    @PreAuthorize("hasAuthority('workorder:parts:add')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.PARTS_ADD + "')")
     @EmitEvent(id = "WORKORDER_PART_CORRECT", apiVersion = "1")
     @Operation(operationId = "correctPartQuantity", summary = "Correct Part Quantity", description = """
                     Applies an administrative correction to a part line's quantity, recording the correction and \
@@ -247,7 +248,7 @@ public class WorkorderPartAdjustmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:parts:view"})
-    @PreAuthorize("hasAuthority('workorder:parts:view')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.PARTS_VIEW + "')")
     @Operation(operationId = "getPartAdjustmentHistory", summary = "Get Part Adjustment History", description = """
                     Returns the substitution, reasoned-return, and correction adjustment events for a \
                     workorder's parts, newest first, either for the whole workorder or filtered to one part.

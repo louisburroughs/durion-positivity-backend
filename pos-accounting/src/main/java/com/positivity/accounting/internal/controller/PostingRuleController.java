@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.dto.PostingRuleSetCreateRequest;
 import com.positivity.accounting.internal.dto.PostingRuleSetListResponse;
 import com.positivity.accounting.internal.dto.PostingRuleSetResponse;
 import com.positivity.accounting.internal.dto.PostingRuleVersionResponse;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.service.PostingRuleService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -55,7 +56,7 @@ public class PostingRuleController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:posting_rules:view"})
-    @PreAuthorize("hasAuthority('accounting:posting_rules:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.POSTING_RULES_VIEW + "')")
     @Operation(
             operationId = "listPostingRuleSets",
             summary = "List Posting Rule Sets",
@@ -94,7 +95,7 @@ public class PostingRuleController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:posting_rules:view"})
-    @PreAuthorize("hasAuthority('accounting:posting_rules:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.POSTING_RULES_VIEW + "')")
     @Operation(
             operationId = "getPostingRuleSet",
             summary = "Get Posting Rule Set",
@@ -122,7 +123,7 @@ public class PostingRuleController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:posting_rules:create"})
-    @PreAuthorize("hasAuthority('accounting:posting_rules:create')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.POSTING_RULES_CREATE + "')")
     @Operation(
             operationId = "createPostingRuleSet",
             summary = "Create Posting Rule Set",
@@ -170,7 +171,7 @@ public class PostingRuleController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:posting_rules:publish"})
-    @PreAuthorize("hasAuthority('accounting:posting_rules:publish')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.POSTING_RULES_PUBLISH + "')")
     @Operation(
             operationId = "publishPostingRuleSet",
             summary = "Publish Posting Rule Set",
@@ -206,7 +207,7 @@ public class PostingRuleController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:posting_rules:create"})
-    @PreAuthorize("hasAuthority('accounting:posting_rules:create')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.POSTING_RULES_CREATE + "')")
     @Operation(
             operationId = "updatePostingRuleSet",
             summary = "Update Posting Rule Set",
@@ -255,7 +256,7 @@ public class PostingRuleController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:posting_rules:archive"})
-    @PreAuthorize("hasAuthority('accounting:posting_rules:archive')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.POSTING_RULES_ARCHIVE + "')")
     @Operation(
             operationId = "archivePostingRuleSet",
             summary = "Archive Posting Rule Set",
@@ -286,7 +287,7 @@ public class PostingRuleController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:posting_rules:view"})
-    @PreAuthorize("hasAuthority('accounting:posting_rules:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.POSTING_RULES_VIEW + "')")
     @Operation(
             operationId = "listPostingRuleVersions",
             summary = "List Posting Rule Versions",

@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.putaway.GeneratePutawayTasksRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayTaskResponse;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.PutawayGenerationService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
@@ -42,7 +43,7 @@ public class PutawayController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:putaway:generate"})
-    @PreAuthorize("hasAuthority('inventory:putaway:generate')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PUTAWAY_GENERATE + "')")
     @Operation(
             operationId = "generatePutawayTasks",
             summary = "Generate Putaway Tasks",
@@ -101,7 +102,7 @@ public class PutawayController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:putaway:view"})
-    @PreAuthorize("hasAuthority('inventory:putaway:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PUTAWAY_VIEW + "')")
     @Operation(
             operationId = "listPutawayTasks",
             summary = "List Available Putaway Tasks",
@@ -137,7 +138,7 @@ public class PutawayController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:putaway:claim"})
-    @PreAuthorize("hasAuthority('inventory:putaway:claim')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PUTAWAY_CLAIM + "')")
     @Operation(
             operationId = "claimPutawayTask",
             summary = "Claim Putaway Task",

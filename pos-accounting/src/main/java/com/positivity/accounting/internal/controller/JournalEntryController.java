@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.JournalEntryReversalRequest;
 import com.positivity.accounting.internal.dto.JournalEntryTraceabilityResponse;
 import com.positivity.accounting.internal.dto.PagedResponse;
+import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.SortParamParser;
 import com.positivity.accounting.service.JournalEntryService;
 import com.positivity.events.EmitEvent;
@@ -82,7 +83,7 @@ public class JournalEntryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:je:view"})
-    @PreAuthorize("hasAuthority('accounting:je:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.JE_VIEW + "')")
     @Operation(
             operationId = "listJournalEntries",
             summary = "List Journal Entries",
@@ -143,7 +144,7 @@ public class JournalEntryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:je:view"})
-    @PreAuthorize("hasAuthority('accounting:je:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.JE_VIEW + "')")
     @Operation(
             operationId = "getJournalEntry",
             summary = "Get Journal Entry",
@@ -172,7 +173,7 @@ public class JournalEntryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:je:view"})
-    @PreAuthorize("hasAuthority('accounting:je:view')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.JE_VIEW + "')")
     @Operation(
             operationId = "getJournalEntryTraceability",
             summary = "Get Journal Entry Traceability",
@@ -201,7 +202,7 @@ public class JournalEntryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:je:create"})
-    @PreAuthorize("hasAuthority('accounting:je:create')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.JE_CREATE + "')")
     @Operation(
             operationId = "createJournalEntry",
             summary = "Create Journal Entry",
@@ -255,7 +256,7 @@ public class JournalEntryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:je:create"})
-    @PreAuthorize("hasAuthority('accounting:je:create')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.JE_CREATE + "')")
     @Operation(
             operationId = "updateJournalEntry",
             summary = "Update Journal Entry",
@@ -307,7 +308,7 @@ public class JournalEntryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:je:post"})
-    @PreAuthorize("hasAuthority('accounting:je:post')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.JE_POST + "')")
     @Operation(
             operationId = "postJournalEntry",
             summary = "Post Journal Entry",
@@ -382,7 +383,7 @@ public class JournalEntryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"accounting:je:reverse"})
-    @PreAuthorize("hasAuthority('accounting:je:reverse')")
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.JE_REVERSE + "')")
     @Operation(
             operationId = "reverseJournalEntry",
             summary = "Reverse Journal Entry",

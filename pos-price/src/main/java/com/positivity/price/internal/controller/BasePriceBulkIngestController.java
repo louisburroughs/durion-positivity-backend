@@ -6,6 +6,7 @@ import com.positivity.bulkingest.BulkIngestResponse;
 import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.events.EmitEvent;
 import com.positivity.price.internal.dto.BasePriceBulkIngestRecord;
+import com.positivity.price.internal.security.PricingPermissions;
 import com.positivity.price.service.BasePriceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -35,7 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/price")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasAuthority('pricing:base_price:create')")
+@PreAuthorize("hasAuthority('" + PricingPermissions.BASE_PRICE_CREATE + "')")
 @Tag(name = "Price Bulk Ingest API", description = "Bulk import base price records")
 public class BasePriceBulkIngestController extends AbstractBulkIngestController<BasePriceBulkIngestRecord> {
 
@@ -54,7 +55,7 @@ public class BasePriceBulkIngestController extends AbstractBulkIngestController<
 
     @Override
     @PostMapping("/bulk-ingest")
-    @PreAuthorize("hasAuthority('pricing:base_price:create')")
+    @PreAuthorize("hasAuthority('" + PricingPermissions.BASE_PRICE_CREATE + "')")
     @EmitEvent(id = "PRICE_BULK_INGEST", apiVersion = "1")
     @Operation(operationId = "bulkIngestBasePrices", summary = "Bulk Import Base Price Records", description = """
                     Bulk-imports base price (MSRP) records, appending an effective-dated price window per product and \

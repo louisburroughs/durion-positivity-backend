@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.workorder.internal.dto.RejectTimeEntryRequest;
 import com.positivity.workorder.internal.dto.TimeEntryMapper;
 import com.positivity.workorder.internal.dto.TimeEntryResponse;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.service.TimeEntryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,7 +28,7 @@ public class TimeEntryController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:timeEntry:approve"})
-    @PreAuthorize("hasAuthority('workorder:timeEntry:approve')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.TIMEENTRY_APPROVE + "')")
     @Operation(operationId = "approveTimeEntry", summary = "Approve a Submitted Time Entry", description = """
                     Approves a SUBMITTED time entry, stamping the approving user and decision timestamp so the \
                     hours can flow onward in the workorder timekeeping workflow.
@@ -50,7 +51,7 @@ public class TimeEntryController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"workorder:timeEntry:reject"})
-    @PreAuthorize("hasAuthority('workorder:timeEntry:reject')")
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.TIMEENTRY_REJECT + "')")
     @Operation(operationId = "rejectTimeEntry", summary = "Reject a Submitted Time Entry", description = """
                     Rejects a SUBMITTED time entry, recording the rejection reason, the deciding user, and the \
                     decision timestamp for technician follow-up.

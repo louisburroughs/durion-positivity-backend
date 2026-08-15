@@ -84,6 +84,17 @@ public class CrmPermissionRegistry {
     // Interaction History (Story #1141)
     public static final String INTERACTION_VIEW = "crm:interaction:view";
 
+    // Person, relationship and promotion-redemption permissions, previously written as string literals at each call
+    // site.
+    public static final String PERSON_CREATE = "crm:person:create";
+    public static final String PERSON_READ = "crm:person:read";
+    public static final String PROMOTION_REDEMPTION_RECORD = "crm:promotion_redemption:record";
+    public static final String PROMOTION_REDEMPTION_VIEW = "crm:promotion_redemption:view";
+    public static final String RELATIONSHIP_CREATE = "crm:relationship:create";
+    public static final String RELATIONSHIP_DELETE = "crm:relationship:delete";
+    public static final String RELATIONSHIP_READ = "crm:relationship:read";
+    public static final String RELATIONSHIP_UPDATE = "crm:relationship:update";
+
     /**
      * Separate from {@link #INTERACTION_VIEW}: the timeline is evidence of what was said to a
      * customer, so reading it must not carry the right to write into it.
@@ -107,6 +118,18 @@ public class CrmPermissionRegistry {
 
     /**
      * Build CRM permission registration request for Security Domain
+     */
+    /**
+     * Builds a permission-registration payload.
+     *
+     * <p><strong>Nothing calls this.</strong> The live startup registration is
+     * {@code internal.config.PermissionRegistration}, which extends
+     * {@code PermissionRegistrationSupport} and POSTs {@code permissions.yaml} — the manifest the
+     * repo's tooling generates. This method and {@link #buildPermissionDefinitions()} are a legacy
+     * second copy of the same facts, kept alive only by
+     * {@code CrmPermissionRegistryTest.registration_coversEveryDeclaredConstant}. Removing both is
+     * worth doing, but it is a change to what that test guards rather than a rename, so it is not
+     * folded into an unrelated refactor.
      */
     public static Map<String, Object> buildCrmPermissionRegistration() {
         Map<String, Object> registration = new LinkedHashMap<>();
@@ -264,7 +287,22 @@ public class CrmPermissionRegistry {
                 permission(
                         INTEGRATION_AUDIT,
                         "View audit/attempt history for ingestion records and retry outcomes",
-                        "LOW"));
+                        "LOW"),
+
+                // Person, relationship and promotion redemption (8 permissions).
+                // Added because CrmPermissionRegistryTest binds this list to the declared constants,
+                // and converting these call sites from literals to constants brought them into that
+                // check. They were already registered for real: the live startup path is
+                // PermissionRegistration, which POSTs permissions.yaml — this payload builder has no
+                // callers. See the class javadoc.
+                permission(PERSON_READ, "View person records and their party linkage", "LOW"),
+                permission(PERSON_CREATE, "Create a person record", "MEDIUM"),
+                permission(RELATIONSHIP_READ, "View relationships between parties", "LOW"),
+                permission(RELATIONSHIP_CREATE, "Create a relationship between two parties", "MEDIUM"),
+                permission(RELATIONSHIP_UPDATE, "Change an existing party relationship", "MEDIUM"),
+                permission(RELATIONSHIP_DELETE, "Remove a relationship between two parties", "HIGH"),
+                permission(PROMOTION_REDEMPTION_VIEW, "View recorded promotion redemptions", "LOW"),
+                permission(PROMOTION_REDEMPTION_RECORD, "Record that a customer redeemed a promotion", "MEDIUM"));
     }
 
     /**
