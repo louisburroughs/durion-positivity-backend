@@ -88,6 +88,9 @@ class AsnServiceImplTest {
     private LedgerPostingService ledgerPostingService;
 
     @Mock
+    private com.positivity.inventory.internal.service.PurchaseOrderFactPublisher purchaseOrderFactPublisher;
+
+    @Mock
     private ApplicationEventPublisher applicationEventPublisher;
 
     private AsnServiceImpl asnService;
@@ -104,6 +107,7 @@ class AsnServiceImplTest {
                 inventoryLedgerEntryRepository,
                 ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
+                purchaseOrderFactPublisher,
                 applicationEventPublisher,
                 new com.positivity.inventory.internal.service.DocumentQuantityConverter(
                         org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
@@ -519,6 +523,16 @@ class AsnServiceImplTest {
         ArgumentCaptor<AdvanceShippingNoticeEntity> captor = ArgumentCaptor.forClass(AdvanceShippingNoticeEntity.class);
         verify(asnRepository).save(captor.capture());
         assertEquals(AsnStatus.FULLY_RECEIVED, captor.getValue().getStatus());
+
+        // Receiving is what takes an order out of open supply, and this is the path that does it.
+        // Without the fact, the ext_purchase_order projection would go on counting a fully
+        // received order as still incoming, promising stock that is already on the shelf.
+        ArgumentCaptor<PurchaseOrderEntity> poCaptor = ArgumentCaptor.forClass(PurchaseOrderEntity.class);
+        verify(purchaseOrderFactPublisher).publish(poCaptor.capture(), any());
+        // A fully received ASN is not a fully received order. Every shipped unit on this ASN
+        // arrived, but the order was for 10,000 minor and only 1,000 of it has been received, so
+        // the order stays open — and the fact carries that status, not the ASN's.
+        assertEquals(PurchaseOrderStatus.PARTIALLY_RECEIVED, poCaptor.getValue().getStatus());
     }
 
     @Test

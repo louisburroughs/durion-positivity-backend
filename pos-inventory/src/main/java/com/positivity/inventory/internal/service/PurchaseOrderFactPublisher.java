@@ -70,17 +70,7 @@ public class PurchaseOrderFactPublisher {
             return;
         }
 
-        PurchaseOrderUpdatedV1 payload = new PurchaseOrderUpdatedV1(
-                order.getPurchaseOrderId(),
-                order.getPoNumber(),
-                order.getVendorId(),
-                order.getStatus().name(),
-                order.getShipToLocationId(),
-                order.getExpectedDeliveryDate(),
-                order.getCurrency(),
-                order.getGrandTotalMinor(),
-                Instant.now(clock),
-                lines.stream().map(PurchaseOrderFactPublisher::toFactLine).toList());
+        PurchaseOrderUpdatedV1 payload = toFact(order, lines, Instant.now(clock));
 
         writer.publish(
                 DomainTopics.events("order"),
@@ -112,6 +102,28 @@ public class PurchaseOrderFactPublisher {
     private static long versionOf(PurchaseOrderEntity order) {
         Integer version = order.getVersionNumber();
         return version == null ? 0L : version.longValue();
+    }
+
+    /**
+     * Builds the published state of one order.
+     *
+     * <p>Package-private rather than private so tests can project an aggregate through the exact
+     * mapping production uses. A test helper with its own copy of this mapping would keep passing
+     * while the real one drifted, which is the failure a parity test exists to prevent.
+     */
+    static PurchaseOrderUpdatedV1 toFact(
+            PurchaseOrderEntity order, List<PurchaseOrderLineEntity> lines, Instant occurredAt) {
+        return new PurchaseOrderUpdatedV1(
+                order.getPurchaseOrderId(),
+                order.getPoNumber(),
+                order.getVendorId(),
+                order.getStatus().name(),
+                order.getShipToLocationId(),
+                order.getExpectedDeliveryDate(),
+                order.getCurrency(),
+                order.getGrandTotalMinor(),
+                occurredAt,
+                lines.stream().map(PurchaseOrderFactPublisher::toFactLine).toList());
     }
 
     private static PurchaseOrderLine toFactLine(PurchaseOrderLineEntity line) {

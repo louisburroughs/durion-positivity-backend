@@ -1,10 +1,10 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.domainevents.order.PurchaseOrderUpdatedV1;
 import com.positivity.inventory.internal.enums.AsnStatus;
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
 import com.positivity.inventory.internal.enums.ReservationStatus;
 import com.positivity.inventory.internal.repository.AsnLineRepository;
-import com.positivity.inventory.internal.repository.PurchaseOrderLineRepository;
+import com.positivity.inventory.internal.repository.ExtPurchaseOrderLineRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -43,15 +43,14 @@ public class StockoutDeadlineCalculator {
     // ForecastQuantityServiceImpl: candidate cutoffs must come from exactly the documents
     // the forecast counts, or the walk would evaluate at dates where nothing changes (or
     // miss dates where something does).
-    private static final List<PurchaseOrderStatus> OPEN_PO_STATUSES =
-            List.of(PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.PARTIALLY_RECEIVED);
+    private static final List<String> OPEN_PO_STATUSES = PurchaseOrderUpdatedV1.OPEN_SUPPLY_STATUSES;
     private static final List<AsnStatus> OPEN_ASN_STATUSES =
             List.of(AsnStatus.LOADED, AsnStatus.READY_FOR_RECEIPT, AsnStatus.PARTIALLY_RECEIVED);
     private static final List<ReservationStatus> OPEN_RESERVATION_STATUSES =
             List.of(ReservationStatus.PENDING, ReservationStatus.PARTIALLY_FULFILLED);
 
     private final ForecastQuantityService forecastQuantityService;
-    private final PurchaseOrderLineRepository purchaseOrderLineRepository;
+    private final ExtPurchaseOrderLineRepository purchaseOrderLineRepository;
     private final AsnLineRepository asnLineRepository;
     private final ReservationRepository reservationRepository;
 
