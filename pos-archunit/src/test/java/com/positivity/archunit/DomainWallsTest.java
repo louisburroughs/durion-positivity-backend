@@ -101,6 +101,26 @@ class DomainWallsTest {
             "pos-order", Set.of("pos-invoice"));
 
     /**
+     * Class-scoped exceptions to ADR-0044 R1: {@code origin module → client source file name → the
+     * exact set of domain modules that ONE file may target synchronously}.
+     *
+     * <p>Narrower than {@link #SCOPED_MODULE_EXCEPTIONS} on purpose. A module-level grant says "this
+     * module may call that one", and every future client added to the module inherits it silently. A
+     * file-level grant says "this one class may", so a second client reaching for the same target
+     * still fails the build and has to argue its own case.
+     *
+     * <p>pos-catalog → pos-supplier, from {@code SupplierStockClientImpl} only: live vendor stock is
+     * the one cross-domain fact that cannot be replicated. It lives at the vendor, changes without
+     * telling us, and is worthless once stale — a replica of it would be a confidently wrong number
+     * on a customer's screen. Permitted per the <b>ADR-0044 amendment 2026-08-10</b> ("Live supplier
+     * stock inquiry is the single approved synchronous cross-module supplier read"), which names the
+     * approved callers as the Product Detail composition and pos-order procurement. Everything else
+     * pos-catalog needs from pos-supplier — vendor prices — already arrives as events.
+     */
+    private static final Map<String, Map<String, Set<String>>> SCOPED_FILE_EXCEPTIONS =
+            Map.of("pos-catalog", Map.of("SupplierStockClientImpl.java", Set.of("pos-supplier")));
+
+    /**
      * Startup-infra classes exempt per ADR-0044 R2 (registration calls, best-effort
      * at boot).
      */
@@ -121,14 +141,18 @@ class DomainWallsTest {
             for (Path module : modules.filter(DomainWallsTest::isPosModule).toList()) {
                 String originModule = module.getFileName().toString();
                 Set<String> scopedExceptions = SCOPED_MODULE_EXCEPTIONS.getOrDefault(originModule, Set.of());
+                Map<String, Set<String>> fileExceptions = SCOPED_FILE_EXCEPTIONS.getOrDefault(originModule, Map.of());
                 for (Path source : clientSources(module)) {
                     if (EXEMPT_FILES.matcher(source.toString()).matches()) {
                         continue;
                     }
+                    Set<String> allowedForThisFile =
+                            fileExceptions.getOrDefault(source.getFileName().toString(), Set.of());
                     Set<String> targets = referencedServices(source);
                     targets.removeIf(target -> target.equals(originModule)
                             || UTILITY_MODULES.contains(target)
                             || scopedExceptions.contains(target)
+                            || allowedForThisFile.contains(target)
                             || !isPosModule(repoRoot.resolve(target)));
                     if (!targets.isEmpty()) {
                         violations

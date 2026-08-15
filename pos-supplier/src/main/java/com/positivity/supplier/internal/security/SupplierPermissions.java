@@ -68,5 +68,20 @@ public final class SupplierPermissions {
      */
     public static final String TRANSMISSION_RESOLVE = "supplier:transmission:resolve";
 
+    /**
+     * Ask a vendor, live, what stock it holds for a receiving location (CAP-319, ADR-0044
+     * amendment 2026-08-10).
+     *
+     * <p>Its own permission rather than a reuse of {@link #PRICECATALOG_READ}, because reading a
+     * vendor's already-staged prices and placing a call to that vendor on every customer page view
+     * are different acts with different costs. A deployment that wants the price catalogue without
+     * putting a trading partner's endpoint in the path of its own product pages needs to be able to
+     * say so, and one permission covering both would take that choice away.
+     *
+     * <p>Held by the composing services rather than by people: pos-catalog asserts it when building
+     * Product Detail, pos-order when quoting procurement.
+     */
+    public static final String STOCK_INQUIRE = "supplier:stock:inquire";
+
     private SupplierPermissions() {}
 }

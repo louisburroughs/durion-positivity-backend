@@ -98,11 +98,20 @@ created seconds ago may not be matchable yet, and its line is quarantined until 
 empty replica — Kafka disabled, or nothing consumed yet — reports `CATALOG_UNAVAILABLE` rather than
 turning a whole vendor catalog into `NO_CATALOG_MATCH` misses an operator would go hunting for.
 
-### Live stock inquiry (A2.5) — no HTTP surface, one in-process contract
+### Live stock inquiry (A2.5) — `supplier:stock:inquire`
 
-`SupplierStockService.inquireLiveStock` is the platform's **single approved synchronous cross-module
-supplier read** (ADR-0044 amendment, 2026-08-10). Approved callers are pos-catalog's Product Detail
-composition and pos-order procurement, and the grant is per calling class, not per module.
+| Route | Operation | Notes |
+| --- | --- | --- |
+| `POST …/stock/inquiries` | `inquireSupplierStock` | Always 200 when the request is well formed. Vendor failure is a status, not an error status |
+
+Its own permission rather than a reuse of the price-catalogue ones: reading a vendor's already-staged
+prices and calling that vendor on every customer page view are different acts with different costs, and
+a deployment must be able to have the first without the second.
+
+This is the platform's **single approved synchronous cross-module supplier read** (ADR-0044 amendment,
+2026-08-10). Approved callers are pos-catalog's Product Detail composition and pos-order procurement,
+and the grant is per calling class, not per module — `DomainWallsTest` allowlists the one client file
+by name, so a second client in the same module reaching for pos-supplier still fails the build.
 
 It **never throws for a vendor-side failure**. Both callers have something useful to render without
 live stock and nothing useful to render if this call blows up, so every failure is a status:

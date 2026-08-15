@@ -91,12 +91,38 @@ function without it.
 A first deployment of a replica consumer should replay before trusting the replica: it holds only
 facts published after it started.
 
+## Live supplier stock on Product Detail (#1225)
+
+Product Detail carries a `supplierAvailability` component when
+`pos.supplier.stock.vendor-profile-id` names a vendor profile. Unset, the component is **absent** rather
+than present-and-degraded: a block that always says "unavailable" teaches a reader to skip it.
+
+This is the **one synchronous cross-domain read** in this module (ADR-0044 amendment 2026-08-10).
+Everything else it needs from another domain arrives as events. Vendor stock is the exception because it
+cannot be replicated — it lives at the vendor, changes without telling us, and is worthless once stale,
+so a replica of it would be a confidently wrong number on a customer's screen. `DomainWallsTest`
+allowlists `SupplierStockClientImpl` **by file name**; any other client here that reaches for
+pos-supplier still fails the build.
+
+Three different nothings reach the page, and the component keeps them apart:
+
+| What happened | `status` | `vendorStatus` | `availableQuantity` |
+| --- | --- | --- | --- |
+| Vendor stated a quantity | `OK` | `AVAILABLE` | the quantity |
+| Vendor said it has none | `OK` | `UNAVAILABLE` | `0` — a fact |
+| Vendor does not carry it | `OK` | `NOT_LISTED` | `null` |
+| Vendor said nothing, or could not be reached | `UNAVAILABLE` | `NOT_ANSWERED` or absent | `null` |
+
+Only the second row justifies telling a customer the vendor is out of stock. Nothing on this path
+defaults a missing quantity to zero.
+
 ## Configuration
 
-| Property                | Default  | Description                  |
-| ----------------------- | -------- | ---------------------------- |
-| `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
-| `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
+| Property                                | Default  | Description                                                     |
+| --------------------------------------- | -------- | --------------------------------------------------------------- |
+| `SPRING_DATASOURCE_URL`                 | required | PostgreSQL connection URL                                        |
+| `EUREKA_SERVER_URL`                     | required | Eureka service discovery URL                                     |
+| `pos.supplier.stock.vendor-profile-id`  | unset    | Vendor profile asked for live stock; unset disables the component |
 
 ## Dependencies
 
