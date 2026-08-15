@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -39,6 +40,13 @@ public class ProductDetailView {
 
     @Schema(description = "Availability information with status indicator", requiredMode = NOT_REQUIRED)
     private AvailabilityInfo availability;
+
+    @Schema(
+            description = "Live vendor stock for this product, when the deployment has a supplier integration"
+                    + " configured. Absent otherwise — its absence means the question was never asked, not that a"
+                    + " vendor has none.",
+            requiredMode = NOT_REQUIRED)
+    private SupplierAvailabilityInfo supplierAvailability;
 
     @Schema(description = "Substitution product suggestions", example = "[]", requiredMode = NOT_REQUIRED)
     private List<SubstitutionHint> substitutions;
@@ -152,6 +160,59 @@ public class ProductDetailView {
         private DataConfidence confidence;
     }
 
+    /**
+     * Live vendor stock, asked of the supplier at request time (CAP-319 #1225).
+     *
+     * <p>The only component here whose data is not ours and cannot be replicated: vendor stock lives
+     * at the vendor, changes without telling us, and is worthless once stale. That is why it is
+     * fetched synchronously under the ADR-0044 amendment while every other cross-domain read on this
+     * page comes from an event-fed replica.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Schema(
+            description = "Live vendor stock with a status indicator. A null quantity means the vendor stated"
+                    + " nothing; zero means the vendor stated it has none, and only that justifies showing a"
+                    + " customer that the vendor is out of stock.")
+    public static class SupplierAvailabilityInfo {
+
+        @Schema(
+                description = "Quantity the vendor can supply. Null whenever the status is not OK, and null even"
+                        + " under OK when the vendor answered without stating a quantity.",
+                example = "8",
+                requiredMode = NOT_REQUIRED)
+        private Integer availableQuantity;
+
+        @Schema(
+                description = "Earliest date the vendor promised any quantity, when it stated one.",
+                example = "2026-08-20",
+                requiredMode = NOT_REQUIRED)
+        private LocalDate earliestDeliveryDate;
+
+        @Schema(
+                description = "Whether the vendor carries this product at all. NOT_LISTED is a definite answer;"
+                        + " UNAVAILABLE means the vendor holds none right now.",
+                example = "AVAILABLE",
+                requiredMode = NOT_REQUIRED)
+        private SupplierStockStatus vendorStatus;
+
+        @Schema(description = "Supplier data status", example = "OK", requiredMode = REQUIRED)
+        private DataStatus status;
+
+        @Schema(
+                description = "When the supplier fact was obtained. Present only when the vendor answered — a"
+                        + " degraded component carries no timestamp, because there is no vendor statement to date."
+                        + " A cached answer carries the age of the fact, not of the cache hit.",
+                example = "2026-08-14T12:00:00Z",
+                requiredMode = NOT_REQUIRED)
+        private Instant asOf;
+
+        @Schema(description = "Confidence in the supplier data", example = "HIGH", requiredMode = REQUIRED)
+        private DataConfidence confidence;
+    }
+
     @Data
     @Builder
     @NoArgsConstructor
@@ -181,6 +242,19 @@ public class ProductDetailView {
         CATALOG,
         INVENTORY,
         SUPPLY_CHAIN
+    }
+
+    /** What a vendor said about an article, as reported by the supplier service. */
+    @Schema(description = "The vendor's answer about this article")
+    public enum SupplierStockStatus {
+        /** The vendor stated an availability. */
+        AVAILABLE,
+        /** The vendor stated it has none — an answer, not a silence. */
+        UNAVAILABLE,
+        /** The vendor does not carry, or will not sell, this article. */
+        NOT_LISTED,
+        /** The vendor returned the article without stating an availability. */
+        NOT_ANSWERED
     }
 
     @Schema(description = "Data confidence level")

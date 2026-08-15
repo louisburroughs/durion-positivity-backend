@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.catalog.internal.client.InventoryClient;
 import com.positivity.catalog.internal.client.PricingClient;
+import com.positivity.catalog.internal.client.SupplierStockClient;
 import com.positivity.catalog.internal.dto.ProductDetailView;
 import com.positivity.catalog.internal.dto.ProductDetailView.DataConfidence;
 import com.positivity.catalog.internal.dto.ProductDetailView.DataStatus;
@@ -73,6 +74,9 @@ class ProductDetailDegradationTest {
     @Mock
     private InventoryClient inventoryClient;
 
+    @Mock
+    private SupplierStockClient supplierStockClient;
+
     private ProductDetailServiceImpl service;
     private ProductEntity product;
 
@@ -84,6 +88,7 @@ class ProductDetailDegradationTest {
                 productReplacementRepository,
                 pricingClient,
                 inventoryClient,
+                supplierStockClient,
                 new ObjectMapper());
 
         product = new ProductEntity();

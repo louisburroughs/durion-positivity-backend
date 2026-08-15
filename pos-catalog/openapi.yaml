@@ -5526,6 +5526,8 @@ components:
           $ref: '#/components/schemas/PricingInfo'
         availability:
           $ref: '#/components/schemas/AvailabilityInfo'
+        supplierAvailability:
+          $ref: '#/components/schemas/SupplierAvailabilityInfo'
         substitutions:
           type: array
           description: Substitution product suggestions
@@ -5578,6 +5580,54 @@ components:
           example: Newer Model
       required:
       - productId
+    SupplierAvailabilityInfo:
+      type: object
+      description: Live vendor stock with a status indicator. A null quantity means the vendor stated nothing; zero means the vendor stated it has none, and only that justifies showing a customer that the vendor is out of stock.
+      properties:
+        availableQuantity:
+          type: integer
+          format: int32
+          description: Quantity the vendor can supply. Null whenever the status is not OK, and null even under OK when the vendor answered without stating a quantity.
+          example: 8
+        earliestDeliveryDate:
+          type: string
+          format: date
+          description: Earliest date the vendor promised any quantity, when it stated one.
+          example: 2026-08-20
+        vendorStatus:
+          type: string
+          description: Whether the vendor carries this product at all. NOT_LISTED is a definite answer; UNAVAILABLE means the vendor holds none right now.
+          enum:
+          - AVAILABLE
+          - UNAVAILABLE
+          - NOT_LISTED
+          - NOT_ANSWERED
+          example: AVAILABLE
+        status:
+          type: string
+          description: Supplier data status
+          enum:
+          - OK
+          - UNAVAILABLE
+          - STALE
+          - ERROR
+          example: OK
+        asOf:
+          type: string
+          format: date-time
+          description: When the supplier fact was obtained. Present only when the vendor answered — a degraded component carries no timestamp, because there is no vendor statement to date. A cached answer carries the age of the fact, not of the cache hit.
+          example: 2026-08-14 12:00:00+00:00
+        confidence:
+          type: string
+          description: Confidence in the supplier data
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          example: HIGH
+      required:
+      - confidence
+      - status
     ServiceDto:
       type: object
       description: Catalog service item
@@ -6027,6 +6077,8 @@ components:
         offset:
           type: integer
           format: int64
+        sort:
+          $ref: '#/components/schemas/SortObject'
         paged:
           type: boolean
         pageNumber:
@@ -6035,8 +6087,6 @@ components:
         pageSize:
           type: integer
           format: int32
-        sort:
-          $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
     SortObject:

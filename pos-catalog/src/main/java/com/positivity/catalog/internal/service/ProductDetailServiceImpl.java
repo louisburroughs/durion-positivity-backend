@@ -2,6 +2,7 @@ package com.positivity.catalog.internal.service;
 
 import com.positivity.catalog.internal.client.InventoryClient;
 import com.positivity.catalog.internal.client.PricingClient;
+import com.positivity.catalog.internal.client.SupplierStockClient;
 import com.positivity.catalog.internal.dto.ProductDetailView;
 import com.positivity.catalog.internal.dto.ProductDetailView.*;
 import com.positivity.catalog.internal.entity.ProductEntity;
@@ -38,10 +39,21 @@ public class ProductDetailServiceImpl implements ProductDetailService {
     private final ProductReplacementRepository productReplacementRepository;
     private final PricingClient pricingClient;
     private final InventoryClient inventoryClient;
+    private final SupplierStockClient supplierStockClient;
     private final ObjectMapper objectMapper;
 
     @Value("${pos.price.default-customer-tier-id:00000000-0000-0000-0000-000000000001}")
     private UUID defaultCustomerTierId;
+
+    /**
+     * Vendor profile this deployment asks about live stock, if any.
+     *
+     * <p>Unset by default and unset for every deployment without a trading partner, which is what
+     * keeps the supplier component out of the response entirely rather than present and permanently
+     * degraded. A component that is always there saying "unavailable" trains a reader to ignore it.
+     */
+    @Value("${pos.supplier.stock.vendor-profile-id:}")
+    private String supplierVendorProfileId;
 
     /**
      * Retrieves a consolidated product detail view with pricing and availability.
@@ -77,6 +89,9 @@ public class ProductDetailServiceImpl implements ProductDetailService {
         // Fetch availability (with graceful degradation)
         AvailabilityInfo availability = fetchAvailabilityInfo(productId, locationId, requestTime, product);
 
+        // Ask the vendor for live stock (the one approved synchronous cross-domain read)
+        SupplierAvailabilityInfo supplierAvailability = fetchSupplierAvailability(product, locationId, requestTime);
+
         // Fetch substitutions (from catalog)
         List<SubstitutionHint> substitutions = fetchSubstitutions(productId);
 
@@ -89,10 +104,105 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                 .specifications(specifications)
                 .pricing(pricing)
                 .availability(availability)
+                .supplierAvailability(supplierAvailability)
                 .substitutions(substitutions)
                 .generatedAt(requestTime)
                 .confidence(overallConfidence)
                 .build();
+    }
+
+    /**
+     * Asks the supplier what it holds for this product at this location (CAP-319 #1225).
+     *
+     * <h2>Absent, not degraded, when the deployment has no supplier</h2>
+     *
+     * Without a configured vendor profile this returns null and the component does not appear. A
+     * component permanently present and permanently {@code UNAVAILABLE} would teach a reader to skip
+     * it, which is the opposite of what a status is for.
+     *
+     * <h2>Three different nothings</h2>
+     *
+     * A vendor that said it has none is {@code UNAVAILABLE} with quantity {@code 0} — a fact worth
+     * showing. A vendor that could not be reached, or that answered without a quantity, is
+     * {@code DataStatus.UNAVAILABLE} with quantity null — a page should say it does not know rather
+     * than say there is none. And a vendor that does not carry the product at all is
+     * {@code NOT_LISTED}: a definite answer, which is why its data status is OK.
+     */
+    private SupplierAvailabilityInfo fetchSupplierAvailability(
+            ProductEntity product, UUID locationId, Instant requestTime) {
+
+        if (supplierVendorProfileId == null || supplierVendorProfileId.isBlank()) {
+            return null;
+        }
+        UUID vendorProfileId;
+        try {
+            vendorProfileId = UUID.fromString(supplierVendorProfileId.trim());
+        } catch (IllegalArgumentException e) {
+            log.warn("pos.supplier.stock.vendor-profile-id is not a UUID: {}", supplierVendorProfileId);
+            return null;
+        }
+
+        Optional<SupplierStockClient.StockInquiryClientResponse> answer;
+        try {
+            answer = supplierStockClient.inquireStock(
+                    vendorProfileId, locationId, product.getProductCode(), product.getSku());
+        } catch (Exception e) {
+            // The client already swallows everything it can. This catch is for what it cannot —
+            // a bean wiring fault, an error thrown before its own try block — and exists because a
+            // supplier problem must never be the reason a product page returns 500. Every sibling
+            // component on this page does the same.
+            log.warn("Supplier stock lookup failed for productId={}: {}", product.getId(), e.toString());
+            answer = Optional.empty();
+        }
+
+        if (answer.isEmpty() || answer.get().lines().isEmpty()) {
+            // No asOf: there is no vendor statement to date. Stamping the render time here would
+            // present "we could not find out" as a fact obtained just now, which is the same class of
+            // fabrication as defaulting an unstated quantity to zero.
+            return SupplierAvailabilityInfo.builder()
+                    .status(DataStatus.UNAVAILABLE)
+                    .confidence(DataConfidence.LOW)
+                    .build();
+        }
+
+        SupplierStockClient.StockInquiryClientLine line = answer.get().lines().getFirst();
+        SupplierStockStatus vendorStatus = parseVendorStatus(line.status());
+        boolean answered = vendorStatus == SupplierStockStatus.AVAILABLE
+                || vendorStatus == SupplierStockStatus.UNAVAILABLE
+                || vendorStatus == SupplierStockStatus.NOT_LISTED;
+
+        return SupplierAvailabilityInfo.builder()
+                // Carried through exactly as the supplier reported it: null stays null. Defaulting a
+                // missing quantity to zero here would undo the whole chain that kept "did not say"
+                // apart from "has none".
+                .availableQuantity(line.availableQuantity())
+                .earliestDeliveryDate(line.earliestDeliveryDate())
+                .vendorStatus(vendorStatus)
+                .status(answered ? DataStatus.OK : DataStatus.UNAVAILABLE)
+                // Dated only when the vendor actually said something. The supplier's own asOf is
+                // preferred because it carries the age of a cached answer; the request time is the
+                // fallback for an answered line the supplier left undated, where "obtained now" is
+                // true. An unanswered line is left undated entirely.
+                .asOf(
+                        answered
+                                ? (answer.get().asOf() == null
+                                        ? requestTime
+                                        : answer.get().asOf())
+                                : null)
+                .confidence(answered ? DataConfidence.HIGH : DataConfidence.LOW)
+                .build();
+    }
+
+    private static SupplierStockStatus parseVendorStatus(String status) {
+        if (status == null) {
+            return SupplierStockStatus.NOT_ANSWERED;
+        }
+        try {
+            return SupplierStockStatus.valueOf(status);
+        } catch (IllegalArgumentException e) {
+            // A status this version does not know about is not an availability claim.
+            return SupplierStockStatus.NOT_ANSWERED;
+        }
     }
 
     /**

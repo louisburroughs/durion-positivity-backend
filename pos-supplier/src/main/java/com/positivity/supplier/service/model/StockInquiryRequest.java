@@ -1,5 +1,6 @@
 package com.positivity.supplier.service.model;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -33,6 +34,10 @@ public record StockInquiryRequest(
      * @param supplierArticleCode vendor's own article code, when known
      * @param requestedQuantity quantity whose availability is being checked; {@code >= 1}
      */
+    @Schema(
+            name = "StockInquiryRequestLine",
+            description = "One inquired article. Named explicitly because an unqualified \"Line\" collides with other"
+                    + " modules' schemas of the same name when specs are merged for SDK generation.")
     public record Line(
             @Nullable String articleEan, @Nullable String supplierArticleCode, int requestedQuantity) {
 

@@ -24,6 +24,8 @@ tags:
   description: Admin CRUD over vendor profiles — one row per configured supplier connection
 - name: Supplier Exchange Audit
   description: Read the supplier exchange-audit trail. Metadata is free to browse; reading stored payload content requires the same permission and is itself recorded.
+- name: Supplier Stock Inquiry
+  description: 'Ask a vendor, live, what stock it holds for a receiving location. Vendor-side failure is reported as a status on a 200 response, never as an error status: callers are expected to degrade and render without live stock rather than fail their own flow.'
 paths:
   /v1/supplier/admin/profiles/{vendorProfileId}:
     get:
@@ -880,6 +882,83 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - supplier:transmission:resolve
+  /v1/supplier/stock/inquiries:
+    post:
+      tags:
+      - Supplier Stock Inquiry
+      summary: Ask a vendor for live stock availability
+      description: 'Places a real-time availability inquiry with the vendor bound to the given profile, for the given receiving location, and returns what the vendor said; availability is consignee-specific, so an answer for one location is never valid for another.
+
+        Use this tool when a decision depends on what a vendor holds right now — composing a product page, quoting procurement; do not use it to read a vendor''s prices, which arrive as price-catalogue events and are read from the price catalogue instead.
+
+        Preconditions: the caller must hold supplier:stock:inquire, and the vendor profile must exist, be enabled, carry a STOCK_INQUIRY binding and map a delivery account to the receiving location; a profile meeting none of these is reported as a status rather than an error.
+
+        Required inputs: a JSON body carrying inquiryId, vendorProfileId, deliveryLocationId and at least one line with a quantity of one or more and at least one article identifier.
+
+        Emits a SUPPLIER_STOCK_INQUIRY event; the inquiry creates nothing and changes nothing, so it is safe to repeat, and repeating it within the cache window returns the same answer without a second vendor call.
+
+        Returns 200 with a status for every outcome including vendor failure — OK means the vendor answered and the per-article outcomes are on the lines, SUPPLIER_UNAVAILABLE means it did not answer usefully, NOT_LISTED means it carries none of the inquired articles, CAPABILITY_NOT_CONFIGURED means this deployment has not bound stock inquiry for the vendor, and CONFIGURATION_ERROR means the profile is bound and wrong and is raised before any vendor call; a null quantity means the vendor stated nothing while a quantity of zero means it stated that it has none, and only the second justifies telling a customer an article is out of stock.
+
+        Returns 400 when the body is malformed — a missing identifier, an empty line list, a line with no article identity, or a quantity below one.
+
+        Returns 403 when the caller lacks supplier:stock:inquire.
+
+        '
+      operationId: inquireSupplierStock
+      requestBody:
+        description: 'The inquiry: which vendor to ask, which receiving location the question is about, and the articles to ask about.'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockInquiryRequest'
+            examples:
+              oneArticle:
+                description: oneArticle
+                value:
+                  inquiryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  vendorProfileId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  deliveryLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5f
+                  lines:
+                  - articleEan: '4019238001234'
+                    requestedQuantity: 4
+        required: true
+      responses:
+        '200':
+          description: The inquiry was processed. Read `status` before reading the lines — a non-OK status carries no vendor data, and that is the normal degraded case rather than an error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockInquiryResponse'
+              examples:
+                answered:
+                  description: answered
+                  value:
+                    inquiryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                    status: OK
+                    lines:
+                    - articleEan: '4019238001234'
+                      status: AVAILABLE
+                      availableQuantity: 8
+                      earliestDeliveryDate: 2026-08-20
+                    asOf: 2026-08-14 12:00:00+00:00
+        '400':
+          description: 'The request body is malformed: a missing identifier, an empty line list, a line with no article identity, or a quantity below 1.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          description: The caller lacks `supplier:stock:inquire`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      x-required-permissions:
+      - supplier:stock:inquire
   /v1/supplier/admin/profiles:
     get:
       tags:
@@ -2802,6 +2881,91 @@ components:
           format: date-time
         failureDetail:
           type: string
+    StockInquiryRequest:
+      type: object
+      properties:
+        inquiryId:
+          type: string
+          format: uuid
+        vendorProfileId:
+          type: string
+          format: uuid
+        deliveryLocationId:
+          type: string
+          format: uuid
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockInquiryRequestLine'
+    StockInquiryRequestLine:
+      type: object
+      description: One inquired article. Named explicitly because an unqualified "Line" collides with other modules' schemas of the same name when specs are merged for SDK generation.
+      properties:
+        articleEan:
+          type: string
+        supplierArticleCode:
+          type: string
+        requestedQuantity:
+          type: integer
+          format: int32
+    StockInquiryLine:
+      type: object
+      description: The vendor's answer about one inquired article.
+      properties:
+        articleEan:
+          type: string
+          description: EAN/GTIN of the article, as the vendor stated it.
+        supplierArticleCode:
+          type: string
+          description: The vendor's own article code, as the vendor stated it.
+        status:
+          type: string
+          description: What the vendor said about this article.
+          enum:
+          - AVAILABLE
+          - UNAVAILABLE
+          - NOT_LISTED
+          - NOT_ANSWERED
+        availableQuantity:
+          type: integer
+          format: int32
+          description: Quantity the vendor can supply. Null when the vendor stated no quantity, which includes every line it did not answer; zero only when the status is UNAVAILABLE, meaning the vendor stated it has none.
+        earliestDeliveryDate:
+          type: string
+          format: date
+          description: Earliest date the vendor promised any quantity, when stated.
+        quotedUnitPrice:
+          type: number
+          description: Quoted unit price, when the vendor norm carries one.
+        currency:
+          type: string
+          description: ISO 4217 currency of the quoted price, when quoted.
+    StockInquiryResponse:
+      type: object
+      description: 'Live vendor availability for the inquired articles. Vendor-side failure is reported as a status, never as an error: callers render without live stock rather than failing their own flow. A null quantity means the vendor stated nothing; a quantity of zero means the vendor stated it has none. Only the second justifies telling a customer an article is out of stock.'
+      properties:
+        inquiryId:
+          type: string
+          format: uuid
+          description: The inquiry identity supplied by the caller, echoed back.
+        status:
+          type: string
+          description: Whether the vendor answered, and if not, why not.
+          enum:
+          - OK
+          - SUPPLIER_UNAVAILABLE
+          - NOT_LISTED
+          - CAPABILITY_NOT_CONFIGURED
+          - CONFIGURATION_ERROR
+        lines:
+          type: array
+          description: Per-article answers; empty unless the status is OK.
+          items:
+            $ref: '#/components/schemas/StockInquiryLine'
+        asOf:
+          type: string
+          format: date-time
+          description: When this answer was obtained. Present when the status is OK; a cached answer carries the instant of the original inquiry, not of the cache hit.
     PriceCatalogImportSummary:
       type: object
       description: Bookkeeping summary of one vendor PRICAT import run.
