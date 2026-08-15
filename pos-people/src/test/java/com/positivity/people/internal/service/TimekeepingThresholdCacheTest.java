@@ -53,14 +53,14 @@ class TimekeepingThresholdCacheTest {
         policy.setScopeType(scopeType);
         policy.setScopeId(scopeId);
         policy.setJobTimeDiscrepancyThresholdMinutes(thresholdMinutes);
-        policy.setUpdatedAt(Instant.parse("2026-01-01T00:00:00Z"));
+        setUpdatedAt(policy, Instant.parse("2026-01-01T00:00:00Z"));
         return policy;
     }
 
     /**
-     * {@code TimekeepingPolicy.setUpdatedAt} is a deliberate no-op — the column is owned by
-     * {@code @LastModifiedDate} auditing, which writes the field reflectively — so a test that
-     * needs a specific audit stamp has to write the field the same way.
+     * {@code updatedAt} is owned by {@code @LastModifiedDate} auditing, which writes the field
+     * reflectively and exposes no setter, so a test that needs a specific audit stamp has to write
+     * the field the same way.
      */
     private static void setUpdatedAt(TimekeepingPolicy policy, Instant updatedAt) {
         ReflectionTestUtils.setField(policy, "updatedAt", updatedAt);

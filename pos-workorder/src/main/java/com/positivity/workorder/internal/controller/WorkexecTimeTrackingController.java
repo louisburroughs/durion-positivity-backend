@@ -356,12 +356,25 @@ public class WorkexecTimeTrackingController {
         }
     }
 
+    /**
+     * Resolve the caller's stable UUID identity, or {@code null} when the security context cannot
+     * supply one.
+     *
+     * <p>{@code SecurityContextHelper.getCurrentUserIdAsUuid()} never returns an empty
+     * {@code Optional}: a missing or malformed user id raises {@code MissingPersonIdException}, and
+     * a missing authentication or details map raises {@code IllegalStateException}. Left to
+     * propagate, both are caught by the module's {@code IllegalStateException} advice and surface as
+     * 409 CONFLICT, which contradicts the 400 these endpoints document and leaks the internal
+     * message. Catching here keeps the null-return contract that the callers — and the
+     * {@code @ApiResponse(responseCode = "400")} annotations — are written against.
+     */
     private UUID resolveAuthenticatedMechanicId() {
-        UUID mechanicId = SecurityContextHelper.getCurrentUserIdAsUuid().orElse(null);
-        if (mechanicId == null) {
-            log.warn("Missing authenticated UUID user id in security context");
+        try {
+            return SecurityContextHelper.getCurrentUserIdAsUuid().orElse(null);
+        } catch (IllegalStateException ex) {
+            log.warn("Missing authenticated UUID user id in security context: {}", ex.getMessage());
+            return null;
         }
-        return mechanicId;
     }
 
     private ResponseEntity<Object> badRequest(String code, String message) {

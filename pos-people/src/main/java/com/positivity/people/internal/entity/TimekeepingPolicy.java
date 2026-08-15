@@ -118,15 +118,17 @@ public class TimekeepingPolicy {
         this.updatedBy = updatedBy;
     }
 
+    /**
+     * {@code createdAt} and {@code updatedAt} are owned by {@link AuditingEntityListener} via
+     * {@link CreatedDate} / {@link LastModifiedDate} and are assigned on persist and update. They
+     * deliberately have no setters: the previous no-op setters accepted a value and silently threw
+     * it away, so callers believed they had stamped a timestamp when they had not.
+     */
     public Instant getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(Instant createdAt) {}
-
     public Instant getUpdatedAt() {
         return updatedAt;
     }
-
-    public void setUpdatedAt(Instant updatedAt) {}
 }
