@@ -102,6 +102,11 @@ public final class SupplierEventTypes {
                 EventTypeRegistration.approval(
                                 "SUPPLIER_TRANSMISSION_RESOLVE",
                                 "Resolve a purchase-order transmission awaiting manual review")
+                        .build(),
+                // Live stock inquiry (CAP-319). Threshold is a write's, not a read's: this makes a
+                // synchronous call to a trading partner while a customer waits, so the latency worth
+                // alerting on is the vendor's, not this module's.
+                EventTypeRegistration.write("SUPPLIER_STOCK_INQUIRY", "Ask a vendor for live stock availability")
                         .build());
     }
 }
