@@ -33,7 +33,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -53,7 +52,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderLineRepository purchaseOrderLineRepository;
     private final ApplicationEventPublisher eventPublisher;
-    private final ApplicationContext applicationContext;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final DocumentQuantityConverter documentQuantityConverter;
     private final InventoryLotCaptureService lotCaptureService;

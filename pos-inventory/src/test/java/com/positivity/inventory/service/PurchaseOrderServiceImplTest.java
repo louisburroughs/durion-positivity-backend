@@ -42,7 +42,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -64,9 +63,6 @@ class PurchaseOrderServiceImplTest {
     private ApplicationEventPublisher eventPublisher;
 
     @Mock
-    private ApplicationContext applicationContext;
-
-    @Mock
     private com.positivity.inventory.internal.service.InventoryFactPublisher inventoryFactPublisher;
 
     private PurchaseOrderServiceImpl purchaseOrderService;
@@ -79,7 +75,6 @@ class PurchaseOrderServiceImplTest {
                 purchaseOrderRepository,
                 purchaseOrderLineRepository,
                 eventPublisher,
-                applicationContext,
                 inventoryFactPublisher,
                 new com.positivity.inventory.internal.service.DocumentQuantityConverter(
                         org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
