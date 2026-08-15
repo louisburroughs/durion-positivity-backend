@@ -39,6 +39,16 @@ public class ExtProduct {
     @Column(nullable = false)
     private boolean active;
 
+    /**
+     * The product's base unit of measure — the unit every converted quantity ends up in.
+     *
+     * <p>Needed to recognise the identity case: a purchase-order line keyed in the product's own
+     * base UoM has no conversion row of its own, and without this it would be indistinguishable
+     * from a UoM catalog has never published.
+     */
+    @Column(name = "base_uom", length = 32)
+    private String baseUom;
+
     /** Catalog {@code ProductTrackingLevel} name: NONE, LOT, SERIAL (consumed by story H3). */
     @Column(length = 32)
     private String trackingLevel;

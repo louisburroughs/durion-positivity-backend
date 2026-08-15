@@ -2,8 +2,10 @@ package com.positivity.order.internal.service;
 
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
 import com.positivity.order.internal.entity.ExtProduct;
+import com.positivity.order.internal.entity.ExtProductUomReplica;
 import com.positivity.order.internal.entity.ProcessedEvent;
 import com.positivity.order.internal.repository.ExtProductRepository;
+import com.positivity.order.internal.repository.ExtProductUomReplicaRepository;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -36,6 +38,7 @@ public class ProductEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtProductRepository extProductRepository;
+    private final ExtProductUomReplicaRepository extProductUomReplicaRepository;
 
     @KafkaListener(
             topics = "${pos.order.kafka.catalog-events-topic:catalog.events.v1}",
@@ -90,8 +93,35 @@ public class ProductEventsListener {
         replica.setName(payload.path("name").stringValue(null));
         replica.setActive(payload.path("active").booleanValue(true));
         replica.setTrackingLevel(payload.path("trackingLevel").stringValue(null));
+        replica.setBaseUom(payload.path("baseUom").stringValue(null));
         replica.setAggregateVersion(aggregateVersion);
         replica.setSyncedAt(Instant.now(clock));
         extProductRepository.save(replica);
+
+        applyUomConversions(productId, payload);
+    }
+
+    /**
+     * Replaces the product's UoM conversion set (CAP-320 #1334).
+     *
+     * <p>Replaced wholesale rather than merged, because each fact carries the product's full set.
+     * Merging would leave a UoM catalog has retired still convertible here, so a purchase-order
+     * line could go on being priced and quantified against a factor its owner no longer publishes.
+     */
+    private void applyUomConversions(UUID productId, JsonNode payload) {
+        extProductUomReplicaRepository.deleteByProductId(productId);
+        for (JsonNode conversion : payload.path("uomConversions")) {
+            String uomCode = conversion.path("uomCode").stringValue(null);
+            if (uomCode == null || uomCode.isBlank()) {
+                continue;
+            }
+            extProductUomReplicaRepository.save(ExtProductUomReplica.builder()
+                    .productId(productId)
+                    .uomCode(uomCode)
+                    .uomType(conversion.path("uomType").stringValue(null))
+                    .factorToBase(conversion.path("factorToBase").decimalValue())
+                    .precisionScale(conversion.path("precisionScale").intValue(0))
+                    .build());
+        }
     }
 }
