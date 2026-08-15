@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1;
 import com.positivity.domainevents.order.PurchaseOrderLine;
 import com.positivity.domainevents.order.PurchaseOrderUpdatedV1;
 import com.positivity.inventory.internal.entity.ExtPurchaseOrderLineReplica;
@@ -10,9 +11,12 @@ import com.positivity.inventory.internal.repository.ExtPurchaseOrderLineReposito
 import com.positivity.inventory.internal.repository.ExtPurchaseOrderReceiptRepository;
 import com.positivity.inventory.internal.repository.ExtPurchaseOrderRepository;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -69,6 +73,7 @@ public class PurchaseOrderProjectionListener {
     private final ExtPurchaseOrderRepository orderRepository;
     private final ExtPurchaseOrderLineRepository lineRepository;
     private final ExtPurchaseOrderReceiptRepository receiptRepository;
+    private final InventoryFactPublisher inventoryFactPublisher;
 
     @KafkaListener(
             topics = "${pos.inventory.kafka.order-events-topic:order.events.v1}",
@@ -140,9 +145,15 @@ public class PurchaseOrderProjectionListener {
                 .expectedDeliveryDate(fact.expectedDeliveryDate())
                 .currency(fact.currency())
                 .grandTotalMinor(fact.grandTotalMinor())
+                .openBalanceMinor(fact.openBalanceMinor())
                 .aggregateVersion(version)
                 .occurredAt(fact.occurredAt())
                 .build());
+
+        // Before the lines are replaced, work out what supply this transition removes. The
+        // quantities that disappear are the ones currently projected, so this has to happen while
+        // they are still here.
+        emitExpectedSupplyDroppedIfLeavingSupply(existing, fact);
 
         // Replace rather than merge. A line the owner removed must disappear here too, or it keeps
         // counting as incoming supply that nobody will deliver.
@@ -175,6 +186,64 @@ public class PurchaseOrderProjectionListener {
                 .unitCostMinor(line.unitCostMinor())
                 .description(line.description())
                 .build();
+    }
+
+    /**
+     * Emits one {@link ExpectedSupplyDroppedV1} per SKU when an order leaves the open-supply
+     * statuses (odoo-parity A4, #1028; CAP-320 #1334).
+     *
+     * <h2>Why this is derived here rather than published by the order</h2>
+     *
+     * Expected supply is an inventory concept: it is inventory that decides what counts as
+     * incoming, and inventory that consumes the consequence. pos-order publishing it would mean
+     * one domain emitting another's fact about a quantity it does not compute. The projection
+     * already holds exactly what is needed — the open quantities as they stood before this
+     * transition — so the same information is available without crossing that line.
+     *
+     * <p>An order that never entered supply (a draft that was cancelled) drops nothing, because
+     * nothing was ever counted.
+     */
+    private void emitExpectedSupplyDroppedIfLeavingSupply(
+            @org.jspecify.annotations.Nullable ExtPurchaseOrderReplica existing, PurchaseOrderUpdatedV1 fact) {
+        if (existing == null) {
+            return;
+        }
+        boolean wasCountedAsSupply = PurchaseOrderUpdatedV1.OPEN_SUPPLY_STATUSES.contains(existing.getStatus());
+        if (!wasCountedAsSupply || fact.countsAsOpenSupply()) {
+            return;
+        }
+
+        Map<UUID, BigDecimal> openBySku = new LinkedHashMap<>();
+        for (ExtPurchaseOrderLineReplica line : lineRepository.findByPurchaseOrderId(existing.getPurchaseOrderId())) {
+            if (line.getSkuId() == null
+                    || line.getOpenQuantity() == null
+                    || line.getOpenQuantity().signum() <= 0) {
+                continue;
+            }
+            openBySku.merge(line.getSkuId(), line.getOpenQuantity(), BigDecimal::add);
+        }
+        if (openBySku.isEmpty()) {
+            return;
+        }
+
+        String reason = "CANCELLED".equals(fact.status())
+                ? ExpectedSupplyDroppedV1.REASON_CANCELLED
+                : ExpectedSupplyDroppedV1.REASON_CLOSED;
+        Instant occurredAt = Instant.now(clock);
+        openBySku.forEach(
+                (skuId, dropped) -> inventoryFactPublisher.recordExpectedSupplyDropped(new ExpectedSupplyDroppedV1(
+                        skuId.toString(),
+                        existing.getShipToLocationId(),
+                        dropped,
+                        existing.getPurchaseOrderId(),
+                        reason,
+                        occurredAt)));
+
+        log.debug(
+                "Expected supply dropped for order {} ({} SKUs, reason {})",
+                existing.getPurchaseOrderId(),
+                openBySku.size(),
+                reason);
     }
 
     /** Lines currently projected for one order; used by the completeness checks and by tests. */

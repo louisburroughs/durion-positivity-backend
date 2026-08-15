@@ -255,9 +255,13 @@ public class PurchaseSuggestionController {
     @PostMapping("/convert")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"inventory:replenishment:manage", "inventory:purchase_order:create"})
-    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.REPLENISHMENT_MANAGE + "') and hasAuthority('"
-            + InventoryPermissionRegistry.PURCHASE_ORDER_CREATE + "')")
+            scopes = {"inventory:replenishment:manage", "order:purchase_order:create"})
+    // Both halves still apply: converting a suggestion is a replenishment decision that places a
+    // purchase order, so the actor must be allowed to do each. The ordering half moved to the
+    // order domain with the aggregate (CAP-320 #1334) and is named as a literal because it is
+    // another module's permission — pos-inventory neither declares nor registers it.
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.REPLENISHMENT_MANAGE
+            + "') and hasAuthority('order:purchase_order:create')")
     @EmitEvent(id = "INVENTORY_PURCHASE_SUGGESTION_CONVERT", apiVersion = "1")
     @Operation(
             operationId = "convertPurchaseSuggestions",

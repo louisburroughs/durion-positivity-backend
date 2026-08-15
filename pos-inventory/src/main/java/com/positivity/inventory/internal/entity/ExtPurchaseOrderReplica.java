@@ -77,6 +77,10 @@ public class ExtPurchaseOrderReplica {
     @Column(name = "grand_total_minor")
     private Long grandTotalMinor;
 
+    /** Value still outstanding; what the over-receipt guard compares a receipt against. */
+    @Column(name = "open_balance_minor")
+    private Long openBalanceMinor;
+
     /** Owner's optimistic-lock version; the stale guard compares against this. */
     @Column(name = "aggregate_version", nullable = false)
     @Builder.Default

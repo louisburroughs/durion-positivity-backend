@@ -2,9 +2,8 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.entity.PurchaseSuggestion;
 import com.positivity.inventory.internal.entity.ReplenishmentPolicy;
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
 import com.positivity.inventory.internal.enums.PurchaseSuggestionStatus;
-import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
+import com.positivity.inventory.internal.repository.ExtPurchaseOrderRepository;
 import com.positivity.inventory.internal.repository.PurchaseSuggestionRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -60,7 +59,7 @@ public class PurchaseSuggestionCreationService {
             PurchaseSuggestionStatus.SUGGESTED, PurchaseSuggestionStatus.ACCEPTED, PurchaseSuggestionStatus.CONVERTED);
 
     private final PurchaseSuggestionRepository purchaseSuggestionRepository;
-    private final PurchaseOrderRepository purchaseOrderRepository;
+    private final ExtPurchaseOrderRepository purchaseOrderRepository;
     private final VendorSelectionService vendorSelectionService;
     private final Clock clock;
 
@@ -206,9 +205,12 @@ public class PurchaseSuggestionCreationService {
         if (poId == null) {
             return false;
         }
+        // Read from the projection: the order is pos-order's now (CAP-320 #1334). An order the
+        // replica has not seen yet is treated as not-draft, which is the safe direction — it stops
+        // the suggestion netting against an order that may already have been approved.
         return purchaseOrderRepository
                 .findById(poId)
-                .map(po -> po.getStatus() == PurchaseOrderStatus.DRAFT)
+                .map(po -> "DRAFT".equals(po.getStatus()))
                 .orElse(false);
     }
 

@@ -122,7 +122,29 @@ class InventoryPermissionRegistryTest {
         // for the enforced *string* rather than for constants, because this module enforces
         // most of its authorities as literals (only 29 of 54 have a constant) — a
         // constants-only check would inspect a third of the real surface and call it clean.
-        assertThat(catalogNames()).containsAll(enforced);
+        Set<String> ownDomain = new LinkedHashSet<>();
+        Set<String> otherDomains = new LinkedHashSet<>();
+        for (String authority : enforced) {
+            (authority.startsWith("inventory:") ? ownDomain : otherDomains).add(authority);
+        }
+
+        assertThat(catalogNames()).containsAll(ownDomain);
+
+        // An endpoint here may legitimately require another domain's permission: converting a
+        // purchase suggestion places a purchase order, so the actor must be allowed to place one
+        // (CAP-320 #1334). Those are still checked, against the catalog that does register them —
+        // the guarantee is that no enforced authority is unregistered anywhere, not that every
+        // authority belongs to this module.
+        for (String authority : otherDomains) {
+            String module = "pos-" + authority.substring(0, authority.indexOf(':'));
+            Path catalog = Path.of("..", module, "src", "main", "resources", "permissions.yaml");
+            assertThat(catalog)
+                    .as("%s enforces %s, so %s must ship a catalog declaring it", "pos-inventory", authority, module)
+                    .exists();
+            assertThat(Files.readString(catalog))
+                    .as("%s is enforced here but not registered by %s", authority, module)
+                    .contains("\"" + authority + "\"");
+        }
     }
 
     /**

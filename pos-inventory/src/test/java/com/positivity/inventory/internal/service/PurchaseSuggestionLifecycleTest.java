@@ -3,14 +3,12 @@ package com.positivity.inventory.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.positivity.inventory.internal.dto.purchaseorder.PurchaseOrderResponse;
 import com.positivity.inventory.internal.dto.purchasesuggestion.ConvertPurchaseSuggestionsRequest;
 import com.positivity.inventory.internal.dto.purchasesuggestion.ConvertPurchaseSuggestionsResponse;
 import com.positivity.inventory.internal.dto.purchasesuggestion.PurchaseSuggestionResponse;
 import com.positivity.inventory.internal.entity.ExtProductReplica;
 import com.positivity.inventory.internal.entity.ExtProductUomReplica;
 import com.positivity.inventory.internal.entity.PurchaseSuggestion;
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
 import com.positivity.inventory.internal.enums.PurchaseSuggestionStatus;
 import com.positivity.inventory.internal.enums.SuggestedVendorType;
 import com.positivity.inventory.internal.exception.PurchaseSuggestionConversionException;
@@ -19,7 +17,6 @@ import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtProductUomReplicaRepository;
 import com.positivity.inventory.internal.repository.PurchaseSuggestionRepository;
-import com.positivity.inventory.service.PurchaseOrderService;
 import com.positivity.inventory.service.PurchaseSuggestionService;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -44,14 +41,14 @@ class PurchaseSuggestionLifecycleTest {
 
     private static final String ACTOR = "f4-lifecycle-test";
 
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    private PurchaseOrderCommandPublisher purchaseOrderCommandPublisher;
+
     @Autowired
     private PurchaseSuggestionService purchaseSuggestionService;
 
     @Autowired
     private PurchaseSuggestionRepository suggestionRepository;
-
-    @Autowired
-    private PurchaseOrderService purchaseOrderService;
 
     @Autowired
     private ExtProductReplicaRepository extProductReplicaRepository;
@@ -167,15 +164,13 @@ class PurchaseSuggestionLifecycleTest {
                 new ConvertPurchaseSuggestionsRequest(List.of(first.getSuggestionId(), second.getSuggestionId())),
                 ACTOR);
 
-        assertThat(converted.getPurchaseOrderStatus()).isEqualTo("DRAFT");
+        // The order is placed by pos-order, so what is known here is that it was asked for and
+        // at what identity — not the number or status pos-order will assign (CAP-320 #1334).
+        assertThat(converted.getPurchaseOrderStatus()).isEqualTo("REQUESTED");
+        assertThat(converted.getPurchaseOrderId()).isNotNull();
+        assertThat(converted.getPoNumber()).isNull();
         assertThat(converted.getConvertedSuggestionIds())
                 .containsExactly(first.getSuggestionId(), second.getSuggestionId());
-        PurchaseOrderResponse po = purchaseOrderService.getPurchaseOrder(converted.getPurchaseOrderId());
-        assertThat(po.getStatus()).isEqualTo(PurchaseOrderStatus.DRAFT);
-        assertThat(po.getVendorId()).isEqualTo(vendorId);
-        assertThat(po.getLines()).hasSize(2);
-        assertThat(po.getLines().stream().map(line -> line.getLineNumber()).toList())
-                .containsExactlyInAnyOrder(1, 2);
 
         assertThat(suggestionRepository
                         .findById(first.getSuggestionId())
@@ -186,7 +181,7 @@ class PurchaseSuggestionLifecycleTest {
                         .findById(second.getSuggestionId())
                         .orElseThrow()
                         .getConvertedPurchaseOrderId())
-                .isEqualTo(po.getPurchaseOrderId());
+                .isEqualTo(converted.getPurchaseOrderId());
     }
 
     @Test
@@ -279,14 +274,18 @@ class PurchaseSuggestionLifecycleTest {
         ConvertPurchaseSuggestionsResponse converted = purchaseSuggestionService.convertPurchaseSuggestions(
                 new ConvertPurchaseSuggestionsRequest(List.of(suggestion.getSuggestionId())), ACTOR);
 
-        PurchaseOrderResponse po = purchaseOrderService.getPurchaseOrder(converted.getPurchaseOrderId());
-        assertThat(po.getLines()).hasSize(1);
-        var line = po.getLines().getFirst();
-        assertThat(line.getDocumentUom()).isEqualTo("CASE6");
-        assertThat(line.getDocumentQuantity()).isEqualByComparingTo("4");
-        assertThat(line.getQuantityDecimal()).isEqualByComparingTo("24"); // base quantity derived via B2
-        assertThat(line.getUnitCostMinor()).isEqualTo(2994L); // per-pack cost = 499 × 6
-        assertThat(po.getSubtotalMinor()).isEqualTo(4L * 2994L);
+        // What this module is responsible for is the request it raises; placing the order and
+        // converting the pack quantity to base are pos-order's (CAP-320 #1334).
+        var command = capturedRequest();
+        assertThat(command.purchaseOrderId()).isEqualTo(converted.getPurchaseOrderId());
+        assertThat(command.lines()).hasSize(1);
+        var line = command.lines().getFirst();
+        assertThat(line.documentUom()).isEqualTo("CASE6");
+        assertThat(line.documentQuantity()).isEqualByComparingTo("4");
+        // Base quantity is deliberately left unstated: the order converts it, and computing it on
+        // both sides is how the two ends come to disagree.
+        assertThat(line.quantity()).isNull();
+        assertThat(line.unitCostMinor()).isEqualTo(2994L); // per-pack cost = 499 × 6
     }
 
     @Test
@@ -301,10 +300,17 @@ class PurchaseSuggestionLifecycleTest {
         ConvertPurchaseSuggestionsResponse converted = purchaseSuggestionService.convertPurchaseSuggestions(
                 new ConvertPurchaseSuggestionsRequest(List.of(suggestion.getSuggestionId())), ACTOR);
 
-        PurchaseOrderResponse po = purchaseOrderService.getPurchaseOrder(converted.getPurchaseOrderId());
-        var line = po.getLines().getFirst();
-        assertThat(line.getDocumentUom()).isNull();
-        assertThat(line.getQuantityDecimal()).isEqualByComparingTo("24");
-        assertThat(line.getUnitCostMinor()).isEqualTo(499L);
+        var line = capturedRequest().lines().getFirst();
+        assertThat(line.documentUom()).isNull();
+        assertThat(line.quantity()).isEqualByComparingTo("24");
+        assertThat(line.unitCostMinor()).isEqualTo(499L);
+    }
+
+    /** The purchase-order request this module raised, as pos-order would receive it. */
+    private com.positivity.domainevents.order.PurchaseOrderRequestedV1 capturedRequest() {
+        var captor =
+                org.mockito.ArgumentCaptor.forClass(com.positivity.domainevents.order.PurchaseOrderRequestedV1.class);
+        org.mockito.Mockito.verify(purchaseOrderCommandPublisher).request(captor.capture());
+        return captor.getValue();
     }
 }

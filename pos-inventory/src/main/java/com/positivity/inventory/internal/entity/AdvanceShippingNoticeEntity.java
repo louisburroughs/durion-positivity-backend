@@ -11,8 +11,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -56,9 +54,15 @@ public class AdvanceShippingNoticeEntity {
     @Column(nullable = false)
     private AsnStatus status;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "po_id", nullable = false)
-    private PurchaseOrderEntity purchaseOrder;
+    /**
+     * The purchase order this belongs to, by id (CAP-320 #1334).
+     *
+     * <p>A plain identifier rather than a JPA association: the order lives in pos-order now, so
+     * there is nothing here to join to. What the order says is read from the
+     * {@code ext_purchase_order} projection, which is the cross-domain read path (ADR-0044 R3).
+     */
+    @Column(name = "po_id", nullable = false)
+    private UUID purchaseOrderId;
 
     private LocalDate shipDate;
 

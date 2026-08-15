@@ -103,6 +103,7 @@ public class PurchaseOrderFactPublisher {
                 order.getExpectedDeliveryDate(),
                 order.getCurrency(),
                 order.getGrandTotalMinor(),
+                order.getOpenBalanceMinor(),
                 occurredAt,
                 lines.stream().map(PurchaseOrderFactPublisher::toFactLine).toList());
     }

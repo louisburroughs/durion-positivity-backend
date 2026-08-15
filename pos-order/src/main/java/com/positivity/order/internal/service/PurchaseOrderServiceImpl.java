@@ -97,6 +97,48 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         return toResponse(saved);
     }
 
+    /**
+     * Creates an order at an identity another domain chose (CAP-320 #1334).
+     *
+     * <p>Identical to {@link #createPurchaseOrder} but for the caller-supplied id, which is what
+     * makes a replenishment conversion produce exactly one order however many times its request is
+     * delivered. Package-private: this is not a REST operation and must not become one, or the
+     * identity of an order would become something any caller could dictate.
+     */
+    @Transactional
+    void createRequested(
+            @NonNull UUID purchaseOrderId, @NonNull CreatePurchaseOrderRequest request, @NonNull String actorId) {
+        TotalsAndLines totalsAndLines = buildLineEntities(request.getLines());
+        long grandTotalMinor = totalsAndLines.subtotalMinor() + totalsAndLines.taxMinor();
+
+        PurchaseOrderEntity purchaseOrder = PurchaseOrderEntity.builder()
+                .purchaseOrderId(purchaseOrderId)
+                .vendorId(request.getVendorId())
+                .poNumber(generatePoNumber())
+                .status(PurchaseOrderStatus.DRAFT)
+                .versionNumber(1)
+                .currency(request.getCurrency())
+                .subtotalMinor(totalsAndLines.subtotalMinor())
+                .taxMinor(totalsAndLines.taxMinor())
+                .grandTotalMinor(grandTotalMinor)
+                .openBalanceMinor(grandTotalMinor)
+                .shipToLocationId(request.getShipToLocationId())
+                .paymentTermsId(request.getPaymentTermsId())
+                .poDate(request.getPoDate())
+                .expectedDeliveryDate(request.getExpectedDeliveryDate())
+                .requestedBy(request.getRequestedBy())
+                .comment(request.getComment())
+                .createdBy(actorId)
+                .build();
+
+        List<PurchaseOrderLineEntity> lines = totalsAndLines.lines();
+        lines.forEach(line -> line.setPurchaseOrder(purchaseOrder));
+        purchaseOrder.setLines(lines);
+
+        PurchaseOrderEntity saved = purchaseOrderRepository.save(purchaseOrder);
+        purchaseOrderFactPublisher.publish(saved, saved.getLines());
+    }
+
     @Override
     @Transactional(readOnly = true)
     public @NonNull PurchaseOrderResponse getPurchaseOrder(@NonNull UUID poId) {

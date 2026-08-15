@@ -21,20 +21,19 @@ import com.positivity.inventory.internal.dto.asn.CreateGoodsReceiptRequest;
 import com.positivity.inventory.internal.dto.asn.GoodsReceiptResponse;
 import com.positivity.inventory.internal.entity.AdvanceShippingNoticeEntity;
 import com.positivity.inventory.internal.entity.AsnLineEntity;
+import com.positivity.inventory.internal.entity.ExtPurchaseOrderReplica;
 import com.positivity.inventory.internal.entity.GoodsReceiptEntity;
-import com.positivity.inventory.internal.entity.PurchaseOrderEntity;
 import com.positivity.inventory.internal.enums.AsnStatus;
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
 import com.positivity.inventory.internal.exception.DuplicateAsnException;
 import com.positivity.inventory.internal.exception.InvalidPoReferenceException;
 import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.AsnLineRepository;
 import com.positivity.inventory.internal.repository.AsnRepository;
+import com.positivity.inventory.internal.repository.ExtPurchaseOrderLineRepository;
+import com.positivity.inventory.internal.repository.ExtPurchaseOrderRepository;
 import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
-import com.positivity.inventory.internal.repository.PurchaseOrderLineRepository;
-import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.internal.service.AsnServiceImpl;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.security.common.GatewaySecurityConstants;
@@ -76,10 +75,10 @@ class AsnServiceImplTest {
     private GoodsReceiptRepository goodsReceiptRepository;
 
     @Mock
-    private PurchaseOrderRepository purchaseOrderRepository;
+    private ExtPurchaseOrderRepository purchaseOrderRepository;
 
     @Mock
-    private PurchaseOrderLineRepository purchaseOrderLineRepository;
+    private ExtPurchaseOrderLineRepository purchaseOrderLineRepository;
 
     @Mock
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
@@ -88,7 +87,7 @@ class AsnServiceImplTest {
     private LedgerPostingService ledgerPostingService;
 
     @Mock
-    private com.positivity.inventory.internal.service.PurchaseOrderFactPublisher purchaseOrderFactPublisher;
+    private com.positivity.inventory.internal.service.GoodsReceiptFactPublisher goodsReceiptFactPublisher;
 
     @Mock
     private ApplicationEventPublisher applicationEventPublisher;
@@ -107,7 +106,7 @@ class AsnServiceImplTest {
                 inventoryLedgerEntryRepository,
                 ledgerPostingService,
                 org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryFactPublisher.class),
-                purchaseOrderFactPublisher,
+                goodsReceiptFactPublisher,
                 applicationEventPublisher,
                 new com.positivity.inventory.internal.service.DocumentQuantityConverter(
                         org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
@@ -149,17 +148,14 @@ class AsnServiceImplTest {
         request.setExpectedArrivalDate(LocalDate.now(FIXED_CLOCK).plusDays(2));
         request.setLineItems(List.of(lineRequest));
 
-        PurchaseOrderEntity approvedPo = PurchaseOrderEntity.builder()
+        ExtPurchaseOrderReplica approvedPo = ExtPurchaseOrderReplica.builder()
                 .purchaseOrderId(poId)
-                .status(PurchaseOrderStatus.APPROVED)
+                .status("APPROVED")
                 .vendorId(vendorId)
                 .poNumber("PO-UNIT-001")
                 .currency("USD")
-                .subtotalMinor(10_000L)
-                .taxMinor(0L)
                 .grandTotalMinor(10_000L)
                 .openBalanceMinor(10_000L)
-                .createdBy("system")
                 .build();
 
         when(purchaseOrderRepository.findById(poId)).thenReturn(Optional.of(approvedPo));
@@ -295,21 +291,18 @@ class AsnServiceImplTest {
         request.setLocationId(locationId);
         request.setLines(List.of(line));
 
-        PurchaseOrderEntity approvedPo = PurchaseOrderEntity.builder()
+        ExtPurchaseOrderReplica approvedPo = ExtPurchaseOrderReplica.builder()
                 .purchaseOrderId(poId)
-                .status(PurchaseOrderStatus.APPROVED)
+                .status("APPROVED")
                 .vendorId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .poNumber("PO-UNIT-GR-001")
                 .currency("USD")
-                .subtotalMinor(10_000L)
-                .taxMinor(0L)
                 .grandTotalMinor(10_000L)
                 .openBalanceMinor(10_000L)
-                .createdBy("system")
                 .build();
 
         AsnLineEntity asnLine = AsnLineEntity.builder()
-                .purchaseOrder(approvedPo)
+                .purchaseOrderId(approvedPo.getPurchaseOrderId())
                 .sku("SKU-TEST-001")
                 .quantityShipped(BigDecimal.TEN)
                 .quantityReceived(BigDecimal.ZERO)
@@ -358,21 +351,18 @@ class AsnServiceImplTest {
         request.setLocationId(locationId);
         request.setLines(List.of(line));
 
-        PurchaseOrderEntity approvedPo = PurchaseOrderEntity.builder()
+        ExtPurchaseOrderReplica approvedPo = ExtPurchaseOrderReplica.builder()
                 .purchaseOrderId(poId)
-                .status(PurchaseOrderStatus.APPROVED)
+                .status("APPROVED")
                 .vendorId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .poNumber("PO-UNIT-GR-002")
                 .currency("USD")
-                .subtotalMinor(10L)
-                .taxMinor(0L)
                 .grandTotalMinor(10L)
                 .openBalanceMinor(1L)
-                .createdBy("system")
                 .build();
 
         AsnLineEntity asnLine = AsnLineEntity.builder()
-                .purchaseOrder(approvedPo)
+                .purchaseOrderId(approvedPo.getPurchaseOrderId())
                 .sku("SKU-OVR-001")
                 .quantityShipped(BigDecimal.ONE)
                 .quantityReceived(BigDecimal.ZERO)
@@ -412,27 +402,24 @@ class AsnServiceImplTest {
         request.setLocationId(locationId);
         request.setLines(List.of(line1));
 
-        PurchaseOrderEntity approvedPo = PurchaseOrderEntity.builder()
+        ExtPurchaseOrderReplica approvedPo = ExtPurchaseOrderReplica.builder()
                 .purchaseOrderId(poId)
-                .status(PurchaseOrderStatus.APPROVED)
+                .status("APPROVED")
                 .vendorId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .poNumber("PO-UNIT-GR-003")
                 .currency("USD")
-                .subtotalMinor(10_000L)
-                .taxMinor(0L)
                 .grandTotalMinor(10_000L)
                 .openBalanceMinor(10_000L)
-                .createdBy("system")
                 .build();
 
         AsnLineEntity asnLine1 = AsnLineEntity.builder()
-                .purchaseOrder(approvedPo)
+                .purchaseOrderId(approvedPo.getPurchaseOrderId())
                 .sku("SKU-1")
                 .quantityShipped(BigDecimal.TEN)
                 .quantityReceived(BigDecimal.ZERO)
                 .build();
         AsnLineEntity asnLine2 = AsnLineEntity.builder()
-                .purchaseOrder(approvedPo)
+                .purchaseOrderId(approvedPo.getPurchaseOrderId())
                 .sku("SKU-2")
                 .quantityShipped(BigDecimal.TEN)
                 .quantityReceived(BigDecimal.ZERO)
@@ -482,21 +469,18 @@ class AsnServiceImplTest {
         request.setLocationId(locationId);
         request.setLines(List.of(line1));
 
-        PurchaseOrderEntity approvedPo = PurchaseOrderEntity.builder()
+        ExtPurchaseOrderReplica approvedPo = ExtPurchaseOrderReplica.builder()
                 .purchaseOrderId(poId)
-                .status(PurchaseOrderStatus.APPROVED)
+                .status("APPROVED")
                 .vendorId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .poNumber("PO-UNIT-GR-004")
                 .currency("USD")
-                .subtotalMinor(10_000L)
-                .taxMinor(0L)
                 .grandTotalMinor(10_000L)
                 .openBalanceMinor(10_000L)
-                .createdBy("system")
                 .build();
 
         AsnLineEntity asnLine1 = AsnLineEntity.builder()
-                .purchaseOrder(approvedPo)
+                .purchaseOrderId(approvedPo.getPurchaseOrderId())
                 .sku("SKU-1")
                 .quantityShipped(BigDecimal.TEN)
                 .quantityReceived(BigDecimal.ZERO)
@@ -524,15 +508,15 @@ class AsnServiceImplTest {
         verify(asnRepository).save(captor.capture());
         assertEquals(AsnStatus.FULLY_RECEIVED, captor.getValue().getStatus());
 
-        // Receiving is what takes an order out of open supply, and this is the path that does it.
-        // Without the fact, the ext_purchase_order projection would go on counting a fully
-        // received order as still incoming, promising stock that is already on the shelf.
-        ArgumentCaptor<PurchaseOrderEntity> poCaptor = ArgumentCaptor.forClass(PurchaseOrderEntity.class);
-        verify(purchaseOrderFactPublisher).publish(poCaptor.capture(), any());
-        // A fully received ASN is not a fully received order. Every shipped unit on this ASN
-        // arrived, but the order was for 10,000 minor and only 1,000 of it has been received, so
-        // the order stays open — and the fact carries that status, not the ASN's.
-        assertEquals(PurchaseOrderStatus.PARTIALLY_RECEIVED, poCaptor.getValue().getStatus());
+        // Receiving reports what arrived; it no longer writes the order (CAP-320 #1334). The fact
+        // has to go out here, or stock would sit on the shelf while the order went on expecting
+        // it and the projection went on promising supply that had already been delivered.
+        ArgumentCaptor<GoodsReceiptEntity> receiptCaptor = ArgumentCaptor.forClass(GoodsReceiptEntity.class);
+        verify(goodsReceiptFactPublisher).publish(receiptCaptor.capture(), any());
+        // Notably it says nothing about the order's resulting status. Whether the order is now
+        // fully received is a question about the order's lines, and pos-order is the only module
+        // holding them — a fully received ASN is not the same thing as a fully received order.
+        assertEquals(poId, receiptCaptor.getValue().getPurchaseOrderId());
     }
 
     @Test

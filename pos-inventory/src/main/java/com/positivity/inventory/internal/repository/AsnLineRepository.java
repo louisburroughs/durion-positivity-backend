@@ -19,6 +19,11 @@ public interface AsnLineRepository extends JpaRepository<AsnLineEntity, UUID> {
      * lines never subtract) over lines of ASNs in the given statuses, optionally restricted to
      * the owning purchase order's ship-to site and to an arrival-date horizon.
      *
+     * <p>The site comes from the {@code ext_purchase_order} projection rather than a join to a
+     * local order table, because the order lives in pos-order (CAP-320 #1334). The join is a LEFT
+     * JOIN deliberately: an unsited query must still count a line whose order the projection has
+     * not caught up with, or a replica lagging by a second would quietly understate supply.
+     *
      * <p>The expected arrival date lives on the ASN header, so the horizon bound applies at
      * header granularity. With {@code boundByExpectedArrival = true}, ASNs with a {@code NULL}
      * expected arrival date are excluded (undated supply cannot be promised by a date); with
@@ -29,9 +34,10 @@ public interface AsnLineRepository extends JpaRepository<AsnLineEntity, UUID> {
                                                  THEN al.quantityShipped - COALESCE(al.quantityReceived, 0)
                                                  ELSE 0 END), 0)
                         FROM AsnLineEntity al
+                        LEFT JOIN ExtPurchaseOrderReplica po ON po.purchaseOrderId = al.purchaseOrderId
                         WHERE al.sku = :sku
                           AND al.asn.status IN :statuses
-                          AND (:siteId IS NULL OR al.purchaseOrder.shipToLocationId = :siteId)
+                          AND (:siteId IS NULL OR po.shipToLocationId = :siteId)
                           AND (:boundByExpectedArrival = FALSE
                                OR (al.asn.expectedArrivalDate IS NOT NULL
                                    AND al.asn.expectedArrivalDate <= :horizonDate))
@@ -52,9 +58,10 @@ public interface AsnLineRepository extends JpaRepository<AsnLineEntity, UUID> {
     @Query("""
                         SELECT DISTINCT al.asn.expectedArrivalDate
                         FROM AsnLineEntity al
+                        LEFT JOIN ExtPurchaseOrderReplica po ON po.purchaseOrderId = al.purchaseOrderId
                         WHERE al.sku = :sku
                           AND al.asn.status IN :statuses
-                          AND (:siteId IS NULL OR al.purchaseOrder.shipToLocationId = :siteId)
+                          AND (:siteId IS NULL OR po.shipToLocationId = :siteId)
                           AND al.asn.expectedArrivalDate IS NOT NULL
                           AND al.asn.expectedArrivalDate <= :horizonDate
                         """)

@@ -12,20 +12,17 @@ import com.positivity.inventory.internal.entity.GoodsReceiptLineEntity;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.InventoryLot;
 import com.positivity.inventory.internal.entity.InventorySerialUnit;
-import com.positivity.inventory.internal.entity.PurchaseOrderEntity;
 import com.positivity.inventory.internal.entity.WarrantyPartReturnHold;
 import com.positivity.inventory.internal.enums.AsnStatus;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.InventoryLotStatus;
 import com.positivity.inventory.internal.enums.InventorySerialStatus;
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.AsnRepository;
 import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryLotRepository;
 import com.positivity.inventory.internal.repository.InventorySerialUnitRepository;
-import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.internal.repository.WarrantyPartReturnHoldRepository;
 import com.positivity.inventory.service.InventoryTraceabilityService;
 import java.math.BigDecimal;
@@ -49,6 +46,9 @@ import org.springframework.test.context.ActiveProfiles;
 class InventoryTraceabilityTest {
 
     @Autowired
+    private PurchaseOrderProjectionTestSupport projection;
+
+    @Autowired
     private InventoryTraceabilityService traceabilityService;
 
     @Autowired
@@ -62,9 +62,6 @@ class InventoryTraceabilityTest {
 
     @Autowired
     private GoodsReceiptRepository goodsReceiptRepository;
-
-    @Autowired
-    private PurchaseOrderRepository purchaseOrderRepository;
 
     @Autowired
     private AsnRepository asnRepository;
@@ -91,26 +88,20 @@ class InventoryTraceabilityTest {
 
     /** Seeds a PO → ASN → goods-receipt chain whose receipt line matches (sku, lotNumber). */
     private GoodsReceiptEntity seedReceiptChain(String sku, String lotNumber, UUID vendorId, UUID locationId) {
-        PurchaseOrderEntity po = purchaseOrderRepository.save(PurchaseOrderEntity.builder()
-                .vendorId(vendorId)
-                .poNumber("PO-" + UUID.randomUUID())
-                .status(PurchaseOrderStatus.APPROVED)
-                .currency("USD")
-                .subtotalMinor(100L)
-                .taxMinor(0L)
-                .grandTotalMinor(100L)
-                .build());
+        // The order is pos-order's; the trace resolves its number through the projection
+        // (CAP-320 #1334), so that is what the fixture states.
+        UUID poId = projection.project("APPROVED", locationId, null, UUID.randomUUID(), "10");
 
         AdvanceShippingNoticeEntity asn = asnRepository.save(AdvanceShippingNoticeEntity.builder()
                 .asnReferenceNumber("ASN-" + UUID.randomUUID())
                 .vendorId(vendorId)
                 .status(AsnStatus.READY_FOR_RECEIPT)
-                .purchaseOrder(po)
+                .purchaseOrderId(poId)
                 .build());
 
         GoodsReceiptEntity receipt = GoodsReceiptEntity.builder()
                 .receiptNumber("GR-" + UUID.randomUUID())
-                .purchaseOrder(po)
+                .purchaseOrderId(poId)
                 .asn(asn)
                 .locationId(locationId)
                 .build();
@@ -167,10 +158,7 @@ class InventoryTraceabilityTest {
                 .containsExactly("PURCHASE_ORDER", "ASN", "GOODS_RECEIPT");
         assertThat(trace.getUpstream().getDocuments())
                 .extracting(TraceabilityDocumentRef::getDocumentId)
-                .containsExactly(
-                        receipt.getPurchaseOrder().getPurchaseOrderId(),
-                        receipt.getAsn().getAsnId(),
-                        receipt.getReceiptId());
+                .containsExactly(receipt.getPurchaseOrderId(), receipt.getAsn().getAsnId(), receipt.getReceiptId());
 
         // Downstream chain, oldest first, reconstructed from the lot-tagged ledger entries.
         assertThat(trace.getDownstream())

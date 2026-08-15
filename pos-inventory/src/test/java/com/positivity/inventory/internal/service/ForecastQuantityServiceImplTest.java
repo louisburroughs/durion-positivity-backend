@@ -7,23 +7,20 @@ import com.positivity.inventory.internal.entity.AsnLineEntity;
 import com.positivity.inventory.internal.entity.ExtStorageLocationReplica;
 import com.positivity.inventory.internal.entity.PickListEntity;
 import com.positivity.inventory.internal.entity.PickTaskEntity;
-import com.positivity.inventory.internal.entity.PurchaseOrderEntity;
-import com.positivity.inventory.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.AsnStatus;
 import com.positivity.inventory.internal.enums.PickListStatus;
 import com.positivity.inventory.internal.enums.PickTaskStatus;
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
 import com.positivity.inventory.internal.enums.ReservationStatus;
 import com.positivity.inventory.internal.repository.AsnRepository;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.PickListRepository;
 import com.positivity.inventory.internal.repository.PickTaskRepository;
-import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
@@ -56,9 +53,6 @@ class ForecastQuantityServiceImplTest {
     private PurchaseOrderProjectionTestSupport projection;
 
     @Autowired
-    private PurchaseOrderRepository purchaseOrderRepository;
-
-    @Autowired
     private AsnRepository asnRepository;
 
     @Autowired
@@ -80,11 +74,11 @@ class ForecastQuantityServiceImplTest {
     void incomingCountsOpenApprovedPoQuantity() {
         UUID sku = UUID.randomUUID();
         UUID site = UUID.randomUUID();
-        savePo(PurchaseOrderStatus.APPROVED, site, null, line(sku, "7"));
-        savePo(PurchaseOrderStatus.PARTIALLY_RECEIVED, site, null, line(sku, "3"));
-        savePo(PurchaseOrderStatus.DRAFT, site, null, line(sku, "100"));
-        savePo(PurchaseOrderStatus.CANCELLED, site, null, line(sku, "100"));
-        savePo(PurchaseOrderStatus.CLOSED, site, null, line(sku, "100"));
+        savePo("APPROVED", site, null, line(sku, "7"));
+        savePo("PARTIALLY_RECEIVED", site, null, line(sku, "3"));
+        savePo("DRAFT", site, null, line(sku, "100"));
+        savePo("CANCELLED", site, null, line(sku, "100"));
+        savePo("CLOSED", site, null, line(sku, "100"));
 
         BigDecimal incoming = expectedSupplyService.expectedIncomingQuantity(sku.toString(), site, null);
 
@@ -97,8 +91,8 @@ class ForecastQuantityServiceImplTest {
         UUID sku = UUID.randomUUID();
         UUID siteA = UUID.randomUUID();
         UUID siteB = UUID.randomUUID();
-        savePo(PurchaseOrderStatus.APPROVED, siteA, null, line(sku, "7"));
-        savePo(PurchaseOrderStatus.APPROVED, siteB, null, line(sku, "5"));
+        savePo("APPROVED", siteA, null, line(sku, "7"));
+        savePo("APPROVED", siteB, null, line(sku, "5"));
 
         assertThat(expectedSupplyService.expectedIncomingQuantity(sku.toString(), siteA, null))
                 .isEqualByComparingTo("7");
@@ -113,7 +107,7 @@ class ForecastQuantityServiceImplTest {
     void incomingAddsAsnRemainders() {
         UUID sku = UUID.randomUUID();
         UUID site = UUID.randomUUID();
-        PurchaseOrderEntity po = savePo(PurchaseOrderStatus.APPROVED, site, null, line(sku, "0"));
+        UUID po = savePo("APPROVED", site, null, line(sku, "0"));
         // 6 shipped, 2 received -> remainder 4.
         saveAsn(po, AsnStatus.PARTIALLY_RECEIVED, null, asnLine(po, sku, "6", "2"));
         // Over-received line must not subtract.
@@ -134,9 +128,9 @@ class ForecastQuantityServiceImplTest {
     void horizonBoundsPoSupplyWithNullDateRule() {
         UUID sku = UUID.randomUUID();
         UUID site = UUID.randomUUID();
-        savePo(PurchaseOrderStatus.APPROVED, site, LocalDate.parse("2026-07-20"), line(sku, "5"));
-        savePo(PurchaseOrderStatus.APPROVED, site, LocalDate.parse("2026-09-01"), line(sku, "11"));
-        savePo(PurchaseOrderStatus.APPROVED, site, null, line(sku, "2"));
+        savePo("APPROVED", site, LocalDate.parse("2026-07-20"), line(sku, "5"));
+        savePo("APPROVED", site, LocalDate.parse("2026-09-01"), line(sku, "11"));
+        savePo("APPROVED", site, null, line(sku, "2"));
 
         Instant horizon = Instant.parse("2026-08-01T12:00:00Z");
 
@@ -154,7 +148,7 @@ class ForecastQuantityServiceImplTest {
     void horizonBoundsAsnSupplyWithNullDateRule() {
         UUID sku = UUID.randomUUID();
         UUID site = UUID.randomUUID();
-        PurchaseOrderEntity po = savePo(PurchaseOrderStatus.APPROVED, site, null, line(sku, "0"));
+        UUID po = savePo("APPROVED", site, null, line(sku, "0"));
         saveAsn(po, AsnStatus.LOADED, LocalDate.parse("2026-07-25"), asnLine(po, sku, "4", null));
         saveAsn(po, AsnStatus.LOADED, LocalDate.parse("2026-10-01"), asnLine(po, sku, "6", null));
         saveAsn(po, AsnStatus.LOADED, null, asnLine(po, sku, "1", null));
@@ -267,7 +261,7 @@ class ForecastQuantityServiceImplTest {
     void projectedAvailableFormula() {
         UUID sku = UUID.randomUUID();
         UUID site = UUID.randomUUID();
-        savePo(PurchaseOrderStatus.APPROVED, site, null, line(sku, "7.900000"));
+        savePo("APPROVED", site, null, line(sku, "7.900000"));
         saveReservation(sku, ReservationStatus.PENDING, 3, 0, null);
 
         ForecastQuantityService.ForecastQuantities forecast =
@@ -291,62 +285,42 @@ class ForecastQuantityServiceImplTest {
 
     // ─── seeding helpers ─────────────────────────────────────────────────────
 
-    private PurchaseOrderLineEntity line(UUID skuId, String openQuantity) {
+    private PurchaseOrderProjectionTestSupport.Line line(UUID skuId, String openQuantity) {
         BigDecimal open = new BigDecimal(openQuantity);
-        return PurchaseOrderLineEntity.builder()
-                .lineNumber(1)
-                .skuId(skuId)
-                .description("forecast test line")
-                .quantityDecimal(open.max(BigDecimal.ONE))
-                .unitCostMinor(100L)
-                .lineTotalMinor(100L)
-                .openQuantityDecimal(open)
-                .build();
+        return new PurchaseOrderProjectionTestSupport.Line(
+                skuId, open.max(BigDecimal.ONE).toPlainString(), openQuantity);
     }
 
-    private PurchaseOrderEntity savePo(
-            PurchaseOrderStatus status,
+    /**
+     * Puts an order into play by stating what it says.
+     *
+     * <p>pos-inventory has no purchase-order table any more (CAP-320 #1334); supply is read from
+     * the projection, so this is the only shape the running system has.
+     */
+    private UUID savePo(
+            String status,
             UUID shipToLocationId,
             LocalDate expectedDeliveryDate,
-            PurchaseOrderLineEntity... lines) {
-        PurchaseOrderEntity po = PurchaseOrderEntity.builder()
-                .vendorId(UUID.randomUUID())
-                .poNumber("FCT-" + PO_SEQ.incrementAndGet() + "-" + UUID.randomUUID())
-                .status(status)
-                .currency("USD")
-                .subtotalMinor(100L)
-                .taxMinor(0L)
-                .grandTotalMinor(100L)
-                .shipToLocationId(shipToLocationId)
-                .expectedDeliveryDate(expectedDeliveryDate)
-                .build();
-        for (PurchaseOrderLineEntity line : lines) {
-            line.setPurchaseOrder(po);
-            po.getLines().add(line);
-        }
-        PurchaseOrderEntity saved = purchaseOrderRepository.save(po);
-        // Supply is read from the projection, so seeding the aggregate alone would describe a
-        // state the running system never reaches (#1333).
-        projection.project(saved);
-        return saved;
+            PurchaseOrderProjectionTestSupport.Line... lines) {
+        PO_SEQ.incrementAndGet();
+        return projection.project(UUID.randomUUID(), status, shipToLocationId, expectedDeliveryDate, List.of(lines));
     }
 
-    private AsnLineEntity asnLine(PurchaseOrderEntity po, UUID skuId, String shipped, String received) {
+    private AsnLineEntity asnLine(UUID poId, UUID skuId, String shipped, String received) {
         return AsnLineEntity.builder()
-                .purchaseOrder(po)
+                .purchaseOrderId(poId)
                 .sku(skuId.toString())
                 .quantityShipped(new BigDecimal(shipped))
                 .quantityReceived(received == null ? null : new BigDecimal(received))
                 .build();
     }
 
-    private void saveAsn(
-            PurchaseOrderEntity po, AsnStatus status, LocalDate expectedArrivalDate, AsnLineEntity... lines) {
+    private void saveAsn(UUID poId, AsnStatus status, LocalDate expectedArrivalDate, AsnLineEntity... lines) {
         AdvanceShippingNoticeEntity asn = AdvanceShippingNoticeEntity.builder()
                 .asnReferenceNumber("ASN-" + UUID.randomUUID())
-                .vendorId(po.getVendorId())
+                .vendorId(UUID.randomUUID())
                 .status(status)
-                .purchaseOrder(po)
+                .purchaseOrderId(poId)
                 .expectedArrivalDate(expectedArrivalDate)
                 .build();
         for (AsnLineEntity line : lines) {

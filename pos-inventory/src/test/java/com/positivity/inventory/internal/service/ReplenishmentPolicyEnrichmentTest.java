@@ -10,13 +10,10 @@ import com.positivity.inventory.internal.dto.replenishment.ReplenishmentScanResu
 import com.positivity.inventory.internal.dto.replenishment.UpdateReplenishmentPolicyRequest;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.NormalizedAvailability;
-import com.positivity.inventory.internal.entity.PurchaseOrderEntity;
-import com.positivity.inventory.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.inventory.internal.entity.ReplenishmentPolicy;
 import com.positivity.inventory.internal.entity.ReplenishmentTask;
 import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
 import com.positivity.inventory.internal.enums.ReplenishmentSourceType;
 import com.positivity.inventory.internal.enums.ReplenishmentStatus;
 import com.positivity.inventory.internal.enums.ReservationStatus;
@@ -54,6 +51,9 @@ class ReplenishmentPolicyEnrichmentTest {
     private static final AtomicInteger PO_SEQ = new AtomicInteger();
 
     @Autowired
+    private PurchaseOrderProjectionTestSupport projection;
+
+    @Autowired
     private ReplenishmentService replenishmentService;
 
     @Autowired
@@ -70,9 +70,6 @@ class ReplenishmentPolicyEnrichmentTest {
 
     @Autowired
     private NormalizedAvailabilityRepository normalizedAvailabilityRepository;
-
-    @Autowired
-    private com.positivity.inventory.internal.repository.PurchaseOrderRepository purchaseOrderRepository;
 
     @Autowired
     private LeadTimeResolver leadTimeResolver;
@@ -186,12 +183,7 @@ class ReplenishmentPolicyEnrichmentTest {
         policy.setPreferredSourceType(ReplenishmentSourceType.INTERNAL_TRANSFER);
         policyRepository.save(policy);
         receive(sku, location, 3);
-        savePo(
-                PurchaseOrderStatus.APPROVED,
-                location,
-                LocalDate.now(ZoneOffset.UTC).plusDays(1),
-                skuId,
-                "7");
+        savePo("APPROVED", location, LocalDate.now(ZoneOffset.UTC).plusDays(1), skuId, "7");
 
         assertThat(leadTimeResolver.resolve(policy).source())
                 .isEqualTo(LeadTimeResolver.LeadTimeSource.POLICY_OVERRIDE);
@@ -488,31 +480,21 @@ class ReplenishmentPolicyEnrichmentTest {
                 .build());
     }
 
-    private void savePo(
-            PurchaseOrderStatus status, UUID shipToSiteId, LocalDate expectedDeliveryDate, UUID skuId, String openQty) {
+    /**
+     * Puts an order into play by stating what it says.
+     *
+     * <p>pos-inventory has no purchase-order table any more (CAP-320 #1334); supply is read from
+     * the projection, so this is the only shape the running system has.
+     */
+    private void savePo(String status, UUID shipToSiteId, LocalDate expectedDeliveryDate, UUID skuId, String openQty) {
+        PO_SEQ.incrementAndGet();
         BigDecimal open = new BigDecimal(openQty);
-        PurchaseOrderEntity po = PurchaseOrderEntity.builder()
-                .vendorId(UUID.randomUUID())
-                .poNumber("F3-" + PO_SEQ.incrementAndGet() + "-" + UUID.randomUUID())
-                .status(status)
-                .currency("USD")
-                .subtotalMinor(100L)
-                .taxMinor(0L)
-                .grandTotalMinor(100L)
-                .shipToLocationId(shipToSiteId)
-                .expectedDeliveryDate(expectedDeliveryDate)
-                .build();
-        PurchaseOrderLineEntity line = PurchaseOrderLineEntity.builder()
-                .lineNumber(1)
-                .skuId(skuId)
-                .description("F3 enrichment test line")
-                .quantityDecimal(open.max(BigDecimal.ONE))
-                .unitCostMinor(100L)
-                .lineTotalMinor(100L)
-                .openQuantityDecimal(open)
-                .build();
-        line.setPurchaseOrder(po);
-        po.getLines().add(line);
-        purchaseOrderRepository.save(po);
+        projection.project(
+                UUID.randomUUID(),
+                status,
+                shipToSiteId,
+                expectedDeliveryDate,
+                java.util.List.of(new PurchaseOrderProjectionTestSupport.Line(
+                        skuId, open.max(BigDecimal.ONE).toPlainString(), openQty)));
     }
 }

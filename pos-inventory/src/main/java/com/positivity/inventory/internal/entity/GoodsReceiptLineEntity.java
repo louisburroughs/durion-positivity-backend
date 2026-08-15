@@ -40,9 +40,12 @@ public class GoodsReceiptLineEntity {
     @JoinColumn(name = "receipt_id", nullable = false)
     private GoodsReceiptEntity goodsReceipt;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "po_line_id")
-    private PurchaseOrderLineEntity poLine;
+    /**
+     * The purchase-order line this belongs to, by id (CAP-320 #1334). A plain identifier for the
+     * same reason as {@code poId}: the line lives in pos-order.
+     */
+    @Column(name = "po_line_id")
+    private UUID poLineId;
 
     @Column(nullable = false)
     private String sku;

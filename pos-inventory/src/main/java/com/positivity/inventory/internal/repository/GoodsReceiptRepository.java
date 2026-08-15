@@ -7,5 +7,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface GoodsReceiptRepository extends JpaRepository<GoodsReceiptEntity, UUID> {
 
-    List<GoodsReceiptEntity> findByPurchaseOrder_PurchaseOrderId(UUID poId);
+    List<GoodsReceiptEntity> findByPurchaseOrderId(UUID poId);
 }

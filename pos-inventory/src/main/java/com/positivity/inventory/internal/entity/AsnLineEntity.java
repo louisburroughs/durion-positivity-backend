@@ -40,13 +40,22 @@ public class AsnLineEntity {
     @JoinColumn(name = "asn_id", nullable = false)
     private AdvanceShippingNoticeEntity asn;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "po_id", nullable = false)
-    private PurchaseOrderEntity purchaseOrder;
+    /**
+     * The purchase order this belongs to, by id (CAP-320 #1334).
+     *
+     * <p>A plain identifier rather than a JPA association: the order lives in pos-order now, so
+     * there is nothing here to join to. What the order says is read from the
+     * {@code ext_purchase_order} projection, which is the cross-domain read path (ADR-0044 R3).
+     */
+    @Column(name = "po_id", nullable = false)
+    private UUID purchaseOrderId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "po_line_id")
-    private PurchaseOrderLineEntity poLine;
+    /**
+     * The purchase-order line this belongs to, by id (CAP-320 #1334). A plain identifier for the
+     * same reason as {@code poId}: the line lives in pos-order.
+     */
+    @Column(name = "po_line_id")
+    private UUID poLineId;
 
     @Column(nullable = false)
     private String sku;

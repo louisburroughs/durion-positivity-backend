@@ -47,6 +47,9 @@ import org.jspecify.annotations.Nullable;
  *                             rather than treated as arriving today
  * @param currency             ISO 4217 currency of the order's monetary figures
  * @param grandTotalMinor      order total in minor units, when priced
+ * @param openBalanceMinor     value still outstanding in minor units. Carried so receiving can
+ *                             tell a receipt that exceeds what is owed before accepting it,
+ *                             rather than finding out once the order rejects the fact
  * @param occurredAt           when this state was reached
  * @param lines                the order's lines; empty only for an order that has none
  */
@@ -59,6 +62,7 @@ public record PurchaseOrderUpdatedV1(
         @Nullable LocalDate expectedDeliveryDate,
         @Nullable String currency,
         @Nullable Long grandTotalMinor,
+        @Nullable Long openBalanceMinor,
         @NonNull Instant occurredAt,
         @NonNull List<PurchaseOrderLine> lines) {
 
