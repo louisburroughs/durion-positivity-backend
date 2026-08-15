@@ -198,8 +198,7 @@ public class PurchaseOrderController {
             summary = "Approve Purchase Order",
             description = """
                     Approves a DRAFT purchase order, moving it to APPROVED and recording the approver, timestamp \
-                    and optional notes; when encumbrance is enabled an encumbrance reference is stamped and an \
-                    encumbrance event is published to accounting.
+                    and optional notes.
                     Use this tool to release a drafted order for receiving; do not use cancelPurchaseOrder, which \
                     terminates the order, and note that receivePurchaseOrder rejects orders that were never \
                     approved.

@@ -33,7 +33,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -53,15 +52,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderLineRepository purchaseOrderLineRepository;
     private final ApplicationEventPublisher eventPublisher;
-    private final ApplicationContext applicationContext;
-    private final EncumbranceEventPublisher encumbranceEventPublisher;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final DocumentQuantityConverter documentQuantityConverter;
     private final InventoryLotCaptureService lotCaptureService;
     private final Clock clock;
-
-    @Value("${pos.inventory.encumbranceEnabled:false}")
-    private boolean encumbranceEnabled;
 
     @Value("${pos.inventory.default-tax-rate:0.10}")
     private double defaultTaxRate = 0.10d;
@@ -172,11 +166,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         Instant now = Instant.now(clock);
         po.setApprovalTimestamp(now);
         po.setApprovalNotes(request.getApprovalNotes());
-        if (encumbranceEnabled) {
-            po.setEncumbranceRef(
-                    "ENC-" + po.getPurchaseOrderId().toString().substring(0, 8).toUpperCase());
-        }
-
         PurchaseOrderEntity saved = purchaseOrderRepository.save(po);
 
         eventPublisher.publishEvent(Map.of(
@@ -198,18 +187,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 actorId,
                 OCCURRED_AT,
                 now.toString()));
-
-        if (encumbranceEnabled) {
-            EncumbranceEventPublisher publisher = encumbranceEventPublisher;
-            if (publisher == null) {
-                publisher = applicationContext.getBean(EncumbranceEventPublisher.class);
-            }
-            publisher.publishEncumbranceEvent(
-                    saved.getPurchaseOrderId(),
-                    saved.getPoNumber(),
-                    safeLong(saved.getGrandTotalMinor()),
-                    saved.getCurrency());
-        }
 
         return toResponse(saved);
     }
@@ -576,7 +553,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .approverId(entity.getApproverId())
                 .approvalTimestamp(entity.getApprovalTimestamp())
                 .approvalNotes(entity.getApprovalNotes())
-                .encumbranceRef(entity.getEncumbranceRef())
                 .createdBy(entity.getCreatedBy())
                 .updatedBy(entity.getUpdatedBy())
                 .createdAt(entity.getCreatedAt())
