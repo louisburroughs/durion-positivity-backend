@@ -65,6 +65,9 @@ class PurchaseOrderServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.InventoryFactPublisher inventoryFactPublisher;
 
+    @Mock
+    private com.positivity.inventory.internal.service.PurchaseOrderFactPublisher purchaseOrderFactPublisher;
+
     private PurchaseOrderServiceImpl purchaseOrderService;
 
     private Clock fixedClock = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
@@ -76,6 +79,7 @@ class PurchaseOrderServiceImplTest {
                 purchaseOrderLineRepository,
                 eventPublisher,
                 inventoryFactPublisher,
+                purchaseOrderFactPublisher,
                 new com.positivity.inventory.internal.service.DocumentQuantityConverter(
                         org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
                 // Lot gate answers "untracked" for every SKU in these unit tests (E1 #1038):
