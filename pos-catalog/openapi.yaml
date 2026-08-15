@@ -939,9 +939,9 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_MANAGER
-        - inventory.cost.standard.update
+        - catalog:item_cost:update
       x-required-permissions:
-      - inventory.cost.standard.update
+      - catalog:item_cost:update
   /v1/catalogs/{catalogId}:
     get:
       tags:
@@ -6077,13 +6077,13 @@ components:
         offset:
           type: integer
           format: int64
-        sort:
-          $ref: '#/components/schemas/SortObject'
         paged:
           type: boolean
         pageNumber:
           type: integer
           format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
         pageSize:
           type: integer
           format: int32

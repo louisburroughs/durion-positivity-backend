@@ -43,6 +43,18 @@ public final class CatalogPermissions {
      */
     public static final String SUPPLIER_COST_READ = "catalog:supplier_cost:read";
 
+    /**
+     * Set an item's standard cost.
+     *
+     * <p>Replaces the authority {@code inventory.cost.standard.update}, which was written with dots
+     * instead of colons and so matched no permission the catalog has ever held. It could be granted
+     * to nobody, which made the endpoint's third authorisation branch dead: it was reachable only by
+     * the {@code ADMIN} and {@code MANAGER} roles beside it, and the intent to gate it by permission
+     * silently did nothing. The name is a catalog one because the endpoint is here — the old string
+     * claimed an inventory permission that no module has ever defined.
+     */
+    public static final String ITEM_COST_UPDATE = "catalog:item_cost:update";
+
     // ── Permissions owned by other domains ──────────────────────────────────────────────
     //
     // Declared here so this module's call sites are constants like every other, but the names
