@@ -90,8 +90,6 @@ public class PurchaseOrderEntity {
 
     private String approvalNotes;
 
-    private String encumbranceRef;
-
     @CreatedBy
     @Column(nullable = false, updatable = false)
     private String createdBy;

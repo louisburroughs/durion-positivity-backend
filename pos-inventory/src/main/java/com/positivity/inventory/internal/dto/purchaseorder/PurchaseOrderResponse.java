@@ -137,12 +137,6 @@ public class PurchaseOrderResponse {
     private String approvalNotes;
 
     @Schema(
-            description = "Reference to the financial encumbrance reserved for this purchase order",
-            example = "ENC-2026-00042",
-            requiredMode = NOT_REQUIRED)
-    private String encumbranceRef;
-
-    @Schema(
             description = "Identifier of the user who created the purchase order",
             example = "user-jdoe",
             requiredMode = NOT_REQUIRED)

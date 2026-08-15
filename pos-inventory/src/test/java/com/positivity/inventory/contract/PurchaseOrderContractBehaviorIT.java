@@ -111,72 +111,41 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(status().isConflict());
     }
 
-    // ─── AC #2: Approval with encumbrance enabled → emits encumbrance event ─────
+    // ─── Approval contract ─────────────────────────────────────────────────────
 
     /**
-     * AC #2: Verifies that approving a PO when encumbrance is enabled causes the
-     * service to emit an encumbrance event and the response contains a non-null
-     * {@code encumbranceRef}.
+     * Approving a purchase order returns the approved order.
      *
-     * Issue: #572
+     * <p>This was two tests (issue #572 AC #2 and AC #3) asserting that an encumbrance reference was
+     * stamped when {@code pos.inventory.encumbranceEnabled} was true and absent when it was false.
+     * The encumbrance stub is removed (CAP-320): the reference was derived from the order's own id,
+     * the event it published was an in-process Spring event nobody subscribed to, and pos-accounting
+     * has no encumbrance concept. What is worth keeping from those two tests is the part that was
+     * never about encumbrance — that the approve endpoint answers 200 with the approved order.
      */
     @Test
-    @DisplayName("POST /purchase-orders/{poId}/approve with encumbrance enabled → 200 + encumbranceRef set")
-    void approvalWithEncumbrance_emitsEncumbranceEvent() throws Exception {
-        // Issue #572: AC #2 — approval must trigger encumbrance posting event
+    @DisplayName("POST /purchase-orders/{poId}/approve → 200 with the approved order")
+    void approval_returnsApprovedOrder() throws Exception {
         UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-        PurchaseOrderResponse approvedResponse = buildApprovedPoResponse(
-                poId, vendorId, "ENC-2026-001", /* encumbranceRef */ 1_000_000L, 100_000L, 1_100_000L);
+        PurchaseOrderResponse approvedResponse = buildApprovedPoResponse(poId, vendorId, 500_000L, 0L, 500_000L);
 
         when(purchaseOrderService.approvePurchaseOrder(
                         eq(poId), any(ApprovePurchaseOrderRequest.class), any(String.class)))
                 .thenReturn(approvedResponse);
 
-        ApprovePurchaseOrderRequest request = new ApprovePurchaseOrderRequest("Approved with encumbrance");
+        ApprovePurchaseOrderRequest request = new ApprovePurchaseOrderRequest("Approved");
         String requestBody = objectMapper.writeValueAsString(request);
 
         mockMvc.perform(withPurchaseOrderApproveAuth(post("/v1/inventory/purchase-orders/{poId}/approve", poId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.encumbranceRef").value("ENC-2026-001"));
+                .andExpect(jsonPath("$.status").value("APPROVED"));
 
         verify(purchaseOrderService)
                 .approvePurchaseOrder(eq(poId), any(ApprovePurchaseOrderRequest.class), any(String.class));
-    }
-
-    // ─── AC #3: Approval without encumbrance → no GL encumbrance posting ────────
-
-    /**
-     * AC #3: Verifies that approving a PO when encumbrance is disabled produces no
-     * GL encumbrance posting and the response has a null {@code encumbranceRef}.
-     *
-     * Issue: #572
-     */
-    @Test
-    @DisplayName("POST /purchase-orders/{poId}/approve without encumbrance → 200, encumbranceRef absent")
-    void approvalWithoutEncumbrance_noGlEncumbrancePosted() throws Exception {
-        // Issue #572: AC #3 — no encumbrance when encumbranceEnabled=false
-        UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-
-        PurchaseOrderResponse approvedResponse =
-                buildApprovedPoResponse(poId, vendorId, null, /* encumbranceRef absent */ 500_000L, 0L, 500_000L);
-
-        when(purchaseOrderService.approvePurchaseOrder(
-                        eq(poId), any(ApprovePurchaseOrderRequest.class), any(String.class)))
-                .thenReturn(approvedResponse);
-
-        ApprovePurchaseOrderRequest request = new ApprovePurchaseOrderRequest("Approved, no encumbrance");
-        String requestBody = objectMapper.writeValueAsString(request);
-
-        mockMvc.perform(withPurchaseOrderApproveAuth(post("/v1/inventory/purchase-orders/{poId}/approve", poId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(requestBody)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.encumbranceRef").doesNotExist());
     }
 
     // ─── AC #4: Partial receipt → openQuantity and openBalanceMinor decrement ───
@@ -342,7 +311,7 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
         UUID vendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID poId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-        PurchaseOrderResponse approvedPo = buildApprovedPoResponse(poId, vendorId, null, 100_000L, 0L, 100_000L);
+        PurchaseOrderResponse approvedPo = buildApprovedPoResponse(poId, vendorId, 100_000L, 0L, 100_000L);
         approvedPo.setLines(List.of(buildLineResponse(
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 1,
@@ -519,12 +488,12 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                             "poId",
                             poId.toString(),
                             "failureReason",
-                            "GL encumbrance post failed: ledger unavailable",
+                            "GL post failed: ledger unavailable",
                             "retryCount",
                             3,
                             "timestamp",
                             Instant.now(TEST_CLOCK).toString()));
-                    throw new RuntimeException("GL encumbrance post failed: ledger unavailable");
+                    throw new RuntimeException("GL post failed: ledger unavailable");
                 })
                 .when(purchaseOrderService)
                 .approvePurchaseOrder(eq(poId), any(ApprovePurchaseOrderRequest.class), any(String.class));
@@ -614,7 +583,7 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
     // ─────────────────────────────────────────────────────────────────────────────
 
     private PurchaseOrderResponse buildApprovedPoResponse(
-            UUID poId, UUID vendorId, String encumbranceRef, long subtotalMinor, long taxMinor, long grandTotalMinor) {
+            UUID poId, UUID vendorId, long subtotalMinor, long taxMinor, long grandTotalMinor) {
         return PurchaseOrderResponse.builder()
                 .purchaseOrderId(poId)
                 .vendorId(vendorId)
@@ -626,7 +595,6 @@ class PurchaseOrderContractBehaviorIT extends BaseContractIntegrationTest {
                 .taxMinor(taxMinor)
                 .grandTotalMinor(grandTotalMinor)
                 .openBalanceMinor(openBalanceMinor(grandTotalMinor))
-                .encumbranceRef(encumbranceRef)
                 .approverId("approver-user")
                 .approvalTimestamp(Instant.now(TEST_CLOCK))
                 .createdAt(Instant.now(TEST_CLOCK))

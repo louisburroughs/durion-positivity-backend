@@ -245,10 +245,6 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_APPROVE", "Approve a purchase order")
                         .build(),
-                EventTypeRegistration.approval(
-                                "INVENTORY_PURCHASE_ORDER_ENCUMBRANCE",
-                                "Emit encumbrance posting contract on PO approval")
-                        .build(),
                 EventTypeRegistration.write(
                                 "INVENTORY_PURCHASE_ORDER_ACCOUNTING_ERROR",
                                 "Record accounting error on PO GL posting failure")
