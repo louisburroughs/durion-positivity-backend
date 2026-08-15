@@ -46,6 +46,15 @@
             <artifactId>pos-events</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!--
+            CAP-319 (#1225): the live stock inquiry's short-TTL cache. Caffeine rather than a
+            hand-rolled map because this cache is on a customer-facing path and needs a bound and an
+            expiry it cannot be talked out of; the same choice pos-catalog and pos-customer made.
+        -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
         <!-- H2 for local dev (application-dev.yml) and tests; not configured in alpha/prod profiles -->
         <dependency>
             <groupId>com.h2database</groupId>

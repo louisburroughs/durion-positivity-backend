@@ -12,10 +12,11 @@ supplier APIs, and the exchange audit trail of what was sent and received.
 | Governing ADRs | ADR-0050 (vendor profile configuration), ADR-0051 (protocol adapter versioning), ADR-0052 (outbound idempotency / duplicate-order prevention) |
 
 This module owns **how** we reach a supplier, and — as the codec waves land — **what** we say to
-them for each capability. Two codecs exist today, both in `internal.adapter.ediwheelb`: PRICAT B4.0
-(#1224) and Stock Report B2.1 (#1228). The remaining capabilities still have SPI ports in
-`internal.spi` and no codec behind them. ADR-0053 governs the price-catalog behaviour described
-below.
+them for each capability. Codecs exist today for PRICAT B4.0 (#1224) and Stock Report B2.1 (#1228) in
+`internal.adapter.ediwheelb`, order create/status C1.0/C1.1 (#1226) in `internal.adapter.ediwheelc1`,
+and live stock inquiry A2.5 (#1225) in `internal.adapter.ediwheela2`. The remaining capabilities still
+have SPI ports in `internal.spi` and no codec behind them. ADR-0053 governs the price-catalog
+behaviour described below.
 
 **Shipment tracking is out of scope for this module**, and not as a gap awaiting a codec (#1313).
 EDIWheel shipment tracking is an exchange between logistics providers and suppliers; a service
@@ -96,6 +97,43 @@ product identity codes on `catalog.events.v1` and `CatalogProductEventsListener`
 created seconds ago may not be matchable yet, and its line is quarantined until the next import. An
 empty replica — Kafka disabled, or nothing consumed yet — reports `CATALOG_UNAVAILABLE` rather than
 turning a whole vendor catalog into `NO_CATALOG_MATCH` misses an operator would go hunting for.
+
+### Live stock inquiry (A2.5) — no HTTP surface, one in-process contract
+
+`SupplierStockService.inquireLiveStock` is the platform's **single approved synchronous cross-module
+supplier read** (ADR-0044 amendment, 2026-08-10). Approved callers are pos-catalog's Product Detail
+composition and pos-order procurement, and the grant is per calling class, not per module.
+
+It **never throws for a vendor-side failure**. Both callers have something useful to render without
+live stock and nothing useful to render if this call blows up, so every failure is a status:
+
+| Status | Means |
+|---|---|
+| `OK` | The vendor answered. Per-article outcomes are on the lines. |
+| `SUPPLIER_UNAVAILABLE` | Unreachable, timed out, breaker open, or answered something unreadable. |
+| `NOT_LISTED` | The vendor carries none of the inquired articles. |
+| `CAPABILITY_NOT_CONFIGURED` | No `STOCK_INQUIRY` binding on the profile (ADR-0050 §3). |
+| `CONFIGURATION_ERROR` | The profile is switched on and wrong — an unmapped delivery location, a missing agency code. Raised **before** any network call. |
+
+Per line: `AVAILABLE`, `UNAVAILABLE`, `NOT_LISTED`, `NOT_ANSWERED`. The distinction that matters is
+`UNAVAILABLE` (the vendor said it has none — quantity `0`, a fact) versus `NOT_ANSWERED` (the vendor
+said nothing — quantity `null`). Only the first justifies telling a customer an article is out of
+stock, and nothing in this path coerces one into the other.
+
+**A2.5 carries no price.** The norm answers availability and delivery dates only; the sibling C1.0
+inquiry is the one with `PriceDetails`. The quote fields on the response stay null here, and a
+supplier price comes from the PRICAT price entries that own it (CAP-318).
+
+**The delivery location is part of the question, not a refinement of it.** Availability is
+consignee-specific, so the inquiry requires a location, the codec refuses to encode without the
+vendor account mapped to it, and the cache key carries it — a shared entry would tell a customer that
+stock at another branch is available at the one fitting the tyre.
+
+Caching is per article, not per inquiry (`pos.supplier.stockinquiry.cache-ttl`, default 60s): a
+product page asks about one article repeatedly and a procurement screen asks about several at once.
+Only `AVAILABLE` and `UNAVAILABLE` are stored. Failures are not — caching one bad moment would extend
+it into a minute of identical failures — and neither is `NOT_LISTED`, so an operator who fixes a
+catalogue mapping sees the fix on the next page load.
 
 ### Stock report (B2.1) — no API surface
 

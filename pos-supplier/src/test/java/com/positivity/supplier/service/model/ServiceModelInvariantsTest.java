@@ -123,17 +123,45 @@ class ServiceModelInvariantsTest {
             // Degradation contract of the single approved synchronous supplier read
             // (ADR-0049 §4): "vendor did not state" must remain distinguishable from
             // "vendor stated zero".
-            StockInquiryResponse.Line unstated = new StockInquiryResponse.Line("4019238001234", null, null, null, null);
+            StockInquiryResponse.Line unstated = new StockInquiryResponse.Line(
+                    "4019238001234", null, StockInquiryResponse.LineStatus.NOT_ANSWERED, null, null, null, null);
 
             assertThat(unstated.availableQuantity()).isNull();
             assertThat(unstated.quotedUnitPrice()).isNull();
         }
 
         @Test
+        void refusesAQuantityOnALineTheVendorNeverAnswered() {
+            // The public DTO is the one callers outside this module construct, so the guard has to
+            // live here too and not only on the canonical model. NOT_LISTED with a number attached
+            // is the shape a consumer would render as fact.
+            assertThatThrownBy(() -> new StockInquiryResponse.Line(
+                            "4019238001234", null, StockInquiryResponse.LineStatus.NOT_LISTED, 0, null, null, null))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> new StockInquiryResponse.Line(
+                            "4019238001234", null, StockInquiryResponse.LineStatus.NOT_ANSWERED, 3, null, null, null))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        void aVendorStatedZeroIsDistinguishableFromAVendorSayingNothing() {
+            // The pair the whole degradation contract turns on: only the first justifies telling a
+            // customer the article is out of stock.
+            StockInquiryResponse.Line statedNone = new StockInquiryResponse.Line(
+                    "4019238001234", null, StockInquiryResponse.LineStatus.UNAVAILABLE, 0, null, null, null);
+            StockInquiryResponse.Line saidNothing = new StockInquiryResponse.Line(
+                    "4019238001234", null, StockInquiryResponse.LineStatus.NOT_ANSWERED, null, null, null, null);
+
+            assertThat(statedNone.availableQuantity()).isZero();
+            assertThat(saidNothing.availableQuantity()).isNull();
+        }
+
+        @Test
         void echoesInquiryIdAndCopiesLines() {
             UUID inquiryId = UUID.randomUUID();
             List<StockInquiryResponse.Line> source = new ArrayList<>();
-            source.add(new StockInquiryResponse.Line(null, "MICH-123", 0, null, null));
+            source.add(new StockInquiryResponse.Line(
+                    null, "MICH-123", StockInquiryResponse.LineStatus.UNAVAILABLE, 0, null, null, null));
             StockInquiryResponse response =
                     new StockInquiryResponse(inquiryId, StockInquiryResponse.Status.OK, source, null);
 

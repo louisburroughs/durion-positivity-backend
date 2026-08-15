@@ -136,17 +136,43 @@ class DomainModelInvariantsTest {
         void unstatedQuantityStaysNullNeverZero() {
             // A vendor that did not answer availability must not be mistaken for a vendor
             // with no stock: null is "not stated", 0 is "none available".
-            SupplierStockInquiryResult.Line unstated =
-                    new SupplierStockInquiryResult.Line("4019238001234", null, null, null, null);
+            SupplierStockInquiryResult.Line unstated = new SupplierStockInquiryResult.Line(
+                    "4019238001234", null, SupplierStockInquiryResult.LineStatus.NOT_ANSWERED, null, null, null, null);
 
             assertThat(unstated.availableQuantity()).isNull();
             assertThat(unstated.quotedUnitPrice()).isNull();
         }
 
         @Test
+        void anUnansweredLineCannotCarryAQuantity() {
+            // The type refuses the combination rather than trusting every caller to avoid it: a
+            // quantity on a line the vendor never answered is a number with no author.
+            assertThatThrownBy(() -> new SupplierStockInquiryResult.Line(
+                            "4019238001234",
+                            null,
+                            SupplierStockInquiryResult.LineStatus.NOT_LISTED,
+                            0,
+                            null,
+                            null,
+                            null))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        void anExplicitlyUnavailableLineMayStateZero() {
+            // "I have none" is an answer, and the only case where zero is a fact rather than an
+            // assumption.
+            SupplierStockInquiryResult.Line none = new SupplierStockInquiryResult.Line(
+                    "4019238001234", null, SupplierStockInquiryResult.LineStatus.UNAVAILABLE, 0, null, null, null);
+
+            assertThat(none.availableQuantity()).isZero();
+        }
+
+        @Test
         void linesAreDefensivelyCopied() {
             List<SupplierStockInquiryResult.Line> source = new ArrayList<>();
-            source.add(new SupplierStockInquiryResult.Line(null, "MICH-123", 4, null, null));
+            source.add(new SupplierStockInquiryResult.Line(
+                    null, "MICH-123", SupplierStockInquiryResult.LineStatus.AVAILABLE, 4, null, null, null));
             SupplierStockInquiryResult result =
                     new SupplierStockInquiryResult(SupplierStockInquiryResult.Status.OK, source, null);
 
