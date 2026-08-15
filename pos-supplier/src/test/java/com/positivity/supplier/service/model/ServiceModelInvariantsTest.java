@@ -131,6 +131,19 @@ class ServiceModelInvariantsTest {
         }
 
         @Test
+        void refusesAQuantityOnALineTheVendorNeverAnswered() {
+            // The public DTO is the one callers outside this module construct, so the guard has to
+            // live here too and not only on the canonical model. NOT_LISTED with a number attached
+            // is the shape a consumer would render as fact.
+            assertThatThrownBy(() -> new StockInquiryResponse.Line(
+                            "4019238001234", null, StockInquiryResponse.LineStatus.NOT_LISTED, 0, null, null, null))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> new StockInquiryResponse.Line(
+                            "4019238001234", null, StockInquiryResponse.LineStatus.NOT_ANSWERED, 3, null, null, null))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
         void aVendorStatedZeroIsDistinguishableFromAVendorSayingNothing() {
             // The pair the whole degradation contract turns on: only the first justifies telling a
             // customer the article is out of stock.

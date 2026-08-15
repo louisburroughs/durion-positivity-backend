@@ -34,8 +34,8 @@ import org.jspecify.annotations.Nullable;
         name = "StockInquiryResponse",
         description = "Live vendor availability for the inquired articles. Vendor-side failure is reported as a status,"
                 + " never as an error: callers render without live stock rather than failing their own flow."
-                + " A null quantity means the vendor stated none, which is not the same as a quantity of"
-                + " zero.")
+                + " A null quantity means the vendor stated nothing; a quantity of zero means the vendor stated"
+                + " it has none. Only the second justifies telling a customer an article is out of stock.")
 public record StockInquiryResponse(
         @Schema(description = "The inquiry identity supplied by the caller, echoed back.") @NonNull
         UUID inquiryId,
@@ -110,8 +110,9 @@ public record StockInquiryResponse(
             LineStatus status,
 
             @Schema(
-                    description = "Quantity the vendor can supply. Null when the vendor stated none; zero only"
-                            + " when the vendor said it has none.")
+                    description = "Quantity the vendor can supply. Null when the vendor stated no quantity, which"
+                            + " includes every line it did not answer; zero only when the status is UNAVAILABLE,"
+                            + " meaning the vendor stated it has none.")
             @Nullable
             Integer availableQuantity,
 
@@ -126,6 +127,14 @@ public record StockInquiryResponse(
 
         public Line {
             Objects.requireNonNull(status, "status must not be null");
+            // The degradation contract enforced by the type rather than trusted to whoever builds
+            // one of these. A quantity on a line the vendor never answered is a number with no
+            // author, and it is precisely the value a consumer would render as fact. The canonical
+            // model carries the same guard; this is the copy that faces callers outside the module.
+            if (status != LineStatus.AVAILABLE && status != LineStatus.UNAVAILABLE && availableQuantity != null) {
+                throw new IllegalArgumentException(
+                        "a quantity may only accompany an answered line, but status was " + status);
+            }
         }
     }
 
