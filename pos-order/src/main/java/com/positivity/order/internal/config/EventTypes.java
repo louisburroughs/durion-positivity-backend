@@ -127,5 +127,25 @@ public final class EventTypes {
                     .build(),
             EventTypeRegistration.write("ORDER_RETURN_RETRY", "Return saga retried after a refund failure")
                     .apiVersion("1")
+                    .build(),
+
+            // PurchaseOrderController — the aggregate moved here from pos-inventory (CAP-320 #1334)
+            EventTypeRegistration.write("ORDER_PURCHASE_ORDER_CREATE", "Create a purchase order")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.fastRead("ORDER_PURCHASE_ORDER_GET", "Get purchase order")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.search("ORDER_PURCHASE_ORDER_LIST", "List purchase orders")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.approval("ORDER_PURCHASE_ORDER_APPROVE", "Approve a purchase order")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.write("ORDER_PURCHASE_ORDER_REVISE", "Revise a purchase order")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.write("ORDER_PURCHASE_ORDER_CANCEL", "Cancel a purchase order")
+                    .apiVersion("1")
                     .build());
 }

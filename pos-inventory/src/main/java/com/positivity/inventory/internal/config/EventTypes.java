@@ -225,13 +225,7 @@ public final class EventTypes {
                                 "INVENTORY_RECEIVING_CROSSDOCK", "Cross-dock receiving line directly to workorder")
                         .build(),
 
-                // PurchaseOrderController - 9 events
-                EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_CREATE", "Create a purchase order")
-                        .build(),
-                EventTypeRegistration.fastRead("INVENTORY_PURCHASE_ORDER_GET", "Get purchase order")
-                        .build(),
-                EventTypeRegistration.fastRead("INVENTORY_PURCHASE_ORDER_LIST", "List purchase orders")
-                        .build(),
+                // PurchaseOrderController — only receiving remains here (CAP-320 #1334)
                 EventTypeRegistration.fastRead("INVENTORY_LOT_LIST", "List inventory lots")
                         .build(),
                 EventTypeRegistration.fastRead("INVENTORY_LOT_GET", "Get an inventory lot with per-location on-hand")
@@ -243,18 +237,12 @@ public final class EventTypes {
                                 "INVENTORY_LOT_EXPIRATION_SET",
                                 "Set or clear an inventory lot's expiration/alert dates")
                         .build(),
-                EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_APPROVE", "Approve a purchase order")
-                        .build(),
                 EventTypeRegistration.write(
                                 "INVENTORY_PURCHASE_ORDER_ACCOUNTING_ERROR",
                                 "Record accounting error on PO GL posting failure")
                         .build(),
                 EventTypeRegistration.write(
                                 "INVENTORY_PURCHASE_ORDER_RECEIVE", "Record a receipt against a purchase order")
-                        .build(),
-                EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_REVISE", "Revise a purchase order")
-                        .build(),
-                EventTypeRegistration.write("INVENTORY_PURCHASE_ORDER_CANCEL", "Cancel a purchase order")
                         .build(),
 
                 // AsnController - 5 events
