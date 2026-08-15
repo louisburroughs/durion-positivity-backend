@@ -126,7 +126,7 @@ class PriceQuoteServiceImplTest {
     }
 
     @Test
-    void lettsALocationOverrideReplaceTheMsrp() {
+    void letsALocationOverrideReplaceTheMsrp() {
         stubBasePrice("100.00", "USD");
         stubLocationOverride("90.00");
 
