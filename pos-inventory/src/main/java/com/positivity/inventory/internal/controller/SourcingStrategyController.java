@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.sourcing.SourcingStrategyConfigRequest;
 import com.positivity.inventory.internal.dto.sourcing.SourcingStrategyConfigResponse;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.SourcingStrategyConfigService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,7 +46,7 @@ public class SourcingStrategyController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:admin"})
-    @PreAuthorize("hasAuthority('inventory:location:admin')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOCATION_ADMIN + "')")
     @Operation(
             operationId = "listSourcingStrategyConfigs",
             summary = "List sourcing strategy configurations",
@@ -83,7 +84,7 @@ public class SourcingStrategyController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:admin"})
-    @PreAuthorize("hasAuthority('inventory:location:admin')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOCATION_ADMIN + "')")
     @Operation(
             operationId = "upsertSourcingStrategyConfig",
             summary = "Upsert sourcing strategy configuration",
@@ -144,7 +145,7 @@ public class SourcingStrategyController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:admin"})
-    @PreAuthorize("hasAuthority('inventory:location:admin')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOCATION_ADMIN + "')")
     @Operation(
             operationId = "deactivateSourcingStrategyConfig",
             summary = "Deactivate sourcing strategy configuration",

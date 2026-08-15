@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.dto.LeadTimeView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.internal.enums.InventorySourceType;
 import com.positivity.inventory.internal.exception.InvalidParamCombinationException;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.InventoryAvailabilityService;
 import com.positivity.inventory.service.InventoryLeadTimeService;
 import com.positivity.shared.error.ApiError;
@@ -45,7 +46,7 @@ public class InventoryAvailabilityController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:on_hand:view"})
-    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "')")
     @Operation(
             operationId = "getAvailabilityByProduct",
             summary = "Query per-location inventory availability",
@@ -110,7 +111,8 @@ public class InventoryAvailabilityController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:on_hand:view", "inventory:on_hand:search"})
-    @PreAuthorize("hasAnyAuthority('inventory:on_hand:view','inventory:on_hand:search')")
+    @PreAuthorize("hasAnyAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "','"
+            + InventoryPermissionRegistry.INVENTORY_SEARCH + "')")
     @Operation(
             operationId = "listAvailabilityBySku",
             summary = "Query inventory availability by SKU (list form)",
@@ -195,7 +197,8 @@ public class InventoryAvailabilityController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:on_hand:view", "inventory:on_hand:search"})
-    @PreAuthorize("hasAnyAuthority('inventory:on_hand:view','inventory:on_hand:search')")
+    @PreAuthorize("hasAnyAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "','"
+            + InventoryPermissionRegistry.INVENTORY_SEARCH + "')")
     @Operation(
             operationId = "getAvailabilityBySku",
             summary = "Query inventory availability by SKU and location",
@@ -297,7 +300,8 @@ public class InventoryAvailabilityController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:on_hand:view", "inventory:on_hand:search"})
-    @PreAuthorize("hasAnyAuthority('inventory:on_hand:view','inventory:on_hand:search')")
+    @PreAuthorize("hasAnyAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "','"
+            + InventoryPermissionRegistry.INVENTORY_SEARCH + "')")
     @Operation(
             operationId = "getInventoryLeadTime",
             summary = "Query product lead time",
@@ -401,7 +405,8 @@ public class InventoryAvailabilityController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:adjustment:create", "inventory:adjustment:approve"})
-    @PreAuthorize("hasAnyAuthority('inventory:adjustment:create','inventory:adjustment:approve')")
+    @PreAuthorize("hasAnyAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_CREATE + "','"
+            + InventoryPermissionRegistry.ADJUSTMENT_APPROVE + "')")
     @Operation(
             operationId = "updateInventoryAvailability",
             summary = "Update inventory availability",

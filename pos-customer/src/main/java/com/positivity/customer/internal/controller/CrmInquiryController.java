@@ -63,7 +63,7 @@ public class CrmInquiryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.INQUIRY_VIEW})
-    @PreAuthorize("hasAuthority('crm:inquiry:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.INQUIRY_VIEW + "')")
     @EmitEvent(id = "CRM_INQUIRY_LIST", apiVersion = "1")
     public ResponseEntity<PagedResponse<InquiryResponse>> list(
             @RequestParam(name = "status", required = false) InquiryStatus status,
@@ -94,7 +94,7 @@ public class CrmInquiryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.INQUIRY_VIEW})
-    @PreAuthorize("hasAuthority('crm:inquiry:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.INQUIRY_VIEW + "')")
     @EmitEvent(id = "CRM_INQUIRY_GET", apiVersion = "1")
     public ResponseEntity<InquiryResponse> get(@PathVariable UUID inquiryId) {
         return ResponseEntity.ok(inquiryService.get(inquiryId));
@@ -126,7 +126,7 @@ public class CrmInquiryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.INQUIRY_MANAGE})
-    @PreAuthorize("hasAuthority('crm:inquiry:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.INQUIRY_MANAGE + "')")
     @EmitEvent(id = "CRM_INQUIRY_CAPTURE", apiVersion = "1")
     public ResponseEntity<InquiryResponse> capture(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -174,7 +174,7 @@ public class CrmInquiryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.INQUIRY_MANAGE})
-    @PreAuthorize("hasAuthority('crm:inquiry:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.INQUIRY_MANAGE + "')")
     @EmitEvent(id = "CRM_INQUIRY_ASSIGN", apiVersion = "1")
     public ResponseEntity<InquiryResponse> assign(
             @PathVariable UUID inquiryId, @RequestParam(name = "assignedTo", required = false) String assignedTo) {
@@ -211,7 +211,7 @@ public class CrmInquiryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.INQUIRY_MANAGE})
-    @PreAuthorize("hasAuthority('crm:inquiry:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.INQUIRY_MANAGE + "')")
     @EmitEvent(id = "CRM_INQUIRY_STATUS_UPDATE", apiVersion = "1")
     public ResponseEntity<InquiryResponse> updateStatus(
             @PathVariable UUID inquiryId,
@@ -254,7 +254,7 @@ public class CrmInquiryController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.INQUIRY_MANAGE})
-    @PreAuthorize("hasAuthority('crm:inquiry:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.INQUIRY_MANAGE + "')")
     @EmitEvent(id = "CRM_INQUIRY_CONVERT", apiVersion = "1")
     public ResponseEntity<InquiryResponse> convert(
             @PathVariable UUID inquiryId,

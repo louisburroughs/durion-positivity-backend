@@ -70,7 +70,7 @@ public class CrmTagController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.TAG_VIEW})
-    @PreAuthorize("hasAuthority('crm:tag:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.TAG_VIEW + "')")
     @EmitEvent(id = "CRM_TAG_LIST", apiVersion = "1")
     public ResponseEntity<List<PartyTagResponse>> listTags(
             @RequestParam(name = "includeInactive", defaultValue = "false") boolean includeInactive) {
@@ -99,7 +99,7 @@ public class CrmTagController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.TAG_VIEW})
-    @PreAuthorize("hasAuthority('crm:tag:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.TAG_VIEW + "')")
     @EmitEvent(id = "CRM_TAG_GET", apiVersion = "1")
     public ResponseEntity<PartyTagResponse> getTag(@PathVariable UUID tagId) {
         return ResponseEntity.ok(partyTagService.getTag(tagId));
@@ -128,7 +128,7 @@ public class CrmTagController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.TAG_MANAGE})
-    @PreAuthorize("hasAuthority('crm:tag:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.TAG_MANAGE + "')")
     @EmitEvent(id = "CRM_TAG_CREATE", apiVersion = "1")
     public ResponseEntity<PartyTagResponse> createTag(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -174,7 +174,7 @@ public class CrmTagController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.TAG_MANAGE})
-    @PreAuthorize("hasAuthority('crm:tag:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.TAG_MANAGE + "')")
     @EmitEvent(id = "CRM_TAG_UPDATE", apiVersion = "1")
     public ResponseEntity<PartyTagResponse> updateTag(
             @PathVariable UUID tagId,
@@ -214,7 +214,7 @@ public class CrmTagController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.TAG_MANAGE})
-    @PreAuthorize("hasAuthority('crm:tag:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.TAG_MANAGE + "')")
     @EmitEvent(id = "CRM_TAG_DELETE", apiVersion = "1")
     public ResponseEntity<Void> deleteTag(@PathVariable UUID tagId) {
         partyTagService.deleteTag(tagId);
@@ -247,7 +247,7 @@ public class CrmTagController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.TAG_VIEW})
-    @PreAuthorize("hasAuthority('crm:tag:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.TAG_VIEW + "')")
     @EmitEvent(id = "CRM_PARTY_TAG_LIST", apiVersion = "1")
     public ResponseEntity<List<PartyTagAssignmentResponse>> listPartyTags(@PathVariable UUID partyId) {
         return ResponseEntity.ok(partyTagService.listPartyTags(partyId));
@@ -280,7 +280,7 @@ public class CrmTagController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.TAG_ASSIGN})
-    @PreAuthorize("hasAuthority('crm:tag:assign')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.TAG_ASSIGN + "')")
     @EmitEvent(id = "CRM_PARTY_TAG_ASSIGN", apiVersion = "1")
     public ResponseEntity<PartyTagAssignmentResponse> assignTag(
             @PathVariable UUID partyId,
@@ -318,7 +318,7 @@ public class CrmTagController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.TAG_ASSIGN})
-    @PreAuthorize("hasAuthority('crm:tag:assign')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.TAG_ASSIGN + "')")
     @EmitEvent(id = "CRM_PARTY_TAG_REMOVE", apiVersion = "1")
     public ResponseEntity<Void> removeTag(@PathVariable UUID partyId, @PathVariable UUID tagId) {
         partyTagService.removeTag(partyId, tagId);

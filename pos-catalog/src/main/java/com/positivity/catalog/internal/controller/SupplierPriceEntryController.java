@@ -2,6 +2,7 @@ package com.positivity.catalog.internal.controller;
 
 import com.positivity.catalog.internal.dto.SupplierPriceEntryDto;
 import com.positivity.catalog.internal.dto.SupplierPriceImportStatusDto;
+import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.service.SupplierPriceEntryService;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
@@ -53,7 +54,7 @@ public class SupplierPriceEntryController {
 
     private final SupplierPriceEntryService supplierPriceEntryService;
 
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('catalog:supplier_cost:read')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.SUPPLIER_COST_READ + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "catalog:supplier_cost:read"})
@@ -134,7 +135,7 @@ public class SupplierPriceEntryController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('catalog:supplier_cost:read')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.SUPPLIER_COST_READ + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "catalog:supplier_cost:read"})
@@ -195,7 +196,7 @@ public class SupplierPriceEntryController {
                 supplierPriceEntryService.findHistory(productId, vendorProfileId, PageRequest.of(page, size)));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('catalog:supplier_cost:read')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.SUPPLIER_COST_READ + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "catalog:supplier_cost:read"})

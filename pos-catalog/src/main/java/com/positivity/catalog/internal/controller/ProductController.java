@@ -19,6 +19,7 @@ import com.positivity.catalog.internal.dto.ProductReplacementRequest;
 import com.positivity.catalog.internal.dto.ProductTrackingLevelUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ProductUpdateRequestDto;
 import com.positivity.catalog.internal.dto.ServiceDto;
+import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.service.CatalogService;
 import com.positivity.catalog.service.LocationPriceOverrideService;
 import com.positivity.catalog.service.ProductCodeLookupService;
@@ -218,7 +219,7 @@ public class ProductController {
         return ResponseEntity.ok(locationPriceOverrideService.getEffectivePrice(locationId, productId));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('pricing:override:approve')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRICING_OVERRIDE_APPROVE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "pricing:override:approve"})
@@ -274,7 +275,7 @@ public class ProductController {
         return ResponseEntity.ok(locationPriceOverrideService.approveOverride(overrideId, request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('pricing:override:approve')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRICING_OVERRIDE_APPROVE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "pricing:override:approve"})
@@ -915,7 +916,8 @@ public class ProductController {
         return catalogService.getNonInventoryProductsByName(name);
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW') or hasAuthority('product:lifecycle:update')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW') or hasAuthority('"
+            + CatalogPermissions.PRODUCT_LIFECYCLE_UPDATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW", "product:lifecycle:update"})
@@ -945,7 +947,8 @@ public class ProductController {
         return ResponseEntity.ok(productLifecycleService.getLifecycle(productId));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW') or hasAuthority('product:lifecycle:update')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_VIEW') or hasAuthority('"
+            + CatalogPermissions.PRODUCT_LIFECYCLE_UPDATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_VIEW", "product:lifecycle:update"})
@@ -969,7 +972,8 @@ public class ProductController {
         return ResponseEntity.ok(productLifecycleService.getReplacementProducts(productId));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT') or hasAuthority('product:lifecycle:update')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT') or hasAuthority('"
+            + CatalogPermissions.PRODUCT_LIFECYCLE_UPDATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT", "product:lifecycle:update"})
@@ -1024,7 +1028,8 @@ public class ProductController {
         return ResponseEntity.ok(productLifecycleService.updateLifecycle(productId, request));
     }
 
-    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT') or hasAuthority('product:lifecycle:update')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CATALOG_EDIT') or hasAuthority('"
+            + CatalogPermissions.PRODUCT_LIFECYCLE_UPDATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"ROLE_ADMIN", "ROLE_CATALOG_EDIT", "product:lifecycle:update"})

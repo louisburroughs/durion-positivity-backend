@@ -6,6 +6,7 @@ import com.positivity.price.internal.dto.ApplyPromotionResponse;
 import com.positivity.price.internal.dto.CreatePromotionOfferRequest;
 import com.positivity.price.internal.dto.PromotionOfferMapper;
 import com.positivity.price.internal.dto.PromotionOfferResponse;
+import com.positivity.price.internal.security.PricingPermissions;
 import com.positivity.price.service.PromotionOfferService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -53,7 +54,7 @@ public class PromotionOfferController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"pricing:promotion:manage"})
-    @PreAuthorize("hasAuthority('pricing:promotion:manage')")
+    @PreAuthorize("hasAuthority('" + PricingPermissions.PROMOTION_MANAGE + "')")
     @Operation(operationId = "createPromotionOffer", summary = "Create Promotion Offer", description = """
                     Creates a promotion offer in DRAFT status with a unique promo code, a validity window, and a \
                     discount policy.
@@ -105,7 +106,7 @@ public class PromotionOfferController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"pricing:promotion:view"})
-    @PreAuthorize("hasAuthority('pricing:promotion:view')")
+    @PreAuthorize("hasAuthority('" + PricingPermissions.PROMOTION_VIEW + "')")
     @Operation(operationId = "getPromotionOfferById", summary = "Get Promotion Offer By ID", description = """
                     Returns the full promotion offer, including status, discount policy, validity window, and usage \
                     counters.
@@ -128,7 +129,7 @@ public class PromotionOfferController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"pricing:promotion:view"})
-    @PreAuthorize("hasAuthority('pricing:promotion:view')")
+    @PreAuthorize("hasAuthority('" + PricingPermissions.PROMOTION_VIEW + "')")
     @Operation(operationId = "getPromotionOfferByCode", summary = "Get Promotion Offer By Code", description = """
                     Returns the promotion offer that owns the supplied customer-facing promo code.
                     Use this tool when only the promo code from marketing material is known; use \
@@ -152,7 +153,7 @@ public class PromotionOfferController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"pricing:promotion:manage"})
-    @PreAuthorize("hasAuthority('pricing:promotion:manage')")
+    @PreAuthorize("hasAuthority('" + PricingPermissions.PROMOTION_MANAGE + "')")
     @Operation(operationId = "activatePromotionOffer", summary = "Activate Promotion Offer", description = """
                     Transitions a promotion offer to ACTIVE so applyPromotionOffer will accept its promo code within \
                     the validity window.
@@ -179,7 +180,7 @@ public class PromotionOfferController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"pricing:promotion:manage"})
-    @PreAuthorize("hasAuthority('pricing:promotion:manage')")
+    @PreAuthorize("hasAuthority('" + PricingPermissions.PROMOTION_MANAGE + "')")
     @Operation(operationId = "deactivatePromotionOffer", summary = "Deactivate Promotion Offer", description = """
                     Transitions an ACTIVE promotion offer to INACTIVE so its promo code is no longer accepted by \
                     applyPromotionOffer.
@@ -206,7 +207,7 @@ public class PromotionOfferController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"pricing:promotion:apply"})
-    @PreAuthorize("hasAuthority('pricing:promotion:apply')")
+    @PreAuthorize("hasAuthority('" + PricingPermissions.PROMOTION_APPLY + "')")
     @Operation(
             operationId = "applyPromotionOffer",
             summary = "Apply Promotion Offer During Estimate Pricing",

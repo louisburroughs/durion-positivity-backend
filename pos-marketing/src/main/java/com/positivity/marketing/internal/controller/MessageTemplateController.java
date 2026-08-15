@@ -86,7 +86,7 @@ public class MessageTemplateController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.TEMPLATE_VIEW})
-    @PreAuthorize("hasAuthority('marketing:template:view')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.TEMPLATE_VIEW + "')")
     @EmitEvent(id = "MARKETING_TEMPLATE_LIST", apiVersion = "1")
     public ResponseEntity<List<MessageTemplateResponse>> list(
             @RequestParam(name = "channel", required = false) CampaignChannel channel,
@@ -123,7 +123,7 @@ public class MessageTemplateController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.TEMPLATE_VIEW})
-    @PreAuthorize("hasAuthority('marketing:template:view')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.TEMPLATE_VIEW + "')")
     @EmitEvent(id = "MARKETING_TEMPLATE_GET", apiVersion = "1")
     public ResponseEntity<MessageTemplateResponse> get(@PathVariable UUID templateId) {
         return ResponseEntity.ok(templateService.get(templateId));
@@ -169,7 +169,7 @@ public class MessageTemplateController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.TEMPLATE_MANAGE})
-    @PreAuthorize("hasAuthority('marketing:template:manage')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.TEMPLATE_MANAGE + "')")
     @EmitEvent(id = "MARKETING_TEMPLATE_CREATE", apiVersion = "1")
     public ResponseEntity<MessageTemplateResponse> create(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -231,7 +231,7 @@ public class MessageTemplateController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.TEMPLATE_MANAGE})
-    @PreAuthorize("hasAuthority('marketing:template:manage')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.TEMPLATE_MANAGE + "')")
     @EmitEvent(id = "MARKETING_TEMPLATE_UPDATE", apiVersion = "1")
     public ResponseEntity<MessageTemplateResponse> update(
             @PathVariable UUID templateId,
@@ -284,7 +284,7 @@ public class MessageTemplateController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.TEMPLATE_MANAGE})
-    @PreAuthorize("hasAuthority('marketing:template:manage')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.TEMPLATE_MANAGE + "')")
     @EmitEvent(id = "MARKETING_TEMPLATE_DELETE", apiVersion = "1")
     public ResponseEntity<Void> delete(@PathVariable UUID templateId) {
         templateService.delete(templateId);

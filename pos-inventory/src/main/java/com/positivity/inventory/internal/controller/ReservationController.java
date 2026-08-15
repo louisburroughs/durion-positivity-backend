@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.PromoteAllocationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.ReservationService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,7 +42,7 @@ public class ReservationController {
 
     @PostMapping()
     @EmitEvent(id = "INVENTORY_RESERVATION_CREATE_OR_UPDATE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_CREATE + "')")
     @Operation(
             operationId = "createOrUpdateReservation",
             summary = "Create or update a reservation",
@@ -107,7 +108,7 @@ public class ReservationController {
 
     @PostMapping("/{allocationId}/promote")
     @EmitEvent(id = "INVENTORY_ALLOCATION_PROMOTE_HARD", apiVersion = "1")
-    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_CREATE + "')")
     @Operation(
             operationId = "promoteReservationAllocation",
             summary = "Promote allocation to hard",
@@ -178,7 +179,7 @@ public class ReservationController {
 
     @DeleteMapping("/{workorderLineId}")
     @EmitEvent(id = "INVENTORY_RESERVATION_CANCEL", apiVersion = "1")
-    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_CREATE + "')")
     @Operation(
             operationId = "cancelReservation",
             summary = "Cancel reservation by workorder line",

@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.cyclecount.schedule.CreateCycleCountScheduleRequest;
 import com.positivity.inventory.internal.dto.cyclecount.schedule.CycleCountScheduleResponse;
 import com.positivity.inventory.internal.dto.cyclecount.schedule.UpdateCycleCountScheduleRequest;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.CycleCountScheduleService;
 import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,7 +50,7 @@ public class CycleCountScheduleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:cycle_count:initiate"})
-    @PreAuthorize("hasAuthority('inventory:cycle_count:initiate')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_INITIATE + "')")
     @Operation(
             operationId = "createCycleCountSchedule",
             summary = "Create cycle count schedule",
@@ -109,7 +110,7 @@ public class CycleCountScheduleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:cycle_count:view"})
-    @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_VIEW + "')")
     @Operation(
             operationId = "listCycleCountSchedules",
             summary = "List cycle count schedules",
@@ -150,7 +151,7 @@ public class CycleCountScheduleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:cycle_count:view"})
-    @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_VIEW + "')")
     @Operation(
             operationId = "getCycleCountSchedule",
             summary = "Get cycle count schedule",
@@ -184,7 +185,7 @@ public class CycleCountScheduleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:cycle_count:initiate"})
-    @PreAuthorize("hasAuthority('inventory:cycle_count:initiate')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_INITIATE + "')")
     @Operation(
             operationId = "updateCycleCountSchedule",
             summary = "Update cycle count schedule",
@@ -238,7 +239,7 @@ public class CycleCountScheduleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:cycle_count:initiate"})
-    @PreAuthorize("hasAuthority('inventory:cycle_count:initiate')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_INITIATE + "')")
     @Operation(
             operationId = "deactivateCycleCountSchedule",
             summary = "Deactivate cycle count schedule",

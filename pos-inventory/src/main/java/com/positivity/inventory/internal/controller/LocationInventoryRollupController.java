@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.inventory.internal.dto.rollup.LocationInventoryRollupResponse;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.LocationInventoryRollupService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,7 +34,7 @@ public class LocationInventoryRollupController {
     private final LocationInventoryRollupService locationInventoryRollupService;
 
     @GetMapping("/{locationId}/inventory-rollup")
-    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:on_hand:view"})

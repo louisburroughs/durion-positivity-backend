@@ -3,6 +3,7 @@ package com.positivity.price.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.price.internal.dto.CreateRestrictionRuleRequest;
 import com.positivity.price.internal.dto.RestrictionRuleResponse;
+import com.positivity.price.internal.security.PricingPermissions;
 import com.positivity.price.service.RestrictionRuleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -63,7 +64,7 @@ public class RestrictionRuleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"pricing:restriction:manage"})
-    @PreAuthorize("hasAuthority('pricing:restriction:manage')")
+    @PreAuthorize("hasAuthority('" + PricingPermissions.RESTRICTION_MANAGE + "')")
     @PostMapping
     public ResponseEntity<@NonNull RestrictionRuleResponse> createRule(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -155,7 +156,7 @@ public class RestrictionRuleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"pricing:restriction:manage"})
-    @PreAuthorize("hasAuthority('pricing:restriction:manage')")
+    @PreAuthorize("hasAuthority('" + PricingPermissions.RESTRICTION_MANAGE + "')")
     @DeleteMapping("/{ruleId}")
     public ResponseEntity<@NonNull RestrictionRuleResponse> deactivateRule(@PathVariable @NonNull UUID ruleId) {
         log.info("DELETE /v1/price/restrictions/rules/{}", ruleId);

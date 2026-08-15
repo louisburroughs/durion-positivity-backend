@@ -2,6 +2,7 @@ package com.positivity.customer.internal.controller;
 
 import com.positivity.customer.internal.dto.PromotionRedemptionResponse;
 import com.positivity.customer.internal.dto.RecordRedemptionRequest;
+import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.service.PromotionRedemptionService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -70,7 +71,7 @@ public class PromotionRedemptionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"crm:promotion_redemption:record"})
-    @PreAuthorize("hasAuthority('crm:promotion_redemption:record')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PROMOTION_REDEMPTION_RECORD + "')")
     @EmitEvent(id = "PROMOTION_REDEMPTION_RECORD", apiVersion = "1")
     public ResponseEntity<PromotionRedemptionResponse> recordRedemption(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -122,7 +123,7 @@ public class PromotionRedemptionController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"crm:promotion_redemption:view"})
-    @PreAuthorize("hasAuthority('crm:promotion_redemption:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PROMOTION_REDEMPTION_VIEW + "')")
     @EmitEvent(id = "PROMOTION_REDEMPTION_LIST", apiVersion = "1")
     public ResponseEntity<List<PromotionRedemptionResponse>> getRedemptionsByCustomer(@PathVariable UUID customerId) {
         List<PromotionRedemptionResponse> response = promotionRedemptionService.getRedemptionsByCustomer(customerId);

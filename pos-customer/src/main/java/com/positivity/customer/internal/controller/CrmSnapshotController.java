@@ -104,7 +104,7 @@ public class CrmSnapshotController {
                 @ApiResponse(responseCode = "404", description = "Party not found")
             })
     @GetMapping("/party/{partyId}/billing-rules")
-    @PreAuthorize("hasAuthority('crm:party:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.PARTY_VIEW + "')")
     @EmitEvent(id = "CRM_SNAPSHOT_BILLING_RULES_GET", apiVersion = "1")
     public ResponseEntity<BillingRuleRef> getPartyBillingRules(
             @Parameter(description = "Party ID (UUID)") @PathVariable UUID partyId) {

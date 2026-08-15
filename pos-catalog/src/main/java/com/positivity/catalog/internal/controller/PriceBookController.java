@@ -6,6 +6,7 @@ import com.positivity.catalog.internal.dto.PriceBookRuleCreateRequestDto;
 import com.positivity.catalog.internal.dto.PriceBookRuleDto;
 import com.positivity.catalog.internal.dto.ResolvePriceRequestDto;
 import com.positivity.catalog.internal.dto.ResolvePriceResponseDto;
+import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.service.PriceBookService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,7 +42,7 @@ public class PriceBookController {
         this.priceBookService = priceBookService;
     }
 
-    @PreAuthorize("hasAuthority('catalog:price_book:write')")
+    @PreAuthorize("hasAuthority('" + CatalogPermissions.PRICE_BOOK_WRITE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:price_book:write"})
@@ -86,7 +87,7 @@ public class PriceBookController {
         return ResponseEntity.status(HttpStatus.CREATED).body(priceBookService.createPriceBook(request));
     }
 
-    @PreAuthorize("hasAuthority('catalog:price_book:read')")
+    @PreAuthorize("hasAuthority('" + CatalogPermissions.PRICE_BOOK_READ + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:price_book:read"})
@@ -109,7 +110,7 @@ public class PriceBookController {
         return ResponseEntity.ok(priceBookService.getPriceBook(priceBookId));
     }
 
-    @PreAuthorize("hasAuthority('catalog:price_book:write')")
+    @PreAuthorize("hasAuthority('" + CatalogPermissions.PRICE_BOOK_WRITE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:price_book:write"})
@@ -154,7 +155,7 @@ public class PriceBookController {
         return ResponseEntity.ok(priceBookService.updatePriceBook(priceBookId, request));
     }
 
-    @PreAuthorize("hasAuthority('catalog:price_book:write')")
+    @PreAuthorize("hasAuthority('" + CatalogPermissions.PRICE_BOOK_WRITE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:price_book:write"})
@@ -207,7 +208,7 @@ public class PriceBookController {
         return ResponseEntity.status(HttpStatus.CREATED).body(priceBookService.createRule(priceBookId, request));
     }
 
-    @PreAuthorize("hasAuthority('catalog:price_book:write')")
+    @PreAuthorize("hasAuthority('" + CatalogPermissions.PRICE_BOOK_WRITE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:price_book:write"})
@@ -261,7 +262,7 @@ public class PriceBookController {
         return ResponseEntity.ok(priceBookService.updateRule(priceBookId, ruleId, request));
     }
 
-    @PreAuthorize("hasAuthority('catalog:price_book:write')")
+    @PreAuthorize("hasAuthority('" + CatalogPermissions.PRICE_BOOK_WRITE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:price_book:write"})
@@ -286,7 +287,7 @@ public class PriceBookController {
         return ResponseEntity.noContent().build();
     }
 
-    @PreAuthorize("hasAuthority('catalog:price_book:read')")
+    @PreAuthorize("hasAuthority('" + CatalogPermissions.PRICE_BOOK_READ + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:price_book:read"})
@@ -312,7 +313,7 @@ public class PriceBookController {
         return ResponseEntity.ok(priceBookService.listRules(priceBookId));
     }
 
-    @PreAuthorize("hasAuthority('catalog:price_book:read')")
+    @PreAuthorize("hasAuthority('" + CatalogPermissions.PRICE_BOOK_READ + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:price_book:read"})

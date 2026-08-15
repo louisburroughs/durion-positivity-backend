@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.supplierhint.SupplierStockHintView;
 import com.positivity.inventory.internal.enums.SupplierHintIdentityKind;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.SupplierStockHintService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,7 +45,7 @@ public class SupplierStockHintController {
 
     @GetMapping("/byProduct/{productId}")
     @EmitEvent(id = "INVENTORY_SUPPLIER_STOCK_HINT_LIST_BY_PRODUCT", apiVersion = "1")
-    @PreAuthorize("hasAuthority('inventory:supplier_stock_hint:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.SUPPLIER_STOCK_HINT_VIEW + "')")
     @Operation(
             operationId = "listSupplierStockHintsByProduct",
             summary = "List vendor availability hints for a product",
@@ -86,7 +87,7 @@ public class SupplierStockHintController {
 
     @GetMapping("/byCode")
     @EmitEvent(id = "INVENTORY_SUPPLIER_STOCK_HINT_LIST_BY_CODE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('inventory:supplier_stock_hint:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.SUPPLIER_STOCK_HINT_VIEW + "')")
     @Operation(
             operationId = "listSupplierStockHintsByCode",
             summary = "List vendor availability hints for an article code",

@@ -48,7 +48,7 @@ public class ReplenishmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:on_hand:view"})
-    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "')")
     @Operation(
             operationId = "listReplenishmentTasks",
             summary = "List replenishment tasks",
@@ -79,7 +79,7 @@ public class ReplenishmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:on_hand:view"})
-    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "')")
     @Operation(
             operationId = "listReplenishmentPolicies",
             summary = "List replenishment policies",
@@ -276,7 +276,7 @@ public class ReplenishmentController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:on_hand:view"})
-    @PreAuthorize("hasAuthority('inventory:on_hand:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.INVENTORY_VIEW + "')")
     @Operation(
             operationId = "listReplenishmentNeeds",
             summary = "Replenishment needs report",

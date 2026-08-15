@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.PutawayExecutionRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayExecutionResponse;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.PutawayExecuteService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -35,7 +36,7 @@ public class PutawayExecuteController {
 
     @PostMapping("/tasks/{taskId}/execute")
     @EmitEvent(id = "INVENTORY_PUTAWAY_EXECUTE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('inventory:putaway:execute')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PUTAWAY_EXECUTE + "')")
     @Operation(
             operationId = "executePutaway",
             summary = "Execute Putaway Task",

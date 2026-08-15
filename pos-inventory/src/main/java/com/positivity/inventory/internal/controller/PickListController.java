@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.dto.picklist.PickListResponse;
 import com.positivity.inventory.internal.dto.picklist.PickTaskResponse;
 import com.positivity.inventory.internal.dto.picklist.UpdatePickListStatusRequest;
 import com.positivity.inventory.internal.enums.PickListStatus;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.PickListService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,7 +48,7 @@ public class PickListController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:pick_list:create"})
-    @PreAuthorize("hasAuthority('inventory:pick_list:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PICK_LIST_CREATE + "')")
     @Operation(
             operationId = "createPickList",
             summary = "Create pick list",
@@ -106,7 +107,7 @@ public class PickListController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:pick_list:view"})
-    @PreAuthorize("hasAuthority('inventory:pick_list:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PICK_LIST_VIEW + "')")
     @Operation(
             operationId = "getPickList",
             summary = "Get pick list",
@@ -143,7 +144,7 @@ public class PickListController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:pick_list:view"})
-    @PreAuthorize("hasAuthority('inventory:pick_list:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PICK_LIST_VIEW + "')")
     @Operation(
             operationId = "listPickListsForWorkorder",
             summary = "List pick lists for workorder",
@@ -182,7 +183,7 @@ public class PickListController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:pick_list:execute"})
-    @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PICK_LIST_EXECUTE + "')")
     @Operation(
             operationId = "releasePickList",
             summary = "Release pick list",
@@ -221,7 +222,7 @@ public class PickListController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:pick_list:execute"})
-    @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PICK_LIST_EXECUTE + "')")
     @Operation(
             operationId = "confirmPickTask",
             summary = "Confirm pick task",
@@ -302,7 +303,7 @@ public class PickListController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:pick_list:view"})
-    @PreAuthorize("hasAuthority('inventory:pick_list:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PICK_LIST_VIEW + "')")
     @Operation(
             operationId = "listPickTasksForPickList",
             summary = "List pick tasks for pick list",
@@ -343,7 +344,7 @@ public class PickListController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:pick_list:execute"})
-    @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PICK_LIST_EXECUTE + "')")
     @Operation(
             operationId = "updatePickListStatus",
             summary = "Update pick list status",
@@ -406,7 +407,7 @@ public class PickListController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:pick_list:execute"})
-    @PreAuthorize("hasAuthority('inventory:pick_list:execute')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PICK_LIST_EXECUTE + "')")
     @Operation(
             operationId = "cancelPickList",
             summary = "Cancel pick list",

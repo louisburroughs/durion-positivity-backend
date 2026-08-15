@@ -458,4 +458,30 @@ public class InventoryPermissionRegistry {
     public static List<String> transferOrderPermissions() {
         return Arrays.asList(TRANSFER_CREATE, TRANSFER_VIEW, TRANSFER_DISPATCH, TRANSFER_RECEIVE, TRANSFER_SHORT_CLOSE);
     }
+
+    // Receiving, purchase-order, scrap, shortage and ledger permissions, previously written as string literals at each
+    // call site.
+    public static final String ALLOCATIONS_REALLOCATE = "inventory:allocations:reallocate";
+    public static final String ASN_CREATE = "inventory:asn:create";
+    public static final String ASN_VIEW = "inventory:asn:view";
+    public static final String GOODS_RECEIPT_CREATE = "inventory:goods_receipt:create";
+    public static final String GOODS_RECEIPT_VIEW = "inventory:goods_receipt:view";
+    public static final String ISSUE_PARTS = "inventory:issue:parts";
+    public static final String LEDGER_VIEW = "inventory:ledger:view";
+    public static final String LOCATION_SYNC = "inventory:location:sync";
+    public static final String PURCHASE_ORDER_APPROVE = "inventory:purchase_order:approve";
+    public static final String PURCHASE_ORDER_CREATE = "inventory:purchase_order:create";
+    public static final String PURCHASE_ORDER_RECEIVE = "inventory:purchase_order:receive";
+    public static final String PURCHASE_ORDER_VIEW = "inventory:purchase_order:view";
+    public static final String RECEIVING_COMPLETE = "inventory:receiving:complete";
+    public static final String RECEIVING_CREATE = "inventory:receiving:create";
+    public static final String RECEIVING_VIEW = "inventory:receiving:view";
+    public static final String RETURN_VIEW = "inventory:return:view";
+    public static final String RETURN_WRITE = "inventory:return:write";
+    public static final String SCRAP_APPROVE = "inventory:scrap:approve";
+    public static final String SCRAP_CREATE = "inventory:scrap:create";
+    public static final String SCRAP_VIEW = "inventory:scrap:view";
+    public static final String SHORTAGE_RESOLVE = "inventory:shortage:resolve";
+    public static final String SHORTAGE_VIEW = "inventory:shortage:view";
+    public static final String SUPPLIER_STOCK_HINT_VIEW = "inventory:supplier_stock_hint:view";
 }

@@ -67,7 +67,7 @@ public class CrmInteractionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.INTERACTION_VIEW})
-    @PreAuthorize("hasAuthority('crm:interaction:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.INTERACTION_VIEW + "')")
     @EmitEvent(id = "CRM_INTERACTION_LIST", apiVersion = "1")
     public ResponseEntity<PagedResponse<CustomerInteractionResponse>> list(
             @PathVariable UUID partyId,
@@ -103,7 +103,7 @@ public class CrmInteractionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.INTERACTION_MANAGE})
-    @PreAuthorize("hasAuthority('crm:interaction:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.INTERACTION_MANAGE + "')")
     @EmitEvent(id = "CRM_INTERACTION_RECORD", apiVersion = "1")
     public ResponseEntity<CustomerInteractionResponse> record(
             @PathVariable UUID partyId,

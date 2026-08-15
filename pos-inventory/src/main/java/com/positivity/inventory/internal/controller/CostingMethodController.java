@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.costing.CostingMethodConfigRequest;
 import com.positivity.inventory.internal.dto.costing.CostingMethodConfigResponse;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.CostingMethodConfigService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,7 +48,7 @@ public class CostingMethodController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:admin"})
-    @PreAuthorize("hasAuthority('inventory:location:admin')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOCATION_ADMIN + "')")
     @Operation(
             operationId = "listCostingMethodConfigs",
             summary = "List costing method configurations",
@@ -85,7 +86,7 @@ public class CostingMethodController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:admin"})
-    @PreAuthorize("hasAuthority('inventory:location:admin')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOCATION_ADMIN + "')")
     @Operation(
             operationId = "upsertCostingMethodConfig",
             summary = "Upsert costing method configuration",

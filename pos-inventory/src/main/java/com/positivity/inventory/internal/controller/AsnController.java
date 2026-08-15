@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.dto.asn.AsnResponse;
 import com.positivity.inventory.internal.dto.asn.CreateAsnRequest;
 import com.positivity.inventory.internal.dto.asn.CreateGoodsReceiptRequest;
 import com.positivity.inventory.internal.dto.asn.GoodsReceiptResponse;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.AsnService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
@@ -39,7 +40,7 @@ public class AsnController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:asn:create"})
-    @PreAuthorize("hasAuthority('inventory:asn:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.ASN_CREATE + "')")
     @EmitEvent(id = "INVENTORY_ASN_CREATE", apiVersion = "1")
     @Operation(
             operationId = "createAsn",
@@ -123,7 +124,7 @@ public class AsnController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:asn:view"})
-    @PreAuthorize("hasAuthority('inventory:asn:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.ASN_VIEW + "')")
     @EmitEvent(id = "INVENTORY_ASN_GET", apiVersion = "1")
     @Operation(
             operationId = "getAsn",
@@ -160,7 +161,7 @@ public class AsnController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:goods_receipt:create"})
-    @PreAuthorize("hasAuthority('inventory:goods_receipt:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.GOODS_RECEIPT_CREATE + "')")
     @EmitEvent(id = "INVENTORY_GOODS_RECEIPT_CREATE", apiVersion = "1")
     @Operation(
             operationId = "createGoodsReceipt",
@@ -251,7 +252,7 @@ public class AsnController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:goods_receipt:view"})
-    @PreAuthorize("hasAuthority('inventory:goods_receipt:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.GOODS_RECEIPT_VIEW + "')")
     @EmitEvent(id = "INVENTORY_GOODS_RECEIPT_GET", apiVersion = "1")
     @Operation(
             operationId = "getGoodsReceipt",

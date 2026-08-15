@@ -6,6 +6,7 @@ import com.positivity.price.internal.dto.EligibilityContext;
 import com.positivity.price.internal.dto.EligibilityDecisionResponse;
 import com.positivity.price.internal.dto.EligibilityRuleResponse;
 import com.positivity.price.internal.dto.PromotionEligibilityRuleMapper;
+import com.positivity.price.internal.security.PricingPermissions;
 import com.positivity.price.service.EligibilityEvaluationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -45,7 +46,7 @@ public class PromotionEligibilityRuleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"pricing:promotion:manage"})
-    @PreAuthorize("hasAuthority('pricing:promotion:manage')")
+    @PreAuthorize("hasAuthority('" + PricingPermissions.PROMOTION_MANAGE + "')")
     @Operation(
             operationId = "createPromotionEligibilityRule",
             summary = "Add Eligibility Rule To Promotion Offer",
@@ -96,7 +97,7 @@ public class PromotionEligibilityRuleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"pricing:promotion:view"})
-    @PreAuthorize("hasAuthority('pricing:promotion:view')")
+    @PreAuthorize("hasAuthority('" + PricingPermissions.PROMOTION_VIEW + "')")
     @Operation(
             operationId = "listPromotionEligibilityRules",
             summary = "List Eligibility Rules For Promotion Offer",
@@ -127,7 +128,7 @@ public class PromotionEligibilityRuleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"pricing:promotion:manage"})
-    @PreAuthorize("hasAuthority('pricing:promotion:manage')")
+    @PreAuthorize("hasAuthority('" + PricingPermissions.PROMOTION_MANAGE + "')")
     @Operation(
             operationId = "deletePromotionEligibilityRule",
             summary = "Delete Promotion Eligibility Rule",
@@ -156,7 +157,7 @@ public class PromotionEligibilityRuleController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"pricing:promotion:apply"})
-    @PreAuthorize("hasAuthority('pricing:promotion:apply')")
+    @PreAuthorize("hasAuthority('" + PricingPermissions.PROMOTION_APPLY + "')")
     @Operation(
             operationId = "evaluatePromotionEligibility",
             summary = "Evaluate Promotion Eligibility",

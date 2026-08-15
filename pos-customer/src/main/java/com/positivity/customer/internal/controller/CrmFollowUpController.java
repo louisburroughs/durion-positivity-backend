@@ -71,7 +71,7 @@ public class CrmFollowUpController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.FOLLOWUP_VIEW})
-    @PreAuthorize("hasAuthority('crm:followup:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.FOLLOWUP_VIEW + "')")
     @EmitEvent(id = "CRM_FOLLOWUP_QUEUE", apiVersion = "1")
     public ResponseEntity<PagedResponse<FollowUpTaskResponse>> queue(
             @RequestParam(name = "status", required = false) FollowUpStatus status,
@@ -104,7 +104,7 @@ public class CrmFollowUpController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.FOLLOWUP_VIEW})
-    @PreAuthorize("hasAuthority('crm:followup:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.FOLLOWUP_VIEW + "')")
     @EmitEvent(id = "CRM_FOLLOWUP_GET", apiVersion = "1")
     public ResponseEntity<FollowUpTaskResponse> get(@PathVariable UUID taskId) {
         return ResponseEntity.ok(followUpTaskService.get(taskId));
@@ -133,7 +133,7 @@ public class CrmFollowUpController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.FOLLOWUP_VIEW})
-    @PreAuthorize("hasAuthority('crm:followup:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.FOLLOWUP_VIEW + "')")
     @EmitEvent(id = "CRM_FOLLOWUP_LIST", apiVersion = "1")
     public ResponseEntity<PagedResponse<FollowUpTaskResponse>> listForParty(
             @PathVariable UUID partyId,
@@ -169,7 +169,7 @@ public class CrmFollowUpController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.FOLLOWUP_MANAGE})
-    @PreAuthorize("hasAuthority('crm:followup:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.FOLLOWUP_MANAGE + "')")
     @EmitEvent(id = "CRM_FOLLOWUP_CREATE", apiVersion = "1")
     public ResponseEntity<FollowUpTaskResponse> create(
             @PathVariable UUID partyId,
@@ -219,7 +219,7 @@ public class CrmFollowUpController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.FOLLOWUP_MANAGE})
-    @PreAuthorize("hasAuthority('crm:followup:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.FOLLOWUP_MANAGE + "')")
     @EmitEvent(id = "CRM_FOLLOWUP_ASSIGN", apiVersion = "1")
     public ResponseEntity<FollowUpTaskResponse> assign(
             @PathVariable UUID taskId, @RequestParam(name = "assignedTo", required = false) String assignedTo) {
@@ -252,7 +252,7 @@ public class CrmFollowUpController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.FOLLOWUP_MANAGE})
-    @PreAuthorize("hasAuthority('crm:followup:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.FOLLOWUP_MANAGE + "')")
     @EmitEvent(id = "CRM_FOLLOWUP_COMPLETE", apiVersion = "1")
     public ResponseEntity<FollowUpTaskResponse> complete(
             @PathVariable UUID taskId,
@@ -298,7 +298,7 @@ public class CrmFollowUpController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.FOLLOWUP_MANAGE})
-    @PreAuthorize("hasAuthority('crm:followup:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.FOLLOWUP_MANAGE + "')")
     @EmitEvent(id = "CRM_FOLLOWUP_DISMISS", apiVersion = "1")
     public ResponseEntity<FollowUpTaskResponse> dismiss(
             @PathVariable UUID taskId,

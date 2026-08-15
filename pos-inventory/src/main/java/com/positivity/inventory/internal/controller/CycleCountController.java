@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.dto.cyclecount.CycleCountTaskResponse;
 import com.positivity.inventory.internal.dto.cyclecount.InterferingMovementResponse;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitCountRequest;
 import com.positivity.inventory.internal.dto.cyclecount.SubmitRecountRequest;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.CycleCountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -56,7 +57,7 @@ public class CycleCountController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:cycle_count:complete"})
-    @PreAuthorize("hasAuthority('inventory:cycle_count:complete')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_COMPLETE + "')")
     @Tag(name = "Cycle Count Operations")
     @Operation(
             operationId = "submitCycleCount",
@@ -120,7 +121,7 @@ public class CycleCountController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:cycle_count:complete"})
-    @PreAuthorize("hasAuthority('inventory:cycle_count:complete')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_COMPLETE + "')")
     @Tag(name = "Cycle Count Operations")
     @Operation(
             operationId = "submitCycleCountRecount",
@@ -178,7 +179,7 @@ public class CycleCountController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:cycle_count:view"})
-    @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_VIEW + "')")
     @Tag(name = "Cycle Count Query")
     @Operation(
             operationId = "getCycleCountTask",
@@ -215,7 +216,7 @@ public class CycleCountController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:cycle_count:view"})
-    @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_VIEW + "')")
     @Tag(name = "Cycle Count Query")
     @Operation(
             operationId = "listCycleCountHistory",
@@ -261,7 +262,7 @@ public class CycleCountController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:cycle_count:view"})
-    @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_VIEW + "')")
     @Tag(name = "Cycle Count Query")
     @Operation(
             operationId = "listCycleCountInterferingMovements",
@@ -308,7 +309,7 @@ public class CycleCountController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:cycle_count:view"})
-    @PreAuthorize("hasAuthority('inventory:cycle_count:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.CYCLE_COUNT_VIEW + "')")
     @Tag(name = "Cycle Count Query")
     @Operation(
             operationId = "listCycleCountAuditorTasks",

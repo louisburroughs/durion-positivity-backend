@@ -68,7 +68,7 @@ public class CrmSuppressionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.SUPPRESSION_VIEW})
-    @PreAuthorize("hasAuthority('crm:suppression:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.SUPPRESSION_VIEW + "')")
     @EmitEvent(id = "CRM_SUPPRESSION_LIST", apiVersion = "1")
     public ResponseEntity<PagedResponse<SuppressionEntryResponse>> list(
             @RequestParam(name = "channel", required = false) MarketingChannel channel,
@@ -99,7 +99,7 @@ public class CrmSuppressionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.SUPPRESSION_VIEW})
-    @PreAuthorize("hasAuthority('crm:suppression:view')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.SUPPRESSION_VIEW + "')")
     @EmitEvent(id = "CRM_SUPPRESSION_CHECK", apiVersion = "1")
     public ResponseEntity<Boolean> check(
             @RequestParam(name = "channel") MarketingChannel channel, @RequestParam(name = "address") String address) {
@@ -134,7 +134,7 @@ public class CrmSuppressionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.SUPPRESSION_MANAGE})
-    @PreAuthorize("hasAuthority('crm:suppression:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.SUPPRESSION_MANAGE + "')")
     @EmitEvent(id = "CRM_SUPPRESSION_ADD", apiVersion = "1")
     public ResponseEntity<SuppressionEntryResponse> add(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -177,7 +177,7 @@ public class CrmSuppressionController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {CrmPermissionRegistry.SUPPRESSION_MANAGE})
-    @PreAuthorize("hasAuthority('crm:suppression:manage')")
+    @PreAuthorize("hasAuthority('" + CrmPermissionRegistry.SUPPRESSION_MANAGE + "')")
     @EmitEvent(id = "CRM_SUPPRESSION_REMOVE", apiVersion = "1")
     public ResponseEntity<Void> remove(@PathVariable UUID suppressionId) {
         suppressionService.remove(suppressionId);

@@ -98,7 +98,7 @@ public class CampaignController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.CAMPAIGN_VIEW})
-    @PreAuthorize("hasAuthority('marketing:campaign:view')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.CAMPAIGN_VIEW + "')")
     @EmitEvent(id = "MARKETING_CAMPAIGN_LIST", apiVersion = "1")
     public ResponseEntity<List<CampaignResponse>> list(
             @RequestParam(name = "status", required = false) CampaignStatus status,
@@ -135,7 +135,7 @@ public class CampaignController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.CAMPAIGN_VIEW})
-    @PreAuthorize("hasAuthority('marketing:campaign:view')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.CAMPAIGN_VIEW + "')")
     @EmitEvent(id = "MARKETING_CAMPAIGN_GET", apiVersion = "1")
     public ResponseEntity<CampaignResponse> get(@PathVariable UUID campaignId) {
         return ResponseEntity.ok(campaignService.get(campaignId));
@@ -178,7 +178,7 @@ public class CampaignController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.CAMPAIGN_CREATE})
-    @PreAuthorize("hasAuthority('marketing:campaign:create')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.CAMPAIGN_CREATE + "')")
     @EmitEvent(id = "MARKETING_CAMPAIGN_CREATE", apiVersion = "1")
     public ResponseEntity<CampaignResponse> create(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -242,7 +242,7 @@ public class CampaignController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.CAMPAIGN_EDIT})
-    @PreAuthorize("hasAuthority('marketing:campaign:edit')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.CAMPAIGN_EDIT + "')")
     @EmitEvent(id = "MARKETING_CAMPAIGN_UPDATE", apiVersion = "1")
     public ResponseEntity<CampaignResponse> update(
             @PathVariable UUID campaignId,
@@ -311,7 +311,7 @@ public class CampaignController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.CAMPAIGN_VIEW})
-    @PreAuthorize("hasAuthority('marketing:campaign:view')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.CAMPAIGN_VIEW + "')")
     @EmitEvent(id = "MARKETING_AUDIENCE_PREVIEW", apiVersion = "1")
     public ResponseEntity<AudiencePreviewResponse> previewAudience(@PathVariable UUID campaignId) {
         return ResponseEntity.ok(campaignService.previewAudience(campaignId));
@@ -357,7 +357,7 @@ public class CampaignController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.CAMPAIGN_SCHEDULE})
-    @PreAuthorize("hasAuthority('marketing:campaign:schedule')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.CAMPAIGN_SCHEDULE + "')")
     @EmitEvent(id = "MARKETING_CAMPAIGN_SCHEDULE", apiVersion = "1")
     public ResponseEntity<CampaignResponse> schedule(@PathVariable UUID campaignId) {
         return ResponseEntity.ok(campaignService.schedule(campaignId));
@@ -397,7 +397,7 @@ public class CampaignController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.CAMPAIGN_MANAGE})
-    @PreAuthorize("hasAuthority('marketing:campaign:manage')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.CAMPAIGN_MANAGE + "')")
     @EmitEvent(id = "MARKETING_CAMPAIGN_PAUSE", apiVersion = "1")
     public ResponseEntity<CampaignResponse> pause(@PathVariable UUID campaignId) {
         return ResponseEntity.ok(campaignService.pause(campaignId));
@@ -437,7 +437,7 @@ public class CampaignController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.CAMPAIGN_MANAGE})
-    @PreAuthorize("hasAuthority('marketing:campaign:manage')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.CAMPAIGN_MANAGE + "')")
     @EmitEvent(id = "MARKETING_CAMPAIGN_RESUME", apiVersion = "1")
     public ResponseEntity<CampaignResponse> resume(@PathVariable UUID campaignId) {
         return ResponseEntity.ok(campaignService.resume(campaignId));
@@ -477,7 +477,7 @@ public class CampaignController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.CAMPAIGN_MANAGE})
-    @PreAuthorize("hasAuthority('marketing:campaign:manage')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.CAMPAIGN_MANAGE + "')")
     @EmitEvent(id = "MARKETING_CAMPAIGN_CANCEL", apiVersion = "1")
     public ResponseEntity<CampaignResponse> cancel(@PathVariable UUID campaignId) {
         return ResponseEntity.ok(campaignService.cancel(campaignId));
@@ -520,7 +520,7 @@ public class CampaignController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.CAMPAIGN_SEND})
-    @PreAuthorize("hasAuthority('marketing:campaign:send')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.CAMPAIGN_SEND + "')")
     @EmitEvent(id = "MARKETING_CAMPAIGN_SEND", apiVersion = "1")
     public ResponseEntity<Map<String, Object>> send(@PathVariable UUID campaignId) {
         int queued = campaignSendService.dispatch(campaignId);
@@ -554,7 +554,7 @@ public class CampaignController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {MarketingPermissionRegistry.CAMPAIGN_VIEW})
-    @PreAuthorize("hasAuthority('marketing:campaign:view')")
+    @PreAuthorize("hasAuthority('" + MarketingPermissionRegistry.CAMPAIGN_VIEW + "')")
     @EmitEvent(id = "MARKETING_CAMPAIGN_SENDS_LIST", apiVersion = "1")
     public ResponseEntity<PagedResponse<CampaignSendResponse>> listSends(
             @PathVariable UUID campaignId,

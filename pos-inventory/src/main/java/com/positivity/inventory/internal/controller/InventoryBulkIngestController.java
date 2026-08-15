@@ -7,6 +7,7 @@ import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.InventoryBulkIngestRecord;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.StockMovementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -40,7 +41,7 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
     private final StockMovementService stockMovementService;
 
     @Override
-    @PreAuthorize("hasAuthority('inventory:adjustment:create')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_CREATE + "')")
     @EmitEvent(id = "INVENTORY_BULK_INGEST", apiVersion = "1")
     @Operation(
             operationId = "bulkIngestInventoryAdjustments",

@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.sync.LocationSyncRunResponse;
 import com.positivity.inventory.internal.dto.sync.SyncLogResponse;
 import com.positivity.inventory.internal.enums.LocationSyncOutcome;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.LocationSyncService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
@@ -49,7 +50,7 @@ public class LocationSyncController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:sync"})
-    @PreAuthorize("hasAuthority('inventory:location:sync')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOCATION_SYNC + "')")
     @Operation(
             operationId = "triggerLocationSync",
             summary = "Trigger a location roster re-sync",
@@ -96,7 +97,7 @@ public class LocationSyncController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:view"})
-    @PreAuthorize("hasAuthority('inventory:location:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOCATION_VIEW + "')")
     @Operation(
             operationId = "listSyncLogs",
             summary = "List location sync logs",
@@ -145,7 +146,7 @@ public class LocationSyncController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:view"})
-    @PreAuthorize("hasAuthority('inventory:location:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOCATION_VIEW + "')")
     @Operation(
             operationId = "getSyncLog",
             summary = "Get a location sync log entry",

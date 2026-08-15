@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.inventory.internal.dto.LocationDto;
 import com.positivity.inventory.internal.dto.LocationZoneDto;
 import com.positivity.inventory.internal.dto.StorageLocationDto;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.InventoryReferenceDataService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,7 +37,7 @@ public class InventoryReferenceDataController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:view"})
-    @PreAuthorize("hasAuthority('inventory:location:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOCATION_VIEW + "')")
     @Operation(
             operationId = "listInventoryLocations",
             summary = "List inventory locations",
@@ -74,7 +75,7 @@ public class InventoryReferenceDataController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:view"})
-    @PreAuthorize("hasAuthority('inventory:location:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOCATION_VIEW + "')")
     @Operation(
             operationId = "listInventoryStorageLocations",
             summary = "List inventory storage locations",
@@ -110,7 +111,7 @@ public class InventoryReferenceDataController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:view"})
-    @PreAuthorize("hasAuthority('inventory:location:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOCATION_VIEW + "')")
     @Operation(
             operationId = "listInventoryLocationZones",
             summary = "List inventory location zones",
@@ -150,7 +151,7 @@ public class InventoryReferenceDataController {
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:view"})
-    @PreAuthorize("hasAuthority('inventory:location:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOCATION_VIEW + "')")
     @Operation(
             operationId = "listStorageTypes",
             summary = "List storage location types",

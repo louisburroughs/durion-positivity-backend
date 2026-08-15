@@ -4,6 +4,7 @@ import com.positivity.catalog.internal.dto.CreateMsrpRequestDto;
 import com.positivity.catalog.internal.dto.ProductMsrpDto;
 import com.positivity.catalog.internal.dto.UpdateMsrpRequestDto;
 import com.positivity.catalog.internal.exception.CatalogNotFoundException;
+import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.service.ProductMsrpService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,7 +42,7 @@ public class ProductMsrpController {
     private final Clock clock;
     private final ProductMsrpService productMsrpService;
 
-    @PreAuthorize("hasAuthority('catalog:msrp:write')")
+    @PreAuthorize("hasAuthority('" + CatalogPermissions.MSRP_WRITE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:msrp:write"})
@@ -91,7 +92,7 @@ public class ProductMsrpController {
         return ResponseEntity.status(HttpStatus.CREATED).body(productMsrpService.createMsrp(productId, request));
     }
 
-    @PreAuthorize("hasAuthority('catalog:msrp:write')")
+    @PreAuthorize("hasAuthority('" + CatalogPermissions.MSRP_WRITE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:msrp:write"})
@@ -145,7 +146,7 @@ public class ProductMsrpController {
         return ResponseEntity.ok(productMsrpService.updateMsrp(productId, msrpId, request));
     }
 
-    @PreAuthorize("hasAuthority('catalog:msrp:read')")
+    @PreAuthorize("hasAuthority('" + CatalogPermissions.MSRP_READ + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:msrp:read"})
@@ -175,7 +176,7 @@ public class ProductMsrpController {
                 .orElseThrow(() -> new CatalogNotFoundException("No active MSRP found for product and date."));
     }
 
-    @PreAuthorize("hasAuthority('catalog:msrp:read')")
+    @PreAuthorize("hasAuthority('" + CatalogPermissions.MSRP_READ + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"catalog:msrp:read"})

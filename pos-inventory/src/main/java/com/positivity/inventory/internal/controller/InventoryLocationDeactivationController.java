@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.DeactivateLocationRequest;
 import com.positivity.inventory.internal.dto.DeactivateLocationResponse;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.InventoryLocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -36,7 +37,7 @@ public class InventoryLocationDeactivationController {
      */
     @PostMapping("/{locationId}/deactivate")
     @EmitEvent(id = "INVENTORY_LOCATION_DEACTIVATE", apiVersion = "1")
-    @PreAuthorize("hasAuthority('inventory:location:admin')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.LOCATION_ADMIN + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:location:admin"})

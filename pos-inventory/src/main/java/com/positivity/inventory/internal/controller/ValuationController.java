@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import com.positivity.inventory.internal.dto.valuation.ValuationReportResponse;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.service.ValuationService;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,7 +48,7 @@ public class ValuationController {
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"inventory:valuation:view"})
-    @PreAuthorize("hasAuthority('inventory:valuation:view')")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.VALUATION_VIEW + "')")
     @Operation(
             operationId = "getInventoryValuation",
             summary = "Get inventory valuation",
