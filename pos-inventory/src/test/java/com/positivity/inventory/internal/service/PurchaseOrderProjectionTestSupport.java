@@ -46,7 +46,9 @@ public class PurchaseOrderProjectionTestSupport {
 
     /** Projects an order already held in memory, lines included. */
     public void project(PurchaseOrderEntity order) {
-        apply(PurchaseOrderFactPublisher.toFact(order, order.getLines(), Instant.now()));
+        apply(
+                PurchaseOrderFactPublisher.toFact(order, order.getLines(), Instant.now()),
+                PurchaseOrderFactPublisher.versionOf(order));
     }
 
     /**
@@ -58,7 +60,7 @@ public class PurchaseOrderProjectionTestSupport {
         purchaseOrderRepository.findById(purchaseOrderId).ifPresent(this::project);
     }
 
-    private void apply(PurchaseOrderUpdatedV1 fact) {
+    private void apply(PurchaseOrderUpdatedV1 fact, long aggregateVersion) {
         extOrderRepository.save(ExtPurchaseOrderReplica.builder()
                 .purchaseOrderId(fact.purchaseOrderId())
                 .poNumber(fact.poNumber())
@@ -68,7 +70,9 @@ public class PurchaseOrderProjectionTestSupport {
                 .expectedDeliveryDate(fact.expectedDeliveryDate())
                 .currency(fact.currency())
                 .grandTotalMinor(fact.grandTotalMinor())
-                .aggregateVersion(1L)
+                // The order's real optimistic-lock version, exactly as the publisher would stamp it
+                // — a hard-coded number here would mask version-dependent staleness behavior.
+                .aggregateVersion(aggregateVersion)
                 .occurredAt(fact.occurredAt())
                 .build());
 

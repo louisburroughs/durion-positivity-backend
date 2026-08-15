@@ -47,8 +47,13 @@ public class ExtPurchaseOrderLineReplica {
     @Column(name = "sku_id", nullable = false)
     private UUID skuId;
 
-    /** What was ordered. Does not move as goods arrive. */
-    @Column(name = "ordered_quantity", nullable = false, precision = 19, scale = 4)
+    /**
+     * What was ordered. Does not move as goods arrive.
+     *
+     * <p>Precision and scale mirror the source column ({@code purchase_order_line.quantity_decimal},
+     * {@code numeric(18,6)}) so projecting a fractional quantity never rounds it.
+     */
+    @Column(name = "ordered_quantity", nullable = false, precision = 18, scale = 6)
     private BigDecimal orderedQuantity;
 
     /**
@@ -57,7 +62,7 @@ public class ExtPurchaseOrderLineReplica {
      * <p>This is the figure availability-to-promise sums. Stock already in the building is counted by
      * the ledger, so adding the ordered quantity instead would count received goods twice.
      */
-    @Column(name = "open_quantity", nullable = false, precision = 19, scale = 4)
+    @Column(name = "open_quantity", nullable = false, precision = 18, scale = 6)
     private BigDecimal openQuantity;
 
     @Column(name = "unit_cost_minor")

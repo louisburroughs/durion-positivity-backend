@@ -50,8 +50,12 @@ CREATE TABLE ext_purchase_order_line (
     -- does not move as goods arrive; open_quantity is what is still outstanding. ATP sums the open
     -- figure, because stock already in the building is counted by the ledger and adding the ordered
     -- figure would count it twice.
-    ordered_quantity numeric(19,4) NOT NULL,
-    open_quantity numeric(19,4) NOT NULL,
+    --
+    -- numeric(18,6) matches purchase_order_line.quantity_decimal/open_quantity_decimal exactly. A
+    -- narrower scale here would round fractional quantities on the way in and the parity comparison
+    -- against the aggregate would drift.
+    ordered_quantity numeric(18,6) NOT NULL,
+    open_quantity numeric(18,6) NOT NULL,
     unit_cost_minor bigint,
     description character varying(255),
     CONSTRAINT ext_purchase_order_line_pkey PRIMARY KEY (line_id),

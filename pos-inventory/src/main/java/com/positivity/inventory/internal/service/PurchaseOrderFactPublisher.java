@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -98,8 +99,11 @@ public class PurchaseOrderFactPublisher {
      *
      * <p>Zero is safe as a floor rather than a collision risk: an order with no version yet has not
      * been persisted, so no earlier fact for it can exist to be ordered against.
+     *
+     * <p>Package-private for the same reason as {@link #toFact}: the projection test support must
+     * version its rows the way production does, not with a number of its own.
      */
-    private static long versionOf(PurchaseOrderEntity order) {
+    static long versionOf(PurchaseOrderEntity order) {
         Integer version = order.getVersionNumber();
         return version == null ? 0L : version.longValue();
     }
@@ -127,7 +131,12 @@ public class PurchaseOrderFactPublisher {
     }
 
     private static PurchaseOrderLine toFactLine(PurchaseOrderLineEntity line) {
-        BigDecimal ordered = line.getQuantityDecimal() == null ? BigDecimal.ZERO : line.getQuantityDecimal();
+        // quantity_decimal is NOT NULL at the schema level and the contract requires it, so a null
+        // here is corrupt data. Publishing zero instead would quietly drop the line's supply from
+        // availability-to-promise; failing keeps the corruption loud and the caller's transaction
+        // rolled back.
+        BigDecimal ordered = Objects.requireNonNull(
+                line.getQuantityDecimal(), () -> "quantityDecimal is null on purchase-order line " + line.getLineId());
         // Open quantity is null on a line that has never been received against; it means "all of it
         // is still outstanding", not "none of it is".
         BigDecimal open = line.getOpenQuantityDecimal() == null ? ordered : line.getOpenQuantityDecimal();
