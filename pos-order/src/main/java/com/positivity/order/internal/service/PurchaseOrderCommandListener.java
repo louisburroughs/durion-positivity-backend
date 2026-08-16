@@ -33,9 +33,10 @@ import tools.jackson.databind.ObjectMapper;
  * two purchase orders for one replenishment decision, and nothing downstream could tell that
  * apart from a buyer genuinely ordering the same goods twice.
  *
- * <p>The ordinary event-id guard is kept as well. It stops the work earlier and more cheaply, but
- * it is the id collision that actually makes duplication impossible: two different commands
- * carrying the same order id would pass the event-id guard and still only produce one order.
+ * <p>The existence check below is the cheap path and handles ordinary redelivery. It is not the
+ * guarantee: check-then-act races. The guarantee is the primary key, which is why the order is
+ * inserted rather than saved — a save would merge, and merging would overwrite the very order the
+ * duplicate was meant not to create twice.
  */
 @Slf4j
 @Component
@@ -80,6 +81,14 @@ public class PurchaseOrderCommandListener {
             } else {
                 log.debug("Ignoring order command type={} eventId={}", eventType, eventId);
             }
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // The order id already exists: another delivery of this request won the insert between
+            // the existence check above and the insert itself. That is the guarantee working, not a
+            // failure — but the transaction is already doomed, so it is rethrown and the retry
+            // finds the row and returns early. Swallowing it here would leave a rolled-back
+            // transaction trying to record the event as processed.
+            log.info("Purchase order already placed by a concurrent delivery; retry will no-op", e);
+            throw e;
         } catch (TransientDataAccessException e) {
             // Rethrown so the container retries. Recording this as processed would drop a
             // replenishment decision on the floor: the suggestions are already marked converted,

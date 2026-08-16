@@ -22,19 +22,31 @@ BEGIN;
 -- 1. The number sequence must resume above every number already printed on a purchase order.
 --    Restarting at 1 would mint a second PO-0000001A, and the two would be indistinguishable on
 --    paper. Base-36 is decoded back to the sequence value it was rendered from.
-SELECT setval(
-    'purchase_order_number_seq',
-    GREATEST(
-        (SELECT COALESCE(MAX(
-            -- 8-character base-36 → bigint
-            (SELECT SUM(
-                (POSITION(SUBSTRING(UPPER(po_number) FROM i FOR 1) IN '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ') - 1)
-                * POWER(36, LENGTH(po_number) - i))
-             FROM generate_series(1, LENGTH(po_number)) AS i)::bigint), 0)
-         FROM purchase_order
-         WHERE po_number ~ '^[0-9A-Z]+$'),
-        1),
-    true);
+--
+--    is_called is the subtle half. Passing true says "this value has been handed out", so nextval
+--    returns the one after it — right when orders were migrated, wrong when none were: on an empty
+--    database it would burn number 1 before a single order existed. So it is set from whether any
+--    order was actually found, and the two cases are written out rather than collapsed.
+DO $$
+DECLARE
+    highest bigint;
+BEGIN
+    SELECT MAX(
+        (SELECT SUM(
+            (POSITION(SUBSTRING(UPPER(po_number) FROM i FOR 1) IN '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ') - 1)
+            * POWER(36, LENGTH(po_number) - i))
+         FROM generate_series(1, LENGTH(po_number)) AS i)::bigint)
+    INTO highest
+    FROM purchase_order
+    WHERE po_number ~ '^[0-9A-Z]+$';
+
+    IF highest IS NULL OR highest < 1 THEN
+        -- Nothing migrated: leave the sequence untouched so the first order still gets number 1.
+        PERFORM setval('purchase_order_number_seq', 1, false);
+    ELSE
+        PERFORM setval('purchase_order_number_seq', highest, true);
+    END IF;
+END $$;
 
 -- 2. encumbrance_ref was removed by #1332 as an unimplemented stub; a dump taken from a database
 --    that predates it carries the column, and pos-order has no home for it.

@@ -54,6 +54,13 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private static final long MAX_PO_NUMBER_SEQUENCE = 2_821_109_907_455L;
 
     private final PurchaseOrderRepository purchaseOrderRepository;
+
+    /**
+     * Used only by {@link #createRequested}, which needs an insert that fails on a duplicate id
+     * rather than a save that quietly merges into one.
+     */
+    private final jakarta.persistence.EntityManager entityManager;
+
     private final PurchaseOrderFactPublisher purchaseOrderFactPublisher;
     private final DocumentQuantityConverter documentQuantityConverter;
     private final Clock clock;
@@ -104,6 +111,16 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
      * makes a replenishment conversion produce exactly one order however many times its request is
      * delivered. Package-private: this is not a REST operation and must not become one, or the
      * identity of an order would become something any caller could dictate.
+     *
+     * <h2>Why this persists rather than saves</h2>
+     *
+     * {@code save()} would not do. The id is already set when it arrives, and Spring Data reads a
+     * non-null id on a {@code @GeneratedValue} entity as "not new", so it would call
+     * {@code merge()} — which silently <em>updates</em> an existing row. That turns the guarantee
+     * inside out: a duplicate request would overwrite the order it was meant to be prevented from
+     * creating twice, and a concurrent insert that slipped past the caller's existence check would
+     * be lost rather than rejected. {@code persist()} inserts or fails, so the primary key is what
+     * enforces "exactly one order per request" rather than a check-then-act that races.
      */
     @Transactional
     void createRequested(
@@ -135,8 +152,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         lines.forEach(line -> line.setPurchaseOrder(purchaseOrder));
         purchaseOrder.setLines(lines);
 
-        PurchaseOrderEntity saved = purchaseOrderRepository.save(purchaseOrder);
-        purchaseOrderFactPublisher.publish(saved, saved.getLines());
+        entityManager.persist(purchaseOrder);
+        entityManager.flush();
+        purchaseOrderFactPublisher.publish(purchaseOrder, purchaseOrder.getLines());
     }
 
     @Override

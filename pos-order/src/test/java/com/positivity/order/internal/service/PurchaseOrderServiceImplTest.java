@@ -65,12 +65,16 @@ class PurchaseOrderServiceImplTest {
     @Mock
     private DocumentQuantityConverter documentQuantityConverter;
 
+    @Mock
+    private jakarta.persistence.EntityManager entityManager;
+
     private PurchaseOrderServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new PurchaseOrderServiceImpl(
                 purchaseOrderRepository,
+                entityManager,
                 purchaseOrderFactPublisher,
                 documentQuantityConverter,
                 Clock.fixed(NOW, ZoneOffset.UTC));
@@ -264,5 +268,24 @@ class PurchaseOrderServiceImplTest {
         when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getPurchaseOrder(PO_ID)).isInstanceOf(PurchaseOrderNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("a requested order is inserted at the id it was asked for, never merged into one")
+    void requestedOrderIsInsertedNotMerged() {
+        CreatePurchaseOrderRequest request = createRequest();
+
+        service.createRequested(PO_ID, request, "pos-inventory");
+
+        // save() would read the pre-set id as "not new" and merge, which silently updates an
+        // existing row — the duplicate would overwrite the order it was meant not to create twice.
+        // persist() inserts or fails, so the primary key is what enforces one-order-per-request.
+        ArgumentCaptor<PurchaseOrderEntity> captor = ArgumentCaptor.forClass(PurchaseOrderEntity.class);
+        verify(entityManager).persist(captor.capture());
+        assertThat(captor.getValue().getPurchaseOrderId()).isEqualTo(PO_ID);
+        verify(purchaseOrderRepository, never()).save(any());
+
+        // The fact still goes out, or nothing downstream learns the order exists.
+        verify(purchaseOrderFactPublisher).publish(any(), any());
     }
 }
