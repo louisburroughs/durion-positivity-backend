@@ -50,7 +50,13 @@ public class PurchaseOrderTransmissionEvent {
     @Column(name = "transmission_intent_id")
     private UUID transmissionIntentId;
 
-    /** {@code CONFIRMED}, {@code REJECTED} or {@code STATUS_CHANGED}. */
+    /**
+     * {@code CONFIRMED}, {@code REJECTED}, {@code STATUS_CHANGED} or {@code REVIEW_REQUIRED}.
+     *
+     * <p>The last is not a vendor answer at all — it records that the transmission stopped and
+     * needs a person — but it belongs on the same timeline, because "nothing happened next, and
+     * here is why" is part of the story of the order.
+     */
     @Column(name = "event_type", nullable = false, length = 64)
     private String eventType;
 

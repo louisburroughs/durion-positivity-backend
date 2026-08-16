@@ -359,7 +359,7 @@ public class TransmissionStateWriter {
         publishConfirmedLines(intent, source, OrderEventMapper.toEventConfirmedLines(lines));
     }
 
-    private void publishReviewRequired(SupplierTransmissionIntentEntity intent, String detail) {
+    private void publishReviewRequired(SupplierTransmissionIntentEntity intent, @Nullable String detail) {
         SupplierOrderReviewRequiredV1 payload = new SupplierOrderReviewRequiredV1(
                 intent.getTransmissionIntentId(),
                 intent.getPurchaseOrderId(),

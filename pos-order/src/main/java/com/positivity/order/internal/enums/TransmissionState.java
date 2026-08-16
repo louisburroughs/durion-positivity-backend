@@ -7,7 +7,13 @@ package com.positivity.order.internal.enums;
  * order; a state that exists only in the transmission log is a state the buyer cannot see.
  */
 public enum TransmissionState {
-    /** Never sent. The starting state, and the state a rejected order returns to on re-request. */
+    /**
+     * Never sent.
+     *
+     * <p>Only ever the starting state. A re-request from {@code REJECTED} moves straight to
+     * {@code REQUESTED} rather than passing back through here — an order that has been sent once
+     * has a transmission history, and returning it to "never sent" would erase that.
+     */
     NOT_TRANSMITTED,
 
     /**
