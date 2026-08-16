@@ -3,6 +3,7 @@ package com.positivity.order.internal.entity;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
@@ -14,6 +15,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * A product's identity code as catalog states it (CAP-320 #1330, ADR-0044 R3).
@@ -27,6 +29,7 @@ import org.springframework.data.annotation.LastModifiedDate;
  * second a replica that has not caught up and will fix itself.
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(
         name = "ext_product_code",
         indexes = @Index(name = "idx_ext_product_code_lookup", columnList = "code_type, code"))
