@@ -919,6 +919,8 @@ paths:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1cancel
   /v1/orders/purchase-orders/{poId}/revisions:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1revisions
+  /v1/orders/purchase-orders/{poId}/transmit:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1transmit
   /v1/orders/sessions:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1sessions
   /v1/orders/sessions/current:

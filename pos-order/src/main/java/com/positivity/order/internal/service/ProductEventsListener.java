@@ -2,8 +2,10 @@ package com.positivity.order.internal.service;
 
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
 import com.positivity.order.internal.entity.ExtProduct;
+import com.positivity.order.internal.entity.ExtProductCode;
 import com.positivity.order.internal.entity.ExtProductUomReplica;
 import com.positivity.order.internal.entity.ProcessedEvent;
+import com.positivity.order.internal.repository.ExtProductCodeRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
 import com.positivity.order.internal.repository.ExtProductUomReplicaRepository;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
@@ -39,6 +41,7 @@ public class ProductEventsListener {
     private final ProcessedEventRepository processedEventRepository;
     private final ExtProductRepository extProductRepository;
     private final ExtProductUomReplicaRepository extProductUomReplicaRepository;
+    private final ExtProductCodeRepository extProductCodeRepository;
 
     @KafkaListener(
             topics = "${pos.order.kafka.catalog-events-topic:catalog.events.v1}",
@@ -99,6 +102,24 @@ public class ProductEventsListener {
         extProductRepository.save(replica);
 
         applyUomConversions(productId, payload);
+
+        // The product's identity code, which is what lets a purchase-order line name an article the
+        // vendor recognises (CAP-320 #1330). A cleared code is stored as null rather than by
+        // deleting the row, so "carries no code" stays distinguishable from "never replicated".
+        extProductCodeRepository.save(ExtProductCode.builder()
+                .productId(productId)
+                .codeType(trimToNull(payload.path("productCodeType").stringValue(null)))
+                .code(trimToNull(payload.path("productCode").stringValue(null)))
+                .aggregateVersion(aggregateVersion)
+                .build());
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     /**

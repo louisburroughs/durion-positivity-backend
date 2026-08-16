@@ -1142,9 +1142,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 49")
+    @DisplayName("CATALOG_VERSION is 50")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(49);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(50);
     }
 
     @Test
@@ -1303,8 +1303,12 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(456)).isEqualTo("PERM_order:purchase_order:approve");
         assertThat(GatewayPermissionCatalog.authorityForBit(457)).isEqualTo("PERM_order:purchase_order:create");
         assertThat(GatewayPermissionCatalog.authorityForBit(458)).isEqualTo("PERM_order:purchase_order:view");
+        // Sending an approved order to the vendor (CAP-320 #1330). Separate from approval because
+        // they are different acts: approving commits the spend, transmitting puts it in front of a
+        // supplier who will act on it.
+        assertThat(GatewayPermissionCatalog.authorityForBit(459)).isEqualTo("PERM_order:purchase_order:transmit");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(459)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(460)).isNull();
     }
 
     @Test

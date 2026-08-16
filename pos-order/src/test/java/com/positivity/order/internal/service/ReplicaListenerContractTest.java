@@ -18,6 +18,7 @@ import com.positivity.order.internal.repository.ExtCustomerRepository;
 import com.positivity.order.internal.repository.ExtEstimateLineRepository;
 import com.positivity.order.internal.repository.ExtEstimateRepository;
 import com.positivity.order.internal.repository.ExtLocationRepository;
+import com.positivity.order.internal.repository.ExtProductCodeRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
 import com.positivity.order.internal.repository.ExtProductUomReplicaRepository;
 import com.positivity.order.internal.repository.ExtVehicleRepository;
@@ -97,6 +98,9 @@ class ReplicaListenerContractTest {
     private ExtProductUomReplicaRepository extProductUomReplicaRepository;
 
     @Mock
+    private ExtProductCodeRepository extProductCodeRepository;
+
+    @Mock
     private ExtLocationRepository extLocationRepository;
 
     @Mock
@@ -142,7 +146,12 @@ class ReplicaListenerContractTest {
         VehicleEventsListener vehicle =
                 new VehicleEventsListener(clock, objectMapper, processedEventRepository, extVehicleRepository);
         ProductEventsListener product = new ProductEventsListener(
-                clock, objectMapper, processedEventRepository, extProductRepository, extProductUomReplicaRepository);
+                clock,
+                objectMapper,
+                processedEventRepository,
+                extProductRepository,
+                extProductUomReplicaRepository,
+                extProductCodeRepository);
         LocationEventsListener location =
                 new LocationEventsListener(clock, objectMapper, processedEventRepository, extLocationRepository);
         WorkorderEventsListener workorder = new WorkorderEventsListener(

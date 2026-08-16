@@ -7,6 +7,7 @@ import com.positivity.order.internal.dto.purchaseorder.ListPurchaseOrdersRequest
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderResponse;
 import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
 import com.positivity.order.internal.security.PurchaseOrderPermissions;
+import com.positivity.order.internal.service.PurchaseOrderTransmissionService;
 import com.positivity.order.service.PurchaseOrderService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
@@ -41,6 +42,7 @@ public class PurchaseOrderController {
     private static final String NO_CURRENT_USER = "No current user";
 
     private final PurchaseOrderService purchaseOrderService;
+    private final PurchaseOrderTransmissionService purchaseOrderTransmissionService;
 
     @PostMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -62,7 +64,7 @@ public class PurchaseOrderController {
                     Required inputs: vendorId (UUID), poDate, currency (ISO 4217) and lines (non-empty), each \
                     naming lineNumber, description and unitCostMinor plus either quantity in base UoM or the \
                     documentUom/documentQuantity pair; tax is derived from the configured default rate.
-                    Emits an INVENTORY_PURCHASE_ORDER_CREATE event; no stock, ledger or vendor-side state is \
+                    Emits an ORDER_PURCHASE_ORDER_CREATE event; no stock, ledger or vendor-side state is \
                     touched.
                     Returns 400 when a line's quantity is missing without the document-UoM pair, and 422 when a \
                     documentUom has no conversion path to the product's base UoM.
@@ -127,7 +129,7 @@ public class PurchaseOrderController {
                     vendor, status, currency or ship-to location.
                     Preconditions: the purchase order must exist.
                     Required inputs: poId (UUIDv7) path parameter; there is no request body.
-                    Emits an INVENTORY_PURCHASE_ORDER_GET audit event; no stock state changes, this is a \
+                    Emits an ORDER_PURCHASE_ORDER_GET audit event; no stock state changes, this is a \
                     read-only projection.
                     Returns 404 when no purchase order exists for the supplied id.
                     """,
@@ -169,7 +171,7 @@ public class PurchaseOrderController {
                     Preconditions: none; every filter is optional and an unfiltered call pages over all orders.
                     Required inputs: none; vendorId, status, currency and locationId narrow the result, and \
                     standard page, size and sort parameters control pagination.
-                    Emits an INVENTORY_PURCHASE_ORDER_LIST audit event; no stock state changes, this is a \
+                    Emits an ORDER_PURCHASE_ORDER_LIST audit event; no stock state changes, this is a \
                     read-only projection.
                     Returns 200 with an empty page when nothing matches, so an empty result is not an error \
                     condition.
@@ -204,7 +206,7 @@ public class PurchaseOrderController {
                     conflict.
                     Required inputs: poId (UUIDv7) path parameter and a JSON body where approvalNotes is optional, \
                     so an empty object is acceptable.
-                    Emits an INVENTORY_PURCHASE_ORDER_APPROVE event; the order becomes eligible for ASNs, goods \
+                    Emits an ORDER_PURCHASE_ORDER_APPROVE event; the order becomes eligible for ASNs, goods \
                     receipts and receiving sessions.
                     Returns 404 when the purchase order does not exist, and 409 when it is not in DRAFT status.
                     """,
@@ -281,7 +283,7 @@ public class PurchaseOrderController {
                     replacement lines list, because every line is replaced rather than merged; paymentTermsId, \
                     expectedDeliveryDate, shipToLocationId, requestedBy and comment overwrite the stored values \
                     even when omitted.
-                    Emits an INVENTORY_PURCHASE_ORDER_REVISE event carrying the field-level delta and the \
+                    Emits an ORDER_PURCHASE_ORDER_REVISE event carrying the field-level delta and the \
                     revision reason.
                     Returns 404 when the purchase order does not exist, and 422 when a line's documentUom has no \
                     conversion path to the product's base UoM.
@@ -355,9 +357,8 @@ public class PurchaseOrderController {
                     other status, including DRAFT, may be cancelled.
                     Required inputs: poId (UUIDv7) path parameter; there is no request body and no confirmation \
                     flag.
-                    Emits an INVENTORY_PURCHASE_ORDER_CANCEL event, and when the order was APPROVED or \
-                    PARTIALLY_RECEIVED it also records one expected-supply-dropped fact per SKU with remaining \
-                    open quantity, removing the order from the supply projection.
+                    Emits an ORDER_PURCHASE_ORDER_CANCEL event and publishes the order's new state; a cancelled \
+                    order is no longer counted as incoming supply by the modules that track it.
                     Returns 404 when the purchase order does not exist, and 409 when it is FULLY_RECEIVED or \
                     CLOSED.
                     """,
@@ -386,5 +387,48 @@ public class PurchaseOrderController {
         String actorUserId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
         return ResponseEntity.ok(purchaseOrderService.cancelPurchaseOrder(poId, actorUserId));
+    }
+
+    @PostMapping("/{poId}/transmit")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"order:purchase_order:transmit"})
+    @PreAuthorize("hasAuthority('" + PurchaseOrderPermissions.PURCHASE_ORDER_TRANSMIT + "')")
+    @EmitEvent(id = "ORDER_PURCHASE_ORDER_TRANSMIT", apiVersion = "1")
+    @Operation(
+            operationId = "transmitPurchaseOrder",
+            summary = "Transmit Purchase Order To Vendor",
+            description = """
+                    Sends an approved purchase order to the supplier named on it, asking pos-supplier to \
+                    transmit it and report back what the vendor says.
+                    Use this tool to actually place an order with a vendor; do not use approvePurchaseOrder for \
+                    this, which commits the spend internally and sends nothing to anyone.
+                    Preconditions: the order must be APPROVED or PARTIALLY_RECEIVED, must name a supplierRef, \
+                    must have no transmission already in flight or awaiting review, and every line must carry an \
+                    article code the vendor would recognise.
+                    Required inputs: poId (UUIDv7) path parameter; there is no request body, because what is sent \
+                    is the order as it stands.
+                    Emits an ORDER_PURCHASE_ORDER_TRANSMIT event and queues a supplier order command; the vendor's \
+                    answer arrives later and appears on the order's transmission state and timeline.
+                    Returns 404 when the purchase order does not exist, and 422 with a code naming the obstacle \
+                    when the order cannot be sent: SUPPLIER_REF_MISSING, PURCHASE_ORDER_NOT_APPROVED, \
+                    TRANSMISSION_IN_FLIGHT, TRANSMISSION_AWAITING_REVIEW, ARTICLE_NOT_IDENTIFIABLE or \
+                    FRACTIONAL_QUANTITY.
+                    """,
+            tags = {"Purchase Orders"})
+    @ApiResponse(responseCode = "202", description = "Transmission requested")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Purchase order not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "The order cannot be transmitted as it stands",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<Void> transmitPurchaseOrder(
+            @Parameter(description = "Purchase order id (UUIDv7)", required = true) @PathVariable UUID poId) {
+        purchaseOrderTransmissionService.requestTransmission(
+                poId, SecurityContextHelper.getCurrentUsername().orElse(NO_CURRENT_USER));
+        return ResponseEntity.accepted().build();
     }
 }

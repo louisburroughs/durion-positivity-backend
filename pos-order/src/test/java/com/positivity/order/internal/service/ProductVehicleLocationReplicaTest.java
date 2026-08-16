@@ -14,6 +14,7 @@ import com.positivity.order.internal.entity.ExtLocation;
 import com.positivity.order.internal.entity.ExtProduct;
 import com.positivity.order.internal.entity.ExtVehicle;
 import com.positivity.order.internal.repository.ExtLocationRepository;
+import com.positivity.order.internal.repository.ExtProductCodeRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
 import com.positivity.order.internal.repository.ExtProductUomReplicaRepository;
 import com.positivity.order.internal.repository.ExtVehicleRepository;
@@ -71,6 +72,9 @@ class ProductVehicleLocationReplicaTest {
     private ExtProductUomReplicaRepository extProductUomReplicaRepository;
 
     @Mock
+    private ExtProductCodeRepository extProductCodeRepository;
+
+    @Mock
     private ExtVehicleRepository extVehicleRepository;
 
     @Mock
@@ -94,7 +98,8 @@ class ProductVehicleLocationReplicaTest {
                     objectMapper,
                     processedEventRepository,
                     extProductRepository,
-                    extProductUomReplicaRepository);
+                    extProductUomReplicaRepository,
+                    extProductCodeRepository);
         }
 
         private String envelope(long version, String active) {
