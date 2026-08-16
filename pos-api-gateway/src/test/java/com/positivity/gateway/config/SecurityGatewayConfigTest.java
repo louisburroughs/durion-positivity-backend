@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 52")
+    @DisplayName("CATALOG_VERSION is 54")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(52);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(54);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 455")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 463")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1315,8 +1315,16 @@ class SecurityGatewayConfigTest {
         // reaches a vendor and can create AP bills: whoever may investigate a missing invoice is
         // not necessarily whoever may reconfigure a profile.
         assertThat(GatewayPermissionCatalog.authorityForBit(461)).isEqualTo("PERM_supplier:invoice:fetch");
+        // Fleet workorder authorization (CAP-323 #1229). One permission covers the lookups and the
+        // request, because in a shop they are one act: a vehicle is looked up in order to ask for
+        // authorization on it.
+        assertThat(GatewayPermissionCatalog.authorityForBit(462)).isEqualTo("PERM_supplier:workorderauth:request");
+        // Working the queue of authorizations no vendor would answer. Separate, because these are
+        // rows where money is already owed for work already done, and whoever chases that is not
+        // necessarily whoever books the job in.
+        assertThat(GatewayPermissionCatalog.authorityForBit(463)).isEqualTo("PERM_supplier:workorderauth:review");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(462)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(464)).isNull();
     }
 
     @Test
