@@ -62,3 +62,5 @@ permissions:
     description: "Approve or cancel a purchase order"
   - name: "order:purchase_order:transmit"
     description: "Send an approved purchase order to its vendor"
+  - name: "order:purchase_order:availability_view"
+    description: "Ask a vendor what it can supply against a purchase order"

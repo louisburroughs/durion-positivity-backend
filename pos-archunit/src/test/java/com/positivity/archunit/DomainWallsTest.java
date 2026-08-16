@@ -1,5 +1,7 @@
 package com.positivity.archunit;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -117,8 +119,15 @@ class DomainWallsTest {
      * approved callers as the Product Detail composition and pos-order procurement. Everything else
      * pos-catalog needs from pos-supplier — vendor prices — already arrives as events.
      */
-    private static final Map<String, Map<String, Set<String>>> SCOPED_FILE_EXCEPTIONS =
-            Map.of("pos-catalog", Map.of("SupplierStockClientImpl.java", Set.of("pos-supplier")));
+    private static final Map<String, Map<String, Set<String>>> SCOPED_FILE_EXCEPTIONS = Map.of(
+            "pos-catalog",
+            Map.of("SupplierStockClientImpl.java", Set.of("pos-supplier")),
+            // The second approved caller the amendment names: procurement in pos-order, where a
+            // buyer is choosing quantities and needs what the vendor says now (CAP-319 #1329).
+            // Granted by file name for the same reason as the first — a third caller has to argue
+            // its own case rather than inherit either of these.
+            "pos-order",
+            Map.of("SupplierStockClientImpl.java", Set.of("pos-supplier")));
 
     /**
      * Startup-infra classes exempt per ADR-0044 R2 (registration calls, best-effort
@@ -131,6 +140,36 @@ class DomainWallsTest {
     private static final Pattern POS_SERVICE_TOKEN = Pattern.compile("pos-[a-z][a-z0-9-]*");
     private static final Pattern SERVICE_ID_DEFAULT = Pattern.compile("\\$\\{[a-z0-9.-]*service-id:([a-z][a-z0-9-]*)}");
     private static final Pattern LOAD_BALANCED_URI = Pattern.compile("lb://([A-Za-z0-9-]+)");
+
+    /**
+     * The supplier grants stay attached to the one file each, and never widen to a module.
+     *
+     * <p>Two modules may call pos-supplier synchronously for live stock, and both entries name a
+     * single class. Converting either to a module-level grant would let any future client in that
+     * module reach pos-supplier without anybody deciding it should — which is the whole thing the
+     * file-scoped form prevents (ADR-0044 amendment 2026-08-10).
+     */
+    @Test
+    void supplierStockGrantsAreScopedToOneFileEach() {
+        assertThat(SCOPED_FILE_EXCEPTIONS)
+                .as("only pos-catalog and pos-order may reach pos-supplier synchronously")
+                .containsOnlyKeys("pos-catalog", "pos-order");
+
+        for (Map.Entry<String, Map<String, Set<String>>> module : SCOPED_FILE_EXCEPTIONS.entrySet()) {
+            assertThat(module.getValue())
+                    .as("%s grants the supplier edge to exactly one file", module.getKey())
+                    .containsOnlyKeys("SupplierStockClientImpl.java");
+            assertThat(module.getValue().get("SupplierStockClientImpl.java"))
+                    .as("%s grants that file exactly one target", module.getKey())
+                    .containsExactly("pos-supplier");
+        }
+
+        // A module-level grant would defeat the point: SCOPED_MODULE_EXCEPTIONS must not quietly
+        // acquire pos-supplier for either of these modules.
+        assertThat(SCOPED_MODULE_EXCEPTIONS.getOrDefault("pos-catalog", Set.of()))
+                .doesNotContain("pos-supplier");
+        assertThat(SCOPED_MODULE_EXCEPTIONS.getOrDefault("pos-order", Set.of())).doesNotContain("pos-supplier");
+    }
 
     @Test
     void internalClientsShouldOnlyTargetUtilityModules() throws IOException {
