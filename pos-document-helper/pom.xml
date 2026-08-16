@@ -21,8 +21,8 @@
              ~5 points under the measurement; the branch floor sits a full branch under it
              because the module only has 10 branches in total, so a single one is worth 10
              points and a tighter floor would fail on noise. -->
-        <jacoco.line.min>0.90</jacoco.line.min>
-        <jacoco.branch.min>0.80</jacoco.branch.min>
+        <jacoco.line.min>0.92</jacoco.line.min>
+        <jacoco.branch.min>0.87</jacoco.branch.min>
     </properties>
 
     <dependencies>

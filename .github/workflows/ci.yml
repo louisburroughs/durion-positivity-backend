@@ -787,6 +787,11 @@ jobs:
             -Dsonar.coverage.jacoco.aggregateXmlReportPaths=${{ github.workspace }}/${{ env.COVERAGE_AGGREGATE_XML_PATH }} \
             2>&1 | tee "$RUNNER_TEMP/full-coverage.log"
 
+      # The floors this step enforces live in each module's pom.xml and MUST be
+      # derived from a `-DskipITs` run, because that is what the build step above
+      # runs. Floors derived from an IT-inclusive measurement describe coverage
+      # this job cannot see, which silently eats the cushion and leaves modules
+      # failing on run-to-run noise. See docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1.
       - name: Enforce the coverage ratchet across every module
         if: always()
         run: |

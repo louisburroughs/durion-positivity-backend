@@ -16,8 +16,8 @@
     <properties>
         <!-- Coverage ratchet (plan Phase 4): measured 83.6% line / 67.7% branch.
              Floors sit ~5 points under to catch regression without failing on noise. -->
-        <jacoco.line.min>0.78</jacoco.line.min>
-        <jacoco.branch.min>0.62</jacoco.branch.min>
+        <jacoco.line.min>0.81</jacoco.line.min>
+        <jacoco.branch.min>0.68</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>
 

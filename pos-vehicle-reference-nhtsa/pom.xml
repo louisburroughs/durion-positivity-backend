@@ -14,8 +14,8 @@
     <properties>
         <!-- Coverage ratchet (plan Phase 4): measured 49.7% line / 50.0% branch.
              First floors for this module — it was at 0% before wave §7. -->
-        <jacoco.line.min>0.44</jacoco.line.min>
-        <jacoco.branch.min>0.45</jacoco.branch.min>
+        <jacoco.line.min>0.50</jacoco.line.min>
+        <jacoco.branch.min>0.55</jacoco.branch.min>
     </properties>
 
     <packaging>jar</packaging>
