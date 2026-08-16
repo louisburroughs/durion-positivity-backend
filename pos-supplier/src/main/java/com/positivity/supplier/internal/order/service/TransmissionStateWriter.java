@@ -4,6 +4,7 @@ import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.supplier.SupplierOrderConfirmedV1;
 import com.positivity.domainevents.supplier.SupplierOrderRejectedV1;
+import com.positivity.domainevents.supplier.SupplierOrderReviewRequiredV1;
 import com.positivity.domainevents.supplier.SupplierOrderStatusChangedV1;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.supplier.internal.domain.model.SupplierDeliverySchedule;
@@ -203,10 +204,15 @@ public class TransmissionStateWriter {
     /**
      * Escalates an intent to {@code MANUAL_REVIEW} (ADR-0052 §3/§4).
      *
-     * <p>No event is published. The transmission has no outcome yet — that is the entire meaning
-     * of this state — and telling the ordering domain "rejected" or "confirmed" here would be an
-     * assertion nobody has made. What the ordering domain sees is a transmission still open, which
-     * is the truth, until an operator resolves it.
+     * <p>No <em>outcome</em> is published, and that remains deliberate: this service does not know
+     * whether the vendor received the order, and saying "rejected" or "confirmed" here would be an
+     * assertion nobody has made.
+     *
+     * <p>The state itself is published, which is a different claim. Left silent, the ordering
+     * domain sees a request that looks in flight and is indistinguishable from one genuinely in
+     * progress — so a buyer waits on goods that are not coming, and the only record of why lives
+     * in a transmission log they have no reason to open (CAP-320 #1330). "Still open" and "stopped,
+     * pending a human" are different facts, and the second is the one somebody has to act on.
      */
     @Transactional
     public void recordManualReview(@NonNull UUID transmissionIntentId, @Nullable String detail) {
@@ -215,6 +221,7 @@ public class TransmissionStateWriter {
         intent.setStatusPollingActive(false);
         intent.setLastError(truncate(detail, 2000));
         intentRepository.save(intent);
+        publishReviewRequired(intent, detail);
         log.warn(
                 "Transmission intent {} (document {}) entered MANUAL_REVIEW: {}",
                 intent.getTransmissionIntentId(),
@@ -350,6 +357,22 @@ public class TransmissionStateWriter {
             SupplierOrderConfirmedV1.Source source,
             List<SupplierOrderResult.Line> lines) {
         publishConfirmedLines(intent, source, OrderEventMapper.toEventConfirmedLines(lines));
+    }
+
+    private void publishReviewRequired(SupplierTransmissionIntentEntity intent, String detail) {
+        SupplierOrderReviewRequiredV1 payload = new SupplierOrderReviewRequiredV1(
+                intent.getTransmissionIntentId(),
+                intent.getPurchaseOrderId(),
+                intent.getVendorProfileId(),
+                intent.getSupplierRef(),
+                intent.getDocumentId(),
+                truncate(detail, 1000),
+                Instant.now(clock));
+        publish(
+                intent,
+                SupplierOrderReviewRequiredV1.EVENT_TYPE,
+                SupplierOrderReviewRequiredV1.SCHEMA_VERSION,
+                payload);
     }
 
     private void publishConfirmedLines(

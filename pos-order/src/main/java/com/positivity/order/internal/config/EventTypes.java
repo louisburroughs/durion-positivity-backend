@@ -147,5 +147,9 @@ public final class EventTypes {
                     .build(),
             EventTypeRegistration.write("ORDER_PURCHASE_ORDER_CANCEL", "Cancel a purchase order")
                     .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.write(
+                            "ORDER_PURCHASE_ORDER_TRANSMIT", "Send an approved purchase order to its vendor")
+                    .apiVersion("1")
                     .build());
 }

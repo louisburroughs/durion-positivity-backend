@@ -1,9 +1,9 @@
-generatedAt: "2026-08-15T22:48:58.528605+00:00"
+generatedAt: "2026-08-16T01:59:02.334307+00:00"
 root: "."
 summary:
   manifestCount: 22
-  permissionCount: 424
-  uniquePermissionCount: 424
+  permissionCount: 425
+  uniquePermissionCount: 425
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -522,7 +522,7 @@ manifests:
     domain: "order"
     serviceName: "pos-order"
     version: "1.0"
-    permissionCount: 29
+    permissionCount: 30
     permissions:
       - name: "order:order:view"
         description: "View orders"
@@ -582,6 +582,8 @@ manifests:
         description: "Create or revise a purchase order (DRAFT state)"
       - name: "order:purchase_order:approve"
         description: "Approve or cancel a purchase order"
+      - name: "order:purchase_order:transmit"
+        description: "Send an approved purchase order to its vendor"
   - module: "pos-people"
     path: "pos-people/src/main/resources/permissions.yaml"
     domain: "people"
@@ -2452,6 +2454,12 @@ permissions:
     source: "pos-order/src/main/resources/permissions.yaml"
   - name: "order:purchase_order:create"
     description: "Create or revise a purchase order (DRAFT state)"
+    domain: "order"
+    serviceName: "pos-order"
+    module: "pos-order"
+    source: "pos-order/src/main/resources/permissions.yaml"
+  - name: "order:purchase_order:transmit"
+    description: "Send an approved purchase order to its vendor"
     domain: "order"
     serviceName: "pos-order"
     module: "pos-order"

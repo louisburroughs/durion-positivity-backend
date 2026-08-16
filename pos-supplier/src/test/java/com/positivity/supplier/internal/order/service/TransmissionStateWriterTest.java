@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.supplier.SupplierOrderConfirmedV1;
 import com.positivity.domainevents.supplier.SupplierOrderRejectedV1;
+import com.positivity.domainevents.supplier.SupplierOrderReviewRequiredV1;
 import com.positivity.domainevents.supplier.SupplierOrderStatusChangedV1;
 import com.positivity.supplier.internal.domain.model.SupplierDeliverySchedule;
 import com.positivity.supplier.internal.domain.model.SupplierDespatch;
@@ -169,14 +169,28 @@ class TransmissionStateWriterTest {
     }
 
     @Test
-    void publishesNothingWhenATransmissionEntersManualReview() {
-        // There is no outcome yet -- that is the entire meaning of the state -- and telling the
-        // ordering domain "confirmed" or "rejected" here would assert something nobody has
-        // established.
+    void publishesTheStateButNoOutcomeWhenATransmissionEntersManualReview() {
         writer.recordManualReview(INTENT_ID, "vendor unreachable after send");
 
         assertThat(intent.getAttemptState()).isEqualTo(TransmissionAttemptState.MANUAL_REVIEW);
-        verify(outboxWriter, never()).publish(anyString(), any());
+
+        ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(outboxWriter).publish(anyString(), captor.capture());
+
+        // There is no outcome yet -- that is the entire meaning of the state -- so nothing here
+        // says "confirmed" or "rejected", which would assert something nobody has established.
+        assertThat(captor.getValue().eventType()).isEqualTo(SupplierOrderReviewRequiredV1.EVENT_TYPE);
+        assertThat(captor.getValue().payload()).isInstanceOf(SupplierOrderReviewRequiredV1.class);
+
+        // The state itself is published, which is a different claim and a necessary one: left
+        // silent, the ordering domain sees a request indistinguishable from one still in progress,
+        // so a buyer waits on goods that are not coming and the only record of why lives in a
+        // transmission log they have no reason to open (CAP-320 #1330).
+        SupplierOrderReviewRequiredV1 payload =
+                (SupplierOrderReviewRequiredV1) captor.getValue().payload();
+        assertThat(payload.purchaseOrderId()).isEqualTo(intent.getPurchaseOrderId());
+        assertThat(payload.documentId()).isEqualTo(intent.getDocumentId());
+        assertThat(payload.detail()).contains("vendor unreachable");
     }
 
     @Test

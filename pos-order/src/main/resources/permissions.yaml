@@ -60,3 +60,5 @@ permissions:
     description: "Create or revise a purchase order (DRAFT state)"
   - name: "order:purchase_order:approve"
     description: "Approve or cancel a purchase order"
+  - name: "order:purchase_order:transmit"
+    description: "Send an approved purchase order to its vendor"
