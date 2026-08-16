@@ -6,15 +6,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import com.positivity.inventory.internal.entity.PurchaseOrderEntity;
-import com.positivity.inventory.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
 import com.positivity.inventory.internal.enums.ReservationStatus;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
-import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import java.math.BigDecimal;
@@ -47,7 +43,7 @@ class ForecastAvailabilityContractBehaviorIT extends BaseContractIntegrationTest
     private InventoryStockSummaryRepository inventoryStockSummaryRepository;
 
     @Autowired
-    private PurchaseOrderRepository purchaseOrderRepository;
+    private com.positivity.inventory.internal.service.PurchaseOrderProjectionTestSupport projection;
 
     @Autowired
     private ReservationRepository reservationRepository;
@@ -147,31 +143,21 @@ class ForecastAvailabilityContractBehaviorIT extends BaseContractIntegrationTest
                 .build());
     }
 
+    /**
+     * States what an approved order says, as its fact would.
+     *
+     * <p>pos-inventory has no purchase-order table any more (CAP-320 #1334); the availability
+     * endpoint reads incoming supply from the projection, so that is what the fixture seeds.
+     */
     private void seedApprovedPo(UUID skuId, UUID siteId, String openQuantity, LocalDate expectedDeliveryDate) {
         BigDecimal open = new BigDecimal(openQuantity);
-        PurchaseOrderEntity po = PurchaseOrderEntity.builder()
-                .vendorId(UUID.randomUUID())
-                .poNumber("FCIT-" + UUID.randomUUID())
-                .status(PurchaseOrderStatus.APPROVED)
-                .currency("USD")
-                .subtotalMinor(100L)
-                .taxMinor(0L)
-                .grandTotalMinor(100L)
-                .shipToLocationId(siteId)
-                .expectedDeliveryDate(expectedDeliveryDate)
-                .build();
-        PurchaseOrderLineEntity line = PurchaseOrderLineEntity.builder()
-                .lineNumber(1)
-                .skuId(skuId)
-                .description("forecast contract line")
-                .quantityDecimal(open.max(BigDecimal.ONE))
-                .unitCostMinor(100L)
-                .lineTotalMinor(100L)
-                .openQuantityDecimal(open)
-                .build();
-        line.setPurchaseOrder(po);
-        po.getLines().add(line);
-        purchaseOrderRepository.save(po);
+        projection.project(
+                UUID.randomUUID(),
+                "APPROVED",
+                siteId,
+                expectedDeliveryDate,
+                java.util.List.of(new com.positivity.inventory.internal.service.PurchaseOrderProjectionTestSupport.Line(
+                        skuId, open.max(BigDecimal.ONE).toPlainString(), openQuantity)));
     }
 
     private void seedPendingReservation(UUID stockItemId, int required, int allocated, Instant dueDateTime) {

@@ -5,16 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentScanResultResponse;
 import com.positivity.inventory.internal.entity.ExtStorageLocationReplica;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import com.positivity.inventory.internal.entity.PurchaseOrderEntity;
-import com.positivity.inventory.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.inventory.internal.entity.ReplenishmentPolicy;
 import com.positivity.inventory.internal.entity.ReplenishmentTask;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
 import com.positivity.inventory.internal.enums.ReplenishmentStatus;
 import com.positivity.inventory.internal.enums.ReplenishmentTriggerType;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
-import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentTaskRepository;
 import com.positivity.inventory.service.ReplenishmentService;
@@ -57,9 +53,6 @@ class BatchReplenishmentScanTest {
 
     @Autowired
     private PurchaseOrderProjectionTestSupport projection;
-
-    @Autowired
-    private PurchaseOrderRepository purchaseOrderRepository;
 
     @Autowired
     private ExtStorageLocationReplicaRepository storageLocationReplicaRepository;
@@ -193,7 +186,7 @@ class BatchReplenishmentScanTest {
         receive(sku, location, 3); // on-hand 3 < min 5 — pre-F2 math would trigger
         // Open APPROVED PO for 7 units expected TODAY (== horizon date, boundary inclusive):
         // projected 3 + 7 = 10 >= min 5.
-        savePo(PurchaseOrderStatus.APPROVED, location, LocalDate.now(ZoneOffset.UTC), skuId, "7");
+        savePo("APPROVED", location, LocalDate.now(ZoneOffset.UTC), skuId, "7");
 
         replenishmentService.runBatchReplenishmentScan();
 
@@ -210,12 +203,7 @@ class BatchReplenishmentScanTest {
         receive(sku, location, 3);
         // Same PO but expected TOMORROW — outside the 0-day horizon, excluded from the
         // projection: projected stays 3 < min 5.
-        savePo(
-                PurchaseOrderStatus.APPROVED,
-                location,
-                LocalDate.now(ZoneOffset.UTC).plusDays(1),
-                skuId,
-                "7");
+        savePo("APPROVED", location, LocalDate.now(ZoneOffset.UTC).plusDays(1), skuId, "7");
 
         replenishmentService.runBatchReplenishmentScan();
 
@@ -240,7 +228,7 @@ class BatchReplenishmentScanTest {
         receive(sku, bin, 3); // on-hand at the BIN the policy governs
         // PO ships to the SITE (POs are never keyed by bin) — bin→site resolution must
         // credit it to the policy's projection: 3 + 7 = 10 >= 5 → no trigger.
-        savePo(PurchaseOrderStatus.APPROVED, site, LocalDate.now(ZoneOffset.UTC), skuId, "7");
+        savePo("APPROVED", site, LocalDate.now(ZoneOffset.UTC), skuId, "7");
 
         replenishmentService.runBatchReplenishmentScan();
 
@@ -267,33 +255,21 @@ class BatchReplenishmentScanTest {
         assertThat(tasks.getFirst().getQuantity()).isEqualTo(17); // total open quantity unchanged
     }
 
-    private void savePo(
-            PurchaseOrderStatus status, UUID shipToSiteId, LocalDate expectedDeliveryDate, UUID skuId, String openQty) {
+    /**
+     * Puts an order into play by stating what it says.
+     *
+     * <p>pos-inventory has no purchase-order table any more (CAP-320 #1334); supply is read from
+     * the projection, so this is the only shape the running system has.
+     */
+    private void savePo(String status, UUID shipToSiteId, LocalDate expectedDeliveryDate, UUID skuId, String openQty) {
+        PO_SEQ.incrementAndGet();
         BigDecimal open = new BigDecimal(openQty);
-        PurchaseOrderEntity po = PurchaseOrderEntity.builder()
-                .vendorId(UUID.randomUUID())
-                .poNumber("F2-" + PO_SEQ.incrementAndGet() + "-" + UUID.randomUUID())
-                .status(status)
-                .currency("USD")
-                .subtotalMinor(100L)
-                .taxMinor(0L)
-                .grandTotalMinor(100L)
-                .shipToLocationId(shipToSiteId)
-                .expectedDeliveryDate(expectedDeliveryDate)
-                .build();
-        PurchaseOrderLineEntity line = PurchaseOrderLineEntity.builder()
-                .lineNumber(1)
-                .skuId(skuId)
-                .description("F2 orderpoint test line")
-                .quantityDecimal(open.max(BigDecimal.ONE))
-                .unitCostMinor(100L)
-                .lineTotalMinor(100L)
-                .openQuantityDecimal(open)
-                .build();
-        line.setPurchaseOrder(po);
-        po.getLines().add(line);
-        purchaseOrderRepository.save(po);
-        // Supply is read from the projection (#1333).
-        projection.project(po);
+        projection.project(
+                UUID.randomUUID(),
+                status,
+                shipToSiteId,
+                expectedDeliveryDate,
+                java.util.List.of(new PurchaseOrderProjectionTestSupport.Line(
+                        skuId, open.max(BigDecimal.ONE).toPlainString(), openQty)));
     }
 }

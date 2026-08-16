@@ -1,4 +1,4 @@
-package com.positivity.inventory.internal.entity;
+package com.positivity.order.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;

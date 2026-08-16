@@ -1,7 +1,7 @@
-package com.positivity.inventory.internal.repository;
+package com.positivity.order.internal.repository;
 
-import com.positivity.inventory.internal.entity.PurchaseOrderEntity;
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
+import com.positivity.order.internal.entity.PurchaseOrderEntity;
+import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,7 +15,7 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrderEnti
     Optional<PurchaseOrderEntity> findByPoNumber(String poNumber);
 
     /**
-     * Get the next purchase order sequence value from PostgreSQL.
+     * Next value of the purchase-order number sequence.
      *
      * @return next sequence value for purchase order number generation
      */

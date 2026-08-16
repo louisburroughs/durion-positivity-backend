@@ -607,18 +607,6 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1pick-lists~1{pickListId}~1tasks~1{taskId}~1confirm
   /v1/inventory/pickingLists/{id}/confirm:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1pickingLists~1{id}~1confirm
-  /v1/inventory/purchase-orders:
-    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-orders
-  /v1/inventory/purchase-orders/{poId}:
-    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-orders~1{poId}
-  /v1/inventory/purchase-orders/{poId}/approve:
-    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-orders~1{poId}~1approve
-  /v1/inventory/purchase-orders/{poId}/cancel:
-    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-orders~1{poId}~1cancel
-  /v1/inventory/purchase-orders/{poId}/receive:
-    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-orders~1{poId}~1receive
-  /v1/inventory/purchase-orders/{poId}/revisions:
-    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-orders~1{poId}~1revisions
   /v1/inventory/purchase-suggestions:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1purchase-suggestions
   /v1/inventory/purchase-suggestions/convert:
@@ -699,6 +687,10 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1stock-movements
   /v1/inventory/storage-locations:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1storage-locations
+  /v1/inventory/supplierStockHints/byCode:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1supplierStockHints~1byCode
+  /v1/inventory/supplierStockHints/byProduct/{productId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1supplierStockHints~1byProduct~1{productId}
   /v1/inventory/sync-logs:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1sync-logs
   /v1/inventory/sync-logs/{syncLogId}:
@@ -917,6 +909,16 @@ paths:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1price-overrides~1{overrideId}~1approve
   /v1/orders/price-overrides/{overrideId}/reject:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1price-overrides~1{overrideId}~1reject
+  /v1/orders/purchase-orders:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders
+  /v1/orders/purchase-orders/{poId}:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}
+  /v1/orders/purchase-orders/{poId}/approve:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1approve
+  /v1/orders/purchase-orders/{poId}/cancel:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1cancel
+  /v1/orders/purchase-orders/{poId}/revisions:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1revisions
   /v1/orders/sessions:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1sessions
   /v1/orders/sessions/current:

@@ -1,18 +1,17 @@
-package com.positivity.inventory.internal.service;
+package com.positivity.order.internal.service;
 
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.order.PurchaseOrderLine;
 import com.positivity.domainevents.order.PurchaseOrderUpdatedV1;
-import com.positivity.inventory.internal.config.OutboxEventWriter;
-import com.positivity.inventory.internal.entity.PurchaseOrderEntity;
-import com.positivity.inventory.internal.entity.PurchaseOrderLineEntity;
+import com.positivity.order.internal.config.OutboxEventWriter;
+import com.positivity.order.internal.entity.PurchaseOrderEntity;
+import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -21,19 +20,14 @@ import org.springframework.stereotype.Component;
 
 /**
  * Publishes {@code purchaseorder.updated} on {@code order.events.v1} whenever a purchase order's
- * state changes (CAP-320, ADR-0049 §3).
+ * state changes (CAP-320 #1334, ADR-0049 §3).
  *
- * <h2>Why pos-inventory publishes on the order domain's topic</h2>
+ * <h2>The same contract, now from its owner</h2>
  *
- * Because the aggregate is moving to pos-order and the contract must not move with it. Publishing on
- * {@code inventory.events.v1} today would mean changing the topic — and every consumer — at the same
- * moment the aggregate relocates, which is exactly the simultaneous rewiring this sequencing exists
- * to avoid. Emitting the eventual owner's contract from the current owner lets the projection be
- * built and proven against the running implementation, so the move becomes a deletion.
- *
- * <p>This is the one place in the module that knowingly produces on another domain's topic. It is
- * temporary by construction: when pos-order gains the aggregate, this class is deleted rather than
- * repointed.
+ * pos-inventory published this fact while it still held the aggregate (#1333), deliberately on
+ * this topic rather than its own, so that moving the aggregate would not also move the contract.
+ * That is what makes this story a deletion on the pos-inventory side rather than a rewiring of
+ * every reader: consumers were already reading the fact they read now.
  *
  * <h2>Full state, every time</h2>
  *
@@ -47,12 +41,11 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class PurchaseOrderFactPublisher {
 
-    private static final String SOURCE = "pos-inventory";
+    private static final String SOURCE = "pos-order";
 
     /**
-     * Optional so the publisher is inert where the outbox is not wired — the same treatment
-     * {@link InventoryFactPublisher} gives it. A deployment without eventing still writes purchase
-     * orders; it simply publishes nothing.
+     * Optional so the publisher is inert where the outbox is not wired. A deployment without
+     * eventing still writes purchase orders; it simply publishes nothing.
      */
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
 
@@ -61,17 +54,15 @@ public class PurchaseOrderFactPublisher {
     /**
      * Queues the order's current state for publication, in the caller's transaction.
      *
-     * <p>{@code aggregateVersion} is the order's own optimistic-lock version, so a consumer's stale
-     * guard compares like with like: two facts for one order are ordered by the version the database
-     * assigned, not by the clock of whichever instance emitted them.
+     * <p>{@code aggregateVersion} is the order's own version number, so a consumer's stale guard
+     * compares like with like: two facts for one order are ordered by the version the order
+     * carries, not by the clock of whichever instance emitted them.
      */
     public void publish(@NonNull PurchaseOrderEntity order, @NonNull List<PurchaseOrderLineEntity> lines) {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
         if (writer == null) {
             return;
         }
-
-        PurchaseOrderUpdatedV1 payload = toFact(order, lines, Instant.now(clock));
 
         writer.publish(
                 DomainTopics.events("order"),
@@ -85,7 +76,7 @@ public class PurchaseOrderFactPublisher {
                         SOURCE,
                         null,
                         order.getUpdatedBy(),
-                        payload));
+                        toFact(order, lines, Instant.now(clock))));
 
         log.debug(
                 "Queued purchaseorder.updated for {} status={} lines={}",
@@ -95,25 +86,11 @@ public class PurchaseOrderFactPublisher {
     }
 
     /**
-     * The order's optimistic-lock version, or zero before one is assigned.
-     *
-     * <p>Zero is safe as a floor rather than a collision risk: an order with no version yet has not
-     * been persisted, so no earlier fact for it can exist to be ordered against.
-     *
-     * <p>Package-private for the same reason as {@link #toFact}: the projection test support must
-     * version its rows the way production does, not with a number of its own.
-     */
-    static long versionOf(PurchaseOrderEntity order) {
-        Integer version = order.getVersionNumber();
-        return version == null ? 0L : version.longValue();
-    }
-
-    /**
      * Builds the published state of one order.
      *
      * <p>Package-private rather than private so tests can project an aggregate through the exact
      * mapping production uses. A test helper with its own copy of this mapping would keep passing
-     * while the real one drifted, which is the failure a parity test exists to prevent.
+     * while the real one drifted.
      */
     static PurchaseOrderUpdatedV1 toFact(
             PurchaseOrderEntity order, List<PurchaseOrderLineEntity> lines, Instant occurredAt) {
@@ -126,17 +103,24 @@ public class PurchaseOrderFactPublisher {
                 order.getExpectedDeliveryDate(),
                 order.getCurrency(),
                 order.getGrandTotalMinor(),
+                order.getOpenBalanceMinor(),
                 occurredAt,
                 lines.stream().map(PurchaseOrderFactPublisher::toFactLine).toList());
     }
 
+    /**
+     * The order's version number, or zero before one is assigned.
+     *
+     * <p>Zero is safe as a floor rather than a collision risk: an order with no version yet has not
+     * been persisted, so no earlier fact for it can exist to be ordered against.
+     */
+    private static long versionOf(PurchaseOrderEntity order) {
+        Integer version = order.getVersionNumber();
+        return version == null ? 0L : version.longValue();
+    }
+
     private static PurchaseOrderLine toFactLine(PurchaseOrderLineEntity line) {
-        // quantity_decimal is NOT NULL at the schema level and the contract requires it, so a null
-        // here is corrupt data. Publishing zero instead would quietly drop the line's supply from
-        // availability-to-promise; failing keeps the corruption loud and the caller's transaction
-        // rolled back.
-        BigDecimal ordered = Objects.requireNonNull(
-                line.getQuantityDecimal(), () -> "quantityDecimal is null on purchase-order line " + line.getLineId());
+        BigDecimal ordered = line.getQuantityDecimal() == null ? BigDecimal.ZERO : line.getQuantityDecimal();
         // Open quantity is null on a line that has never been received against; it means "all of it
         // is still outstanding", not "none of it is".
         BigDecimal open = line.getOpenQuantityDecimal() == null ? ordered : line.getOpenQuantityDecimal();

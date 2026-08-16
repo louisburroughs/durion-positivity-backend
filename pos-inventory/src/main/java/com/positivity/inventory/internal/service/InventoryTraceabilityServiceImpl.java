@@ -7,14 +7,15 @@ import com.positivity.inventory.internal.dto.traceability.TraceabilityMovement;
 import com.positivity.inventory.internal.dto.traceability.TraceabilityUpstream;
 import com.positivity.inventory.internal.dto.traceability.WarrantyHoldRef;
 import com.positivity.inventory.internal.entity.AdvanceShippingNoticeEntity;
+import com.positivity.inventory.internal.entity.ExtPurchaseOrderReplica;
 import com.positivity.inventory.internal.entity.GoodsReceiptEntity;
 import com.positivity.inventory.internal.entity.GoodsReceiptLineEntity;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.InventoryLot;
 import com.positivity.inventory.internal.entity.InventorySerialUnit;
-import com.positivity.inventory.internal.entity.PurchaseOrderEntity;
 import com.positivity.inventory.internal.entity.WarrantyPartReturnHold;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
+import com.positivity.inventory.internal.repository.ExtPurchaseOrderRepository;
 import com.positivity.inventory.internal.repository.GoodsReceiptLineRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryLotRepository;
@@ -52,6 +53,7 @@ public class InventoryTraceabilityServiceImpl implements InventoryTraceabilitySe
     private static final String DOC_GOODS_RECEIPT = "GOODS_RECEIPT";
 
     private final InventoryLotRepository lotRepository;
+    private final ExtPurchaseOrderRepository extPurchaseOrderRepository;
     private final InventorySerialUnitRepository serialRepository;
     private final InventoryLedgerEntryRepository ledgerRepository;
     private final GoodsReceiptLineRepository goodsReceiptLineRepository;
@@ -169,9 +171,17 @@ public class InventoryTraceabilityServiceImpl implements InventoryTraceabilitySe
         if (receipt == null) {
             return;
         }
-        PurchaseOrderEntity po = receipt.getPurchaseOrder();
-        if (po != null && po.getPurchaseOrderId() != null) {
-            putDocument(documents, DOC_PURCHASE_ORDER, po.getPurchaseOrderId(), po.getPoNumber());
+        UUID purchaseOrderId = receipt.getPurchaseOrderId();
+        if (purchaseOrderId != null) {
+            // The PO number is the order's to state, so it comes from the projection. When the
+            // replica has not caught up the trace still names the order by id rather than dropping
+            // it: a document reference with no human-readable number is far less misleading than a
+            // trace that omits the purchase order entirely.
+            String poNumber = extPurchaseOrderRepository
+                    .findById(purchaseOrderId)
+                    .map(ExtPurchaseOrderReplica::getPoNumber)
+                    .orElse(null);
+            putDocument(documents, DOC_PURCHASE_ORDER, purchaseOrderId, poNumber);
         }
         AdvanceShippingNoticeEntity asn = receipt.getAsn();
         if (asn != null && asn.getAsnId() != null) {

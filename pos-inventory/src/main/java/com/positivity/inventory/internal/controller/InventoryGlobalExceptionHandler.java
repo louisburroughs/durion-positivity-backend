@@ -27,7 +27,6 @@ import com.positivity.inventory.internal.exception.OverReceiptNotPermittedExcept
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.PickScanMismatchException;
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
-import com.positivity.inventory.internal.exception.PurchaseOrderNotApprovedException;
 import com.positivity.inventory.internal.exception.PurchaseSuggestionConversionException;
 import com.positivity.inventory.internal.exception.PurchaseSuggestionStateException;
 import com.positivity.inventory.internal.exception.PutawayValidationException;
@@ -111,11 +110,6 @@ public class InventoryGlobalExceptionHandler {
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex) {
-        return build(HttpStatus.CONFLICT, CONFLICT, ex.getMessage());
-    }
-
-    @ExceptionHandler(PurchaseOrderNotApprovedException.class)
-    public ResponseEntity<ApiError> handlePurchaseOrderNotApproved(PurchaseOrderNotApprovedException ex) {
         return build(HttpStatus.CONFLICT, CONFLICT, ex.getMessage());
     }
 

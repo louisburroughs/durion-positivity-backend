@@ -1,4 +1,4 @@
-package com.positivity.inventory.internal.dto.purchaseorder;
+package com.positivity.order.internal.dto.purchaseorder;
 
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 

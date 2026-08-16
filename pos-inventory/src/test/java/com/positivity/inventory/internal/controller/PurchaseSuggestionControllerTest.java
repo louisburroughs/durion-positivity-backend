@@ -40,7 +40,7 @@ class PurchaseSuggestionControllerTest {
     private static final UUID SUGGESTION_ID = UUID.fromString("00000000-0000-0000-0000-000000000070");
     private static final String VIEW = "inventory:on_hand:view";
     private static final String MANAGE = "inventory:replenishment:manage";
-    private static final String PO_CREATE = "inventory:purchase_order:create";
+    private static final String PO_CREATE = "order:purchase_order:create";
 
     @Autowired
     MockMvc mockMvc;

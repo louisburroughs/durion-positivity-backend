@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.domainevents.order.PurchaseOrderUpdatedV1;
 import com.positivity.inventory.internal.dto.asn.AsnLineResponse;
 import com.positivity.inventory.internal.dto.asn.AsnResponse;
 import com.positivity.inventory.internal.dto.asn.CreateAsnRequest;
@@ -9,24 +10,23 @@ import com.positivity.inventory.internal.dto.asn.GoodsReceiptLineResponse;
 import com.positivity.inventory.internal.dto.asn.GoodsReceiptResponse;
 import com.positivity.inventory.internal.entity.AdvanceShippingNoticeEntity;
 import com.positivity.inventory.internal.entity.AsnLineEntity;
+import com.positivity.inventory.internal.entity.ExtPurchaseOrderLineReplica;
+import com.positivity.inventory.internal.entity.ExtPurchaseOrderReplica;
 import com.positivity.inventory.internal.entity.GoodsReceiptEntity;
 import com.positivity.inventory.internal.entity.GoodsReceiptLineEntity;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
-import com.positivity.inventory.internal.entity.PurchaseOrderEntity;
-import com.positivity.inventory.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.inventory.internal.enums.AsnStatus;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
 import com.positivity.inventory.internal.exception.DuplicateAsnException;
 import com.positivity.inventory.internal.exception.InvalidPoReferenceException;
 import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.AsnLineRepository;
 import com.positivity.inventory.internal.repository.AsnRepository;
+import com.positivity.inventory.internal.repository.ExtPurchaseOrderLineRepository;
+import com.positivity.inventory.internal.repository.ExtPurchaseOrderRepository;
 import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
-import com.positivity.inventory.internal.repository.PurchaseOrderLineRepository;
-import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
 import com.positivity.inventory.service.AsnService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -52,12 +52,12 @@ public class AsnServiceImpl implements AsnService {
     private final AsnRepository asnRepository;
     private final AsnLineRepository asnLineRepository;
     private final GoodsReceiptRepository goodsReceiptRepository;
-    private final PurchaseOrderRepository purchaseOrderRepository;
-    private final PurchaseOrderLineRepository purchaseOrderLineRepository;
+    private final ExtPurchaseOrderRepository purchaseOrderRepository;
+    private final ExtPurchaseOrderLineRepository purchaseOrderLineRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
-    private final PurchaseOrderFactPublisher purchaseOrderFactPublisher;
+    private final GoodsReceiptFactPublisher goodsReceiptFactPublisher;
     private final ApplicationEventPublisher eventPublisher;
     private final DocumentQuantityConverter documentQuantityConverter;
     private final InventoryLotCaptureService lotCaptureService;
@@ -66,11 +66,14 @@ public class AsnServiceImpl implements AsnService {
     @Transactional
     public @NonNull AsnResponse createAsn(@NonNull CreateAsnRequest request, @NonNull String actorId) {
         for (UUID poId : request.getRelatedPoIds()) {
-            PurchaseOrderEntity purchaseOrder = purchaseOrderRepository
+            ExtPurchaseOrderReplica purchaseOrder = purchaseOrderRepository
                     .findById(poId)
                     .orElseThrow(() -> new InvalidPoReferenceException(
                             "INVALID_PO_REFERENCE: PO " + poId + " is unknown or not APPROVED"));
-            if (purchaseOrder.getStatus() != PurchaseOrderStatus.APPROVED) {
+            // A shipping notice may only be raised against an order that has been committed to.
+            // PARTIALLY_RECEIVED is deliberately excluded here: a second ASN against a part
+            // delivered order is a different case from the first, and is not what this creates.
+            if (!"APPROVED".equals(purchaseOrder.getStatus())) {
                 throw new InvalidPoReferenceException(
                         "INVALID_PO_REFERENCE: PO " + poId + " is unknown or not APPROVED");
             }
@@ -86,8 +89,9 @@ public class AsnServiceImpl implements AsnService {
                 .asnReferenceNumber(request.getAsnReferenceNumber())
                 .vendorId(request.getVendorId())
                 .status(AsnStatus.LOADED)
-                .purchaseOrder(
-                        requireApprovedPurchaseOrder(request.getRelatedPoIds().get(0)))
+                .purchaseOrderId(
+                        requireApprovedPurchaseOrder(request.getRelatedPoIds().get(0))
+                                .getPurchaseOrderId())
                 .shipDate(request.getShipDate())
                 .expectedArrivalDate(request.getExpectedArrivalDate())
                 .build();
@@ -96,7 +100,7 @@ public class AsnServiceImpl implements AsnService {
 
         List<AsnLineEntity> lineEntities = request.getLineItems().stream()
                 .map(line -> {
-                    PurchaseOrderLineEntity poLine = resolvePurchaseOrderLine(line.getPoLineId());
+                    ExtPurchaseOrderLineReplica poLine = resolvePurchaseOrderLine(line.getPoLineId());
                     // odoo-parity B2 (#1034): an optional document UoM derives the base
                     // quantityShipped; the keyed values are kept for audit.
                     DocumentQuantityConverter.DocumentConversion conversion = documentQuantityConverter
@@ -114,8 +118,9 @@ public class AsnServiceImpl implements AsnService {
                     }
                     return AsnLineEntity.builder()
                             .asn(savedAsnRef)
-                            .purchaseOrder(requireApprovedPurchaseOrder(line.getPoId()))
-                            .poLine(poLine)
+                            .purchaseOrderId(
+                                    requireApprovedPurchaseOrder(line.getPoId()).getPurchaseOrderId())
+                            .poLineId(poLine == null ? null : poLine.getLineId())
                             .sku(line.getSku())
                             .quantityShipped(quantityShipped)
                             .quantityReceived(BigDecimal.ZERO)
@@ -170,24 +175,16 @@ public class AsnServiceImpl implements AsnService {
         }
 
         UUID poId = asn != null
-                ? (asn.getPurchaseOrder() != null
-                        ? asn.getPurchaseOrder().getPurchaseOrderId()
+                ? (asn.getPurchaseOrderId() != null
+                        ? asn.getPurchaseOrderId()
                         : asn.getLines().stream()
-                                .map(AsnLineEntity::getPurchaseOrder)
-                                .filter(po -> po != null && po.getPurchaseOrderId() != null)
-                                .map(PurchaseOrderEntity::getPurchaseOrderId)
+                                .map(AsnLineEntity::getPurchaseOrderId)
+                                .filter(java.util.Objects::nonNull)
                                 .findFirst()
                                 .orElse(request.getPoId()))
                 : request.getPoId();
 
-        PurchaseOrderEntity purchaseOrder = purchaseOrderRepository
-                .findById(poId)
-                .orElseThrow(() -> new InvalidPoReferenceException(
-                        "INVALID_PO_REFERENCE: PO " + poId + " is unknown or not APPROVED"));
-        if (purchaseOrder.getStatus() != PurchaseOrderStatus.APPROVED
-                && purchaseOrder.getStatus() != PurchaseOrderStatus.PARTIALLY_RECEIVED) {
-            throw new InvalidPoReferenceException("INVALID_PO_REFERENCE: PO " + poId + " is unknown or not APPROVED");
-        }
+        ExtPurchaseOrderReplica purchaseOrder = requireApprovedPurchaseOrder(poId);
 
         // odoo-parity B2 (#1034): convert optional document-UoM quantities to base BEFORE the
         // over-receipt guard and any posting; money math stays documentQuantity × unitCostMinor
@@ -208,7 +205,7 @@ public class AsnServiceImpl implements AsnService {
 
         GoodsReceiptEntity receiptEntity = GoodsReceiptEntity.builder()
                 .receiptNumber(generateReceiptNumber())
-                .purchaseOrder(purchaseOrder)
+                .purchaseOrderId(purchaseOrder.getPurchaseOrderId())
                 .asn(asn)
                 .locationId(request.getLocationId())
                 .totalAccruedAmountMinor(receiptTotalMinor)
@@ -220,7 +217,8 @@ public class AsnServiceImpl implements AsnService {
             DocumentQuantityConverter.DocumentConversion conversion = computed.conversion();
             GoodsReceiptLineEntity receiptLine = GoodsReceiptLineEntity.builder()
                     .goodsReceipt(receiptEntity)
-                    .poLine(computed.poLine())
+                    .poLineId(
+                            computed.poLine() == null ? null : computed.poLine().getLineId())
                     .sku(line.getSku())
                     .quantityReceived(computed.baseQuantity())
                     .unitCostMinor(line.getUnitCostMinor())
@@ -292,16 +290,20 @@ public class AsnServiceImpl implements AsnService {
             inventoryFactPublisher.markEntry(entry);
         }
 
-        long nextOpenBalance = Math.max(0L, currentOpenBalance - receiptTotalMinor);
-        purchaseOrder.setOpenBalanceMinor(nextOpenBalance);
-        purchaseOrder.setStatus(
-                nextOpenBalance == 0L ? PurchaseOrderStatus.FULLY_RECEIVED : PurchaseOrderStatus.PARTIALLY_RECEIVED);
-        purchaseOrderRepository.save(purchaseOrder);
-        // This is the second path that changes a purchase order's state, and the consequential one
-        // for availability-to-promise: it is what takes an order out of open supply once it is
-        // fully received. Without the fact, the projection would go on counting a delivered order
-        // as still incoming, over-promising stock that is already on the shelf.
-        purchaseOrderFactPublisher.publish(purchaseOrder, purchaseOrder.getLines());
+        // Receiving states what arrived; pos-order decides what that means for the order's
+        // outstanding quantities and status (CAP-320 #1334). Writing the order here is what made
+        // two modules writers of one aggregate, and is exactly what this split removes.
+        goodsReceiptFactPublisher.publish(
+                persistedReceipt,
+                computedLines.stream()
+                        .map(computed -> new GoodsReceiptFactPublisher.GoodsReceiptLineFact(
+                                computed.poLine() == null
+                                        ? null
+                                        : computed.poLine().getLineId(),
+                                computed.request().getSku(),
+                                computed.baseQuantity(),
+                                computed.lineAccruedMinor()))
+                        .toList());
 
         if (asn != null) {
             applyReceiptToAsn(asn, computedLines);
@@ -372,7 +374,7 @@ public class AsnServiceImpl implements AsnService {
      */
     private record ReceiptLineComputation(
             CreateGoodsReceiptLineRequest request,
-            PurchaseOrderLineEntity poLine,
+            ExtPurchaseOrderLineReplica poLine,
             DocumentQuantityConverter.DocumentConversion conversion,
             BigDecimal baseQuantity,
             long lineAccruedMinor,
@@ -382,7 +384,7 @@ public class AsnServiceImpl implements AsnService {
             @NonNull List<CreateGoodsReceiptLineRequest> lines, UUID vendorId) {
         List<ReceiptLineComputation> computed = new ArrayList<>(lines.size());
         for (CreateGoodsReceiptLineRequest line : lines) {
-            PurchaseOrderLineEntity poLine = resolvePurchaseOrderLine(line.getPoLineId());
+            ExtPurchaseOrderLineReplica poLine = resolvePurchaseOrderLine(line.getPoLineId());
             DocumentQuantityConverter.DocumentConversion conversion = documentQuantityConverter
                     .convertIfPresent(
                             resolveProductId(poLine, line.getSku()),
@@ -415,7 +417,7 @@ public class AsnServiceImpl implements AsnService {
      * present, otherwise the free-text SKU parsed as a UUID; {@code null} when neither resolves
      * (a document UoM on such a line raises {@code UOM_CONVERSION_UNDEFINED}).
      */
-    private UUID resolveProductId(PurchaseOrderLineEntity poLine, String sku) {
+    private UUID resolveProductId(ExtPurchaseOrderLineReplica poLine, String sku) {
         if (poLine != null && poLine.getSkuId() != null) {
             return poLine.getSkuId();
         }
@@ -456,10 +458,7 @@ public class AsnServiceImpl implements AsnService {
         List<AsnLineResponse> lineResponses = entity.getLines().stream()
                 .map(line -> AsnLineResponse.builder()
                         .asnLineId(line.getAsnLineId())
-                        .poId(
-                                line.getPurchaseOrder() == null
-                                        ? null
-                                        : line.getPurchaseOrder().getPurchaseOrderId())
+                        .poId(line.getPurchaseOrderId())
                         .sku(line.getSku())
                         .quantityShipped(line.getQuantityShipped())
                         .quantityReceived(line.getQuantityReceived())
@@ -488,10 +487,7 @@ public class AsnServiceImpl implements AsnService {
         List<GoodsReceiptLineResponse> lineResponses = entity.getLines().stream()
                 .map(line -> GoodsReceiptLineResponse.builder()
                         .receiptLineId(line.getReceiptLineId())
-                        .poLineId(
-                                line.getPoLine() == null
-                                        ? null
-                                        : line.getPoLine().getLineId())
+                        .poLineId(line.getPoLineId())
                         .sku(line.getSku())
                         .quantityReceived(line.getQuantityReceived())
                         .unitCostMinor(line.getUnitCostMinor())
@@ -505,10 +501,7 @@ public class AsnServiceImpl implements AsnService {
         return GoodsReceiptResponse.builder()
                 .receiptId(entity.getReceiptId())
                 .receiptNumber(entity.getReceiptNumber())
-                .poId(
-                        entity.getPurchaseOrder() == null
-                                ? null
-                                : entity.getPurchaseOrder().getPurchaseOrderId())
+                .poId(entity.getPurchaseOrderId())
                 .asnId(entity.getAsn() == null ? null : entity.getAsn().getAsnId())
                 .locationId(entity.getLocationId())
                 .totalAccruedAmountMinor(entity.getTotalAccruedAmountMinor())
@@ -518,19 +511,26 @@ public class AsnServiceImpl implements AsnService {
                 .build();
     }
 
-    private @NonNull PurchaseOrderEntity requireApprovedPurchaseOrder(@NonNull UUID poId) {
-        PurchaseOrderEntity purchaseOrder = purchaseOrderRepository
+    /**
+     * The order an ASN or receipt may be raised against, read from the projection (CAP-320 #1334).
+     *
+     * <p>pos-order owns the order now, so this asks the replica rather than a table here or a call
+     * there (ADR-0044 R1/R3). An order the projection has not caught up with is treated as unknown:
+     * refusing a receipt that is merely early is recoverable, while accepting one against an order
+     * that was never approved is not.
+     */
+    private @NonNull ExtPurchaseOrderReplica requireApprovedPurchaseOrder(@NonNull UUID poId) {
+        ExtPurchaseOrderReplica purchaseOrder = purchaseOrderRepository
                 .findById(poId)
                 .orElseThrow(() -> new InvalidPoReferenceException(
                         "INVALID_PO_REFERENCE: PO " + poId + " is unknown or not APPROVED"));
-        if (purchaseOrder.getStatus() != PurchaseOrderStatus.APPROVED
-                && purchaseOrder.getStatus() != PurchaseOrderStatus.PARTIALLY_RECEIVED) {
+        if (!PurchaseOrderUpdatedV1.OPEN_SUPPLY_STATUSES.contains(purchaseOrder.getStatus())) {
             throw new InvalidPoReferenceException("INVALID_PO_REFERENCE: PO " + poId + " is unknown or not APPROVED");
         }
         return purchaseOrder;
     }
 
-    private PurchaseOrderLineEntity resolvePurchaseOrderLine(UUID poLineId) {
+    private ExtPurchaseOrderLineReplica resolvePurchaseOrderLine(UUID poLineId) {
         if (poLineId == null) {
             return null;
         }

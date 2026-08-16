@@ -15,6 +15,7 @@ import com.positivity.order.internal.entity.ExtProduct;
 import com.positivity.order.internal.entity.ExtVehicle;
 import com.positivity.order.internal.repository.ExtLocationRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
+import com.positivity.order.internal.repository.ExtProductUomReplicaRepository;
 import com.positivity.order.internal.repository.ExtVehicleRepository;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
 import java.time.Clock;
@@ -67,6 +68,9 @@ class ProductVehicleLocationReplicaTest {
     private ExtProductRepository extProductRepository;
 
     @Mock
+    private ExtProductUomReplicaRepository extProductUomReplicaRepository;
+
+    @Mock
     private ExtVehicleRepository extVehicleRepository;
 
     @Mock
@@ -85,7 +89,12 @@ class ProductVehicleLocationReplicaTest {
     class Products {
 
         private ProductEventsListener listener() {
-            return new ProductEventsListener(clock, objectMapper, processedEventRepository, extProductRepository);
+            return new ProductEventsListener(
+                    clock,
+                    objectMapper,
+                    processedEventRepository,
+                    extProductRepository,
+                    extProductUomReplicaRepository);
         }
 
         private String envelope(long version, String active) {

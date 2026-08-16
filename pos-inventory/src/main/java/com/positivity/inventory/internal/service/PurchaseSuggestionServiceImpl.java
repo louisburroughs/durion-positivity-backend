@@ -1,8 +1,7 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.inventory.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
-import com.positivity.inventory.internal.dto.purchaseorder.PurchaseOrderLineRequest;
-import com.positivity.inventory.internal.dto.purchaseorder.PurchaseOrderResponse;
+import com.positivity.domainevents.order.PurchaseOrderRequestedLine;
+import com.positivity.domainevents.order.PurchaseOrderRequestedV1;
 import com.positivity.inventory.internal.dto.purchasesuggestion.ConvertPurchaseSuggestionsRequest;
 import com.positivity.inventory.internal.dto.purchasesuggestion.ConvertPurchaseSuggestionsResponse;
 import com.positivity.inventory.internal.dto.purchasesuggestion.PurchaseSuggestionResponse;
@@ -14,8 +13,8 @@ import com.positivity.inventory.internal.exception.PurchaseSuggestionStateExcept
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.ExtProductUomReplicaRepository;
 import com.positivity.inventory.internal.repository.PurchaseSuggestionRepository;
-import com.positivity.inventory.service.PurchaseOrderService;
 import com.positivity.inventory.service.PurchaseSuggestionService;
+import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -68,7 +67,7 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
 
     private final PurchaseSuggestionRepository purchaseSuggestionRepository;
     private final ExtProductUomReplicaRepository extProductUomReplicaRepository;
-    private final PurchaseOrderService purchaseOrderService;
+    private final PurchaseOrderCommandPublisher purchaseOrderCommandPublisher;
     private final ForecastSiteResolver forecastSiteResolver;
     private final Clock clock;
 
@@ -164,44 +163,54 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                 .max(Comparator.naturalOrder())
                 .orElse(null);
 
-        CreatePurchaseOrderRequest poRequest = new CreatePurchaseOrderRequest();
-        poRequest.setVendorId(vendorId);
-        poRequest.setPoDate(LocalDate.ofInstant(Instant.now(clock), ZoneOffset.UTC));
-        poRequest.setCurrency(currency);
-        poRequest.setExpectedDeliveryDate(expectedDeliveryDate);
-        poRequest.setShipToLocationId(shipToSite);
-        poRequest.setRequestedBy(actorId);
-        poRequest.setComment("Converted from purchase suggestion(s) "
-                + suggestions.stream()
-                        .map(suggestion -> suggestion.getSuggestionId().toString())
-                        .reduce((left, right) -> left + ", " + right)
-                        .orElse(""));
-        List<PurchaseOrderLineRequest> lines = new ArrayList<>();
+        // The identity is minted here and used as the order's primary key, so one conversion can
+        // only ever produce one order: a redelivered command or a retried publish collides on the
+        // key rather than placing a second order for the same goods (CAP-320 #1334).
+        UUID purchaseOrderId = UUIDv7Generator.generate();
+
+        List<PurchaseOrderRequestedLine> lines = new ArrayList<>();
         for (int i = 0; i < suggestions.size(); i++) {
-            lines.add(toLineRequest(suggestions.get(i), i + 1));
+            lines.add(toRequestedLine(suggestions.get(i), i + 1));
         }
-        poRequest.setLines(lines);
 
-        PurchaseOrderResponse po = purchaseOrderService.createPurchaseOrder(poRequest, actorId);
+        purchaseOrderCommandPublisher.request(new PurchaseOrderRequestedV1(
+                purchaseOrderId,
+                vendorId,
+                currency,
+                shipToSite,
+                LocalDate.ofInstant(Instant.now(clock), ZoneOffset.UTC),
+                expectedDeliveryDate,
+                actorId,
+                "Converted from purchase suggestion(s) "
+                        + suggestions.stream()
+                                .map(suggestion -> suggestion.getSuggestionId().toString())
+                                .reduce((left, right) -> left + ", " + right)
+                                .orElse(""),
+                Instant.now(clock),
+                lines));
 
+        // Marked converted in the same transaction as the request. A suggestion that stayed
+        // SUGGESTED after the order was asked for would be picked up by the next replenishment
+        // scan and ordered a second time.
         for (PurchaseSuggestion suggestion : suggestions) {
             suggestion.setStatus(PurchaseSuggestionStatus.CONVERTED);
-            suggestion.setConvertedPurchaseOrderId(po.getPurchaseOrderId());
+            suggestion.setConvertedPurchaseOrderId(purchaseOrderId);
         }
         purchaseSuggestionRepository.saveAll(suggestions);
         log.info(
-                "Purchase suggestions converted: purchaseOrderId={} poNumber={} vendorId={} suggestionIds={}"
-                        + " actorId={}",
-                po.getPurchaseOrderId(),
-                po.getPoNumber(),
+                "Purchase suggestions converted: purchaseOrderId={} vendorId={} suggestionIds={} actorId={}",
+                purchaseOrderId,
                 vendorId,
                 request.getSuggestionIds(),
                 actorId);
 
+        // The order number and status are pos-order's to assign; they arrive on the fact and land
+        // in the ext_purchase_order projection. Reporting a guess here would be reporting a number
+        // no purchase order actually carries.
         return ConvertPurchaseSuggestionsResponse.builder()
-                .purchaseOrderId(po.getPurchaseOrderId())
-                .poNumber(po.getPoNumber())
-                .purchaseOrderStatus(po.getStatus() != null ? po.getStatus().name() : null)
+                .purchaseOrderId(purchaseOrderId)
+                .poNumber(null)
+                .purchaseOrderStatus("REQUESTED")
                 .convertedSuggestionIds(suggestions.stream()
                         .map(PurchaseSuggestion::getSuggestionId)
                         .toList())
@@ -257,26 +266,38 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
     }
 
     /** One PO line per suggestion, expressed in the vendor's pack UoM when the B2 rule applies. */
-    private PurchaseOrderLineRequest toLineRequest(PurchaseSuggestion suggestion, int lineNumber) {
-        PurchaseOrderLineRequest line = new PurchaseOrderLineRequest();
-        line.setLineNumber(lineNumber);
+    private PurchaseOrderRequestedLine toRequestedLine(PurchaseSuggestion suggestion, int lineNumber) {
         UUID productId = parseUuid(suggestion.getItemSKU());
-        line.setSkuId(productId);
-        line.setDescription("Replenishment purchase suggestion for SKU " + suggestion.getItemSKU());
+        String description = "Replenishment purchase suggestion for SKU " + suggestion.getItemSKU();
 
         Optional<ExtProductUomReplica> packUom = packUomFor(productId, suggestion);
         if (packUom.isPresent()) {
             int packSize = suggestion.getVendorPackSize();
-            line.setDocumentUom(packUom.get().getUomCode());
-            line.setDocumentQuantity(BigDecimal.valueOf(suggestion.getSuggestedQuantity() / packSize));
-            // unitCostMinor refers to one documentUom unit (see PurchaseOrderLineRequest):
-            // per-pack cost = per-base-unit feed cost × pack size.
-            line.setUnitCostMinor(suggestion.getUnitCostMinor() * packSize);
-        } else {
-            line.setQuantity(BigDecimal.valueOf(suggestion.getSuggestedQuantity()));
-            line.setUnitCostMinor(suggestion.getUnitCostMinor());
+            // Ordered in vendor packs, and the order should say so. unitCostMinor refers to one
+            // pack: per-pack cost = per-base-unit feed cost × pack size. pos-order converts the
+            // pack quantity to base, which is why the base quantity is left unstated here rather
+            // than computed twice.
+            return new PurchaseOrderRequestedLine(
+                    lineNumber,
+                    productId,
+                    description,
+                    null,
+                    suggestion.getUnitCostMinor() * (long) packSize,
+                    packUom.get().getUomCode(),
+                    BigDecimal.valueOf(suggestion.getSuggestedQuantity() / packSize),
+                    null,
+                    null);
         }
-        return line;
+        return new PurchaseOrderRequestedLine(
+                lineNumber,
+                productId,
+                description,
+                BigDecimal.valueOf(suggestion.getSuggestedQuantity()),
+                suggestion.getUnitCostMinor(),
+                null,
+                null,
+                null,
+                null);
     }
 
     /**

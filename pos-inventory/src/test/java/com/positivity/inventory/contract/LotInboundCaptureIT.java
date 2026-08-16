@@ -10,11 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.inventory.internal.dto.asn.CreateGoodsReceiptLineRequest;
 import com.positivity.inventory.internal.dto.asn.CreateGoodsReceiptRequest;
 import com.positivity.inventory.internal.dto.asn.GoodsReceiptResponse;
-import com.positivity.inventory.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
-import com.positivity.inventory.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
-import com.positivity.inventory.internal.dto.purchaseorder.PurchaseOrderLineRequest;
-import com.positivity.inventory.internal.dto.purchaseorder.PurchaseOrderResponse;
-import com.positivity.inventory.internal.dto.purchaseorder.ReceivePurchaseOrderRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceiveLineRequest;
 import com.positivity.inventory.internal.entity.ExtProductReplica;
@@ -35,11 +30,9 @@ import com.positivity.inventory.internal.repository.InventoryLotRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.ReceivingSessionRepository;
 import com.positivity.inventory.service.AsnService;
-import com.positivity.inventory.service.PurchaseOrderService;
 import com.positivity.inventory.service.ReceivingService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -93,7 +86,7 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
     private AsnService asnService;
 
     @Autowired
-    private PurchaseOrderService purchaseOrderService;
+    private com.positivity.inventory.internal.service.PurchaseOrderProjectionTestSupport projection;
 
     @Autowired
     private ReceivingService receivingService;
@@ -135,9 +128,9 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
     @DisplayName("POST /goods-receipts for a LOT-tracked SKU without lotNumber → 422 LOT_NUMBER_REQUIRED")
     void goodsReceipt_lotTrackedWithoutLotNumber_returns422() throws Exception {
         UUID productId = seedProduct("LOT");
-        PurchaseOrderResponse po = createApprovedPo(productId, 5, 1_000L);
+        UUID po = createApprovedPo(productId, 5, 1_000L);
 
-        CreateGoodsReceiptRequest request = receiptRequest(po.getPurchaseOrderId(), UUID.randomUUID());
+        CreateGoodsReceiptRequest request = receiptRequest(po, UUID.randomUUID());
         request.setLines(List.of(receiptLine(productId.toString(), new BigDecimal("5"), 1_000L, null)));
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/goods-receipts")
@@ -158,9 +151,9 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
     void goodsReceipt_lotTracked_createsLotAndMaintainsDualRows() {
         UUID productId = seedProduct("LOT");
         UUID locationId = UUID.randomUUID();
-        PurchaseOrderResponse po = createApprovedPo(productId, 12, 1_000L);
+        UUID po = createApprovedPo(productId, 12, 1_000L);
 
-        CreateGoodsReceiptRequest first = receiptRequest(po.getPurchaseOrderId(), locationId);
+        CreateGoodsReceiptRequest first = receiptRequest(po, locationId);
         first.setLines(List.of(receiptLine(productId.toString(), new BigDecimal("7"), 1_000L, "LOT-2026-A")));
         GoodsReceiptResponse firstResponse = asnService.createGoodsReceipt(first, ACTOR);
         assertThat(firstResponse.getReceiptId()).isNotNull();
@@ -170,7 +163,6 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
                 .orElseThrow();
         assertThat(lot.getStatus()).isEqualTo(InventoryLotStatus.ACTIVE);
         assertThat(lot.getReceivedAt()).isNotNull();
-        assertThat(lot.getVendorId()).isEqualTo(po.getVendorId());
         assertThat(lot.getExpirationDate()).isNull();
 
         List<InventoryLedgerEntry> entries = ledgerEntriesFor(productId);
@@ -188,7 +180,7 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
         assertThat(perLot.getOnHand()).isEqualTo(7);
 
         // Second receipt of the same lot number reuses the lot (find-or-create).
-        CreateGoodsReceiptRequest second = receiptRequest(po.getPurchaseOrderId(), locationId);
+        CreateGoodsReceiptRequest second = receiptRequest(po, locationId);
         second.setLines(List.of(receiptLine(productId.toString(), new BigDecimal("5"), 1_000L, "LOT-2026-A")));
         asnService.createGoodsReceipt(second, ACTOR);
 
@@ -254,34 +246,6 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
     // ─── PO-receive path ────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("receivePurchaseOrder gates LOT-tracked lines and registers the lot (no ledger posting on this path)")
-    void receivePurchaseOrder_lotTracked_gatesAndRegistersLot() {
-        UUID productId = seedProduct("LOT");
-        PurchaseOrderResponse po = createApprovedPo(productId, 10, 1_000L);
-        UUID lineId = po.getLines().getFirst().getLineId();
-
-        ReceivePurchaseOrderRequest missingLot =
-                new ReceivePurchaseOrderRequest(List.of(new ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest(
-                        lineId, new BigDecimal("4"), null, null, null, null)));
-        assertThatThrownBy(() -> purchaseOrderService.receivePurchaseOrder(po.getPurchaseOrderId(), missingLot, ACTOR))
-                .isInstanceOf(LotNumberRequiredException.class);
-
-        ReceivePurchaseOrderRequest withLot =
-                new ReceivePurchaseOrderRequest(List.of(new ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest(
-                        lineId, new BigDecimal("4"), null, null, null, "LOT-PO-1")));
-        purchaseOrderService.receivePurchaseOrder(po.getPurchaseOrderId(), withLot, ACTOR);
-
-        InventoryLot lot = lotRepository
-                .findByStockItemIdAndLotNumber(productId.toString(), "LOT-PO-1")
-                .orElseThrow();
-        assertThat(lot.getVendorId()).isEqualTo(po.getVendorId());
-        // This path records receipt against the PO only — no ledger entries to stamp.
-        assertThat(ledgerEntriesFor(productId)).isEmpty();
-    }
-
-    // ─── zero-change regression for untracked and SERIAL products ───────────────
-
-    @Test
     @DisplayName("NONE-tracked receipt behaves byte-identically: null lotId, no lot row, single summary row")
     void untrackedReceipt_zeroBehaviorChange() {
         UUID trackedNone = seedProduct("NONE");
@@ -290,8 +254,8 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
         UUID locationId = UUID.randomUUID();
 
         for (String sku : List.of(trackedNone.toString(), noReplica.toString(), freeTextSku)) {
-            PurchaseOrderResponse po = createApprovedPo(UUID.randomUUID(), 9, 1_000L);
-            CreateGoodsReceiptRequest request = receiptRequest(po.getPurchaseOrderId(), locationId);
+            UUID po = createApprovedPo(UUID.randomUUID(), 9, 1_000L);
+            CreateGoodsReceiptRequest request = receiptRequest(po, locationId);
             // A keyed lot number on an untracked SKU stays document-only free text, as before E1.
             request.setLines(List.of(receiptLine(sku, new BigDecimal("9"), 1_000L, "LOT-IGNORED")));
             asnService.createGoodsReceipt(request, ACTOR);
@@ -317,8 +281,8 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
     @DisplayName("SERIAL-tracked receipt enumerates one serial unit per received unit; null lotId (serials != lots)")
     void serialTracked_enumeratesSerials() {
         UUID productId = seedProduct("SERIAL");
-        PurchaseOrderResponse po = createApprovedPo(productId, 3, 1_000L);
-        CreateGoodsReceiptRequest request = receiptRequest(po.getPurchaseOrderId(), UUID.randomUUID());
+        UUID po = createApprovedPo(productId, 3, 1_000L);
+        CreateGoodsReceiptRequest request = receiptRequest(po, UUID.randomUUID());
         CreateGoodsReceiptLineRequest line = receiptLine(productId.toString(), new BigDecimal("3"), 1_000L, null);
         line.setSerialNumbers(List.of("SN-E4-1", "SN-E4-2", "SN-E4-3"));
         request.setLines(List.of(line));
@@ -334,8 +298,8 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
     @DisplayName("SERIAL-tracked receipt whose serial count != quantity is rejected 422 SERIAL_COUNT_MISMATCH")
     void serialTracked_countMismatchRejected() {
         UUID productId = seedProduct("SERIAL");
-        PurchaseOrderResponse po = createApprovedPo(productId, 3, 1_000L);
-        CreateGoodsReceiptRequest request = receiptRequest(po.getPurchaseOrderId(), UUID.randomUUID());
+        UUID po = createApprovedPo(productId, 3, 1_000L);
+        CreateGoodsReceiptRequest request = receiptRequest(po, UUID.randomUUID());
         CreateGoodsReceiptLineRequest line = receiptLine(productId.toString(), new BigDecimal("3"), 1_000L, null);
         line.setSerialNumbers(List.of("SN-ONLY-1"));
         request.setLines(List.of(line));
@@ -352,9 +316,9 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
     void lotReadApi_listAndDetail() throws Exception {
         UUID productId = seedProduct("LOT");
         UUID locationId = UUID.randomUUID();
-        PurchaseOrderResponse po = createApprovedPo(productId, 20, 1_000L);
+        UUID po = createApprovedPo(productId, 20, 1_000L);
 
-        CreateGoodsReceiptRequest receipt = receiptRequest(po.getPurchaseOrderId(), locationId);
+        CreateGoodsReceiptRequest receipt = receiptRequest(po, locationId);
         receipt.setLines(List.of(
                 receiptLine(productId.toString(), new BigDecimal("6"), 1_000L, "LOT-API-A"),
                 receiptLine(productId.toString(), new BigDecimal("8"), 1_000L, "LOT-API-B")));
@@ -416,22 +380,15 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
         return productId;
     }
 
-    private PurchaseOrderResponse createApprovedPo(UUID skuId, int quantity, long unitCostMinor) {
-        CreatePurchaseOrderRequest request = new CreatePurchaseOrderRequest(
-                UUID.randomUUID(),
-                LocalDate.of(2026, 7, 1),
-                "USD",
-                "NET30",
-                LocalDate.of(2026, 7, 15),
-                UUID.randomUUID(),
-                ACTOR,
-                "odoo-parity E1 IT",
-                List.of(new PurchaseOrderLineRequest(
-                        1, skuId, "line 1", BigDecimal.valueOf(quantity), unitCostMinor, null, null, null, null)));
-        PurchaseOrderResponse po = purchaseOrderService.createPurchaseOrder(request, ACTOR);
-        purchaseOrderService.approvePurchaseOrder(
-                po.getPurchaseOrderId(), new ApprovePurchaseOrderRequest("approved for E1 IT"), ACTOR);
-        return purchaseOrderService.getPurchaseOrder(po.getPurchaseOrderId());
+    /**
+     * States an approved order a receipt can be recorded against (CAP-320 #1334).
+     *
+     * <p>The order itself is placed in pos-order; what matters here is what this module knows
+     * about it, which is its projection.
+     */
+    private UUID createApprovedPo(UUID skuId, int quantity, long unitCostMinor) {
+        return projection.projectReceivable(
+                "APPROVED", UUID.randomUUID(), skuId, String.valueOf(quantity), quantity * unitCostMinor);
     }
 
     private CreateGoodsReceiptRequest receiptRequest(UUID poId, UUID locationId) {

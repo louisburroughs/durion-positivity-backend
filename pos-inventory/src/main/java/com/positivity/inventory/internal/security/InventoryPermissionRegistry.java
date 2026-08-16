@@ -469,10 +469,7 @@ public class InventoryPermissionRegistry {
     public static final String ISSUE_PARTS = "inventory:issue:parts";
     public static final String LEDGER_VIEW = "inventory:ledger:view";
     public static final String LOCATION_SYNC = "inventory:location:sync";
-    public static final String PURCHASE_ORDER_APPROVE = "inventory:purchase_order:approve";
-    public static final String PURCHASE_ORDER_CREATE = "inventory:purchase_order:create";
     public static final String PURCHASE_ORDER_RECEIVE = "inventory:purchase_order:receive";
-    public static final String PURCHASE_ORDER_VIEW = "inventory:purchase_order:view";
     public static final String RECEIVING_COMPLETE = "inventory:receiving:complete";
     public static final String RECEIVING_CREATE = "inventory:receiving:create";
     public static final String RECEIVING_VIEW = "inventory:receiving:view";

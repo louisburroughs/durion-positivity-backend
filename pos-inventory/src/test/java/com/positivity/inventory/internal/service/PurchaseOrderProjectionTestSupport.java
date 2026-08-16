@@ -1,95 +1,137 @@
 package com.positivity.inventory.internal.service;
 
-import com.positivity.domainevents.order.PurchaseOrderLine;
-import com.positivity.domainevents.order.PurchaseOrderUpdatedV1;
 import com.positivity.inventory.internal.entity.ExtPurchaseOrderLineReplica;
 import com.positivity.inventory.internal.entity.ExtPurchaseOrderReplica;
-import com.positivity.inventory.internal.entity.PurchaseOrderEntity;
 import com.positivity.inventory.internal.repository.ExtPurchaseOrderLineRepository;
 import com.positivity.inventory.internal.repository.ExtPurchaseOrderRepository;
-import com.positivity.inventory.internal.repository.PurchaseOrderRepository;
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Projects a purchase order into {@code ext_purchase_order} the way the running system would.
+ * Seeds {@code ext_purchase_order} the way a published fact would (CAP-320 #1334).
  *
- * <h2>Why tests need this at all</h2>
+ * <h2>Why tests build orders this way now</h2>
  *
- * Availability-to-promise reads the projection, not the aggregate (#1333). A test that saves a
- * {@link PurchaseOrderEntity} and expects supply to move is describing a state the system never
- * reaches: in production the order is published as a fact and applied by
- * {@link PurchaseOrderProjectionListener}. Without Kafka in the test context nothing closes that
- * loop, so this helper closes it explicitly — one call, at the point the order is saved.
+ * pos-inventory has no purchase-order table any more. Everything here that reasons about incoming
+ * supply — availability-to-promise, replenishment, receiving, traceability — reads the projection,
+ * so a test that wants an order in play states what the order says rather than constructing one.
+ * That is not a testing shortcut: it is the only shape the running system has.
  *
- * <h2>Why it borrows the production mapping</h2>
- *
- * It builds the same {@link PurchaseOrderUpdatedV1} the publisher builds, through the same
- * package-private {@code toFact}. A helper carrying its own copy of the mapping would keep the
- * tests green while the real one drifted — the null-open-quantity rule in particular, where
- * "never received against" must mean "all of it is still outstanding" rather than "none of it is".
- * Copying that rule here would let a regression in the real one go unnoticed.
- *
- * <p>Once the aggregate moves to pos-order (#1334) this becomes the only way these tests can seed
- * supply, because the aggregate will no longer exist in this module.
+ * <p>Before the aggregate moved, this helper wrote both sides and borrowed the production mapping
+ * to keep them consistent. There is no second side left to be consistent with.
  */
 @Component
 @RequiredArgsConstructor
 public class PurchaseOrderProjectionTestSupport {
 
-    private final PurchaseOrderRepository purchaseOrderRepository;
     private final ExtPurchaseOrderRepository extOrderRepository;
     private final ExtPurchaseOrderLineRepository extLineRepository;
 
-    /** Projects an order already held in memory, lines included. */
-    public void project(PurchaseOrderEntity order) {
-        apply(
-                PurchaseOrderFactPublisher.toFact(order, order.getLines(), Instant.now()),
-                PurchaseOrderFactPublisher.versionOf(order));
+    /** One projected line: what was ordered and how much of it is still outstanding. */
+    public record Line(UUID skuId, String orderedQuantity, String openQuantity) {}
+
+    /** Projects an order with a single line, the common case in these tests. */
+    @Transactional
+    public UUID project(String status, UUID siteId, LocalDate expectedDeliveryDate, UUID skuId, String openQuantity) {
+        return project(
+                UUID.randomUUID(),
+                status,
+                siteId,
+                expectedDeliveryDate,
+                List.of(new Line(skuId, openQuantity, openQuantity)));
+    }
+
+    /** Projects an order with the lines given, as though its fact had just been applied. */
+    @Transactional
+    public UUID project(
+            UUID purchaseOrderId, String status, UUID siteId, LocalDate expectedDeliveryDate, List<Line> lines) {
+        extOrderRepository.save(ExtPurchaseOrderReplica.builder()
+                .purchaseOrderId(purchaseOrderId)
+                .poNumber("PO-" + purchaseOrderId.toString().substring(0, 8))
+                .vendorId(UUID.randomUUID())
+                .status(status)
+                .shipToLocationId(siteId)
+                // Carried through exactly: an undated order stays undated, because the
+                // horizon-bounded supply query excludes it rather than treating it as due today.
+                .expectedDeliveryDate(expectedDeliveryDate)
+                .currency("USD")
+                .grandTotalMinor(0L)
+                .openBalanceMinor(0L)
+                .aggregateVersion(1L)
+                .occurredAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build());
+
+        // Replace, not merge — the same rule the listener follows, so re-projecting an order after
+        // a change shows the change rather than both versions of it.
+        extLineRepository.deleteByPurchaseOrderId(purchaseOrderId);
+        int lineNumber = 1;
+        List<ExtPurchaseOrderLineReplica> saved = new ArrayList<>();
+        for (Line line : lines) {
+            saved.add(extLineRepository.save(ExtPurchaseOrderLineReplica.builder()
+                    .lineId(UUID.randomUUID())
+                    .purchaseOrderId(purchaseOrderId)
+                    .lineNumber(lineNumber++)
+                    .skuId(line.skuId())
+                    .orderedQuantity(new BigDecimal(line.orderedQuantity()))
+                    .openQuantity(new BigDecimal(line.openQuantity()))
+                    .unitCostMinor(0L)
+                    .description("projection test fixture")
+                    .build()));
+        }
+        return purchaseOrderId;
     }
 
     /**
-     * Projects an order by id, for tests that create or mutate one through the real service or raw
-     * SQL. Transactional so the order's lazily loaded lines are readable.
+     * Projects an order that a receipt will be recorded against.
+     *
+     * <p>The outstanding balance matters here and nowhere else: it is what the over-receipt guard
+     * compares a receipt's value against, so a fixture that left it at zero would have every
+     * receipt rejected for reasons that have nothing to do with what it is testing.
      */
     @Transactional
-    public void project(UUID purchaseOrderId) {
-        purchaseOrderRepository.findById(purchaseOrderId).ifPresent(this::project);
+    public UUID projectReceivable(String status, UUID siteId, UUID skuId, String openQuantity, long openBalanceMinor) {
+        UUID purchaseOrderId =
+                project(UUID.randomUUID(), status, siteId, null, List.of(new Line(skuId, openQuantity, openQuantity)));
+        extOrderRepository.findById(purchaseOrderId).ifPresent(order -> {
+            order.setOpenBalanceMinor(openBalanceMinor);
+            extOrderRepository.save(order);
+        });
+        return purchaseOrderId;
     }
 
-    private void apply(PurchaseOrderUpdatedV1 fact, long aggregateVersion) {
-        extOrderRepository.save(ExtPurchaseOrderReplica.builder()
-                .purchaseOrderId(fact.purchaseOrderId())
-                .poNumber(fact.poNumber())
-                .vendorId(fact.vendorId())
-                .status(fact.status())
-                .shipToLocationId(fact.shipToLocationId())
-                .expectedDeliveryDate(fact.expectedDeliveryDate())
-                .currency(fact.currency())
-                .grandTotalMinor(fact.grandTotalMinor())
-                // The order's real optimistic-lock version, exactly as the publisher would stamp it
-                // — a hard-coded number here would mask version-dependent staleness behavior.
-                .aggregateVersion(aggregateVersion)
-                .occurredAt(fact.occurredAt())
-                .build());
+    /** The single line projected for an order, for tests that need its id. */
+    @Transactional
+    public UUID lineIdOf(UUID purchaseOrderId) {
+        return extLineRepository.findByPurchaseOrderId(purchaseOrderId).stream()
+                .findFirst()
+                .map(ExtPurchaseOrderLineReplica::getLineId)
+                .orElseThrow();
+    }
 
-        // Replace, not merge — the same rule the listener follows, so a test that re-projects an
-        // order after a change sees the change rather than both versions of it.
-        extLineRepository.deleteByPurchaseOrderId(fact.purchaseOrderId());
-        for (PurchaseOrderLine line : fact.lines()) {
-            extLineRepository.save(ExtPurchaseOrderLineReplica.builder()
-                    .lineId(line.lineId() == null ? UUID.randomUUID() : line.lineId())
-                    .purchaseOrderId(fact.purchaseOrderId())
-                    .lineNumber(line.lineNumber())
-                    .skuId(line.skuId())
-                    .orderedQuantity(line.orderedQuantity())
-                    .openQuantity(line.openQuantity())
-                    .unitCostMinor(line.unitCostMinor())
-                    .description(line.description())
-                    .build());
+    /** Re-projects an order at a new status, keeping its lines — an approval or a cancellation. */
+    @Transactional
+    public void restate(UUID purchaseOrderId, String status) {
+        extOrderRepository.findById(purchaseOrderId).ifPresent(order -> {
+            order.setStatus(status);
+            order.setAggregateVersion(order.getAggregateVersion() + 1);
+            extOrderRepository.save(order);
+        });
+    }
+
+    /** Sets one line's outstanding quantity, as a receipt would. */
+    @Transactional
+    public void setOpenQuantity(UUID purchaseOrderId, String openQuantity) {
+        for (ExtPurchaseOrderLineReplica line : extLineRepository.findByPurchaseOrderId(purchaseOrderId)) {
+            line.setOpenQuantity(new BigDecimal(openQuantity));
+            extLineRepository.save(line);
         }
     }
 }

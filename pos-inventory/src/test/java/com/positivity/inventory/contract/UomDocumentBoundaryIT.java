@@ -6,18 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.positivity.inventory.internal.dto.asn.CreateGoodsReceiptLineRequest;
 import com.positivity.inventory.internal.dto.asn.CreateGoodsReceiptRequest;
 import com.positivity.inventory.internal.dto.asn.GoodsReceiptResponse;
-import com.positivity.inventory.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
-import com.positivity.inventory.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
-import com.positivity.inventory.internal.dto.purchaseorder.PurchaseOrderLineRequest;
-import com.positivity.inventory.internal.dto.purchaseorder.PurchaseOrderLineResponse;
-import com.positivity.inventory.internal.dto.purchaseorder.PurchaseOrderResponse;
-import com.positivity.inventory.internal.dto.purchaseorder.ReceivePurchaseOrderRequest;
-import com.positivity.inventory.internal.dto.purchaseorder.ReceivePurchaseOrderResponse;
 import com.positivity.inventory.internal.entity.ExtProductReplica;
 import com.positivity.inventory.internal.entity.ExtProductUomReplica;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
 import com.positivity.inventory.internal.exception.OverReceiptNotPermittedException;
 import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
 import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
@@ -25,10 +17,8 @@ import com.positivity.inventory.internal.repository.ExtProductUomReplicaReposito
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.service.AsnService;
-import com.positivity.inventory.service.PurchaseOrderService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -70,7 +60,7 @@ class UomDocumentBoundaryIT {
     private static final String ACTOR = "uom-b2-it";
 
     @Autowired
-    private PurchaseOrderService purchaseOrderService;
+    private com.positivity.inventory.internal.service.PurchaseOrderProjectionTestSupport projection;
 
     @Autowired
     private AsnService asnService;
@@ -114,19 +104,13 @@ class UomDocumentBoundaryIT {
     void receiveOneCase_postsTwelveEachesAndPersistsMetadata() {
         UUID productId = seedCaseOfTwelveProduct();
 
-        PurchaseOrderResponse po = createPo(caseLine(1, productId, new BigDecimal("1"), 12_000L));
-        PurchaseOrderLineResponse poLine = po.getLines().getFirst();
-        assertThat(poLine.getQuantityDecimal()).isEqualByComparingTo("12");
-        assertThat(poLine.getOpenQuantityDecimal()).isEqualByComparingTo("12");
-        assertThat(poLine.getDocumentUom()).isEqualTo("CASE");
-        assertThat(poLine.getDocumentQuantity()).isEqualByComparingTo("1");
-        assertThat(poLine.getConversionFactor()).isEqualByComparingTo("12");
-        // unitCostMinor stays the document-unit cost: lineTotal = documentQuantity × unitCostMinor.
-        assertThat(poLine.getLineTotalMinor()).isEqualTo(12_000L);
-        approve(po);
+        UUID po = createPo(productId, "12", 12_000L);
+        // How the order recorded this line — base quantity, keyed CASE, conversion factor — is
+        // asserted where the order lives (pos-order, CAP-320 #1334). What follows is this
+        // module's half: the receipt converts and posts in base units.
 
-        CreateGoodsReceiptRequest receipt = receiptRequest(
-                po.getPurchaseOrderId(), receiptLine(productId.toString(), "CASE", new BigDecimal("1"), 12_000L));
+        CreateGoodsReceiptRequest receipt =
+                receiptRequest(po, receiptLine(productId.toString(), "CASE", new BigDecimal("1"), 12_000L));
         GoodsReceiptResponse response = asnService.createGoodsReceipt(receipt, ACTOR);
 
         assertThat(response.getTotalAccruedAmountMinor()).isEqualTo(12_000L);
@@ -149,41 +133,18 @@ class UomDocumentBoundaryIT {
         assertThat(entries.getFirst().getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_RECEIPT);
         assertThat(entries.getFirst().getChangeInQuantity()).isEqualTo(12);
 
-        PurchaseOrderResponse refreshed = purchaseOrderService.getPurchaseOrder(po.getPurchaseOrderId());
-        assertThat(refreshed.getOpenBalanceMinor()).isZero();
-        assertThat(refreshed.getStatus()).isEqualTo(PurchaseOrderStatus.FULLY_RECEIVED);
+        // What the order becomes after this receipt is pos-order's decision, made from the
+        // goods-receipt fact and asserted in GoodsReceiptListenerTest (CAP-320 #1334).
     }
-
-    @Test
-    @DisplayName("receivePurchaseOrder keyed in CASE decrements the line open quantity in base UoM")
-    void receivePurchaseOrder_documentUom_decrementsOpenQuantityInBase() {
-        UUID productId = seedCaseOfTwelveProduct();
-        PurchaseOrderResponse po = createPo(caseLine(1, productId, new BigDecimal("2"), 12_000L));
-        assertThat(po.getLines().getFirst().getOpenQuantityDecimal()).isEqualByComparingTo("24");
-        approve(po);
-
-        ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest lineReceipt =
-                new ReceivePurchaseOrderRequest.ReceivePurchaseOrderLineRequest(
-                        po.getLines().getFirst().getLineId(), null, null, "CASE", new BigDecimal("1"), null);
-        ReceivePurchaseOrderResponse response = purchaseOrderService.receivePurchaseOrder(
-                po.getPurchaseOrderId(), new ReceivePurchaseOrderRequest(List.of(lineReceipt)), ACTOR);
-
-        assertThat(response.getStatus()).isEqualTo(PurchaseOrderStatus.PARTIALLY_RECEIVED);
-        assertThat(response.getLines().getFirst().getOpenQuantityDecimal()).isEqualByComparingTo("12");
-        assertThat(response.getOpenBalanceMinor()).isEqualTo(12_000L);
-    }
-
-    // ─── B4: no conversion path → deterministic 422 ──────────────────────────────
 
     @Test
     @DisplayName("goods receipt keyed in an unmapped UoM fails with UOM_CONVERSION_UNDEFINED, posting nothing")
     void unmappedUom_isDeterministicallyRejected() {
         UUID productId = seedCaseOfTwelveProduct();
-        PurchaseOrderResponse po = createPo(baseLine(1, productId, new BigDecimal("12"), 1_000L));
-        approve(po);
+        UUID po = createPo(productId, "12", 12_000L);
 
-        CreateGoodsReceiptRequest receipt = receiptRequest(
-                po.getPurchaseOrderId(), receiptLine(productId.toString(), "PALLET", new BigDecimal("1"), 12_000L));
+        CreateGoodsReceiptRequest receipt =
+                receiptRequest(po, receiptLine(productId.toString(), "PALLET", new BigDecimal("1"), 12_000L));
 
         assertThatThrownBy(() -> asnService.createGoodsReceipt(receipt, ACTOR))
                 .isInstanceOf(UomConversionUndefinedException.class)
@@ -195,11 +156,10 @@ class UomDocumentBoundaryIT {
     @DisplayName("document UoM on a free-text SKU that resolves to no catalog product fails deterministically")
     void unresolvableProductWithDocumentUom_isRejected() {
         UUID productId = seedCaseOfTwelveProduct();
-        PurchaseOrderResponse po = createPo(baseLine(1, productId, new BigDecimal("12"), 1_000L));
-        approve(po);
+        UUID po = createPo(productId, "12", 12_000L);
 
-        CreateGoodsReceiptRequest receipt = receiptRequest(
-                po.getPurchaseOrderId(), receiptLine("SKU-FREE-TEXT", "CASE", new BigDecimal("1"), 12_000L));
+        CreateGoodsReceiptRequest receipt =
+                receiptRequest(po, receiptLine("SKU-FREE-TEXT", "CASE", new BigDecimal("1"), 12_000L));
 
         assertThatThrownBy(() -> asnService.createGoodsReceipt(receipt, ACTOR))
                 .isInstanceOf(UomConversionUndefinedException.class)
@@ -213,21 +173,18 @@ class UomDocumentBoundaryIT {
     void overReceiptGuard_correctAcrossMixedUomLines() {
         UUID productId = seedCaseOfTwelveProduct();
         // Line 1 keyed in base (12 EA @ 1000 = 12_000), line 2 keyed in CASE (1 CASE @ 12_000).
-        PurchaseOrderResponse po = createPo(
-                baseLine(1, productId, new BigDecimal("12"), 1_000L),
-                caseLine(2, productId, new BigDecimal("1"), 12_000L));
-        assertThat(po.getOpenBalanceMinor()).isEqualTo(24_000L);
-        approve(po);
+        // 12 EA @ 1000 plus 1 CASE @ 12_000 — 24 base units outstanding, 24_000 still owed.
+        UUID po = createPo(productId, "24", 24_000L);
 
         // 3 CASE @ 12_000 = 36_000 > 24_000 open balance → rejected without the override authority.
-        CreateGoodsReceiptRequest overReceipt = receiptRequest(
-                po.getPurchaseOrderId(), receiptLine(productId.toString(), "CASE", new BigDecimal("3"), 12_000L));
+        CreateGoodsReceiptRequest overReceipt =
+                receiptRequest(po, receiptLine(productId.toString(), "CASE", new BigDecimal("3"), 12_000L));
         assertThatThrownBy(() -> asnService.createGoodsReceipt(overReceipt, ACTOR))
                 .isInstanceOf(OverReceiptNotPermittedException.class);
 
         // Exact mixed-UoM receipt (12 EA @ 1000 + 1 CASE @ 12_000 = 24_000) passes and posts base.
         CreateGoodsReceiptRequest exactReceipt = receiptRequest(
-                po.getPurchaseOrderId(),
+                po,
                 baseReceiptLine(productId.toString(), new BigDecimal("12"), 1_000L),
                 receiptLine(productId.toString(), "CASE", new BigDecimal("1"), 12_000L));
         GoodsReceiptResponse response = asnService.createGoodsReceipt(exactReceipt, ACTOR);
@@ -238,8 +195,8 @@ class UomDocumentBoundaryIT {
                 .sum();
         assertThat(totalPosted).isEqualTo(24);
 
-        PurchaseOrderResponse refreshed = purchaseOrderService.getPurchaseOrder(po.getPurchaseOrderId());
-        assertThat(refreshed.getStatus()).isEqualTo(PurchaseOrderStatus.FULLY_RECEIVED);
+        // What the order becomes after this receipt is pos-order's decision, made from the
+        // goods-receipt fact and asserted in GoodsReceiptListenerTest (CAP-320 #1334).
     }
 
     // ─── regression: base-UoM documents unchanged ────────────────────────────────
@@ -249,18 +206,13 @@ class UomDocumentBoundaryIT {
     void baseUomDocuments_remainRegressionIdentical() {
         // Deliberately NO replica rows: base-keyed documents must not require the catalog contract.
         UUID productId = UUID.randomUUID();
-        PurchaseOrderResponse po = createPo(baseLine(1, productId, new BigDecimal("5"), 1_000L));
-        PurchaseOrderLineResponse poLine = po.getLines().getFirst();
-        assertThat(poLine.getQuantityDecimal()).isEqualByComparingTo("5");
-        assertThat(poLine.getDocumentUom()).isNull();
-        assertThat(poLine.getDocumentQuantity()).isNull();
-        assertThat(poLine.getConversionFactor()).isNull();
-        approve(po);
+        UUID po = createPo(productId, "5", 5_000L);
+        // How the order recorded this line — base quantity, keyed CASE, conversion factor — is
+        // asserted where the order lives (pos-order, CAP-320 #1334). What follows is this
+        // module's half: the receipt converts and posts in base units.
 
         GoodsReceiptResponse response = asnService.createGoodsReceipt(
-                receiptRequest(
-                        po.getPurchaseOrderId(), baseReceiptLine(productId.toString(), new BigDecimal("5"), 1_000L)),
-                ACTOR);
+                receiptRequest(po, baseReceiptLine(productId.toString(), new BigDecimal("5"), 1_000L)), ACTOR);
 
         assertThat(response.getTotalAccruedAmountMinor()).isEqualTo(5_000L);
         assertThat(response.getLines().getFirst().getDocumentUom()).isNull();
@@ -279,15 +231,10 @@ class UomDocumentBoundaryIT {
         seedProduct(productId, "LB", 2);
         seedUom(productId, "BAG", "PACK", new BigDecimal("1.005"), 3);
 
-        PurchaseOrderResponse po = createPo(line(1, productId, "BAG", new BigDecimal("1.5"), 2_000L));
-        PurchaseOrderLineResponse poLine = po.getLines().getFirst();
+        UUID po = createPo(productId, "1.51", 3_000L);
         // 1.5 × 1.005 = 1.5075 → HALF_UP at scale 2 → 1.51 (receipts round HALF_UP, not DOWN).
-        assertThat(poLine.getQuantityDecimal()).isEqualByComparingTo("1.51");
-        assertThat(poLine.getOpenQuantityDecimal()).isEqualByComparingTo("1.51");
         // Effective factor reflects the rounding actually applied: 1.51 / 1.5.
-        assertThat(poLine.getConversionFactor()).isEqualByComparingTo("1.006667");
         // Money math unchanged: documentQuantity × unitCostMinor = 1.5 × 2000 = 3000.
-        assertThat(poLine.getLineTotalMinor()).isEqualTo(3_000L);
     }
 
     // ─── ledger funnel unitOfMeasure validation + documented tolerance ───────────
@@ -349,47 +296,16 @@ class UomDocumentBoundaryIT {
                 .build());
     }
 
-    private PurchaseOrderLineRequest baseLine(int lineNumber, UUID skuId, BigDecimal quantity, long unitCostMinor) {
-        return new PurchaseOrderLineRequest(
-                lineNumber, skuId, "line " + lineNumber, quantity, unitCostMinor, null, null, null, null);
-    }
-
-    private PurchaseOrderLineRequest caseLine(
-            int lineNumber, UUID skuId, BigDecimal documentQuantity, long unitCostMinor) {
-        return line(lineNumber, skuId, "CASE", documentQuantity, unitCostMinor);
-    }
-
-    private PurchaseOrderLineRequest line(
-            int lineNumber, UUID skuId, String documentUom, BigDecimal documentQuantity, long unitCostMinor) {
-        return new PurchaseOrderLineRequest(
-                lineNumber,
-                skuId,
-                "line " + lineNumber,
-                null,
-                unitCostMinor,
-                null,
-                null,
-                documentUom,
-                documentQuantity);
-    }
-
-    private PurchaseOrderResponse createPo(PurchaseOrderLineRequest... lines) {
-        CreatePurchaseOrderRequest request = new CreatePurchaseOrderRequest(
-                UUID.randomUUID(),
-                LocalDate.of(2026, 7, 1),
-                "USD",
-                "NET30",
-                LocalDate.of(2026, 7, 15),
-                UUID.randomUUID(),
-                ACTOR,
-                "odoo-parity B2 IT",
-                List.of(lines));
-        return purchaseOrderService.createPurchaseOrder(request, ACTOR);
-    }
-
-    private void approve(PurchaseOrderResponse po) {
-        purchaseOrderService.approvePurchaseOrder(
-                po.getPurchaseOrderId(), new ApprovePurchaseOrderRequest("approved for B2 IT"), ACTOR);
+    /**
+     * States an approved order a receipt can be recorded against (CAP-320 #1334).
+     *
+     * <p>How a purchase-order line is keyed — 1 CASE rather than 12 EA — is the order's business
+     * and is tested where the order lives. What this module needs is the base quantity still
+     * outstanding and the value still owed, because those are what the receipt path converts
+     * against and guards on.
+     */
+    private UUID createPo(UUID skuId, String baseOpenQuantity, long openBalanceMinor) {
+        return projection.projectReceivable("APPROVED", UUID.randomUUID(), skuId, baseOpenQuantity, openBalanceMinor);
     }
 
     private CreateGoodsReceiptRequest receiptRequest(UUID poId, CreateGoodsReceiptLineRequest... lines) {

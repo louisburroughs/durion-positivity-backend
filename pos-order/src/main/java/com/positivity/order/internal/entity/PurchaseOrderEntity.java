@@ -1,6 +1,6 @@
-package com.positivity.inventory.internal.entity;
+package com.positivity.order.internal.entity;
 
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
+import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -29,6 +29,20 @@ import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+/**
+ * The commercial purchase order: what was ordered, from which vendor, at what price, on whose
+ * approval (CAP-320, ADR-0049 §2).
+ *
+ * <h2>What this owns and what it does not</h2>
+ *
+ * pos-order is the only module that accepts a change to a purchase order. It does not own what
+ * arrived: goods receipt is pos-inventory's, and {@code openQuantityDecimal} on the lines moves
+ * here only in response to a receipt fact that module publishes. Two writable purchase orders is
+ * the failure this split exists to prevent, and the second one always finds a caller.
+ *
+ * <p>Everything outside this module reads the order through the published
+ * {@code purchaseorder.updated} fact and its own replica, never this table.
+ */
 @Entity
 @Table(name = "purchase_order")
 @Getter

@@ -64,6 +64,9 @@ class PurchaseOrderProjectionListenerTest {
     @Mock
     private ExtPurchaseOrderReceiptRepository receiptRepository;
 
+    @Mock
+    private InventoryFactPublisher inventoryFactPublisher;
+
     private PurchaseOrderProjectionListener listener;
 
     @BeforeEach
@@ -74,7 +77,8 @@ class PurchaseOrderProjectionListenerTest {
                 processedEventRepository,
                 orderRepository,
                 lineRepository,
-                receiptRepository);
+                receiptRepository,
+                inventoryFactPublisher);
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(orderRepository.findById(any())).thenReturn(Optional.empty());
     }
@@ -95,6 +99,7 @@ class PurchaseOrderProjectionListenerTest {
                 "expectedDeliveryDate": "2026-09-01",
                 "currency": "USD",
                 "grandTotalMinor": 100000,
+                "openBalanceMinor": 40000,
                 "occurredAt": "2026-08-15T12:00:00Z",
                 "lines": [
                   {

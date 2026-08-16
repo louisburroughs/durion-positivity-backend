@@ -1,15 +1,13 @@
-package com.positivity.inventory.internal.controller;
+package com.positivity.order.internal.controller;
 
 import com.positivity.events.EmitEvent;
-import com.positivity.inventory.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
-import com.positivity.inventory.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
-import com.positivity.inventory.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
-import com.positivity.inventory.internal.dto.purchaseorder.PurchaseOrderResponse;
-import com.positivity.inventory.internal.dto.purchaseorder.ReceivePurchaseOrderRequest;
-import com.positivity.inventory.internal.dto.purchaseorder.ReceivePurchaseOrderResponse;
-import com.positivity.inventory.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
-import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
-import com.positivity.inventory.service.PurchaseOrderService;
+import com.positivity.order.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
+import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
+import com.positivity.order.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
+import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderResponse;
+import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
+import com.positivity.order.internal.security.PurchaseOrderPermissions;
+import com.positivity.order.service.PurchaseOrderService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,9 +33,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/v1/inventory/purchase-orders")
+@RequestMapping("/v1/orders/purchase-orders")
 @RequiredArgsConstructor
-@Tag(name = "Purchase Orders", description = "Purchase order creation, lifecycle, and receiving endpoints")
+@Tag(name = "Purchase Orders", description = "Purchase order creation, approval, revision and cancellation")
 public class PurchaseOrderController {
 
     private static final String NO_CURRENT_USER = "No current user";
@@ -47,9 +45,9 @@ public class PurchaseOrderController {
     @PostMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"inventory:purchase_order:create"})
-    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PURCHASE_ORDER_CREATE + "')")
-    @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_CREATE", apiVersion = "1")
+            scopes = {"order:purchase_order:create"})
+    @PreAuthorize("hasAuthority('" + PurchaseOrderPermissions.PURCHASE_ORDER_CREATE + "')")
+    @EmitEvent(id = "ORDER_PURCHASE_ORDER_CREATE", apiVersion = "1")
     @Operation(
             operationId = "createPurchaseOrder",
             summary = "Create Purchase Order",
@@ -116,9 +114,9 @@ public class PurchaseOrderController {
     @GetMapping("/{poId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"inventory:purchase_order:view"})
-    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PURCHASE_ORDER_VIEW + "')")
-    @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_GET", apiVersion = "1")
+            scopes = {"order:purchase_order:view"})
+    @PreAuthorize("hasAuthority('" + PurchaseOrderPermissions.PURCHASE_ORDER_VIEW + "')")
+    @EmitEvent(id = "ORDER_PURCHASE_ORDER_GET", apiVersion = "1")
     @Operation(
             operationId = "getPurchaseOrder",
             summary = "Get Purchase Order",
@@ -157,9 +155,9 @@ public class PurchaseOrderController {
     @GetMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"inventory:purchase_order:view"})
-    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PURCHASE_ORDER_VIEW + "')")
-    @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_LIST", apiVersion = "1")
+            scopes = {"order:purchase_order:view"})
+    @PreAuthorize("hasAuthority('" + PurchaseOrderPermissions.PURCHASE_ORDER_VIEW + "')")
+    @EmitEvent(id = "ORDER_PURCHASE_ORDER_LIST", apiVersion = "1")
     @Operation(
             operationId = "listPurchaseOrders",
             summary = "List Purchase Orders",
@@ -190,9 +188,9 @@ public class PurchaseOrderController {
     @PostMapping("/{poId}/approve")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"inventory:purchase_order:approve"})
-    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PURCHASE_ORDER_APPROVE + "')")
-    @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_APPROVE", apiVersion = "1")
+            scopes = {"order:purchase_order:approve"})
+    @PreAuthorize("hasAuthority('" + PurchaseOrderPermissions.PURCHASE_ORDER_APPROVE + "')")
+    @EmitEvent(id = "ORDER_PURCHASE_ORDER_APPROVE", apiVersion = "1")
     @Operation(
             operationId = "approvePurchaseOrder",
             summary = "Approve Purchase Order",
@@ -263,9 +261,9 @@ public class PurchaseOrderController {
     @PostMapping("/{poId}/revisions")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"inventory:purchase_order:create"})
-    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PURCHASE_ORDER_CREATE + "')")
-    @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_REVISE", apiVersion = "1")
+            scopes = {"order:purchase_order:create"})
+    @PreAuthorize("hasAuthority('" + PurchaseOrderPermissions.PURCHASE_ORDER_CREATE + "')")
+    @EmitEvent(id = "ORDER_PURCHASE_ORDER_REVISE", apiVersion = "1")
     @Operation(
             operationId = "revisePurchaseOrder",
             summary = "Revise Purchase Order",
@@ -343,9 +341,9 @@ public class PurchaseOrderController {
     @PostMapping("/{poId}/cancel")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"inventory:purchase_order:approve"})
-    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PURCHASE_ORDER_APPROVE + "')")
-    @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_CANCEL", apiVersion = "1")
+            scopes = {"order:purchase_order:approve"})
+    @PreAuthorize("hasAuthority('" + PurchaseOrderPermissions.PURCHASE_ORDER_APPROVE + "')")
+    @EmitEvent(id = "ORDER_PURCHASE_ORDER_CANCEL", apiVersion = "1")
     @Operation(
             operationId = "cancelPurchaseOrder",
             summary = "Cancel Purchase Order",
@@ -388,80 +386,5 @@ public class PurchaseOrderController {
         String actorUserId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
         return ResponseEntity.ok(purchaseOrderService.cancelPurchaseOrder(poId, actorUserId));
-    }
-
-    @PostMapping("/{poId}/receive")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
-            name = "bearerAuth",
-            scopes = {"inventory:purchase_order:receive"})
-    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.PURCHASE_ORDER_RECEIVE + "')")
-    @EmitEvent(id = "INVENTORY_PURCHASE_ORDER_RECEIVE", apiVersion = "1")
-    @Operation(
-            operationId = "receivePurchaseOrder",
-            summary = "Receive Purchase Order",
-            description = """
-                    Records commercial receipt against purchase order lines, decrementing each line's open \
-                    quantity and the order's open balance; this path posts no inventory ledger entries and changes \
-                    no on-hand stock.
-                    Use this tool to true up the purchase order's open position; do not use createGoodsReceipt or \
-                    receiveItemsIntoStaging, which are the paths that actually post GOODS_RECEIPT ledger entries \
-                    and move stock.
-                    Preconditions: the purchase order must exist and must not be DRAFT or CANCELLED, and every \
-                    referenced lineId must resolve to a purchase order line.
-                    Required inputs: poId (UUIDv7) path parameter and lines (non-empty), each naming lineId plus \
-                    either quantityReceived in base UoM or the documentUom/documentQuantity pair; unitCostMinor is \
-                    optional and defaults to the line's ordered unit cost, and lotNumber is mandatory for \
-                    LOT-tracked lines, registering the receipt on the lot master.
-                    Emits an INVENTORY_PURCHASE_ORDER_RECEIVE event and moves the order to PARTIALLY_RECEIVED, or \
-                    FULLY_RECEIVED with a zero open balance once every line's open quantity reaches zero.
-                    Returns 409 when the purchase order is DRAFT or CANCELLED, 404 when the order or a referenced \
-                    line does not exist, and 422 when a documentUom has no conversion path or a LOT-tracked line \
-                    omits lotNumber.
-                    """,
-            tags = {"Purchase Orders"})
-    @ApiResponse(
-            responseCode = "200",
-            description = "Purchase order received",
-            content =
-                    @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ReceivePurchaseOrderResponse.class)))
-    @ApiResponse(
-            responseCode = "400",
-            description = "Validation failure",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "403",
-            description = "User lacks required purchase order receive authority",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "404",
-            description = "Purchase order not found",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "409",
-            description = "Purchase order is in a conflicting state",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<ReceivePurchaseOrderResponse> receivePurchaseOrder(
-            @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Per-line received quantities used to decrement the order's open position.",
-                            required = true,
-                            content =
-                                    @Content(
-                                            mediaType = "application/json",
-                                            schema = @Schema(implementation = ReceivePurchaseOrderRequest.class),
-                                            examples = @ExampleObject(name = "Partial line receipt", value = """
-                                                                    {"lines":[{"lineId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a20",
-                                                                      "quantityReceived":4,
-                                                                      "unitCostMinor":1499,
-                                                                      "lotNumber":"LOT-2026-0042"}]}
-                                                                    """)))
-                    @Valid
-                    @RequestBody
-                    ReceivePurchaseOrderRequest request) {
-        String actorUserId = SecurityContextHelper.getCurrentUsername()
-                .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
-        return ResponseEntity.ok(purchaseOrderService.receivePurchaseOrder(poId, request, actorUserId));
     }
 }

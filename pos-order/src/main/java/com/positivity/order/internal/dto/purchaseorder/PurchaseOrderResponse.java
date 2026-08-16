@@ -1,9 +1,9 @@
-package com.positivity.inventory.internal.dto.purchaseorder;
+package com.positivity.order.internal.dto.purchaseorder;
 
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
+import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;

@@ -2,7 +2,6 @@ package com.positivity.inventory.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.positivity.inventory.internal.dto.purchaseorder.PurchaseOrderResponse;
 import com.positivity.inventory.internal.dto.purchasesuggestion.ConvertPurchaseSuggestionsRequest;
 import com.positivity.inventory.internal.dto.purchasesuggestion.ConvertPurchaseSuggestionsResponse;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentScanResultResponse;
@@ -12,7 +11,6 @@ import com.positivity.inventory.internal.entity.PurchaseSuggestion;
 import com.positivity.inventory.internal.entity.ReplenishmentPolicy;
 import com.positivity.inventory.internal.entity.ReplenishmentTask;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
-import com.positivity.inventory.internal.enums.PurchaseOrderStatus;
 import com.positivity.inventory.internal.enums.PurchaseSuggestionStatus;
 import com.positivity.inventory.internal.enums.ReplenishmentSourceType;
 import com.positivity.inventory.internal.enums.ReplenishmentStatus;
@@ -21,7 +19,6 @@ import com.positivity.inventory.internal.repository.NormalizedAvailabilityReposi
 import com.positivity.inventory.internal.repository.PurchaseSuggestionRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentTaskRepository;
-import com.positivity.inventory.service.PurchaseOrderService;
 import com.positivity.inventory.service.PurchaseSuggestionService;
 import com.positivity.inventory.service.ReplenishmentService;
 import java.math.BigDecimal;
@@ -66,9 +63,6 @@ class PurchaseSuggestionScanTest {
 
     @Autowired
     private PurchaseOrderProjectionTestSupport projection;
-
-    @Autowired
-    private PurchaseOrderService purchaseOrderService;
 
     @Autowired
     private LedgerPostingService ledgerPostingService;
@@ -265,7 +259,14 @@ class PurchaseSuggestionScanTest {
         purchaseSuggestionService.acceptPurchaseSuggestion(suggestion.getSuggestionId(), ACTOR);
         ConvertPurchaseSuggestionsResponse converted = purchaseSuggestionService.convertPurchaseSuggestions(
                 new ConvertPurchaseSuggestionsRequest(List.of(suggestion.getSuggestionId())), ACTOR);
-        assertThat(converted.getPurchaseOrderStatus()).isEqualTo("DRAFT");
+        assertThat(converted.getPurchaseOrderStatus()).isEqualTo("REQUESTED");
+        // pos-order places the order and publishes the fact; here that arrival is stated directly.
+        projection.project(
+                converted.getPurchaseOrderId(),
+                "DRAFT",
+                location,
+                java.time.LocalDate.now(java.time.ZoneOffset.UTC),
+                List.of(new PurchaseOrderProjectionTestSupport.Line(productId, "17", "17")));
 
         // Phase 1 — PO still DRAFT: not yet expected supply (A2 counts APPROVED+), so the
         // CONVERTED suggestion must keep netting: no re-suggest, no task.
@@ -278,12 +279,9 @@ class PurchaseSuggestionScanTest {
 
         // Phase 2 — approve the PO: its open quantity enters expected supply, the CONVERTED
         // suggestion must stop netting at the same moment. Projection = 0 + 20 ≥ min → no trigger.
-        jdbcTemplate.update(
-                "UPDATE purchase_order SET status = 'APPROVED' WHERE purchase_order_id = ?",
-                converted.getPurchaseOrderId());
-        // Approval is what turns the order into expected supply, and expected supply is read from
-        // the projection — so the approval has to reach it, as a published fact would.
-        projection.project(converted.getPurchaseOrderId());
+        // Approval is what turns the order into expected supply, and it reaches this module as a
+        // fact from pos-order rather than as a write here (CAP-320 #1334).
+        projection.restate(converted.getPurchaseOrderId(), "APPROVED");
         assertThat(replenishmentService
                         .evaluatePickFaceForReplenishment(sku, location)
                         .getStatus())
@@ -296,15 +294,10 @@ class PurchaseSuggestionScanTest {
         // the remaining gap must appear: raw need = max 20 − projected 8 − netting 0 = 12.
         // Were the CONVERTED suggestion still netting its 20, the need would be 0 and the
         // breach would be silently swallowed.
-        jdbcTemplate.update(
-                "UPDATE purchase_order SET status = 'PARTIALLY_RECEIVED' WHERE purchase_order_id = ?",
-                converted.getPurchaseOrderId());
-        jdbcTemplate.update(
-                "UPDATE purchase_order_line SET open_quantity_decimal = 5 WHERE purchase_order_id = ?",
-                converted.getPurchaseOrderId());
-        // The receipt is what changes supply, and supply is read from the projection — so the
-        // change has to reach it, exactly as a published fact would in the running system.
-        projection.project(converted.getPurchaseOrderId());
+        // pos-inventory reports the receipt; pos-order applies it and publishes the order's new
+        // state. What lands here is that state.
+        projection.restate(converted.getPurchaseOrderId(), "PARTIALLY_RECEIVED");
+        projection.setOpenQuantity(converted.getPurchaseOrderId(), "5");
         post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 15, 15);
         post(sku, location, InventoryLedgerEventType.GOODS_ISSUE, -12, 3);
 
@@ -339,21 +332,11 @@ class PurchaseSuggestionScanTest {
         ConvertPurchaseSuggestionsResponse converted = purchaseSuggestionService.convertPurchaseSuggestions(
                 new ConvertPurchaseSuggestionsRequest(List.of(suggestion.getSuggestionId())), ACTOR);
 
-        // Read through the existing PO service so the DRAFT PO also satisfies the PO
-        // contract surface (same DTO the PO endpoints serve).
-        PurchaseOrderResponse po = purchaseOrderService.getPurchaseOrder(converted.getPurchaseOrderId());
-        assertThat(po.getStatus()).isEqualTo(PurchaseOrderStatus.DRAFT); // approval workflow still applies
-        assertThat(po.getVendorId()).isEqualTo(manufacturerId);
-        assertThat(po.getCurrency()).isEqualTo("USD");
-        assertThat(po.getShipToLocationId()).isEqualTo(location);
-        assertThat(po.getLines()).hasSize(1);
-        assertThat(po.getLines().getFirst().getSkuId()).isEqualTo(productId);
-        assertThat(po.getLines().getFirst().getQuantityDecimal()).isEqualByComparingTo("17");
-        assertThat(po.getLines().getFirst().getUnitCostMinor()).isEqualTo(499L);
-
+        // The order itself is placed by pos-order; what this module records is which order its
+        // suggestion became, and that has to be the identity it asked for (CAP-320 #1334).
         PurchaseSuggestion stamped =
                 suggestionRepository.findById(suggestion.getSuggestionId()).orElseThrow();
         assertThat(stamped.getStatus()).isEqualTo(PurchaseSuggestionStatus.CONVERTED);
-        assertThat(stamped.getConvertedPurchaseOrderId()).isEqualTo(po.getPurchaseOrderId());
+        assertThat(stamped.getConvertedPurchaseOrderId()).isEqualTo(converted.getPurchaseOrderId());
     }
 }
