@@ -83,5 +83,14 @@ public final class SupplierPermissions {
      */
     public static final String STOCK_INQUIRE = "supplier:stock:inquire";
 
+    /**
+     * Running a vendor invoice fetch on demand.
+     *
+     * <p>Its own permission rather than an admin catch-all: it reaches out to a vendor and can
+     * create AP bills, so the people who may investigate a missing invoice are not necessarily the
+     * people who may reconfigure a profile.
+     */
+    public static final String INVOICE_FETCH = "supplier:invoice:fetch";
+
     private SupplierPermissions() {}
 }

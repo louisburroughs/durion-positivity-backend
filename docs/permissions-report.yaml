@@ -1,9 +1,9 @@
-generatedAt: "2026-08-16T11:11:47.470034+00:00"
+generatedAt: "2026-08-16T18:02:10.429550+00:00"
 root: "."
 summary:
   manifestCount: 22
-  permissionCount: 426
-  uniquePermissionCount: 426
+  permissionCount: 427
+  uniquePermissionCount: 427
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -792,7 +792,7 @@ manifests:
     domain: "supplier"
     serviceName: "pos-supplier"
     version: "1.0"
-    permissionCount: 8
+    permissionCount: 9
     permissions:
       - name: "supplier:audit:read"
         description: "Read supplier exchange audit records"
@@ -810,6 +810,8 @@ manifests:
         description: "Resolve a purchase-order transmission awaiting manual review (confirm with vendor reference, mark not received, or cancel)"
       - name: "supplier:stock:inquire"
         description: "Ask a vendor, live, what stock it holds for a receiving location (the approved synchronous supplier read)"
+      - name: "supplier:invoice:fetch"
+        description: "Run a vendor invoice fetch on demand"
   - module: "pos-tax"
     path: "pos-tax/src/main/resources/permissions.yaml"
     domain: "tax"
@@ -3020,6 +3022,12 @@ permissions:
     source: "pos-shop-manager/src/main/resources/permissions.yaml"
   - name: "supplier:audit:read"
     description: "Read supplier exchange audit records"
+    domain: "supplier"
+    serviceName: "pos-supplier"
+    module: "pos-supplier"
+    source: "pos-supplier/src/main/resources/permissions.yaml"
+  - name: "supplier:invoice:fetch"
+    description: "Run a vendor invoice fetch on demand"
     domain: "supplier"
     serviceName: "pos-supplier"
     module: "pos-supplier"

@@ -18,3 +18,5 @@ permissions:
     description: "Resolve a purchase-order transmission awaiting manual review (confirm with vendor reference, mark not received, or cancel)"
   - name: "supplier:stock:inquire"
     description: "Ask a vendor, live, what stock it holds for a receiving location (the approved synchronous supplier read)"
+  - name: "supplier:invoice:fetch"
+    description: "Run a vendor invoice fetch on demand"

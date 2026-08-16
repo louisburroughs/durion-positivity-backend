@@ -154,6 +154,18 @@ pos:
       # report on the same spec DOES take buyerParty/agencyCode, so a deployment binding a C1.0
       # endpoint to this codec turns this on rather than silently fetching nothing.
       send-buyer-party: ${SUPPLIER_STOCKREPORT_SEND_BUYER_PARTY:false}
+    # ── Vendor invoice fetch (B3.3, CAP-321) ───────────────────────────────────────────
+    invoice:
+      poll-interval-ms: ${SUPPLIER_INVOICE_POLL_INTERVAL_MS:300000}
+      # How far back each window reaches beyond the last checkpoint. A vendor may date an invoice
+      # a day or two before it becomes fetchable, and a window starting exactly where the last one
+      # ended would step over it. Re-asking is cheap: the importer recognises an invoice it already
+      # holds by the vendor's own identity. The right value is only learned from a live vendor.
+      window-overlap: ${SUPPLIER_INVOICE_WINDOW_OVERLAP:P2D}
+      # How far back the first fetch reaches when a binding has no checkpoint. Bounded, because an
+      # unbounded first fetch against a vendor with years of history would time out — and a
+      # timed-out first fetch never establishes a checkpoint, so it would time out again forever.
+      initial-lookback: ${SUPPLIER_INVOICE_INITIAL_LOOKBACK:P30D}
     # ── Purchase-order transmission (ADR-0052, CAP-320) ─────────────────────────────────
     #
     # Three background jobs, three cadences. None of them ever re-sends an order: dispatch drains

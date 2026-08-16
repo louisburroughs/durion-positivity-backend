@@ -14,6 +14,8 @@ tags:
   description: Admin CRUD over vendor auth configs — secret references only, never plaintext credentials
 - name: Supplier Price Catalog
   description: Trigger vendor PRICAT imports and read their bookkeeping and unmatched-line quarantine. No vendor prices are served here; they travel as supplier.pricecatalog.updated events.
+- name: Supplier Invoices
+  description: On-demand vendor invoice retrieval
 - name: Supplier Commercial Accounts
   description: Admin CRUD over vendor commercial accounts — billing and per-location delivery numbers
 - name: Supplier Endpoint Bindings
@@ -959,6 +961,76 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - supplier:stock:inquire
+  /v1/supplier/invoices/{supplierRef}/fetches:
+    post:
+      tags:
+      - Supplier Invoices
+      summary: Fetch Vendor Invoices For A Window
+      description: 'Asks a vendor for the invoices it issued between two dates and imports the ones not already held.
+
+        Use this tool when somebody is chasing an invoice a vendor says it sent; do not use it to catch a schedule up, because it deliberately leaves the checkpoint alone and the scheduled run will still cover its own window.
+
+        Preconditions: the vendor profile must be enabled and have an invoice-fetch binding configured; fromDate must not be after toDate.
+
+        Required inputs: supplierRef path parameter, and fromDate and toDate query parameters as ISO dates.
+
+        Emits a SUPPLIER_INVOICE_FETCH event and, for each invoice not already held, publishes it for the accounting domain to record as a vendor bill.
+
+        Returns 200 with the number the vendor sent and the number newly imported, 422 when the vendor refused the window or could not be reached, 404 when the vendor profile is unknown, and 409 when the profile is disabled or has no invoice-fetch binding configured.
+
+        '
+      operationId: fetchSupplierInvoices
+      parameters:
+      - name: supplierRef
+        in: path
+        description: Vendor profile alias
+        required: true
+        schema:
+          type: string
+      - name: fromDate
+        in: query
+        description: First issue date to fetch, inclusive
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: toDate
+        in: query
+        description: Last issue date to fetch, inclusive
+        required: true
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Window fetched
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          description: Vendor profile unknown
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Vendor profile disabled, or no invoice-fetch binding configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: The vendor refused the window or could not be reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - supplier:invoice:fetch
+      x-required-permissions:
+      - supplier:invoice:fetch
   /v1/supplier/admin/profiles:
     get:
       tags:
