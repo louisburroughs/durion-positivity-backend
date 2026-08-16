@@ -1142,9 +1142,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 51")
+    @DisplayName("CATALOG_VERSION is 52")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(51);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(52);
     }
 
     @Test
@@ -1311,8 +1311,12 @@ class SecurityGatewayConfigTest {
         // vendor's own systems, so it is gated apart from viewing the order.
         assertThat(GatewayPermissionCatalog.authorityForBit(460))
                 .isEqualTo("PERM_order:purchase_order:availability_view");
+        // Running a vendor invoice fetch on demand (CAP-321 #1343). Its own permission because it
+        // reaches a vendor and can create AP bills: whoever may investigate a missing invoice is
+        // not necessarily whoever may reconfigure a profile.
+        assertThat(GatewayPermissionCatalog.authorityForBit(461)).isEqualTo("PERM_supplier:invoice:fetch");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(461)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(462)).isNull();
     }
 
     @Test

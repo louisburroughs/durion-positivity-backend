@@ -1301,6 +1301,8 @@ paths:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1profiles~1{vendorProfileId}~1bindings
   /v1/supplier/admin/profiles/{vendorProfileId}/bindings/{bindingId}:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1profiles~1{vendorProfileId}~1bindings~1{bindingId}
+  /v1/supplier/invoices/{supplierRef}/fetches:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1invoices~1{supplierRef}~1fetches
   /v1/supplier/stock/inquiries:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1stock~1inquiries
   /v1/supplier/transmissions/purchase-order/{purchaseOrderId}:

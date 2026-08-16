@@ -107,6 +107,9 @@ public final class SupplierEventTypes {
                 // synchronous call to a trading partner while a customer waits, so the latency worth
                 // alerting on is the vendor's, not this module's.
                 EventTypeRegistration.write("SUPPLIER_STOCK_INQUIRY", "Ask a vendor for live stock availability")
+                        .build(),
+                EventTypeRegistration.write(
+                                "SUPPLIER_INVOICE_FETCH", "Run a vendor invoice fetch for an explicit window")
                         .build());
     }
 }
