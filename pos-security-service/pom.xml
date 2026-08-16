@@ -13,8 +13,10 @@
     <description>POS Security Service Module for IAM and JWT management</description>
 
     <properties>
-        <!-- Coverage ratchet (plan Phase 4): measured 81.8% line / 71.1% branch.
-             Floors sit ~5 points under to catch regression without failing on noise. -->
+        <!-- Coverage ratchet: measured 77.1% line / 66.6% branch by the gate's own
+             command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
+             Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
+             IT-inclusive measurement describes coverage the gate cannot see. -->
         <jacoco.line.min>0.74</jacoco.line.min>
         <jacoco.branch.min>0.63</jacoco.branch.min>
     </properties>

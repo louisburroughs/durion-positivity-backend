@@ -13,9 +13,10 @@
     <description>Identity/contact/user-link authority module (ADR-0044 Phase 3)</description>
 
     <properties>
-        <!-- Coverage ratchet (plan Phase 4): measured 70.1% line / 55.9% branch after the
-             §7 controller web-slice wave (was 64.1% / 52.3%).
-             Floors sit ~5 points under to catch regression without failing on noise. -->
+        <!-- Coverage ratchet: measured 72.8% line / 62.2% branch by the gate's own
+             command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
+             Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
+             IT-inclusive measurement describes coverage the gate cannot see. -->
         <jacoco.line.min>0.69</jacoco.line.min>
         <jacoco.branch.min>0.59</jacoco.branch.min>
     </properties>

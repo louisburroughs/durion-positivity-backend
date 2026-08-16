@@ -12,10 +12,13 @@
     <description>CarAPI vehicle reference integration</description>
 
     <properties>
-        <!-- Coverage ratchet (plan Phase 4): measured 78.3% line / 88.9% branch.
-             First floors for this module — it was at 0% before wave §7. -->
+        <!-- Coverage ratchet: measured 78.3% line / 88.9% branch by the gate's own
+             command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
+             Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
+             IT-inclusive measurement describes coverage the gate cannot see.
+             The branch floor tolerates one whole branch (18 branches total, one = 5.6 points). -->
         <jacoco.line.min>0.75</jacoco.line.min>
-        <jacoco.branch.min>0.85</jacoco.branch.min>
+        <jacoco.branch.min>0.83</jacoco.branch.min>
     </properties>
 
     <packaging>jar</packaging>
