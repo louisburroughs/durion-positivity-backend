@@ -103,6 +103,18 @@ public class SupplierExceptionHandler {
      * or waiting; a 500 tells them only that something broke here, which is the wrong place to
      * look.
      */
+    /**
+     * A fleet lookup that could not be answered.
+     *
+     * <p>422 rather than 502: the request was well-formed and the configuration is fine — the vendor
+     * simply could not be reached or said something unreadable. An operator seeing this should try
+     * again or check the vendor's status, not go and edit a profile.
+     */
+    @ExceptionHandler(FleetLookupException.class)
+    public ResponseEntity<ApiError> handleFleetLookupFailure(FleetLookupException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_ENTITY, "SUPPLIER_FLEET_LOOKUP_FAILED", ex.getMessage(), request);
+    }
+
     @ExceptionHandler(InvoiceFetchException.class)
     public ResponseEntity<ApiError> handleInvoiceFetch(InvoiceFetchException ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_ENTITY, "SUPPLIER_INVOICE_FETCH_FAILED", ex.getMessage(), request);

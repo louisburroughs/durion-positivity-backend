@@ -1,9 +1,9 @@
-generatedAt: "2026-08-16T18:02:10.429550+00:00"
+generatedAt: "2026-08-16T20:30:21.598598+00:00"
 root: "."
 summary:
   manifestCount: 22
-  permissionCount: 427
-  uniquePermissionCount: 427
+  permissionCount: 429
+  uniquePermissionCount: 429
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -792,7 +792,7 @@ manifests:
     domain: "supplier"
     serviceName: "pos-supplier"
     version: "1.0"
-    permissionCount: 9
+    permissionCount: 11
     permissions:
       - name: "supplier:audit:read"
         description: "Read supplier exchange audit records"
@@ -812,6 +812,10 @@ manifests:
         description: "Ask a vendor, live, what stock it holds for a receiving location (the approved synchronous supplier read)"
       - name: "supplier:invoice:fetch"
         description: "Run a vendor invoice fetch on demand"
+      - name: "supplier:workorderauth:request"
+        description: "Ask a fleet program to authorize work, and look up fleet vehicles, contracts and policies"
+      - name: "supplier:workorderauth:review"
+        description: "View and clear fleet workorder authorizations parked for manual review"
   - module: "pos-tax"
     path: "pos-tax/src/main/resources/permissions.yaml"
     domain: "tax"
@@ -3070,6 +3074,18 @@ permissions:
     source: "pos-supplier/src/main/resources/permissions.yaml"
   - name: "supplier:transmission:resolve"
     description: "Resolve a purchase-order transmission awaiting manual review (confirm with vendor reference, mark not received, or cancel)"
+    domain: "supplier"
+    serviceName: "pos-supplier"
+    module: "pos-supplier"
+    source: "pos-supplier/src/main/resources/permissions.yaml"
+  - name: "supplier:workorderauth:request"
+    description: "Ask a fleet program to authorize work, and look up fleet vehicles, contracts and policies"
+    domain: "supplier"
+    serviceName: "pos-supplier"
+    module: "pos-supplier"
+    source: "pos-supplier/src/main/resources/permissions.yaml"
+  - name: "supplier:workorderauth:review"
+    description: "View and clear fleet workorder authorizations parked for manual review"
     domain: "supplier"
     serviceName: "pos-supplier"
     module: "pos-supplier"

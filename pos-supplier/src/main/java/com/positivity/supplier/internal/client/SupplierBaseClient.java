@@ -26,6 +26,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
@@ -225,6 +227,9 @@ public class SupplierBaseClient {
             // and therefore never retried, reporting a permanent rejection of a valid document.
             headers.set(HttpHeaders.CONTENT_TYPE, request.contentType());
         }
+        // Applied before auth, so a codec cannot overwrite a credential header with one of its own:
+        // a protocol header is a vendor's routing concern and never an authorisation one.
+        request.headers().forEach(headers::set);
         try {
             // Credentials resolved at call time; the resolved values live only in these headers.
             authStrategies.apply(headers, binding.authConfig());
@@ -304,7 +309,8 @@ public class SupplierBaseClient {
                     decode(entity.getBody(), entity.getHeaders().getContentType()),
                     null,
                     started,
-                    Instant.now(clock));
+                    Instant.now(clock),
+                    carriedHeaders(entity.getHeaders()));
             metrics.recordBreakerState(binding.profile().getVendorProfileId(), binding.capability(), breaker);
             return ok;
 
@@ -570,10 +576,44 @@ public class SupplierBaseClient {
             @Nullable String failureDetail,
             @NonNull Instant started,
             @NonNull Instant finished) {
+        return recordAndBuild(
+                request,
+                uri,
+                correlationId,
+                attemptNumber,
+                outcome,
+                httpStatus,
+                responseBody,
+                failureDetail,
+                started,
+                finished,
+                Map.of());
+    }
+
+    @NonNull
+    private SupplierHttpResponse recordAndBuild(
+            @NonNull SupplierHttpRequest request,
+            @NonNull String uri,
+            @NonNull String correlationId,
+            int attemptNumber,
+            @NonNull ExchangeOutcome outcome,
+            @Nullable Integer httpStatus,
+            @Nullable String responseBody,
+            @Nullable String failureDetail,
+            @NonNull Instant started,
+            @NonNull Instant finished,
+            @NonNull Map<String, String> responseHeaders) {
         ResolvedBinding binding = request.binding();
         Duration duration = Duration.between(started, finished);
         SupplierHttpResponse response = new SupplierHttpResponse(
-                outcome, httpStatus, responseBody, correlationId, attemptNumber, duration, failureDetail);
+                outcome,
+                httpStatus,
+                responseBody,
+                correlationId,
+                attemptNumber,
+                duration,
+                failureDetail,
+                responseHeaders);
 
         try {
             exchangeObserver.onExchange(new ExchangeContext(
@@ -615,7 +655,27 @@ public class SupplierBaseClient {
                 response.correlationId(),
                 attempts,
                 Duration.between(callStarted, Instant.now(clock)),
-                response.failureDetail());
+                response.failureDetail(),
+                response.responseHeaders());
+    }
+
+    /**
+     * The subset of response headers the transport carries out, per
+     * {@link SupplierHttpResponse#CARRIED_RESPONSE_HEADERS}.
+     *
+     * <p>Filtered here rather than by the caller so no code path can hand the whole vendor header
+     * map onward by accident.
+     */
+    @NonNull
+    private static Map<String, String> carriedHeaders(@NonNull HttpHeaders headers) {
+        Map<String, String> carried = new LinkedHashMap<>();
+        headers.forEach((name, values) -> {
+            if (SupplierHttpResponse.CARRIED_RESPONSE_HEADERS.contains(name.toLowerCase(Locale.ROOT))
+                    && !values.isEmpty()) {
+                carried.put(name, values.getFirst());
+            }
+        });
+        return carried;
     }
 
     @NonNull

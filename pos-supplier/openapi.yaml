@@ -18,6 +18,8 @@ tags:
   description: On-demand vendor invoice retrieval
 - name: Supplier Commercial Accounts
   description: Admin CRUD over vendor commercial accounts — billing and per-location delivery numbers
+- name: Supplier Fleet Authorization
+  description: Fleet workorder authorization and lookups
 - name: Supplier Endpoint Bindings
   description: Admin CRUD over capability endpoint bindings — capability → (family, version, URL, auth)
 - name: Supplier Order Transmission
@@ -1031,6 +1033,82 @@ paths:
         - supplier:invoice:fetch
       x-required-permissions:
       - supplier:invoice:fetch
+  /v1/supplier/fleet/{supplierRef}/authorizations:
+    post:
+      tags:
+      - Supplier Fleet Authorization
+      summary: Request Fleet Authorization For A Workorder
+      description: 'Asks a vendor''s fleet program to authorize the work on a workorder, and records what it said.
+
+        Use this tool once the vehicle and the work are known; do not call it repeatedly to check for an answer, because asking again can open a second authorization against the same contract — use getFleetWorkorderAuthorization to read the outcome instead.
+
+        Preconditions: the vendor profile must be enabled with a workorder-authorization binding and a billing account number, and the request must identify the vehicle by vendor vehicle id, license plate, VIN or fleet number.
+
+        Required inputs: supplierRef path parameter, workorderId, and at least one vehicle identifier; contractId, odometerValue and lines are optional.
+
+        Emits a SUPPLIER_WORKORDER_AUTHORIZATION_REQUEST event, and on a decision publishes supplier.workorderauth.granted or supplier.workorderauth.denied for the workorder domain.
+
+        Returns 200 with the authorization, whose status is GRANTED, DENIED, NOT_FOUND, PENDING when the vendor accepted the request and will decide later, or MANUAL_REVIEW when no decision could be obtained at all; 400 when no vehicle identifier is given; 404 when the vendor profile is unknown; and 409 when the profile is disabled or has no workorder-authorization binding configured.
+
+        '
+      operationId: requestFleetWorkorderAuthorization
+      parameters:
+      - name: supplierRef
+        in: path
+        description: Vendor profile alias
+        required: true
+        schema:
+          type: string
+      requestBody:
+        description: 'The work being requested, and how the fleet vehicle is identified. At least one of vendorVehicleId, licensePlate, vin or fleetNumber must be given: a request that identifies no vehicle cannot be authorized by anyone.'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FleetAuthorizationRequestBody'
+            examples:
+              Two front tyres on a plated fleet vehicle:
+                description: Two front tyres on a plated fleet vehicle
+                value:
+                  workorderId: 019200aa-0000-7000-8000-0000000000c1
+                  licensePlate: ABC-123
+                  contractId: C-1
+                  odometerValue: '104500'
+                  lines:
+                  - reference: '4001111'
+                    description: Front axle tyres
+                    quantity: 2
+                    tirePosition: 1L
+        required: true
+      responses:
+        '200':
+          description: Authorization requested; see status for the outcome
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FleetAuthorizationResponse'
+        '400':
+          description: The request identifies no vehicle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Vendor profile unknown
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Vendor profile disabled, or no workorder-authorization binding configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - supplier:workorderauth:request
+      x-required-permissions:
+      - supplier:workorderauth:request
   /v1/supplier/admin/profiles:
     get:
       tags:
@@ -1995,6 +2073,277 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - supplier:transmission:read
+  /v1/supplier/fleet/{supplierRef}/vehicles/{vehicleIdent}:
+    get:
+      tags:
+      - Supplier Fleet Authorization
+      summary: Look Up A Fleet Vehicle
+      description: 'Asks a vendor''s fleet program what it knows about a vehicle, by license plate, VIN, fleet number or the vendor''s own vehicle id.
+
+        Use this tool before requesting authorization, to confirm the vehicle is on a fleet contract and to obtain the vendor vehicle id; do not treat the answer as authorization, because only requestFleetWorkorderAuthorization obtains that.
+
+        Preconditions: the vendor profile must be enabled with a workorder-authorization binding.
+
+        Required inputs: supplierRef and vehicleIdent path parameters.
+
+        Emits a SUPPLIER_FLEET_VEHICLE_LOOKUP event.
+
+        Returns 200 with the vehicle as the fleet holds it, 404 when the fleet does not know the vehicle or the vendor profile is unknown, 409 when the profile is disabled or unconfigured, and 422 when the vendor could not be reached or answered unreadably.
+
+        '
+      operationId: lookupFleetVehicle
+      parameters:
+      - name: supplierRef
+        in: path
+        description: Vendor profile alias
+        required: true
+        schema:
+          type: string
+      - name: vehicleIdent
+        in: path
+        description: Plate, VIN, fleet number or vendor vehicle id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The vehicle as the fleet holds it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FleetVehicle'
+        '404':
+          description: The fleet does not know this vehicle, or the vendor profile is unknown
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Vendor profile disabled, or no workorder-authorization binding configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: The vendor could not be reached or answered unreadably
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - supplier:workorderauth:request
+      x-required-permissions:
+      - supplier:workorderauth:request
+  /v1/supplier/fleet/{supplierRef}/policies:
+    get:
+      tags:
+      - Supplier Fleet Authorization
+      summary: List Fleet Policies
+      description: 'Lists what a fleet program says it will and will not pay for.
+
+        Use this tool to narrow what is offered to a fleet customer; do not use it as permission, because it is advisory and only requestFleetWorkorderAuthorization obtains a decision.
+
+        Preconditions: the vendor profile must be enabled with a workorder-authorization binding.
+
+        Required inputs: supplierRef path parameter.
+
+        Emits a SUPPLIER_FLEET_POLICY_LIST event.
+
+        Returns 200 with the policies as stated — an empty list when the vendor states none or answers in a shape this adapter does not recognise — 404 when the vendor profile is unknown, 409 when the profile is disabled or unconfigured, and 422 when the vendor could not be reached.
+
+        '
+      operationId: listFleetPolicies
+      parameters:
+      - name: supplierRef
+        in: path
+        description: Vendor profile alias
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The fleet policies as stated
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FleetPolicy'
+        '404':
+          description: Vendor profile unknown
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Vendor profile disabled, or no workorder-authorization binding configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: The vendor could not be reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - supplier:workorderauth:request
+      x-required-permissions:
+      - supplier:workorderauth:request
+  /v1/supplier/fleet/{supplierRef}/contracts:
+    get:
+      tags:
+      - Supplier Fleet Authorization
+      summary: List Fleet Contracts
+      description: 'Lists the fleet contracts this service provider may claim work under at a vendor.
+
+        Use this tool to populate a contract choice before requesting authorization; do not use the contract dates to decide whether work is covered, because only the vendor decides that when authorization is requested.
+
+        Preconditions: the vendor profile must be enabled with a workorder-authorization binding.
+
+        Required inputs: supplierRef path parameter.
+
+        Emits a SUPPLIER_FLEET_CONTRACT_LIST event.
+
+        Returns 200 with the contracts as stated, 404 when the vendor profile is unknown, 409 when the profile is disabled or unconfigured, and 422 when the vendor could not be reached.
+
+        '
+      operationId: listFleetContracts
+      parameters:
+      - name: supplierRef
+        in: path
+        description: Vendor profile alias
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The fleet contracts as stated
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FleetContract'
+        '404':
+          description: Vendor profile unknown
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Vendor profile disabled, or no workorder-authorization binding configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: The vendor could not be reached or answered unreadably
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - supplier:workorderauth:request
+      x-required-permissions:
+      - supplier:workorderauth:request
+  /v1/supplier/fleet/{supplierRef}/authorizations/{workorderId}:
+    get:
+      tags:
+      - Supplier Fleet Authorization
+      summary: Read A Fleet Authorization
+      description: 'Returns the fleet authorization recorded for a workorder at a vendor, including the vendor''s reason where it gave one.
+
+        Use this tool to check the outcome of an authorization that came back PENDING; do not call requestFleetWorkorderAuthorization again for that, because it can open a second authorization.
+
+        Preconditions: none.
+
+        Required inputs: supplierRef and workorderId path parameters.
+
+        Emits a SUPPLIER_WORKORDER_AUTHORIZATION_READ event.
+
+        Returns 200 with the authorization, and 404 when the vendor profile is unknown or no authorization was ever requested for this workorder.
+
+        '
+      operationId: getFleetWorkorderAuthorization
+      parameters:
+      - name: supplierRef
+        in: path
+        description: Vendor profile alias
+        required: true
+        schema:
+          type: string
+      - name: workorderId
+        in: path
+        description: Workorder the authorization concerns
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The recorded authorization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FleetAuthorizationResponse'
+        '404':
+          description: Vendor profile unknown, or no authorization recorded for this workorder
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - supplier:workorderauth:request
+      x-required-permissions:
+      - supplier:workorderauth:request
+  /v1/supplier/fleet/authorizations/reviews:
+    get:
+      tags:
+      - Supplier Fleet Authorization
+      summary: List Fleet Authorizations Needing Review
+      description: 'Lists fleet authorizations and completions that could not be resolved with a vendor and are waiting on a person, newest first.
+
+        Use this tool to work the queue of stuck fleet jobs; the reviewReason says what went wrong and approvalStatus distinguishes an authorization nobody could obtain from a completion nobody could get signed off. Do not read a row here as a vendor decision — nothing in this list has been refused by a fleet, only left unresolved — and do not use it to check one workorder, because getFleetWorkorderAuthorization answers that directly instead.
+
+        Preconditions: none.
+
+        Required inputs: none; limit defaults to 100.
+
+        Emits a SUPPLIER_WORKORDER_AUTHORIZATION_REVIEW_LIST event.
+
+        Returns 200 with the rows waiting on a person, which is an empty list when nothing is stuck.
+
+        '
+      operationId: listFleetAuthorizationsNeedingReview
+      parameters:
+      - name: limit
+        in: query
+        description: Maximum rows to return
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: Authorizations and completions waiting on a person
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FleetAuthorizationResponse'
+      security:
+      - bearerAuth:
+        - supplier:workorderauth:review
+      x-required-permissions:
+      - supplier:workorderauth:review
   /v1/supplier/admin/price-catalog/{vendorProfileId}/unmatched-lines:
     get:
       tags:
@@ -3038,6 +3387,103 @@ components:
           type: string
           format: date-time
           description: When this answer was obtained. Present when the status is OK; a cached answer carries the instant of the original inquiry, not of the cache hit.
+    FleetAuthorizationRequestBody:
+      type: object
+      description: A request to have a fleet program authorize the work on a workorder
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder the authorization is for
+        vendorVehicleId:
+          type: string
+          description: The vendor's own vehicle id, when a lookup has already resolved one
+        licensePlate:
+          type: string
+          description: License plate as presented
+        vin:
+          type: string
+          description: VIN as presented
+        fleetNumber:
+          type: string
+          description: The fleet's own unit number
+        contractId:
+          type: string
+          description: Fleet contract claimed, when known
+        odometerValue:
+          type: string
+          description: Odometer reading at check-in, as recorded
+        lines:
+          type: array
+          description: The work being requested
+          items:
+            $ref: '#/components/schemas/Line'
+      required:
+      - workorderId
+    Line:
+      type: object
+      description: One requested operation or part
+      properties:
+        reference:
+          type: string
+          description: Part or operation reference as the shop knows it
+        description:
+          type: string
+          description: Free text for a human reading the request at the fleet
+        quantity:
+          type: integer
+          format: int32
+          description: How many
+          minimum: 0
+        tirePosition:
+          type: string
+          description: Wheel position, where the work is position-specific
+    FleetAuthorizationResponse:
+      type: object
+      description: A fleet workorder authorization and its vendor-side sign-off state
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+          description: Workorder the authorization concerns
+        supplierRef:
+          type: string
+          description: Vendor profile alias
+        status:
+          type: string
+          description: GRANTED, DENIED, NOT_FOUND, PENDING while the vendor decides, or MANUAL_REVIEW when no decision could be obtained
+        vendorAuthorizationId:
+          type: string
+          description: The vendor's own authorization id, needed to approve completion
+        contractReference:
+          type: string
+          description: Contract the work was authorized under, as stated
+        authorizedAmount:
+          type: number
+          description: Ceiling the vendor stated, when it stated one
+        currency:
+          type: string
+          description: ISO 4217 code for authorizedAmount
+        reasonCode:
+          type: string
+          description: The vendor's refusal code, as stated
+        reasonText:
+          type: string
+          description: The vendor's refusal text, as stated
+        reviewReason:
+          type: string
+          description: Why this authorization needs a human; never a vendor decision
+        approvalStatus:
+          type: string
+          description: NOT_REQUESTED, PENDING, APPROVED or MANUAL_REVIEW
+        requestedAt:
+          type: string
+          format: date-time
+          description: When the authorization was requested
+        decidedAt:
+          type: string
+          format: date-time
+          description: When the vendor decided, if it has
     PriceCatalogImportSummary:
       type: object
       description: Bookkeeping summary of one vendor PRICAT import run.
@@ -3118,6 +3564,64 @@ components:
         failureDetail:
           type: string
           description: Operator-facing failure summary for a failed import.
+    FleetVehicle:
+      type: object
+      properties:
+        vendorVehicleId:
+          type: string
+        licensePlate:
+          type: string
+        fleetNumber:
+          type: string
+        vin:
+          type: string
+        brand:
+          type: string
+        model:
+          type: string
+        modelYear:
+          type: integer
+          format: int32
+        odometerValue:
+          type: string
+        identifiable:
+          type: boolean
+    FleetPolicy:
+      type: object
+      properties:
+        policyId:
+          type: string
+        name:
+          type: string
+        useBlacklist:
+          type: boolean
+        useWhitelist:
+          type: boolean
+        blacklisted:
+          type: array
+          items:
+            type: string
+        whitelisted:
+          type: array
+          items:
+            type: string
+    FleetContract:
+      type: object
+      properties:
+        vendorContractId:
+          type: string
+        name:
+          type: string
+        contractorId:
+          type: string
+        contractorName:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
     PagedResponse:
       type: object
       description: A page of results.

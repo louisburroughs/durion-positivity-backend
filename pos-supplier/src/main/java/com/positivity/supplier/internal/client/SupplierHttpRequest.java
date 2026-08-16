@@ -36,7 +36,8 @@ public record SupplierHttpRequest(
         @Nullable String body,
         @Nullable String contentType,
         @Nullable String accept,
-        boolean idempotent) {
+        boolean idempotent,
+        @NonNull Map<String, String> headers) {
 
     public SupplierHttpRequest {
         Objects.requireNonNull(binding, "binding must not be null");
@@ -48,7 +49,22 @@ public record SupplierHttpRequest(
         if (body != null && (contentType == null || contentType.isBlank())) {
             throw new IllegalArgumentException("contentType is required when a body is present");
         }
+        Objects.requireNonNull(headers, "headers must not be null");
         queryParams = Map.copyOf(new LinkedHashMap<>(queryParams));
+        headers = Map.copyOf(new LinkedHashMap<>(headers));
+    }
+
+    /** Builds a request that adds no headers of its own. */
+    public SupplierHttpRequest(
+            @NonNull ResolvedBinding binding,
+            @NonNull HttpMethod method,
+            @Nullable String pathSuffix,
+            @NonNull Map<String, String> queryParams,
+            @Nullable String body,
+            @Nullable String contentType,
+            @Nullable String accept,
+            boolean idempotent) {
+        this(binding, method, pathSuffix, queryParams, body, contentType, accept, idempotent, Map.of());
     }
 
     /**
@@ -76,6 +92,7 @@ public record SupplierHttpRequest(
      */
     @NonNull
     public SupplierHttpRequest asIdempotentRead() {
-        return new SupplierHttpRequest(binding, method, pathSuffix, queryParams, body, contentType, accept, true);
+        return new SupplierHttpRequest(
+                binding, method, pathSuffix, queryParams, body, contentType, accept, true, headers);
     }
 }

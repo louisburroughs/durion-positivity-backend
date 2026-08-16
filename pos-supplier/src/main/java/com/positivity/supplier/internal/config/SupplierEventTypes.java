@@ -110,6 +110,30 @@ public final class SupplierEventTypes {
                         .build(),
                 EventTypeRegistration.write(
                                 "SUPPLIER_INVOICE_FETCH", "Run a vendor invoice fetch for an explicit window")
+                        .build(),
+                // Fleet workorder authorization (CAP-323). Approval-grade rather than write: this
+                // asks a trading partner for a commercial decision, and asking twice can open two
+                // authorizations against one contract — so a duplicate here costs a phone call to a
+                // fleet manager, not a retry.
+                EventTypeRegistration.approval(
+                                "SUPPLIER_WORKORDER_AUTHORIZATION_REQUEST",
+                                "Ask a fleet program to authorize work on a workorder")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "SUPPLIER_WORKORDER_AUTHORIZATION_READ",
+                                "Read the fleet authorization recorded for a workorder")
+                        .build(),
+                // The lookups reach a vendor synchronously while a service advisor waits, so their
+                // threshold is the vendor's latency, as with the stock inquiry above.
+                EventTypeRegistration.write("SUPPLIER_FLEET_VEHICLE_LOOKUP", "Look up a vehicle in a fleet program")
+                        .build(),
+                EventTypeRegistration.write("SUPPLIER_FLEET_CONTRACT_LIST", "List a vendor's fleet contracts")
+                        .build(),
+                EventTypeRegistration.write("SUPPLIER_FLEET_POLICY_LIST", "List a fleet program's policies")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "SUPPLIER_WORKORDER_AUTHORIZATION_REVIEW_LIST",
+                                "List fleet authorizations and completions waiting on a person")
                         .build());
     }
 }

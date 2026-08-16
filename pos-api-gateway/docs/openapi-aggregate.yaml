@@ -1301,6 +1301,18 @@ paths:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1profiles~1{vendorProfileId}~1bindings
   /v1/supplier/admin/profiles/{vendorProfileId}/bindings/{bindingId}:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1admin~1profiles~1{vendorProfileId}~1bindings~1{bindingId}
+  /v1/supplier/fleet/authorizations/reviews:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1fleet~1authorizations~1reviews
+  /v1/supplier/fleet/{supplierRef}/authorizations:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1fleet~1{supplierRef}~1authorizations
+  /v1/supplier/fleet/{supplierRef}/authorizations/{workorderId}:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1fleet~1{supplierRef}~1authorizations~1{workorderId}
+  /v1/supplier/fleet/{supplierRef}/contracts:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1fleet~1{supplierRef}~1contracts
+  /v1/supplier/fleet/{supplierRef}/policies:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1fleet~1{supplierRef}~1policies
+  /v1/supplier/fleet/{supplierRef}/vehicles/{vehicleIdent}:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1fleet~1{supplierRef}~1vehicles~1{vehicleIdent}
   /v1/supplier/invoices/{supplierRef}/fetches:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1invoices~1{supplierRef}~1fetches
   /v1/supplier/stock/inquiries:

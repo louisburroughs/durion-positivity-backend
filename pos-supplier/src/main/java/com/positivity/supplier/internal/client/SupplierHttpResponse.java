@@ -2,7 +2,12 @@ package com.positivity.supplier.internal.client;
 
 import com.positivity.supplier.internal.spi.ExchangeOutcome;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -23,6 +28,8 @@ import org.jspecify.annotations.Nullable;
  * @param attempts how many attempts were made, {@code >= 1}
  * @param totalDuration wall-clock duration across all attempts
  * @param failureDetail operator-facing failure summary; {@code null} on success. Never a credential
+ * @param responseHeaders control-flow response headers, restricted to
+ *     {@link #CARRIED_RESPONSE_HEADERS}; empty when none were present
  */
 public record SupplierHttpResponse(
         @NonNull ExchangeOutcome outcome,
@@ -31,15 +38,69 @@ public record SupplierHttpResponse(
         @NonNull String correlationId,
         int attempts,
         @NonNull Duration totalDuration,
-        @Nullable String failureDetail) {
+        @Nullable String failureDetail,
+        @NonNull Map<String, String> responseHeaders) {
+
+    /**
+     * The only response headers carried out of the transport, matched case-insensitively.
+     *
+     * <p>An allowlist rather than the whole header map, because these three carry protocol control
+     * flow and nothing else does. {@code Location} is where an asynchronously accepted request says
+     * its result will appear — without it a 202 is indistinguishable from a request that vanished.
+     * {@code API-Version} lets a caller notice it is talking to a major version it was not built
+     * for. {@code Retry-After} is a vendor stating its own backoff.
+     *
+     * <p>Carrying every header instead would put arbitrary vendor-controlled strings — set-cookie,
+     * bearer challenges, tracing identifiers — into an object that is logged and flows toward the
+     * exchange audit. That is a credential-leak shape for no gain: no caller has ever wanted them.
+     */
+    public static final Set<String> CARRIED_RESPONSE_HEADERS = Set.of("location", "api-version", "retry-after");
 
     public SupplierHttpResponse {
         Objects.requireNonNull(outcome, "outcome must not be null");
         Objects.requireNonNull(correlationId, "correlationId must not be null");
         Objects.requireNonNull(totalDuration, "totalDuration must not be null");
+        Objects.requireNonNull(responseHeaders, "responseHeaders must not be null");
         if (attempts < 1) {
             throw new IllegalArgumentException("attempts must be >= 1");
         }
+        // Lower-cased keys so a caller need not guess a vendor's capitalisation: HTTP header names
+        // are case-insensitive and vendors do vary.
+        Map<String, String> normalised = new LinkedHashMap<>();
+        responseHeaders.forEach((name, value) -> {
+            if (name != null && value != null) {
+                normalised.put(name.toLowerCase(Locale.ROOT), value);
+            }
+        });
+        responseHeaders = Collections.unmodifiableMap(normalised);
+    }
+
+    /**
+     * Builds a response that carried no headers.
+     *
+     * <p>Kept so the many call sites that never had headers to report — every EDIWheel capability,
+     * and every failure path that received no response at all — say that by omission rather than by
+     * threading an empty map through.
+     */
+    public SupplierHttpResponse(
+            @NonNull ExchangeOutcome outcome,
+            @Nullable Integer httpStatus,
+            @Nullable String body,
+            @NonNull String correlationId,
+            int attempts,
+            @NonNull Duration totalDuration,
+            @Nullable String failureDetail) {
+        this(outcome, httpStatus, body, correlationId, attempts, totalDuration, failureDetail, Map.of());
+    }
+
+    /**
+     * The named response header, or {@code null} when the vendor did not send it.
+     *
+     * @param name header name; matched case-insensitively
+     */
+    @Nullable
+    public String header(@NonNull String name) {
+        return responseHeaders.get(name.toLowerCase(Locale.ROOT));
     }
 
     /** Whether the vendor accepted and answered. */
