@@ -111,7 +111,6 @@ public class ProductEventsListener {
                 .codeType(trimToNull(payload.path("productCodeType").stringValue(null)))
                 .code(trimToNull(payload.path("productCode").stringValue(null)))
                 .aggregateVersion(aggregateVersion)
-                .updatedAt(Instant.now(clock))
                 .build());
     }
 

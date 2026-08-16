@@ -13,6 +13,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.LastModifiedDate;
 
 /**
  * A product's identity code as catalog states it (CAP-320 #1330, ADR-0044 R3).
@@ -50,6 +51,13 @@ public class ExtProductCode {
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 
+    /**
+     * When this replica last changed, maintained by auditing (ADR-0024).
+     *
+     * <p>Ours rather than catalog's: it says when we last heard, which is the question asked when a
+     * product's code looks wrong and somebody needs to know whether this row is stale.
+     */
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
