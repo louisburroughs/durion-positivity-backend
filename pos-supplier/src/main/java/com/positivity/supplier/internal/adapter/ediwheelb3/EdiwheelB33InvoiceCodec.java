@@ -246,7 +246,17 @@ public class EdiwheelB33InvoiceCodec implements SupplierAdapterCodec {
             return null;
         }
         BigDecimal value = decimal(article.invoicedQuantity.quantityValue);
-        return value == null ? null : value.intValue();
+        if (value == null) {
+            return null;
+        }
+        try {
+            // Exact, so "12.000" is twelve and "1.9" is not one. Truncating would quietly restate
+            // what the vendor invoiced, and the line would then disagree with its own amount.
+            return value.intValueExact();
+        } catch (ArithmeticException e) {
+            log.warn("Vendor invoice line carries a non-whole quantity '{}'; recorded as absent", value);
+            return null;
+        }
     }
 
     private static @Nullable String orderReferenceOf(InvoiceB33Wire.@Nullable HeaderReferences references) {
@@ -272,7 +282,10 @@ public class EdiwheelB33InvoiceCodec implements SupplierAdapterCodec {
             return null;
         }
         try {
-            return new BigDecimal(value);
+            // Comma as the decimal separator, which the EDIWheel norms use and which every sibling
+            // codec already normalises. Without this a perfectly good "240,00" would be recorded as
+            // an unreadable amount, and the invoice would arrive with no total at all.
+            return new BigDecimal(value.replace(',', '.'));
         } catch (NumberFormatException e) {
             log.warn("Vendor invoice carries an unreadable amount '{}'; recorded as absent", value);
             return null;

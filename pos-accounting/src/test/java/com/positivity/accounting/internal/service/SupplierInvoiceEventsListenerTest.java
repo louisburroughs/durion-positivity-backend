@@ -204,4 +204,38 @@ class SupplierInvoiceEventsListenerTest {
         // marking it processed would lose a vendor debt permanently.
         verify(processedEventRepository, never()).save(any());
     }
+
+    @Test
+    @DisplayName("an invoice with no readable total is flagged, not filed as a nil bill")
+    void absentTotalIsFlaggedNotZero() {
+        String noTotal = """
+            {"eventId":"%s","eventType":"supplier.invoice.received","payload":{
+              "vendorProfileId":"%s","supplierRef":"michelin-de","vendorInvoiceNumber":"INV-X",
+              "invoiceDate":"2026-08-14","type":"INVOICE","currency":"EUR",
+              "totalNetAmount":null,"totalTaxAmount":null,"totalGrossAmount":null,
+              "vendorOrderReference":null,"occurredAt":"2026-08-16T08:00:00Z","lines":[]}}
+            """.formatted(EVENT_1, PROFILE);
+
+        listener.onSupplierEvent(noTotal);
+
+        // The codec records an unreadable amount as absent precisely so it stays distinguishable
+        // from a nil invoice. Filing it as a zero-value bill would undo that: it looks settled,
+        // sits at the bottom of every ageing report, and is noticed when the vendor chases payment.
+        assertThat(captured().getStatus()).isEqualTo(VendorBillStatus.MATCH_EXCEPTION);
+    }
+
+    @Test
+    @DisplayName("a non-transient database failure is retried, not acknowledged")
+    void nonTransientDatabaseFailureIsRethrown() {
+        when(vendorBillRepository.save(any()))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("value too long"));
+
+        assertThatThrownBy(() -> listener.onSupplierEvent(event(EVENT_2, "INV-2", "INVOICE", "288.00")))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+
+        // A column-length violation is not a malformed message. Acknowledging it would lose a
+        // vendor debt permanently: the supplier side has already published this invoice and will
+        // not publish it again.
+        verify(processedEventRepository, never()).save(any());
+    }
 }

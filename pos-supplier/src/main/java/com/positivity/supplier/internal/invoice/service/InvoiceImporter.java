@@ -18,6 +18,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -117,7 +118,19 @@ public class InvoiceImporter {
                             .build());
         }
 
-        SupplierInvoiceEntity saved = invoiceRepository.save(entity);
+        SupplierInvoiceEntity saved;
+        try {
+            saved = invoiceRepository.saveAndFlush(entity);
+        } catch (DataIntegrityViolationException e) {
+            // Another instance stored this invoice between the check above and this insert. The
+            // unique identity did its job; the invoice is safely held either way. Letting this
+            // escape would fail the whole fetch over a document that is now correctly imported,
+            // and the retry would re-cover the same window to no purpose.
+            log.debug(
+                    "Vendor invoice {} was stored concurrently; treating as already held",
+                    invoice.vendorInvoiceNumber());
+            return false;
+        }
         publish(saved, invoice, now);
         log.info("Imported vendor invoice {} ({}) from {}", invoice.vendorInvoiceNumber(), invoice.type(), supplierRef);
         return true;

@@ -61,7 +61,7 @@ class InvoiceImporterTest {
         importer = new InvoiceImporter(invoiceRepository, outboxEventWriter, Clock.fixed(NOW, ZoneOffset.UTC));
         when(invoiceRepository.findByVendorProfileIdAndVendorInvoiceNumberAndInvoiceDate(any(), any(), any()))
                 .thenReturn(Optional.empty());
-        when(invoiceRepository.save(any())).thenAnswer(call -> {
+        when(invoiceRepository.saveAndFlush(any())).thenAnswer(call -> {
             SupplierInvoiceEntity saved = call.getArgument(0);
             saved.setSupplierInvoiceId(UUID.randomUUID());
             return saved;
@@ -122,7 +122,7 @@ class InvoiceImporterTest {
         // same debt in front of AP a second time, with only its own guard between that and a
         // duplicate payment.
         assertThat(imported).isZero();
-        verify(invoiceRepository, never()).save(any());
+        verify(invoiceRepository, never()).saveAndFlush(any());
         verify(outboxEventWriter, never()).publish(any(), any());
     }
 
@@ -153,6 +153,25 @@ class InvoiceImporterTest {
                         invoice("INV-2", SupplierInvoice.Type.INVOICE, "120.00")));
 
         assertThat(imported).isEqualTo(1);
-        verify(invoiceRepository).save(any());
+        verify(invoiceRepository).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("an invoice stored concurrently does not fail the fetch")
+    void concurrentInsertIsTreatedAsAlreadyHeld() {
+        // doThrow, not when(...): stubbing through when() would invoke the mock and run the prior
+        // answer with a null argument.
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"))
+                .when(invoiceRepository)
+                .saveAndFlush(any());
+
+        int imported = importer.importInvoices(
+                PROFILE, REF, List.of(invoice("INV-1", SupplierInvoice.Type.INVOICE, "288.00")));
+
+        // Another instance won the insert between the check and the write. The unique identity did
+        // its job and the invoice is held either way; failing the whole fetch over a document that
+        // is now correctly imported would just re-cover the window to no purpose.
+        assertThat(imported).isZero();
+        verify(outboxEventWriter, never()).publish(any(), any());
     }
 }

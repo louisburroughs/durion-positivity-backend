@@ -196,4 +196,64 @@ class EdiwheelB33InvoiceCodecTest {
                 .extracting(SupplierInvoice.Line::lineNumber)
                 .containsExactly(1, 2);
     }
+
+    @Test
+    @DisplayName("comma decimals are read, as every sibling codec already reads them")
+    void commaDecimalsAreRead() {
+        String summary = "<Summary><TotalAmount><AmountValue>240,00</AmountValue></TotalAmount></Summary>";
+
+        // The norms use a comma separator. Refusing it would record a perfectly good figure as
+        // unreadable and land an invoice with no total at all.
+        assertThat(codec.decode(document("380", summary)).getFirst().totalGrossAmount())
+                .isEqualByComparingTo("240.00");
+    }
+
+    @Test
+    @DisplayName("a grouped figure is not guessed at")
+    void groupedFigureIsAbsent() {
+        String summary = "<Summary><TotalAmount><AmountValue>1.234,56</AmountValue></TotalAmount></Summary>";
+
+        // "1.234" is a thousand in one convention and one-and-a-bit in another, and nothing in the
+        // document says which. A wrong guess here is off by a factor of a thousand on a payment,
+        // so it is recorded as unreadable and somebody looks — the same rule the rest of this
+        // codec follows, and the same behaviour every sibling codec has.
+        assertThat(codec.decode(document("380", summary)).getFirst().totalGrossAmount())
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("a whole quantity written with decimals is that quantity")
+    void wholeQuantityWithDecimalsIsExact() {
+        String line = """
+                <LineLevel><LineID>1</LineID><Article>
+                  <InvoicedQuantity><QuantityValue>12,000</QuantityValue></InvoicedQuantity>
+                </Article></LineLevel>
+                """;
+
+        assertThat(codec.decode(document("380", line))
+                        .getFirst()
+                        .lines()
+                        .getFirst()
+                        .quantity())
+                .isEqualTo(12);
+    }
+
+    @Test
+    @DisplayName("a non-whole quantity is absent, never truncated")
+    void fractionalQuantityIsAbsent() {
+        String line = """
+                <LineLevel><LineID>1</LineID><Article>
+                  <InvoicedQuantity><QuantityValue>1,9</QuantityValue></InvoicedQuantity>
+                </Article></LineLevel>
+                """;
+
+        // Truncating to 1 would restate what the vendor invoiced, and the line would then disagree
+        // with its own amount.
+        assertThat(codec.decode(document("380", line))
+                        .getFirst()
+                        .lines()
+                        .getFirst()
+                        .quantity())
+                .isNull();
+    }
 }

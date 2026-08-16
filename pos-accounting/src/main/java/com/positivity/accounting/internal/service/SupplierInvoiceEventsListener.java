@@ -17,7 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.TransientDataAccessException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -108,12 +108,16 @@ public class SupplierInvoiceEventsListener {
             } else {
                 log.debug("Ignoring supplier event type={} eventId={}", eventType, eventId);
             }
-        } catch (TransientDataAccessException e) {
-            // Rethrown so the container retries. Recording this as processed would lose a vendor
-            // invoice permanently: the supplier side has already published it and will not publish
-            // it again, so nothing would ever bring it back.
+        } catch (DataAccessException e) {
+            // Every database failure is rethrown, not only the transient ones. A column-length
+            // violation or a concurrent vendor insert is not a malformed message, and marking it
+            // processed would lose a vendor debt permanently — the supplier side has already
+            // published this invoice and will not publish it again, so nothing would bring it back.
+            // Better a retry, or a dead letter somebody has to look at, than a debt that vanishes.
             throw e;
         } catch (Exception e) {
+            // Genuinely unreadable: a payload this build cannot parse will not parse on retry
+            // either, and blocking the partition would stop every other vendor's invoices too.
             log.warn("Skipping malformed supplier invoice event eventId={}", eventId, e);
         }
 
@@ -161,7 +165,14 @@ public class SupplierInvoiceEventsListener {
         bill.setBillNumber(billNumber);
         bill.setBillDate(fact.invoiceDate().atStartOfDay());
         bill.setTotalAmount(signedTotal(fact));
-        bill.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
+        // An invoice whose amount could not be read is not a nil invoice. The codec deliberately
+        // records an unreadable figure as absent rather than zero so the two stay distinguishable,
+        // and collapsing them here would undo that: a bill for nothing looks settled, sits at the
+        // bottom of every ageing report, and is noticed when the vendor chases payment.
+        bill.setStatus(
+                fact.totalGrossAmount() == null
+                        ? VendorBillStatus.MATCH_EXCEPTION
+                        : VendorBillStatus.PENDING_RECEIPT_MATCH);
         bill.setOriginEventId(UUID.fromString(eventId));
         bill.setOriginEventType(ORIGIN_EVENT_TYPE);
         bill.setPurchaseOrderNumber(fact.vendorOrderReference());
