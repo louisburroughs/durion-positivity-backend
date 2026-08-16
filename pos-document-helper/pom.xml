@@ -16,12 +16,13 @@
     <description>Helper library for document template registration and rendering requests</description>
 
     <properties>
-        <!-- Coverage ratchet: measured 95.7% line / 90.0% branch after the duplicate
-             com.positivity.documents.helper tree was removed (#1274). The line floor sits
-             ~5 points under the measurement; the branch floor sits a full branch under it
-             because the module only has 10 branches in total, so a single one is worth 10
-             points and a tighter floor would fail on noise. -->
-        <jacoco.line.min>0.90</jacoco.line.min>
+        <!-- Coverage ratchet: measured 95.7% line / 90.0% branch by the gate's own
+             command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
+             Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
+             IT-inclusive measurement describes coverage the gate cannot see.
+             The branch floor tolerates one whole branch instead: the module has only 10
+             branches, so one is worth 10 points and a 3-point cushion would fail on noise. -->
+        <jacoco.line.min>0.92</jacoco.line.min>
         <jacoco.branch.min>0.80</jacoco.branch.min>
     </properties>
 

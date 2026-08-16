@@ -14,9 +14,11 @@
     <description>POS Supplier integration module (outbound supplier connectivity, ADR-0049..0052)</description>
 
     <properties>
-        <!-- Coverage ratchet (plan Phase 4): measured 88.0% line / 75.3% branch.
-             Floors sit ~5 points under to catch regression without failing on noise. -->
-        <jacoco.line.min>0.82</jacoco.line.min>
+        <!-- Coverage ratchet: measured 87.3% line / 73.5% branch by the gate's own
+             command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
+             Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
+             IT-inclusive measurement describes coverage the gate cannot see. -->
+        <jacoco.line.min>0.84</jacoco.line.min>
         <jacoco.branch.min>0.70</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>

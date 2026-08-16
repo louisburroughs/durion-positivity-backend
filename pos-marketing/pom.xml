@@ -14,11 +14,12 @@
     <description>POS Marketing module: campaigns, templates, audience binding, and send orchestration</description>
 
     <properties>
-        <!-- Coverage ratchet (plan Phase 4): measured 89.7% line / 82.9% branch after the
-             §7 controller web-slice wave (was 87.4% / 82.1%).
-             Floors sit ~5 points under to catch regression without failing on noise. -->
-        <jacoco.line.min>0.84</jacoco.line.min>
-        <jacoco.branch.min>0.77</jacoco.branch.min>
+        <!-- Coverage ratchet: measured 90.7% line / 85.2% branch by the gate's own
+             command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
+             Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
+             IT-inclusive measurement describes coverage the gate cannot see. -->
+        <jacoco.line.min>0.87</jacoco.line.min>
+        <jacoco.branch.min>0.82</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>
     <dependencies>

@@ -12,10 +12,12 @@
     <description>Vehicle reference module for NHTSA</description>
 
     <properties>
-        <!-- Coverage ratchet (plan Phase 4): measured 49.7% line / 50.0% branch.
-             First floors for this module — it was at 0% before wave §7. -->
-        <jacoco.line.min>0.44</jacoco.line.min>
-        <jacoco.branch.min>0.45</jacoco.branch.min>
+        <!-- Coverage ratchet: measured 53.4% line / 58.3% branch by the gate's own
+             command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
+             Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
+             IT-inclusive measurement describes coverage the gate cannot see. -->
+        <jacoco.line.min>0.50</jacoco.line.min>
+        <jacoco.branch.min>0.55</jacoco.branch.min>
     </properties>
 
     <packaging>jar</packaging>

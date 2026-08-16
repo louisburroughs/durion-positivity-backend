@@ -643,65 +643,78 @@ Per `.agents/skills/java-testing` and repo conventions:
 
 ### 6.1 Authoritative baseline
 
-Full-reactor `verify` including Failsafe ITs, per the Phase 0 command, on `main`
-at `683cc6381`. **These are each module's own report** — the figure a per-module
-JaCoCo `check` actually reads — not the aggregate, which credits shared
-libraries with their consumers' coverage (§1.5).
+**Measured the way the gate measures.** Full-reactor
+`./mvnw verify -DskipITs -Darchunit.skipTests=true`, on `main` at `5269162`.
+The `-DskipITs` is not incidental — it is the whole point. The ratchet job in
+`.github/workflows/ci.yml` runs with `-DskipITs`, so only Surefire
+(`*Test.java`) contributes to the bundle JaCoCo checks. A baseline measured any
+other way describes coverage the gate cannot see.
 
-Repo-wide, summing all 38 per-module reports: **81.1% line, 66.6% branch**
-(14,295 missed of 75,661 lines). Against the §1.5 baseline of 72.6% / 59.5% /
-20,265 missed, that is **+8.5 points line and ~6,000 fewer missed lines**.
+> **Regenerating this table.** Run the command above, then read each module's
+> own `target/site/jacoco/jacoco.csv` (summing `LINE_MISSED`/`LINE_COVERED` and
+> `BRANCH_MISSED`/`BRANCH_COVERED`). Use the per-module report, never the
+> aggregate: the aggregate credits shared libraries with their consumers'
+> coverage (§1.5), and it is not what `jacoco:check` reads.
+
+**Why this section was rewritten (2026-08-16).** The previous baseline was
+measured with a full-reactor `verify` *including* Failsafe ITs, and floors were
+set ~5 points below those numbers. But the gate never runs the ITs. For a module
+whose IT-only coverage was around five points — `pos-order`, `pos-accounting`,
+`pos-inventory`, `pos-security-service` and others — the mismatch consumed the
+entire cushion, leaving the floor sitting within a point of the module's real
+unit-only coverage. Those modules were not slowly degrading; they were parked on
+the boundary, and ordinary run-to-run variation decided whether the nightly build
+went green or red. `pos-order` failed exactly this way at 704/1122 branches —
+eight branches above its floor — reporting 0.61 in CI and 0.6275 locally on the
+same commit, with neither measurement wrong.
+
+Repo-wide, summing all per-module reports: **80.4% line** (15,791 missed of
+80,683).
 
 | Module | Lines | Line% | Branch% | `jacoco.line.min` | `jacoco.branch.min` |
 |---|---:|---:|---:|---:|---:|
-| `pos-accounting` | 10516 | 85.8 | 72.5 | 0.80 | 0.67 |
-| `pos-inventory` | 10056 | 84.6 | 68.3 | 0.79 | 0.63 |
-| `pos-workorder` | 7465 | 76.6 | 56.7 | 0.71 | 0.51 |
-| `pos-mcp-server` | 6153 | 80.2 | 68.5 | 0.75 | 0.63 |
-| `pos-customer` | 5362 | 85.9 | 70.6 | 0.80 | 0.65 |
-| `pos-security-service` | 3504 | 81.8 | 71.1 | 0.76 | 0.66 |
-| `pos-invoice` | 3308 | 78.9 | 65.3 | 0.73 | 0.60 |
-| `pos-order` | 3237 | 83.6 | 67.7 | 0.78 | 0.62 |
-| `pos-people` | 2859 | 79.4 | 63.6 | 0.74 | 0.58 |
-| `pos-catalog` | 2807 | 77.4 | 53.5 | 0.72 | 0.48 |
-| `pos-warranty` | 2562 | 90.4 | 80.7 | 0.85 | 0.75 |
-| `pos-supplier` | 2351 | 88.0 | 75.3 | 0.82 | 0.70 |
-| `pos-location` | 2167 | 81.4 | 70.1 | 0.76 | 0.65 |
-| `pos-shop-manager` | 1933 | 83.2 | 67.1 | 0.78 | 0.62 |
-| `pos-bulk-loader` | 1770 | 76.8 | 65.3 | 0.71 | 0.60 |
-| `pos-people-contact` | 1477 | 65.2 | 52.3 | 0.60 | 0.47 |
-| `pos-marketing` | 1236 | 87.9 | 82.9 | 0.82 | 0.77 |
-| `pos-price` | 1053 | 94.9 | 81.7 | 0.89 | 0.76 |
-| `pos-tax` | 984 | 78.5 | 66.8 | 0.73 | 0.61 |
-| `pos-vehicle-inventory` | 977 | 66.4 | 71.0 | 0.61 | 0.66 |
-| `pos-vehicle-fitment` | 542 | 78.4 | 63.6 | 0.73 | 0.58 |
-| `pos-domain-events` | 511 | 39.3 | 37.2 | 0.34 | 0.32 |
-| `pos-event-receiver` | 437 | 77.3 | 87.0 | 0.72 | 0.81 |
-| `pos-api-gateway` | 435 | 85.5 | 72.2 | 0.80 | 0.67 |
-| `pos-security-common` | 406 | 46.8 | 36.5 | 0.41 | 0.31 |
-| `pos-documents` | 383 | 75.2 | 52.9 | 0.70 | 0.47 |
-| `pos-vehicle-reference-nhtsa` | 189 | 0.0 | 0.0 | — *(unguarded)* | — |
-| `pos-events` | 174 | 59.8 | 57.1 | 0.54 | 0.52 |
-| `pos-openapi-validation` | 171 | 93.6 | 82.3 | 0.88 | 0.77 |
-| `pos-document-helper` | 162 | 95.7 | 90.0 | 0.90 | 0.80 |
-| `pos-tax-common` | 100 | 34.0 | 46.4 | 0.29 | 0.41 |
-| `pos-vehicle-reference-carapi` | 69 | 0.0 | 0.0 | — *(unguarded)* | — |
-| `pos-image` | 61 | 0.0 | 0.0 | — *(unguarded)* | — |
+| `pos-accounting` | 10668 | 80.3 | 67.3 | 0.77 | 0.64 |
+| `pos-inventory` | 10153 | 79.2 | 64.1 | 0.76 | 0.61 |
+| `pos-workorder` | 7584 | 77.7 | 63.1 | 0.74 | 0.60 |
+| `pos-mcp-server` | 6166 | 80.2 | 68.5 | 0.77 | 0.65 |
+| `pos-customer` | 5439 | 82.4 | 69.6 | 0.79 | 0.66 |
+| `pos-supplier` | 5155 | 87.3 | 73.5 | 0.84 | 0.70 |
+| `pos-order` | 4201 | 84.4 | 71.3 | 0.81 | 0.68 |
+| `pos-security-service` | 3559 | 77.1 | 66.6 | 0.74 | 0.63 |
+| `pos-invoice` | 3380 | 77.3 | 63.7 | 0.74 | 0.60 |
+| `pos-catalog` | 3009 | 77.6 | 61.6 | 0.74 | 0.58 |
+| `pos-people` | 2901 | 78.7 | 73.1 | 0.75 | 0.70 |
+| `pos-warranty` | 2638 | 87.3 | 78.9 | 0.84 | 0.75 |
+| `pos-location` | 2208 | 78.1 | 66.1 | 0.75 | 0.63 |
+| `pos-shop-manager` | 2007 | 79.9 | 63.5 | 0.76 | 0.60 |
+| `pos-bulk-loader` | 1770 | 76.6 | 65.3 | 0.73 | 0.62 |
+| `pos-people-contact` | 1481 | 72.8 | 62.2 | 0.69 | 0.59 |
+| `pos-marketing` | 1402 | 90.7 | 85.2 | 0.87 | 0.82 |
+| `pos-price` | 1053 | 94.4 | 80.4 | 0.91 | 0.77 |
+| `pos-vehicle-inventory` | 993 | 79.6 | 74.7 | 0.76 | 0.71 |
+| `pos-tax` | 984 | 78.5 | 66.8 | 0.75 | 0.63 |
+| `pos-domain-events` | 648 | 84.9 | 78.9 | 0.81 | 0.75 |
+| `pos-vehicle-fitment` | 542 | 78.4 | 63.6 | 0.75 | 0.60 |
+| `pos-event-receiver` | 441 | 77.6 | 87.2 | 0.74 | 0.84 |
+| `pos-api-gateway` | 436 | 85.6 | 72.2 | 0.82 | 0.69 |
+| `pos-security-common` | 407 | 79.4 | 80.7 | 0.76 | 0.77 |
+| `pos-documents` | 384 | 72.9 | 75.0 | 0.69 | 0.72 |
+| `pos-openapi-validation` | 258 | 94.2 | 81.2 | 0.91 | 0.78 |
+| `pos-vehicle-reference-nhtsa` | 189 | 53.4 | 58.3 | 0.50 | 0.55 |
+| `pos-events` | 174 | 59.8 | 57.1 | 0.56 | 0.54 |
+| `pos-document-helper` | 162 | 95.7 | 90.0 | 0.92 | 0.87 |
+| `pos-tax-common` | 104 | 89.4 | 74.1 | 0.86 | 0.71 |
+| `pos-vehicle-reference-carapi` | 69 | 78.3 | 88.9 | 0.75 | 0.85 |
+| `pos-image` | 61 | 31.1 | 100.0 | 0.28 | 0.97 |
 | `pos-shared-dtos` | 34 | 0.0 | 0.0 | — *(unguarded)* | — |
 | `pos-inquiry` | 16 | 0.0 | — | — *(unguarded)* | — |
+| `pos-service-discovery` | 4 | 0.0 | — | — *(unguarded)* | — |
+| `pos-bulk-ingest-lib` | 3 | 0.0 | — | — *(unguarded)* | — |
 
-`pos-archunit`, `pos-bulk-ingest-lib`, and `pos-service-discovery` are omitted
-from the table — 3–4 lines each, nothing to guard. `pos-inquiry` (16 lines, 0%)
-is listed but unguarded, with the other all-zero modules.
-
-**Caveat on the aggregate figure.** The run also produced
-`jacoco-aggregate/jacoco.xml` reading 81.7% line / 67.6% branch, but over **32 of
-38 groups**: recovering from a mid-run failure required `mvn install -DskipTests`
-on the shared libraries, which wiped their `jacoco.exec` and dropped them from
-the merge. A subsequent isolated re-run of the aggregate goal then overwrote that
-XML with an empty one. The aggregate is therefore **not** currently trustworthy on
-disk; CI regenerates it on every merge to `main`, and that is the copy to wire
-into SonarCloud (§6.3). Nothing in §6.1's per-module table depends on it.
+`pos-shared-dtos`, `pos-inquiry`, `pos-service-discovery` and
+`pos-bulk-ingest-lib` carry no floor — a handful of lines each, or all-zero
+coverage. A `0.00` floor is not a gate; they need first tests, not thresholds
+(§7).
 
 ### 6.2 How the ratchet works
 
@@ -713,10 +726,17 @@ Root `pom.xml` gains a `check-ratchet` execution on the `verify` phase asserting
 <jacoco.branch.min>0.00</jacoco.branch.min>
 ```
 
-Each module overrides them in its own `pom.xml`, set **~5 points below its
-measured baseline** — enough to catch a real regression, loose enough not to fail
-on the noise of a refactor moving a few lines. `haltOnFailure` is true, so a
-breach fails the build:
+Each module overrides them in its own `pom.xml`, set **3 points below its
+measured unit-only baseline** (§6.1), rounded down to two decimals — enough to
+catch a real regression, loose enough to absorb both a refactor moving a few
+lines and the run-to-run variation that comes from a parallel (`-T 1C`) CI build
+exercising a slightly different set of paths than a serial local one. That
+variation was measured at roughly 1.7 points on `pos-order`, so a cushion any
+thinner than about two points is not a gate, it is a coin toss.
+
+The cushion is measured against the **same command the gate runs**
+(`verify -DskipITs`). Deriving it from any other measurement is what broke this
+section before — see §6.1. `haltOnFailure` is true, so a breach fails the build:
 
 ```
 Rule violated for bundle pos-tax-common: lines covered ratio is 0.34,
@@ -739,6 +759,13 @@ that, and CI always runs tests.
 - Raise a module's floor when its coverage rises — that is what makes it a
   ratchet rather than a fixed bar.
 - Never lower a floor without saying why in the commit message.
+- Re-derive floors only from a `-DskipITs` run. If you find yourself reading a
+  coverage number that included the ITs, stop: that number cannot be turned into
+  a floor, because the gate will never reproduce it.
+- A floor sitting within ~2 points of measured coverage is not "tight", it is
+  unstable, and it will fail on a night when nothing changed. Treat a
+  thin-margin module as a bug in the floor or a gap in the tests, not as a
+  module doing well.
 - The four all-zero modules (`pos-image`, `pos-inquiry`,
   `pos-vehicle-reference-carapi`, `pos-vehicle-reference-nhtsa`) carry **no**
   floor. A `0.00` floor is not a gate, and pretending otherwise would misrepresent

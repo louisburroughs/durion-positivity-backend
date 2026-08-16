@@ -17,10 +17,12 @@
     <packaging>jar</packaging>
 
     <properties>
-        <!-- Coverage ratchet (plan Phase 4): measured 80.2% line / 68.5% branch.
-             Floors sit ~5 points under to catch regression without failing on noise. -->
-        <jacoco.line.min>0.75</jacoco.line.min>
-        <jacoco.branch.min>0.63</jacoco.branch.min>
+        <!-- Coverage ratchet: measured 80.2% line / 68.5% branch by the gate's own
+             command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
+             Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
+             IT-inclusive measurement describes coverage the gate cannot see. -->
+        <jacoco.line.min>0.77</jacoco.line.min>
+        <jacoco.branch.min>0.65</jacoco.branch.min>
 
         <java.version>25</java.version>
         <maven.compiler.source>25</maven.compiler.source>

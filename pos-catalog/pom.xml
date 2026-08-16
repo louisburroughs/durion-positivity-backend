@@ -14,11 +14,12 @@
     <description>POS Catalog module</description>
 
     <properties>
-        <!-- Coverage ratchet (plan Phase 4): measured 80.3% line / 59.7% branch after the
-             §7 branch-tail wave (was 77.4% / 53.5%).
-             Floors sit ~5 points under to catch regression without failing on noise. -->
-        <jacoco.line.min>0.75</jacoco.line.min>
-        <jacoco.branch.min>0.54</jacoco.branch.min>
+        <!-- Coverage ratchet: measured 77.6% line / 61.6% branch by the gate's own
+             command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
+             Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
+             IT-inclusive measurement describes coverage the gate cannot see. -->
+        <jacoco.line.min>0.74</jacoco.line.min>
+        <jacoco.branch.min>0.58</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>
     <dependencies>
