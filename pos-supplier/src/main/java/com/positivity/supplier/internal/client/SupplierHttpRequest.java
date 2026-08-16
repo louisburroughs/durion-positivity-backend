@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.client;
 
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -50,8 +51,13 @@ public record SupplierHttpRequest(
             throw new IllegalArgumentException("contentType is required when a body is present");
         }
         Objects.requireNonNull(headers, "headers must not be null");
-        queryParams = Map.copyOf(new LinkedHashMap<>(queryParams));
-        headers = Map.copyOf(new LinkedHashMap<>(headers));
+        // Collections.unmodifiableMap over a LinkedHashMap, not Map.copyOf: the latter gives no
+        // ordering guarantee, and the query string is built by iterating this map. SupplierRequestSpec
+        // takes the same care one layer up, so copying with Map.copyOf here discarded the order it had
+        // just preserved -- leaving a vendor's query parameters in an arbitrary sequence that could
+        // differ between runs of the same request.
+        queryParams = Collections.unmodifiableMap(new LinkedHashMap<>(queryParams));
+        headers = Collections.unmodifiableMap(new LinkedHashMap<>(headers));
     }
 
     /** Builds a request that adds no headers of its own. */

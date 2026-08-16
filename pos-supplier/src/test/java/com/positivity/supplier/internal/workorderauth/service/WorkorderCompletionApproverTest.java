@@ -198,6 +198,29 @@ class WorkorderCompletionApproverTest {
         assertThat(row.getApprovedAt()).isEqualTo(NOW);
     }
 
+    @Test
+    @DisplayName("a vendor with no billing account parks at once, without spending the retry budget")
+    void missingPartnerIdParksWithoutBurningAttempts() {
+        // No number of attempts supplies a missing account number. Retrying would escalate a
+        // money-critical approval with a review reason blaming the vendor for a defect on this side.
+        SupplierWorkorderAuthorizationEntity row = granted();
+        row.setApprovalStatus(WorkorderApprovalStatus.PENDING);
+        when(authorizationRepository.findByApprovalStatusOrderByUpdatedAtAsc(
+                        WorkorderApprovalStatus.PENDING, Limit.of(50)))
+                .thenReturn(List.of(row));
+        when(authorizationRepository.findById(any())).thenReturn(Optional.of(row));
+        SupplierAccountEntity unconfigured = new SupplierAccountEntity();
+        when(profileResolver.resolvePartyContext(any(), any()))
+                .thenReturn(new ResolvedPartyAccounts(unconfigured, unconfigured));
+
+        approver.approveOutstanding();
+
+        assertThat(row.getApprovalStatus()).isEqualTo(WorkorderApprovalStatus.MANUAL_REVIEW);
+        assertThat(row.getApprovalAttempts()).isZero();
+        assertThat(row.getReviewReason()).contains("partnerId");
+        verify(baseClient, never()).exchange(any());
+    }
+
     private static SupplierWorkorderAuthorizationEntity granted() {
         return SupplierWorkorderAuthorizationEntity.builder()
                 .supplierWorkorderAuthorizationId(UUID.fromString("019200aa-0000-7000-8000-0000000000a1"))

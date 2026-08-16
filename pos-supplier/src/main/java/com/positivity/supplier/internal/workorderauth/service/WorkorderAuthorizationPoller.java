@@ -11,6 +11,7 @@ import com.positivity.supplier.internal.domain.model.SupplierRequestSpec;
 import com.positivity.supplier.internal.domain.model.SupplierWorkorderAuthorization;
 import com.positivity.supplier.internal.entity.SupplierWorkorderAuthorizationEntity;
 import com.positivity.supplier.internal.enums.WorkorderAuthorizationStatus;
+import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
 import com.positivity.supplier.internal.registry.AdapterResolution;
 import com.positivity.supplier.internal.repository.SupplierWorkorderAuthorizationRepository;
@@ -134,10 +135,19 @@ public class WorkorderAuthorizationPoller {
         ResolvedBinding binding =
                 profileResolver.resolveBinding(supplierRef, SupplierCapability.WORKORDER_AUTHORIZATION);
         MichelinS2SWorkorderAuthCodec codec = resolveCodec(binding);
-        String partnerId =
-                profileResolver.resolvePartyContext(supplierRef, null).billing().getAccountNumber();
 
-        SupplierRequestSpec spec = codec.buildPollRequest(pollPath, partnerId == null ? "" : partnerId);
+        String partnerId;
+        try {
+            partnerId = S2SPartnerId.resolve(profileResolver, supplierRef);
+        } catch (SupplierConfigurationException e) {
+            // Polling on with an empty partnerId would ask a vendor that has already rejected the
+            // request as unidentified, once every tick, until the pending timeout expired a day
+            // later -- and would then report the misconfiguration as a vendor that never decided.
+            runner.parkForReview(row, "authorization cannot be polled: " + e.getMessage());
+            return;
+        }
+
+        SupplierRequestSpec spec = codec.buildPollRequest(pollPath, partnerId);
         SupplierHttpResponse response = baseClient.exchange(toHttpRequest(binding, spec));
 
         if (!response.isSuccess()) {

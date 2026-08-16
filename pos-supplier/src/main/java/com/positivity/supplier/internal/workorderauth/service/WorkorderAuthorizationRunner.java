@@ -10,7 +10,6 @@ import com.positivity.supplier.internal.domain.model.SupplierRef;
 import com.positivity.supplier.internal.domain.model.SupplierRequestSpec;
 import com.positivity.supplier.internal.domain.model.SupplierWorkorderAuthorization;
 import com.positivity.supplier.internal.domain.model.WorkorderAuthorizationRequest;
-import com.positivity.supplier.internal.entity.SupplierAccountEntity;
 import com.positivity.supplier.internal.entity.SupplierWorkorderAuthorizationEntity;
 import com.positivity.supplier.internal.enums.WorkorderApprovalStatus;
 import com.positivity.supplier.internal.enums.WorkorderAuthorizationStatus;
@@ -108,7 +107,7 @@ public class WorkorderAuthorizationRunner implements SupplierWorkorderAuthorizat
         ResolvedBinding binding =
                 profileResolver.resolveBinding(supplierRef, SupplierCapability.WORKORDER_AUTHORIZATION);
         MichelinS2SWorkorderAuthCodec codec = resolveCodec(binding);
-        String partnerId = partnerIdFor(supplierRef);
+        String partnerId = S2SPartnerId.resolve(profileResolver, supplierRef);
 
         SupplierWorkorderAuthorizationEntity row = openRow(binding, supplierRef, request);
 
@@ -260,23 +259,6 @@ public class WorkorderAuthorizationRunner implements SupplierWorkorderAuthorizat
         row.setDecidedAt(null);
         row.setPollLocation(null);
         return authorizationRepository.save(row);
-    }
-
-    @NonNull
-    private String partnerIdFor(@NonNull SupplierRef supplierRef) {
-        SupplierAccountEntity billing =
-                profileResolver.resolvePartyContext(supplierRef, null).billing();
-        String partnerId = billing.getAccountNumber();
-        if (partnerId == null || partnerId.isBlank()) {
-            // The spec requires partnerId on every operation. Without it the vendor cannot tell
-            // which service centre is asking, and a fleet authorization from an unidentified caller
-            // is not something any vendor grants.
-            throw new SupplierConfigurationException(
-                    SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
-                    "No billing account number configured for " + supplierRef.value()
-                            + "; the S2S partnerId has nowhere to come from");
-        }
-        return partnerId;
     }
 
     @NonNull

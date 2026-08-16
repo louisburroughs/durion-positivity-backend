@@ -10,6 +10,7 @@ import com.positivity.supplier.internal.domain.model.SupplierRequestSpec;
 import com.positivity.supplier.internal.entity.SupplierWorkorderAuthorizationEntity;
 import com.positivity.supplier.internal.enums.WorkorderApprovalStatus;
 import com.positivity.supplier.internal.enums.WorkorderAuthorizationStatus;
+import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
 import com.positivity.supplier.internal.registry.AdapterResolution;
 import com.positivity.supplier.internal.repository.SupplierWorkorderAuthorizationRepository;
@@ -148,11 +149,19 @@ public class WorkorderCompletionApprover {
         ResolvedBinding binding =
                 profileResolver.resolveBinding(supplierRef, SupplierCapability.WORKORDER_AUTHORIZATION);
         MichelinS2SWorkorderAuthCodec codec = resolveCodec(binding);
-        String partnerId =
-                profileResolver.resolvePartyContext(supplierRef, null).billing().getAccountNumber();
 
-        SupplierRequestSpec spec =
-                codec.buildApprovalRequest(vendorAuthorizationId, partnerId == null ? "" : partnerId, "1");
+        String partnerId;
+        try {
+            partnerId = S2SPartnerId.resolve(profileResolver, supplierRef);
+        } catch (SupplierConfigurationException e) {
+            // Parked, not retried. No number of attempts fixes a missing account number, and
+            // spending the budget on it would escalate a money-critical approval with a review
+            // reason blaming the vendor for a defect on this side.
+            park(row, "completion cannot be approved: " + e.getMessage());
+            return;
+        }
+
+        SupplierRequestSpec spec = codec.buildApprovalRequest(vendorAuthorizationId, partnerId, "1");
         SupplierHttpResponse response = baseClient.exchange(toHttpRequest(binding, spec));
 
         if (response.isSuccess()) {

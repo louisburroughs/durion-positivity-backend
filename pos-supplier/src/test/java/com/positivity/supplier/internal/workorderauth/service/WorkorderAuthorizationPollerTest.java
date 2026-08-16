@@ -191,6 +191,23 @@ class WorkorderAuthorizationPollerTest {
         verify(runner, never()).parkForReview(any(), any());
     }
 
+    @Test
+    @DisplayName("a vendor with no billing account parks the row instead of polling with an empty partnerId")
+    void missingPartnerIdParksRatherThanPolls() {
+        // An empty partnerId is rejected by the vendor as an unidentified caller. Polling on with
+        // one would ask once a tick until the pending timeout expired a day later, and would then
+        // report a misconfiguration on this side as a vendor that never decided.
+        givenPending(pending("/api/v1/workOrders/WO-77"));
+        SupplierAccountEntity unconfigured = new SupplierAccountEntity();
+        when(profileResolver.resolvePartyContext(any(), any()))
+                .thenReturn(new ResolvedPartyAccounts(unconfigured, unconfigured));
+
+        poller.pollPendingAuthorizations();
+
+        verify(runner).parkForReview(any(), contains("partnerId"));
+        verify(baseClient, never()).exchange(any());
+    }
+
     private void givenPending(SupplierWorkorderAuthorizationEntity row) {
         when(authorizationRepository.findAwaitingPoll(WorkorderAuthorizationStatus.PENDING, Limit.of(50)))
                 .thenReturn(List.of(row));

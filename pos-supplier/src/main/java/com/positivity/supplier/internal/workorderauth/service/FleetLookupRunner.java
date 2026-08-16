@@ -121,15 +121,7 @@ public class FleetLookupRunner {
                     "No workorder authorization codec registered for " + binding.family() + " "
                             + binding.version().value());
         }
-        String partnerId =
-                profileResolver.resolvePartyContext(supplierRef, null).billing().getAccountNumber();
-        if (partnerId == null || partnerId.isBlank()) {
-            throw new SupplierConfigurationException(
-                    SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
-                    "No billing account number configured for " + supplierRef.value()
-                            + "; the S2S partnerId has nowhere to come from");
-        }
-        return new Call(binding, codec, partnerId);
+        return new Call(binding, codec, S2SPartnerId.resolve(profileResolver, supplierRef));
     }
 
     @NonNull
