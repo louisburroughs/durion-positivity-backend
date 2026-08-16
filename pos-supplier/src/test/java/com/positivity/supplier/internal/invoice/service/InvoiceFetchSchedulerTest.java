@@ -1,7 +1,6 @@
 package com.positivity.supplier.internal.invoice.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -13,6 +12,7 @@ import com.positivity.supplier.internal.domain.model.SupplierRef;
 import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.entity.SupplierScheduleLeaseEntity;
+import com.positivity.supplier.internal.exception.InvoiceFetchException;
 import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.repository.SupplierScheduleLeaseRepository;
@@ -83,9 +83,7 @@ class InvoiceFetchSchedulerTest {
                 OVERLAP,
                 INITIAL_LOOKBACK);
 
-        SupplierEndpointBindingEntity binding = new SupplierEndpointBindingEntity();
-        binding.setId(BINDING_ID);
-        binding.setVendorProfileId(PROFILE_ID);
+        SupplierEndpointBindingEntity binding = newBinding();
         when(bindingRepository.findByCapabilityAndEnabledTrueAndScheduleCronIsNotNull(SupplierCapability.INVOICE_FETCH))
                 .thenReturn(List.of(binding));
 
@@ -223,12 +221,15 @@ class InvoiceFetchSchedulerTest {
     @Test
     @DisplayName("an on-demand fetch runs the same path and leaves the checkpoint alone")
     void onDemandDoesNotMoveTheCheckpoint() {
-        when(fetchRunner.fetchWindow(any(), any(), any())).thenReturn(3);
+        when(fetchRunner.fetchWindow(any(), any(), any())).thenReturn(new InvoiceFetchRunner.FetchOutcome(5, 3));
 
-        int imported = scheduler.fetchOnDemand(
+        InvoiceFetchRunner.FetchOutcome outcome = scheduler.fetchOnDemand(
                 new SupplierRef("michelin-de"), LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 15));
 
-        assertThat(imported).isEqualTo(3);
+        // Both numbers: five sent, three new. A window that fetches and imports nothing new is
+        // working, and only the pair makes that legible.
+        assertThat(outcome.fetched()).isEqualTo(5);
+        assertThat(outcome.imported()).isEqualTo(3);
         verify(fetchRunner).fetchWindow(any(), eq(LocalDate.of(2026, 7, 1)), eq(LocalDate.of(2026, 7, 15)));
         // Moving the checkpoint to satisfy an investigation would skip everything between the
         // queried window and where the schedule had actually reached.
@@ -242,13 +243,14 @@ class InvoiceFetchSchedulerTest {
         SupplierEndpointBindingEntity second = new SupplierEndpointBindingEntity();
         second.setId(UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f8a09"));
         second.setVendorProfileId(PROFILE_ID);
+        second.setScheduleCron("0 0 * * * *");
         when(bindingRepository.findByCapabilityAndEnabledTrueAndScheduleCronIsNotNull(SupplierCapability.INVOICE_FETCH))
                 .thenReturn(List.of(newBinding(), second));
         when(scheduleCoordinator.tryClaim(any(), any())).thenReturn(true);
         runPagesImmediately();
         when(fetchRunner.fetchWindow(any(), any(), any()))
                 .thenThrow(new InvoiceFetchException("vendor unreachable"))
-                .thenReturn(1);
+                .thenReturn(new InvoiceFetchRunner.FetchOutcome(1, 1));
 
         scheduler.runDueFetches();
 
@@ -260,17 +262,54 @@ class InvoiceFetchSchedulerTest {
         SupplierEndpointBindingEntity binding = new SupplierEndpointBindingEntity();
         binding.setId(BINDING_ID);
         binding.setVendorProfileId(PROFILE_ID);
+        // Hourly. The poll tick is how often the scheduler looks; this is how often the vendor is
+        // actually asked.
+        binding.setScheduleCron("0 0 * * * *");
         return binding;
     }
 
     @Test
-    @DisplayName("a window ending before it begins is refused by the codec, not sent")
-    void invertedWindowIsRefused() {
-        when(fetchRunner.fetchWindow(any(), any(), any()))
-                .thenThrow(new InvoiceFetchException("window ends before it begins"));
+    @DisplayName("a binding whose cadence has not come round is not fetched")
+    void bindingNotYetDueIsSkipped() {
+        SupplierScheduleLeaseEntity lease = new SupplierScheduleLeaseEntity();
+        // Checkpointed at the top of this hour, against an hourly cron: the next firing is an hour
+        // away.
+        lease.setCheckpointAt(NOW);
+        when(leaseRepository.findByBindingIdIn(List.of(BINDING_ID))).thenReturn(List.of(lease));
 
-        assertThatThrownBy(() -> scheduler.fetchOnDemand(
-                        new SupplierRef("michelin-de"), LocalDate.of(2026, 7, 15), LocalDate.of(2026, 7, 1)))
-                .isInstanceOf(InvoiceFetchException.class);
+        scheduler.runDueFetches();
+
+        // The poll tick is how often the scheduler looks, not how often a vendor is asked. Without
+        // this the vendor would be asked for the same fortnight every five minutes.
+        verify(scheduleCoordinator, never()).tryClaim(any(), any());
+        verify(fetchRunner, never()).fetchWindow(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a binding whose cadence has come round is fetched")
+    void bindingDueIsFetched() {
+        SupplierScheduleLeaseEntity lease = new SupplierScheduleLeaseEntity();
+        lease.setCheckpointAt(NOW.minus(Duration.ofHours(3)));
+        when(leaseRepository.findByBindingIdIn(List.of(BINDING_ID))).thenReturn(List.of(lease));
+        runPagesImmediately();
+
+        scheduler.runDueFetches();
+
+        verify(fetchRunner).fetchWindow(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("an unparseable cron stops that binding rather than firing it every tick")
+    void unparseableCronDoesNotFire() {
+        SupplierEndpointBindingEntity broken = newBinding();
+        broken.setScheduleCron("not a cron");
+        when(bindingRepository.findByCapabilityAndEnabledTrueAndScheduleCronIsNotNull(SupplierCapability.INVOICE_FETCH))
+                .thenReturn(List.of(broken));
+
+        scheduler.runDueFetches();
+
+        // Failing closed rather than open: a misconfigured cron that fired every tick would hammer
+        // a vendor, and the log line is what an operator has to notice instead.
+        verify(fetchRunner, never()).fetchWindow(any(), any(), any());
     }
 }

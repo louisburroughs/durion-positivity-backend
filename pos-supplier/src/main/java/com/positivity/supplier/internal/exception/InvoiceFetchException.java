@@ -1,4 +1,4 @@
-package com.positivity.supplier.internal.invoice.service;
+package com.positivity.supplier.internal.exception;
 
 /**
  * Thrown when a window of vendor invoices could not be fetched or read (CAP-321 #1343).

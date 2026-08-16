@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import com.positivity.supplier.internal.domain.model.SupplierRef;
+import com.positivity.supplier.internal.invoice.service.InvoiceFetchRunner;
 import com.positivity.supplier.internal.invoice.service.InvoiceFetchScheduler;
 import com.positivity.supplier.internal.security.SupplierPermissions;
 import io.swagger.v3.oas.annotations.Operation;
@@ -64,15 +65,19 @@ public class SupplierInvoiceFetchController {
                     ISO dates.
                     Emits a SUPPLIER_INVOICE_FETCH event and, for each invoice not already held, publishes it \
                     for the accounting domain to record as a vendor bill.
-                    Returns 200 with the number fetched and the number new, 422 when the vendor refused the \
-                    window or could not be reached, and 404 when the vendor profile or its binding is not \
-                    configured.
+                    Returns 200 with the number the vendor sent and the number newly imported, 422 when the \
+                    vendor refused the window or could not be reached, 404 when the vendor profile is unknown, \
+                    and 409 when the profile is disabled or has no invoice-fetch binding configured.
                     """,
             tags = {"Supplier Invoices"})
     @ApiResponse(responseCode = "200", description = "Window fetched")
     @ApiResponse(
             responseCode = "404",
-            description = "Vendor profile or invoice binding not configured",
+            description = "Vendor profile unknown",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Vendor profile disabled, or no invoice-fetch binding configured",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -88,9 +93,11 @@ public class SupplierInvoiceFetchController {
                     @RequestParam
                     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate toDate) {
-        int imported = invoiceFetchScheduler.fetchOnDemand(new SupplierRef(supplierRef), fromDate, toDate);
-        // "imported" rather than "fetched": the number that mattered is how many were new, because
-        // an operator running this twice should see the second run import nothing and know why.
+        InvoiceFetchRunner.FetchOutcome outcome =
+                invoiceFetchScheduler.fetchOnDemand(new SupplierRef(supplierRef), fromDate, toDate);
+        // Both numbers, because they answer different questions. "fetched" says whether the vendor
+        // had anything for this window at all; "imported" says how much of it was new. An operator
+        // running this twice needs to see 12 and 0 and understand that as working, not as broken.
         return ResponseEntity.ok(Map.of(
                 "supplierRef",
                 supplierRef,
@@ -98,7 +105,9 @@ public class SupplierInvoiceFetchController {
                 fromDate.toString(),
                 "toDate",
                 toDate.toString(),
+                "fetched",
+                outcome.fetched(),
                 "imported",
-                imported));
+                outcome.imported()));
     }
 }

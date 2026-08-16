@@ -13,6 +13,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -21,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 
 /**
@@ -116,6 +118,10 @@ public class InvoiceFetchScheduler {
             return;
         }
 
+        if (!isDue(binding, now)) {
+            return;
+        }
+
         String ownerToken = SupplierScheduleCoordinator.newOwnerToken();
         if (!scheduleCoordinator.tryClaim(binding.getId(), ownerToken)) {
             // Another instance holds this binding. Not an error: exactly one fetcher per vendor is
@@ -157,20 +163,60 @@ public class InvoiceFetchScheduler {
     }
 
     /**
+     * Whether this binding's own cadence says to fetch now.
+     *
+     * <p>The poll tick is how often the scheduler looks, not how often a vendor is asked. Without
+     * this every binding would be fetched on every tick — five minutes by default — which ignores
+     * the cadence an operator configured and asks a trading partner for the same fortnight of
+     * invoices hundreds of times a day.
+     *
+     * <p>The last completed window is the checkpoint, so the cron is measured from there: it is the
+     * only record of when this binding last actually finished a fetch.
+     */
+    private boolean isDue(SupplierEndpointBindingEntity binding, Instant now) {
+        CronExpression cron;
+        try {
+            cron = CronExpression.parse(binding.getScheduleCron());
+        } catch (IllegalArgumentException e) {
+            // Logged every tick on purpose: a binding that silently never fires is exactly the
+            // failure an operator cannot see.
+            log.warn(
+                    "Binding {} has an unparseable schedule cron '{}': {}",
+                    binding.getId(),
+                    binding.getScheduleCron(),
+                    e.getMessage());
+            return false;
+        }
+
+        Instant checkpoint = checkpointFor(binding.getId());
+        if (checkpoint == null) {
+            // Never completed a window. Due immediately, so a newly configured binding does not
+            // wait a full cron period before its first fetch.
+            return true;
+        }
+        LocalDateTime next = cron.next(LocalDateTime.ofInstant(checkpoint, ZoneOffset.UTC));
+        return next != null && !next.isAfter(LocalDateTime.ofInstant(now, ZoneOffset.UTC));
+    }
+
+    /**
      * Where this window starts: the last committed checkpoint less the overlap, or the initial
      * lookback when the binding has never completed one.
      */
     private Instant windowStartFor(UUID bindingId, Instant now) {
-        List<SupplierScheduleLeaseEntity> leases = leaseRepository.findByBindingIdIn(List.of(bindingId));
-        Instant checkpoint = leases.stream()
-                .map(SupplierScheduleLeaseEntity::getCheckpointAt)
-                .filter(java.util.Objects::nonNull)
-                .findFirst()
-                .orElse(null);
+        Instant checkpoint = checkpointFor(bindingId);
         if (checkpoint == null) {
             return now.minus(initialLookback);
         }
         return checkpoint.minus(overlap);
+    }
+
+    /** The binding's last completed window end, or null when it has never completed one. */
+    private Instant checkpointFor(UUID bindingId) {
+        return leaseRepository.findByBindingIdIn(List.of(bindingId)).stream()
+                .map(SupplierScheduleLeaseEntity::getCheckpointAt)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     /**
@@ -181,9 +227,10 @@ public class InvoiceFetchScheduler {
      * schedule has got to — and moving the checkpoint to satisfy a query would skip everything
      * between it and the schedule's real position.
      *
-     * @return how many invoices were new
+     * @return what the vendor sent and how much of it was new
      */
-    public int fetchOnDemand(@NonNull SupplierRef supplierRef, @NonNull LocalDate fromDate, @NonNull LocalDate toDate) {
+    public InvoiceFetchRunner.FetchOutcome fetchOnDemand(
+            @NonNull SupplierRef supplierRef, @NonNull LocalDate fromDate, @NonNull LocalDate toDate) {
         log.info("On-demand invoice fetch for {} over {}..{}", supplierRef.value(), fromDate, toDate);
         return fetchRunner.fetchWindow(supplierRef, fromDate, toDate);
     }

@@ -976,7 +976,7 @@ paths:
 
         Emits a SUPPLIER_INVOICE_FETCH event and, for each invoice not already held, publishes it for the accounting domain to record as a vendor bill.
 
-        Returns 200 with the number fetched and the number new, 422 when the vendor refused the window or could not be reached, and 404 when the vendor profile or its binding is not configured.
+        Returns 200 with the number the vendor sent and the number newly imported, 422 when the vendor refused the window or could not be reached, 404 when the vendor profile is unknown, and 409 when the profile is disabled or has no invoice-fetch binding configured.
 
         '
       operationId: fetchSupplierInvoices
@@ -1009,7 +1009,13 @@ paths:
               schema:
                 type: object
         '404':
-          description: Vendor profile or invoice binding not configured
+          description: Vendor profile unknown
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Vendor profile disabled, or no invoice-fetch binding configured
           content:
             application/json:
               schema:

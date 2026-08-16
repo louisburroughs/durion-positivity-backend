@@ -95,6 +95,19 @@ public class SupplierExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, ex.getCode(), ex.getMessage(), request);
     }
 
+    /**
+     * A vendor invoice window that could not be fetched or read (CAP-321 #1343).
+     *
+     * <p>422 rather than 500: the request was understood and the fault is at the vendor — it could
+     * not be reached, or it refused the window. A caller can act on that, by narrowing the window
+     * or waiting; a 500 tells them only that something broke here, which is the wrong place to
+     * look.
+     */
+    @ExceptionHandler(InvoiceFetchException.class)
+    public ResponseEntity<ApiError> handleInvoiceFetch(InvoiceFetchException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_ENTITY, "SUPPLIER_INVOICE_FETCH_FAILED", ex.getMessage(), request);
+    }
+
     /** Configuration-state collisions, including YAML-managed profile mutation (ADR-0050 §6). */
     @ExceptionHandler(SupplierConflictException.class)
     public ResponseEntity<ApiError> handleConflict(SupplierConflictException ex, HttpServletRequest request) {

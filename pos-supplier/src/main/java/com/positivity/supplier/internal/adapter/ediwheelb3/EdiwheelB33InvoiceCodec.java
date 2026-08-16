@@ -85,7 +85,9 @@ public class EdiwheelB33InvoiceCodec implements SupplierAdapterCodec {
     public SupplierRequestSpec buildRequest(
             @NonNull PartyContext partyContext, @NonNull LocalDate fromDate, @NonNull LocalDate toDate) {
         if (toDate.isBefore(fromDate)) {
-            throw new InvoiceDecodeException("Invoice window ends before it begins: " + fromDate + " to " + toDate);
+            // IllegalArgumentException, not a decode failure: nothing has been decoded, and calling
+            // it one sent a caller looking for a vendor problem when the fault was in the request.
+            throw new IllegalArgumentException("Invoice window ends before it begins: " + fromDate + " to " + toDate);
         }
         Map<String, String> query = new LinkedHashMap<>();
         query.put("invoiceIssueFromDate", WINDOW_DATE.format(fromDate));

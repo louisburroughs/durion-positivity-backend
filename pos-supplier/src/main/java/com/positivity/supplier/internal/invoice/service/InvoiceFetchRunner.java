@@ -11,6 +11,7 @@ import com.positivity.supplier.internal.domain.model.SupplierInvoice;
 import com.positivity.supplier.internal.domain.model.SupplierRef;
 import com.positivity.supplier.internal.domain.model.SupplierRequestSpec;
 import com.positivity.supplier.internal.entity.SupplierAccountEntity;
+import com.positivity.supplier.internal.exception.InvoiceFetchException;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
 import com.positivity.supplier.internal.registry.AdapterResolution;
@@ -59,12 +60,20 @@ public class InvoiceFetchRunner {
     /**
      * Fetches the vendor's invoices for an inclusive date window and imports the new ones.
      *
-     * @return how many invoices were new; the rest were already held from an overlapping window
+     * @return what the vendor sent and how much of it was new
      * @throws InvoiceFetchException when the vendor could not be reached or refused the window
      * @throws SupplierConfigurationException when the profile, binding, codec or billing account is
      *     not configured — a deployment defect, surfaced loudly rather than retried forever
      */
-    public int fetchWindow(@NonNull SupplierRef supplierRef, @NonNull LocalDate fromDate, @NonNull LocalDate toDate) {
+    public FetchOutcome fetchWindow(
+            @NonNull SupplierRef supplierRef, @NonNull LocalDate fromDate, @NonNull LocalDate toDate) {
+        if (toDate.isBefore(fromDate)) {
+            // Checked here so every caller sees one exception type from this method. Letting the
+            // codec's own complaint escape meant an operator's typo surfaced as a 500 rather than
+            // as the request problem it is.
+            throw new InvoiceFetchException("invoice window ends before it begins: " + fromDate + " to " + toDate);
+        }
+
         ResolvedBinding binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.INVOICE_FETCH);
         EdiwheelB33InvoiceCodec codec = resolveCodec(binding);
         ResolvedPartyAccounts accounts = profileResolver.resolvePartyContext(supplierRef, null);
@@ -100,8 +109,18 @@ public class InvoiceFetchRunner {
                 supplierRef.value(),
                 invoices.size(),
                 imported);
-        return imported;
+        return new FetchOutcome(invoices.size(), imported);
     }
+
+    /**
+     * What one window produced.
+     *
+     * <p>Both numbers, because they answer different questions: {@code fetched} says whether the
+     * vendor had anything for this window at all, {@code imported} how much of it was new. A window
+     * that fetched twelve and imported none is working exactly as intended, and the two figures
+     * together are what make that legible rather than alarming.
+     */
+    public record FetchOutcome(int fetched, int imported) {}
 
     private SupplierHttpRequest toHttpRequest(ResolvedBinding binding, SupplierRequestSpec spec) {
         return new SupplierHttpRequest(
