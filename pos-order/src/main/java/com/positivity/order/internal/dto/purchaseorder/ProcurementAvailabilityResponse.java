@@ -58,9 +58,10 @@ public record ProcurementAvailabilityResponse(
             int requestedQuantity,
 
             @Schema(
-                    description = "AVAILABLE, UNAVAILABLE, NOT_LISTED, NOT_ANSWERED, or"
+                    description = "AVAILABLE, UNAVAILABLE, NOT_LISTED or NOT_ANSWERED as the vendor stated it;"
                             + " ARTICLE_NOT_IDENTIFIABLE when the line carries no code the vendor would"
-                            + " recognise and so was never asked about.")
+                            + " recognise; NOTHING_OUTSTANDING when the line is already settled and so was not"
+                            + " asked about. The last two describe our own situation, not the vendor's answer.")
             String status,
 
             @Schema(

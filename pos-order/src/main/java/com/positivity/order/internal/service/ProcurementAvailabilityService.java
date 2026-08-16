@@ -72,15 +72,24 @@ public class ProcurementAvailabilityService {
                         PurchaseOrderLineEntity::getLineNumber, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
 
-        // Resolve every line's article first, so the inquiry carries exactly the lines that can be
-        // asked about and the rest are reported as unidentifiable rather than silently dropped.
+        // Resolve every line's article once and keep the answer. Looking it up again while
+        // rendering would double the reads and, worse, could disagree with itself if the replica
+        // changed mid-request — a line grouped under one article and reported under another.
+        Map<UUID, String> eanByLineId = new HashMap<>();
         Map<String, List<PurchaseOrderLineEntity>> linesByEan = new HashMap<>();
         List<PurchaseOrderLineEntity> unidentifiable = new ArrayList<>();
         for (PurchaseOrderLineEntity line : orderedLines) {
             String ean = eanFor(line);
             if (ean == null) {
                 unidentifiable.add(line);
-            } else {
+                continue;
+            }
+            eanByLineId.put(line.getLineId(), ean);
+            // A line with nothing outstanding is settled and needs no answer. It must also be kept
+            // out of the inquiry: the supplier contract rejects a quantity below one, so a single
+            // fully received line would 400 the request and degrade the whole screen to
+            // "supplier unavailable" — one settled line hiding every other line's answer.
+            if (requestedQuantity(line) > 0) {
                 linesByEan.computeIfAbsent(ean, k -> new ArrayList<>()).add(line);
             }
         }
@@ -107,7 +116,7 @@ public class ProcurementAvailabilityService {
 
         List<ProcurementAvailabilityResponse.Line> lines = new ArrayList<>();
         for (PurchaseOrderLineEntity line : orderedLines) {
-            lines.add(toResponseLine(line, eanFor(line), answersByEan));
+            lines.add(toResponseLine(line, eanByLineId.get(line.getLineId()), answersByEan));
         }
 
         if (!unidentifiable.isEmpty()) {
@@ -142,6 +151,13 @@ public class ProcurementAvailabilityService {
                     "ARTICLE_NOT_IDENTIFIABLE",
                     null,
                     null);
+        }
+
+        if (requested == 0) {
+            // Nothing outstanding, so the vendor was never asked. Reporting this as unanswered
+            // would suggest it declined to say; there was nothing to ask about.
+            return new ProcurementAvailabilityResponse.Line(
+                    line.getLineId(), line.getLineNumber(), line.getSkuId(), ean, 0, "NOTHING_OUTSTANDING", null, null);
         }
 
         SupplierStockClient.AnswerLine answer = answers.get(ean);

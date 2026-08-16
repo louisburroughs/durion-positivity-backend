@@ -138,4 +138,22 @@ class SupplierStockClientImplTest {
         // to learn nothing is a cost with no answer attached.
         server.verify();
     }
+
+    @Test
+    @DisplayName("the call carries the identity pos-supplier authorises it by")
+    void callCarriesServiceIdentity() {
+        server.expect(MockRestRequestMatchers.requestTo("http://supplier/v1/supplier/stock/inquiries"))
+                .andExpect(MockRestRequestMatchers.header("X-User", "pos-order-service"))
+                .andExpect(MockRestRequestMatchers.header("X-Authorities", "supplier:stock:inquire"))
+                .andRespond(MockRestResponseCreators.withSuccess("""
+                        {"inquiryId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f5b03","status":"OK",
+                         "asOf":null,"lines":[]}
+                        """, MediaType.APPLICATION_JSON));
+
+        // Without these the endpoint refuses the call and every answer degrades to
+        // SUPPLIER_UNAVAILABLE — which looks exactly like a vendor being down, so the feature
+        // would have appeared to work while never once reaching a supplier.
+        assertThat(client.inquire(VENDOR, SITE, ONE_LINE).status()).isEqualTo(SupplierStockClient.Status.OK);
+        server.verify();
+    }
 }

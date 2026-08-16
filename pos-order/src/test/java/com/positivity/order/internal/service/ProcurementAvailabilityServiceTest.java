@@ -283,4 +283,63 @@ class ProcurementAvailabilityServiceTest {
                 .isInstanceOf(PurchaseOrderNotFoundException.class);
         verify(supplierStockClient, never()).inquire(any(), any(), any());
     }
+
+    @Test
+    @DisplayName("a settled line is kept out of the inquiry rather than poisoning it")
+    void settledLineIsNotAskedAbout() {
+        PurchaseOrderLineEntity settled = line(1, SKU_A, "10");
+        settled.setOpenQuantityDecimal(BigDecimal.ZERO);
+        order(settled, line(2, SKU_B, "3"));
+        answers(
+                SupplierStockClient.Status.OK,
+                new SupplierStockClient.AnswerLine(EAN_B, null, SupplierStockClient.LineStatus.AVAILABLE, 3, null));
+
+        ProcurementAvailabilityResponse response = service.availabilityFor(PO_ID, VENDOR_PROFILE, DELIVERY_SITE);
+
+        ArgumentCaptor<List<SupplierStockClient.InquiryLine>> captor = ArgumentCaptor.forClass(List.class);
+        verify(supplierStockClient).inquire(any(), any(), captor.capture());
+        // The supplier contract rejects a quantity below one, so including the settled line would
+        // 400 the whole request — one line with nothing outstanding hiding every other line's
+        // answer behind a "supplier unavailable" that looks exactly like a vendor being down.
+        assertThat(captor.getValue())
+                .singleElement()
+                .satisfies(asked -> assertThat(asked.articleEan()).isEqualTo(EAN_B));
+
+        // It is still reported, and reported as what it is.
+        assertThat(response.lines().get(0).status()).isEqualTo("NOTHING_OUTSTANDING");
+        assertThat(response.lines().get(0).availableQuantity()).isNull();
+        assertThat(response.lines().get(1).availableQuantity()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("an order with every line settled asks the vendor nothing")
+    void allSettledMakesNoCall() {
+        PurchaseOrderLineEntity settled = line(1, SKU_A, "10");
+        settled.setOpenQuantityDecimal(BigDecimal.ZERO);
+        order(settled);
+        answers(SupplierStockClient.Status.OK);
+
+        ProcurementAvailabilityResponse response = service.availabilityFor(PO_ID, VENDOR_PROFILE, DELIVERY_SITE);
+
+        ArgumentCaptor<List<SupplierStockClient.InquiryLine>> captor = ArgumentCaptor.forClass(List.class);
+        verify(supplierStockClient).inquire(any(), any(), captor.capture());
+        assertThat(captor.getValue()).isEmpty();
+        assertThat(response.lines())
+                .singleElement()
+                .satisfies(line -> assertThat(line.status()).isEqualTo("NOTHING_OUTSTANDING"));
+    }
+
+    @Test
+    @DisplayName("each line's article is resolved once, not once per pass")
+    void articleIsResolvedOncePerLine() {
+        order(line(1, SKU_A, "5"), line(2, SKU_B, "3"));
+        answers(SupplierStockClient.Status.OK);
+
+        service.availabilityFor(PO_ID, VENDOR_PROFILE, DELIVERY_SITE);
+
+        // Resolving again while rendering would double the reads and could disagree with itself if
+        // the replica changed mid-request, grouping a line under one article and reporting another.
+        verify(extProductCodeRepository, times(1)).findById(SKU_A);
+        verify(extProductCodeRepository, times(1)).findById(SKU_B);
+    }
 }

@@ -35,6 +35,12 @@ import org.springframework.web.client.RestClient;
 @Component
 public class SupplierStockClientImpl implements SupplierStockClient {
 
+    /** Identity this service calls under; pos-supplier records it on the exchange audit. */
+    private static final String SERVICE_USER = "pos-order-service";
+
+    /** The authority pos-supplier requires of a stock inquiry (ADR-0050). */
+    private static final String STOCK_INQUIRE_AUTHORITY = "supplier:stock:inquire";
+
     private final RestClient restClient;
     private final String basePath;
 
@@ -69,6 +75,11 @@ public class SupplierStockClientImpl implements SupplierStockClient {
             InquiryResponse response = restClient
                     .post()
                     .uri(basePath + "/stock/inquiries")
+                    // The inquiry endpoint is authorised like any other: without these the call is
+                    // rejected and every answer degrades to "supplier unavailable", which looks
+                    // exactly like a vendor being down and would have hidden a broken feature.
+                    .header("X-User", SERVICE_USER)
+                    .header("X-Authorities", STOCK_INQUIRE_AUTHORITY)
                     .body(body)
                     .retrieve()
                     .body(InquiryResponse.class);
