@@ -601,13 +601,15 @@ public enum PermissionCode {
     ORDER__PURCHASE_ORDER__CREATE(457, "order:purchase_order:create"),
     ORDER__PURCHASE_ORDER__VIEW(458, "order:purchase_order:view"),
     // ── Order (new) ────────────────────────────────────────────────────────────
-    ORDER__PURCHASE_ORDER__TRANSMIT(459, "order:purchase_order:transmit");
+    ORDER__PURCHASE_ORDER__TRANSMIT(459, "order:purchase_order:transmit"),
+    // ── Order (new) ────────────────────────────────────────────────────────────
+    ORDER__PURCHASE_ORDER__AVAILABILITY_VIEW(460, "order:purchase_order:availability_view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 50;
+    public static final int CATALOG_VERSION = 51;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

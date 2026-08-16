@@ -4,9 +4,11 @@ import com.positivity.events.EmitEvent;
 import com.positivity.order.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
+import com.positivity.order.internal.dto.purchaseorder.ProcurementAvailabilityResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderResponse;
 import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
 import com.positivity.order.internal.security.PurchaseOrderPermissions;
+import com.positivity.order.internal.service.ProcurementAvailabilityService;
 import com.positivity.order.internal.service.PurchaseOrderTransmissionService;
 import com.positivity.order.service.PurchaseOrderService;
 import com.positivity.security.common.SecurityContextHelper;
@@ -31,6 +33,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -43,6 +46,7 @@ public class PurchaseOrderController {
 
     private final PurchaseOrderService purchaseOrderService;
     private final PurchaseOrderTransmissionService purchaseOrderTransmissionService;
+    private final ProcurementAvailabilityService procurementAvailabilityService;
 
     @PostMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -430,5 +434,52 @@ public class PurchaseOrderController {
         purchaseOrderTransmissionService.requestTransmission(
                 poId, SecurityContextHelper.getCurrentUsername().orElse(NO_CURRENT_USER));
         return ResponseEntity.accepted().build();
+    }
+
+    @GetMapping("/{poId}/supplier-availability")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"order:purchase_order:availability_view"})
+    @PreAuthorize("hasAuthority('" + PurchaseOrderPermissions.PURCHASE_ORDER_AVAILABILITY_VIEW + "')")
+    @EmitEvent(id = "ORDER_PURCHASE_ORDER_AVAILABILITY", apiVersion = "1")
+    @Operation(
+            operationId = "getPurchaseOrderSupplierAvailability",
+            summary = "Read Live Vendor Availability For A Purchase Order",
+            description = """
+                    Asks a vendor what it can supply against every line of a purchase order, in one inquiry, and \
+                    returns the answer per line.
+                    Use this tool when a buyer is deciding what to order and needs what the vendor says now; do not \
+                    use the availability endpoints for this, which report owned stock rather than what a supplier \
+                    could send.
+                    Preconditions: the purchase order must exist; the vendor profile and delivery location are \
+                    both required, because availability is consignee-specific and answering for another location \
+                    answers a different question.
+                    Required inputs: poId path parameter, and vendorProfileId and deliveryLocationId query \
+                    parameters.
+                    Emits an ORDER_PURCHASE_ORDER_AVAILABILITY audit event; no state changes, and a supplier that \
+                    cannot be reached degrades the answer rather than failing the request.
+                    Returns 200 with a document status of SUPPLIER_UNAVAILABLE and no line quantities when the \
+                    vendor could not be asked; availableQuantity is null where the vendor stated nothing and zero \
+                    only where it stated it has none, and 404 when the purchase order does not exist.
+                    """,
+            tags = {"Purchase Orders"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Vendor availability, possibly degraded",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ProcurementAvailabilityResponse.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Purchase order not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<ProcurementAvailabilityResponse> getPurchaseOrderSupplierAvailability(
+            @Parameter(description = "Purchase order id (UUIDv7)", required = true) @PathVariable UUID poId,
+            @Parameter(description = "Vendor profile to ask", required = true) @RequestParam UUID vendorProfileId,
+            @Parameter(description = "Delivery location the answer is for", required = true) @RequestParam
+                    UUID deliveryLocationId) {
+        return ResponseEntity.ok(
+                procurementAvailabilityService.availabilityFor(poId, vendorProfileId, deliveryLocationId));
     }
 }

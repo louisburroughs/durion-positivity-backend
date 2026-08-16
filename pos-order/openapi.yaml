@@ -2130,6 +2130,65 @@ paths:
         - order:purchase_order:view
       x-required-permissions:
       - order:purchase_order:view
+  /v1/orders/purchase-orders/{poId}/supplier-availability:
+    get:
+      tags:
+      - Purchase Orders
+      summary: Read Live Vendor Availability For A Purchase Order
+      description: 'Asks a vendor what it can supply against every line of a purchase order, in one inquiry, and returns the answer per line.
+
+        Use this tool when a buyer is deciding what to order and needs what the vendor says now; do not use the availability endpoints for this, which report owned stock rather than what a supplier could send.
+
+        Preconditions: the purchase order must exist; the vendor profile and delivery location are both required, because availability is consignee-specific and answering for another location answers a different question.
+
+        Required inputs: poId path parameter, and vendorProfileId and deliveryLocationId query parameters.
+
+        Emits an ORDER_PURCHASE_ORDER_AVAILABILITY audit event; no state changes, and a supplier that cannot be reached degrades the answer rather than failing the request.
+
+        Returns 200 with a document status of SUPPLIER_UNAVAILABLE and no line quantities when the vendor could not be asked; availableQuantity is null where the vendor stated nothing and zero only where it stated it has none, and 404 when the purchase order does not exist.
+
+        '
+      operationId: getPurchaseOrderSupplierAvailability
+      parameters:
+      - name: poId
+        in: path
+        description: Purchase order id (UUIDv7)
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: vendorProfileId
+        in: query
+        description: Vendor profile to ask
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: deliveryLocationId
+        in: query
+        description: Delivery location the answer is for
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Vendor availability, possibly degraded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcurementAvailability'
+        '404':
+          description: Purchase order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - order:purchase_order:availability_view
+      x-required-permissions:
+      - order:purchase_order:availability_view
   /v1/orders/price-overrides/{overrideId}:
     get:
       tags:
@@ -3780,6 +3839,68 @@ components:
           type: boolean
         unsorted:
           type: boolean
+    ProcurementAvailability:
+      type: object
+      description: 'Live vendor availability for a purchase order''s lines. A supplier that could not be reached is reported through the document status, never as zero quantities: availableQuantity is null when the vendor stated nothing and zero only when it stated it has none, and only the second means an article is unavailable.'
+      properties:
+        purchaseOrderId:
+          type: string
+          format: uuid
+          description: The purchase order the lines belong to.
+        vendorProfileId:
+          type: string
+          format: uuid
+          description: The vendor profile asked.
+        deliveryLocationId:
+          type: string
+          format: uuid
+          description: The delivery location the answer is for; availability is consignee-specific.
+        status:
+          type: string
+          description: 'Whether the vendor answered, and if not, why not: OK, SUPPLIER_UNAVAILABLE, NOT_LISTED, CAPABILITY_NOT_CONFIGURED or CONFIGURATION_ERROR. Anything other than OK means no line quantity here is a statement by the vendor.'
+        asOf:
+          type: string
+          format: date-time
+          description: When the answer was obtained; null when there is no answer to date.
+        lines:
+          type: array
+          description: One entry per purchase-order line, in line-number order.
+          items:
+            $ref: '#/components/schemas/ProcurementAvailabilityLine'
+    ProcurementAvailabilityLine:
+      type: object
+      description: One purchase-order line and what the vendor said about it.
+      properties:
+        lineId:
+          type: string
+          format: uuid
+          description: Purchase-order line id.
+        lineNumber:
+          type: integer
+          format: int32
+          description: Line number on the order.
+        skuId:
+          type: string
+          format: uuid
+          description: Catalog product ordered.
+        articleEan:
+          type: string
+          description: The article code the vendor was asked about; null when none could be resolved.
+        requestedQuantity:
+          type: integer
+          format: int32
+          description: 'Quantity asked about: what is still outstanding on this line.'
+        status:
+          type: string
+          description: AVAILABLE, UNAVAILABLE, NOT_LISTED, NOT_ANSWERED, or ARTICLE_NOT_IDENTIFIABLE when the line carries no code the vendor would recognise and so was never asked about.
+        availableQuantity:
+          type: integer
+          format: int32
+          description: Quantity the vendor can supply. Null when the vendor stated no quantity; zero only when it stated it has none.
+        earliestDeliveryDate:
+          type: string
+          format: date
+          description: Earliest date the vendor promised any quantity, when stated.
   securitySchemes:
     bearerAuth:
       type: http

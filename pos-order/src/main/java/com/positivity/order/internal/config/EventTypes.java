@@ -151,5 +151,10 @@ public final class EventTypes {
             EventTypeRegistration.write(
                             "ORDER_PURCHASE_ORDER_TRANSMIT", "Send an approved purchase order to its vendor")
                     .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.fastRead(
+                            "ORDER_PURCHASE_ORDER_AVAILABILITY",
+                            "Read live vendor availability for a purchase order's lines")
+                    .apiVersion("1")
                     .build());
 }

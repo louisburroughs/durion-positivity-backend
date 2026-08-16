@@ -29,6 +29,14 @@ public final class PurchaseOrderPermissions {
      */
     public static final String PURCHASE_ORDER_TRANSMIT = "order:purchase_order:transmit";
 
+    /**
+     * Asking a vendor what it can actually supply against an order's lines.
+     *
+     * <p>A read, but not a free one: it reaches out to the vendor's own systems, so it is gated
+     * separately from viewing the order rather than folded into it.
+     */
+    public static final String PURCHASE_ORDER_AVAILABILITY_VIEW = "order:purchase_order:availability_view";
+
     private PurchaseOrderPermissions() {
         // Utility class
     }
