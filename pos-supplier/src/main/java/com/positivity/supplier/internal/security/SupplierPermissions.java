@@ -92,5 +92,23 @@ public final class SupplierPermissions {
      */
     public static final String INVOICE_FETCH = "supplier:invoice:fetch";
 
+    /**
+     * Asking a fleet program to authorize work, and reading fleet vehicles, contracts and policies.
+     *
+     * <p>One permission covering the read lookups and the authorization request, because in a shop
+     * they are one act: a service advisor looks a fleet vehicle up in order to ask for authorization
+     * on it, and separating them would mean a role that can see a fleet contract but cannot use it.
+     */
+    public static final String WORKORDER_AUTHORIZE = "supplier:workorderauth:request";
+
+    /**
+     * Seeing and clearing authorizations parked for manual review.
+     *
+     * <p>Separate from requesting, because these are the rows where a vendor could not be reached or
+     * a completion could not be signed off — money already owed for work already done. Whoever
+     * chases that is not necessarily whoever books the job in.
+     */
+    public static final String WORKORDER_AUTHORIZATION_REVIEW = "supplier:workorderauth:review";
+
     private SupplierPermissions() {}
 }

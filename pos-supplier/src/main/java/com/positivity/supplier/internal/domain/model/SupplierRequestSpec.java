@@ -36,7 +36,8 @@ public record SupplierRequestSpec(
         @Nullable String body,
         @Nullable String contentType,
         @Nullable String accept,
-        boolean idempotent) {
+        boolean idempotent,
+        @NonNull Map<String, String> headers) {
 
     public SupplierRequestSpec {
         Objects.requireNonNull(method, "method must not be null");
@@ -53,6 +54,27 @@ public record SupplierRequestSpec(
         // Collections.unmodifiableMap over a LinkedHashMap, not Map.copyOf: the latter is unordered,
         // which would quietly make the documented insertion order untrue and produce a different
         // query string on every run.
+        Objects.requireNonNull(headers, "headers must not be null");
         queryParams = Collections.unmodifiableMap(new LinkedHashMap<>(queryParams));
+        headers = Collections.unmodifiableMap(new LinkedHashMap<>(headers));
+    }
+
+    /**
+     * Builds a spec that adds no headers of its own.
+     *
+     * <p>Kept because no EDIWheel capability needs one: the norms identify the buyer through
+     * credentials and query parameters, so every codec written before the Michelin S2S family said
+     * everything it had to say without touching headers. Those call sites keep saying it by
+     * omission.
+     */
+    public SupplierRequestSpec(
+            @NonNull String method,
+            @Nullable String pathSuffix,
+            @NonNull Map<String, String> queryParams,
+            @Nullable String body,
+            @Nullable String contentType,
+            @Nullable String accept,
+            boolean idempotent) {
+        this(method, pathSuffix, queryParams, body, contentType, accept, idempotent, Map.of());
     }
 }

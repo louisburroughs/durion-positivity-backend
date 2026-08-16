@@ -20,3 +20,7 @@ permissions:
     description: "Ask a vendor, live, what stock it holds for a receiving location (the approved synchronous supplier read)"
   - name: "supplier:invoice:fetch"
     description: "Run a vendor invoice fetch on demand"
+  - name: "supplier:workorderauth:request"
+    description: "Ask a fleet program to authorize work, and look up fleet vehicles, contracts and policies"
+  - name: "supplier:workorderauth:review"
+    description: "View and clear fleet workorder authorizations parked for manual review"

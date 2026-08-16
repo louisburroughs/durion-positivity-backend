@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.client;
 
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -36,7 +37,8 @@ public record SupplierHttpRequest(
         @Nullable String body,
         @Nullable String contentType,
         @Nullable String accept,
-        boolean idempotent) {
+        boolean idempotent,
+        @NonNull Map<String, String> headers) {
 
     public SupplierHttpRequest {
         Objects.requireNonNull(binding, "binding must not be null");
@@ -48,7 +50,27 @@ public record SupplierHttpRequest(
         if (body != null && (contentType == null || contentType.isBlank())) {
             throw new IllegalArgumentException("contentType is required when a body is present");
         }
-        queryParams = Map.copyOf(new LinkedHashMap<>(queryParams));
+        Objects.requireNonNull(headers, "headers must not be null");
+        // Collections.unmodifiableMap over a LinkedHashMap, not Map.copyOf: the latter gives no
+        // ordering guarantee, and the query string is built by iterating this map. SupplierRequestSpec
+        // takes the same care one layer up, so copying with Map.copyOf here discarded the order it had
+        // just preserved -- leaving a vendor's query parameters in an arbitrary sequence that could
+        // differ between runs of the same request.
+        queryParams = Collections.unmodifiableMap(new LinkedHashMap<>(queryParams));
+        headers = Collections.unmodifiableMap(new LinkedHashMap<>(headers));
+    }
+
+    /** Builds a request that adds no headers of its own. */
+    public SupplierHttpRequest(
+            @NonNull ResolvedBinding binding,
+            @NonNull HttpMethod method,
+            @Nullable String pathSuffix,
+            @NonNull Map<String, String> queryParams,
+            @Nullable String body,
+            @Nullable String contentType,
+            @Nullable String accept,
+            boolean idempotent) {
+        this(binding, method, pathSuffix, queryParams, body, contentType, accept, idempotent, Map.of());
     }
 
     /**
@@ -76,6 +98,7 @@ public record SupplierHttpRequest(
      */
     @NonNull
     public SupplierHttpRequest asIdempotentRead() {
-        return new SupplierHttpRequest(binding, method, pathSuffix, queryParams, body, contentType, accept, true);
+        return new SupplierHttpRequest(
+                binding, method, pathSuffix, queryParams, body, contentType, accept, true, headers);
     }
 }

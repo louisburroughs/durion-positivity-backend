@@ -193,6 +193,24 @@ pos:
     outbox:
       poll-interval-ms: ${SUPPLIER_OUTBOX_POLL_INTERVAL_MS:1000}
       send-timeout-ms: ${SUPPLIER_OUTBOX_SEND_TIMEOUT_MS:10000}
+    workorderauth:
+      # How often accepted-but-undecided authorizations are re-read. The S2S API may answer a
+      # request with 202 and a Location instead of a decision; without this the 202 is
+      # indistinguishable from a request that vanished.
+      poll-interval-ms: ${SUPPLIER_WORKORDERAUTH_POLL_INTERVAL_MS:120000}
+      poll-batch-size: ${SUPPLIER_WORKORDERAUTH_POLL_BATCH_SIZE:50}
+      # How long an authorization may stay undecided before a human is asked to look. Bounded
+      # because "never" is not an answer a shop can act on: a vendor that will never resolve a
+      # request must not look the same as one that is about to.
+      pending-timeout: ${SUPPLIER_WORKORDERAUTH_PENDING_TIMEOUT:PT24H}
+      # Completion sign-off. Retried, unlike the authorization request: approving an
+      # already-approved workorder is the vendor restating a fact, whereas re-requesting an
+      # authorization can open a second one against the same contract.
+      approval-interval-ms: ${SUPPLIER_WORKORDERAUTH_APPROVAL_INTERVAL_MS:300000}
+      approval-batch-size: ${SUPPLIER_WORKORDERAUTH_APPROVAL_BATCH_SIZE:50}
+      # Finite on purpose. An approval that retries forever looks like one that is working, and an
+      # unapproved completion is work already performed that the fleet has not agreed to pay for.
+      approval-max-attempts: ${SUPPLIER_WORKORDERAUTH_APPROVAL_MAX_ATTEMPTS:6}
     kafka:
       # Off by default so a deployment without a broker starts cleanly; the outbox still records
       # events, and they drain once this is enabled. It also gates the catalog product-code
@@ -201,6 +219,10 @@ pos:
       enabled: ${SUPPLIER_KAFKA_ENABLED:false}
       catalog-events-topic: ${SUPPLIER_CATALOG_EVENTS_TOPIC:catalog.events.v1}
       catalog-events-consumer-group: ${SUPPLIER_CATALOG_EVENTS_CONSUMER_GROUP:pos-supplier-catalog-events}
+      # Workorder completions, which queue the fleet sign-off (CAP-323). Its own consumer group:
+      # one group per topic per module, so a lag or a reset here cannot disturb the catalog replica.
+      workorder-events-topic: ${SUPPLIER_WORKORDER_EVENTS_TOPIC:workorder.events.v1}
+      workorder-events-consumer-group: ${SUPPLIER_WORKORDER_EVENTS_CONSUMER_GROUP:pos-supplier-workorder-events}
       # Inbound commands (ADR-0049 §3): purchase-order transmission requests from pos-order and
       # PRICAT re-publication requests from pos-catalog. Also gated by `enabled` above: with Kafka
       # off nothing is consumed and no order is transmitted, which is the safe direction — the
