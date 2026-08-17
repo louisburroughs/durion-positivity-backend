@@ -13,6 +13,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,8 +40,21 @@ public class ReservationEntity {
     @UUIDv7Id
     private UUID reservationId;
 
-    @Column(nullable = false, unique = true)
+    /**
+     * The workorder line this reservation fulfils, when demand came from a workorder. Exactly one
+     * of this and {@link #salesOrderLineId} is set (CAP #1315 widened this table to accept either
+     * demand source; DB CHECK enforces the invariant, a partial unique index per column enforces
+     * one reservation per line either way).
+     */
+    @Column(name = "workorder_line_id")
     private UUID workorderLineId;
+
+    /**
+     * The sales-order line this reservation fulfils, when demand came from a sales order (CAP
+     * #1315). Exactly one of this and {@link #workorderLineId} is set.
+     */
+    @Column(name = "sales_order_line_id")
+    private UUID salesOrderLineId;
 
     @Column(name = "stock_item_id", nullable = false)
     private UUID stockItemId;
@@ -80,4 +94,14 @@ public class ReservationEntity {
     @OneToMany(mappedBy = "reservation", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @Builder.Default
     private List<AllocationEntity> allocations = new ArrayList<>();
+
+    /**
+     * Whichever demand line this reservation is actually keyed on (CAP #1315). Fairness/priority
+     * logic that only cares "which demand line" — not which kind — reads this instead of branching
+     * on both fields.
+     */
+    @Transient
+    public UUID getDemandLineId() {
+        return workorderLineId != null ? workorderLineId : salesOrderLineId;
+    }
 }

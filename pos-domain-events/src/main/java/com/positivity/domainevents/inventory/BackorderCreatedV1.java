@@ -14,29 +14,39 @@ import org.jspecify.annotations.Nullable;
  * read-side for workorder-line shortage visibility (no contract change required from workexec to
  * unblock G1).
  *
+ * <p>Schema v2 (CAP #1315): a backorder's demand line can now be a sales-order line instead of a
+ * workorder line ({@code BackorderRecord} was widened to accept either). Exactly one of
+ * {@code workorderLineId}/{@code salesOrderLineId} is non-null on every event; v1 consumers that
+ * only read {@code workorderLineId} continue to see it populated for every backorder they'd have
+ * seen before, and simply never observe the sales-order-only ones (a null they'd have to check for
+ * regardless, since v1 never guaranteed the field either way for a type it didn't know about).
+ *
  * @param backorderId backorder record identifier (aggregate id of the fact)
- * @param workorderLineId workorder line whose demand was short
+ * @param workorderLineId workorder line whose demand was short, when demand was from a workorder
+ * @param salesOrderLineId sales-order line whose demand was short, when demand was from a sales
+ *     order (additive, schema v2)
  * @param sku stock-item identifier that was short (ledger stock-item string)
  * @param quantityShort quantity that could not be fulfilled (positive)
  * @param occurredAt when the backorder was opened
  */
 public record BackorderCreatedV1(
         @NonNull UUID backorderId,
-        @NonNull UUID workorderLineId,
+        @Nullable UUID workorderLineId,
+        @Nullable UUID salesOrderLineId,
         @NonNull String sku,
         int quantityShort,
         @Nullable UUID locationId,
         @NonNull Instant occurredAt) {
 
     public static final String EVENT_TYPE = "inventory.backorder.created";
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
 
     public BackorderCreatedV1 {
         if (backorderId == null) {
             throw new IllegalArgumentException("backorderId must not be null");
         }
-        if (workorderLineId == null) {
-            throw new IllegalArgumentException("workorderLineId must not be null");
+        if ((workorderLineId == null) == (salesOrderLineId == null)) {
+            throw new IllegalArgumentException("exactly one of workorderLineId/salesOrderLineId must be set");
         }
         if (sku == null || sku.isBlank()) {
             throw new IllegalArgumentException("sku must not be blank");

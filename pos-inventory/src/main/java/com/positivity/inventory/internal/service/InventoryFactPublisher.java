@@ -11,6 +11,7 @@ import com.positivity.domainevents.inventory.LotExpiryAlertV1;
 import com.positivity.domainevents.inventory.PickListUpdatedV1;
 import com.positivity.domainevents.inventory.PickTaskUpdatedV1;
 import com.positivity.domainevents.inventory.ProductValueChangedV1;
+import com.positivity.domainevents.inventory.ReservationOutcomeV1;
 import com.positivity.domainevents.inventory.ScrapPostedV1;
 import com.positivity.domainevents.inventory.StorageLocationOnHandUpdatedV1;
 import com.positivity.domainevents.inventory.TransferOrderUpdatedV1;
@@ -223,6 +224,19 @@ public class InventoryFactPublisher {
             return;
         }
         pending.backorderResolutions.add(fact);
+    }
+
+    /**
+     * Record a reservation-request outcome fact (CAP #1315): the requesting module's demand line
+     * either is currently covered by owned ATP, or was not and a backorder was opened for the
+     * shortfall. Queued as-is — one outcome per reservation-request command processed.
+     */
+    public void recordReservationOutcome(@NonNull ReservationOutcomeV1 fact) {
+        Pending pending = pending();
+        if (pending == null) {
+            return;
+        }
+        pending.reservationOutcomes.add(fact);
     }
 
     /**
@@ -440,6 +454,21 @@ public class InventoryFactPublisher {
                         "Skipping backorder-resolved fact for {}: {}", backorderResolved.backorderId(), e.getMessage());
             }
         }
+        for (ReservationOutcomeV1 reservationOutcome : pending.reservationOutcomes) {
+            try {
+                publish(
+                        writer,
+                        ReservationOutcomeV1.EVENT_TYPE,
+                        ReservationOutcomeV1.SCHEMA_VERSION,
+                        reservationOutcome.reservationId(),
+                        reservationOutcome);
+            } catch (Exception e) {
+                log.warn(
+                        "Skipping reservation-outcome fact for {}: {}",
+                        reservationOutcome.reservationId(),
+                        e.getMessage());
+            }
+        }
         for (LotExpiryAlertV1 lotExpiryAlert : pending.lotExpiryAlerts) {
             try {
                 publish(
@@ -519,6 +548,7 @@ public class InventoryFactPublisher {
         private final List<TransferOrderUpdatedV1> transferOrderUpdates = new ArrayList<>();
         private final List<BackorderCreatedV1> backorderCreations = new ArrayList<>();
         private final List<BackorderResolvedV1> backorderResolutions = new ArrayList<>();
+        private final List<ReservationOutcomeV1> reservationOutcomes = new ArrayList<>();
         private final List<LotExpiryAlertV1> lotExpiryAlerts = new ArrayList<>();
     }
 }

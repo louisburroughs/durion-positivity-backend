@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.repository.ProcessedEventRepository;
 import com.positivity.inventory.service.ConsumptionService;
 import com.positivity.inventory.service.OutboxReplayService;
 import com.positivity.inventory.service.PickListService;
+import com.positivity.inventory.service.ReservationRequestService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -44,6 +45,10 @@ import tools.jackson.databind.ObjectMapper;
  * replaces {@code InventoryPickClient.consumePickedItems}); same idempotency, the
  * {@code inventory.consumption.recorded} fact carries the result.</li>
  * <li>{@code inventory.pick-list.release-requested} — async pick-list release (#901).</li>
+ * <li>{@code inventory.reservation.request-requested} — the ATP-gate commitment point for
+ * pos-order (checkout) and pos-workorder (part-issue), CAP #1315. Delegates to
+ * {@code ReservationRequestService}; the resulting {@code inventory.reservation.outcome.recorded}
+ * fact tells the requester whether owned ATP covered the line or a backorder was opened.</li>
  * </ul>
  *
  * <p>Business validation failures (scan mismatch, not-picked, over-consumption) are permanent:
@@ -68,6 +73,9 @@ public class InventoryCommandListener {
     /** Canonical dotted name normalized: inventory.items.consume-requested. */
     private static final String COMMAND_ITEMS_CONSUME_REQUESTED = "INVENTORY_ITEMS_CONSUME_REQUESTED";
 
+    /** Canonical dotted name normalized: inventory.reservation.request-requested (CAP #1315). */
+    private static final String COMMAND_RESERVATION_REQUEST_REQUESTED = "INVENTORY_RESERVATION_REQUEST_REQUESTED";
+
     static final String COMMANDS_OWNER = "inventory-commands";
 
     /** Covers the sub-millisecond skew between outbox createdAt and the eventId timestamp. */
@@ -82,6 +90,7 @@ public class InventoryCommandListener {
     private final OutboxReplayService outboxReplayService;
     private final PickListService pickListService;
     private final ConsumptionService consumptionService;
+    private final ReservationRequestService reservationRequestHandler;
     private final ProcessedEventRepository processedEventRepository;
 
     @KafkaListener(
@@ -114,6 +123,10 @@ public class InventoryCommandListener {
             }
             if (COMMAND_ITEMS_CONSUME_REQUESTED.equals(commandType)) {
                 handleDeduplicated(root, this::handleItemsConsumeRequested);
+                return;
+            }
+            if (COMMAND_RESERVATION_REQUEST_REQUESTED.equals(commandType)) {
+                handleDeduplicated(root, this::handleReservationRequestRequested);
                 return;
             }
             log.debug("Ignoring unsupported commandType={} message={}", commandType, message);
@@ -243,6 +256,32 @@ public class InventoryCommandListener {
                 workorderId,
                 pickListId,
                 response.getTotalItemsConsumed());
+    }
+
+    private void handleReservationRequestRequested(@NonNull JsonNode payload) {
+        UUID workorderLineId = parseUuid(payload, "workorderLineId");
+        UUID salesOrderLineId = parseUuid(payload, "salesOrderLineId");
+        UUID stockItemId = parseUuid(payload, "stockItemId");
+        UUID locationId = parseUuid(payload, "locationId");
+        int requiredQuantity = payload.path("requiredQuantity").intValue(0);
+        if ((workorderLineId == null) == (salesOrderLineId == null)) {
+            log.warn(
+                    "Ignoring reservation-request command: exactly one of workorderLineId/salesOrderLineId must be"
+                            + " set: {}",
+                    payload);
+            return;
+        }
+        if (stockItemId == null || locationId == null || requiredQuantity <= 0) {
+            log.warn("Ignoring reservation-request command with missing/invalid fields: {}", payload);
+            return;
+        }
+        reservationRequestHandler.handle(workorderLineId, salesOrderLineId, stockItemId, requiredQuantity, locationId);
+        log.info(
+                "Reservation request command processed demandLine={} sku={} qty={} locationId={}",
+                workorderLineId != null ? workorderLineId : salesOrderLineId,
+                stockItemId,
+                requiredQuantity,
+                locationId);
     }
 
     private @Nullable UUID parseUuid(@Nullable JsonNode node, @NonNull String field) {

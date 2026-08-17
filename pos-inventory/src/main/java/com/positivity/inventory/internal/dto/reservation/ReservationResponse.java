@@ -21,11 +21,16 @@ public class ReservationResponse {
     private UUID reservationId;
 
     @Schema(
-            description = "Identifier of the workorder line the reservation fulfils",
-            example = "01960003-0000-7000-8000-000000000002",
-            requiredMode = REQUIRED)
-    @NotNull
+            description = "Identifier of the workorder line the reservation fulfils, when demand is from a"
+                    + " workorder; null when demand is from a sales order instead.",
+            example = "01960003-0000-7000-8000-000000000002")
     private UUID workorderLineId;
+
+    @Schema(
+            description = "Identifier of the sales-order line the reservation fulfils (CAP #1315), when demand is"
+                    + " from a sales order; null when demand is from a workorder instead.",
+            example = "01960003-0000-7000-8000-000000000005")
+    private UUID salesOrderLineId;
 
     @Schema(
             description = "Identifier of the stock item being reserved",

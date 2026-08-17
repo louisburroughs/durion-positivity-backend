@@ -62,14 +62,15 @@ public class BackorderController {
             operationId = "listBackorders",
             summary = "List backorders",
             description = """
-                    Lists backorders — unfulfilled workorder-line demand held open until availability covers it — \
-                    newest first.
+                    Lists backorders — unfulfilled demand (a workorder line or, since CAP #1315, a sales-order \
+                    line) held open until availability covers it — newest first.
                     Use this tool to monitor open shortages awaiting stock; use getBackorder instead when the \
                     backorderId is already known, and note backorders are opened by the shortage flows \
-                    (resolveShortage with BACKORDER), not by any direct create endpoint.
+                    (resolveShortage with BACKORDER) or the sales-order checkout gate, not by any direct create \
+                    endpoint.
                     Preconditions: none; an empty result is not an error.
-                    Required inputs: none — status (OPEN, RESOLVED or CANCELLED), sku, locationId and \
-                    workorderLineId are optional filters combined with AND.
+                    Required inputs: none — status (OPEN, RESOLVED or CANCELLED), sku, locationId, \
+                    workorderLineId and salesOrderLineId are optional filters combined with AND.
                     No events are emitted and no state changes; this is a read-only projection.
                     Returns 200 with an empty array when nothing matches.
                     """,
@@ -87,8 +88,11 @@ public class BackorderController {
             @Parameter(description = "Filter by SKU / stock-item identifier") @RequestParam(required = false)
                     String sku,
             @Parameter(description = "Filter by site") @RequestParam(required = false) UUID locationId,
-            @Parameter(description = "Filter by workorder line") @RequestParam(required = false) UUID workorderLineId) {
-        return ResponseEntity.ok(backorderService.listBackorders(status, sku, locationId, workorderLineId));
+            @Parameter(description = "Filter by workorder line") @RequestParam(required = false) UUID workorderLineId,
+            @Parameter(description = "Filter by sales-order line (CAP #1315)") @RequestParam(required = false)
+                    UUID salesOrderLineId) {
+        return ResponseEntity.ok(
+                backorderService.listBackorders(status, sku, locationId, workorderLineId, salesOrderLineId));
     }
 
     /**

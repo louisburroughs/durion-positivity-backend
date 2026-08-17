@@ -45,7 +45,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         indexes = {
             @Index(name = "idx_backorder_record_status", columnList = "status"),
             @Index(name = "idx_backorder_record_sku_location_status", columnList = "sku, location_id, status"),
-            @Index(name = "idx_backorder_record_workorder_line", columnList = "workorder_line_id")
+            @Index(name = "idx_backorder_record_workorder_line", columnList = "workorder_line_id"),
+            @Index(name = "idx_backorder_record_sales_order_line", columnList = "sales_order_line_id")
         })
 @Data
 @NoArgsConstructor
@@ -59,9 +60,20 @@ public class BackorderRecord {
     @UUIDv7Id
     private UUID backorderId;
 
-    /** Workorder line whose demand was short; the backorder→demand linkage key. */
-    @Column(name = "workorder_line_id", nullable = false)
+    /**
+     * Workorder line whose demand was short, when demand came from a workorder. Exactly one of
+     * this and {@link #salesOrderLineId} is set (CAP #1315 widened this table to accept either
+     * demand source; DB CHECK enforces the invariant).
+     */
+    @Column(name = "workorder_line_id")
     private UUID workorderLineId;
+
+    /**
+     * Sales-order line whose demand was short, when demand came from a sales order (CAP #1315).
+     * Exactly one of this and {@link #workorderLineId} is set.
+     */
+    @Column(name = "sales_order_line_id")
+    private UUID salesOrderLineId;
 
     /** SKU / stock-item identifier that was short (ledger stock-item string). */
     @Column(name = "sku", nullable = false)
@@ -106,4 +118,10 @@ public class BackorderRecord {
     /** When the backorder reached RESOLVED; null otherwise. */
     @Column(name = "resolved_at")
     private Instant resolvedAt;
+
+    /** Whichever demand line this backorder is actually keyed on (CAP #1315). */
+    @jakarta.persistence.Transient
+    public UUID getDemandLineId() {
+        return workorderLineId != null ? workorderLineId : salesOrderLineId;
+    }
 }

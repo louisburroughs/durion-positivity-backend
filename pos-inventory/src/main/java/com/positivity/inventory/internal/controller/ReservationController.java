@@ -211,4 +211,39 @@ public class ReservationController {
         reservationService.cancelReservation(workorderLineId);
         return ResponseEntity.noContent().build();
     }
+
+    @DeleteMapping("/sales-order-line/{salesOrderLineId}")
+    @EmitEvent(id = "INVENTORY_RESERVATION_CANCEL_SALES_ORDER_LINE", apiVersion = "1")
+    @PreAuthorize("hasAuthority('" + InventoryPermissionRegistry.ADJUSTMENT_CREATE + "')")
+    @Operation(
+            operationId = "cancelReservationForSalesOrderLine",
+            summary = "Cancel reservation by sales-order line",
+            description = """
+                    Cancels the reservation for a sales-order line (CAP #1315) and releases every allocation \
+                    under it — the sales-order-demand counterpart of cancelReservation.
+                    Use this tool when sales-order demand is withdrawn; do not use cancelReservation, whose path \
+                    parameter is a workorderLineId and which finds nothing for a sales-order line.
+                    Preconditions: a reservation must exist for the sales-order line.
+                    Required inputs: salesOrderLineId (UUID) path parameter; there is no request body.
+                    Emits an INVENTORY_RESERVATION_CANCEL_SALES_ORDER_LINE event; every allocation is marked \
+                    RELEASED, located HARD allocations get ALLOCATION_RELEASED ledger entries for their \
+                    un-released remainder only, and the reservation ends CANCELLED with allocatedQuantity 0.
+                    Returns 404 when no reservation exists for the sales-order line.
+                    """,
+            tags = {"Inventory Reservations"})
+    @ApiResponse(responseCode = "204", description = "Reservation cancelled")
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required reservation authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Reservation not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<Void> cancelReservationForSalesOrderLine(
+            @Parameter(description = "Sales-order line identifier", required = true) @PathVariable
+                    UUID salesOrderLineId) {
+        reservationService.cancelReservationForSalesOrderLine(salesOrderLineId);
+        return ResponseEntity.noContent().build();
+    }
 }

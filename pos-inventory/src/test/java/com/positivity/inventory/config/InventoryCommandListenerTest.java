@@ -24,6 +24,7 @@ import com.positivity.inventory.internal.repository.ProcessedEventRepository;
 import com.positivity.inventory.service.ConsumptionService;
 import com.positivity.inventory.service.OutboxReplayService;
 import com.positivity.inventory.service.PickListService;
+import com.positivity.inventory.service.ReservationRequestService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -50,6 +51,7 @@ class InventoryCommandListenerTest {
     private final OutboxReplayService replayService = mock(OutboxReplayService.class);
     private final PickListService pickListService = mock(PickListService.class);
     private final ConsumptionService consumptionService = mock(ConsumptionService.class);
+    private final ReservationRequestService reservationRequestHandler = mock(ReservationRequestService.class);
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
 
     private InventoryCommandListener listener;
@@ -57,7 +59,13 @@ class InventoryCommandListenerTest {
     @BeforeEach
     void setUp() {
         listener = new InventoryCommandListener(
-                TEST_CLOCK, new ObjectMapper(), replayService, pickListService, consumptionService, processedEvents);
+                TEST_CLOCK,
+                new ObjectMapper(),
+                replayService,
+                pickListService,
+                consumptionService,
+                reservationRequestHandler,
+                processedEvents);
         ReflectionTestUtils.setField(listener, "replayMaxLookback", Duration.ofDays(30));
     }
 

@@ -150,6 +150,26 @@ class BackorderServiceImplTest {
     }
 
     @Test
+    @DisplayName("createBackorderForSalesOrderLine opens OPEN record keyed by salesOrderLineId")
+    void createBackorderForSalesOrderLine_opensRecordPostsLedgerAndFact() {
+        UUID salesOrderLineId = UUID.fromString("01960004-0003-7000-8000-000000000001");
+        when(backorderRepository.findBySalesOrderLineIdAndSkuAndStatus(salesOrderLineId, SKU, BackorderStatus.OPEN))
+                .thenReturn(Optional.empty());
+
+        BackorderResponse response = service.createBackorderForSalesOrderLine(salesOrderLineId, SKU, 4, LOCATION_ID);
+
+        assertThat(response.getStatus()).isEqualTo(BackorderStatus.OPEN);
+        assertThat(response.getSalesOrderLineId()).isEqualTo(salesOrderLineId);
+        assertThat(response.getWorkorderLineId()).isNull();
+        assertThat(response.getQuantityShort()).isEqualTo(4);
+
+        ArgumentCaptor<BackorderCreatedV1> factCaptor = ArgumentCaptor.forClass(BackorderCreatedV1.class);
+        verify(inventoryFactPublisher).recordBackorderCreated(factCaptor.capture());
+        assertThat(factCaptor.getValue().salesOrderLineId()).isEqualTo(salesOrderLineId);
+        assertThat(factCaptor.getValue().workorderLineId()).isNull();
+    }
+
+    @Test
     @DisplayName("Stock arrival auto-resolves the older backorder first when only one can be covered")
     void onInboundAvailability_resolvesOldestFirst_whenBudgetCoversOne() {
         BackorderRecord older = openBackorder(WORKORDER_LINE_A, 5, Instant.parse("2026-07-20T00:00:00Z"));
@@ -157,7 +177,8 @@ class BackorderServiceImplTest {
         when(backorderRepository.findBySkuAndLocationIdAndStatusOrderByCreatedAtAsc(
                         SKU, LOCATION_ID, BackorderStatus.OPEN))
                 .thenReturn(List.of(older, newer));
-        when(reservationRepository.findByWorkorderLineId(any())).thenReturn(Optional.empty());
+        when(reservationRepository.findByWorkorderLineIdOrSalesOrderLineId(any(), any()))
+                .thenReturn(Optional.empty());
         // Budget covers exactly one backorder of 5.
         when(summaryRepository.findByStockItemIdAndLocationId(SKU, LOCATION_ID))
                 .thenReturn(Optional.of(summaryWithAtp(5)));
@@ -194,7 +215,8 @@ class BackorderServiceImplTest {
                 .priority(5)
                 .status(ReservationStatus.BACKORDERED)
                 .build();
-        when(reservationRepository.findByWorkorderLineId(WORKORDER_LINE_A)).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findByWorkorderLineIdOrSalesOrderLineId(WORKORDER_LINE_A, WORKORDER_LINE_A))
+                .thenReturn(Optional.of(reservation));
         when(summaryRepository.findByStockItemIdAndLocationId(SKU, LOCATION_ID))
                 .thenReturn(Optional.of(summaryWithAtp(10)));
 
@@ -226,7 +248,8 @@ class BackorderServiceImplTest {
         when(backorderRepository.findBySkuAndLocationIdAndStatusOrderByCreatedAtAsc(
                         SKU, LOCATION_ID, BackorderStatus.OPEN))
                 .thenReturn(List.of(backorder));
-        when(reservationRepository.findByWorkorderLineId(any())).thenReturn(Optional.empty());
+        when(reservationRepository.findByWorkorderLineIdOrSalesOrderLineId(any(), any()))
+                .thenReturn(Optional.empty());
         when(summaryRepository.findByStockItemIdAndLocationId(SKU, LOCATION_ID))
                 .thenReturn(Optional.of(summaryWithAtp(4)));
 

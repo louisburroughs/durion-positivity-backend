@@ -1016,4 +1016,38 @@ class ReservationServiceImplTest {
         assertThat(entry.getSourceTransactionId())
                 .isEqualTo(locatedHard.getAllocationId().toString());
     }
+
+    // ─── CAP #1315: sales-order demand line ─────────────────────────────────────
+
+    @Test
+    @DisplayName("cancelReservationForSalesOrderLine cancels the reservation found by salesOrderLineId")
+    void cancelReservationForSalesOrderLine_found_marksCancelled() {
+        UUID salesOrderLineId = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
+        ReservationEntity reservation = ReservationEntity.builder()
+                .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .salesOrderLineId(salesOrderLineId)
+                .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .requiredQuantity(3)
+                .allocatedQuantity(3)
+                .status(ReservationStatus.PENDING)
+                .build();
+        when(reservationRepository.findBySalesOrderLineId(salesOrderLineId)).thenReturn(Optional.of(reservation));
+        when(allocationRepository.findByReservation(reservation)).thenReturn(List.of());
+
+        service.cancelReservationForSalesOrderLine(salesOrderLineId);
+
+        assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+        verify(ledgerPostingService, never()).post(any());
+    }
+
+    @Test
+    @DisplayName("cancelReservationForSalesOrderLine throws ResourceNotFoundException when no reservation exists")
+    void cancelReservationForSalesOrderLine_missing_throwsResourceNotFound() {
+        UUID salesOrderLineId = UUID.fromString("00000000-0000-0000-0000-0000000000d2");
+        when(reservationRepository.findBySalesOrderLineId(salesOrderLineId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.cancelReservationForSalesOrderLine(salesOrderLineId))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Reservation not found");
+    }
 }
