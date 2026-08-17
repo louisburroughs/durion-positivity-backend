@@ -177,7 +177,8 @@ class WorkorderCompletionTest {
                 auditEventRepository,
                 idempotencyService,
                 promotionValidationService,
-                peopleAvailabilityLocalService);
+                peopleAvailabilityLocalService,
+                org.mockito.Mockito.mock(com.positivity.workorder.internal.service.FleetAuthorizationService.class));
     }
 
     @AfterEach

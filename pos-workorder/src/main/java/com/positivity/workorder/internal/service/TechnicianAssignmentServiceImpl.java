@@ -179,6 +179,26 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         return saved;
     }
 
+    @Override
+    public Optional<TechnicianAssignment> releaseAssignment(
+            @NonNull UUID workorderId, @NonNull String releasedBy, @Nullable String reason) {
+        Optional<TechnicianAssignment> currentAssignment =
+                assignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId);
+        if (currentAssignment.isEmpty()) {
+            return Optional.empty();
+        }
+        TechnicianAssignment assignment = currentAssignment.get();
+        assignment.markAsNotCurrent(LocalDateTime.now(clock), reason);
+        TechnicianAssignment saved = assignmentRepository.save(assignment);
+        log.info(
+                "Released technician {} from workorder {} by {}: {}",
+                assignment.getTechnicianId(),
+                workorderId,
+                releasedBy,
+                reason);
+        return Optional.of(saved);
+    }
+
     /**
      * Get the current assignment for a workorder.
      *

@@ -155,7 +155,9 @@ public class InvoiceEventPublisher {
                         : rules.getInvoiceDeliveryMethod().name(),
                 rules.getInvoiceGroupingStrategy() == null
                         ? null
-                        : rules.getInvoiceGroupingStrategy().name());
+                        : rules.getInvoiceGroupingStrategy().name(),
+                rules.isFleetAuthorizationRequired(),
+                rules.getFleetSupplierRef());
         DomainEventEnvelope<BillingRulesUpdatedV1> envelope = DomainEventEnvelope.of(
                 BillingRulesUpdatedV1.EVENT_TYPE,
                 BillingRulesUpdatedV1.SCHEMA_VERSION,

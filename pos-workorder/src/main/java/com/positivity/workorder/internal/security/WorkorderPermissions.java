@@ -170,6 +170,24 @@ public final class WorkorderPermissions {
     /** Owned by the timekeeping domain. */
     public static final String TIMEKEEPING_WORK_SESSION_STOP = "timekeeping:work_session:stop";
 
+    /**
+     * Requesting a fleet payment authorization, and reading its status.
+     *
+     * <p>Requesting is its own permission rather than folded into general workorder editing: it
+     * reaches another domain and can affect whether a job may start, and the people who may
+     * investigate a stuck authorization are not necessarily the people who may edit a workorder.
+     */
+    public static final String FLEET_AUTHORIZATION_REQUEST = "workorder:fleet_auth:request";
+
+    /**
+     * Resolving a fleet payment authorization that did not come back granted.
+     *
+     * <p>Separate from requesting, per the domain ruling that a refusal is resolved explicitly by an
+     * advisor selecting revised scope or cancellation, each needing its own permission and audit
+     * record.
+     */
+    public static final String FLEET_AUTHORIZATION_RESOLVE = "workorder:fleet_auth:resolve";
+
     private WorkorderPermissions() {
         // Utility class - prevent instantiation
     }

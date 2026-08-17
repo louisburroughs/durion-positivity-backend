@@ -32,8 +32,8 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
-    private static final int EXPECTED_PERMISSION_COUNT = 466;
-    private static final int EXPECTED_CATALOG_VERSION = 55;
+    private static final int EXPECTED_PERMISSION_COUNT = 468;
+    private static final int EXPECTED_CATALOG_VERSION = 56;
 
     // -------------------------------------------------------------------------
     // AC-1: Catalog size — EXPECTED_PERMISSION_COUNT entries

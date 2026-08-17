@@ -86,8 +86,23 @@ pos:
     service-id: ${POS_DOCUMENTS_SERVICE_ID:documents}
 
 workorder:
+  fleetauth:
+    # How long a job's held resources (a technician assignment) survive an unresolved fleet
+    # payment authorization before they are released. Configurable because the domain ruled retry,
+    # timeout and escalation rules differ by deployment -- a shop with tight bay capacity wants a
+    # short grace period, one with slack wants a long one.
+    resource-release-after: ${WORKORDER_FLEETAUTH_RESOURCE_RELEASE_AFTER:PT4H}
+    resource-release-interval-ms: ${WORKORDER_FLEETAUTH_RESOURCE_RELEASE_INTERVAL_MS:900000}
+    resource-release-batch-size: ${WORKORDER_FLEETAUTH_RESOURCE_RELEASE_BATCH_SIZE:50}
   kafka:
     enabled: ${WORKORDER_KAFKA_ENABLED:false}
+    # Fleet payment authorization (#1346): decisions from pos-supplier, vehicle identity from
+    # pos-vehicle-inventory (ADR-0044 R3), and the delayed release of resources held by a job
+    # blocked on an unresolved authorization.
+    supplier-events-topic: ${WORKORDER_SUPPLIER_EVENTS_TOPIC:supplier.events.v1}
+    supplier-events-consumer-group: ${WORKORDER_SUPPLIER_EVENTS_CONSUMER_GROUP:pos-workorder-supplier-events}
+    vehicle-events-topic: ${WORKORDER_VEHICLE_EVENTS_TOPIC:vehicle.events.v1}
+    vehicle-events-consumer-group: ${WORKORDER_VEHICLE_EVENTS_CONSUMER_GROUP:pos-workorder-vehicle-events}
     events-topic: ${WORKORDER_KAFKA_EVENTS_TOPIC:workorder.events.v1}
     # People replicas (ADR-0044 §6, #877)
     people-contact-events-topic: ${WORKORDER_PC_EVENTS_TOPIC:people-contact.events.v1}

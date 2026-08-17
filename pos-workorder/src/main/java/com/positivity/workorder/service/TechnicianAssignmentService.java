@@ -23,6 +23,18 @@ public interface TechnicianAssignmentService {
             @Nullable String notes);
 
     @NonNull
+    /**
+     * Releases the current technician assignment without creating a new one.
+     *
+     * <p>Distinct from {@link #reassignTechnician}, which always names a replacement: this is for
+     * freeing capacity a job cannot currently use — a workorder blocked on an unresolved fleet
+     * payment authorization, for instance — where there is nothing to reassign to yet.
+     *
+     * @return the released assignment, or empty when there was no current assignment
+     */
+    Optional<TechnicianAssignment> releaseAssignment(
+            @NonNull UUID workorderId, @NonNull String releasedBy, @Nullable String reason);
+
     Optional<TechnicianAssignment> getCurrentAssignment(@NonNull UUID workorderId);
 
     @NonNull

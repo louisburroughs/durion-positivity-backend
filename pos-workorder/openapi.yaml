@@ -48,6 +48,8 @@ tags:
   description: Endpoints for assigning technicians to workorders
 - name: Change Request API
   description: Endpoints for managing additional work requests and approvals
+- name: Workorder Fleet Authorization
+  description: Fleet payment authorization for a workorder
 - name: Estimate API
   description: Endpoints for estimate management and approval workflow
 - name: WIP Dashboard
@@ -1912,6 +1914,115 @@ paths:
         - workorder:workorder:generate_invoice
       x-required-permissions:
       - workorder:workorder:generate_invoice
+  /v1/workorders/{workorderId}/fleet-authorization/resolution:
+    post:
+      tags:
+      - Workorder Fleet Authorization
+      summary: Resolve A Refused Fleet Payment Authorization
+      description: 'Records what an advisor decided to do about a fleet payment authorization that did not come back granted: revise the scope and try again, or cancel and find another payer.
+
+        Use this tool after a fleet program refuses payment or no answer could be obtained; do not use it to select a different payer directly, because that needs a payer model this endpoint does not have -- cancel here and record the new payer through whatever assigns one.
+
+        Preconditions: an authorization must be recorded for this workorder and must not already be GRANTED.
+
+        Required inputs: workorderId path parameter; resolution (SCOPE_REVISED or CANCELLED) and reason in the request body.
+
+        Emits a WORKORDER_FLEET_AUTHORIZATION_RESOLVE event.
+
+        Returns 200 with the authorization, 404 when none is recorded for this workorder, and 409 when the recorded authorization is already GRANTED and needs no resolution.
+
+        '
+      operationId: resolveWorkorderFleetAuthorization
+      parameters:
+      - name: workorderId
+        in: path
+        description: Workorder whose authorization is being resolved
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: What the advisor decided to do about the refusal, and why. Do not use this to select a different payer directly, because that needs a payer model this endpoint does not have -- use CANCELLED here and record the new payer through whatever assigns one instead.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FleetAuthorizationResolutionRequest'
+            examples:
+              Scope revised to fit fleet coverage:
+                description: Scope revised to fit fleet coverage
+                value:
+                  resolution: SCOPE_REVISED
+                  reason: Customer approved a reduced scope the fleet will cover
+        required: true
+      responses:
+        '200':
+          description: The resolved authorization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FleetAuthorizationView'
+        '404':
+          description: No fleet payment authorization is recorded for this workorder
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: The recorded authorization is already GRANTED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - workorder:fleet_auth:resolve
+      x-required-permissions:
+      - workorder:fleet_auth:resolve
+  /v1/workorders/{workorderId}/fleet-authorization/requests:
+    post:
+      tags:
+      - Workorder Fleet Authorization
+      summary: Request Or Re-Request Fleet Payment Authorization
+      description: 'Asks this workorder''s payer''s fleet program to authorize paying for it. The same endpoint that fires automatically on approval; calling it again is how an advisor retries after fixing whatever blocked the first attempt, such as a missing vehicle identity.
+
+        Use this tool to retry a stuck authorization; do not call it while one is already PENDING or GRANTED, because it will not re-ask in either case and asking a fleet twice for the same workorder risks opening a second authorization at the vendor.
+
+        Preconditions: this workorder''s payer must require fleet authorization; there is nothing to request otherwise.
+
+        Required inputs: workorderId path parameter.
+
+        Emits a WORKORDER_FLEET_AUTHORIZATION_REQUEST event, and where a vehicle can be identified, a workorder.fleetauth.requested command for pos-supplier to act on.
+
+        Returns 200 with the authorization, whose status is PENDING when the vendor was asked, or MANUAL_REVIEW when no vehicle could be identified so nobody was asked; and 404 when this workorder''s payer does not require fleet authorization.
+
+        '
+      operationId: requestWorkorderFleetAuthorization
+      parameters:
+      - name: workorderId
+        in: path
+        description: Workorder to request authorization for
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The authorization as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FleetAuthorizationView'
+        '404':
+          description: This workorder's payer does not require fleet authorization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - workorder:fleet_auth:request
+      x-required-permissions:
+      - workorder:fleet_auth:request
   /v1/workorders/{workorderId}/complete:
     post:
       tags:
@@ -4703,6 +4814,51 @@ paths:
         - workorder:labor:view
       x-required-permissions:
       - workorder:labor:view
+  /v1/workorders/{workorderId}/fleet-authorization:
+    get:
+      tags:
+      - Workorder Fleet Authorization
+      summary: Read A Workorder's Fleet Payment Authorization
+      description: 'Returns the fleet payment authorization recorded for a workorder, including the vendor''s own reason where it gave one.
+
+        Use this tool to check why a fleet-covered workorder cannot start, or whether a re-request has been answered; do not use it to decide whether work may start, because startWorkorder enforces that itself and will refuse a start this endpoint would not have blocked.
+
+        Preconditions: none.
+
+        Required inputs: workorderId path parameter.
+
+        Emits a WORKORDER_FLEET_AUTHORIZATION_READ event.
+
+        Returns 200 with the authorization, and 404 when this workorder''s payer requires none or none has ever been requested.
+
+        '
+      operationId: getWorkorderFleetAuthorization
+      parameters:
+      - name: workorderId
+        in: path
+        description: Workorder the authorization concerns
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The recorded authorization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FleetAuthorizationView'
+        '404':
+          description: No fleet payment authorization is recorded for this workorder
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - workorder:fleet_auth:request
+      x-required-permissions:
+      - workorder:fleet_auth:request
   /v1/workorders/{workorderId}/detail:
     get:
       tags:
@@ -6918,6 +7074,57 @@ components:
       - taxAmount
       - totalAmount
       - workorderId
+    FleetAuthorizationResolutionRequest:
+      type: object
+      description: An advisor's resolution of a refused or unresolvable fleet payment authorization
+      properties:
+        resolution:
+          type: string
+          description: What the advisor decided
+          enum:
+          - SCOPE_REVISED
+          - CANCELLED
+        reason:
+          type: string
+          description: Why, for the audit record
+          example: Customer approved a reduced scope the fleet will cover
+          minLength: 1
+      required:
+      - reason
+      - resolution
+    FleetAuthorizationView:
+      type: object
+      description: A workorder's fleet payment authorization
+      properties:
+        workorderId:
+          type: string
+          format: uuid
+        supplierRef:
+          type: string
+        status:
+          type: string
+        vendorReasonCode:
+          type: string
+        vendorReasonText:
+          type: string
+        reviewReason:
+          type: string
+        contractReference:
+          type: string
+        authorizedAmount:
+          type: number
+        currency:
+          type: string
+        resolution:
+          type: string
+        resolutionReason:
+          type: string
+        requestedAt:
+          type: string
+          format: date-time
+        decidedAt:
+          type: string
+          format: date-time
     CompleteWorkorderRequest:
       type: object
       description: Request payload to complete a workorder

@@ -46,6 +46,7 @@ public class WorkorderStateMachine {
     private final WorkorderServiceRepository workorderServiceRepository;
     private final WorkorderPartRepository workorderPartRepository;
     private final ChangeRequestRepository changeRequestRepository;
+    private final FleetAuthorizationService fleetAuthorizationService;
     private final AuditEventRepository auditEventRepository;
     private final ObjectMapper objectMapper;
     private final ChangeRequestService changeRequestService;
@@ -292,6 +293,12 @@ public class WorkorderStateMachine {
                     "Workorder %s cannot be started. There are %s pending change request(s) awaiting approval",
                     workorderId, pendingApprovalRequests.size()));
         }
+
+        // Fleet payment authorization (#1346). Enforced here rather than in a controller so the rule
+        // holds however work is started, and with no override: the domain ruled that nobody may
+        // begin work while a required authorization is unresolved, and that no existing role may
+        // bypass it. A financial-risk override was considered and declined.
+        fleetAuthorizationService.assertMayStart(workorderId);
 
         captureSnapshot(workorder, actorId, "WORK_START", reason);
 

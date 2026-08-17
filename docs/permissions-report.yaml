@@ -1,9 +1,9 @@
-generatedAt: "2026-08-17T01:13:23.631215+00:00"
+generatedAt: "2026-08-17T14:44:05.196073+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 431
-  uniquePermissionCount: 431
+  permissionCount: 433
+  uniquePermissionCount: 433
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -926,7 +926,7 @@ manifests:
     domain: "workorder"
     serviceName: "pos-workorder"
     version: "1.0"
-    permissionCount: 51
+    permissionCount: 53
     permissions:
       - name: "workorder:approval_config:create"
         description: "Create approval configurations"
@@ -1030,6 +1030,10 @@ manifests:
         description: "Start work on workorders"
       - name: "workorder:workorder:view"
         description: "View workorders"
+      - name: "workorder:fleet_auth:request"
+        description: "Request or re-request a fleet payment authorization for a workorder"
+      - name: "workorder:fleet_auth:resolve"
+        description: "Resolve a fleet payment authorization that was refused, by revising scope or cancelling"
 permissions:
   - name: "accounting:ap:pay"
     description: "Process payments"
@@ -3469,6 +3473,18 @@ permissions:
     source: "pos-workorder/src/main/resources/permissions.yaml"
   - name: "workorder:events:replay"
     description: "Re-emit published domain events from the outbox (replica seeding and drift repair)"
+    domain: "workorder"
+    serviceName: "pos-workorder"
+    module: "pos-workorder"
+    source: "pos-workorder/src/main/resources/permissions.yaml"
+  - name: "workorder:fleet_auth:request"
+    description: "Request or re-request a fleet payment authorization for a workorder"
+    domain: "workorder"
+    serviceName: "pos-workorder"
+    module: "pos-workorder"
+    source: "pos-workorder/src/main/resources/permissions.yaml"
+  - name: "workorder:fleet_auth:resolve"
+    description: "Resolve a fleet payment authorization that was refused, by revising scope or cancelling"
     domain: "workorder"
     serviceName: "pos-workorder"
     module: "pos-workorder"

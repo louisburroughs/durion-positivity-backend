@@ -81,6 +81,7 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final IdempotencyService idempotencyService;
     private final PromotionValidationService promotionValidationService;
     private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
+    private final FleetAuthorizationService fleetAuthorizationService;
 
     @Override
     public List<Workorder> getAllWorkorders() {
@@ -517,6 +518,13 @@ public class WorkorderServiceImpl implements WorkorderService {
         log.info("Workorder {} approved by customer {} with signature capture", workorderId, customerId);
         Workorder saved = workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(saved.getId());
+
+        // Fleet payment authorization (#1346): requested automatically on approval when this
+        // workorder's payer requires one, so an advisor is not the only path to a request ever
+        // being sent. A no-op for every non-fleet workorder, and a no-op again if this workorder
+        // was already asked -- requestAuthorization does not re-ask a granted or pending one.
+        fleetAuthorizationService.requestAuthorization(saved.getId());
+
         return saved;
     }
 
