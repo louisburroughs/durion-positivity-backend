@@ -106,7 +106,7 @@ public class PriceCatalogImporter implements SupplierPriceCatalogPort {
 
         PricatDocument document;
         try {
-            document = readCatalogue(binding, codec, billing, importManifestId);
+            document = readCatalogue(binding, codec, billing);
         } catch (PriceCatalogFetchException e) {
             // Recorded rather than raised: an import run is scheduled work, and an operator needs
             // the manifest row saying this vendor was asked and did not answer usably.
@@ -279,15 +279,14 @@ public class PriceCatalogImporter implements SupplierPriceCatalogPort {
      * of those is worth anybody's attention.
      */
     @Override
-    public SupplierPriceCatalogPort.@NonNull Fetched fetchPriceCatalog(
-            @NonNull SupplierRef supplierRef, @NonNull UUID importManifestId) {
+    public SupplierPriceCatalogPort.@NonNull Fetched fetchPriceCatalog(@NonNull SupplierRef supplierRef) {
         ResolvedBinding binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.PRICE_CATALOG);
         EdiwheelB40PricatCodec codec = SupplierCodecs.require(
                 adapterRegistry, binding, SupplierCapability.PRICE_CATALOG, EdiwheelB40PricatCodec.class);
         SupplierAccountEntity billing =
                 profileResolver.resolvePartyContext(supplierRef, null).billing();
 
-        PricatDocument document = readCatalogue(binding, codec, billing, importManifestId);
+        PricatDocument document = readCatalogue(binding, codec, billing);
         return new SupplierPriceCatalogPort.Fetched(
                 document.entries(),
                 document.rejectedLines().stream()
@@ -312,8 +311,7 @@ public class PriceCatalogImporter implements SupplierPriceCatalogPort {
     private PricatDocument readCatalogue(
             @NonNull ResolvedBinding binding,
             @NonNull EdiwheelB40PricatCodec codec,
-            @NonNull SupplierAccountEntity billing,
-            @NonNull UUID importManifestId) {
+            @NonNull SupplierAccountEntity billing) {
         PartyContext partyContext = new PartyContext(billing.getAccountNumber(), billing.getAgencyCode(), null);
         SupplierRequestSpec spec = codec.buildRequest(partyContext, null);
         SupplierHttpResponse response = baseClient.exchange(SupplierRequests.toHttpRequest(binding, spec));
@@ -323,7 +321,7 @@ public class PriceCatalogImporter implements SupplierPriceCatalogPort {
                     + (response.failureDetail() == null ? "" : " — " + response.failureDetail()));
         }
         try {
-            return codec.decode(response.body(), importManifestId);
+            return codec.decode(response.body());
         } catch (PricatDecodeException e) {
             throw new PriceCatalogFetchException(e.getMessage(), e);
         }

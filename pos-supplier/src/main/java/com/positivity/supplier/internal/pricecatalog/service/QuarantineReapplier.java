@@ -189,7 +189,6 @@ public class QuarantineReapplier {
                 line.getCurrency(),
                 line.getSourceDocumentId(),
                 line.getSourceDocumentDate(),
-                line.getImportManifestId(),
                 line.getPositionNumber());
     }
 

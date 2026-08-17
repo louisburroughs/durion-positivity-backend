@@ -75,7 +75,6 @@ class PriceCatalogMatchingTest {
                 "SEK",
                 "DOC-1",
                 LocalDate.of(2026, 1, 1),
-                MANIFEST_ID,
                 position);
     }
 

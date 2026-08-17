@@ -14,7 +14,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -103,13 +102,12 @@ public class EdiwheelB40PricatCodec implements SupplierAdapterCodec {
      * decoded.
      *
      * @param body             response body as received
-     * @param importManifestId the import this decode belongs to; stamped on every entry
      * @return the decoded document; never null, and never partially silent
      * @throws PricatDecodeException when the body is not a PRICAT document at all, or the vendor
      *                               signalled a document-level error code
      */
     @NonNull
-    public PricatDocument decode(@Nullable String body, @NonNull UUID importManifestId) {
+    public PricatDocument decode(@Nullable String body) {
         if (body == null || body.isBlank()) {
             throw new PricatDecodeException("PRICAT response body was empty");
         }
@@ -146,7 +144,7 @@ public class EdiwheelB40PricatCodec implements SupplierAdapterCodec {
                 continue;
             }
             try {
-                entries.add(toEntry(article, documentId, documentDate, countryCode, currency, importManifestId));
+                entries.add(toEntry(article, documentId, documentDate, countryCode, currency));
             } catch (IllegalArgumentException e) {
                 rejected.add(new PricatDocument.RejectedLine(
                         article.pos(),
@@ -164,8 +162,7 @@ public class EdiwheelB40PricatCodec implements SupplierAdapterCodec {
             String documentId,
             LocalDate documentDate,
             String countryCode,
-            String currency,
-            UUID importManifestId) {
+            String currency) {
         BigDecimal netPrice = parseAmount(article.netValue(), "netValue");
         BigDecimal grossPrice = parseAmount(article.grossPrice(), "grossPrice");
         LocalDate netFrom = parseVendorDate(article.netValueValidFrom(), "netValueValidFrom");
@@ -200,7 +197,6 @@ public class EdiwheelB40PricatCodec implements SupplierAdapterCodec {
                 currency,
                 documentId,
                 documentDate,
-                importManifestId,
                 article.pos());
     }
 
