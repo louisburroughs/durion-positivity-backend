@@ -78,7 +78,7 @@ class WorkorderAuthorizationPollerTest {
     private SupplierBaseClient baseClient;
 
     @Mock
-    private WorkorderAuthorizationRunner runner;
+    private WorkorderAuthorizationTransactions transactions;
 
     @Captor
     private ArgumentCaptor<SupplierHttpRequest> requestCaptor;
@@ -92,7 +92,7 @@ class WorkorderAuthorizationPollerTest {
                 profileResolver,
                 adapterRegistry,
                 baseClient,
-                runner,
+                transactions,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 50,
                 PENDING_TIMEOUT);
@@ -116,7 +116,7 @@ class WorkorderAuthorizationPollerTest {
 
         poller.pollPendingAuthorizations();
 
-        verify(runner).parkForReview(any(), contains("did not decide within"));
+        verify(transactions).parkForReview(any(), contains("did not decide within"));
         verify(baseClient, never()).exchange(any());
     }
 
@@ -127,7 +127,7 @@ class WorkorderAuthorizationPollerTest {
 
         poller.pollPendingAuthorizations();
 
-        verify(runner).parkForReview(any(), contains("no poll location"));
+        verify(transactions).parkForReview(any(), contains("no poll location"));
         verify(baseClient, never()).exchange(any());
     }
 
@@ -172,7 +172,7 @@ class WorkorderAuthorizationPollerTest {
 
         poller.pollPendingAuthorizations();
 
-        verify(runner).applyDecision(any(), any());
+        verify(transactions).applyDecision(any(), any());
     }
 
     @Test
@@ -187,8 +187,8 @@ class WorkorderAuthorizationPollerTest {
         poller.pollPendingAuthorizations();
 
         assertThat(row.getStatus()).isEqualTo(WorkorderAuthorizationStatus.PENDING);
-        verify(runner, never()).applyDecision(any(), any());
-        verify(runner, never()).parkForReview(any(), any());
+        verify(transactions, never()).applyDecision(any(), any());
+        verify(transactions, never()).parkForReview(any(), any());
     }
 
     @Test
@@ -204,7 +204,7 @@ class WorkorderAuthorizationPollerTest {
 
         poller.pollPendingAuthorizations();
 
-        verify(runner).parkForReview(any(), contains("partnerId"));
+        verify(transactions).parkForReview(any(), contains("partnerId"));
         verify(baseClient, never()).exchange(any());
     }
 

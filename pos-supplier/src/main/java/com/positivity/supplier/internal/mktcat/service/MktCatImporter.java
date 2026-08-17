@@ -318,10 +318,11 @@ public class MktCatImporter implements SupplierCatalogPort {
 
     @NonNull
     private static String bodyOrThrow(@NonNull SupplierHttpResponse response, @NonNull String what) {
-        if (!response.isSuccess() || response.body() == null) {
+        String body = response.body();
+        if (!response.isSuccess() || body == null) {
             throw new MktCatImportException(what + " could not be read: " + response.outcome());
         }
-        return response.body();
+        return body;
     }
 
     @Nullable

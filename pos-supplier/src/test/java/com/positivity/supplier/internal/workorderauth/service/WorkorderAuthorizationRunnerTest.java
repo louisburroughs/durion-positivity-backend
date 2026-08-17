@@ -82,13 +82,13 @@ class WorkorderAuthorizationRunnerTest {
 
     @BeforeEach
     void setUp() {
+        // A real WorkorderAuthorizationTransactions, not a mock: it holds the row-status logic these
+        // tests exercise, and it is a separate bean only so @Transactional applies (self-invocation
+        // from within WorkorderAuthorizationRunner used to bypass it -- SonarCloud java:S2229).
+        WorkorderAuthorizationTransactions transactions = new WorkorderAuthorizationTransactions(
+                authorizationRepository, publisher, Clock.fixed(NOW, ZoneOffset.UTC));
         runner = new WorkorderAuthorizationRunner(
-                profileResolver,
-                adapterRegistry,
-                baseClient,
-                authorizationRepository,
-                publisher,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                profileResolver, adapterRegistry, baseClient, authorizationRepository, transactions);
 
         when(profileResolver.resolveBinding(any(), any())).thenReturn(binding());
         when(adapterRegistry.resolve(any(), any(), any()))
