@@ -5,11 +5,13 @@ import com.positivity.catalog.internal.entity.ProductEntity;
 import com.positivity.catalog.internal.entity.ProductStatus;
 import com.positivity.catalog.internal.entity.ProductTrackingLevel;
 import com.positivity.catalog.internal.entity.SubstitutionGroupMemberEntity;
+import com.positivity.catalog.internal.entity.SupplierArticleCodeEntity;
 import com.positivity.catalog.internal.repository.ProductUomRepository;
 import com.positivity.catalog.internal.repository.SubstitutionGroupMemberRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.catalog.ProductUpdatedV1;
+import com.positivity.domainevents.catalog.SupplierArticleCodeUpdatedV1;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
@@ -106,6 +108,41 @@ public class CatalogFactPublisher {
                 clock);
         writer.publish(DomainTopics.events("catalog"), envelope);
         log.debug("Queued catalog.product.updated productId={} sku={}", product.getId(), product.getSku());
+    }
+
+    /**
+     * Emits {@code catalog.supplier_article_code.updated} for one vendor+product pair (CAP-320
+     * #1347). Called after {@code entry} is persisted, so {@code updatedAt} is already stamped by
+     * auditing and can carry the same monotonic epoch-millis version scheme as
+     * {@link #publishProductUpdated}.
+     */
+    public void publishSupplierArticleCodeUpdated(@NonNull SupplierArticleCodeEntity entry) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        long aggregateVersion =
+                entry.getUpdatedAt() == null ? 0L : entry.getUpdatedAt().toEpochMilli();
+        SupplierArticleCodeUpdatedV1 payload = new SupplierArticleCodeUpdatedV1(
+                entry.getVendorProfileId(),
+                entry.getSupplierRef(),
+                entry.getProductId(),
+                entry.getSupplierArticleCode());
+        DomainEventEnvelope<SupplierArticleCodeUpdatedV1> envelope = DomainEventEnvelope.of(
+                SupplierArticleCodeUpdatedV1.EVENT_TYPE,
+                SupplierArticleCodeUpdatedV1.SCHEMA_VERSION,
+                entry.getProductId(),
+                aggregateVersion,
+                "pos-catalog",
+                null,
+                null,
+                payload,
+                clock);
+        writer.publish(DomainTopics.events("catalog"), envelope);
+        log.debug(
+                "Queued catalog.supplier_article_code.updated productId={} vendorProfileId={}",
+                entry.getProductId(),
+                entry.getVendorProfileId());
     }
 
     private @Nullable List<ProductUpdatedV1.UomConversion> uomConversionsOf(UUID productId) {

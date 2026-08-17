@@ -6,6 +6,7 @@ import com.positivity.domainevents.supplier.SupplierOrderRequestedLine;
 import com.positivity.domainevents.supplier.SupplierOrderRequestedV1;
 import com.positivity.order.internal.config.OutboxEventWriter;
 import com.positivity.order.internal.entity.ExtProductCode;
+import com.positivity.order.internal.entity.ExtSupplierArticleCode;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
@@ -13,6 +14,7 @@ import com.positivity.order.internal.enums.TransmissionState;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderNotTransmittableException;
 import com.positivity.order.internal.repository.ExtProductCodeRepository;
+import com.positivity.order.internal.repository.ExtSupplierArticleCodeRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
@@ -58,6 +60,7 @@ public class PurchaseOrderTransmissionService {
 
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final ExtProductCodeRepository extProductCodeRepository;
+    private final ExtSupplierArticleCodeRepository extSupplierArticleCodeRepository;
     /**
      * Optional because the outbox is not wired in every deployment — but unlike a fact publisher,
      * absence here is fatal rather than inert. Silently publishing nothing would leave the order
@@ -169,6 +172,10 @@ public class PurchaseOrderTransmissionService {
      * <p>A line whose article cannot be identified refuses the whole transmission. Withholding it
      * instead would send an order that silently differs from the one on screen, and the difference
      * would surface as a short delivery weeks later rather than as a question now.
+     *
+     * <p>Both an EAN and the vendor's own article code may travel on the same line (CAP-320 #1347);
+     * neither is invented when absent. A vendor that carries no EAN is unidentifiable until its own
+     * article code replicates, not before — sending a fabricated EAN would name the wrong article.
      */
     private List<SupplierOrderRequestedLine> resolveLines(PurchaseOrderEntity order) {
         List<SupplierOrderRequestedLine> resolved = new ArrayList<>();
@@ -180,7 +187,8 @@ public class PurchaseOrderTransmissionService {
                         PurchaseOrderLineEntity::getLineNumber, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList()) {
             String ean = eanFor(line);
-            if (ean == null) {
+            String supplierArticleCode = supplierArticleCodeFor(order.getSupplierRef(), line);
+            if (ean == null && supplierArticleCode == null) {
                 unidentifiable.add(line.getLineNumber());
                 continue;
             }
@@ -196,7 +204,7 @@ public class PurchaseOrderTransmissionService {
             resolved.add(new SupplierOrderRequestedLine(
                     line.getLineNumber() == null ? 0 : line.getLineNumber(),
                     ean,
-                    null,
+                    supplierArticleCode,
                     whole,
                     order.getExpectedDeliveryDate()));
         }
@@ -235,6 +243,18 @@ public class PurchaseOrderTransmissionService {
                 .findById(line.getSkuId())
                 .filter(code -> EAN.equalsIgnoreCase(code.getCodeType()))
                 .map(ExtProductCode::getCode)
+                .filter(code -> !code.isBlank())
+                .orElse(null);
+    }
+
+    /** The vendor's own article code for this line's product, when this replica holds one (CAP-320 #1347). */
+    private String supplierArticleCodeFor(String supplierRef, PurchaseOrderLineEntity line) {
+        if (line.getSkuId() == null || supplierRef == null || supplierRef.isBlank()) {
+            return null;
+        }
+        return extSupplierArticleCodeRepository
+                .findBySupplierRefAndProductId(supplierRef, line.getSkuId())
+                .map(ExtSupplierArticleCode::getSupplierArticleCode)
                 .filter(code -> !code.isBlank())
                 .orElse(null);
     }

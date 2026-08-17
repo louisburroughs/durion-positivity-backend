@@ -259,6 +259,8 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog-items~1{type}~1{catalogId}
   /v1/catalog/bulk-ingest:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1bulk-ingest
+  /v1/catalog/supplier-article-codes/replay:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1supplier-article-codes~1replay
   /v1/catalog/supplier-prices/history:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1supplier-prices~1history
   /v1/catalog/supplier-prices/imports/incomplete:

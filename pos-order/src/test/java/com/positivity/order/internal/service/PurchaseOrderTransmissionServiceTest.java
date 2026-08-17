@@ -12,12 +12,14 @@ import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.supplier.SupplierOrderRequestedV1;
 import com.positivity.order.internal.config.OutboxEventWriter;
 import com.positivity.order.internal.entity.ExtProductCode;
+import com.positivity.order.internal.entity.ExtSupplierArticleCode;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.enums.TransmissionState;
 import com.positivity.order.internal.exception.PurchaseOrderNotTransmittableException;
 import com.positivity.order.internal.repository.ExtProductCodeRepository;
+import com.positivity.order.internal.repository.ExtSupplierArticleCodeRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -64,6 +66,9 @@ class PurchaseOrderTransmissionServiceTest {
     private ExtProductCodeRepository extProductCodeRepository;
 
     @Mock
+    private ExtSupplierArticleCodeRepository extSupplierArticleCodeRepository;
+
+    @Mock
     private OutboxEventWriter outboxEventWriter;
 
     @Mock
@@ -74,7 +79,11 @@ class PurchaseOrderTransmissionServiceTest {
     @BeforeEach
     void setUp() {
         service = new PurchaseOrderTransmissionService(
-                purchaseOrderRepository, extProductCodeRepository, outboxProvider, Clock.fixed(NOW, ZoneOffset.UTC));
+                purchaseOrderRepository,
+                extProductCodeRepository,
+                extSupplierArticleCodeRepository,
+                outboxProvider,
+                Clock.fixed(NOW, ZoneOffset.UTC));
         when(outboxProvider.getIfAvailable()).thenReturn(outboxEventWriter);
         when(extProductCodeRepository.findById(SKU_ID))
                 .thenReturn(Optional.of(ExtProductCode.builder()
@@ -84,6 +93,8 @@ class PurchaseOrderTransmissionServiceTest {
                         .aggregateVersion(1L)
                         .updatedAt(NOW)
                         .build()));
+        when(extSupplierArticleCodeRepository.findBySupplierRefAndProductId(any(), any()))
+                .thenReturn(Optional.empty());
     }
 
     private PurchaseOrderEntity order(PurchaseOrderStatus status, TransmissionState transmissionState) {
@@ -257,6 +268,54 @@ class PurchaseOrderTransmissionServiceTest {
         assertThatThrownBy(() -> service.requestTransmission(PO_ID, ACTOR))
                 .isInstanceOf(PurchaseOrderNotTransmittableException.class)
                 .hasMessageContaining("ARTICLE_NOT_IDENTIFIABLE");
+    }
+
+    @Test
+    @DisplayName("the vendor's own article code alone identifies a line with no EAN (CAP-320 #1347)")
+    void supplierArticleCodeAloneIdentifiesTheLine() {
+        order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_TRANSMITTED);
+        when(extProductCodeRepository.findById(SKU_ID)).thenReturn(Optional.empty());
+        when(extSupplierArticleCodeRepository.findBySupplierRefAndProductId("acme-parts", SKU_ID))
+                .thenReturn(Optional.of(ExtSupplierArticleCode.builder()
+                        .supplierRef("acme-parts")
+                        .vendorProfileId(UUID.randomUUID())
+                        .productId(SKU_ID)
+                        .supplierArticleCode("ACME-9911")
+                        .aggregateVersion(1L)
+                        .updatedAt(NOW)
+                        .build()));
+
+        // A vendor that carries no EAN cannot be transmitted to at all without this — the whole
+        // reason this replica exists.
+        service.requestTransmission(PO_ID, ACTOR);
+
+        assertThat(published().lines()).singleElement().satisfies(line -> {
+            assertThat(line.articleEan()).isNull();
+            assertThat(line.supplierArticleCode()).isEqualTo("ACME-9911");
+        });
+    }
+
+    @Test
+    @DisplayName("both identifiers travel together when both are known")
+    void bothIdentifiersAreSentWhenBothArePresent() {
+        order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_TRANSMITTED);
+        when(extSupplierArticleCodeRepository.findBySupplierRefAndProductId("acme-parts", SKU_ID))
+                .thenReturn(Optional.of(ExtSupplierArticleCode.builder()
+                        .supplierRef("acme-parts")
+                        .vendorProfileId(UUID.randomUUID())
+                        .productId(SKU_ID)
+                        .supplierArticleCode("ACME-9911")
+                        .aggregateVersion(1L)
+                        .updatedAt(NOW)
+                        .build()));
+
+        service.requestTransmission(PO_ID, ACTOR);
+
+        // Neither is invented and neither is dropped when the other is present.
+        assertThat(published().lines()).singleElement().satisfies(line -> {
+            assertThat(line.articleEan()).isEqualTo("5012345678900");
+            assertThat(line.supplierArticleCode()).isEqualTo("ACME-9911");
+        });
     }
 
     @Test

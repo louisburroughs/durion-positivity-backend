@@ -16,6 +16,8 @@ tags:
   description: Unit of measure conversion API
 - name: Catalog Bulk Ingest API
   description: Bulk import catalog products
+- name: Supplier Article Codes
+  description: Replay of vendor-specific article-code facts derived from PRICAT imports, for seeding or repairing consumer replicas such as pos-order's purchase-order transmission.
 - name: Products API
   description: API for products, lifecycle, and pricing
 - name: Item Cost API
@@ -2391,6 +2393,69 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CatalogDto'
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_EDIT
+  /v1/catalog/supplier-article-codes/replay:
+    post:
+      tags:
+      - Supplier Article Codes
+      summary: Re-emit Vendor Article Code Facts for Replica Consumers
+      description: 'Re-publishes catalog.supplier_article_code.updated facts for one bounded page of vendor-article-code rows so that event-fed replicas in other modules can be seeded or repaired, returning what it emitted and a cursor for the next page.
+
+        Use this tool to fill a consumer''s replica after a first deployment or a consumer outage longer than broker retention; do not use it to fix one row, which republishes itself on its next PRICAT import.
+
+        Preconditions: Kafka publication must be enabled, or the facts queue in the outbox and reach nobody; replayed facts are indistinguishable from live ones, so consumers apply them through their normal path and their stale guard prevents an older fact regressing newer state.
+
+        Required inputs: none; afterId resumes a previous page, updatedSince restricts to rows changed at or after an instant, and limit bounds the page at 1000.
+
+        Emits a CATALOG_SUPPLIER_ARTICLE_CODE_REPLAY event and queues one fact per row in the page; no catalog state changes.
+
+        Returns 200 with complete=true and a null cursor once the table end is reached, and 400 when limit is out of range or a parameter is malformed.
+
+        '
+      operationId: replaySupplierArticleCodeFacts
+      parameters:
+      - name: afterId
+        in: query
+        description: Resume cursor from a previous call; omit to start at the beginning.
+        required: false
+        schema:
+          type: string
+          format: uuid
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+      - name: updatedSince
+        in: query
+        description: Restrict to rows changed at or after this instant; omit to replay all.
+        required: false
+        schema:
+          type: string
+          format: date-time
+          example: 2026-08-01 00:00:00+00:00
+      - name: limit
+        in: query
+        description: Maximum facts to emit in this call, 1-1000.
+        required: false
+        schema:
+          type: integer
+          default: 500
+          example: 500
+          maximum: 1000
+          minimum: 1
+      responses:
+        '200':
+          description: What this page emitted and where to resume.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierArticleCodeReplayResultDto'
+        '400':
+          description: A parameter is malformed or the limit is out of range.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -5247,6 +5312,32 @@ components:
       required:
       - field
       - message
+    SupplierArticleCodeReplayResultDto:
+      type: object
+      description: Outcome of one page of a vendor-article-code fact replay.
+      properties:
+        emitted:
+          type: integer
+          format: int32
+          description: Facts published by this call.
+          example: 500
+        nextAfterId:
+          type: string
+          format: uuid
+          description: Cursor for the next page; null when the table end was reached.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        complete:
+          type: boolean
+          description: True when no further pages remain for this filter.
+          example: false
+        updatedSince:
+          type: string
+          format: date-time
+          description: The updatedSince filter this page ran under, echoed back.
+        startedAt:
+          type: string
+          format: date-time
+          description: When this page began.
     BulkIngestRequestCatalogBulkIngestRecord:
       type: object
       description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
@@ -6077,13 +6168,13 @@ components:
         offset:
           type: integer
           format: int64
+        sort:
+          $ref: '#/components/schemas/SortObject'
         paged:
           type: boolean
         pageNumber:
           type: integer
           format: int32
-        sort:
-          $ref: '#/components/schemas/SortObject'
         pageSize:
           type: integer
           format: int32

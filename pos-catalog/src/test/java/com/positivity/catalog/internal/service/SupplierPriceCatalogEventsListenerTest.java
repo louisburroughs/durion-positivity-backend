@@ -9,12 +9,15 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.catalog.internal.config.CatalogFactPublisher;
 import com.positivity.catalog.internal.config.OutboxEventWriter;
 import com.positivity.catalog.internal.entity.ProcessedEvent;
+import com.positivity.catalog.internal.entity.SupplierArticleCodeEntity;
 import com.positivity.catalog.internal.entity.SupplierPriceEntryEntity;
 import com.positivity.catalog.internal.entity.SupplierPriceImportChunkEntity;
 import com.positivity.catalog.internal.entity.SupplierPriceImportEntity;
 import com.positivity.catalog.internal.repository.ProcessedEventRepository;
+import com.positivity.catalog.internal.repository.SupplierArticleCodeRepository;
 import com.positivity.catalog.internal.repository.SupplierPriceEntryRepository;
 import com.positivity.catalog.internal.repository.SupplierPriceImportChunkRepository;
 import com.positivity.catalog.internal.repository.SupplierPriceImportRepository;
@@ -63,6 +66,12 @@ class SupplierPriceCatalogEventsListenerTest {
     private SupplierPriceImportChunkRepository priceImportChunkRepository;
 
     @Mock
+    private SupplierArticleCodeRepository supplierArticleCodeRepository;
+
+    @Mock
+    private CatalogFactPublisher catalogFactPublisher;
+
+    @Mock
     private OutboxEventWriter outboxEventWriter;
 
     private SupplierPriceCatalogEventsListener listener;
@@ -76,11 +85,17 @@ class SupplierPriceCatalogEventsListenerTest {
                 priceEntryRepository,
                 priceImportRepository,
                 priceImportChunkRepository,
+                supplierArticleCodeRepository,
+                catalogFactPublisher,
                 outboxEventWriter);
         when(priceEntryRepository.save(any(SupplierPriceEntryEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(priceImportRepository.save(any(SupplierPriceImportEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(priceImportRepository.findById(MANIFEST_ID)).thenReturn(Optional.empty());
         when(priceImportChunkRepository.save(any(SupplierPriceImportChunkEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(supplierArticleCodeRepository.findByVendorProfileIdAndProductId(any(), any()))
+                .thenReturn(Optional.empty());
+        when(supplierArticleCodeRepository.save(any(SupplierArticleCodeEntity.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -182,6 +197,82 @@ class SupplierPriceCatalogEventsListenerTest {
             listener.onSupplierEvent(chunkEvent("e-1", 1, 1, 1));
 
             verify(processedEventRepository).save(any(ProcessedEvent.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("vendor article code current-state projection (CAP-320 #1347)")
+    class SupplierArticleCode {
+
+        @Test
+        void upsertsAndPublishesWhenALineStatesACode() {
+            listener.onSupplierEvent(chunkEvent("e-1", 1, 1, 1));
+
+            ArgumentCaptor<SupplierArticleCodeEntity> captor = ArgumentCaptor.forClass(SupplierArticleCodeEntity.class);
+            verify(supplierArticleCodeRepository).save(captor.capture());
+            SupplierArticleCodeEntity row = captor.getValue();
+            assertThat(row.getVendorProfileId()).isEqualTo(PROFILE_ID);
+            assertThat(row.getSupplierRef()).isEqualTo("michelin-eu");
+            assertThat(row.getProductId()).isEqualTo(PRODUCT_ID);
+            assertThat(row.getSupplierArticleCode()).isEqualTo("999900");
+            verify(catalogFactPublisher).publishSupplierArticleCodeUpdated(row);
+        }
+
+        @Test
+        void skipsTheWriteWhenTheCodeAndAliasHaveNotChanged() {
+            when(supplierArticleCodeRepository.findByVendorProfileIdAndProductId(PROFILE_ID, PRODUCT_ID))
+                    .thenReturn(Optional.of(SupplierArticleCodeEntity.builder()
+                            .id(UUID.randomUUID())
+                            .vendorProfileId(PROFILE_ID)
+                            .supplierRef("michelin-eu")
+                            .productId(PRODUCT_ID)
+                            .supplierArticleCode("999900")
+                            .build()));
+
+            listener.onSupplierEvent(chunkEvent("e-1", 1, 1, 1));
+
+            verify(supplierArticleCodeRepository, never()).save(any());
+            verify(catalogFactPublisher, never()).publishSupplierArticleCodeUpdated(any());
+        }
+
+        @Test
+        void updatesAndRepublishesWhenTheCodeChanged() {
+            when(supplierArticleCodeRepository.findByVendorProfileIdAndProductId(PROFILE_ID, PRODUCT_ID))
+                    .thenReturn(Optional.of(SupplierArticleCodeEntity.builder()
+                            .id(UUID.randomUUID())
+                            .vendorProfileId(PROFILE_ID)
+                            .supplierRef("michelin-eu")
+                            .productId(PRODUCT_ID)
+                            .supplierArticleCode("OLD-CODE")
+                            .build()));
+
+            listener.onSupplierEvent(chunkEvent("e-1", 1, 1, 1));
+
+            ArgumentCaptor<SupplierArticleCodeEntity> captor = ArgumentCaptor.forClass(SupplierArticleCodeEntity.class);
+            verify(supplierArticleCodeRepository).save(captor.capture());
+            assertThat(captor.getValue().getSupplierArticleCode()).isEqualTo("999900");
+            verify(catalogFactPublisher).publishSupplierArticleCodeUpdated(captor.getValue());
+        }
+
+        @Test
+        void skipsALineThatStatesNoCode() {
+            String body = """
+                    {"eventId":"e-1","eventType":"supplier.pricecatalog.updated","schemaVersion":1,
+                     "aggregateId":"%s","aggregateVersion":1,"occurredAtUtc":"2026-08-14T09:00:00Z",
+                     "sourceService":"pos-supplier",
+                     "payload":{"importManifestId":"%s","vendorProfileId":"%s","supplierRef":"michelin-eu",
+                       "chunkSequence":1,"chunkCount":1,"sourceDocumentId":"PRICAT-1","sourceDocumentDate":"2026-01-30",
+                       "buyerAccountNumber":"30012456","countryCode":"SE","currency":"SEK","protocolVersion":"B4_0",
+                       "fetchedAt":"2026-08-14T08:00:00Z","lines":[
+                         {"productId":"%s","matchMethod":"EAN","articleEan":"3528709999080","supplierArticleCode":null,
+                          "xReferenceCode":null,"suggestedRetailPrice":"120.00","grossPrice":"100.00","netPrice":"90.00",
+                          "taxRate":"25","recyclingFee":"3.50","effectiveFrom":"2026-02-01","positionNumber":1}]}}
+                    """.formatted(MANIFEST_ID, MANIFEST_ID, PROFILE_ID, PRODUCT_ID);
+
+            listener.onSupplierEvent(body);
+
+            verify(supplierArticleCodeRepository, never()).save(any());
+            verify(catalogFactPublisher, never()).publishSupplierArticleCodeUpdated(any());
         }
     }
 
