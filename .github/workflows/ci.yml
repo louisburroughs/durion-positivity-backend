@@ -258,22 +258,42 @@ jobs:
         # lowResourceTests bounds each Surefire fork to 1 GiB: with -T 1C up to four
         # module builds fork test JVMs concurrently, and default heap sizing would
         # overcommit the 16 GB runner.
+        #
+        # The `check` goal is invoked directly rather than by running `verify`: the
+        # ratchet's check-ratchet execution is bound to verify, so a build that stops at
+        # `test` never evaluates it and every PR merged ungated (the nightly then caught
+        # the regression a day late). Invoking the goal gates here without paying for
+        # package + spring-boot:repackage on every changed module. Its rules live at
+        # plugin level in the root pom precisely so this CLI invocation sees them.
+        #
+        # -DskipITs is what makes this the RIGHT gate: it is the measurement the nightly
+        # ratchet performs and the one the floors are derived from. Do not drop it.
         run: |
           ./mvnw ${{ steps.selection.outputs.args-pr }} \
             -DskipTests=false test \
             org.jacoco:jacoco-maven-plugin:0.8.14:report \
+            org.jacoco:jacoco-maven-plugin:0.8.14:check \
             -Darchunit.skipTests=true \
             -DlowResourceTests=true \
             -DskipITs -T 1C -B -ntp
 
       - name: Test changed modules and dependents incl. ITs (main)
         if: github.event_name != 'pull_request' && steps.selection.outputs.run-tests == 'true'
+        # This step runs the ITs, so its jacoco.exec is IT-inclusive and its coverage is
+        # higher than the floors describe. Reaching `verify` fires the check-ratchet
+        # execution against that inflated data, which cannot fail honestly — it can only
+        # pass a module the unit-only gate would reject, and that false green is exactly
+        # how pos-image and pos-supplier reached main below their floors. haltOnFailure is
+        # off here so the numbers are still logged for information while the binding
+        # verdicts come from the two unit-only measurements: the PR step above and the
+        # nightly ratchet job. See docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.2.
         run: |
           ./mvnw ${{ steps.selection.outputs.args }} \
             -DskipTests=false verify \
             org.jacoco:jacoco-maven-plugin:0.8.14:report \
             -Darchunit.skipTests=true \
             -DlowResourceTests=true \
+            -Djacoco.check.haltOnFailure=false \
             -T 1C -B -ntp
 
       - name: Summarize test failures
