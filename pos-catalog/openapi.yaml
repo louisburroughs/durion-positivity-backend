@@ -14,26 +14,28 @@ tags:
   description: Groups of mutually interchangeable products; a product belongs to at most one group
 - name: UOM Conversion API
   description: Unit of measure conversion API
+- name: Item Cost API
+  description: Manage standard, last, and average item costs
+- name: Supplier Prices
+  description: 'Vendor price entries applied from supplier PRICAT imports: latest applicable cost, full cost history, and import application state. Read-only.'
+- name: Product UoM API
+  description: Per-product unit-of-measure conversion set (purchase/pack UoMs with factor to base UoM)
 - name: Catalog Bulk Ingest API
   description: Bulk import catalog products
 - name: Supplier Article Codes
   description: Replay of vendor-specific article-code facts derived from PRICAT imports, for seeding or repairing consumer replicas such as pos-order's purchase-order transmission.
 - name: Products API
   description: API for products, lifecycle, and pricing
-- name: Item Cost API
-  description: Manage standard, last, and average item costs
-- name: Supplier Prices
-  description: 'Vendor price entries applied from supplier PRICAT imports: latest applicable cost, full cost history, and import application state. Read-only.'
 - name: Product MSRP API
   description: Manage MSRP values with effective dates
 - name: Catalog API
   description: API for managing catalogs
 - name: Price Book API
   description: Manage price books, pricing rules, and resolution
-- name: Product UoM API
-  description: Per-product unit-of-measure conversion set (purchase/pack UoMs with factor to base UoM)
 - name: Catalog Items API
   description: API for managing catalog items by type
+- name: Tread Design Enrichment
+  description: Vendor-supplied MKCAT marketing content — names, copy per language, artwork — attached to catalog products by matching, not by identifier. Read-only.
 paths:
   /v1/products/{productId}:
     get:
@@ -3373,6 +3375,115 @@ paths:
       - bearerAuth:
         - ROLE_ADMIN
         - ROLE_CATALOG_VIEW
+  /v1/catalog/tread-designs/unmatched:
+    get:
+      tags:
+      - Tread Design Enrichment
+      summary: List Vendor Tread Designs Matched to No Product
+      description: 'Returns tread designs that fuzzy matching, scoped to each design''s own vendor''s priced products,
+
+        could not resolve to any catalog product, newest applied first.
+
+        Use this tool to review enrichment a person needs to connect manually; do not use it to look up one
+
+        product''s enrichment, which is getTreadDesignForProduct. A design matching nothing is an ordinary
+
+        outcome here, not a failure of ingestion.
+
+        Preconditions: none; an empty result means every applied design has matched at least one product.
+
+        Required inputs: none; page and size are optional, with size defaulting to 50 and capped at 200.
+
+        Emits a CATALOG_TREAD_DESIGN_UNMATCHED_LIST event; no state changes.
+
+        Returns 200 with an empty items array when nothing is unmatched.
+
+        '
+      operationId: listUnmatchedTreadDesigns
+      parameters:
+      - name: page
+        in: query
+        description: Zero-based page index.
+        required: false
+        schema:
+          type: integer
+          example: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: Page size, 1-200.
+        required: false
+        schema:
+          type: integer
+          default: 50
+          example: 50
+          maximum: 200
+          minimum: 1
+      responses:
+        '200':
+          description: A page of unmatched tread designs, newest applied first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '400':
+          description: The page size is out of range.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
+  /v1/catalog/tread-designs/for-product/{productId}:
+    get:
+      tags:
+      - Tread Design Enrichment
+      summary: Get Vendor Tread-Design Enrichment for a Product
+      description: 'Returns the manufacturer marketing content matched to a product — names, copy per language, artwork —
+
+        distinguishable from catalog-owned product data because it lives here rather than on the product itself.
+
+        Use this tool to show manufacturer marketing copy alongside a product; do not use it as a source for
+
+        any structural or identity field, since a supplier fact never changes what a product is.
+
+        Preconditions: the product must exist and must have matched a tread design; fuzzy matching on vendor
+
+        brand and design names means many products, especially newly priced ones, match nothing yet.
+
+        Required inputs: productId path parameter; there is no request body.
+
+        Emits a CATALOG_TREAD_DESIGN_FOR_PRODUCT event; no state changes.
+
+        Returns 404 when the product does not exist or matches no tread design — an ordinary outcome, not
+
+        an error condition.
+
+        '
+      operationId: getTreadDesignForProduct
+      parameters:
+      - name: productId
+        in: path
+        description: Product to look up enrichment for.
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The matched design's enrichment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreadDesignDto'
+        '404':
+          description: The product does not exist, or matches no tread design. The response has NO body.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - ROLE_CATALOG_VIEW
   /v1/catalog/supplier-prices/latest:
     get:
       tags:
@@ -5986,6 +6097,147 @@ components:
           type: string
           description: Manufacturer part number of the matched product, null when unknown.
           example: HDW-001
+    Page:
+      type: object
+      properties:
+        totalPages:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        size:
+          type: integer
+          format: int32
+        content:
+          type: array
+        number:
+          type: integer
+          format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        numberOfElements:
+          type: integer
+          format: int32
+        first:
+          type: boolean
+        last:
+          type: boolean
+        empty:
+          type: boolean
+    PageableObject:
+      type: object
+      properties:
+        offset:
+          type: integer
+          format: int64
+        paged:
+          type: boolean
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        unpaged:
+          type: boolean
+    SortObject:
+      type: object
+      properties:
+        empty:
+          type: boolean
+        sorted:
+          type: boolean
+        unsorted:
+          type: boolean
+    TreadDesignDto:
+      type: object
+      description: Vendor-supplied tread-design marketing enrichment, distinct from catalog-owned product data.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: This design's id.
+        vendorProfileId:
+          type: string
+          format: uuid
+          description: Vendor profile the enrichment was fetched from.
+        supplierRef:
+          type: string
+          description: That profile's alias, descriptive only.
+        vendorVariantId:
+          type: string
+          description: The vendor's own tread design variant identifier.
+        brand:
+          type: string
+          description: Brand as stated by the vendor.
+        treadDesign:
+          type: string
+          description: Primary tread design name as stated.
+        treadDesign2:
+          type: string
+          description: Secondary tread design name, where the vendor uses one.
+        productName:
+          type: string
+          description: Vendor's product name, where given.
+        vehicleType:
+          type: string
+          description: Vehicle class as stated.
+        seasonality:
+          type: string
+          description: Seasonality as the vendor states it, not mapped to a Durion vocabulary.
+        hasUnresolvedImages:
+          type: boolean
+          description: Whether any artwork on this design is still missing and awaiting retry.
+        texts:
+          type: array
+          description: Marketing copy per language.
+          items:
+            $ref: '#/components/schemas/TreadDesignTextDto'
+        images:
+          type: array
+          description: Artwork references.
+          items:
+            $ref: '#/components/schemas/TreadDesignImageDto'
+        updatedAt:
+          type: string
+          format: date-time
+          description: When this enrichment was last applied.
+    TreadDesignImageDto:
+      type: object
+      description: Vendor-supplied artwork reference.
+      properties:
+        imageType:
+          type: string
+          description: Vendor's own classification of the image.
+        imageId:
+          type: integer
+          format: int64
+          description: pos-image identifier for the stored bytes; absent when unresolved.
+        unresolved:
+          type: boolean
+          description: Whether the artwork is still missing and awaiting a future republication.
+    TreadDesignTextDto:
+      type: object
+      description: Vendor-supplied marketing copy in one language.
+      properties:
+        languageCode:
+          type: string
+          description: Vendor's own language code, as stated.
+          example: en-US
+        name:
+          type: string
+          description: Product name in that language.
+        description:
+          type: string
+          description: Marketing description in that language.
+        footNotes:
+          type: string
+          description: Legal or qualifying text, when given.
     SupplierPriceEntryDto:
       type: object
       description: A vendor price for a product in one market, effective from a date.
@@ -6132,63 +6384,6 @@ components:
           type: string
           format: date-time
           description: When this row last changed.
-    Page:
-      type: object
-      properties:
-        totalPages:
-          type: integer
-          format: int32
-        totalElements:
-          type: integer
-          format: int64
-        size:
-          type: integer
-          format: int32
-        content:
-          type: array
-        number:
-          type: integer
-          format: int32
-        sort:
-          $ref: '#/components/schemas/SortObject'
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
-        numberOfElements:
-          type: integer
-          format: int32
-        first:
-          type: boolean
-        last:
-          type: boolean
-        empty:
-          type: boolean
-    PageableObject:
-      type: object
-      properties:
-        offset:
-          type: integer
-          format: int64
-        sort:
-          $ref: '#/components/schemas/SortObject'
-        pageNumber:
-          type: integer
-          format: int32
-        pageSize:
-          type: integer
-          format: int32
-        paged:
-          type: boolean
-        unpaged:
-          type: boolean
-    SortObject:
-      type: object
-      properties:
-        empty:
-          type: boolean
-        sorted:
-          type: boolean
-        unsorted:
-          type: boolean
   securitySchemes:
     bearerAuth:
       type: http
