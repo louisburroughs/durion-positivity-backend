@@ -80,6 +80,10 @@ public class OrderStatusQueryRunner implements SupplierOrderStatusPort {
      * no such order" and "we could not ask the vendor" are opposite findings for a reconciler
      * resolving an ambiguous transmission — one means nothing was placed, the other means we still
      * do not know — and a single empty return would make them indistinguishable.
+     *
+     * <p>{@code documentId} is required. The codec rejects a null or blank one before anything is
+     * sent, and the column it comes from is non-null, so a nullable parameter advertised a call that
+     * could only ever throw.
      */
     @Override
     @NonNull

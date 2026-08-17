@@ -11,10 +11,11 @@ import org.jspecify.annotations.NonNull;
  * <p>Governing ADRs: ADR-0049 §3, ADR-0052 §3 (order-status answers are how an ambiguous
  * transmission is reconciled — the vendor's own record is the tie-breaker).
  *
- * <p>Both references are accepted because either may be the one the vendor knows this order by: our
- * document id if it echoed it, its own order number if it assigned one. Asking with only one would
- * mean an order transmitted but not confirmed could never be looked up, which is precisely the case
- * this capability exists to resolve.
+ * <p>The document id is required and the vendor's own order number is not. That asymmetry is the C1.1
+ * norm's: the query is keyed on the buyer's document reference, and a vendor order number — which
+ * only exists once the vendor has confirmed — narrows it where one is known. An order transmitted
+ * but not confirmed is exactly the case this capability resolves, and it is resolvable precisely
+ * because the document id was minted on this side before anything was sent.
  */
 public interface SupplierOrderStatusPort {
 
@@ -22,12 +23,13 @@ public interface SupplierOrderStatusPort {
      * Asks the vendor what became of one order.
      *
      * @param supplierRef         the vendor profile alias to ask
-     * @param documentId          the document id minted for the transmission, where known
-     * @param supplierOrderNumber the vendor's own order number, where it gave one
+     * @param documentId          the document id minted for the transmission; always present,
+     *                            because it is minted here before the order is sent
+     * @param supplierOrderNumber the vendor's own order number, where it has given one
      */
     @NonNull
     SupplierOrderStatusResult queryOrderStatus(
             @NonNull SupplierRef supplierRef,
-            @org.jspecify.annotations.Nullable String documentId,
+            @NonNull String documentId,
             @org.jspecify.annotations.Nullable String supplierOrderNumber);
 }

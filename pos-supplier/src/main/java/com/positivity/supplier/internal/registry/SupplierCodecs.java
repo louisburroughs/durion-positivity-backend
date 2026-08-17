@@ -18,7 +18,9 @@ import org.jspecify.annotations.NonNull;
  * {@code SupplierConfigurationException}, some {@code IllegalStateException}, so the same
  * misconfiguration surfaced as a 409 in one capability and a 500 in another.
  *
- * <p>A deployment defect should look the same wherever it is found. Hence one implementation.
+ * <p>A deployment defect should look the same wherever it is <em>found</em> — but not every defect
+ * here is the same defect. Nothing registered for the triple and something registered that speaks a
+ * different protocol have different fixes, so they say different things.
  */
 public final class SupplierCodecs {
 
@@ -42,12 +44,26 @@ public final class SupplierCodecs {
             @NonNull SupplierCapability capability,
             @NonNull Class<T> codecType) {
         AdapterResolution resolution = registry.resolve(capability, binding.family(), binding.version());
-        if (resolution instanceof AdapterResolution.Resolved resolved && codecType.isInstance(resolved.codec())) {
-            return codecType.cast(resolved.codec());
+        if (!(resolution instanceof AdapterResolution.Resolved resolved)) {
+            throw new SupplierConfigurationException(
+                    SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
+                    "No " + capability + " codec registered for " + binding.family() + " "
+                            + binding.version().value());
         }
-        throw new SupplierConfigurationException(
-                SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
-                "No " + capability + " codec registered for " + binding.family() + " "
-                        + binding.version().value());
+        if (!codecType.isInstance(resolved.codec())) {
+            // A different failure with a different fix, and worth saying so. "Nothing is registered"
+            // sends an operator to the binding to add one; "something is registered and it is the
+            // wrong kind" sends them to the binding's family or version, which is pointing at an
+            // adapter that speaks a different protocol. One message for both had an operator adding
+            // a binding that already existed.
+            throw new SupplierConfigurationException(
+                    SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
+                    "The codec registered for " + capability + " " + binding.family() + " "
+                            + binding.version().value() + " is a "
+                            + resolved.codec().getClass().getSimpleName() + ", but this capability needs a "
+                            + codecType.getSimpleName()
+                            + "; the binding's protocol family or version points at the wrong adapter");
+        }
+        return codecType.cast(resolved.codec());
     }
 }

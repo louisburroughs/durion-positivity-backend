@@ -4,10 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.JavaParameterizedType;
+import com.tngtech.archunit.core.domain.JavaType;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -103,22 +107,54 @@ class SupplierPortAdoptionTest {
     }
 
     @Test
-    @DisplayName("no port signature takes or returns a JPA entity")
+    @DisplayName("no port signature takes or returns a JPA entity, including inside generics")
     void portsAreFreeOfEntities() {
         // A port that needs an entity is describing bookkeeping rather than a capability — which is
         // exactly why order creation has no port. Entities also drag JPA into a package that is
         // framework-clean by mandate (ADR-0051 §2).
+        //
+        // Generic parameters are checked, not just raw types. A raw-type check passes a method
+        // returning List<SomeEntity>, because its raw type is java.util.List — and a list of
+        // entities is the likelier leak of the two, since a port returning one entity looks wrong
+        // at a glance and a port returning a list of them does not.
         List<String> offenders = supplierClasses.stream()
                 .filter(clazz -> clazz.getPackageName().equals(SPI_PACKAGE))
                 .filter(clazz -> clazz.getSimpleName().endsWith("Port"))
                 .flatMap(clazz -> clazz.getMethods().stream())
-                .filter(method -> method.getRawParameterTypes().stream()
-                                .anyMatch(type -> type.getName().contains(".internal.entity."))
-                        || method.getRawReturnType().getName().contains(".internal.entity."))
+                .filter(SupplierPortAdoptionTest::mentionsAnEntity)
                 .map(method -> method.getOwner().getSimpleName() + "." + method.getName())
                 .sorted()
                 .toList();
 
         assertThat(offenders).as("port methods touching entities").isEmpty();
+    }
+
+    /**
+     * Whether a method's signature names an entity anywhere, generic arguments included.
+     *
+     * <p>Reads the generic signature rather than the erased one. {@code List<SomeEntity>} erases to
+     * {@code java.util.List}, so a raw-type check would report a clean signature for the exact shape
+     * most likely to smuggle persistence into this package.
+     */
+    private static boolean mentionsAnEntity(JavaMethod method) {
+        Stream<String> genericTypeNames = Stream.concat(
+                        method.getParameterTypes().stream(), Stream.of(method.getReturnType()))
+                .flatMap(SupplierPortAdoptionTest::allTypeNames);
+        Stream<String> rawTypeNames = Stream.concat(
+                        method.getRawParameterTypes().stream(), Stream.of(method.getRawReturnType()))
+                .map(JavaClass::getName);
+
+        return Stream.concat(genericTypeNames, rawTypeNames).anyMatch(name -> name.contains(".internal.entity."));
+    }
+
+    /** Every type named by a generic type, itself and its arguments, however deeply nested. */
+    private static Stream<String> allTypeNames(JavaType type) {
+        Stream<String> self = Stream.of(type.getName());
+        if (type instanceof JavaParameterizedType parameterized) {
+            return Stream.concat(
+                    self,
+                    parameterized.getActualTypeArguments().stream().flatMap(SupplierPortAdoptionTest::allTypeNames));
+        }
+        return self;
     }
 }
