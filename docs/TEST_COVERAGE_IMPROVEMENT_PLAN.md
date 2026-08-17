@@ -754,6 +754,28 @@ The one narrow edge is a *partial* `jacoco.exec` left by an interrupted test run
 where a later `install -DskipTests` would judge incomplete data — `clean` fixes
 that, and CI always runs tests.
 
+**Where the gate actually runs.** Three CI steps touch coverage, and only two of
+them are binding:
+
+| step | measurement | binding? |
+|---|---|---|
+| PR — "Test changed modules and dependents" | `test` + `jacoco:check`, `-DskipITs` | **yes** — pre-merge gate |
+| main — "…incl. ITs" | `verify`, ITs included | no — `haltOnFailure=false` |
+| nightly — "Build aggregate coverage report" | `verify -DskipITs`, full reactor | **yes** — job fails on any violation |
+
+The PR step invokes `jacoco:check` directly instead of running `verify`. The
+`check-ratchet` execution is bound to `verify`, so a build that stops at `test`
+never evaluates it — which is why every PR merged ungated until 2026-08-16, and the
+nightly caught regressions a day late. The rules therefore live in a **plugin-level**
+`<configuration>` in the root pom, not inside the execution: execution configuration
+is invisible to CLI-invoked goals.
+
+The main step is deliberately **not** binding. It runs the ITs, so its coverage is
+higher than the floors describe; letting it decide would produce false greens, never
+honest failures. That is precisely how `pos-image` and `pos-supplier` reached main
+below their floors. Both binding gates measure `-DskipITs`, the same way the floors
+are derived (§6.1).
+
 **Working rules.**
 
 - Raise a module's floor when its coverage rises — that is what makes it a
