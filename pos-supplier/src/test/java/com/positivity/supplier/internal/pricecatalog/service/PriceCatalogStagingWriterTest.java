@@ -134,7 +134,6 @@ class PriceCatalogStagingWriterTest {
                 "SEK",
                 "DOC-1",
                 LocalDate.of(2026, 1, 30),
-                MANIFEST_ID,
                 position);
     }
 

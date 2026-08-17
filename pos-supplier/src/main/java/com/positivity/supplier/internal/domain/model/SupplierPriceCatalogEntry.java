@@ -3,7 +3,6 @@ package com.positivity.supplier.internal.domain.model;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Objects;
-import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -29,7 +28,6 @@ import org.jspecify.annotations.Nullable;
  * @param recyclingFee recycling fee amount the vendor stated, when stated
  * @param sourceDocumentId vendor catalog document id the row came from, when stated
  * @param sourceDocumentDate vendor catalog document date, when stated
- * @param importManifestId identity of the import run that produced this row
  * @param positionNumber 1-based line position within the vendor document, when stated; lets a
  *     staged row or a quarantined line be cited back to the vendor by document position
  */
@@ -47,14 +45,12 @@ public record SupplierPriceCatalogEntry(
         @NonNull String currency,
         @Nullable String sourceDocumentId,
         @Nullable LocalDate sourceDocumentDate,
-        @NonNull UUID importManifestId,
         @Nullable Integer positionNumber) {
 
     public SupplierPriceCatalogEntry {
         Objects.requireNonNull(effectiveFrom, "effectiveFrom must not be null");
         Objects.requireNonNull(countryCode, "countryCode must not be null");
         Objects.requireNonNull(currency, "currency must not be null");
-        Objects.requireNonNull(importManifestId, "importManifestId must not be null");
         if (countryCode.isBlank()) {
             throw new IllegalArgumentException("countryCode must not be blank");
         }

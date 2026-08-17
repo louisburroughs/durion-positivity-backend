@@ -138,7 +138,6 @@ class QuarantineReapplicationWriterTest {
                 row.getCurrency(),
                 row.getSourceDocumentId(),
                 row.getSourceDocumentDate(),
-                row.getImportManifestId(),
                 position);
         return new ResolvedLine(row, entry, PRODUCT_ID, PriceCatalogMatchMethod.EAN);
     }

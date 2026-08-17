@@ -68,12 +68,6 @@
  * intent through its ledger", and that is orchestration rather than a protocol capability. A port
  * describing it would be fiction, which is the defect this whole exercise existed to end.
  *
- * <p><strong>{@code SupplierPriceCatalogPort} takes an import manifest id</strong>, which it should
- * not. {@code SupplierPriceCatalogEntry.importManifestId} is non-null, so an entry cannot exist
- * without one — this platform's import bookkeeping is baked into the canonical model of what a
- * vendor published. The parameter is documented as the leak it is rather than hidden by inventing an
- * id here, which would stamp entries with a run that never happened.
- *
  * <p>{@link com.positivity.supplier.internal.spi.TireIdentificationPort} is the one deliberate
  * exception to "every port is implemented": it is a placeholder pending confirmation that DOT
  * scanning is required (§12 decision 10), and {@code TireIdentificationDormancyTest} asserts it
