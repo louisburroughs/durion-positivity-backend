@@ -70,4 +70,12 @@ class ReservationOutcomeV1Test {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("backorderId");
     }
+
+    @Test
+    void rejectsCoveredWithBackorderId() {
+        assertThatThrownBy(() -> new ReservationOutcomeV1(
+                        RESERVATION_ID, WORKORDER_LINE_ID, null, "SKU-1", 3, true, BACKORDER_ID, OCCURRED_AT))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("backorderId");
+    }
 }
