@@ -25,6 +25,14 @@
     <packaging>jar</packaging>
     <dependencies>
         <!-- Lombok for annotation processing -->
+        <!-- Standard ApiError envelope (docs/ERROR_ENVELOPE.md). Added with the store endpoint
+             (CAP-324 #1257): this module had no error handling because it had no writes, and a new
+             write must not answer in a shape no client parses. -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-shared-dtos</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- Gateway-based stateless security. Added with the store endpoint (CAP-324 #1257):
              the read endpoints never needed a gate, but an ungated write accepts and keeps
              arbitrary bytes from anyone who can reach the service. -->

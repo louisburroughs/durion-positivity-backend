@@ -7,6 +7,7 @@ import com.positivity.image.internal.security.ImagePermissions;
 import com.positivity.image.service.ImageService;
 import com.positivity.image.service.ImageStorageService;
 import com.positivity.image.service.model.StoredImage;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -163,7 +164,10 @@ public class ImageController {
                                                     }
                                                     """)))
     @ApiResponse(responseCode = "200", description = "The stored image reference.")
-    @ApiResponse(responseCode = "400", description = "The content was empty.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "The content was empty, or was not valid base64.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<StoredImage> storeImage(@Valid @RequestBody StoreImageRequest request) {
         return ResponseEntity.ok(imageStorageService.store(
                 request.filename(),

@@ -120,4 +120,121 @@ class MktCatImageFetcherTest {
         assertThat(imageStoreClient.store("x.jpg", "image/jpeg", new byte[] {1}, "https://cdn.example.com/x.jpg"))
                 .isPresent();
     }
+
+    @Test
+    @DisplayName("a server that declares an oversized body is refused before it is read")
+    void oversizedDeclarationIsRefusedUpFront() throws Exception {
+        // Refusing on the declared length is cheaper than refusing after reading, and it is the
+        // common case for a genuinely large file.
+        try (TinyServer server = TinyServer.serving(200, "image/jpeg", new byte[64], true)) {
+            MktCatImageFetcher fetcher = new MktCatImageFetcher(imageStoreClient, 2000, 8L);
+
+            List<SupplierCatalogEnrichmentImage> images =
+                    fetcher.fetchAndStore(List.of(new MarketingVariant.MarketingImageRef("TREAD", server.url())));
+
+            assertThat(images.getFirst().unresolved()).isTrue();
+            verify(imageStoreClient, never()).store(any(), any(), any(), any());
+        }
+    }
+
+    @Test
+    @DisplayName("a body that lies about its length is cut off at the cap rather than buffered whole")
+    void undeclaredOversizedBodyIsCutOff() throws Exception {
+        // The case the cap exists for. A server that omits or understates content-length would
+        // otherwise be fully in memory by the time anything checked its size.
+        try (TinyServer server = TinyServer.serving(200, "image/jpeg", new byte[4096], false)) {
+            MktCatImageFetcher fetcher = new MktCatImageFetcher(imageStoreClient, 2000, 64L);
+
+            List<SupplierCatalogEnrichmentImage> images =
+                    fetcher.fetchAndStore(List.of(new MarketingVariant.MarketingImageRef("TREAD", server.url())));
+
+            assertThat(images.getFirst().unresolved()).isTrue();
+            verify(imageStoreClient, never()).store(any(), any(), any(), any());
+        }
+    }
+
+    @Test
+    @DisplayName("a body within the cap is fetched and handed to the image service")
+    void bodyWithinTheCapIsStored() throws Exception {
+        when(imageStoreClient.store(any(), any(), any(), any()))
+                .thenReturn(Optional.of(new ImageStoreClient.StoredImageRef(11L, "hash", true)));
+
+        try (TinyServer server = TinyServer.serving(200, "image/png", new byte[32], true)) {
+            MktCatImageFetcher fetcher = new MktCatImageFetcher(imageStoreClient, 2000, 1024L);
+
+            List<SupplierCatalogEnrichmentImage> images =
+                    fetcher.fetchAndStore(List.of(new MarketingVariant.MarketingImageRef("TREAD", server.url())));
+
+            assertThat(images.getFirst().unresolved()).isFalse();
+            assertThat(images.getFirst().imageId()).isEqualTo(11L);
+        }
+    }
+
+    @Test
+    @DisplayName("a server that accepts the connection and then stalls does not park the thread forever")
+    void stalledResponseTimesOut() throws Exception {
+        // A connect timeout alone would not cover this: the connection succeeds and the body never
+        // arrives, which is what pins an ingest thread to a host nobody controls.
+        try (TinyServer server = TinyServer.stalling()) {
+            MktCatImageFetcher fetcher = new MktCatImageFetcher(imageStoreClient, 300, 1024L);
+
+            List<SupplierCatalogEnrichmentImage> images =
+                    fetcher.fetchAndStore(List.of(new MarketingVariant.MarketingImageRef("TREAD", server.url())));
+
+            assertThat(images.getFirst().unresolved()).isTrue();
+        }
+    }
+
+    /** A minimal HTTP server, so the fetch paths above are exercised rather than described. */
+    private static final class TinyServer implements AutoCloseable {
+
+        private final com.sun.net.httpserver.HttpServer server;
+
+        private TinyServer(com.sun.net.httpserver.HttpServer server) {
+            this.server = server;
+        }
+
+        static TinyServer serving(int status, String contentType, byte[] body, boolean declareLength)
+                throws java.io.IOException {
+            com.sun.net.httpserver.HttpServer server =
+                    com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/artwork.jpg", exchange -> {
+                exchange.getResponseHeaders().add("Content-Type", contentType);
+                // -1 means chunked: no content-length, which is how a body hides its size.
+                exchange.sendResponseHeaders(status, declareLength ? body.length : 0);
+                try (java.io.OutputStream out = exchange.getResponseBody()) {
+                    out.write(body);
+                }
+            });
+            server.start();
+            return new TinyServer(server);
+        }
+
+        static TinyServer stalling() throws java.io.IOException {
+            com.sun.net.httpserver.HttpServer server =
+                    com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/artwork.jpg", exchange -> {
+                try {
+                    // Comfortably longer than the fetcher's 300ms deadline, short enough that the
+                    // handler thread is not still sleeping when the suite moves on.
+                    Thread.sleep(2_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                exchange.sendResponseHeaders(200, 0);
+                exchange.close();
+            });
+            server.start();
+            return new TinyServer(server);
+        }
+
+        String url() {
+            return "http://127.0.0.1:" + server.getAddress().getPort() + "/artwork.jpg";
+        }
+
+        @Override
+        public void close() {
+            server.stop(0);
+        }
+    }
 }
