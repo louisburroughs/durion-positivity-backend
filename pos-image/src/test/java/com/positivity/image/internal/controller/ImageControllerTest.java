@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.image.internal.dto.ImageFileView;
 import com.positivity.image.service.ImageService;
+import com.positivity.image.service.ImageStorageService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -39,6 +40,9 @@ class ImageControllerTest {
     @Mock
     private ImageService imageService;
 
+    @Mock
+    private ImageStorageService storageService;
+
     @Test
     @DisplayName("serves a stored file as an attachment under its own filename")
     void servesExistingFile(@TempDir Path tempDir) throws Exception {
@@ -47,7 +51,7 @@ class ImageControllerTest {
         when(imageService.findById(1L))
                 .thenReturn(Optional.of(new ImageFileView("vehicle-front.jpg", file.toString())));
 
-        ResponseEntity<Resource> response = new ImageController(imageService).getImageById(1L);
+        ResponseEntity<Resource> response = new ImageController(imageService, storageService).getImageById(1L);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_OCTET_STREAM);
@@ -63,7 +67,9 @@ class ImageControllerTest {
     void missingRowIsNotFound() {
         when(imageService.findById(99L)).thenReturn(Optional.empty());
 
-        assertThat(new ImageController(imageService).getImageById(99L).getStatusCode())
+        assertThat(new ImageController(imageService, storageService)
+                        .getImageById(99L)
+                        .getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
     }
 
@@ -76,7 +82,9 @@ class ImageControllerTest {
                 .thenReturn(Optional.of(new ImageFileView(
                         "gone.jpg", tempDir.resolve("gone.jpg").toString())));
 
-        assertThat(new ImageController(imageService).getImageById(1L).getStatusCode())
+        assertThat(new ImageController(imageService, storageService)
+                        .getImageById(1L)
+                        .getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
     }
 
@@ -89,7 +97,7 @@ class ImageControllerTest {
                 .thenReturn(Optional.of(new ImageFileView("logo.png", file.toString())));
         when(imageService.findByFilename("absent.png")).thenReturn(Optional.empty());
 
-        ImageController controller = new ImageController(imageService);
+        ImageController controller = new ImageController(imageService, storageService);
 
         assertThat(controller.getImageByFilename("logo.png").getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(controller.getImageByFilename("absent.png").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);

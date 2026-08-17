@@ -1,0 +1,4 @@
+version: "1.0"
+permissions:
+  - name: "image:image:store"
+    description: "Store image bytes in the image service"
