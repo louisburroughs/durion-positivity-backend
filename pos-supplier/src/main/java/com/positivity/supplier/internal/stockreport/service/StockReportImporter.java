@@ -79,9 +79,11 @@ public class StockReportImporter implements SupplierStockReportPort {
      */
     @NonNull
     public StockSnapshotEntity runSnapshot(@NonNull SupplierRef supplierRef) {
+        // The binding and billing account are resolved here because the failure path below needs
+        // them to write its row. The codec is not: fetchStockSnapshot resolves its own, and an
+        // unconfigured one still surfaces from there as a SupplierConfigurationException, which
+        // this method does not catch.
         ResolvedBinding binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.STOCK_REPORT);
-        EdiwheelB21StockReportCodec codec = SupplierCodecs.require(
-                adapterRegistry, binding, SupplierCapability.STOCK_REPORT, EdiwheelB21StockReportCodec.class);
         ResolvedPartyAccounts accounts = profileResolver.resolvePartyContext(supplierRef, null);
         SupplierAccountEntity billing = accounts.billing();
 
