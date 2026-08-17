@@ -50,4 +50,12 @@ public interface SupplierPriceEntryRepository extends JpaRepository<SupplierPric
             @Param("productId") UUID productId, @Param("vendorProfileId") UUID vendorProfileId, Pageable pageable);
 
     long countByImportManifestId(UUID importManifestId);
+
+    /**
+     * Every product this vendor has ever priced (CAP-324 #1352). Scopes tread-design matching to
+     * products a real relationship exists with, rather than fuzzy-matching against the whole
+     * catalog — a Michelin design cannot match a product no Michelin PRICAT line ever priced.
+     */
+    @Query("SELECT DISTINCT e.productId FROM SupplierPriceEntryEntity e WHERE e.vendorProfileId = :vendorProfileId")
+    List<UUID> findDistinctProductIdsByVendorProfileId(@Param("vendorProfileId") UUID vendorProfileId);
 }

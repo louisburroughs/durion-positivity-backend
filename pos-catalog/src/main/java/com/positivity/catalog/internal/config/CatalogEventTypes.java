@@ -60,6 +60,13 @@ public final class CatalogEventTypes {
                                 "CATALOG_SUPPLIER_ARTICLE_CODE_REPLAY",
                                 "Re-emit vendor article code facts for event-fed replica consumers")
                         .build(),
+                // MKCAT tread-design enrichment reads (CAP-324 #1352)
+                EventTypeRegistration.fastRead(
+                                "CATALOG_TREAD_DESIGN_FOR_PRODUCT", "Get vendor tread-design enrichment for a product")
+                        .build(),
+                EventTypeRegistration.search(
+                                "CATALOG_TREAD_DESIGN_UNMATCHED_LIST", "List tread designs matched to no product")
+                        .build(),
                 EventTypeRegistration.write(
                                 "CATALOG_PRODUCT_LIFECYCLE_UPDATE", "Set product lifecycle state with effective date")
                         .build(),

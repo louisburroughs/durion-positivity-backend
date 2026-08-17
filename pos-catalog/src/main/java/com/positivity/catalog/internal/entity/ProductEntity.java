@@ -105,6 +105,16 @@ public class ProductEntity implements CatalogItem {
     @Schema(description = "Brand of the manufacturer", example = "AcmePro")
     private String manufacturerBrand;
 
+    /**
+     * The tread design this product matches, when one has been resolved (CAP-324 #1352). Vendor
+     * marketing enrichment, distinguishable at read time from catalog-owned content; a supplier fact
+     * that could redefine identity or structure is never permitted here — this is an association
+     * only, the same shape as {@link #manufacturerId}/{@link #category}.
+     */
+    @Column(name = "tread_design_id", columnDefinition = "UUID")
+    @Schema(description = "Matched tread design enrichment id (vendor-supplied), when resolved")
+    private UUID treadDesignId;
+
     @Override
     public String getLongDescription() {
         return this.longDescription;
