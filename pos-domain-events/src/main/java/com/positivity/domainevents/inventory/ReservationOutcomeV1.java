@@ -61,6 +61,9 @@ public record ReservationOutcomeV1(
         if (!covered && backorderId == null) {
             throw new IllegalArgumentException("an uncovered outcome must carry the backorderId it opened");
         }
+        if (covered && backorderId != null) {
+            throw new IllegalArgumentException("a covered outcome must not carry a backorderId");
+        }
         if (occurredAt == null) {
             throw new IllegalArgumentException("occurredAt must not be null");
         }
