@@ -50,7 +50,8 @@ public class TreadDesignServiceImpl implements TreadDesignService {
     @NonNull
     public Page<TreadDesignDto> findUnmatched(@NonNull Pageable pageable) {
         Page<TreadDesignEntity> page = treadDesignRepository.findUnmatched(pageable);
-        List<UUID> designIds = page.getContent().stream().map(TreadDesignEntity::getId).toList();
+        List<UUID> designIds =
+                page.getContent().stream().map(TreadDesignEntity::getId).toList();
         if (designIds.isEmpty()) {
             return page.map(design -> toDto(design, List.of(), List.of()));
         }
