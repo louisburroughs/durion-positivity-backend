@@ -609,13 +609,18 @@ public enum PermissionCode {
     // ── Supplier (new) ─────────────────────────────────────────────────────────
     SUPPLIER__WORKORDERAUTH__REQUEST(462, "supplier:workorderauth:request"),
     // ── Supplier (new) ─────────────────────────────────────────────────────────
-    SUPPLIER__WORKORDERAUTH__REVIEW(463, "supplier:workorderauth:review");
+    SUPPLIER__WORKORDERAUTH__REVIEW(463, "supplier:workorderauth:review"),
+    // ── Image (new) ────────────────────────────────────────────────────────────
+    IMAGE__IMAGE__STORE(464, "image:image:store"),
+
+    // ── Supplier (new) ─────────────────────────────────────────────────────────
+    SUPPLIER__MKTCAT__IMPORT(465, "supplier:mktcat:import");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 54;
+    public static final int CATALOG_VERSION = 55;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

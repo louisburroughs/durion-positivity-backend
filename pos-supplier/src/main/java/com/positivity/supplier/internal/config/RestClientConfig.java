@@ -2,6 +2,7 @@ package com.positivity.supplier.internal.config;
 
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -46,5 +47,22 @@ public class RestClientConfig {
         factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
         factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
         return RestClient.builder().requestFactory(factory);
+    }
+
+    /**
+     * Load-balanced builder resolving Eureka service ids for sibling-service clients.
+     *
+     * <p>Separate from the primary builder because that one carries this module's own connect and
+     * read timeouts, tuned for platform registrations. A call to a sibling service is a different
+     * kind of call — it goes through Eureka, and its timeouts belong to the client that makes it —
+     * so sharing one builder would silently apply the wrong deadline to whichever came second.
+     *
+     * <p>Added for the pos-image client (CAP-324 #1257): MKCAT artwork is stored in pos-image rather
+     * than rendered from a manufacturer's own server.
+     */
+    @Bean
+    @LoadBalanced
+    public RestClient.Builder loadBalancedRestClientBuilder() {
+        return RestClient.builder();
     }
 }

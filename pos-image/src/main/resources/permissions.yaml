@@ -1,3 +1,5 @@
+domain: image
+serviceName: pos-image
 version: "1.0"
 permissions:
   - name: "image:image:store"

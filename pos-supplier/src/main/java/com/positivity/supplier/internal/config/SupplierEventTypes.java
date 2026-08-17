@@ -134,6 +134,13 @@ public final class SupplierEventTypes {
                 EventTypeRegistration.fastRead(
                                 "SUPPLIER_WORKORDER_AUTHORIZATION_REVIEW_LIST",
                                 "List fleet authorizations and completions waiting on a person")
+                        .build(),
+                // Marketing catalogue (CAP-324). A full catalogue read, not a local query: the
+                // threshold that matters is the standards body's, and it serves every consumer.
+                EventTypeRegistration.write("SUPPLIER_MKTCAT_IMPORT", "Run a marketing-catalogue import on demand")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "SUPPLIER_MKTCAT_VARIANT_LIST", "List staged marketing-catalogue enrichment")
                         .build());
     }
 }

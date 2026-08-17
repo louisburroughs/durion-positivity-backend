@@ -110,6 +110,18 @@ public class SupplierExceptionHandler {
      * simply could not be reached or said something unreadable. An operator seeing this should try
      * again or check the vendor's status, not go and edit a profile.
      */
+    /**
+     * A marketing-catalogue import that could not be read.
+     *
+     * <p>422 rather than 502: the request was well-formed and the configuration is fine — the
+     * catalogue could not be reached or answered unreadably. Distinguished from an empty catalogue
+     * on purpose, because an importer that diffs would read "unreadable" as "everything withdrawn".
+     */
+    @ExceptionHandler(MktCatImportException.class)
+    public ResponseEntity<ApiError> handleMktCatImportFailure(MktCatImportException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_ENTITY, "SUPPLIER_MKTCAT_IMPORT_FAILED", ex.getMessage(), request);
+    }
+
     @ExceptionHandler(FleetLookupException.class)
     public ResponseEntity<ApiError> handleFleetLookupFailure(FleetLookupException ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_ENTITY, "SUPPLIER_FLEET_LOOKUP_FAILED", ex.getMessage(), request);

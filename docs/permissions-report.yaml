@@ -1,9 +1,9 @@
-generatedAt: "2026-08-16T20:30:21.598598+00:00"
+generatedAt: "2026-08-17T00:38:56.814838+00:00"
 root: "."
 summary:
-  manifestCount: 22
-  permissionCount: 429
-  uniquePermissionCount: 429
+  manifestCount: 23
+  permissionCount: 431
+  uniquePermissionCount: 431
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -300,6 +300,15 @@ manifests:
     permissions:
       - name: "documents:render"
         description: "Render document content into supported output formats"
+  - module: "pos-image"
+    path: "pos-image/src/main/resources/permissions.yaml"
+    domain: "image"
+    serviceName: "pos-image"
+    version: "1.0"
+    permissionCount: 1
+    permissions:
+      - name: "image:image:store"
+        description: "Store image bytes in the image service"
   - module: "pos-inventory"
     path: "pos-inventory/src/main/resources/permissions.yaml"
     domain: "inventory"
@@ -792,7 +801,7 @@ manifests:
     domain: "supplier"
     serviceName: "pos-supplier"
     version: "1.0"
-    permissionCount: 11
+    permissionCount: 12
     permissions:
       - name: "supplier:audit:read"
         description: "Read supplier exchange audit records"
@@ -816,6 +825,8 @@ manifests:
         description: "Ask a fleet program to authorize work, and look up fleet vehicles, contracts and policies"
       - name: "supplier:workorderauth:review"
         description: "View and clear fleet workorder authorizations parked for manual review"
+      - name: "supplier:mktcat:import"
+        description: "Run a marketing-catalogue (MKCAT) import on demand and read staged enrichment"
   - module: "pos-tax"
     path: "pos-tax/src/main/resources/permissions.yaml"
     domain: "tax"
@@ -1800,6 +1811,12 @@ permissions:
     serviceName: "pos-documents"
     module: "pos-documents"
     source: "pos-documents/src/main/resources/permissions.yaml"
+  - name: "image:image:store"
+    description: "Store image bytes in the image service"
+    domain: "image"
+    serviceName: "pos-image"
+    module: "pos-image"
+    source: "pos-image/src/main/resources/permissions.yaml"
   - name: "inventory:adjustment:approve"
     description: "Approve and post an adjustment to the ledger (creates ADJUSTMENT_IN/OUT events)"
     domain: "inventory"
@@ -3032,6 +3049,12 @@ permissions:
     source: "pos-supplier/src/main/resources/permissions.yaml"
   - name: "supplier:invoice:fetch"
     description: "Run a vendor invoice fetch on demand"
+    domain: "supplier"
+    serviceName: "pos-supplier"
+    module: "pos-supplier"
+    source: "pos-supplier/src/main/resources/permissions.yaml"
+  - name: "supplier:mktcat:import"
+    description: "Run a marketing-catalogue (MKCAT) import on demand and read staged enrichment"
     domain: "supplier"
     serviceName: "pos-supplier"
     module: "pos-supplier"

@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 54")
+    @DisplayName("CATALOG_VERSION is 55")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(54);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(55);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 463")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 465")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1323,8 +1323,14 @@ class SecurityGatewayConfigTest {
         // rows where money is already owed for work already done, and whoever chases that is not
         // necessarily whoever books the job in.
         assertThat(GatewayPermissionCatalog.authorityForBit(463)).isEqualTo("PERM_supplier:workorderauth:review");
+        // Storing image bytes (CAP-324 #1257). pos-image gained a write endpoint, and an ungated one
+        // would accept and keep arbitrary bytes from anyone able to reach the service.
+        assertThat(GatewayPermissionCatalog.authorityForBit(464)).isEqualTo("PERM_image:image:store");
+        // Running a marketing-catalogue import (CAP-324 #1230): a full read of a centrally published
+        // catalogue, not a cheap local query.
+        assertThat(GatewayPermissionCatalog.authorityForBit(465)).isEqualTo("PERM_supplier:mktcat:import");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(464)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(466)).isNull();
     }
 
     @Test

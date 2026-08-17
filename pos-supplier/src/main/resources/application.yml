@@ -61,6 +61,11 @@ springdoc:
   default-produces-media-type: application/json
 
 pos:
+  image:
+    # pos-image is a Utility module under ADR-0044 and may be called directly. MKCAT artwork is
+    # stored there so a product page never renders from a manufacturer's own server.
+    service-id: ${POS_IMAGE_SERVICE_ID:image}
+    base-path: ${POS_IMAGE_BASE_PATH:/v1/images}
   # ── Exchange-audit payload encryption (ADR-0050 §7) ─────────────────────────────────
   #
   # NOT optional plumbing. AuditPayloadCipher fails startup without a key unless the dev or test
@@ -193,6 +198,26 @@ pos:
     outbox:
       poll-interval-ms: ${SUPPLIER_OUTBOX_POLL_INTERVAL_MS:1000}
       send-timeout-ms: ${SUPPLIER_OUTBOX_SEND_TIMEOUT_MS:10000}
+    mktcat:
+      # Full catalogue sweep. The mode that always works: change subscription is better where a
+      # catalogue offers it, but a subscription the vendor has silently forgotten produces no error,
+      # just a catalogue that stops changing. Both modes go through one importer that publishes on
+      # content change, so running both costs reads and emits nothing extra.
+      poll-interval-ms: ${SUPPLIER_MKTCAT_POLL_INTERVAL_MS:900000}
+      # Artwork is fetched directly rather than through the supplier base client: an image URI is an
+      # arbitrary asset URL published inside a document, and sending vendor credentials to it would
+      # leak them to whatever host the catalogue names.
+      image-fetch-timeout-ms: ${SUPPLIER_MKTCAT_IMAGE_FETCH_TIMEOUT_MS:15000}
+      # Bounded because the URI comes from a document rather than from configuration: without a cap,
+      # a mistyped link to a very large file would be pulled into memory and stored.
+      image-max-bytes: ${SUPPLIER_MKTCAT_IMAGE_MAX_BYTES:10485760}
+      # Missing artwork is retried on its own cadence rather than waiting for the next sweep, which
+      # on a nightly schedule would leave a picture missing for a day for a reason unrelated to it.
+      image-retry-interval-ms: ${SUPPLIER_MKTCAT_IMAGE_RETRY_INTERVAL_MS:1800000}
+      image-retry-batch-size: ${SUPPLIER_MKTCAT_IMAGE_RETRY_BATCH_SIZE:25}
+      # Where the catalogue should send change notifications. Unset by default: a deployment that
+      # cannot accept callbacks must not advertise one, and the scheduled sweep covers it.
+      callback-base-url: ${SUPPLIER_MKTCAT_CALLBACK_BASE_URL:}
     workorderauth:
       # How often accepted-but-undecided authorizations are re-read. The S2S API may answer a
       # request with 202 and a Location instead of a decision; without this the 202 is

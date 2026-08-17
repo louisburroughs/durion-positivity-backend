@@ -10,6 +10,61 @@ tags:
 - name: Image API
   description: Operations related to image retrieval and serving
 paths:
+  /v1/images:
+    post:
+      tags:
+      - Image API
+      summary: Store An Image
+      description: 'Stores image bytes and returns a reference to them, or returns the reference already held when the same bytes from the same origin have been stored before.
+
+        Use this tool when ingesting artwork that must not depend on a third party to render, such as manufacturer marketing images; do not use it to register an image that already lives somewhere this service can read, because that needs no copy.
+
+        Preconditions: the content must not be empty, because an empty body is a failed download and storing one would stop it ever being retried.
+
+        Required inputs: filename, contentType and content as base64; sourceUri and context are optional, and sourceUri is kept as provenance rather than as a render source.
+
+        No events are emitted.
+
+        Returns 200 with the reference, whose newlyStored flag says whether this call did the storing or found the bytes already held, and 400 when the content is empty.
+
+        '
+      operationId: storeImage
+      requestBody:
+        description: The image to store, with the origin it was fetched from where there was one.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoreImageRequest'
+            examples:
+              Manufacturer tread pattern artwork:
+                description: Manufacturer tread pattern artwork
+                value:
+                  filename: primacy-4-tread.jpg
+                  contentType: image/jpeg
+                  content: /9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAY=
+                  sourceUri: https://mkcat.example.com/images/9981.jpg
+                  context:
+                  - mkcat
+                  - tread-design
+        required: true
+      responses:
+        '200':
+          description: The stored image reference.
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/StoredImage'
+        '400':
+          description: The content was empty.
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/StoredImage'
+      security:
+      - bearerAuth:
+        - image:image:store
+      x-required-permissions:
+      - image:image:store
   /v1/images/id/{id}:
     get:
       tags:
@@ -57,6 +112,8 @@ paths:
               schema:
                 type: string
                 format: binary
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/images/filename/{filename}:
     get:
       tags:
@@ -109,4 +166,55 @@ paths:
               schema:
                 type: string
                 format: binary
-components: {}
+      x-required-permissions:
+      - AUTHENTICATED
+components:
+  schemas:
+    StoreImageRequest:
+      type: object
+      description: Image bytes to store, base64-encoded, with optional provenance
+      properties:
+        filename:
+          type: string
+          description: Name to store the image under
+          example: primacy-4-tread.jpg
+          minLength: 1
+        contentType:
+          type: string
+          description: MIME type of the bytes
+          example: image/jpeg
+          minLength: 1
+        content:
+          type: string
+          description: The image bytes, base64-encoded
+        sourceUri:
+          type: string
+          description: Where the bytes were fetched from. Kept as provenance for audit and reconciliation, never used as a render source
+        context:
+          type: array
+          description: Tags this image should carry
+          items:
+            type: string
+      required:
+      - content
+      - contentType
+      - filename
+    StoredImage:
+      type: object
+      properties:
+        imageId:
+          type: integer
+          format: int64
+        filename:
+          type: string
+        contentType:
+          type: string
+        byteSize:
+          type: integer
+          format: int64
+        contentHash:
+          type: string
+        sourceUri:
+          type: string
+        newlyStored:
+          type: boolean
