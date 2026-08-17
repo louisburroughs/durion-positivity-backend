@@ -6,6 +6,7 @@ import com.positivity.domainevents.supplier.SupplierOrderRequestedLine;
 import com.positivity.domainevents.supplier.SupplierOrderRequestedV1;
 import com.positivity.order.internal.config.OutboxEventWriter;
 import com.positivity.order.internal.entity.ExtProductCode;
+import com.positivity.order.internal.entity.ExtSupplierArticleCode;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
@@ -13,6 +14,7 @@ import com.positivity.order.internal.enums.TransmissionState;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderNotTransmittableException;
 import com.positivity.order.internal.repository.ExtProductCodeRepository;
+import com.positivity.order.internal.repository.ExtSupplierArticleCodeRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
@@ -21,7 +23,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -58,6 +63,7 @@ public class PurchaseOrderTransmissionService {
 
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final ExtProductCodeRepository extProductCodeRepository;
+    private final ExtSupplierArticleCodeRepository extSupplierArticleCodeRepository;
     /**
      * Optional because the outbox is not wired in every deployment — but unlike a fact publisher,
      * absence here is fatal rather than inert. Silently publishing nothing would leave the order
@@ -169,18 +175,32 @@ public class PurchaseOrderTransmissionService {
      * <p>A line whose article cannot be identified refuses the whole transmission. Withholding it
      * instead would send an order that silently differs from the one on screen, and the difference
      * would surface as a short delivery weeks later rather than as a question now.
+     *
+     * <p>Both an EAN and the vendor's own article code may travel on the same line (CAP-320 #1347);
+     * neither is invented when absent. A vendor that carries no EAN is unidentifiable until its own
+     * article code replicates, not before — sending a fabricated EAN would name the wrong article.
      */
     private List<SupplierOrderRequestedLine> resolveLines(PurchaseOrderEntity order) {
+        List<PurchaseOrderLineEntity> lines = order.getLines().stream()
+                .sorted(Comparator.comparing(
+                        PurchaseOrderLineEntity::getLineNumber, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+        List<UUID> skuIds = lines.stream()
+                .map(PurchaseOrderLineEntity::getSkuId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<UUID, String> eanBySku = eansFor(skuIds);
+        Map<UUID, String> supplierArticleCodeBySku = supplierArticleCodesFor(order.getSupplierRef(), skuIds);
+
         List<SupplierOrderRequestedLine> resolved = new ArrayList<>();
         List<Integer> unidentifiable = new ArrayList<>();
         List<Integer> fractional = new ArrayList<>();
 
-        for (PurchaseOrderLineEntity line : order.getLines().stream()
-                .sorted(Comparator.comparing(
-                        PurchaseOrderLineEntity::getLineNumber, Comparator.nullsLast(Comparator.naturalOrder())))
-                .toList()) {
-            String ean = eanFor(line);
-            if (ean == null) {
+        for (PurchaseOrderLineEntity line : lines) {
+            String ean = eanBySku.get(line.getSkuId());
+            String supplierArticleCode = supplierArticleCodeBySku.get(line.getSkuId());
+            if (ean == null && supplierArticleCode == null) {
                 unidentifiable.add(line.getLineNumber());
                 continue;
             }
@@ -196,7 +216,7 @@ public class PurchaseOrderTransmissionService {
             resolved.add(new SupplierOrderRequestedLine(
                     line.getLineNumber() == null ? 0 : line.getLineNumber(),
                     ean,
-                    null,
+                    supplierArticleCode,
                     whole,
                     order.getExpectedDeliveryDate()));
         }
@@ -227,16 +247,34 @@ public class PurchaseOrderTransmissionService {
         return order.getVersionNumber() == null ? 0 : Math.max(0, order.getVersionNumber());
     }
 
-    private String eanFor(PurchaseOrderLineEntity line) {
-        if (line.getSkuId() == null) {
-            return null;
+    /**
+     * EANs for a set of products, one query for the whole order rather than one per line — a
+     * purchase order can carry many lines, and a per-line lookup would be an N+1 query pattern on
+     * the transmission path.
+     */
+    private Map<UUID, String> eansFor(List<UUID> skuIds) {
+        if (skuIds.isEmpty()) {
+            return Map.of();
         }
-        return extProductCodeRepository
-                .findById(line.getSkuId())
+        return extProductCodeRepository.findAllById(skuIds).stream()
                 .filter(code -> EAN.equalsIgnoreCase(code.getCodeType()))
-                .map(ExtProductCode::getCode)
-                .filter(code -> !code.isBlank())
-                .orElse(null);
+                .filter(code -> code.getCode() != null && !code.getCode().isBlank())
+                .collect(Collectors.toMap(ExtProductCode::getProductId, ExtProductCode::getCode));
+    }
+
+    /**
+     * The vendor's own article code for a set of products, when this replica holds one (CAP-320
+     * #1347) — bulk-fetched for the same reason as {@link #eansFor}.
+     */
+    private Map<UUID, String> supplierArticleCodesFor(String supplierRef, List<UUID> skuIds) {
+        if (skuIds.isEmpty() || supplierRef == null || supplierRef.isBlank()) {
+            return Map.of();
+        }
+        return extSupplierArticleCodeRepository.findBySupplierRefAndProductIdIn(supplierRef, skuIds).stream()
+                .filter(row -> row.getSupplierArticleCode() != null
+                        && !row.getSupplierArticleCode().isBlank())
+                .collect(Collectors.toMap(
+                        ExtSupplierArticleCode::getProductId, ExtSupplierArticleCode::getSupplierArticleCode));
     }
 
     /**

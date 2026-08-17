@@ -54,6 +54,12 @@ public final class CatalogEventTypes {
                                 "CATALOG_SUPPLIER_PRICE_IMPORT_GAPS",
                                 "List vendor price imports this module could not confirm complete")
                         .build(),
+                // Replica seeding / repair for vendor article codes (CAP-320 #1347), same
+                // approval-grade budget as CATALOG_PRODUCT_FACT_REPLAY and for the same reason.
+                EventTypeRegistration.approval(
+                                "CATALOG_SUPPLIER_ARTICLE_CODE_REPLAY",
+                                "Re-emit vendor article code facts for event-fed replica consumers")
+                        .build(),
                 EventTypeRegistration.write(
                                 "CATALOG_PRODUCT_LIFECYCLE_UPDATE", "Set product lifecycle state with effective date")
                         .build(),

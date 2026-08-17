@@ -1,11 +1,14 @@
 package com.positivity.catalog.internal.service;
 
+import com.positivity.catalog.internal.config.CatalogFactPublisher;
 import com.positivity.catalog.internal.config.OutboxEventWriter;
 import com.positivity.catalog.internal.entity.ProcessedEvent;
+import com.positivity.catalog.internal.entity.SupplierArticleCodeEntity;
 import com.positivity.catalog.internal.entity.SupplierPriceEntryEntity;
 import com.positivity.catalog.internal.entity.SupplierPriceImportChunkEntity;
 import com.positivity.catalog.internal.entity.SupplierPriceImportEntity;
 import com.positivity.catalog.internal.repository.ProcessedEventRepository;
+import com.positivity.catalog.internal.repository.SupplierArticleCodeRepository;
 import com.positivity.catalog.internal.repository.SupplierPriceEntryRepository;
 import com.positivity.catalog.internal.repository.SupplierPriceImportChunkRepository;
 import com.positivity.catalog.internal.repository.SupplierPriceImportRepository;
@@ -73,6 +76,8 @@ public class SupplierPriceCatalogEventsListener {
     private final SupplierPriceEntryRepository priceEntryRepository;
     private final SupplierPriceImportRepository priceImportRepository;
     private final SupplierPriceImportChunkRepository priceImportChunkRepository;
+    private final SupplierArticleCodeRepository supplierArticleCodeRepository;
+    private final CatalogFactPublisher catalogFactPublisher;
     private final OutboxEventWriter outboxEventWriter;
 
     @KafkaListener(
@@ -163,6 +168,11 @@ public class SupplierPriceCatalogEventsListener {
                     .importManifestId(payload.importManifestId())
                     .fetchedAt(payload.fetchedAt())
                     .build());
+
+            if (line.supplierArticleCode() != null
+                    && !line.supplierArticleCode().isBlank()) {
+                applySupplierArticleCode(payload.vendorProfileId(), payload.supplierRef(), line);
+            }
         }
 
         priceImportChunkRepository.save(SupplierPriceImportChunkEntity.builder()
@@ -186,6 +196,29 @@ public class SupplierPriceCatalogEventsListener {
                 payload.chunkCount(),
                 payload.importManifestId(),
                 payload.lines().size());
+    }
+
+    /**
+     * Upserts the current-state vendor-article-code row and publishes it, but only when the code
+     * (or the vendor's alias snapshot) actually changed — a reimport that restates the same code for
+     * every line every cycle should not republish a fact nothing about.
+     */
+    private void applySupplierArticleCode(UUID vendorProfileId, String supplierRef, SupplierPriceCatalogLine line) {
+        SupplierArticleCodeEntity existing = supplierArticleCodeRepository
+                .findByVendorProfileIdAndProductId(vendorProfileId, line.productId())
+                .orElse(null);
+        if (existing != null
+                && line.supplierArticleCode().equals(existing.getSupplierArticleCode())
+                && supplierRef.equals(existing.getSupplierRef())) {
+            return;
+        }
+        SupplierArticleCodeEntity row = existing != null ? existing : new SupplierArticleCodeEntity();
+        row.setVendorProfileId(vendorProfileId);
+        row.setSupplierRef(supplierRef);
+        row.setProductId(line.productId());
+        row.setSupplierArticleCode(line.supplierArticleCode());
+        row = supplierArticleCodeRepository.save(row);
+        catalogFactPublisher.publishSupplierArticleCodeUpdated(row);
     }
 
     private void applyCompletion(JsonNode envelope) {
