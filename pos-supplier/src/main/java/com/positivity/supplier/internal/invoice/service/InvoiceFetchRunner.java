@@ -3,8 +3,8 @@ package com.positivity.supplier.internal.invoice.service;
 import com.positivity.supplier.internal.adapter.ediwheelb3.EdiwheelB33InvoiceCodec;
 import com.positivity.supplier.internal.adapter.ediwheelb3.InvoiceDecodeException;
 import com.positivity.supplier.internal.client.SupplierBaseClient;
-import com.positivity.supplier.internal.client.SupplierHttpRequest;
 import com.positivity.supplier.internal.client.SupplierHttpResponse;
+import com.positivity.supplier.internal.client.SupplierRequests;
 import com.positivity.supplier.internal.domain.model.PartyContext;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.domain.model.SupplierInvoice;
@@ -14,16 +14,16 @@ import com.positivity.supplier.internal.entity.SupplierAccountEntity;
 import com.positivity.supplier.internal.exception.InvoiceFetchException;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
-import com.positivity.supplier.internal.registry.AdapterResolution;
+import com.positivity.supplier.internal.registry.SupplierCodecs;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedPartyAccounts;
+import com.positivity.supplier.internal.spi.SupplierInvoicePort;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 
 /**
@@ -50,7 +50,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class InvoiceFetchRunner {
+public class InvoiceFetchRunner implements SupplierInvoicePort {
 
     private final SupplierProfileResolver profileResolver;
     private final AdapterRegistry adapterRegistry;
@@ -67,40 +67,9 @@ public class InvoiceFetchRunner {
      */
     public FetchOutcome fetchWindow(
             @NonNull SupplierRef supplierRef, @NonNull LocalDate fromDate, @NonNull LocalDate toDate) {
-        if (toDate.isBefore(fromDate)) {
-            // Checked here so every caller sees one exception type from this method. Letting the
-            // codec's own complaint escape meant an operator's typo surfaced as a 500 rather than
-            // as the request problem it is.
-            throw new InvoiceFetchException("invoice window ends before it begins: " + fromDate + " to " + toDate);
-        }
+        List<SupplierInvoice> invoices = fetchInvoices(supplierRef, fromDate, toDate);
 
         ResolvedBinding binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.INVOICE_FETCH);
-        EdiwheelB33InvoiceCodec codec = resolveCodec(binding);
-        ResolvedPartyAccounts accounts = profileResolver.resolvePartyContext(supplierRef, null);
-        SupplierAccountEntity billing = accounts.billing();
-
-        PartyContext partyContext = new PartyContext(billing.getAccountNumber(), billing.getAgencyCode(), null);
-        SupplierRequestSpec spec = codec.buildRequest(partyContext, fromDate, toDate);
-        SupplierHttpResponse response = baseClient.exchange(toHttpRequest(binding, spec));
-
-        if (!response.isSuccess()) {
-            // Thrown, not recorded as an empty window. The vendor may well have issued invoices in
-            // this window and simply not told us; treating silence as "none" would let the
-            // checkpoint move past them for good.
-            throw new InvoiceFetchException("vendor exchange failed: " + response.outcome()
-                    + (response.failureDetail() == null ? "" : " — " + response.failureDetail()));
-        }
-
-        List<SupplierInvoice> invoices;
-        try {
-            invoices = codec.decode(response.body());
-        } catch (InvoiceDecodeException e) {
-            // Also thrown. A document-level refusal ("window too wide") is a configuration problem
-            // that will recur until somebody changes something, and it must not look like a quiet
-            // stretch of days with no invoices.
-            throw new InvoiceFetchException("vendor refused or returned an unreadable window: " + e.getMessage(), e);
-        }
-
         int imported = importer.importInvoices(binding.binding().getVendorProfileId(), supplierRef.value(), invoices);
         log.info(
                 "Invoice window {}..{} for {}: {} fetched, {} new",
@@ -113,6 +82,53 @@ public class InvoiceFetchRunner {
     }
 
     /**
+     * The vendor conversation, with no storing and no publishing (the {@link SupplierInvoicePort}).
+     *
+     * <p>Separated from {@link #fetchWindow} so the port describes one thing: what the vendor said.
+     * Everything the caller does about it afterwards — recognising documents already held, emitting
+     * facts, moving a checkpoint — is policy this platform chose, and a port that carried it could
+     * not be implemented by a second protocol without inheriting the choice.
+     */
+    @Override
+    @NonNull
+    public List<SupplierInvoice> fetchInvoices(
+            @NonNull SupplierRef supplierRef, @NonNull LocalDate fromDate, @NonNull LocalDate toDate) {
+        if (toDate.isBefore(fromDate)) {
+            // Checked here so every caller sees one exception type from this method. Letting the
+            // codec's own complaint escape meant an operator's typo surfaced as a 500 rather than
+            // as the request problem it is.
+            throw new InvoiceFetchException("invoice window ends before it begins: " + fromDate + " to " + toDate);
+        }
+
+        ResolvedBinding binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.INVOICE_FETCH);
+        EdiwheelB33InvoiceCodec codec = SupplierCodecs.require(
+                adapterRegistry, binding, SupplierCapability.INVOICE_FETCH, EdiwheelB33InvoiceCodec.class);
+        ResolvedPartyAccounts accounts = profileResolver.resolvePartyContext(supplierRef, null);
+        SupplierAccountEntity billing = accounts.billing();
+
+        PartyContext partyContext = new PartyContext(billing.getAccountNumber(), billing.getAgencyCode(), null);
+        SupplierRequestSpec spec = codec.buildRequest(partyContext, fromDate, toDate);
+        SupplierHttpResponse response = baseClient.exchange(SupplierRequests.toHttpRequest(binding, spec));
+
+        if (!response.isSuccess()) {
+            // Thrown, not recorded as an empty window. The vendor may well have issued invoices in
+            // this window and simply not told us; treating silence as "none" would let the
+            // checkpoint move past them for good.
+            throw new InvoiceFetchException("vendor exchange failed: " + response.outcome()
+                    + (response.failureDetail() == null ? "" : " — " + response.failureDetail()));
+        }
+
+        try {
+            return codec.decode(response.body());
+        } catch (InvoiceDecodeException e) {
+            // Also thrown. A document-level refusal ("window too wide") is a configuration problem
+            // that will recur until somebody changes something, and it must not look like a quiet
+            // stretch of days with no invoices.
+            throw new InvoiceFetchException("vendor refused or returned an unreadable window: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * What one window produced.
      *
      * <p>Both numbers, because they answer different questions: {@code fetched} says whether the
@@ -121,29 +137,4 @@ public class InvoiceFetchRunner {
      * together are what make that legible rather than alarming.
      */
     public record FetchOutcome(int fetched, int imported) {}
-
-    private SupplierHttpRequest toHttpRequest(ResolvedBinding binding, SupplierRequestSpec spec) {
-        return new SupplierHttpRequest(
-                binding,
-                HttpMethod.valueOf(spec.method()),
-                spec.pathSuffix(),
-                spec.queryParams(),
-                spec.body(),
-                spec.contentType(),
-                spec.accept(),
-                spec.idempotent());
-    }
-
-    private EdiwheelB33InvoiceCodec resolveCodec(ResolvedBinding binding) {
-        AdapterResolution resolution =
-                adapterRegistry.resolve(SupplierCapability.INVOICE_FETCH, binding.family(), binding.version());
-        if (resolution instanceof AdapterResolution.Resolved resolved
-                && resolved.codec() instanceof EdiwheelB33InvoiceCodec codec) {
-            return codec;
-        }
-        throw new SupplierConfigurationException(
-                SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
-                "No invoice codec registered for " + binding.family() + " "
-                        + binding.version().value());
-    }
 }

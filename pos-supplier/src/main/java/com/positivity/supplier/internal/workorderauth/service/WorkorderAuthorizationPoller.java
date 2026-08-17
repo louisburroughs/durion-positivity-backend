@@ -3,8 +3,8 @@ package com.positivity.supplier.internal.workorderauth.service;
 import com.positivity.supplier.internal.adapter.michelins2s.MichelinS2SWorkorderAuthCodec;
 import com.positivity.supplier.internal.adapter.michelins2s.WorkorderAuthDecodeException;
 import com.positivity.supplier.internal.client.SupplierBaseClient;
-import com.positivity.supplier.internal.client.SupplierHttpRequest;
 import com.positivity.supplier.internal.client.SupplierHttpResponse;
+import com.positivity.supplier.internal.client.SupplierRequests;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.domain.model.SupplierRef;
 import com.positivity.supplier.internal.domain.model.SupplierRequestSpec;
@@ -13,7 +13,7 @@ import com.positivity.supplier.internal.entity.SupplierWorkorderAuthorizationEnt
 import com.positivity.supplier.internal.enums.WorkorderAuthorizationStatus;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
-import com.positivity.supplier.internal.registry.AdapterResolution;
+import com.positivity.supplier.internal.registry.SupplierCodecs;
 import com.positivity.supplier.internal.repository.SupplierWorkorderAuthorizationRepository;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
@@ -27,7 +27,6 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Limit;
-import org.springframework.http.HttpMethod;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -134,7 +133,11 @@ public class WorkorderAuthorizationPoller {
         SupplierRef supplierRef = new SupplierRef(row.getSupplierRef());
         ResolvedBinding binding =
                 profileResolver.resolveBinding(supplierRef, SupplierCapability.WORKORDER_AUTHORIZATION);
-        MichelinS2SWorkorderAuthCodec codec = resolveCodec(binding);
+        MichelinS2SWorkorderAuthCodec codec = SupplierCodecs.require(
+                adapterRegistry,
+                binding,
+                SupplierCapability.WORKORDER_AUTHORIZATION,
+                MichelinS2SWorkorderAuthCodec.class);
 
         String partnerId;
         try {
@@ -148,7 +151,7 @@ public class WorkorderAuthorizationPoller {
         }
 
         SupplierRequestSpec spec = codec.buildPollRequest(pollPath, partnerId);
-        SupplierHttpResponse response = baseClient.exchange(toHttpRequest(binding, spec));
+        SupplierHttpResponse response = baseClient.exchange(SupplierRequests.toHttpRequest(binding, spec));
 
         if (!response.isSuccess()) {
             // Left PENDING deliberately: a failed poll says nothing about the vendor's decision, and
@@ -200,30 +203,5 @@ public class WorkorderAuthorizationPoller {
         } catch (IllegalArgumentException e) {
             return null;
         }
-    }
-
-    @NonNull
-    private SupplierHttpRequest toHttpRequest(@NonNull ResolvedBinding binding, @NonNull SupplierRequestSpec spec) {
-        return new SupplierHttpRequest(
-                binding,
-                HttpMethod.valueOf(spec.method()),
-                spec.pathSuffix(),
-                spec.queryParams(),
-                spec.body(),
-                spec.contentType(),
-                spec.accept(),
-                spec.idempotent(),
-                spec.headers());
-    }
-
-    @NonNull
-    private MichelinS2SWorkorderAuthCodec resolveCodec(@NonNull ResolvedBinding binding) {
-        AdapterResolution resolution = adapterRegistry.resolve(
-                SupplierCapability.WORKORDER_AUTHORIZATION, binding.family(), binding.version());
-        if (resolution instanceof AdapterResolution.Resolved resolved
-                && resolved.codec() instanceof MichelinS2SWorkorderAuthCodec codec) {
-            return codec;
-        }
-        throw new IllegalStateException("No workorder authorization codec registered for " + binding.family());
     }
 }

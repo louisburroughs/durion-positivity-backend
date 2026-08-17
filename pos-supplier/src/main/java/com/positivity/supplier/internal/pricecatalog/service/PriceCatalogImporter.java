@@ -6,8 +6,8 @@ import com.positivity.supplier.internal.adapter.ediwheelb.PricatDecodeException;
 import com.positivity.supplier.internal.adapter.ediwheelb.PricatDocument;
 import com.positivity.supplier.internal.audit.SupplierCorrelationContext;
 import com.positivity.supplier.internal.client.SupplierBaseClient;
-import com.positivity.supplier.internal.client.SupplierHttpRequest;
 import com.positivity.supplier.internal.client.SupplierHttpResponse;
+import com.positivity.supplier.internal.client.SupplierRequests;
 import com.positivity.supplier.internal.domain.model.PartyContext;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.domain.model.SupplierPriceCatalogEntry;
@@ -17,12 +17,14 @@ import com.positivity.supplier.internal.entity.PriceCatalogImportEntity;
 import com.positivity.supplier.internal.entity.SupplierAccountEntity;
 import com.positivity.supplier.internal.enums.PriceCatalogMatchMethod;
 import com.positivity.supplier.internal.enums.UnmatchedLineReason;
+import com.positivity.supplier.internal.exception.PriceCatalogFetchException;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
-import com.positivity.supplier.internal.registry.AdapterResolution;
+import com.positivity.supplier.internal.registry.SupplierCodecs;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedPartyAccounts;
+import com.positivity.supplier.internal.spi.SupplierPriceCatalogPort;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -35,7 +37,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 
 /**
@@ -67,7 +68,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class PriceCatalogImporter {
+public class PriceCatalogImporter implements SupplierPriceCatalogPort {
 
     /** ADR-0053 §7 default; validate against the first Michelin sandbox pull and record it there. */
     public static final int DEFAULT_CHUNK_SIZE = 500;
@@ -94,7 +95,8 @@ public class PriceCatalogImporter {
     @NonNull
     public PriceCatalogImportEntity runImport(@NonNull SupplierRef supplierRef) {
         ResolvedBinding binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.PRICE_CATALOG);
-        EdiwheelB40PricatCodec codec = resolveCodec(binding);
+        EdiwheelB40PricatCodec codec = SupplierCodecs.require(
+                adapterRegistry, binding, SupplierCapability.PRICE_CATALOG, EdiwheelB40PricatCodec.class);
         ResolvedPartyAccounts accounts = profileResolver.resolvePartyContext(supplierRef, null);
         SupplierAccountEntity billing = accounts.billing();
 
@@ -102,25 +104,12 @@ public class PriceCatalogImporter {
         String correlationId = SupplierCorrelationContext.currentOrGenerate();
         Instant fetchedAt = Instant.now(clock);
 
-        PartyContext partyContext = new PartyContext(billing.getAccountNumber(), billing.getAgencyCode(), null);
-        SupplierRequestSpec spec = codec.buildRequest(partyContext, null);
-        SupplierHttpResponse response = baseClient.exchange(toHttpRequest(binding, spec));
-
-        if (!response.isSuccess()) {
-            return stagingWriter.persistFailure(
-                    importManifestId,
-                    binding,
-                    billing,
-                    fetchedAt,
-                    correlationId,
-                    "vendor exchange failed: " + response.outcome()
-                            + (response.failureDetail() == null ? "" : " — " + response.failureDetail()));
-        }
-
         PricatDocument document;
         try {
-            document = codec.decode(response.body(), importManifestId);
-        } catch (PricatDecodeException e) {
+            document = readCatalogue(binding, codec, billing, importManifestId);
+        } catch (PriceCatalogFetchException e) {
+            // Recorded rather than raised: an import run is scheduled work, and an operator needs
+            // the manifest row saying this vendor was asked and did not answer usably.
             return stagingWriter.persistFailure(
                     importManifestId, binding, billing, fetchedAt, correlationId, e.getMessage());
         }
@@ -240,37 +229,6 @@ public class PriceCatalogImporter {
                 new MatchOutcome(null, null, UnmatchedLineReason.CATALOG_UNAVAILABLE, u.detail());
         };
     }
-
-    /**
-     * Turns a codec's transport-free request spec into a transport request against the resolved
-     * binding. The join lives here rather than in the codec so the adapter package stays free of
-     * transport and configuration types (ADR-0051 §2).
-     */
-    private SupplierHttpRequest toHttpRequest(ResolvedBinding binding, SupplierRequestSpec spec) {
-        return new SupplierHttpRequest(
-                binding,
-                HttpMethod.valueOf(spec.method()),
-                spec.pathSuffix(),
-                spec.queryParams(),
-                spec.body(),
-                spec.contentType(),
-                spec.accept(),
-                spec.idempotent());
-    }
-
-    private EdiwheelB40PricatCodec resolveCodec(ResolvedBinding binding) {
-        AdapterResolution resolution =
-                adapterRegistry.resolve(SupplierCapability.PRICE_CATALOG, binding.family(), binding.version());
-        if (resolution instanceof AdapterResolution.Resolved resolved
-                && resolved.codec() instanceof EdiwheelB40PricatCodec codec) {
-            return codec;
-        }
-        throw new SupplierConfigurationException(
-                SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
-                "No PRICAT codec registered for " + binding.family() + " "
-                        + binding.version().value());
-    }
-
     /**
      * Identity of a line within one document, for deduplication only. EAN first, then the
      * cross-reference code, then the supplier code — the supplier code appears here solely to tell
@@ -312,4 +270,62 @@ public class PriceCatalogImporter {
 
     /** Everything decided before the staging transaction opens. */
     public record PreparedImport(List<MatchedLine> matched, List<QuarantinedLine> quarantined, int duplicates) {}
+
+    /**
+     * The vendor conversation, with no staging and no matching (the {@link SupplierPriceCatalogPort}).
+     *
+     * <p>Returns the unreadable lines alongside the decoded ones. Dropping them would make a product
+     * with a malformed price line indistinguishable from one the vendor never listed, and only one
+     * of those is worth anybody's attention.
+     */
+    @Override
+    public SupplierPriceCatalogPort.@NonNull Fetched fetchPriceCatalog(
+            @NonNull SupplierRef supplierRef, @NonNull UUID importManifestId) {
+        ResolvedBinding binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.PRICE_CATALOG);
+        EdiwheelB40PricatCodec codec = SupplierCodecs.require(
+                adapterRegistry, binding, SupplierCapability.PRICE_CATALOG, EdiwheelB40PricatCodec.class);
+        SupplierAccountEntity billing =
+                profileResolver.resolvePartyContext(supplierRef, null).billing();
+
+        PricatDocument document = readCatalogue(binding, codec, billing, importManifestId);
+        return new SupplierPriceCatalogPort.Fetched(
+                document.entries(),
+                document.rejectedLines().stream()
+                        .map(line -> new SupplierPriceCatalogPort.RejectedLine(
+                                line.positionNumber(),
+                                line.articleEan(),
+                                line.supplierArticleCode(),
+                                line.xReferenceCode(),
+                                line.detail()))
+                        .toList(),
+                document.linesFetched());
+    }
+
+    /**
+     * Fetches and decodes the catalogue, throwing when it could not be read.
+     *
+     * <p>Shared by the import run and the port, so both see exactly the same document. What to do
+     * about a failure differs — the run records a manifest, the port raises — and that difference is
+     * the caller's, which is why it is not decided here.
+     */
+    @NonNull
+    private PricatDocument readCatalogue(
+            @NonNull ResolvedBinding binding,
+            @NonNull EdiwheelB40PricatCodec codec,
+            @NonNull SupplierAccountEntity billing,
+            @NonNull UUID importManifestId) {
+        PartyContext partyContext = new PartyContext(billing.getAccountNumber(), billing.getAgencyCode(), null);
+        SupplierRequestSpec spec = codec.buildRequest(partyContext, null);
+        SupplierHttpResponse response = baseClient.exchange(SupplierRequests.toHttpRequest(binding, spec));
+
+        if (!response.isSuccess()) {
+            throw new PriceCatalogFetchException("vendor exchange failed: " + response.outcome()
+                    + (response.failureDetail() == null ? "" : " — " + response.failureDetail()));
+        }
+        try {
+            return codec.decode(response.body(), importManifestId);
+        } catch (PricatDecodeException e) {
+            throw new PriceCatalogFetchException(e.getMessage(), e);
+        }
+    }
 }

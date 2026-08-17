@@ -141,7 +141,7 @@ class StockInquiryRunnerTest {
     void returnsTheVendorsAnswerWhenTheVendorAnswers() {
         when(baseClient.exchange(any())).thenReturn(response(ExchangeOutcome.OK, GOOD_QUOTE));
 
-        SupplierStockInquiryResult result = runner.inquire(SUPPLIER, LOCATION_ID, inquiry());
+        SupplierStockInquiryResult result = runner.inquireAvailability(SUPPLIER, LOCATION_ID, inquiry());
 
         assertThat(result.status()).isEqualTo(SupplierStockInquiryResult.Status.OK);
         assertThat(result.lines()).hasSize(1);
@@ -152,7 +152,7 @@ class StockInquiryRunnerTest {
     void sendsTheProfilesBillingAndDeliveryAccountsRatherThanAnythingTheCallerSupplied() {
         when(baseClient.exchange(any())).thenReturn(response(ExchangeOutcome.OK, GOOD_QUOTE));
 
-        runner.inquire(SUPPLIER, LOCATION_ID, inquiry());
+        runner.inquireAvailability(SUPPLIER, LOCATION_ID, inquiry());
 
         ArgumentCaptor<SupplierHttpRequest> captor = ArgumentCaptor.forClass(SupplierHttpRequest.class);
         verify(baseClient).exchange(captor.capture());
@@ -165,7 +165,7 @@ class StockInquiryRunnerTest {
     void reportsAnUnreachableVendorAsUnavailableRatherThanThrowing() {
         when(baseClient.exchange(any())).thenReturn(response(ExchangeOutcome.PRE_SEND_FAILURE, null));
 
-        SupplierStockInquiryResult result = runner.inquire(SUPPLIER, LOCATION_ID, inquiry());
+        SupplierStockInquiryResult result = runner.inquireAvailability(SUPPLIER, LOCATION_ID, inquiry());
 
         // A product page has something to render without live stock and nothing to render if this
         // throws.
@@ -187,7 +187,7 @@ class StockInquiryRunnerTest {
                         Duration.ofMillis(1),
                         "circuit breaker open"));
 
-        SupplierStockInquiryResult result = runner.inquire(SUPPLIER, LOCATION_ID, inquiry());
+        SupplierStockInquiryResult result = runner.inquireAvailability(SUPPLIER, LOCATION_ID, inquiry());
 
         assertThat(result.status()).isEqualTo(SupplierStockInquiryResult.Status.SUPPLIER_UNAVAILABLE);
     }
@@ -196,7 +196,7 @@ class StockInquiryRunnerTest {
     void reportsAReadTimeoutAsUnavailableRatherThanAsAnEmptyWarehouse() {
         when(baseClient.exchange(any())).thenReturn(response(ExchangeOutcome.POST_SEND_AMBIGUOUS, null));
 
-        SupplierStockInquiryResult result = runner.inquire(SUPPLIER, LOCATION_ID, inquiry());
+        SupplierStockInquiryResult result = runner.inquireAvailability(SUPPLIER, LOCATION_ID, inquiry());
 
         assertThat(result.status()).isEqualTo(SupplierStockInquiryResult.Status.SUPPLIER_UNAVAILABLE);
         assertThat(result.lines()).isEmpty();
@@ -206,7 +206,7 @@ class StockInquiryRunnerTest {
     void reportsAnUnreadableAnswerAsUnavailableRatherThanAsNoStock() {
         when(baseClient.exchange(any())).thenReturn(response(ExchangeOutcome.OK, "<html>502</html>"));
 
-        SupplierStockInquiryResult result = runner.inquire(SUPPLIER, LOCATION_ID, inquiry());
+        SupplierStockInquiryResult result = runner.inquireAvailability(SUPPLIER, LOCATION_ID, inquiry());
 
         // Our parsing problem must not become the vendor's empty warehouse.
         assertThat(result.status()).isEqualTo(SupplierStockInquiryResult.Status.SUPPLIER_UNAVAILABLE);
@@ -218,7 +218,7 @@ class StockInquiryRunnerTest {
                 .thenThrow(new SupplierConfigurationException(
                         SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED, "not bound"));
 
-        SupplierStockInquiryResult result = runner.inquire(SUPPLIER, LOCATION_ID, inquiry());
+        SupplierStockInquiryResult result = runner.inquireAvailability(SUPPLIER, LOCATION_ID, inquiry());
 
         assertThat(result.status()).isEqualTo(SupplierStockInquiryResult.Status.CAPABILITY_NOT_CONFIGURED);
         verifyNoInteractions(baseClient);
@@ -230,7 +230,7 @@ class StockInquiryRunnerTest {
                 .thenThrow(new SupplierConfigurationException(
                         SupplierConfigurationException.MISSING_DELIVERY_MAPPING, "no mapping"));
 
-        SupplierStockInquiryResult result = runner.inquire(SUPPLIER, LOCATION_ID, inquiry());
+        SupplierStockInquiryResult result = runner.inquireAvailability(SUPPLIER, LOCATION_ID, inquiry());
 
         // Asking anyway would return an answer about whichever address the vendor defaults to —
         // right-looking, and about the wrong place.
@@ -243,7 +243,7 @@ class StockInquiryRunnerTest {
         when(profileResolver.resolvePartyContext(SUPPLIER, LOCATION_ID))
                 .thenReturn(new ResolvedPartyAccounts(account("30012456", "91"), null));
 
-        SupplierStockInquiryResult result = runner.inquire(SUPPLIER, LOCATION_ID, inquiry());
+        SupplierStockInquiryResult result = runner.inquireAvailability(SUPPLIER, LOCATION_ID, inquiry());
 
         assertThat(result.status()).isEqualTo(SupplierStockInquiryResult.Status.CONFIGURATION_ERROR);
         verify(baseClient, never()).exchange(any());
@@ -255,7 +255,7 @@ class StockInquiryRunnerTest {
                         SupplierCapability.STOCK_INQUIRY, ProtocolFamily.EDIWHEEL_A25, ProtocolVersion.A2_5))
                 .thenReturn(new AdapterResolution.NotConfigured("no codec bound for STOCK_INQUIRY/EDIWHEEL_A25/A2_5"));
 
-        SupplierStockInquiryResult result = runner.inquire(SUPPLIER, LOCATION_ID, inquiry());
+        SupplierStockInquiryResult result = runner.inquireAvailability(SUPPLIER, LOCATION_ID, inquiry());
 
         assertThat(result.status()).isEqualTo(SupplierStockInquiryResult.Status.CAPABILITY_NOT_CONFIGURED);
         verifyNoInteractions(baseClient);
@@ -265,7 +265,7 @@ class StockInquiryRunnerTest {
     void marksTheExchangeRetryableBecauseAnInquiryCommitsNothing() {
         when(baseClient.exchange(any())).thenReturn(response(ExchangeOutcome.OK, GOOD_QUOTE));
 
-        runner.inquire(SUPPLIER, LOCATION_ID, inquiry());
+        runner.inquireAvailability(SUPPLIER, LOCATION_ID, inquiry());
 
         ArgumentCaptor<SupplierHttpRequest> captor = ArgumentCaptor.forClass(SupplierHttpRequest.class);
         verify(baseClient).exchange(captor.capture());

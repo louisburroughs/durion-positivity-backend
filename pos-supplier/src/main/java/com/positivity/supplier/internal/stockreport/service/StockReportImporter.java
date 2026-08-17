@@ -4,8 +4,8 @@ import com.positivity.supplier.internal.adapter.ediwheelb.EdiwheelB21StockReport
 import com.positivity.supplier.internal.adapter.ediwheelb.StockReportDecodeException;
 import com.positivity.supplier.internal.audit.SupplierCorrelationContext;
 import com.positivity.supplier.internal.client.SupplierBaseClient;
-import com.positivity.supplier.internal.client.SupplierHttpRequest;
 import com.positivity.supplier.internal.client.SupplierHttpResponse;
+import com.positivity.supplier.internal.client.SupplierRequests;
 import com.positivity.supplier.internal.domain.model.PartyContext;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.domain.model.SupplierRef;
@@ -13,19 +13,20 @@ import com.positivity.supplier.internal.domain.model.SupplierRequestSpec;
 import com.positivity.supplier.internal.domain.model.SupplierStockSnapshot;
 import com.positivity.supplier.internal.entity.StockSnapshotEntity;
 import com.positivity.supplier.internal.entity.SupplierAccountEntity;
+import com.positivity.supplier.internal.exception.StockReportFetchException;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
-import com.positivity.supplier.internal.registry.AdapterResolution;
+import com.positivity.supplier.internal.registry.SupplierCodecs;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedPartyAccounts;
+import com.positivity.supplier.internal.spi.SupplierStockReportPort;
 import java.time.Clock;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 
 /**
@@ -51,7 +52,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class StockReportImporter {
+public class StockReportImporter implements SupplierStockReportPort {
 
     /** Same default as PRICAT: a country-level report is as wide as a catalog (ADR-0053 §7). */
     public static final int DEFAULT_CHUNK_SIZE = 500;
@@ -79,31 +80,20 @@ public class StockReportImporter {
     @NonNull
     public StockSnapshotEntity runSnapshot(@NonNull SupplierRef supplierRef) {
         ResolvedBinding binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.STOCK_REPORT);
-        EdiwheelB21StockReportCodec codec = resolveCodec(binding);
+        EdiwheelB21StockReportCodec codec = SupplierCodecs.require(
+                adapterRegistry, binding, SupplierCapability.STOCK_REPORT, EdiwheelB21StockReportCodec.class);
         ResolvedPartyAccounts accounts = profileResolver.resolvePartyContext(supplierRef, null);
         SupplierAccountEntity billing = accounts.billing();
 
         String correlationId = SupplierCorrelationContext.currentOrGenerate();
         Instant fetchedAt = Instant.now(clock);
 
-        PartyContext partyContext = new PartyContext(billing.getAccountNumber(), billing.getAgencyCode(), null);
-        SupplierRequestSpec spec = codec.buildRequest(partyContext, sendBuyerParty);
-        SupplierHttpResponse response = baseClient.exchange(toHttpRequest(binding, spec));
-
-        if (!response.isSuccess()) {
-            return snapshotWriter.persistFailure(
-                    binding,
-                    billing,
-                    correlationId,
-                    fetchedAt,
-                    "vendor exchange failed: " + response.outcome()
-                            + (response.failureDetail() == null ? "" : " — " + response.failureDetail()));
-        }
-
         SupplierStockSnapshot snapshot;
         try {
-            snapshot = codec.decode(response.body());
-        } catch (StockReportDecodeException e) {
+            snapshot = fetchStockSnapshot(supplierRef);
+        } catch (StockReportFetchException e) {
+            // The failure is recorded rather than raised: a snapshot run is scheduled work, and an
+            // operator needs the row that says this vendor was asked and did not answer.
             return snapshotWriter.persistFailure(binding, billing, correlationId, fetchedAt, e.getMessage());
         }
 
@@ -115,31 +105,35 @@ public class StockReportImporter {
     }
 
     /**
-     * Turns the codec's transport-free spec into a transport request against the resolved binding.
-     * The join lives here so the adapter package stays free of transport types (ADR-0051 §2).
+     * The vendor conversation, with no persistence (the {@link SupplierStockReportPort}).
+     *
+     * <p>Throws rather than returning an empty snapshot. An empty snapshot is a claim — "this vendor
+     * holds nothing, anywhere" — and a consumer acting on one would report every article unavailable
+     * because a request timed out. Recording the failure instead is {@link #runSnapshot}'s job,
+     * because what to do about it is this platform's policy rather than the protocol's.
      */
-    private SupplierHttpRequest toHttpRequest(ResolvedBinding binding, SupplierRequestSpec spec) {
-        return new SupplierHttpRequest(
-                binding,
-                HttpMethod.valueOf(spec.method()),
-                spec.pathSuffix(),
-                spec.queryParams(),
-                spec.body(),
-                spec.contentType(),
-                spec.accept(),
-                spec.idempotent());
-    }
+    @Override
+    @NonNull
+    public SupplierStockSnapshot fetchStockSnapshot(@NonNull SupplierRef supplierRef) {
+        ResolvedBinding binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.STOCK_REPORT);
+        EdiwheelB21StockReportCodec codec = SupplierCodecs.require(
+                adapterRegistry, binding, SupplierCapability.STOCK_REPORT, EdiwheelB21StockReportCodec.class);
+        SupplierAccountEntity billing =
+                profileResolver.resolvePartyContext(supplierRef, null).billing();
 
-    private EdiwheelB21StockReportCodec resolveCodec(ResolvedBinding binding) {
-        AdapterResolution resolution =
-                adapterRegistry.resolve(SupplierCapability.STOCK_REPORT, binding.family(), binding.version());
-        if (resolution instanceof AdapterResolution.Resolved resolved
-                && resolved.codec() instanceof EdiwheelB21StockReportCodec codec) {
-            return codec;
+        PartyContext partyContext = new PartyContext(billing.getAccountNumber(), billing.getAgencyCode(), null);
+        SupplierRequestSpec spec = codec.buildRequest(partyContext, sendBuyerParty);
+        SupplierHttpResponse response = baseClient.exchange(SupplierRequests.toHttpRequest(binding, spec));
+
+        if (!response.isSuccess()) {
+            throw new StockReportFetchException("vendor exchange failed: " + response.outcome()
+                    + (response.failureDetail() == null ? "" : " — " + response.failureDetail()));
         }
-        throw new SupplierConfigurationException(
-                SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
-                "No stock-report codec registered for " + binding.family() + " "
-                        + binding.version().value());
+
+        try {
+            return codec.decode(response.body());
+        } catch (StockReportDecodeException e) {
+            throw new StockReportFetchException(e.getMessage(), e);
+        }
     }
 }

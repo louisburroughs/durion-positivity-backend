@@ -92,7 +92,7 @@ class SupplierStockServiceImplTest {
 
     @Test
     void returnsTheVendorsAnswerWithTheInquiryIdEchoedBack() {
-        when(runner.inquire(any(), any(), any())).thenReturn(answered(8));
+        when(runner.inquireAvailability(any(), any(), any())).thenReturn(answered(8));
         StockInquiryRequest request = request(LOCATION_A);
 
         StockInquiryResponse response = service.inquireLiveStock(request);
@@ -107,31 +107,31 @@ class SupplierStockServiceImplTest {
 
     @Test
     void asksTheVendorOnlyOnceForRepeatedViewsOfTheSameArticle() {
-        when(runner.inquire(any(), any(), any())).thenReturn(answered(8));
+        when(runner.inquireAvailability(any(), any(), any())).thenReturn(answered(8));
 
         service.inquireLiveStock(request(LOCATION_A));
         StockInquiryResponse second = service.inquireLiveStock(request(LOCATION_A));
 
-        verify(runner, times(1)).inquire(any(), any(), any());
+        verify(runner, times(1)).inquireAvailability(any(), any(), any());
         assertThat(second.lines().getFirst().availableQuantity()).isEqualTo(8);
     }
 
     @Test
     void neverServesOneLocationsAnswerToAnother() {
-        when(runner.inquire(any(), any(), any())).thenReturn(answered(8));
+        when(runner.inquireAvailability(any(), any(), any())).thenReturn(answered(8));
 
         service.inquireLiveStock(request(LOCATION_A));
         service.inquireLiveStock(request(LOCATION_B));
 
         // Availability is consignee-specific. A shared entry would tell a customer that stock four
         // hundred kilometres away is available at the branch fitting the tyre.
-        verify(runner).inquire(any(SupplierRef.class), eq(LOCATION_A), any(SupplierStockInquiry.class));
-        verify(runner).inquire(any(SupplierRef.class), eq(LOCATION_B), any(SupplierStockInquiry.class));
+        verify(runner).inquireAvailability(any(SupplierRef.class), eq(LOCATION_A), any(SupplierStockInquiry.class));
+        verify(runner).inquireAvailability(any(SupplierRef.class), eq(LOCATION_B), any(SupplierStockInquiry.class));
     }
 
     @Test
     void asksTheVendorOnlyAboutArticlesItHasNoAnswerFor() {
-        when(runner.inquire(any(), any(), any())).thenReturn(answered(8));
+        when(runner.inquireAvailability(any(), any(), any())).thenReturn(answered(8));
         service.inquireLiveStock(request(LOCATION_A));
 
         StockInquiryRequest twoArticles = new StockInquiryRequest(
@@ -141,7 +141,7 @@ class SupplierStockServiceImplTest {
                 List.of(
                         new StockInquiryRequest.Line(EAN, null, 4),
                         new StockInquiryRequest.Line("9999999999999", null, 2)));
-        when(runner.inquire(any(), any(), any()))
+        when(runner.inquireAvailability(any(), any(), any()))
                 .thenReturn(new SupplierStockInquiryResult(
                         SupplierStockInquiryResult.Status.OK,
                         List.of(new SupplierStockInquiryResult.Line(
@@ -157,7 +157,7 @@ class SupplierStockServiceImplTest {
         StockInquiryResponse response = service.inquireLiveStock(twoArticles);
 
         ArgumentCaptor<SupplierStockInquiry> captor = ArgumentCaptor.forClass(SupplierStockInquiry.class);
-        verify(runner, times(2)).inquire(any(), any(), captor.capture());
+        verify(runner, times(2)).inquireAvailability(any(), any(), captor.capture());
         assertThat(captor.getValue().lines()).hasSize(1);
         assertThat(captor.getValue().lines().getFirst().articleEan()).isEqualTo("9999999999999");
         // Both articles are answered: one from the cache, one from the vendor.
@@ -166,7 +166,7 @@ class SupplierStockServiceImplTest {
 
     @Test
     void datesTheAnswerByTheOldestFactInIt() {
-        when(runner.inquire(any(), any(), any())).thenReturn(answered(8));
+        when(runner.inquireAvailability(any(), any(), any())).thenReturn(answered(8));
         service.inquireLiveStock(request(LOCATION_A));
 
         // A later call served from that cached answer must not claim to be current: a caller asking
@@ -181,7 +181,7 @@ class SupplierStockServiceImplTest {
 
     @Test
     void doesNotRememberAVendorThatCouldNotAnswer() {
-        when(runner.inquire(any(), any(), any()))
+        when(runner.inquireAvailability(any(), any(), any()))
                 .thenReturn(failed(SupplierStockInquiryResult.Status.SUPPLIER_UNAVAILABLE));
 
         service.inquireLiveStock(request(LOCATION_A));
@@ -189,12 +189,12 @@ class SupplierStockServiceImplTest {
 
         // Caching a failure would turn one bad moment into a minute of identical failures for every
         // customer viewing the page.
-        verify(runner, times(2)).inquire(any(), any(), any());
+        verify(runner, times(2)).inquireAvailability(any(), any(), any());
     }
 
     @Test
     void doesNotRememberAnArticleTheVendorCouldNotDetermine() {
-        when(runner.inquire(any(), any(), any()))
+        when(runner.inquireAvailability(any(), any(), any()))
                 .thenReturn(new SupplierStockInquiryResult(
                         SupplierStockInquiryResult.Status.OK,
                         List.of(new SupplierStockInquiryResult.Line(
@@ -204,12 +204,12 @@ class SupplierStockServiceImplTest {
         service.inquireLiveStock(request(LOCATION_A));
         service.inquireLiveStock(request(LOCATION_A));
 
-        verify(runner, times(2)).inquire(any(), any(), any());
+        verify(runner, times(2)).inquireAvailability(any(), any(), any());
     }
 
     @Test
     void doesNotRememberAnUnlistedArticleSoACatalogueFixShowsImmediately() {
-        when(runner.inquire(any(), any(), any()))
+        when(runner.inquireAvailability(any(), any(), any()))
                 .thenReturn(new SupplierStockInquiryResult(
                         SupplierStockInquiryResult.Status.NOT_LISTED,
                         List.of(new SupplierStockInquiryResult.Line(
@@ -222,7 +222,7 @@ class SupplierStockServiceImplTest {
         assertThat(first.status()).isEqualTo(StockInquiryResponse.Status.NOT_LISTED);
         // NOT_LISTED usually means a mapping is wrong. An operator who fixes it should see the fix
         // on the next page load, not a minute later wondering whether it worked.
-        verify(runner, times(2)).inquire(any(), any(), any());
+        verify(runner, times(2)).inquireAvailability(any(), any(), any());
     }
 
     @Test
@@ -231,7 +231,7 @@ class SupplierStockServiceImplTest {
                 SupplierStockInquiryResult.Status.SUPPLIER_UNAVAILABLE,
                 SupplierStockInquiryResult.Status.CAPABILITY_NOT_CONFIGURED,
                 SupplierStockInquiryResult.Status.CONFIGURATION_ERROR)) {
-            when(runner.inquire(any(), any(), any())).thenReturn(failed(status));
+            when(runner.inquireAvailability(any(), any(), any())).thenReturn(failed(status));
 
             StockInquiryResponse response = service.inquireLiveStock(request(LOCATION_A));
 
@@ -254,34 +254,34 @@ class SupplierStockServiceImplTest {
 
     @Test
     void makesNoCallAtAllWhenEveryArticleIsAlreadyAnswered() {
-        when(runner.inquire(any(), any(), any())).thenReturn(answered(8));
+        when(runner.inquireAvailability(any(), any(), any())).thenReturn(answered(8));
         service.inquireLiveStock(request(LOCATION_A));
 
         service.inquireLiveStock(request(LOCATION_A));
 
-        verify(runner, times(1)).inquire(any(), any(), any());
+        verify(runner, times(1)).inquireAvailability(any(), any(), any());
     }
 
     @Test
     void asksEveryTimeWhenCachingIsSwitchedOff() {
         StockInquiryCache disabled = new StockInquiryCache(false, Duration.ofSeconds(60));
         SupplierStockServiceImpl uncached = new SupplierStockServiceImpl(profileRepository, runner, disabled, CLOCK);
-        when(runner.inquire(any(), any(), any())).thenReturn(answered(8));
+        when(runner.inquireAvailability(any(), any(), any())).thenReturn(answered(8));
 
         uncached.inquireLiveStock(request(LOCATION_A));
         uncached.inquireLiveStock(request(LOCATION_A));
 
-        verify(runner, times(2)).inquire(any(), any(), any());
+        verify(runner, times(2)).inquireAvailability(any(), any(), any());
     }
 
     @Test
     void neverThrowsForAVendorSideFailure() {
-        when(runner.inquire(any(), any(), any()))
+        when(runner.inquireAvailability(any(), any(), any()))
                 .thenReturn(failed(SupplierStockInquiryResult.Status.SUPPLIER_UNAVAILABLE));
 
         // The whole point of the degradation contract: a page renders without live stock rather than
         // failing because a supplier had a bad afternoon.
         assertThat(service.inquireLiveStock(request(LOCATION_A))).isNotNull();
-        verify(runner, never()).inquire(eq(null), any(), any());
+        verify(runner, never()).inquireAvailability(eq(null), any(), any());
     }
 }

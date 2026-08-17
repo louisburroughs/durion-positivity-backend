@@ -95,7 +95,8 @@ public class SupplierStockServiceImpl implements SupplierStockService {
                                 line.articleEan(), line.supplierArticleCode(), line.requestedQuantity()))
                         .toList());
 
-        SupplierStockInquiryResult result = runner.inquire(supplierRef, request.deliveryLocationId(), inquiry);
+        SupplierStockInquiryResult result =
+                runner.inquireAvailability(supplierRef, request.deliveryLocationId(), inquiry);
         if (result.status() != SupplierStockInquiryResult.Status.OK
                 && result.status() != SupplierStockInquiryResult.Status.NOT_LISTED) {
             // The vendor did not answer. Cached articles are not reported alongside it: a mixed

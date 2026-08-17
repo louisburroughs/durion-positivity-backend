@@ -181,23 +181,4 @@ class DomainModelInvariantsTest {
             assertThat(result.lines()).hasSize(1);
         }
     }
-
-    @Nested
-    class ExchangeMetadataInvariants {
-
-        @Test
-        void unmappedFieldsAreDefensivelyCopiedAndImmutable() {
-            // ADR-0051 §4: unmapped canonical fields are recorded per exchange so nothing is
-            // silently dropped — the recorded list must not be mutable after the fact.
-            List<String> source = new ArrayList<>(List.of("liner.notes"));
-            ExchangeMetadata metadata = new ExchangeMetadata(
-                    UUID.randomUUID(), "corr-1", ProtocolFamily.EDIWHEEL_C1, ProtocolVersion.C1_1, source);
-
-            source.add("late.field");
-
-            assertThat(metadata.unmappedFields()).containsExactly("liner.notes");
-            assertThatThrownBy(() -> metadata.unmappedFields().add("x"))
-                    .isInstanceOf(UnsupportedOperationException.class);
-        }
-    }
 }

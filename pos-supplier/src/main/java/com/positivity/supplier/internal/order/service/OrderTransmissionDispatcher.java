@@ -14,9 +14,8 @@ import com.positivity.supplier.internal.domain.model.SupplierRequestSpec;
 import com.positivity.supplier.internal.entity.SupplierAccountEntity;
 import com.positivity.supplier.internal.entity.SupplierTransmissionIntentEntity;
 import com.positivity.supplier.internal.entity.SupplierTransmissionLineEntity;
-import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
-import com.positivity.supplier.internal.registry.AdapterResolution;
+import com.positivity.supplier.internal.registry.SupplierCodecs;
 import com.positivity.supplier.internal.repository.SupplierTransmissionLineRepository;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
@@ -82,7 +81,8 @@ public class OrderTransmissionDispatcher {
         SupplierRequestSpec spec;
         try {
             binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.ORDER_CREATE);
-            codec = resolveCodec(binding);
+            codec = SupplierCodecs.require(
+                    adapterRegistry, binding, SupplierCapability.ORDER_CREATE, EdiwheelC10OrderCodec.class);
             ResolvedPartyAccounts accounts =
                     profileResolver.resolvePartyContext(supplierRef, intent.getDeliveryLocationId());
             SupplierAccountEntity billing = accounts.billing();
@@ -203,19 +203,6 @@ public class OrderTransmissionDispatcher {
                 intent.getDocumentId(),
                 intent.getPurchaseOrderNumber(),
                 lines);
-    }
-
-    private EdiwheelC10OrderCodec resolveCodec(ResolvedBinding binding) {
-        AdapterResolution resolution =
-                adapterRegistry.resolve(SupplierCapability.ORDER_CREATE, binding.family(), binding.version());
-        if (resolution instanceof AdapterResolution.Resolved resolved
-                && resolved.codec() instanceof EdiwheelC10OrderCodec codec) {
-            return codec;
-        }
-        throw new SupplierConfigurationException(
-                SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
-                "No order-create codec registered for " + binding.family() + " "
-                        + binding.version().value());
     }
 
     private static String describe(SupplierHttpResponse response) {

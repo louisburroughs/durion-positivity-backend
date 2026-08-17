@@ -17,13 +17,13 @@ import com.positivity.supplier.internal.domain.model.SupplierRef;
 import com.positivity.supplier.internal.domain.model.SupplierRequestSpec;
 import com.positivity.supplier.internal.entity.SupplierMktCatVariantEntity;
 import com.positivity.supplier.internal.exception.MktCatImportException;
-import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
-import com.positivity.supplier.internal.registry.AdapterResolution;
+import com.positivity.supplier.internal.registry.SupplierCodecs;
 import com.positivity.supplier.internal.repository.SupplierMktCatVariantRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
+import com.positivity.supplier.internal.spi.SupplierCatalogPort;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -69,7 +69,7 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class MktCatImporter {
+public class MktCatImporter implements SupplierCatalogPort {
 
     private static final String SOURCE = "pos-supplier";
 
@@ -93,18 +93,7 @@ public class MktCatImporter {
      */
     @NonNull
     public ImportOutcome importAll(@NonNull SupplierRef supplierRef) {
-        ResolvedBinding binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.MARKETING_CATALOG);
-        EdiwheelC12MktCatCodec codec = resolveCodec(binding);
-
-        SupplierHttpResponse listResponse = exchange(binding, codec.buildVariantListRequest());
-        if (!listResponse.isSuccess()) {
-            // Thrown rather than reported as an empty catalogue. An importer that diffs would read
-            // an empty list as "the vendor withdrew everything".
-            throw new MktCatImportException("catalogue variant list could not be read: " + listResponse.outcome()
-                    + (listResponse.failureDetail() == null ? "" : " -- " + listResponse.failureDetail()));
-        }
-
-        return importVariants(supplierRef, codec.decodeVariantIds(listResponse.body()));
+        return importVariants(supplierRef, listVariantIds(supplierRef));
     }
 
     /**
@@ -115,7 +104,8 @@ public class MktCatImporter {
     @NonNull
     public ImportOutcome importVariants(@NonNull SupplierRef supplierRef, @NonNull List<String> variantIds) {
         ResolvedBinding binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.MARKETING_CATALOG);
-        EdiwheelC12MktCatCodec codec = resolveCodec(binding);
+        EdiwheelC12MktCatCodec codec = SupplierCodecs.require(
+                adapterRegistry, binding, SupplierCapability.MARKETING_CATALOG, EdiwheelC12MktCatCodec.class);
         UUID vendorProfileId = binding.profile().getVendorProfileId();
 
         int seen = 0;
@@ -152,13 +142,7 @@ public class MktCatImporter {
             @NonNull SupplierRef supplierRef,
             @NonNull UUID vendorProfileId,
             @NonNull String variantId) {
-        String detail = bodyOrThrow(exchange(binding, codec.buildVariantDetailRequest(variantId)), "variant detail");
-        // Images and language data are optional: a variant with neither is still a variant, and
-        // refusing it would lose the design entirely over its lack of a picture.
-        String images = bodyOrNull(exchange(binding, codec.buildVariantImagesRequest(variantId)));
-        String languages = bodyOrNull(exchange(binding, codec.buildVariantLanguageDataRequest(variantId)));
-
-        MarketingVariant variant = codec.decodeVariant(variantId, detail, images, languages);
+        MarketingVariant variant = readVariant(binding, codec, variantId);
         List<SupplierCatalogEnrichmentImage> storedImages = imageFetcher.fetchAndStore(variant.imageUris());
         List<SupplierCatalogEnrichmentText> texts = variant.texts().stream()
                 .map(text -> new SupplierCatalogEnrichmentText(
@@ -167,6 +151,24 @@ public class MktCatImporter {
 
         return stageAndPublish(
                 vendorProfileId, supplierRef, variant, texts, storedImages, hashOf(variant, storedImages));
+    }
+
+    /**
+     * Reads one variant from the catalogue's four resources, without storing anything.
+     *
+     * <p>Shared by the scheduled import and the {@link SupplierCatalogPort}, so a caller that wants
+     * only the vendor's view gets exactly what the importer saw. Two readers would drift, and the
+     * one that drifts is the port — used rarely, watched by nobody.
+     */
+    @NonNull
+    private MarketingVariant readVariant(
+            @NonNull ResolvedBinding binding, @NonNull EdiwheelC12MktCatCodec codec, @NonNull String variantId) {
+        String detail = bodyOrThrow(exchange(binding, codec.buildVariantDetailRequest(variantId)), "variant detail");
+        // Images and language data are optional: a variant with neither is still a variant, and
+        // refusing it would lose the design entirely over its lack of a picture.
+        String images = bodyOrNull(exchange(binding, codec.buildVariantImagesRequest(variantId)));
+        String languages = bodyOrNull(exchange(binding, codec.buildVariantLanguageDataRequest(variantId)));
+        return codec.decodeVariant(variantId, detail, images, languages);
     }
 
     /**
@@ -326,21 +328,6 @@ public class MktCatImporter {
     private static String bodyOrNull(@NonNull SupplierHttpResponse response) {
         return response.isSuccess() ? response.body() : null;
     }
-
-    @NonNull
-    private EdiwheelC12MktCatCodec resolveCodec(@NonNull ResolvedBinding binding) {
-        AdapterResolution resolution =
-                adapterRegistry.resolve(SupplierCapability.MARKETING_CATALOG, binding.family(), binding.version());
-        if (resolution instanceof AdapterResolution.Resolved resolved
-                && resolved.codec() instanceof EdiwheelC12MktCatCodec codec) {
-            return codec;
-        }
-        throw new SupplierConfigurationException(
-                SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
-                "No marketing catalogue codec registered for " + binding.family() + " "
-                        + binding.version().value());
-    }
-
     /**
      * What one import run did.
      *
@@ -349,4 +336,43 @@ public class MktCatImporter {
      * @param skipped   variants that could not be read this run and will be re-attempted
      */
     public record ImportOutcome(int seen, int published, int skipped) {}
+
+    /**
+     * Lists every variant the catalogue publishes (the {@link SupplierCatalogPort}).
+     *
+     * <p>Throws rather than answering with an empty list, for the reason the whole importer is built
+     * around: it diffs what it fetched against what it holds, and an unreadable catalogue read as an
+     * empty one concludes that every variant ever published has been withdrawn.
+     */
+    @Override
+    @NonNull
+    public List<String> listVariantIds(@NonNull SupplierRef supplierRef) {
+        ResolvedBinding binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.MARKETING_CATALOG);
+        EdiwheelC12MktCatCodec codec = SupplierCodecs.require(
+                adapterRegistry, binding, SupplierCapability.MARKETING_CATALOG, EdiwheelC12MktCatCodec.class);
+
+        SupplierHttpResponse response = exchange(binding, codec.buildVariantListRequest());
+        if (!response.isSuccess()) {
+            throw new MktCatImportException("catalogue variant list could not be read: " + response.outcome()
+                    + (response.failureDetail() == null ? "" : " — " + response.failureDetail()));
+        }
+        return codec.decodeVariantIds(response.body());
+    }
+
+    /**
+     * Assembles one variant from the catalogue's four resources (the {@link SupplierCatalogPort}).
+     *
+     * <p>Returns artwork as the URIs the catalogue published. Fetching those bytes is deliberately
+     * not part of this: it is I/O against arbitrary asset hosts rather than the configured vendor
+     * endpoint, and doing it behind the port would send vendor credentials to whatever host the
+     * catalogue named.
+     */
+    @Override
+    @NonNull
+    public MarketingVariant fetchVariant(@NonNull SupplierRef supplierRef, @NonNull String vendorVariantId) {
+        ResolvedBinding binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.MARKETING_CATALOG);
+        EdiwheelC12MktCatCodec codec = SupplierCodecs.require(
+                adapterRegistry, binding, SupplierCapability.MARKETING_CATALOG, EdiwheelC12MktCatCodec.class);
+        return readVariant(binding, codec, vendorVariantId);
+    }
 }
