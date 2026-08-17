@@ -4,8 +4,8 @@ import com.positivity.supplier.internal.adapter.ediwheela2.EdiwheelA25StockInqui
 import com.positivity.supplier.internal.adapter.ediwheela2.StockInquiryDecodeException;
 import com.positivity.supplier.internal.adapter.ediwheela2.StockInquiryEncodeException;
 import com.positivity.supplier.internal.client.SupplierBaseClient;
-import com.positivity.supplier.internal.client.SupplierHttpRequest;
 import com.positivity.supplier.internal.client.SupplierHttpResponse;
+import com.positivity.supplier.internal.client.SupplierRequests;
 import com.positivity.supplier.internal.domain.model.PartyContext;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.domain.model.SupplierRef;
@@ -15,17 +15,17 @@ import com.positivity.supplier.internal.domain.model.SupplierStockInquiryResult;
 import com.positivity.supplier.internal.entity.SupplierAccountEntity;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
-import com.positivity.supplier.internal.registry.AdapterResolution;
+import com.positivity.supplier.internal.registry.SupplierCodecs;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedPartyAccounts;
 import com.positivity.supplier.internal.spi.ExchangeOutcome;
+import com.positivity.supplier.internal.spi.SupplierStockInquiryPort;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 
 /**
@@ -50,7 +50,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class StockInquiryRunner {
+public class StockInquiryRunner implements SupplierStockInquiryPort {
 
     private final SupplierProfileResolver profileResolver;
     private final AdapterRegistry adapterRegistry;
@@ -69,8 +69,9 @@ public class StockInquiryRunner {
      * @param inquiry the articles to ask about
      * @return the canonical answer; never null, and never an exception for a vendor-side failure
      */
+    @Override
     @NonNull
-    public SupplierStockInquiryResult inquire(
+    public SupplierStockInquiryResult inquireAvailability(
             @NonNull SupplierRef supplierRef, @NonNull UUID deliveryLocationId, @NonNull SupplierStockInquiry inquiry) {
 
         ResolvedBinding binding;
@@ -79,7 +80,8 @@ public class StockInquiryRunner {
         SupplierAccountEntity delivery;
         try {
             binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.STOCK_INQUIRY);
-            codec = resolveCodec(binding);
+            codec = SupplierCodecs.require(
+                    adapterRegistry, binding, SupplierCapability.STOCK_INQUIRY, EdiwheelA25StockInquiryCodec.class);
             ResolvedPartyAccounts accounts = profileResolver.resolvePartyContext(supplierRef, deliveryLocationId);
             billing = accounts.billing();
             delivery = accounts.delivery();
@@ -102,7 +104,7 @@ public class StockInquiryRunner {
             return failed(SupplierStockInquiryResult.Status.CONFIGURATION_ERROR);
         }
 
-        SupplierHttpResponse response = baseClient.exchange(toHttpRequest(binding, spec));
+        SupplierHttpResponse response = baseClient.exchange(SupplierRequests.toHttpRequest(binding, spec));
         if (!response.isSuccess()) {
             // Every non-OK outcome is the same answer to a caller rendering a page: we could not
             // find out. The distinctions the client draws (pre-send, ambiguous, rejected) matter for
@@ -150,34 +152,5 @@ public class StockInquiryRunner {
 
     private static SupplierStockInquiryResult failed(SupplierStockInquiryResult.Status status) {
         return new SupplierStockInquiryResult(status, List.of(), null);
-    }
-
-    /**
-     * Turns the codec's transport-free spec into a transport request against the resolved binding.
-     * The join lives here so the adapter package stays free of transport types (ADR-0051 §2).
-     */
-    private SupplierHttpRequest toHttpRequest(ResolvedBinding binding, SupplierRequestSpec spec) {
-        return new SupplierHttpRequest(
-                binding,
-                HttpMethod.valueOf(spec.method()),
-                spec.pathSuffix(),
-                spec.queryParams(),
-                spec.body(),
-                spec.contentType(),
-                spec.accept(),
-                spec.idempotent());
-    }
-
-    private EdiwheelA25StockInquiryCodec resolveCodec(ResolvedBinding binding) {
-        AdapterResolution resolution =
-                adapterRegistry.resolve(SupplierCapability.STOCK_INQUIRY, binding.family(), binding.version());
-        if (resolution instanceof AdapterResolution.Resolved resolved
-                && resolved.codec() instanceof EdiwheelA25StockInquiryCodec codec) {
-            return codec;
-        }
-        throw new SupplierConfigurationException(
-                SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
-                "No stock-inquiry codec registered for " + binding.family() + " "
-                        + binding.version().value());
     }
 }

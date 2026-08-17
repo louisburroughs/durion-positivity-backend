@@ -2,8 +2,8 @@ package com.positivity.supplier.internal.order.service;
 
 import com.positivity.supplier.internal.adapter.ediwheelc1.EdiwheelC11OrderStatusCodec;
 import com.positivity.supplier.internal.client.SupplierBaseClient;
-import com.positivity.supplier.internal.client.SupplierHttpRequest;
 import com.positivity.supplier.internal.client.SupplierHttpResponse;
+import com.positivity.supplier.internal.client.SupplierRequests;
 import com.positivity.supplier.internal.domain.model.PartyContext;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.domain.model.SupplierOrderStatusResult;
@@ -11,16 +11,17 @@ import com.positivity.supplier.internal.domain.model.SupplierRef;
 import com.positivity.supplier.internal.domain.model.SupplierRequestSpec;
 import com.positivity.supplier.internal.entity.SupplierAccountEntity;
 import com.positivity.supplier.internal.entity.SupplierTransmissionIntentEntity;
+import com.positivity.supplier.internal.exception.OrderStatusUnavailableException;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
-import com.positivity.supplier.internal.registry.AdapterResolution;
+import com.positivity.supplier.internal.registry.SupplierCodecs;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
+import com.positivity.supplier.internal.spi.SupplierOrderStatusPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 
 /**
@@ -43,7 +44,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class OrderStatusQueryRunner {
+public class OrderStatusQueryRunner implements SupplierOrderStatusPort {
 
     private final SupplierProfileResolver profileResolver;
     private final AdapterRegistry adapterRegistry;
@@ -62,69 +63,75 @@ public class OrderStatusQueryRunner {
      */
     @NonNull
     public Answer query(@NonNull SupplierTransmissionIntentEntity intent) {
-        SupplierRef supplierRef = new SupplierRef(intent.getSupplierRef());
+        try {
+            return Answer.of(queryOrderStatus(
+                    new SupplierRef(intent.getSupplierRef()), intent.getDocumentId(), intent.getSupplierOrderNumber()));
+        } catch (OrderStatusUnavailableException e) {
+            // Turned into an answer rather than propagated: the reconciler's caller is a scheduled
+            // sweep over many intents, and one unreachable vendor must not end it.
+            return Answer.unavailable(e.getMessage());
+        }
+    }
+
+    /**
+     * Asks the vendor what became of one order (the {@link SupplierOrderStatusPort}).
+     *
+     * <p>Throws when no answer was obtained, rather than returning an empty result. "The vendor has
+     * no such order" and "we could not ask the vendor" are opposite findings for a reconciler
+     * resolving an ambiguous transmission — one means nothing was placed, the other means we still
+     * do not know — and a single empty return would make them indistinguishable.
+     *
+     * <p>{@code documentId} is required. The codec rejects a null or blank one before anything is
+     * sent, and the column it comes from is non-null, so a nullable parameter advertised a call that
+     * could only ever throw.
+     */
+    @Override
+    @NonNull
+    public SupplierOrderStatusResult queryOrderStatus(
+            @NonNull SupplierRef supplierRef, @Nullable String documentId, @Nullable String supplierOrderNumber) {
         ResolvedBinding binding;
         EdiwheelC11OrderStatusCodec codec;
         PartyContext partyContext;
         try {
             binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.ORDER_STATUS);
-            codec = resolveCodec(binding);
+            codec = SupplierCodecs.require(
+                    adapterRegistry, binding, SupplierCapability.ORDER_STATUS, EdiwheelC11OrderStatusCodec.class);
             SupplierAccountEntity billing =
                     profileResolver.resolvePartyContext(supplierRef, null).billing();
             partyContext = new PartyContext(billing.getAccountNumber(), billing.getAgencyCode(), null);
         } catch (SupplierConfigurationException e) {
-            return Answer.unavailable("order status is not usable for this profile: " + e.getMessage());
+            throw new OrderStatusUnavailableException(
+                    "order status is not usable for this profile: " + e.getMessage(), e);
         }
 
         SupplierRequestSpec spec;
         try {
-            spec = codec.buildRequest(intent.getDocumentId(), intent.getSupplierOrderNumber(), partyContext);
+            spec = codec.buildRequest(documentId, supplierOrderNumber, partyContext);
         } catch (RuntimeException e) {
-            return Answer.unavailable("could not build an order-status query: " + e.getMessage());
+            throw new OrderStatusUnavailableException("could not build an order-status query: " + e.getMessage(), e);
         }
 
-        SupplierHttpResponse response = baseClient.exchange(new SupplierHttpRequest(
-                binding,
-                HttpMethod.valueOf(spec.method()),
-                spec.pathSuffix(),
-                spec.queryParams(),
-                spec.body(),
-                spec.contentType(),
-                spec.accept(),
-                spec.idempotent()));
-
+        SupplierHttpResponse response = baseClient.exchange(SupplierRequests.toHttpRequest(binding, spec));
         if (!response.isSuccess()) {
-            return Answer.unavailable("vendor exchange failed: " + response.outcome()
+            throw new OrderStatusUnavailableException("vendor exchange failed: " + response.outcome()
                     + (response.failureDetail() == null ? "" : " — " + response.failureDetail()));
         }
 
         try {
-            EdiwheelC11OrderStatusCodec.Decoded decoded = codec.decode(intent.getDocumentId(), response.body());
+            EdiwheelC11OrderStatusCodec.Decoded decoded = codec.decode(documentId, response.body());
             if (!decoded.isComplete()) {
                 // Not a failure: the answer is usable, but an operator diagnosing a missing
                 // delivery date needs to know the vendor stated one we could not read.
                 log.warn(
                         "Order status for document {} carried values this codec could not read: {}",
-                        intent.getDocumentId(),
+                        documentId,
                         decoded.unmappedFields());
             }
-            return Answer.of(decoded.result());
+            return decoded.result();
         } catch (RuntimeException e) {
-            return Answer.unavailable("could not decode the vendor's order-status answer: " + e.getMessage());
+            throw new OrderStatusUnavailableException(
+                    "could not decode the vendor's order-status answer: " + e.getMessage(), e);
         }
-    }
-
-    private EdiwheelC11OrderStatusCodec resolveCodec(ResolvedBinding binding) {
-        AdapterResolution resolution =
-                adapterRegistry.resolve(SupplierCapability.ORDER_STATUS, binding.family(), binding.version());
-        if (resolution instanceof AdapterResolution.Resolved resolved
-                && resolved.codec() instanceof EdiwheelC11OrderStatusCodec codec) {
-            return codec;
-        }
-        throw new SupplierConfigurationException(
-                SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
-                "No order-status codec registered for " + binding.family() + " "
-                        + binding.version().value());
     }
 
     /**

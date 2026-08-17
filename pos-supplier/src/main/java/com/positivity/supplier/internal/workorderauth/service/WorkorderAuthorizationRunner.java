@@ -3,8 +3,8 @@ package com.positivity.supplier.internal.workorderauth.service;
 import com.positivity.supplier.internal.adapter.michelins2s.MichelinS2SWorkorderAuthCodec;
 import com.positivity.supplier.internal.adapter.michelins2s.WorkorderAuthDecodeException;
 import com.positivity.supplier.internal.client.SupplierBaseClient;
-import com.positivity.supplier.internal.client.SupplierHttpRequest;
 import com.positivity.supplier.internal.client.SupplierHttpResponse;
+import com.positivity.supplier.internal.client.SupplierRequests;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.domain.model.SupplierRef;
 import com.positivity.supplier.internal.domain.model.SupplierRequestSpec;
@@ -15,7 +15,7 @@ import com.positivity.supplier.internal.enums.WorkorderApprovalStatus;
 import com.positivity.supplier.internal.enums.WorkorderAuthorizationStatus;
 import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
-import com.positivity.supplier.internal.registry.AdapterResolution;
+import com.positivity.supplier.internal.registry.SupplierCodecs;
 import com.positivity.supplier.internal.repository.SupplierWorkorderAuthorizationRepository;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
@@ -30,7 +30,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Limit;
-import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -106,13 +105,17 @@ public class WorkorderAuthorizationRunner implements SupplierWorkorderAuthorizat
             @NonNull SupplierRef supplierRef, @NonNull WorkorderAuthorizationRequest request) {
         ResolvedBinding binding =
                 profileResolver.resolveBinding(supplierRef, SupplierCapability.WORKORDER_AUTHORIZATION);
-        MichelinS2SWorkorderAuthCodec codec = resolveCodec(binding);
+        MichelinS2SWorkorderAuthCodec codec = SupplierCodecs.require(
+                adapterRegistry,
+                binding,
+                SupplierCapability.WORKORDER_AUTHORIZATION,
+                MichelinS2SWorkorderAuthCodec.class);
         String partnerId = S2SPartnerId.resolve(profileResolver, supplierRef);
 
         SupplierWorkorderAuthorizationEntity row = openRow(binding, supplierRef, request);
 
         SupplierRequestSpec spec = codec.buildAuthorizationRequest(request, partnerId, API_MAJOR_VERSION);
-        SupplierHttpResponse response = baseClient.exchange(toHttpRequest(binding, spec));
+        SupplierHttpResponse response = baseClient.exchange(SupplierRequests.toHttpRequest(binding, spec));
 
         if (!response.isSuccess()) {
             // Not a denial. The vendor may never have seen the request, or may have created an
@@ -260,35 +263,6 @@ public class WorkorderAuthorizationRunner implements SupplierWorkorderAuthorizat
         row.setPollLocation(null);
         return authorizationRepository.save(row);
     }
-
-    @NonNull
-    private SupplierHttpRequest toHttpRequest(@NonNull ResolvedBinding binding, @NonNull SupplierRequestSpec spec) {
-        return new SupplierHttpRequest(
-                binding,
-                HttpMethod.valueOf(spec.method()),
-                spec.pathSuffix(),
-                spec.queryParams(),
-                spec.body(),
-                spec.contentType(),
-                spec.accept(),
-                spec.idempotent(),
-                spec.headers());
-    }
-
-    @NonNull
-    private MichelinS2SWorkorderAuthCodec resolveCodec(@NonNull ResolvedBinding binding) {
-        AdapterResolution resolution = adapterRegistry.resolve(
-                SupplierCapability.WORKORDER_AUTHORIZATION, binding.family(), binding.version());
-        if (resolution instanceof AdapterResolution.Resolved resolved
-                && resolved.codec() instanceof MichelinS2SWorkorderAuthCodec codec) {
-            return codec;
-        }
-        throw new SupplierConfigurationException(
-                SupplierConfigurationException.CAPABILITY_NOT_CONFIGURED,
-                "No workorder authorization codec registered for " + binding.family() + " "
-                        + binding.version().value());
-    }
-
     /** Keeps a vendor's error text inside the column it is stored in. */
     @NonNull
     private static String truncate(@NonNull String reason) {
