@@ -55,7 +55,7 @@ public class WorkorderAuthorizationPoller {
     private final SupplierProfileResolver profileResolver;
     private final AdapterRegistry adapterRegistry;
     private final SupplierBaseClient baseClient;
-    private final WorkorderAuthorizationRunner runner;
+    private final WorkorderAuthorizationTransactions transactions;
     private final Clock clock;
 
     /** How many rows one tick will read. Bounded so a backlog cannot monopolise a tick. */
@@ -74,7 +74,7 @@ public class WorkorderAuthorizationPoller {
             SupplierProfileResolver profileResolver,
             AdapterRegistry adapterRegistry,
             SupplierBaseClient baseClient,
-            WorkorderAuthorizationRunner runner,
+            WorkorderAuthorizationTransactions transactions,
             Clock clock,
             @Value("${pos.supplier.workorderauth.poll-batch-size:50}") int batchSize,
             @Value("${pos.supplier.workorderauth.pending-timeout:PT24H}") Duration pendingTimeout) {
@@ -82,7 +82,7 @@ public class WorkorderAuthorizationPoller {
         this.profileResolver = profileResolver;
         this.adapterRegistry = adapterRegistry;
         this.baseClient = baseClient;
-        this.runner = runner;
+        this.transactions = transactions;
         this.clock = clock;
         this.batchSize = batchSize;
         this.pendingTimeout = pendingTimeout;
@@ -114,7 +114,7 @@ public class WorkorderAuthorizationPoller {
         Instant now = Instant.now(clock);
         if (row.getRequestedAt() != null
                 && row.getRequestedAt().plus(pendingTimeout).isBefore(now)) {
-            runner.parkForReview(
+            transactions.parkForReview(
                     row,
                     "vendor accepted the authorization but did not decide within " + pendingTimeout
                             + "; it has not been asked again");
@@ -126,7 +126,8 @@ public class WorkorderAuthorizationPoller {
             // Accepted with nowhere to look. Nothing further is possible for this row, and the
             // codec should have refused it at 202 -- so reaching here means a row predates that
             // check or was written by hand.
-            runner.parkForReview(row, "authorization is pending with no poll location, so its decision cannot be read");
+            transactions.parkForReview(
+                    row, "authorization is pending with no poll location, so its decision cannot be read");
             return;
         }
 
@@ -146,7 +147,7 @@ public class WorkorderAuthorizationPoller {
             // Polling on with an empty partnerId would ask a vendor that has already rejected the
             // request as unidentified, once every tick, until the pending timeout expired a day
             // later -- and would then report the misconfiguration as a vendor that never decided.
-            runner.parkForReview(row, "authorization cannot be polled: " + e.getMessage());
+            transactions.parkForReview(row, "authorization cannot be polled: " + e.getMessage());
             return;
         }
 
@@ -173,11 +174,11 @@ public class WorkorderAuthorizationPoller {
                     response.header("Location"),
                     row.getWorkorderId());
         } catch (WorkorderAuthDecodeException e) {
-            runner.parkForReview(row, "vendor answer could not be read while polling: " + e.getMessage());
+            transactions.parkForReview(row, "vendor answer could not be read while polling: " + e.getMessage());
             return;
         }
 
-        runner.applyDecision(row, decision);
+        transactions.applyDecision(row, decision);
     }
 
     /**

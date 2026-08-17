@@ -197,8 +197,10 @@ class ProcurementAvailabilityServiceTest {
             assertThat(line.articleEan()).isEqualTo(EAN_A);
             assertThat(line.requestedQuantity()).isEqualTo(10);
         });
-        // Both lines carry the answer, because both are about that article.
+        // Both lines carry the answer, because both are about that article. hasSize first: allSatisfy
+        // alone would pass vacuously if the response reported no lines at all.
         assertThat(response.lines())
+                .hasSize(2)
                 .allSatisfy(line -> assertThat(line.availableQuantity()).isEqualTo(7));
     }
 
