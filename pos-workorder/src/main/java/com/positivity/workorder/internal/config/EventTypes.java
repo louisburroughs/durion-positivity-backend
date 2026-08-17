@@ -513,6 +513,24 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    // Fleet payment authorization events (#1346)
+    public static final EventTypeRegistration WORKORDER_FLEET_AUTHORIZATION_READ = EventTypeRegistration.fastRead(
+                    "WORKORDER_FLEET_AUTHORIZATION_READ", "Read a workorder's fleet payment authorization")
+            .apiVersion("1")
+            .build();
+
+    // Approval-grade rather than write: this asks a trading partner for a commercial decision, and
+    // asking twice can open two authorizations against one contract.
+    public static final EventTypeRegistration WORKORDER_FLEET_AUTHORIZATION_REQUEST = EventTypeRegistration.approval(
+                    "WORKORDER_FLEET_AUTHORIZATION_REQUEST", "Request or re-request fleet payment authorization")
+            .apiVersion("1")
+            .build();
+
+    public static final EventTypeRegistration WORKORDER_FLEET_AUTHORIZATION_RESOLVE = EventTypeRegistration.write(
+                    "WORKORDER_FLEET_AUTHORIZATION_RESOLVE", "Resolve a refused fleet payment authorization")
+            .apiVersion("1")
+            .build();
+
     // ==================== ALL EVENT TYPES ====================
 
     /** All event types for registration at startup */
@@ -611,5 +629,9 @@ public final class EventTypes {
             WORKORDER_PICK_FACADE_RESOLVE_SCAN,
             WORKORDER_PICK_FACADE_CONFIRM_LINE,
             WORKORDER_PICK_FACADE_COMPLETE_TASK,
-            WORKORDER_PICKED_ITEMS_CONSUME);
+            WORKORDER_PICKED_ITEMS_CONSUME,
+            // Fleet payment authorization events (#1346)
+            WORKORDER_FLEET_AUTHORIZATION_READ,
+            WORKORDER_FLEET_AUTHORIZATION_REQUEST,
+            WORKORDER_FLEET_AUTHORIZATION_RESOLVE);
 }

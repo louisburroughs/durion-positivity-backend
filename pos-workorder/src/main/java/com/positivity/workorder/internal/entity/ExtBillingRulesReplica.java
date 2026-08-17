@@ -36,6 +36,21 @@ public class ExtBillingRulesReplica {
     @Column(name = "purchase_order_required", nullable = false)
     private boolean purchaseOrderRequired;
 
+    /**
+     * Whether this party's work needs a fleet payment authorization before it may start (#1346).
+     *
+     * <p>Replicated rather than asked for, because the start gate runs inside
+     * {@code WorkorderStateMachine.startWork} — in a transaction, on the path of every job that
+     * begins. A synchronous read to another domain there would be both a wall breach (ADR-0044 R1)
+     * and a way for pos-invoice being slow to stop work starting.
+     */
+    @Column(name = "fleet_authorization_required", nullable = false)
+    private boolean fleetAuthorizationRequired;
+
+    /** Which fleet program authorises for this party, as a supplier profile alias. */
+    @Column(name = "fleet_supplier_ref", length = 100)
+    private String fleetSupplierRef;
+
     @Column(name = "payment_terms_code", length = 50)
     private String paymentTermsCode;
 

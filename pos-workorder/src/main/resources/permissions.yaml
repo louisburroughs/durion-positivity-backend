@@ -104,3 +104,7 @@ permissions:
     description: "Start work on workorders"
   - name: "workorder:workorder:view"
     description: "View workorders"
+  - name: "workorder:fleet_auth:request"
+    description: "Request or re-request a fleet payment authorization for a workorder"
+  - name: "workorder:fleet_auth:resolve"
+    description: "Resolve a fleet payment authorization that was refused, by revising scope or cancelling"

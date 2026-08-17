@@ -140,6 +140,8 @@ public class InvoiceEventsListener {
         extBillingRulesReplicaRepository.save(ExtBillingRulesReplica.builder()
                 .partyId(payload.partyId())
                 .purchaseOrderRequired(payload.purchaseOrderRequired())
+                .fleetAuthorizationRequired(payload.fleetAuthorizationRequired())
+                .fleetSupplierRef(payload.fleetSupplierRef())
                 .paymentTermsCode(payload.paymentTermsCode())
                 .invoiceDeliveryMethod(payload.invoiceDeliveryMethod())
                 .invoiceGroupingStrategy(payload.invoiceGroupingStrategy())

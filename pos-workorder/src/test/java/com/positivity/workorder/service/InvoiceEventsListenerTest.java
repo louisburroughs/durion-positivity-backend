@@ -130,7 +130,8 @@ class InvoiceEventsListenerTest {
                  "aggregateId":"00000000-0000-0000-0000-00000000000b","aggregateVersion":3,
                  "payload":{"partyId":"party-001","purchaseOrderRequired":true,
                             "paymentTermsCode":"NET_30","invoiceDeliveryMethod":"EMAIL",
-                            "invoiceGroupingStrategy":"PER_WORKORDER"}}
+                            "invoiceGroupingStrategy":"PER_WORKORDER",
+                            "fleetAuthorizationRequired":false,"fleetSupplierRef":null}}
                 """);
 
         ArgumentCaptor<ExtBillingRulesReplica> saved = ArgumentCaptor.forClass(ExtBillingRulesReplica.class);

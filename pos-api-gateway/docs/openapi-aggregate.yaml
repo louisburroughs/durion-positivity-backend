@@ -1545,6 +1545,12 @@ paths:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1{workorderId}~1completion-preconditions
   /v1/workorders/{workorderId}/detail:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1{workorderId}~1detail
+  /v1/workorders/{workorderId}/fleet-authorization:
+    $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1{workorderId}~1fleet-authorization
+  /v1/workorders/{workorderId}/fleet-authorization/requests:
+    $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1{workorderId}~1fleet-authorization~1requests
+  /v1/workorders/{workorderId}/fleet-authorization/resolution:
+    $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1{workorderId}~1fleet-authorization~1resolution
   /v1/workorders/{workorderId}/generate-invoice:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1{workorderId}~1generate-invoice
   /v1/workorders/{workorderId}/labor:

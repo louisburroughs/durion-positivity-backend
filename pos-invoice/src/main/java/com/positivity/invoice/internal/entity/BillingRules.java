@@ -36,6 +36,27 @@ public class BillingRules {
     @Column(name = "purchase_order_required", nullable = false)
     private boolean purchaseOrderRequired = false;
 
+    /**
+     * Whether this party's work needs a fleet payment authorization before it may start (#1346).
+     *
+     * <p>A policy of the payer rather than of the job: the same commercial account answers the same
+     * way for every workorder it pays for. Deciding it per workorder would make it something an
+     * advisor can forget, and an unset gate is an open gate.
+     */
+    @Column(name = "fleet_authorization_required", nullable = false)
+    private boolean fleetAuthorizationRequired = false;
+
+    /**
+     * Which fleet program authorises for this party, as a supplier profile alias.
+     *
+     * <p>Held with the flag because the two are useless apart. A party marked as needing
+     * authorization but naming no authoriser would have every workorder blocked at the start gate
+     * with nothing able to ask anyone for permission — which is why the database rejects that
+     * combination outright.
+     */
+    @Column(name = "fleet_supplier_ref", length = 100)
+    private String fleetSupplierRef;
+
     @Column(name = "payment_terms_code", nullable = false, length = 50)
     private String paymentTermsCode = "NET_30";
 

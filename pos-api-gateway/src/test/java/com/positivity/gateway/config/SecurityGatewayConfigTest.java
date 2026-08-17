@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 55")
+    @DisplayName("CATALOG_VERSION is 56")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(55);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(56);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 465")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 467")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1329,8 +1329,11 @@ class SecurityGatewayConfigTest {
         // Running a marketing-catalogue import (CAP-324 #1230): a full read of a centrally published
         // catalogue, not a cheap local query.
         assertThat(GatewayPermissionCatalog.authorityForBit(465)).isEqualTo("PERM_supplier:mktcat:import");
+        // Fleet payment authorization (#1346): requesting one, and resolving a refusal.
+        assertThat(GatewayPermissionCatalog.authorityForBit(466)).isEqualTo("PERM_workorder:fleet_auth:request");
+        assertThat(GatewayPermissionCatalog.authorityForBit(467)).isEqualTo("PERM_workorder:fleet_auth:resolve");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(466)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(468)).isNull();
     }
 
     @Test

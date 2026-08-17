@@ -71,6 +71,9 @@ class WorkorderStateMachineTest {
     @org.mockito.Mock
     private com.positivity.workorder.internal.service.ServiceCompletionFactPublisher serviceCompletionFactPublisher;
 
+    @Mock
+    private com.positivity.workorder.internal.service.FleetAuthorizationService fleetAuthorizationService;
+
     @InjectMocks
     private WorkorderStateMachine stateMachine;
 
