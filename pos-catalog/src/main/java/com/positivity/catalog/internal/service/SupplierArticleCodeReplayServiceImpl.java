@@ -18,7 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Re-emits {@code catalog.supplier_article_code.updated} the same way {@code
+ * Re-emits {@code catalog.supplier-article-code.updated} the same way {@code
  * ProductFactReplayServiceImpl} re-emits {@code catalog.product.updated} (#1309): through the same
  * publisher live traffic uses, cursor-paged over the current-state table's own id so a replay of a
  * large vendor catalogue can be stopped and resumed.

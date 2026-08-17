@@ -26,7 +26,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * row per PRICAT import line, never queryable as "the code right now" without picking a tie-break.
  * This table is that current-state projection, upserted from the same PRICAT ingestion, and is
  * what {@link com.positivity.catalog.internal.config.CatalogFactPublisher} reads to publish
- * {@code catalog.supplier_article_code.updated} for pos-order's purchase-order transmission
+ * {@code catalog.supplier-article-code.updated} for pos-order's purchase-order transmission
  * (CAP-320 #1330), the same way {@code ProductEntity} is the current-state row that feeds
  * {@code catalog.product.updated}.
  *

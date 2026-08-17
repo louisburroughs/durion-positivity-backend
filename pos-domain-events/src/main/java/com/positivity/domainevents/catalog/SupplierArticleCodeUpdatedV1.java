@@ -5,7 +5,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
 /**
- * Payload for {@code catalog.supplier_article_code.updated} on {@code catalog.events.v1}
+ * Payload for {@code catalog.supplier-article-code.updated} on {@code catalog.events.v1}
  * (CAP-320 #1347, ADR-0044 §6).
  *
  * <p>The vendor's own article code for one product at one vendor. Distinct from
@@ -36,7 +36,7 @@ public record SupplierArticleCodeUpdatedV1(
         @NonNull String supplierArticleCode) {
 
     /** Event type of this payload on {@code catalog.events.v1}. */
-    public static final String EVENT_TYPE = "catalog.supplier_article_code.updated";
+    public static final String EVENT_TYPE = "catalog.supplier-article-code.updated";
 
     /** Payload schema version; additive changes only within v1 (ADR-0044 §3). */
     public static final int SCHEMA_VERSION = 1;

@@ -2402,7 +2402,7 @@ paths:
       tags:
       - Supplier Article Codes
       summary: Re-emit Vendor Article Code Facts for Replica Consumers
-      description: 'Re-publishes catalog.supplier_article_code.updated facts for one bounded page of vendor-article-code rows so that event-fed replicas in other modules can be seeded or repaired, returning what it emitted and a cursor for the next page.
+      description: 'Re-publishes catalog.supplier-article-code.updated facts for one bounded page of vendor-article-code rows so that event-fed replicas in other modules can be seeded or repaired, returning what it emitted and a cursor for the next page.
 
         Use this tool to fill a consumer''s replica after a first deployment or a consumer outage longer than broker retention; do not use it to fix one row, which republishes itself on its next PRICAT import.
 
@@ -6170,14 +6170,14 @@ components:
           format: int64
         sort:
           $ref: '#/components/schemas/SortObject'
-        paged:
-          type: boolean
         pageNumber:
           type: integer
           format: int32
         pageSize:
           type: integer
           format: int32
+        paged:
+          type: boolean
         unpaged:
           type: boolean
     SortObject:

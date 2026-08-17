@@ -25,7 +25,7 @@ class SupplierArticleCodeUpdatedV1Test {
         SupplierArticleCodeUpdatedV1 back = MAPPER.readValue(json, SupplierArticleCodeUpdatedV1.class);
 
         assertThat(back).isEqualTo(evt);
-        assertThat(SupplierArticleCodeUpdatedV1.EVENT_TYPE).isEqualTo("catalog.supplier_article_code.updated");
+        assertThat(SupplierArticleCodeUpdatedV1.EVENT_TYPE).isEqualTo("catalog.supplier-article-code.updated");
         assertThat(SupplierArticleCodeUpdatedV1.SCHEMA_VERSION).isEqualTo(1);
     }
 

@@ -20,7 +20,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * The vendor's own article code for one product at one vendor, replicated from
- * {@code catalog.supplier_article_code.updated} (CAP-320 #1347, ADR-0044 R3).
+ * {@code catalog.supplier-article-code.updated} (CAP-320 #1347, ADR-0044 R3).
  *
  * <p>This is what lets a purchase-order line name an article to a vendor that identifies its
  * catalogue by its own codes rather than by EAN — without it that vendor cannot be transmitted to
@@ -60,8 +60,13 @@ public class ExtSupplierArticleCode {
     @Column(name = "supplier_ref", nullable = false, length = 100)
     private String supplierRef;
 
-    /** Kept for traceability only; never the lookup key in this module (see class javadoc). */
-    @Column(name = "vendor_profile_id", nullable = false, updatable = false)
+    /**
+     * Kept for traceability only; never the lookup key in this module (see class javadoc). Not
+     * {@code updatable = false}: the listener sets it on every apply, including updates to an
+     * existing row, so it must actually persist a changed value rather than silently keep the first
+     * one ever seen.
+     */
+    @Column(name = "vendor_profile_id", nullable = false)
     private UUID vendorProfileId;
 
     @Column(name = "product_id", nullable = false, updatable = false)

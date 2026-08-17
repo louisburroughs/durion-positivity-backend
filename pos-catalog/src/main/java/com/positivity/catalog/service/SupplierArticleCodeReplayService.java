@@ -7,7 +7,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Bounded, resumable re-emission of {@code catalog.supplier_article_code.updated} facts (CAP-320
+ * Bounded, resumable re-emission of {@code catalog.supplier-article-code.updated} facts (CAP-320
  * #1347, following #1309's pattern for {@code catalog.product.updated}).
  *
  * <p>A first deployment of pos-order's replica matches nothing: the replica holds only facts

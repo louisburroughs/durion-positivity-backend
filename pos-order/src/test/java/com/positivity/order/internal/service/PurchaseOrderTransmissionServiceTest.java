@@ -85,16 +85,16 @@ class PurchaseOrderTransmissionServiceTest {
                 outboxProvider,
                 Clock.fixed(NOW, ZoneOffset.UTC));
         when(outboxProvider.getIfAvailable()).thenReturn(outboxEventWriter);
-        when(extProductCodeRepository.findById(SKU_ID))
-                .thenReturn(Optional.of(ExtProductCode.builder()
+        when(extProductCodeRepository.findAllById(List.of(SKU_ID)))
+                .thenReturn(List.of(ExtProductCode.builder()
                         .productId(SKU_ID)
                         .codeType("EAN")
                         .code("5012345678900")
                         .aggregateVersion(1L)
                         .updatedAt(NOW)
                         .build()));
-        when(extSupplierArticleCodeRepository.findBySupplierRefAndProductId(any(), any()))
-                .thenReturn(Optional.empty());
+        when(extSupplierArticleCodeRepository.findBySupplierRefAndProductIdIn(any(), any()))
+                .thenReturn(List.of());
     }
 
     private PurchaseOrderEntity order(PurchaseOrderStatus status, TransmissionState transmissionState) {
@@ -239,7 +239,7 @@ class PurchaseOrderTransmissionServiceTest {
     @DisplayName("a line the vendor could not identify refuses the whole order, not just the line")
     void unidentifiableArticleRefusesTheOrder() {
         order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_TRANSMITTED);
-        when(extProductCodeRepository.findById(SKU_ID)).thenReturn(Optional.empty());
+        when(extProductCodeRepository.findAllById(List.of(SKU_ID))).thenReturn(List.of());
 
         // Withholding the line would send an order that silently differs from the one on screen,
         // and the difference would surface as a short delivery rather than as a question now.
@@ -254,8 +254,8 @@ class PurchaseOrderTransmissionServiceTest {
     @DisplayName("a product with a code of the wrong type is not identified by it")
     void nonEanCodeIsNotAnArticleIdentifier() {
         order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_TRANSMITTED);
-        when(extProductCodeRepository.findById(SKU_ID))
-                .thenReturn(Optional.of(ExtProductCode.builder()
+        when(extProductCodeRepository.findAllById(List.of(SKU_ID)))
+                .thenReturn(List.of(ExtProductCode.builder()
                         .productId(SKU_ID)
                         .codeType("INTERNAL")
                         .code("PART-9911")
@@ -274,9 +274,9 @@ class PurchaseOrderTransmissionServiceTest {
     @DisplayName("the vendor's own article code alone identifies a line with no EAN (CAP-320 #1347)")
     void supplierArticleCodeAloneIdentifiesTheLine() {
         order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_TRANSMITTED);
-        when(extProductCodeRepository.findById(SKU_ID)).thenReturn(Optional.empty());
-        when(extSupplierArticleCodeRepository.findBySupplierRefAndProductId("acme-parts", SKU_ID))
-                .thenReturn(Optional.of(ExtSupplierArticleCode.builder()
+        when(extProductCodeRepository.findAllById(List.of(SKU_ID))).thenReturn(List.of());
+        when(extSupplierArticleCodeRepository.findBySupplierRefAndProductIdIn("acme-parts", List.of(SKU_ID)))
+                .thenReturn(List.of(ExtSupplierArticleCode.builder()
                         .supplierRef("acme-parts")
                         .vendorProfileId(UUID.randomUUID())
                         .productId(SKU_ID)
@@ -299,8 +299,8 @@ class PurchaseOrderTransmissionServiceTest {
     @DisplayName("both identifiers travel together when both are known")
     void bothIdentifiersAreSentWhenBothArePresent() {
         order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_TRANSMITTED);
-        when(extSupplierArticleCodeRepository.findBySupplierRefAndProductId("acme-parts", SKU_ID))
-                .thenReturn(Optional.of(ExtSupplierArticleCode.builder()
+        when(extSupplierArticleCodeRepository.findBySupplierRefAndProductIdIn("acme-parts", List.of(SKU_ID)))
+                .thenReturn(List.of(ExtSupplierArticleCode.builder()
                         .supplierRef("acme-parts")
                         .vendorProfileId(UUID.randomUUID())
                         .productId(SKU_ID)

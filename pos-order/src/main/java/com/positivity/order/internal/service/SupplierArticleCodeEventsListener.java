@@ -85,14 +85,23 @@ public class SupplierArticleCodeEventsListener {
     private void applyUpdate(JsonNode envelope) {
         JsonNode payload = envelope.path("payload");
         String supplierRef = payload.path("supplierRef").stringValue(null);
-        UUID productId = UUID.fromString(payload.path("productId").stringValue(null));
-        UUID vendorProfileId = UUID.fromString(payload.path("vendorProfileId").stringValue(null));
+        String productIdValue = payload.path("productId").stringValue(null);
+        String vendorProfileIdValue = payload.path("vendorProfileId").stringValue(null);
         String supplierArticleCode = payload.path("supplierArticleCode").stringValue(null);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0L);
 
-        if (supplierRef == null || supplierRef.isBlank() || supplierArticleCode == null) {
+        // Validated before parsing, so a missing field reads as "missing field" rather than
+        // surfacing as a UUID-parse or null-pointer failure that means the same thing but hides it.
+        if (supplierRef == null
+                || supplierRef.isBlank()
+                || productIdValue == null
+                || vendorProfileIdValue == null
+                || supplierArticleCode == null
+                || supplierArticleCode.isBlank()) {
             throw new IllegalArgumentException("supplier article code fact missing a required field");
         }
+        UUID productId = UUID.fromString(productIdValue);
+        UUID vendorProfileId = UUID.fromString(vendorProfileIdValue);
 
         ExtSupplierArticleCode existing = extSupplierArticleCodeRepository
                 .findBySupplierRefAndProductId(supplierRef, productId)

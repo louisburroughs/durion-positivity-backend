@@ -111,10 +111,17 @@ public class CatalogFactPublisher {
     }
 
     /**
-     * Emits {@code catalog.supplier_article_code.updated} for one vendor+product pair (CAP-320
+     * Emits {@code catalog.supplier-article-code.updated} for one vendor+product pair (CAP-320
      * #1347). Called after {@code entry} is persisted, so {@code updatedAt} is already stamped by
      * auditing and can carry the same monotonic epoch-millis version scheme as
      * {@link #publishProductUpdated}.
+     *
+     * <p>The envelope's {@code aggregateId} is {@code entry.getId()}, not the product id: the same
+     * product legitimately has a row per vendor, and using the product id would let two vendors'
+     * independent {@code aggregateVersion} sequences collide under one aggregate — an update from
+     * vendor B could look like it regressed vendor A's version. {@code entry}'s own id is stable
+     * across updates (found by the {@code (vendorProfileId, productId)} unique constraint and
+     * updated in place), so it already identifies exactly this vendor+product pair.
      */
     public void publishSupplierArticleCodeUpdated(@NonNull SupplierArticleCodeEntity entry) {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
@@ -131,7 +138,7 @@ public class CatalogFactPublisher {
         DomainEventEnvelope<SupplierArticleCodeUpdatedV1> envelope = DomainEventEnvelope.of(
                 SupplierArticleCodeUpdatedV1.EVENT_TYPE,
                 SupplierArticleCodeUpdatedV1.SCHEMA_VERSION,
-                entry.getProductId(),
+                entry.getId(),
                 aggregateVersion,
                 "pos-catalog",
                 null,
@@ -140,7 +147,7 @@ public class CatalogFactPublisher {
                 clock);
         writer.publish(DomainTopics.events("catalog"), envelope);
         log.debug(
-                "Queued catalog.supplier_article_code.updated productId={} vendorProfileId={}",
+                "Queued catalog.supplier-article-code.updated productId={} vendorProfileId={}",
                 entry.getProductId(),
                 entry.getVendorProfileId());
     }

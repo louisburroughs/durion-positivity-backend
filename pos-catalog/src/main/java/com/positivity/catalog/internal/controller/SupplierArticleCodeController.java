@@ -49,7 +49,7 @@ public class SupplierArticleCodeController {
             operationId = "replaySupplierArticleCodeFacts",
             summary = "Re-emit Vendor Article Code Facts for Replica Consumers",
             description = """
-            Re-publishes catalog.supplier_article_code.updated facts for one bounded page of vendor-article-code \
+            Re-publishes catalog.supplier-article-code.updated facts for one bounded page of vendor-article-code \
             rows so that event-fed replicas in other modules can be seeded or repaired, returning what it \
             emitted and a cursor for the next page.
             Use this tool to fill a consumer's replica after a first deployment or a consumer outage longer than \

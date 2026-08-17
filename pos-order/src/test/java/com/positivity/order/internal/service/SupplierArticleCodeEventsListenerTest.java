@@ -61,7 +61,7 @@ class SupplierArticleCodeEventsListenerTest {
 
     private static String factEvent(String eventId, long aggregateVersion, String supplierRef, String code) {
         return """
-                {"eventId":"%s","eventType":"catalog.supplier_article_code.updated","schemaVersion":1,
+                {"eventId":"%s","eventType":"catalog.supplier-article-code.updated","schemaVersion":1,
                  "aggregateId":"%s","aggregateVersion":%d,"occurredAtUtc":"2026-08-17T08:59:00Z",
                  "sourceService":"pos-catalog",
                  "payload":{"vendorProfileId":"%s","supplierRef":"%s","productId":"%s","supplierArticleCode":"%s"}}
@@ -123,7 +123,7 @@ class SupplierArticleCodeEventsListenerTest {
     @Test
     void ignoresAnEventWithoutAnEventId() {
         listener.onCatalogEvent("""
-                {"eventType":"catalog.supplier_article_code.updated","payload":{}}
+                {"eventType":"catalog.supplier-article-code.updated","payload":{}}
                 """);
 
         verify(processedEventRepository, never()).save(any());
@@ -139,6 +139,14 @@ class SupplierArticleCodeEventsListenerTest {
     @Test
     void swallowsAMalformedPayloadButLeavesItUnrecorded() {
         listener.onCatalogEvent(factEvent("e-5", 100L, "", "999908"));
+
+        verify(extSupplierArticleCodeRepository, never()).save(any());
+        verify(processedEventRepository, never()).save(any());
+    }
+
+    @Test
+    void treatsABlankCodeAsMalformedRatherThanPersistingIt() {
+        listener.onCatalogEvent(factEvent("e-7", 100L, "michelin-eu", " "));
 
         verify(extSupplierArticleCodeRepository, never()).save(any());
         verify(processedEventRepository, never()).save(any());
