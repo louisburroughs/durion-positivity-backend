@@ -12,8 +12,10 @@ import com.positivity.catalog.internal.repository.TreadDesignImageRepository;
 import com.positivity.catalog.internal.repository.TreadDesignRepository;
 import com.positivity.catalog.internal.repository.TreadDesignTextRepository;
 import com.positivity.catalog.service.TreadDesignService;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
@@ -38,16 +40,37 @@ public class TreadDesignServiceImpl implements TreadDesignService {
                 .findById(productId)
                 .map(ProductEntity::getTreadDesignId)
                 .flatMap(treadDesignRepository::findById)
-                .map(this::toDto);
+                .map(design -> toDto(
+                        design,
+                        treadDesignTextRepository.findByTreadDesignId(design.getId()),
+                        treadDesignImageRepository.findByTreadDesignId(design.getId())));
     }
 
     @Override
     @NonNull
     public Page<TreadDesignDto> findUnmatched(@NonNull Pageable pageable) {
-        return treadDesignRepository.findUnmatched(pageable).map(this::toDto);
+        Page<TreadDesignEntity> page = treadDesignRepository.findUnmatched(pageable);
+        List<UUID> designIds = page.getContent().stream().map(TreadDesignEntity::getId).toList();
+        if (designIds.isEmpty()) {
+            return page.map(design -> toDto(design, List.of(), List.of()));
+        }
+
+        // Two queries for the whole page rather than two per design (CAP-324 #1352 review): a
+        // review list defaults to size=50 and is capped at 200, so a naive per-design lookup here
+        // would be the one query on this endpoint guaranteed to get slower as the catalog grows.
+        var textsByDesign = treadDesignTextRepository.findByTreadDesignIdIn(designIds).stream()
+                .collect(Collectors.groupingBy(TreadDesignTextEntity::getTreadDesignId));
+        var imagesByDesign = treadDesignImageRepository.findByTreadDesignIdIn(designIds).stream()
+                .collect(Collectors.groupingBy(TreadDesignImageEntity::getTreadDesignId));
+
+        return page.map(design -> toDto(
+                design,
+                textsByDesign.getOrDefault(design.getId(), List.of()),
+                imagesByDesign.getOrDefault(design.getId(), List.of())));
     }
 
-    private TreadDesignDto toDto(TreadDesignEntity design) {
+    private TreadDesignDto toDto(
+            TreadDesignEntity design, List<TreadDesignTextEntity> texts, List<TreadDesignImageEntity> images) {
         return new TreadDesignDto(
                 design.getId(),
                 design.getVendorProfileId(),
@@ -60,12 +83,8 @@ public class TreadDesignServiceImpl implements TreadDesignService {
                 design.getVehicleType(),
                 design.getSeasonality(),
                 design.isHasUnresolvedImages(),
-                treadDesignTextRepository.findByTreadDesignId(design.getId()).stream()
-                        .map(this::toTextDto)
-                        .toList(),
-                treadDesignImageRepository.findByTreadDesignId(design.getId()).stream()
-                        .map(this::toImageDto)
-                        .toList(),
+                texts.stream().map(this::toTextDto).toList(),
+                images.stream().map(this::toImageDto).toList(),
                 design.getUpdatedAt());
     }
 

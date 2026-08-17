@@ -4,7 +4,6 @@ import com.positivity.catalog.internal.entity.ProductEntity;
 import com.positivity.catalog.internal.entity.TreadDesignEntity;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Component;
@@ -74,10 +73,20 @@ public class TreadDesignMatcher {
     }
 
     private static Set<String> trigrams(String... texts) {
+        // A manual character filter rather than a regex: score() runs once per candidate per
+        // design, so a vendor with many priced products means this recompiling and re-matching a
+        // pattern on every call — a plain loop over already-known ASCII ranges avoids both the
+        // regex engine and the intermediate strings replaceAll would allocate.
         StringBuilder normalized = new StringBuilder();
         for (String text : texts) {
-            if (text != null) {
-                normalized.append(text.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", ""));
+            if (text == null) {
+                continue;
+            }
+            for (int i = 0; i < text.length(); i++) {
+                char c = Character.toLowerCase(text.charAt(i));
+                if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+                    normalized.append(c);
+                }
             }
         }
         String text = normalized.toString();

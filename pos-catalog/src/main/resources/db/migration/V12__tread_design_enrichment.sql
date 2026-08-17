@@ -63,5 +63,10 @@ CREATE TABLE tread_design_image (
 );
 
 -- ── The association: nullable, additive, and the only column this story touches on product ─────
+-- ON DELETE SET NULL rather than CASCADE or RESTRICT: a design row being cleaned up or re-keyed
+-- must not delete a product, nor block the cleanup — it should simply leave the product
+-- unmatched again, the same state it was in before a match was ever found.
 ALTER TABLE product ADD COLUMN tread_design_id uuid;
+ALTER TABLE product ADD CONSTRAINT fk_product_tread_design
+    FOREIGN KEY (tread_design_id) REFERENCES tread_design (id) ON DELETE SET NULL;
 CREATE INDEX idx_product_tread_design ON product (tread_design_id);
