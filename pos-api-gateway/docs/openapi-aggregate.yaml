@@ -495,6 +495,8 @@ paths:
     $ref: ../../pos-event-receiver/openapi.yaml#/paths/~1v1~1events~1summary~1lastHour
   /v1/events/summary/lastWeek:
     $ref: ../../pos-event-receiver/openapi.yaml#/paths/~1v1~1events~1summary~1lastWeek
+  /v1/images:
+    $ref: ../../pos-image/openapi.yaml#/paths/~1v1~1images
   /v1/images/filename/{filename}:
     $ref: ../../pos-image/openapi.yaml#/paths/~1v1~1images~1filename~1{filename}
   /v1/images/id/{id}:
@@ -1315,6 +1317,10 @@ paths:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1fleet~1{supplierRef}~1vehicles~1{vehicleIdent}
   /v1/supplier/invoices/{supplierRef}/fetches:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1invoices~1{supplierRef}~1fetches
+  /v1/supplier/mktcat/{supplierRef}/imports:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1mktcat~1{supplierRef}~1imports
+  /v1/supplier/mktcat/{supplierRef}/variants:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1mktcat~1{supplierRef}~1variants
   /v1/supplier/stock/inquiries:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1stock~1inquiries
   /v1/supplier/transmissions/purchase-order/{purchaseOrderId}:

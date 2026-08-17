@@ -30,6 +30,8 @@ tags:
   description: Read the supplier exchange-audit trail. Metadata is free to browse; reading stored payload content requires the same permission and is itself recorded.
 - name: Supplier Stock Inquiry
   description: 'Ask a vendor, live, what stock it holds for a receiving location. Vendor-side failure is reported as a status on a 200 response, never as an error status: callers are expected to degrade and render without live stock rather than fail their own flow.'
+- name: Supplier Marketing Catalog
+  description: Manufacturer marketing enrichment (MKCAT C1.2)
 paths:
   /v1/supplier/admin/profiles/{vendorProfileId}:
     get:
@@ -963,6 +965,62 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - supplier:stock:inquire
+  /v1/supplier/mktcat/{supplierRef}/imports:
+    post:
+      tags:
+      - Supplier Marketing Catalog
+      summary: Import The Marketing Catalog
+      description: 'Reads the manufacturer marketing catalogue and publishes enrichment for every tread design variant whose content has changed since the last run.
+
+        Use this tool to bring a newly configured catalogue in without waiting for its first scheduled sweep, or after fixing a configuration problem; do not use it to force republication of unchanged content, because publication is decided by content and an unchanged variant emits nothing however often it is imported.
+
+        Preconditions: the vendor profile must be enabled and have a marketing-catalogue binding configured.
+
+        Required inputs: supplierRef path parameter.
+
+        Emits a SUPPLIER_MKTCAT_IMPORT event, and for each changed variant publishes supplier.catalog.updated for the catalog domain to attach.
+
+        Returns 200 with how many variants were seen, published and skipped; 404 when the vendor profile is unknown; 409 when the profile is disabled or has no marketing-catalogue binding; and 422 when the catalogue could not be read at all.
+
+        '
+      operationId: importMarketingCatalog
+      parameters:
+      - name: supplierRef
+        in: path
+        description: Vendor profile alias
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: What the import saw and published
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          description: Vendor profile unknown
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Vendor profile disabled, or no marketing-catalogue binding configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: The catalogue could not be read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - supplier:mktcat:import
+      x-required-permissions:
+      - supplier:mktcat:import
   /v1/supplier/invoices/{supplierRef}/fetches:
     post:
       tags:
@@ -2073,6 +2131,60 @@ paths:
       - bearerAuth: []
       x-required-permissions:
       - supplier:transmission:read
+  /v1/supplier/mktcat/{supplierRef}/variants:
+    get:
+      tags:
+      - Supplier Marketing Catalog
+      summary: List Staged Marketing Enrichment
+      description: 'Lists the tread design variants a marketing catalogue last sent, most recently seen first, including which of them are still missing artwork.
+
+        Use this tool when a product''s marketing copy is not what was expected, to see what the catalogue actually published; do not read this as catalog content, because nothing here has been attached to a product and a variant may match no product at all.
+
+        Preconditions: none.
+
+        Required inputs: supplierRef path parameter; limit defaults to 100.
+
+        Emits a SUPPLIER_MKTCAT_VARIANT_LIST event.
+
+        Returns 200 with the staged variants, which is an empty list when the catalogue has never been imported, and 404 when the vendor profile is unknown.
+
+        '
+      operationId: listMarketingCatalogVariants
+      parameters:
+      - name: supplierRef
+        in: path
+        description: Vendor profile alias
+        required: true
+        schema:
+          type: string
+      - name: limit
+        in: query
+        description: Maximum rows to return
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: Staged enrichment for this catalogue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MarketingEnrichmentView'
+        '404':
+          description: Vendor profile unknown
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - supplier:mktcat:import
+      x-required-permissions:
+      - supplier:mktcat:import
   /v1/supplier/fleet/{supplierRef}/vehicles/{vehicleIdent}:
     get:
       tags:
@@ -3564,6 +3676,32 @@ components:
         failureDetail:
           type: string
           description: Operator-facing failure summary for a failed import.
+    MarketingEnrichmentView:
+      type: object
+      properties:
+        vendorVariantId:
+          type: string
+        supplierRef:
+          type: string
+        brand:
+          type: string
+        treadDesign:
+          type: string
+        productName:
+          type: string
+        seasonality:
+          type: string
+        unresolvedImages:
+          type: boolean
+        firstSeenAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+        lastPublishedAt:
+          type: string
+          format: date-time
     FleetVehicle:
       type: object
       properties:

@@ -24,3 +24,5 @@ permissions:
     description: "Ask a fleet program to authorize work, and look up fleet vehicles, contracts and policies"
   - name: "supplier:workorderauth:review"
     description: "View and clear fleet workorder authorizations parked for manual review"
+  - name: "supplier:mktcat:import"
+    description: "Run a marketing-catalogue (MKCAT) import on demand and read staged enrichment"

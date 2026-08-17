@@ -110,5 +110,14 @@ public final class SupplierPermissions {
      */
     public static final String WORKORDER_AUTHORIZATION_REVIEW = "supplier:workorderauth:review";
 
+    /**
+     * Running a marketing-catalogue import on demand, and reading what the catalogue last sent.
+     *
+     * <p>Its own permission because an import is a full read of a centrally published catalogue —
+     * thousands of calls to a standards body serving every consumer at once — rather than a cheap
+     * local query. Whoever may trigger that is not necessarily whoever may view a vendor profile.
+     */
+    public static final String MARKETING_CATALOG_IMPORT = "supplier:mktcat:import";
+
     private SupplierPermissions() {}
 }
