@@ -143,6 +143,37 @@ class ImageStorageServiceImplTest {
     }
 
     @Test
+    @DisplayName("a null body is refused the same way an empty one is")
+    void nullContentIsRefused() {
+        assertThatThrownBy(() -> storage.store("tread.jpg", "image/jpeg", null, VENDOR_URI, List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("retried");
+
+        verify(imageRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("a re-ingested record missing its type and size still yields a usable reference")
+    void referenceFillsInMissingTypeAndSize() {
+        // Rows written before the content columns existed carry neither. The reference has to name
+        // a content type and a size regardless, or a consumer cannot render what it is handed.
+        ImageEntity legacy = new ImageEntity();
+        legacy.setId(7L);
+        legacy.setFilename("legacy.jpg");
+        legacy.setContentHash("whatever-hash");
+        legacy.setSourceUri(VENDOR_URI);
+        legacy.setContentType(null);
+        legacy.setByteSize(null);
+        when(imageRepository.findFirstBySourceUriAndContentHash(any(), any())).thenReturn(Optional.of(legacy));
+
+        StoredImage reference = storage.store("tread.jpg", "image/jpeg", ARTWORK, VENDOR_URI, List.of());
+
+        assertThat(reference.contentType()).isEqualTo("application/octet-stream");
+        assertThat(reference.byteSize()).isZero();
+        assertThat(reference.newlyStored()).isFalse();
+    }
+
+    @Test
     @DisplayName("a direct upload with no origin is stored, and the origin lookup is skipped")
     void uploadWithoutAnOriginIsAccepted() {
         StoredImage stored = storage.store("hand-uploaded.png", "image/png", ARTWORK, null, null);
