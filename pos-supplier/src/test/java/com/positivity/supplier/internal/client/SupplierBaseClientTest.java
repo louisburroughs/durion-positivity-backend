@@ -155,7 +155,9 @@ class SupplierBaseClientTest {
             assertThat(response.body())
                     .as("the vendor declared ISO-8859-1; reading it as UTF-8 would corrupt the stored record")
                     .isEqualTo(vendorText)
-                    .doesNotContain("�");
+                    // The escape, never the literal character: a raw U+FFFD byte sequence in a source
+                    // file trips SonarQube's file-encoding check and warns over the whole analysis.
+                    .doesNotContain("\uFFFD");
         }
 
         @Test

@@ -610,6 +610,10 @@ jobs:
       pull-requests: read
     needs: [ build-test ]
     if: github.event_name != 'schedule'
+    # Exposed at job level purely so the Sonar steps below can test for its presence:
+    # the `secrets` context is not readable from a step `if:`, but `env` is.
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
     steps:
       - name: Checkout code
@@ -655,7 +659,29 @@ jobs:
         run: ./mvnw com.github.spotbugs:spotbugs-maven-plugin:4.9.8.1:check -B
         continue-on-error: true
 
+      # ---------------------------------------------------------------------
+      # Everything below is PULL-REQUEST ONLY, and must stay that way.
+      #
+      # This job imports coverage for the CHANGED modules only (that is all the
+      # selective `build-test` run produces) while indexing the WHOLE reactor for
+      # analysis. Sonar's Zero Coverage Sensor then scores every module that was
+      # not tested at 0%. On a pull request that is harmless — PR analyses are
+      # stored against the PR, `Coverage on New Code` only looks at changed files,
+      # and the branch measures are untouched.
+      #
+      # On a push to main it was catastrophic: the analysis published to the `main`
+      # branch and overwrote the nightly aggregate's real number with the changed
+      # modules' share of the reactor. Run 32130372863 (merge of #1363, touching
+      # pos-order + pos-workorder) logged `Importing 2 report(s).` for a 37-module
+      # reactor and dropped main from 78.0% to 14.9% — 10,622 covered lines out of
+      # 84,981, i.e. exactly those two modules. The project had been sawtoothing
+      # like that on every push since May.
+      #
+      # Main-branch coverage now comes from ONE place: the `code-quality-full` job
+      # below, which measures the whole reactor through pos-coverage-aggregate.
+      # ---------------------------------------------------------------------
       - name: Cache SonarCloud packages
+        if: github.event_name == 'pull_request' && env.SONAR_TOKEN != ''
         uses: actions/cache@v5
         with:
           path: ~/.sonar/cache
@@ -663,6 +689,7 @@ jobs:
           restore-keys: ${{ runner.os }}-sonar
 
       - name: Download JaCoCo coverage reports
+        if: github.event_name == 'pull_request' && env.SONAR_TOKEN != ''
         uses: actions/download-artifact@v5
         continue-on-error: true
         with:
@@ -670,6 +697,7 @@ jobs:
           path: sonar-coverage
 
       - name: Report downloaded coverage reports
+        if: github.event_name == 'pull_request' && env.SONAR_TOKEN != ''
         # This job runs `test-compile` only, so the sole source of coverage is the
         # artifact downloaded above; if it is empty the scan silently reports 0%.
         # Warn rather than fail: when selective testing skips every module, an empty
@@ -687,12 +715,26 @@ jobs:
             find sonar-coverage -name jacoco.xml | sed 's/^/  /'
           fi
 
-      - name: SonarCloud Scan
+      - name: Announce a missing SonarCloud token
+        if: github.event_name == 'pull_request' && env.SONAR_TOKEN == ''
+        # A fork PR is handed no secrets, and a tokenless `sonar:sonar` pays for a full
+        # test-compile over the reactor before dying on authentication. The steps below
+        # skip instead — but say so out loud, because a silently skipped analysis looks
+        # exactly like a clean one on the checks list.
+        run: echo "::warning::SONAR_TOKEN unavailable (fork pull request?); SonarCloud analysis skipped for this PR."
+
+      - name: SonarCloud Scan (pull requests only)
+        if: github.event_name == 'pull_request' && env.SONAR_TOKEN != ''
         # Stopgap: PR-mode analysis currently fails at PR decoration because SonarCloud cannot
         # resolve the pull request via its GitHub App / DevOps-platform binding ("Something went
         # wrong while trying to get the pullrequest with key 'N'"). Until that binding is fixed in
-        # SonarCloud, do not let a PR-decoration failure fail this check. The push/main-branch scan
-        # (else branch below) stays strict and remains the authoritative quality gate.
+        # SonarCloud, do not let a PR-decoration failure fail this check. The authoritative
+        # branch-level quality gate is the `code-quality-full` job below.
+        #
+        # The analysis is forced into PR mode with the four `sonar.pullrequest.*` properties.
+        # Never let this fall back to a branch analysis: without them the scanner auto-detects a
+        # branch and publishes partial coverage over it, which is the regression described in the
+        # block above.
         #
         # xmlReportPaths must be absolute: the scanner resolves a relative value against each
         # Maven module's own base directory, so `sonar-coverage/**` only ever matched from the
@@ -700,44 +742,40 @@ jobs:
         # `**/target/site/jacoco/jacoco.xml` entry that used to follow it was dead weight here —
         # this job runs `test-compile` with -DskipTests, so no module produces a local report and
         # the downloaded artifact is the only coverage that exists.
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          # SONAR_TOKEN is inherited from the job-level env above.
           # Event data is passed via env vars, never interpolated into the script:
           # head.ref is attacker-controlled on fork PRs (script injection).
-          EVENT_NAME: ${{ github.event_name }}
           PR_KEY: ${{ github.event.pull_request.number }}
           PR_BRANCH: ${{ github.event.pull_request.head.ref }}
           PR_BASE: ${{ github.event.pull_request.base.ref }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          SONAR_BASE_ARGS="-DskipTests -DskipITs \
+          ./mvnw test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
+            -DskipTests -DskipITs \
             -Dsonar.projectKey=louisburroughs_durion-positivity-backend \
             -Dsonar.organization=louisburroughs \
             -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.coverage.jacoco.xmlReportPaths=${{ github.workspace }}/sonar-coverage/**/jacoco.xml"
-
-          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
-            # Force PR-scoped analysis explicitly to avoid branch-level quality-gate
-            # evaluation and bypass flaky PR auto-detection.
-            ./mvnw test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
-              ${SONAR_BASE_ARGS} \
-              -Dsonar.pullrequest.key="${PR_KEY}" \
-              -Dsonar.pullrequest.branch="${PR_BRANCH}" \
-              -Dsonar.pullrequest.base="${PR_BASE}" \
-              -Dsonar.scm.revision="${PR_HEAD_SHA}"
-          else
-            ./mvnw test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
-              ${SONAR_BASE_ARGS}
-          fi
+            -Dsonar.coverage.jacoco.xmlReportPaths=${{ github.workspace }}/sonar-coverage/**/jacoco.xml \
+            -Dsonar.pullrequest.key="${PR_KEY}" \
+            -Dsonar.pullrequest.branch="${PR_BRANCH}" \
+            -Dsonar.pullrequest.base="${PR_BASE}" \
+            -Dsonar.scm.revision="${PR_HEAD_SHA}"
 
   code-quality-full:
     name: Full Coverage SonarCloud Analysis
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: github.event_name == 'schedule'
+    # The ONLY job that publishes a branch-level SonarCloud analysis. It measures the
+    # whole reactor through pos-coverage-aggregate, so main's coverage is the real
+    # number rather than whichever modules a push happened to touch (see the long
+    # comment in `code-quality`). Nightly on the schedule; `workflow_dispatch` is here
+    # so main can be refreshed on demand instead of waiting for 06:00 UTC — useful
+    # right after a coverage push, or to repair main if a stray analysis lands on it.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout code
