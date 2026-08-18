@@ -140,14 +140,20 @@ public class NltiController {
                     @Valid
                     @RequestBody
                     @NonNull
-                    WorkflowStateUpdateRequest request) {
+                    WorkflowStateUpdateRequest request,
+            @NonNull HttpServletRequest servletRequest) {
         // Fail fast on a missing authenticated principal rather than defaulting to a sentinel subject:
         // subjectId is the ownership key for this session-mutating call, so an unresolved username must
         // never silently pass through (or mis-attribute the ownership check).
         String subjectId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new AuthenticationCredentialsNotFoundException(
                         "No authenticated username available for workflow-state update"));
-        WorkflowState updatedState = workflowStateService.advance(sessionId, subjectId, request.workflowState());
+        // Gate 2C: the transition telemetry event is keyed by the caller's correlation id, resolved from
+        // the X-Correlation-Id header exactly as the request path does (generated when absent), so a
+        // transition joins to the chat/NLTI requests that surround it.
+        UUID correlationId = NltiCorrelationIdSupport.resolveFromRequest(servletRequest);
+        WorkflowState updatedState =
+                workflowStateService.advance(sessionId, subjectId, request.workflowState(), correlationId);
         return ResponseEntity.ok(new WorkflowStateResponse(sessionId, updatedState));
     }
 

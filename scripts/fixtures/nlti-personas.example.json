@@ -1,0 +1,74 @@
+{
+  "_comment": [
+    "Example persona config for scripts/nlti_live_verify.py (#1367).",
+    "Copy this file somewhere outside the repo (e.g. /opt/durion/alpha/nlti-personas.json), adjust",
+    "the usernames to real alpha accounts, and export the referenced secrets in the environment.",
+    "NEVER put a password or a JWT in this file — only the NAME of the env var that holds it.",
+    "",
+    "Resolution order per persona: $<tokenEnv> -> $POS_MCP_TOKEN_<expectedRole> -> <tokenEnv> in the",
+    "env file (--env-file / $ENV_FILE / ./.env) -> login at",
+    "POST {gateway}/security-service/v1/auth/login with username + $<passwordEnv>.",
+    "When passwordEnv/tokenEnv are omitted they default to",
+    "NLTI_PERSONA_<UPPERCASED_NAME>_PASSWORD / _TOKEN."
+  ],
+  "personas": [
+    {
+      "name": "ops-admin",
+      "username": "ops.admin",
+      "passwordEnv": "NLTI_PERSONA_OPS_ADMIN_PASSWORD",
+      "tokenEnv": "NLTI_PERSONA_OPS_ADMIN_TOKEN",
+      "expectedRole": "ROLE_ADMIN",
+      "admin": true,
+      "description": "Broad-permission operator; drives the admin suite and the write-gate happy path.",
+      "expectsPermissions": [
+        "mcp:chat:execute",
+        "mcp:chat:stream",
+        "nlti:request:submit",
+        "nlti:audit:read",
+        "mcp:system_prompt:view",
+        "mcp:llm_api:view",
+        "mcp:tool:view"
+      ],
+      "lacksPermissions": [],
+      "probePrompt": "What administrative actions can I take from here?"
+    },
+    {
+      "name": "technician",
+      "username": "tech.user",
+      "passwordEnv": "NLTI_PERSONA_TECHNICIAN_PASSWORD",
+      "tokenEnv": "NLTI_PERSONA_TECHNICIAN_TOKEN",
+      "expectedRole": "ROLE_TECHNICIAN",
+      "admin": false,
+      "description": "Shop-floor role. Drives the permission fail-closed probes: must NOT hold the admin or write-target permissions.",
+      "expectsPermissions": [
+        "mcp:chat:execute",
+        "mcp:chat:stream",
+        "nlti:request:submit"
+      ],
+      "lacksPermissions": [
+        "mcp:system_prompt:view",
+        "mcp:llm_api:view",
+        "mcp:tool:manage"
+      ],
+      "probePrompt": "What workorders am I assigned today?"
+    },
+    {
+      "name": "counter-user",
+      "username": "counter.user",
+      "passwordEnv": "NLTI_PERSONA_COUNTER_USER_PASSWORD",
+      "tokenEnv": "NLTI_PERSONA_COUNTER_USER_TOKEN",
+      "expectedRole": "ROLE_USER",
+      "admin": false,
+      "description": "Least-privileged chat user; used to show role-layer differentiation in the persona suite.",
+      "expectsPermissions": [
+        "mcp:chat:execute",
+        "mcp:chat:stream"
+      ],
+      "lacksPermissions": [
+        "nlti:audit:read",
+        "mcp:system_prompt:view"
+      ],
+      "probePrompt": "What can you help me with in my role?"
+    }
+  ]
+}

@@ -1,0 +1,519 @@
+{
+  "uid": "nlti-gate7",
+  "title": "NLTI Gate 7 — Routing, Model, RAG and Write Safety",
+  "tags": ["nlti", "pos-mcp-server", "gate-7", "rag", "write-gate"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "description": "Gate 7 verification dashboard for #1219. Most panels read the nlti.request.telemetry v1 JSON stream from Loki; HTTP-status and preload panels read Prometheus. Fields that the emitter does not populate yet are marked GAP in the panel description. See pos-mcp-server/docs/dashboards/nlti-overview.md.",
+  "templating": {
+    "list": [
+      {
+        "name": "role",
+        "label": "Primary role (regex)",
+        "description": "Regex matched against actor.primaryRole. A textbox, not a query variable: actor_primaryRole is a pipeline-parsed label, so Loki's label_values API cannot enumerate it. Default .* matches every role.",
+        "type": "textbox",
+        "query": ".*",
+        "current": { "text": ".*", "value": ".*" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "1. Routing mix (routing.*)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Routing mix by intent type",
+      "description": "routing.intentType from the Gate 4 T1 router decision. Empty series = requests with no router decision (Tier-0 simple chat, or the tiered router disabled).",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (routing_intentType) (count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | actor_primaryRole =~ \"$role\" [$__interval]))",
+          "legendFormat": "{{routing_intentType}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Routing mix by domain and risk level",
+      "description": "routing.domain and routing.riskLevel. riskLevel drives the write-gate policy (WritePlanPolicy: stale-data protection applies to risk >= MEDIUM).",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (routing_domain) (count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | actor_primaryRole =~ \"$role\" [$__interval]))",
+          "legendFormat": "domain={{routing_domain}}"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (routing_riskLevel) (count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | actor_primaryRole =~ \"$role\" [$__interval]))",
+          "legendFormat": "risk={{routing_riskLevel}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Workflow-state mix and Tier-0 rule hits",
+      "description": "routing.workflowState is the Gate 2C session workflow (IDLE, CREATING_PO, RECEIVING_ASN, INVENTORY_RECON, PROCESSING_RETURN). routing.simpleChatRule names the Tier-0 rule that short-circuited the router.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (routing_workflowState) (count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | actor_primaryRole =~ \"$role\" [$__interval]))",
+          "legendFormat": "workflow={{routing_workflowState}}"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (routing_simpleChatRule) (count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | routing_simpleChatRule != \"\" [$__interval]))",
+          "legendFormat": "rule={{routing_simpleChatRule}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "row",
+      "title": "2. Model tier (routing.tier, model.tierModel)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 8 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Requests by serving tier",
+      "description": "routing.tier: T0_RULE (simple-chat short circuit), T1_ROUTER, T2_SIMPLE, T2_COMPLEX. This is the #1216 routing-mix metric.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 10, "x": 0, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (routing_tier) (count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | actor_primaryRole =~ \"$role\" [$__interval]))",
+          "legendFormat": "{{routing_tier}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "piechart",
+      "title": "Tier share (dashboard window)",
+      "description": "Same source as the tier timeseries, aggregated over the selected range. Use this for the Gate 4 / Gate 7 tier-mix evidence table.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 6, "x": 10, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (routing_tier) (count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" [$__range]))",
+          "legendFormat": "{{routing_tier}}",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Executing model by tier",
+      "description": "model.tierModel is the model name the tier executor actually used; model.routerModel is the T1 classifier model. An empty tierModel with a non-empty tier means the tier resolved to the default chat model (MCP_MODEL_SIMPLE / MCP_MODEL_COMPLEX unset).",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (routing_tier, model_tierModel) (count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" [$__interval]))",
+          "legendFormat": "{{routing_tier}} / {{model_tierModel}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "row",
+      "title": "3. Fallback rate",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "Model fallback rate (model.fallbackUsed)",
+      "description": "GAP: NltiRequestTelemetryFactory hardcodes Model.fallbackUsed=false and the fallbackChatModel bean (ModelFallbackConfiguration) is never injected into a call path, so this reads 0 by construction. The query is correct against the v1 schema and will populate once failover is wired and the flag is set.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 17 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | model_fallbackUsed = \"true\" [$__range])) / clamp_min(sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" [$__range])), 1)",
+          "instant": true,
+          "legendFormat": "fallback share"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.02 },
+              { "color": "red", "value": 0.1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Tier model-resolution fallbacks (WARN)",
+      "description": "Real fallback signal available today: TieredChatModelResolver logs at WARN when a tier cannot apply its model override and silently serves the default model. Non-zero here invalidates any tier-quality comparison.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 6, "w": 9, "x": 6, "y": 17 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\", level=\"WARN\"} |= \"MCP tiered model resolver\" [$__interval]))",
+          "legendFormat": "tier override rejected"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Requests served with no tier decision",
+      "description": "Proxy for 'the tiered router did not run': telemetry events where routing.tier is absent. Expected to be ~0 when MCP_MODEL_TIERING_ENABLED=true; a rising share means requests are bypassing the router.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 6, "w": 9, "x": 15, "y": 17 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | routing_tier = \"\" [$__interval]))",
+          "legendFormat": "no tier"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | routing_tier != \"\" [$__interval]))",
+          "legendFormat": "tier decided"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "row",
+      "title": "4. Prompt layers (rag.promptLayers)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Prompt-layer composition rate by layer",
+      "description": "rag.promptLayers is a JSON array, which Loki's bare `| json` skips; each series therefore uses `| json prompt_layers=\"rag.promptLayers\"` plus a quoted-token label filter. Layers are BASE, ROLE, DOMAIN, TOOL_USE, WRITE_GATE (NltiRequestTelemetry.PromptLayer). This is the Gate 1 (#1213) evidence panel.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json prompt_layers=\"rag.promptLayers\" | prompt_layers =~ `\"BASE\"` [$__interval]))",
+          "legendFormat": "BASE"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json prompt_layers=\"rag.promptLayers\" | prompt_layers =~ `\"ROLE\"` [$__interval]))",
+          "legendFormat": "ROLE"
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json prompt_layers=\"rag.promptLayers\" | prompt_layers =~ `\"DOMAIN\"` [$__interval]))",
+          "legendFormat": "DOMAIN"
+        },
+        {
+          "refId": "D",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json prompt_layers=\"rag.promptLayers\" | prompt_layers =~ `\"TOOL_USE\"` [$__interval]))",
+          "legendFormat": "TOOL_USE"
+        },
+        {
+          "refId": "E",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json prompt_layers=\"rag.promptLayers\" | prompt_layers =~ `\"WRITE_GATE\"` [$__interval]))",
+          "legendFormat": "WRITE_GATE"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Requests composed with no prompt layers",
+      "description": "NltiRequestTelemetryFactory omits the whole rag object when RolePromptResolver.assemble() returned no layers (no seeded master prompt or no role persona). Sustained non-zero means prompt seeding is broken for some role.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json prompt_layers=\"rag.promptLayers\" | prompt_layers = \"\" [$__interval]))",
+          "legendFormat": "no layers"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\", level=\"WARN\"} |~ \"MCP no master prompt seeded|MCP no role persona seeded\" [$__interval]))",
+          "legendFormat": "prompt seed missing (WARN)"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "row",
+      "title": "5. Permission rejects",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "403 responses on NLTI / MCP routes",
+      "description": "Real permission-reject signal today. Covers SessionOwnershipViolationException and the write-gate dual permission check (NltiWritePlanService.requireToolPermission throws AccessDeniedException). Split by templated uri so confirm/cancel denials are distinguishable.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 33 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (uri) (rate(http_server_requests_seconds_count{service=\"pos-mcp-server\", uri=~\"/v1/(mcp|nlt)/.*\", status=\"403\"}[$__rate_interval])) * 60",
+          "legendFormat": "403 {{uri}}"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (uri) (rate(http_server_requests_seconds_count{service=\"pos-mcp-server\", uri=~\"/v1/(mcp|nlt)/.*\", status=\"401\"}[$__rate_interval])) * 60",
+          "legendFormat": "401 {{uri}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqpm" }, "overrides": [] }
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Caller permission-code count (p05 / p50)",
+      "description": "actor.permissionCodeCount from telemetry. A p05 collapsing toward 0 means the gateway bitset decode or the role-default permission fetch is failing, which manifests downstream as tool-selection and RAG-visibility rejects.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 33 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "quantile_over_time(0.05, {job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | unwrap actor_permissionCodeCount [$__interval])",
+          "legendFormat": "p05"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "quantile_over_time(0.50, {job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | unwrap actor_permissionCodeCount [$__interval])",
+          "legendFormat": "p50"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Tool candidates rejected for permissions (tools.rejectedPermissionCount)",
+      "description": "GAP: NltiRequestTelemetryFactory hardcodes Tools.rejectedPermissionCount=0, and PermissionAwareMetadataFilter logs its drop count only at DEBUG (deployed baseline is INFO per ADR-0046). The query is correct against the v1 schema; it reads 0 until the tool-selection path threads the reject count through.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 33 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | unwrap tools_rejectedPermissionCount [$__interval])",
+          "legendFormat": "rejected candidates"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | unwrap tools_candidateCount [$__interval])",
+          "legendFormat": "candidates offered"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "6. RAG recall",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 40 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Top retrieved-document score (rag.retrieved)",
+      "description": "GAP: NltiRequestTelemetryFactory always passes null for Rag.retrieved (Gate 5 has not wired retrieval scores into the emitter), so this panel has no data today. The expression uses Loki's indexed JSON expression syntax because rag.retrieved is an array, which a bare `| json` skips. Use the DOMAIN-layer and preload panels beside it as the interim recall signal, and scripts/rag_lock_sweep.py for corpus-level recall evidence.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 41 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "quantile_over_time(0.50, {job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json top_score=\"rag.retrieved[0].score\" | top_score != \"\" | unwrap top_score [$__interval])",
+          "legendFormat": "p50 top score"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "quantile_over_time(0.05, {job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json top_score=\"rag.retrieved[0].score\" | top_score != \"\" | unwrap top_score [$__interval])",
+          "legendFormat": "p05 top score"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "DOMAIN prompt-layer rate (RAG-scoped prompt composed)",
+      "description": "Interim recall signal that is emitted today. The DOMAIN layer is added by RolePromptResolver only when the selected tools resolved a rag-scope, so its share tracks whether requests are being grounded at all. A drop with steady traffic means rag-scope resolution or the preloaded corpus regressed.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 41 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json prompt_layers=\"rag.promptLayers\" | prompt_layers =~ `\"DOMAIN\"` [$__interval])) / clamp_min(sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" [$__interval])), 1)",
+          "legendFormat": "DOMAIN share"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1, "min": 0 }, "overrides": [] }
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "Static RAG corpus preload health",
+      "description": "Corpus availability underpins recall. mcp.rag.preload.duration is timed once per StaticRagPreloadService run (startup); the WARN stream carries per-document failures. Any preload failure means the 39-doc corpus is incomplete and Gate 5 recall numbers are not comparable.",
+      "datasource": { "uid": "-- Mixed --" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 41 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(increase(mcp_rag_preload_duration_seconds_count{service=\"pos-mcp-server\"}[1h]))",
+          "legendFormat": "preload runs/1h"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\", level=\"WARN\"} |= \"Preload failed for document_id=\" [$__interval]))",
+          "legendFormat": "preload failures"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "type": "row",
+      "title": "7. Write confirmation",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 48 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "Write-plan confirm / cancel outcomes by HTTP status",
+      "description": "The authoritative write-gate outcome signal available today. NltiExceptionHandler maps the write-plan failure modes onto distinct statuses: 404 WRITE_PLAN_NOT_FOUND, 409 WRITE_PLAN_CONFLICT / WRITE_PLAN_STALE, 410 WRITE_PLAN_EXPIRED, 403 permission re-check failure, 5xx WRITE_PLAN_EXECUTION_FAILED.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 49 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (uri, status) (rate(http_server_requests_seconds_count{service=\"pos-mcp-server\", uri=~\"/v1/nlt/requests/\\\\{requestId\\\\}/(confirm|cancel)\"}[$__rate_interval])) * 60",
+          "legendFormat": "{{uri}} {{status}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqpm" }, "overrides": [] }
+    },
+    {
+      "id": 26,
+      "type": "timeseries",
+      "title": "Write-capable requests and plans created",
+      "description": "write.isWrite is emitted (as true) only when the request's candidate tools included a write-capable tool — the Gate 6 preview trigger. The plan-created series is the INFO log NltiWritePlanService emits after persisting a PENDING_CONFIRMATION plan. A widening gap between them means write intents are being detected but not turned into plans.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 49 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | write_isWrite = \"true\" [$__interval]))",
+          "legendFormat": "write-capable requests"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"NLTI write plan created\" [$__interval]))",
+          "legendFormat": "write plans created"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "type": "timeseries",
+      "title": "Confirmation outcome mix (write.confirmationOutcome)",
+      "description": "GAP: NltiRequestTelemetryFactory always passes null for Write.confirmationOutcome and Write.planArgsProvenance — the confirm/cancel path records its outcomes in the nlti_audit_event ledger (outcome=confirmed|cancelled|expired|stale-data|superseded), not in the telemetry stream, and the ledger is a database table with no log or metric mirror. Until that is wired, take confirmation outcomes from the HTTP-status panel or from GET /v1/nlt/audit.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 56 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (write_confirmationOutcome) (count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | write_confirmationOutcome != \"\" [$__interval]))",
+          "legendFormat": "{{write_confirmationOutcome}}"
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "type": "timeseries",
+      "title": "Adaptive tuning proposals by mode",
+      "description": "Supporting panel for the #1219 shadow-to-live tuning verification. mcp.tuning.proposals is tagged with mode (shadow|live) by ToolPriorityTuningService; a live-mode proposal writes mcp_tool.priority.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 56 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (mode) (increase(mcp_tuning_proposals_total{service=\"pos-mcp-server\"}[1h]))",
+          "legendFormat": "{{mode}} proposals/1h"
+        }
+      ]
+    }
+  ]
+}

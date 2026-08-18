@@ -1,7 +1,9 @@
 package com.positivity.mcp.internal.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -16,6 +18,7 @@ import com.positivity.mcp.service.NltiRequestService;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -208,15 +211,43 @@ class NltiControllerTest {
     void setWorkflowState_returns200WithUpdatedState() throws Exception {
         // A gateway-style principal (username in the details map) so the controller resolves the
         // subject the same way session creation does — the ownership key must match.
-        when(workflowStateService.advance(eq(SESSION_ID), eq("alice"), eq(WorkflowState.CREATING_PO)))
+        // Gate 2C (#1215): the inbound X-Correlation-Id must reach the service so the emitted
+        // nlti.workflow.transition telemetry event joins to the surrounding request telemetry.
+        when(workflowStateService.advance(
+                        eq(SESSION_ID), eq("alice"), eq(WorkflowState.CREATING_PO), eq(CORRELATION_ID)))
                 .thenReturn(WorkflowState.CREATING_PO);
 
         mockMvc.perform(post("/v1/nlt/sessions/" + SESSION_ID + "/workflow-state")
+                        .header("X-Correlation-Id", CORRELATION_ID.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"workflowState\":\"CREATING_PO\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sessionId").value(SESSION_ID.toString()))
                 .andExpect(jsonPath("$.workflowState").value("CREATING_PO"));
+    }
+
+    @Test
+    @WithGatewayUser(username = "alice", authorities = "nlti:request:submit")
+    @DisplayName("POST workflow-state without X-Correlation-Id still forwards a generated correlation id")
+    void setWorkflowState_withoutCorrelationHeader_forwardsGeneratedCorrelationId() throws Exception {
+        when(workflowStateService.advance(
+                        eq(SESSION_ID), eq("alice"), eq(WorkflowState.PROCESSING_RETURN), any(UUID.class)))
+                .thenReturn(WorkflowState.PROCESSING_RETURN);
+
+        mockMvc.perform(post("/v1/nlt/sessions/" + SESSION_ID + "/workflow-state")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workflowState\":\"PROCESSING_RETURN\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.workflowState").value("PROCESSING_RETURN"));
+
+        ArgumentCaptor<UUID> correlationIdCaptor = ArgumentCaptor.forClass(UUID.class);
+        verify(workflowStateService)
+                .advance(
+                        eq(SESSION_ID),
+                        eq("alice"),
+                        eq(WorkflowState.PROCESSING_RETURN),
+                        correlationIdCaptor.capture());
+        assertThat(correlationIdCaptor.getValue()).isNotNull();
     }
 
     @Test

@@ -1,0 +1,20 @@
+{
+  "_comment": [
+    "TEMPLATE for scripts/nlti_live_verify.py --write-target (#1218, Gate 6).",
+    "",
+    "THIS FILE INTENTIONALLY DOES NOT NAME A TARGET. Which downstream service/action the live",
+    "write-gate run executes — and whether dirtying alpha data with it is acceptable — is OPEN",
+    "DECISION C in pos-mcp-server/docs/gate-closeout-plan-1212-1219.md. Copy this file, replace",
+    "every <PLACEHOLDER>, and keep it outside the repo. The harness refuses to run a prompt that",
+    "still contains a <...> placeholder.",
+    "",
+    "prompt        : the ACTION-intent natural-language prompt submitted to POST /v1/nlt/requests.",
+    "expectedTool  : the mcp_tool name the previewed plan must target (asserted, optional).",
+    "clientContext : optional key-value map forwarded as NltiRequestDTO.clientContext.",
+    "cleanupNote   : how an operator undoes the write on alpha; copied into the evidence block."
+  ],
+  "prompt": "<ACTION prompt naming the agreed write target>",
+  "expectedTool": "<mcp_tool name the plan must target>",
+  "clientContext": {},
+  "cleanupNote": "<how to reverse this write on alpha>"
+}

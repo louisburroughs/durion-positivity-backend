@@ -1,0 +1,295 @@
+{
+  "uid": "nlti-overview",
+  "title": "NLTI Overview (pos-mcp-server)",
+  "tags": ["nlti", "pos-mcp-server", "gate-7"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "description": "Request health for the NL-interface. Counters/timers come from Prometheus (pos-mcp-server /actuator/prometheus). True latency percentiles and per-outcome splits come from the nlti.request.telemetry log stream in Loki. See pos-mcp-server/docs/dashboards/nlti-overview.md.",
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Request volume and outcome",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "NLTI request count (per min)",
+      "description": "nlt.request.count is an untagged Micrometer counter incremented once per NltiRequestService.submit(). It carries no status/route tags, so the per-route split lives in the panel to the right.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(nlt_request_count_total{service=\"pos-mcp-server\"}[$__rate_interval])) * 60",
+          "legendFormat": "submit/min"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(nlt_error_count_total{service=\"pos-mcp-server\"}[$__rate_interval])) * 60",
+          "legendFormat": "errors/min"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqpm" }, "overrides": [] }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "HTTP requests by route and status (per min)",
+      "description": "The route/status split the untagged nlt.request.count cannot give. uri is the Spring templated path, so /v1/nlt/requests/{requestId}/confirm stays one series.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (uri, status) (rate(http_server_requests_seconds_count{service=\"pos-mcp-server\", uri=~\"/v1/(mcp|nlt)/.*\"}[$__rate_interval])) * 60",
+          "legendFormat": "{{uri}} {{status}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqpm" }, "overrides": [] }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Chat outcome mix (telemetry)",
+      "description": "outcome.status / outcome.errorCode from nlti.request.telemetry. Covers the /v1/mcp/chat and /chat/stream paths, which do not increment nlt.request.count.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (outcome_status) (count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" [$__interval]))",
+          "legendFormat": "{{outcome_status}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "row",
+      "title": "Latency",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 8 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Chat end-to-end latency p50/p95/p99 (telemetry)",
+      "description": "True percentiles, computed in Loki over latency.totalMs from nlti.request.telemetry. Prometheus cannot supply these: pos-mcp-server does not import application-observability.yml, so no percentile histograms are published for any timer.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "quantile_over_time(0.50, {job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | unwrap latency_totalMs [$__interval])",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "quantile_over_time(0.95, {job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | unwrap latency_totalMs [$__interval])",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "quantile_over_time(0.99, {job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | unwrap latency_totalMs [$__interval])",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "/v1/nlt/requests submit latency (mean)",
+      "description": "Micrometer timer nlt.request.latency_ms (the one NltiRequestServiceImpl actually records; the nlt.request.latency bean in NltiObservabilityMetricsConfig is registered but never sampled). Mean only — no histogram buckets are published.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(nlt_request_latency_ms_seconds_sum{service=\"pos-mcp-server\"}[$__rate_interval])) / clamp_min(sum(rate(nlt_request_latency_ms_seconds_count{service=\"pos-mcp-server\"}[$__rate_interval])), 0.0001)",
+          "legendFormat": "mean"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max(nlt_request_latency_ms_seconds_max{service=\"pos-mcp-server\"})",
+          "legendFormat": "max (decaying window)"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "id": 8,
+      "type": "row",
+      "title": "Stage latency — instrumentation pending (#1213)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+      "collapsed": true,
+      "panels": [
+        {
+          "id": 9,
+          "type": "timeseries",
+          "title": "NLTI planning latency (mean)",
+          "description": "GAP: nlt.planning.latency is registered as a bean in NltiObservabilityMetricsConfig but no code path records a sample, so the series exists with count 0. Panel is correct and will populate once the planning stage is timed.",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "gridPos": { "h": 7, "w": 12, "x": 0, "y": 18 },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "sum(rate(nlt_planning_latency_seconds_sum{service=\"pos-mcp-server\"}[$__rate_interval])) / clamp_min(sum(rate(nlt_planning_latency_seconds_count{service=\"pos-mcp-server\"}[$__rate_interval])), 0.0001)",
+              "legendFormat": "planning mean"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+        },
+        {
+          "id": 10,
+          "type": "timeseries",
+          "title": "NLTI execution latency (mean)",
+          "description": "GAP: nlt.execution.latency, mcp.model.latency and mcp.tool.execution.latency are all registered-but-never-recorded timers. Same caveat as the planning panel.",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "gridPos": { "h": 7, "w": 12, "x": 12, "y": 18 },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "sum(rate(nlt_execution_latency_seconds_sum{service=\"pos-mcp-server\"}[$__rate_interval])) / clamp_min(sum(rate(nlt_execution_latency_seconds_count{service=\"pos-mcp-server\"}[$__rate_interval])), 0.0001)",
+              "legendFormat": "execution mean"
+            },
+            {
+              "refId": "B",
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "sum(rate(mcp_model_latency_seconds_sum{service=\"pos-mcp-server\"}[$__rate_interval])) / clamp_min(sum(rate(mcp_model_latency_seconds_count{service=\"pos-mcp-server\"}[$__rate_interval])), 0.0001)",
+              "legendFormat": "model mean"
+            },
+            {
+              "refId": "C",
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "sum(rate(mcp_tool_execution_latency_seconds_sum{service=\"pos-mcp-server\"}[$__rate_interval])) / clamp_min(sum(rate(mcp_tool_execution_latency_seconds_count{service=\"pos-mcp-server\"}[$__rate_interval])), 0.0001)",
+              "legendFormat": "tool mean"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "row",
+      "title": "Errors, audit, and intent",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 19 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "NLTI errors by error code (telemetry)",
+      "description": "nlt.error.count is untagged; the per-code breakdown comes from outcome.errorCode in the telemetry stream.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 20 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (outcome_errorCode) (count_over_time({job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\" | regexp `(?P<telemetry>[{]\"schemaVersion\".+[}])` | line_format \"{{.telemetry}}\" | json | __error__=\"\" | outcome_status = \"ERROR\" [$__interval]))",
+          "legendFormat": "{{outcome_errorCode}}"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Audit write failures (1h)",
+      "description": "nlt.audit.write_failures is incremented by AuditLedgerServiceImpl whenever the append-only ledger write throws. Any non-zero value is a P1: destructive events re-throw and block execution.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 20 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(increase(nlt_audit_write_failures_total{service=\"pos-mcp-server\"}[1h]))",
+          "legendFormat": "failures/1h"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Intent parses and clarifications (per min)",
+      "description": "nlt.intent.parse.count fires once per IntentParserService.parse(); nlt.intent.clarification.count fires when the parse could not resolve an intent. A rising clarification ratio is the primary intent-regression signal.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 20 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(nlt_intent_parse_count_total{service=\"pos-mcp-server\"}[$__rate_interval])) * 60",
+          "legendFormat": "parses/min"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(nlt_intent_clarification_count_total{service=\"pos-mcp-server\"}[$__rate_interval])) * 60",
+          "legendFormat": "clarifications/min"
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(nlt_intent_clarification_count_total{service=\"pos-mcp-server\"}[$__rate_interval])) / clamp_min(sum(rate(nlt_intent_parse_count_total{service=\"pos-mcp-server\"}[$__rate_interval])), 0.0001)",
+          "legendFormat": "clarification ratio"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "logs",
+      "title": "Raw nlti.request.telemetry stream",
+      "description": "Drill-down for any spike window. Each line is one JSON telemetry event; correlationId links to the audit ledger (/v1/nlt/audit) and to scripts/nlti_live_verify.py evidence.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 27 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{job=\"docker\", service=\"pos-mcp-server\"} |= \"nlti.request.telemetry\""
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": true,
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "sortOrder": "Descending"
+      }
+    }
+  ]
+}
