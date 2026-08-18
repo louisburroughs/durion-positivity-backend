@@ -110,9 +110,9 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-customer:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # #838 flag flip — uncomment in the second deploy, after the broker is verified healthy:
-    # environment:
-    #   POS_CUSTOMER_KAFKA_ENABLED: "true"
+    # #838 second deploy: broker verified healthy, flag flipped on.
+    environment:
+      POS_CUSTOMER_KAFKA_ENABLED: "true"
 
   pos-event-receiver:
     image: ${ECR_REGISTRY}/durion/pos-event-receiver:${BACKEND_TAG}
@@ -137,9 +137,9 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-invoice:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # #838 flag flip — uncomment in the second deploy, after the broker is verified healthy:
-    # environment:
-    #   POS_INVOICE_KAFKA_ENABLED: "true"
+    # #838 second deploy: broker verified healthy, flag flipped on.
+    environment:
+      POS_INVOICE_KAFKA_ENABLED: "true"
 
   pos-location:
     image: ${ECR_REGISTRY}/durion/pos-location:${BACKEND_TAG}
@@ -160,9 +160,9 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-people-contact:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # #838 flag flip — uncomment in the second deploy, after the broker is verified healthy:
-    # environment:
-    #   POS_PEOPLE_CONTACT_KAFKA_ENABLED: "true"
+    # #838 second deploy: broker verified healthy, flag flipped on.
+    environment:
+      POS_PEOPLE_CONTACT_KAFKA_ENABLED: "true"
 
   pos-price:
     image: ${ECR_REGISTRY}/durion/pos-price:${BACKEND_TAG}
@@ -207,9 +207,9 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-workorder:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
-    # #838 flag flip — uncomment in the second deploy, after the broker is verified healthy:
-    # environment:
-    #   WORKORDER_KAFKA_ENABLED: "true"
+    # #838 second deploy: broker verified healthy, flag flipped on.
+    environment:
+      WORKORDER_KAFKA_ENABLED: "true"
 
   # ── Frontend ───────────────────────────────────────────────────────────────
 
