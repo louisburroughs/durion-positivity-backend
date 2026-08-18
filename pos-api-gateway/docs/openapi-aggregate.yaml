@@ -655,6 +655,8 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1replenishment~1tasks
   /v1/inventory/reservations:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1reservations
+  /v1/inventory/reservations/sales-order-line/{salesOrderLineId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1reservations~1sales-order-line~1{salesOrderLineId}
   /v1/inventory/reservations/{allocationId}/promote:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1reservations~1{allocationId}~1promote
   /v1/inventory/reservations/{workorderLineId}:

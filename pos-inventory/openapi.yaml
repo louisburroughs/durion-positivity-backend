@@ -7109,13 +7109,13 @@ paths:
       tags:
       - Backorders
       summary: List backorders
-      description: 'Lists backorders — unfulfilled workorder-line demand held open until availability covers it — newest first.
+      description: 'Lists backorders — unfulfilled demand (a workorder line or, since CAP #1315, a sales-order line) held open until availability covers it — newest first.
 
-        Use this tool to monitor open shortages awaiting stock; use getBackorder instead when the backorderId is already known, and note backorders are opened by the shortage flows (resolveShortage with BACKORDER), not by any direct create endpoint.
+        Use this tool to monitor open shortages awaiting stock; use getBackorder instead when the backorderId is already known, and note backorders are opened by the shortage flows (resolveShortage with BACKORDER) or the sales-order checkout gate, not by any direct create endpoint.
 
         Preconditions: none; an empty result is not an error.
 
-        Required inputs: none — status (OPEN, RESOLVED or CANCELLED), sku, locationId and workorderLineId are optional filters combined with AND.
+        Required inputs: none — status (OPEN, RESOLVED or CANCELLED), sku, locationId, workorderLineId and salesOrderLineId are optional filters combined with AND.
 
         No events are emitted and no state changes; this is a read-only projection.
 
@@ -7150,6 +7150,13 @@ paths:
       - name: workorderLineId
         in: query
         description: Filter by workorder line
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: salesOrderLineId
+        in: query
+        description: 'Filter by sales-order line (CAP #1315)'
         required: false
         schema:
           type: string
@@ -7619,6 +7626,53 @@ paths:
       - name: workorderLineId
         in: path
         description: Workorder line identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Reservation cancelled
+        '403':
+          description: User lacks required reservation authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Reservation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth:
+        - inventory:adjustment:create
+      x-required-permissions:
+      - inventory:adjustment:create
+  /v1/inventory/reservations/sales-order-line/{salesOrderLineId}:
+    delete:
+      tags:
+      - Inventory Reservations
+      summary: Cancel reservation by sales-order line
+      description: 'Cancels the reservation for a sales-order line (CAP #1315) and releases every allocation under it — the sales-order-demand counterpart of cancelReservation.
+
+        Use this tool when sales-order demand is withdrawn; do not use cancelReservation, whose path parameter is a workorderLineId and which finds nothing for a sales-order line.
+
+        Preconditions: a reservation must exist for the sales-order line.
+
+        Required inputs: salesOrderLineId (UUID) path parameter; there is no request body.
+
+        Emits an INVENTORY_RESERVATION_CANCEL_SALES_ORDER_LINE event; every allocation is marked RELEASED, located HARD allocations get ALLOCATION_RELEASED ledger entries for their un-released remainder only, and the reservation ends CANCELLED with allocatedQuantity 0.
+
+        Returns 404 when no reservation exists for the sales-order line.
+
+        '
+      operationId: cancelReservationForSalesOrderLine
+      parameters:
+      - name: salesOrderLineId
+        in: path
+        description: Sales-order line identifier
         required: true
         schema:
           type: string
@@ -9038,13 +9092,18 @@ components:
       - workorderId
     CreateReservationRequest:
       type: object
-      description: Request to create an inventory reservation against a workorder line for a stock item
+      description: 'Request to create an inventory reservation against a demand line (a workorder line or a sales-order line, CAP #1315) for a stock item. Exactly one of workorderLineId/salesOrderLineId must be set; the service rejects a request that sets both or neither.'
       properties:
         workorderLineId:
           type: string
           format: uuid
-          description: Identifier of the workorder line the reservation fulfils
+          description: Identifier of the workorder line the reservation fulfils, when demand is from a workorder. Exactly one of this and salesOrderLineId must be set.
           example: 01960003-0000-7000-8000-000000000001
+        salesOrderLineId:
+          type: string
+          format: uuid
+          description: 'Identifier of the sales-order line the reservation fulfils, when demand is from a sales order (CAP #1315). Exactly one of this and workorderLineId must be set.'
+          example: 01960003-0000-7000-8000-000000000004
         stockItemId:
           type: string
           format: uuid
@@ -9059,7 +9118,6 @@ components:
       required:
       - requiredQuantity
       - stockItemId
-      - workorderLineId
     ReservationResponse:
       type: object
       description: Inventory reservation with its allocation state for a workorder line
@@ -9072,8 +9130,13 @@ components:
         workorderLineId:
           type: string
           format: uuid
-          description: Identifier of the workorder line the reservation fulfils
+          description: Identifier of the workorder line the reservation fulfils, when demand is from a workorder; null when demand is from a sales order instead.
           example: 01960003-0000-7000-8000-000000000002
+        salesOrderLineId:
+          type: string
+          format: uuid
+          description: 'Identifier of the sales-order line the reservation fulfils (CAP #1315), when demand is from a sales order; null when demand is from a workorder instead.'
+          example: 01960003-0000-7000-8000-000000000005
         stockItemId:
           type: string
           format: uuid
@@ -9099,7 +9162,6 @@ components:
       - reservationId
       - status
       - stockItemId
-      - workorderLineId
     PromoteAllocationRequest:
       type: object
       description: Request to promote a soft allocation to a hardened, location-pinned allocation
@@ -12748,7 +12810,11 @@ components:
         workorderLineId:
           type: string
           format: uuid
-          description: Workorder line whose demand was short
+          description: Workorder line whose demand was short, when demand was from a workorder; null otherwise
+        salesOrderLineId:
+          type: string
+          format: uuid
+          description: 'Sales-order line whose demand was short (CAP #1315), when demand was from a sales order; null otherwise'
         sku:
           type: string
           description: SKU / stock-item identifier that was short
