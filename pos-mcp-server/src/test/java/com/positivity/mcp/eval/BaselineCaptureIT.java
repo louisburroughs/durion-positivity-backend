@@ -155,19 +155,23 @@ class BaselineCaptureIT {
         int scored = 0;
 
         // Match production's cosine similarity floor so recall@k is neither over- nor under-reported:
-        // score at the loosest value a doc must clear to enter the pipeline. That value is
-        // `mcp.rag.tier2-min-score` in application.yml, and it is CALIBRATED PER EMBEDDING MODEL — the
-        // #1194 bge-m3 cutover moved production from 0.6/0.55 (nomic-embed-text) to 0.45/0.40, because
-        // the two models put cosine similarity on different scales.
+        // score at the loosest value a doc must clear to enter the pipeline. SessionAgentManager builds
+        // two dense retrievers — a primary at `mcp.rag.min-score` with topK 10, and a broad one at
+        // `mcp.rag.tier2-min-score` over TIER2_RETRIEVAL_CANDIDATES. The retriever below uses a wide
+        // candidate count (>= 50), so it mirrors the BROAD retriever, and the floor that belongs with it
+        // is `mcp.rag.tier2-min-score` (0.40) — not the primary 0.45.
         //
-        // This constant previously hardcoded 0.55 and went stale at that cutover, which made the test
-        // score ~0.10 stricter than production and under-report recall: measured live on alpha
-        // 2026-08-18, the same 51 fixtures over the same corpus scored 0.6373 at 0.55 versus 0.8922 at
-        // 0.45. That looked like a retrieval regression and was purely a measurement artifact.
+        // Both floors are CALIBRATED PER EMBEDDING MODEL: the #1194 bge-m3 cutover moved production from
+        // 0.6/0.55 (nomic-embed-text) to 0.45/0.40, because the two models put cosine similarity on
+        // different scales. This constant hardcoded the old broad floor 0.55 and went stale at that
+        // cutover, which made the test score stricter than production and under-report recall: measured
+        // live on alpha 2026-08-18, the same 51 fixtures over the same corpus scored 0.6373 at 0.55
+        // versus 0.8922 at 0.45. That looked like a retrieval regression and was purely a measurement
+        // artifact.
         //
-        // Keep this in step with `mcp.rag.min-score` in application.yml whenever the embedding model
-        // changes. Override with -Dmcp.eval.rag-min-score.
-        double ragMinScore = Double.parseDouble(System.getProperty("mcp.eval.rag-min-score", "0.45"));
+        // Keep this in step with `mcp.rag.tier2-min-score` in application.yml whenever the embedding
+        // model changes. Override with -Dmcp.eval.rag-min-score.
+        double ragMinScore = Double.parseDouble(System.getProperty("mcp.eval.rag-min-score", "0.40"));
 
         for (Path file : suiteFiles("rag-retrieval")) {
             JsonNode root = MAPPER.readTree(file.toFile());
