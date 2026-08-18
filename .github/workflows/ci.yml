@@ -610,6 +610,10 @@ jobs:
       pull-requests: read
     needs: [ build-test ]
     if: github.event_name != 'schedule'
+    # Exposed at job level purely so the Sonar steps below can test for its presence:
+    # the `secrets` context is not readable from a step `if:`, but `env` is.
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
     steps:
       - name: Checkout code
@@ -677,7 +681,7 @@ jobs:
       # below, which measures the whole reactor through pos-coverage-aggregate.
       # ---------------------------------------------------------------------
       - name: Cache SonarCloud packages
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && env.SONAR_TOKEN != ''
         uses: actions/cache@v5
         with:
           path: ~/.sonar/cache
@@ -685,7 +689,7 @@ jobs:
           restore-keys: ${{ runner.os }}-sonar
 
       - name: Download JaCoCo coverage reports
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && env.SONAR_TOKEN != ''
         uses: actions/download-artifact@v5
         continue-on-error: true
         with:
@@ -693,7 +697,7 @@ jobs:
           path: sonar-coverage
 
       - name: Report downloaded coverage reports
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && env.SONAR_TOKEN != ''
         # This job runs `test-compile` only, so the sole source of coverage is the
         # artifact downloaded above; if it is empty the scan silently reports 0%.
         # Warn rather than fail: when selective testing skips every module, an empty
@@ -711,8 +715,16 @@ jobs:
             find sonar-coverage -name jacoco.xml | sed 's/^/  /'
           fi
 
+      - name: Announce a missing SonarCloud token
+        if: github.event_name == 'pull_request' && env.SONAR_TOKEN == ''
+        # A fork PR is handed no secrets, and a tokenless `sonar:sonar` pays for a full
+        # test-compile over the reactor before dying on authentication. The steps below
+        # skip instead — but say so out loud, because a silently skipped analysis looks
+        # exactly like a clean one on the checks list.
+        run: echo "::warning::SONAR_TOKEN unavailable (fork pull request?); SonarCloud analysis skipped for this PR."
+
       - name: SonarCloud Scan (pull requests only)
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && env.SONAR_TOKEN != ''
         # Stopgap: PR-mode analysis currently fails at PR decoration because SonarCloud cannot
         # resolve the pull request via its GitHub App / DevOps-platform binding ("Something went
         # wrong while trying to get the pullrequest with key 'N'"). Until that binding is fixed in
@@ -733,7 +745,7 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          # SONAR_TOKEN is inherited from the job-level env above.
           # Event data is passed via env vars, never interpolated into the script:
           # head.ref is attacker-controlled on fork PRs (script injection).
           PR_KEY: ${{ github.event.pull_request.number }}
