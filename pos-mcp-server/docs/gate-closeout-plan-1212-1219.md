@@ -91,7 +91,7 @@ gate on the same soak).
 | 0.3 | Build `scripts/nlti_live_verify.py` — per-suite harness (`equivalence`, `persona`, `workflow`, `router`, `write-gate`, `admin`); auths as N personas via the gateway, harvests `nlti.request.telemetry` from Loki by correlationId, emits JSON + paste-ready markdown evidence | **#1367**, feeds #1213 #1214 #1215 #1216 #1218 #1219 |
 | 0.4 | `V34__processing_return_workflow_seed.sql` (+ h2 twin), pending decision D below | #1215 |
 | 0.5 | Dashboard JSON + extend `docs/dashboards/nlti-overview.md` with the missing routing/tier/fallback/RAG/prompt-layer/write-gate panels; cross-check `docs/alerts/nlti-alerts.md` covers the 7 required alerts | **#1368**, feeds #1219 |
-| 0.6 | Un-archive `docs/archive/gate-verification-runbook.md` as the live procedure; note the #1367 harness supersedes the manual curl/psql steps in §B.6–B.10 | all |
+| 0.6 | ✅ **Done (2026-08-18).** Un-archived to [`gate-verification-runbook.md`](gate-verification-runbook.md) as the live procedure; retired-worktree instructions corrected, and §B.6–B.10 marked superseded in place by the #1367 harness (see its *Harness supersession map*) | all |
 
 Estimated: ~1.5–2 days, mostly 0.3.
 

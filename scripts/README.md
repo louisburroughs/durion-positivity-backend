@@ -33,6 +33,8 @@ Utility scripts for development, operations, testing, and deployment.
 | [`test-gateway-refactoring.sh`](#test-gateway-refactoringsh) | Testing | Integration checks for the gateway API versioning refactor |
 | [`run_test.sh`](#run_testsh) | Testing | Run a focused set of `pos-accounting` tests and grep failures |
 | [`rag_gap_harness.py`](#rag_gap_harnesspy) | Evaluation | RAG corpus gap-discovery harness — ask/grade/classify + hybrid flip-threshold (#1125) |
+| [`rag_lock_sweep.py`](#rag_lock_sweeppy) | Evaluation | Gate 5 retrieval-lock sweep — on-disk RAG corpus vs the embedded `mcp_rag_preload_record` rows (#1217) |
+| [`nlti_live_verify.py`](#nlti_live_verifypy) | Evaluation | Live HTTP verification harness for the NLTI gates — per-suite, multi-persona, Loki telemetry (#1367) |
 | [`fix_uuids*.py`](#fix_uuidspy-family) | Migration | One-time UUID normalization helpers for test files |
 
 ---
@@ -545,6 +547,100 @@ Pure decision logic lives in the `scripts/gap_harness/` package and is unit-test
 (`scripts/tests/test_gap_harness.py`); `replay`, `emit-fixture`, and `calibrate` on a set carrying
 `predicted_verdict` run offline. Full docs: [`scripts/gap_harness/README.md`](gap_harness/README.md). Design:
 `pos-mcp-server/docs/rag-corpus-gap-harness-design.md`.
+
+---
+
+### `nlti_live_verify.py`
+
+Live HTTP verification harness for the NLTI phase gates (#1367). Where `eval_live.py` drives
+Postgres/pgvector directly, this one exercises the real `pos-mcp-server` HTTP surface through
+`pos-api-gateway` as N configured personas, harvests the `nlti.request.telemetry` stream from Loki
+via LogQL, and emits both a JSON result file and a paste-ready markdown evidence block shaped like
+the gate blocks in `pos-mcp-server/docs/implementation_checklist.md`.
+
+Suites (`--suite a,b` is repeatable; `--suite all` runs everything): `equivalence` (Gate 2A /
+#1214), `persona` (Gate 1 / #1213), `workflow` (Gate 2C / #1215), `router` (Gate 4 / #1216),
+`write-gate` (Gate 6 / #1218), `admin` (Gate 7 / #1219).
+
+**Usage:**
+```bash
+# offline: print the exact request plan, open no sockets, exit 0
+python3 scripts/nlti_live_verify.py --suite all --dry-run \
+    --personas scripts/fixtures/nlti-personas.example.json
+
+# live: Wave 1 of the gate close-out plan (#1213 + #1214)
+NLTI_PERSONA_OPS_ADMIN_PASSWORD=... NLTI_PERSONA_TECHNICIAN_PASSWORD=... \
+    python3 scripts/nlti_live_verify.py --suite equivalence,persona \
+    --gateway-url http://localhost:8080 --loki-url http://localhost:3100 \
+    --personas /opt/durion/alpha/nlti-personas.json
+
+# live: non-IDLE workflow activation (#1215)
+python3 scripts/nlti_live_verify.py --suite workflow --workflow-state PROCESSING_RETURN ...
+
+# live: the write-gate flow needs an explicit, opted-in write target (#1218, open decision C)
+python3 scripts/nlti_live_verify.py --suite write-gate --allow-writes \
+    --write-target /opt/durion/alpha/nlti-write-target.json ...
+```
+
+**Notes:**
+- Stdlib only — no `pip install` needed. YAML persona files work only if PyYAML happens to be
+  present; JSON always works.
+- Personas are configured in a JSON/YAML file that names **env vars**, never secrets — see
+  [`scripts/fixtures/nlti-personas.example.json`](fixtures/nlti-personas.example.json). Token
+  resolution: `$<tokenEnv>` → `$POS_MCP_TOKEN_<role>` → env file → gateway login.
+- Safety: the default mode never mutates alpha business data. `POST /v1/nlt/requests/{id}/confirm`
+  and the admin CRUD writes are skipped unless `--allow-writes` is passed, and the `write-gate`
+  suite additionally requires `--write-target` (there is deliberately no default). `--read-only`
+  restricts the run to GET/auth requests only.
+- Telemetry is harvested from Loki (`--loki-url`, `observability/loki-config.yml`), never from
+  `docker compose logs`. The chat endpoints accept no correlation id, so those records are joined
+  by request time window plus actor role; the NLTI endpoints (including the Gate 2C
+  `nlti.workflow.transition` event) are joined by `X-Correlation-Id`.
+- Exit codes: `0` all executed checks passed (or `--dry-run`), `1` a check failed, `2` configuration
+  error, `3` infrastructure error (auth/gateway/Loki unreachable).
+- Plan: `pos-mcp-server/docs/gate-closeout-plan-1212-1219.md` (Wave 0.3).
+
+---
+
+### `rag_lock_sweep.py`
+
+Gate 5 retrieval-lock sweep (#1217) — the live half. Hashes every static RAG document declared under
+`mcp.rag.preload.docs` and compares it against the `mcp_rag_preload_record` rows the service wrote
+when it embedded that corpus, so drift between the shipped corpus and what is actually in the
+database is caught. It also cross-checks that each document has chunk rows (with non-NULL vectors) in
+`mcp_document_embedding` and reports documents that exist in the DB but have left the manifest.
+
+The hash comparison is the point: `StaticRagPreloadServiceImpl` skips re-embedding when the newest
+`LOADED` row already carries the same hash, so a corpus edit that never reached the running service
+looks healthy from the application side and is only visible by hashing the files on disk.
+
+The offline half of the same lock — deterministic/unique id, `rag-scope`, an explicit permission
+decision, resolvable `source-path`, documented chunking — is
+`pos-mcp-server/src/test/java/com/positivity/mcp/eval/RetrievalLockTest.java`, which runs in the
+normal `pos-mcp-server` surefire build.
+
+**Usage:**
+```bash
+# offline: print the plan and every on-disk hash, open no DB connection, exit 0
+python3 scripts/rag_lock_sweep.py --dry-run
+
+# live: Wave 1 step 2 of the gate close-out plan (#1217)
+pip install --user pg8000
+ENV_FILE=/opt/durion/alpha/.env python3 scripts/rag_lock_sweep.py
+```
+
+**Notes:**
+- Strictly read-only: every statement goes through a `SELECT`-only guard and the session is opened
+  `READ ONLY`. Re-seeding is a separate tool (`scripts/rag_seed.py`).
+- The manifest defaults to `application-alpha.yml` because `StaticRagPreloadServiceImpl` is
+  `@Profile("alpha")` and a profile list replaces the base list; `--config` overrides it. PyYAML is
+  used when installed, otherwise a stdlib parser reads the preload block.
+- Emits a paste-ready markdown evidence block plus JSON under
+  `pos-mcp-server/target/rag-lock-sweep/` (`--markdown-out` / `--json-out` to override).
+- Exit codes: `0` every document locked (or `--dry-run`), `1` drift detected, `2` configuration
+  error, `3` infrastructure error (driver missing, DB unreachable) — non-zero on drift so it can be
+  wired into CI.
+- Plan: `pos-mcp-server/docs/gate-closeout-plan-1212-1219.md` (Wave 0.2, run in Wave 1 step 2).
 
 ---
 

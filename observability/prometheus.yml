@@ -144,6 +144,21 @@ scrape_configs:
           service: 'pos-location'
           application: 'pos-location'
 
+  # pos-mcp-server (#1368): required by the NLTI dashboards. Two deviations from the
+  # jobs above are deliberate:
+  #   * port 8086, not 8080 — docker-compose sets SERVER_PORT/MANAGEMENT_SERVER_PORT=8086
+  #     and publishes it as 8094 on the host; Prometheus scrapes the container port.
+  #   * no basic_auth — SecurityConfiguration only registers filter chains for
+  #     /v1/mcp/**, /v1/nlt/** and the MCP transport endpoints, so /actuator/** is
+  #     unauthenticated on this service.
+  - job_name: 'pos-mcp-server'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['pos-mcp-server:8086']
+        labels:
+          service: 'pos-mcp-server'
+          application: 'pos-mcp-server'
+
   - job_name: 'pos-people'
     metrics_path: '/actuator/prometheus'
     basic_auth:

@@ -1,0 +1,16 @@
+-- V26: H2 dev/test twin of pg V34 (PROCESSING_RETURN workflow tool set, Gate 2C / issue #1215).
+--
+-- Deliberately a no-op. The tool-registry tables (mcp_tool, mcp_workflow_state, mcp_tool_workflow)
+-- exist only in the Postgres chain: they are created by pg V3 and seeded by pg V4/V18, and the H2
+-- chain has never had a twin for either (this directory contains no CREATE for those tables and no
+-- INSERT statements at all). They are also not JPA entities — ToolMetadataRepositoryImpl reads them
+-- through JdbcTemplate — so Hibernate's H2 ddl-auto does not create them either.
+--
+-- Seeding here would therefore fail the H2 migration chain on "table not found" rather than seed
+-- anything, so the PROCESSING_RETURN rows are Postgres-only, exactly like the CREATING_PO /
+-- RECEIVING_ASN / INVENTORY_RECON rows they extend (pg V4:305-325). Unit tests cover workflow-gated
+-- selection through a mocked ToolMetadataRepository; the live activation check for this seed is the
+-- Gate 2C alpha run recorded in docs/implementation_checklist.md.
+--
+-- The file is kept (instead of omitted) so the pg-to-H2 version mapping stays explicit and a future
+-- change that does add the tool-registry tables to H2 has an obvious place to notice the divergence.

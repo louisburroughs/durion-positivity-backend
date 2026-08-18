@@ -1,5 +1,26 @@
 # Gate Verification Runbook — pos-mcp-server NL interface
 
+> **Status: LIVE — this is the close-out procedure for #1212–#1219.** Restored from
+> `docs/archive/` on **2026-08-18** for the eight-gate close-out wave.
+>
+> **Companion documents**
+>
+> | Document | Role |
+> |---|---|
+> | [`gate-closeout-plan-1212-1219.md`](gate-closeout-plan-1212-1219.md) | Sequencing: which wave runs which check, in what order, with what alpha access and which open decisions block it. |
+> | [`implementation_checklist.md`](implementation_checklist.md) | **Source of truth** for gate status, evidence, metrics tables, and sign-off. Nothing in this runbook flips a gate — the checklist does. |
+> | [`implementation_phase_gates.md`](implementation_phase_gates.md) | Gate definitions and exit criteria. |
+>
+> **Two things changed since this runbook was archived — read both before running section B:**
+>
+> 1. **Path/branch.** The `feat/nl-interface-gates` worktree is retired. Run every command from the
+>    repository root (`~/IdeaProjects/durion-positivity-backend`) on the current close-out branch.
+>    Ignore the `cd .worktrees/nl-interface` line below.
+> 2. **Harness.** `scripts/nlti_live_verify.py` (built in Wave 0.3 under **#1367**) supersedes most of
+>    the manual `curl`/`psql` steps in **§B.6–§B.10**. Those manual steps are retained deliberately —
+>    they are the fallback when the harness is unavailable, and they document what the harness
+>    automates. See [Harness supersession map](#harness-supersession-map) before running any of them.
+
 How to build and verify each phase gate **locally**. Two tiers:
 
 - **A. Offline checks** — build + unit/structural tests. No Ollama, no Postgres. These are what's been verified so far and run in CI.
@@ -10,6 +31,10 @@ All commands run from the **worktree root** unless noted:
 cd ~/IdeaProjects/durion-positivity-backend/.worktrees/nl-interface
 ```
 Branch: `feat/nl-interface-gates`. Toolchain: JDK 25 (`java -version` → 25.x), Maven wrapper `./mvnw`.
+
+> **Stale as of 2026-08-18.** That worktree and branch are retired. Run everything from the repository
+> root (`~/IdeaProjects/durion-positivity-backend`) on the current close-out branch. The toolchain
+> line still holds.
 
 ---
 
@@ -85,6 +110,36 @@ When suites reach 100/50/30, remove the `@Disabled` on `EvalFixtureValidationTes
 
 These cover the HOLD items on Gates 0–2B: baseline metrics, RAG recall, fail-closed permission behavior, persona differences, and the V19/V17 migration.
 
+### Harness supersession map
+
+`scripts/nlti_live_verify.py` (**#1367**, Wave 0.3) drives the live HTTP surface — it authenticates as
+several personas through the gateway, calls `/v1/mcp/chat`, `/v1/mcp/chat/stream`, and
+`/v1/nlt/requests`, harvests `nlti.request.telemetry` by `correlationId`, and emits JSON plus
+paste-ready markdown evidence for `implementation_checklist.md`. It exposes six suites:
+`equivalence`, `persona`, `workflow`, `router`, `write-gate`, `admin`.
+
+Prefer the harness. Fall back to the manual steps below when the harness is unavailable, when a
+harness assertion fails and you need to isolate the cause by hand, or where the table records **no
+mapping**.
+
+| Manual step | Superseded by | Gate / issue |
+|---|---|---|
+| §B.6 — *Streaming parity* bullet | `--suite equivalence` | Gate 2A / #1214 |
+| §B.6 — *Negative (leakage/permission)* bullet, incl. the cached-agent leakage check | `--suite persona` | Gate 1 / #1213 |
+| §B.6 — *Workflow gating (Gate 2C live)* bullet | `--suite workflow` | Gate 2C / #1215 |
+| §B.6 — *PRECHECK* `psql` queries and the *End-to-end (positive)* bullet (discovered `source='openapi'` ops) | **No mapping.** No suite covers OpenAPI discovered-op persistence or execution; Gate 3 is outside the #1212–#1219 set. Run manually, unchanged. | Gate 3 |
+| §B.6 — *Facade regression* bullet | **No mapping.** Already verified 2026-07-01 (alpha `sha-559d554`, PR #788); retained as historical evidence, not a step to re-run. | Gate 3 |
+| §B.7 — all four bullets (routing split, safe fallback, quality/latency, fallback-vs-tier) | `--suite router` | Gate 4 / #1216 |
+| §B.8 — *Recall*, *Embedding migration*, *Chunking*, *Doc hygiene* bullets | **Not the harness.** Superseded by the offline `RetrievalLockTest` plus `scripts/rag_lock_sweep.py` (Wave 0.2; run in Wave 1 step 2). | Gate 5 / #1217 |
+| §B.8 — *Visibility (permission-first)* bullet | **Partial / unconfirmed.** `--suite persona` exercises permission-scoped answers end to end, but whether it asserts retrieval-level document visibility depends on the harness's final assertion set. Treat the manual check as authoritative until the harness output is inspected. | Gate 5 / #1217 |
+| §B.9 — all bullets | `--suite write-gate`. Note the harness cannot choose the alpha write target or accept the risk of dirtying alpha data — that is open decision **C** in the close-out plan and must be settled first. | Gate 6 / #1218 |
+| §B.10 — *Admin RBAC*, *Cache-safe*, *Audit*, *Tuning* bullets | `--suite admin` | Gate 7 / #1219 |
+| §B.10 — *Dashboards* and *Alerts* bullets | **Not the harness.** Panels and alert rules are built under **#1368**; verify against [`dashboards/nlti-overview.md`](dashboards/nlti-overview.md) and [`alerts/nlti-alerts.md`](alerts/nlti-alerts.md). The harness supplies the traffic those panels read. | Gate 7 / #1219, #1368 |
+
+Sections **§B.1–§B.5** are **not** superseded: they are environment setup, backend reachability,
+service boot, `BaselineCaptureIT`, and schema spot-checks that the harness assumes have already been
+done. §B.4 remains the Gate 0 baseline procedure (#1212).
+
 ### B.1 Backend env vars
 ```bash
 export OLLAMA_CHAT_BASE_URL=https://ollama.com
@@ -141,6 +196,12 @@ psql "$MCP_DB_URL" -c "\dt mcp_tool_role*"   # expect only *_deprecated
 ```
 
 ### B.6 OpenAPI execution bridge (Gate 3)
+
+> **Partially superseded (2026-08-18, #1367).** Three of this section's bullets are automated by
+> `scripts/nlti_live_verify.py` — see the per-bullet markers below. The OpenAPI discovered-op
+> PRECHECK and the positive end-to-end bullet have **no harness equivalent** and are still run by
+> hand. Retained in full as the fallback and as the specification of what the harness asserts.
+
 **Implemented (committed, unit-tested):** `RequestScopedUserContext`, `DiscoveredOperation` +
 `findDiscoveredCandidatesForPermissions`, exec-coordinate columns (V21/V19), `OpenApiOperationExecutor`,
 `OpenApiToolProvider` (fail-closed, `isDynamic`). **Remaining before this section runs:**
@@ -150,6 +211,8 @@ psql "$MCP_DB_URL" -c "\dt mcp_tool_role*"   # expect only *_deprecated
 > **Facade-path status (2026-07-01):** the shared **facade** tool-binding path is fixed and live-verified — see the **Facade regression** bullet below (PR #788, image `sha-559d554`). The **openapi** discovered-ops items (1)/(2)/(3) above remain outstanding: `SELECT count(*) FROM mcp_tool WHERE source='openapi'` is still `0` on alpha, so the openapi **End-to-end / Negative / Streaming** bullets below stay deferred until step (1) lands.
 
 Requires the gateway aggregate spec reachable + discovered ops persisted with coords + permissions (step 1 above). With the service up (`alpha`):
+
+*PRECHECK block below: **no harness mapping** — run manually.*
 ```bash
 # PRECHECK — discovered ops must exist in the DB at all (empty today until step 1 is implemented):
 psql "$MCP_DB_URL" -c "SELECT count(*) FROM mcp_tool WHERE source='openapi';"
@@ -157,13 +220,20 @@ psql "$MCP_DB_URL" -c "SELECT count(*) FROM mcp_tool WHERE source='openapi';"
 psql "$MCP_DB_URL" -c "SELECT name, http_method, http_path FROM mcp_tool WHERE source='openapi' LIMIT 5;"
 psql "$MCP_DB_URL" -c "SELECT t.name FROM mcp_tool t JOIN mcp_tool_permission p ON p.tool_id=t.id WHERE t.source='openapi' LIMIT 5;"
 ```
-- **End-to-end (positive):** as a user holding the op's permission, send a `/v1/mcp/chat` message that should trigger a `source='openapi'` op **with no facade equivalent**; confirm a real gateway result (not a hallucinated success).
-- **Negative (leakage/permission):** as a user **lacking** that permission, confirm the op never appears in the agent's tools and cannot be executed — including reusing a cached agent that a higher-permission user just used (cached-agent leakage check).
-- **Streaming parity:** repeat both via `/v1/mcp/chat/stream` (separate Reactor-context propagation path — must enforce the negative case too).
-- **Facade regression:** ✅ **VERIFIED 2026-07-01** (alpha, image `sha-559d554`, PR #788). As `admin.alpha` via gateway `POST /mcp-server/v1/mcp/chat`, "show open workorders" bound `selectedTools=8` (`MasterAgentRegistry.resolve-by-name` → 8 beans) and `WorkorderFacadeTool` executed against the live workorder service, returning real data (only `WO-2026-1000` Blue Ridge Landscaping, status COMPLETED — no hallucination). **Regression fixed:** pre-#788 this same path bound `selectedTools=0` (gated+scored names were resolved against a role-keyed bucket, but tool beans are bucketed by domain → every role resolved empty). Fix resolves selected names across the full registered set. Chat `HTTP=200`, model ~30s (qwen3.5:cloud).
-- **Workflow gating (Gate 2C live):** seed `mcp_tool_workflow` for a non-IDLE state, set `NltiSession.workflow_state`, confirm that state's tools activate and IDLE-only tools do not.
+- **End-to-end (positive):** *[no harness mapping — run manually]* as a user holding the op's permission, send a `/v1/mcp/chat` message that should trigger a `source='openapi'` op **with no facade equivalent**; confirm a real gateway result (not a hallucinated success).
+- **Negative (leakage/permission):** *[superseded → `nlti_live_verify.py --suite persona`]* as a user **lacking** that permission, confirm the op never appears in the agent's tools and cannot be executed — including reusing a cached agent that a higher-permission user just used (cached-agent leakage check).
+- **Streaming parity:** *[superseded → `nlti_live_verify.py --suite equivalence`]* repeat both via `/v1/mcp/chat/stream` (separate Reactor-context propagation path — must enforce the negative case too).
+- **Facade regression:** *[no harness mapping — historical evidence, do not re-run]* ✅ **VERIFIED 2026-07-01** (alpha, image `sha-559d554`, PR #788). As `admin.alpha` via gateway `POST /mcp-server/v1/mcp/chat`, "show open workorders" bound `selectedTools=8` (`MasterAgentRegistry.resolve-by-name` → 8 beans) and `WorkorderFacadeTool` executed against the live workorder service, returning real data (only `WO-2026-1000` Blue Ridge Landscaping, status COMPLETED — no hallucination). **Regression fixed:** pre-#788 this same path bound `selectedTools=0` (gated+scored names were resolved against a role-keyed bucket, but tool beans are bucketed by domain → every role resolved empty). Fix resolves selected names across the full registered set. Chat `HTTP=200`, model ~30s (qwen3.5:cloud).
+- **Workflow gating (Gate 2C live):** *[superseded → `nlti_live_verify.py --suite workflow`]* seed `mcp_tool_workflow` for a non-IDLE state, set `NltiSession.workflow_state`, confirm that state's tools activate and IDLE-only tools do not. (For #1215 the state under test is `PROCESSING_RETURN`, seeded by `V34__processing_return_workflow_seed.sql`; the workflow state is set via `POST /v1/nlt/sessions/{id}/workflow-state`.)
 
 ### B.7 Tiered model router (Gate 4)
+
+> **Superseded (2026-08-18, #1367) → `scripts/nlti_live_verify.py --suite router`.** All four bullets
+> in this section are automated: the suite runs a representative query set, reads `routing.tier` and
+> `fallback_used` from `nlti.request.telemetry`, and emits the routing-mix, latency, and quality
+> numbers for the Gate 4 metrics table. Run this section by hand only to isolate a harness failure.
+> Wave 2 of the close-out plan owns the tier-model configuration and redeploy this section requires.
+
 **Implemented (committed, unit-tested):** `ModelTier`, `RequestComplexity`, `RouterClassification`
 (+ safe default), `TierSelector` (pure rule), `NltiRouter` (`@Profile alpha`, strict-JSON parse +
 safe default → T2-complex). **Remaining before this section runs:** (1) tier→model resolver with
@@ -177,14 +247,29 @@ Requires the T1/T2-simple/T2-complex models configured + reachable.
 - **Fallback vs tier:** trigger `mcp.model.fallback` and confirm telemetry shows `fallback_used=true` independent of `routing.tier`.
 
 ### B.8 RAG expansion, permission-aware filtering, hybrid retrieval (Gate 5 — after implementation per `gate5-rag-hybrid-design.md`)
+
+> **Superseded (2026-08-18) — but *not* by the #1367 harness.** No `nlti_live_verify.py` suite covers
+> retrieval. The Gate 5 retrieval-lock sweep (#1217) is instead automated by the offline
+> `RetrievalLockTest` (all 39 `application.yml` static docs carry a deterministic id, `rag-scope`,
+> `required-permissions`, `source-path`, and documented chunking) plus `scripts/rag_lock_sweep.py`
+> for the live half (content hash vs `rag_preload` rows). Both are built in Wave 0.2 and run in
+> Wave 1 step 2. See the per-bullet markers below.
+
 Requires pgvector + the embedding model; run the RAG-retrieval fixtures through the #783 harness.
-- **Recall:** exact WO/invoice/PO/VIN/SKU/account-code/claim fixtures improve recall@k; record dense-only vs hybrid side by side.
-- **Visibility (permission-first):** admin/security docs never returned to non-admin/non-security fixtures; a permission-elevated user retrieves per permissions, not nominal role.
-- **Embedding migration:** with `bge-m3`/1024 active, recall@k ≥ the 768 baseline before switching; 768 column retained until validated.
-- **Chunking:** glossary/identifier docs use small chunks; prose/playbooks larger.
-- Doc hygiene: every preload/ingested doc has deterministic id, content hash, `rag_scope`, `required_permissions`.
+- **Recall:** *[superseded → `scripts/rag_lock_sweep.py` + `scripts/eval_live.py`]* exact WO/invoice/PO/VIN/SKU/account-code/claim fixtures improve recall@k; record dense-only vs hybrid side by side.
+- **Visibility (permission-first):** *[partially superseded → `nlti_live_verify.py --suite persona` — **unconfirmed**]* admin/security docs never returned to non-admin/non-security fixtures; a permission-elevated user retrieves per permissions, not nominal role. The `persona` suite exercises permission-scoped answers end to end, but whether it asserts *retrieval-level* document visibility depends on the harness's final assertion set. Until that is inspected, run this bullet manually and treat the manual result as authoritative.
+- **Embedding migration:** *[superseded → `scripts/rag_lock_sweep.py`]* with `bge-m3`/1024 active, recall@k ≥ the 768 baseline before switching; 768 column retained until validated.
+- **Chunking:** *[superseded → `RetrievalLockTest` (offline)]* glossary/identifier docs use small chunks; prose/playbooks larger.
+- Doc hygiene: *[superseded → `RetrievalLockTest` (offline) + `scripts/rag_lock_sweep.py` (live hash check)]* every preload/ingested doc has deterministic id, content hash, `rag_scope`, `required_permissions`.
 
 ### B.9 Write-action confirmation gate (Gate 6 — after implementation per `gate6-write-confirmation-design.md`)
+
+> **Superseded (2026-08-18, #1367) → `scripts/nlti_live_verify.py --suite write-gate`.** The suite
+> drives the `/v1/nlt/requests` + `/confirm` flow for every bullet below and emits the pass/fail
+> evidence table. **Blocked on a decision the harness cannot make:** which downstream service/action
+> is the alpha write target, and whether dirtying alpha data is acceptable — open decision **C** in
+> `gate-closeout-plan-1212-1219.md`. Settle that before running either the harness or these steps.
+
 Run the `write-safety` fixtures against the live NLTI-session path (`/v1/nlt/requests` + `/confirm`).
 The exit criterion is **all write-safety fixtures pass**:
 - No mutation without an explicit `/confirm`; plan args == executed args (no re-parse on confirm).
@@ -198,12 +283,17 @@ The exit criterion is **all write-safety fixtures pass**:
 - Rollback check: with write tools suppressed, the interface is read-only.
 
 ### B.10 Admin tooling, dashboards, tuning controls (Gate 7 — after implementation per `gate7-admin-observability-design.md`)
-- **Admin RBAC:** unauthorized user → 403 on `/v1/mcp/admin/tool-permissions`; authorized admin can list/add/remove a `(tool, permission_code)` mapping.
-- **Cache-safe:** a mapping change takes effect after the agent-cache TTL / explicit invalidation (not mid-request).
-- **Audit:** the change is recorded (who / what / old→new / when) via `AuditLedgerService`.
-- **Dashboards:** panels (routing, tier usage, fallback, tool-selection quality, permission rejects, RAG recall, prompt-layer usage, write confirmations/cancellations/expirations/failures, p50/p95) reconcile with `nlti.request.telemetry` + Prometheus meters.
-- **Alerts** fire for: failed-tool-call spike, permission-reject spike, fallback overuse, write-failure rate, confirmation-mismatch attempt, retrieval regression, latency SLO breach.
-- **Tuning:** `mcp.tuning.mode=shadow` computes but does NOT mutate `mcp_tool.priority`; `=live` cannot promote shadow→live unless the #783 harness shows improvement (or approved neutral).
+
+> **Partially superseded (2026-08-18, #1367).** The admin-flow bullets are automated by
+> `scripts/nlti_live_verify.py --suite admin`. The **Dashboards** and **Alerts** bullets are not —
+> those panels and rules are built under **#1368**; the harness only supplies the traffic they read.
+
+- **Admin RBAC:** *[superseded → `nlti_live_verify.py --suite admin`]* unauthorized user → 403 on `/v1/mcp/admin/tool-permissions`; authorized admin can list/add/remove a `(tool, permission_code)` mapping.
+- **Cache-safe:** *[superseded → `nlti_live_verify.py --suite admin`]* a mapping change takes effect after the agent-cache TTL / explicit invalidation (not mid-request).
+- **Audit:** *[superseded → `nlti_live_verify.py --suite admin`]* the change is recorded (who / what / old→new / when) via `AuditLedgerService`.
+- **Dashboards:** *[no harness mapping — #1368; verify against [`dashboards/nlti-overview.md`](dashboards/nlti-overview.md)]* panels (routing, tier usage, fallback, tool-selection quality, permission rejects, RAG recall, prompt-layer usage, write confirmations/cancellations/expirations/failures, p50/p95) reconcile with `nlti.request.telemetry` + Prometheus meters.
+- **Alerts** *[no harness mapping — #1368; verify against [`alerts/nlti-alerts.md`](alerts/nlti-alerts.md)]* fire for: failed-tool-call spike, permission-reject spike, fallback overuse, write-failure rate, confirmation-mismatch attempt, retrieval regression, latency SLO breach.
+- **Tuning:** *[superseded → `nlti_live_verify.py --suite admin`]* `mcp.tuning.mode=shadow` computes but does NOT mutate `mcp_tool.priority`; `=live` cannot promote shadow→live unless the #783 harness shows improvement (or approved neutral). The `live` promotion checks `mcp.tuning.eval-result-path` for a fresh `thresholds.passed=true` file — that is the Wave 1 eval output (#1212), so run this after the baseline capture.
 
 ---
 
@@ -224,5 +314,8 @@ Note: some pre-existing tests may require the `alpha` profile / backend; the gat
 | Check formatting | `./mvnw -o -pl pos-mcp-server spotless:check` |
 | Smoke-test chat backend | curl in B.2 |
 | Run service (live) | `./mvnw -o -pl pos-mcp-server spring-boot:run -Dspring-boot.run.profiles=alpha` |
+| Run a live gate suite (#1367) | `python3 scripts/nlti_live_verify.py --suite <equivalence\|persona\|workflow\|router\|write-gate\|admin>` |
+| Live RAG lock sweep (#1217) | `python3 scripts/rag_lock_sweep.py` |
+| See what the harness replaces | [Harness supersession map](#harness-supersession-map) |
 
 Gate status + sign-offs live in [`implementation_checklist.md`](implementation_checklist.md). Gate definitions in [`implementation_phase_gates.md`](implementation_phase_gates.md).
