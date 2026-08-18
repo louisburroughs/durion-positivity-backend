@@ -18,6 +18,11 @@ openapi-generator Maven plugin. Specifically:
 This script loads each YAML file, walks the full structure, removes those
 problematic entries, and writes the file back. Idempotent.
 
+Mapping keys are also written in a deterministic order. OpenAPI maps are
+semantically unordered, while arrays retain their original order because
+array order can be meaningful for fields such as `required`, `enum`, and
+`servers`.
+
 Usage:
   scripts/sanitize-openapi.py <file> [<file> ...]
 """
@@ -46,6 +51,17 @@ _STRUCTURAL_KEYS = frozenset(
         "callbacks",
     }
 )
+
+_TOP_LEVEL_KEY_ORDER = {
+    "openapi": 0,
+    "info": 1,
+    "externalDocs": 2,
+    "servers": 3,
+    "security": 4,
+    "tags": 5,
+    "paths": 6,
+    "components": 7,
+}
 
 
 def _is_empty_default(value: object) -> bool:
@@ -77,10 +93,28 @@ def _clean(node: object) -> object:
     return node
 
 
+def _ordered(node: object, *, top_level: bool = False) -> object:
+    if isinstance(node, dict):
+        if top_level:
+            key_order = lambda item: (
+                _TOP_LEVEL_KEY_ORDER.get(item[0], len(_TOP_LEVEL_KEY_ORDER)),
+                str(item[0]),
+            )
+        else:
+            key_order = lambda item: str(item[0])
+        return {
+            key: _ordered(value)
+            for key, value in sorted(node.items(), key=key_order)
+        }
+    if isinstance(node, list):
+        return [_ordered(item) for item in node]
+    return node
+
+
 def sanitize_file(path: Path) -> bool:
     text = path.read_text()
     data = yaml.safe_load(text)
-    cleaned = _clean(data)
+    cleaned = _ordered(_clean(data), top_level=True)
     new_text = yaml.safe_dump(
         cleaned,
         sort_keys=False,

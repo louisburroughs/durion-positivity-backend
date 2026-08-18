@@ -9,10 +9,19 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = REPO_ROOT / "scripts" / "generate-permissions.py"
+SANITIZER_PATH = REPO_ROOT / "scripts" / "sanitize-openapi.py"
 
 
 def load_generator_module():
     spec = importlib.util.spec_from_file_location("generate_permissions", MODULE_PATH)
+    module = importlib.util.module_from_spec(spec)
+    assert spec is not None and spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_sanitizer_module():
+    spec = importlib.util.spec_from_file_location("sanitize_openapi", SANITIZER_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec is not None and spec.loader is not None
     spec.loader.exec_module(module)
@@ -101,6 +110,34 @@ class GeneratePermissionsCoreTest(unittest.TestCase):
             self.assertEqual(
                 parsed["permissions"][0]["description"],
                 "line1\nline2\ttab\u0001control",
+            )
+
+
+class SanitizeOpenApiTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.sanitizer = load_sanitizer_module()
+
+    def test_sanitize_file_is_deterministic_for_mapping_order(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "openapi.yaml"
+            output.write_text(
+                """components:\n  schemas:\n    Zulu:\n      type: object\n      properties:\n        zebra:\n          type: string\n        alpha:\n          type: string\n    Alpha:\n      type: object\n      properties:\n        beta:\n          type: string\npaths:\n  /z:\n    get:\n      responses:\n        '200':\n          description: ok\n  /a:\n    get:\n      responses:\n        '200':\n          description: ok\nopenapi: 3.1.0\ninfo:\n  version: v1\n  title: Test\n""",
+                encoding="utf-8",
+            )
+
+            self.assertTrue(self.sanitizer.sanitize_file(output))
+            first = output.read_text(encoding="utf-8")
+            self.assertFalse(self.sanitizer.sanitize_file(output))
+            self.assertEqual(first, output.read_text(encoding="utf-8"))
+
+            parsed = yaml.safe_load(first)
+            self.assertEqual(list(parsed), ["openapi", "info", "paths", "components"])
+            self.assertEqual(list(parsed["paths"]), ["/a", "/z"])
+            self.assertEqual(list(parsed["components"]["schemas"]), ["Alpha", "Zulu"])
+            self.assertEqual(
+                list(parsed["components"]["schemas"]["Zulu"]["properties"]),
+                ["alpha", "zebra"],
             )
 
 

@@ -318,6 +318,10 @@ Generates `openapi.yaml` for every configured module and creates an aggregate in
    - The aggregate uses `$ref` pointers to each module's `openapi.yaml`
    - Duplicate paths across modules are skipped and listed in `x-duplicate-paths-skipped`
 
+Generated module specs are sanitized with `scripts/sanitize-openapi.py`, which
+also canonicalizes mapping-key order. This prevents nondeterministic Springdoc
+discovery order from producing noisy diffs; array order is preserved.
+
 **Notes:**
 - Requires `python3` and `PyYAML` for aggregate generation.
 - Module generation still works with `--no-aggregate`.
