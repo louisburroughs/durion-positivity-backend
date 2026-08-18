@@ -176,6 +176,34 @@ class PartIssueAvailabilityGateTest {
         }
 
         @Test
+        @DisplayName("rounds a fractional issue up when reserving, never down to zero")
+        void reservesWholeUnitsForFractionalIssue() {
+            WorkorderPart part = part(PART_ID, PRODUCT_ID, "4", "0");
+            givenWorkorderAndPart(workorder(WorkorderStatus.WORK_IN_PROGRESS), part);
+            givenAtp(PRODUCT_ID, 10);
+
+            service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("0.5"), null);
+
+            // The reservation contract is integer-only. Truncating would ask for 0, which the
+            // outcome fact rejects as non-positive, leaving the issue permanently unreconciled.
+            assertThat(part.getQuantityIssued()).isEqualByComparingTo("0.5");
+            verify(inventoryCommandPublisher).requestReservation(PART_ID, PRODUCT_ID, 1, SHOP_ID);
+        }
+
+        @Test
+        @DisplayName("rounds a fractional issue up rather than under-reserving")
+        void roundsPartialUnitUp() {
+            WorkorderPart part = part(PART_ID, PRODUCT_ID, "4", "0");
+            givenWorkorderAndPart(workorder(WorkorderStatus.WORK_IN_PROGRESS), part);
+            givenAtp(PRODUCT_ID, 10);
+
+            service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2.7"), null);
+
+            // 2 would leave 0.7 of a unit handed out and unaccounted for.
+            verify(inventoryCommandPublisher).requestReservation(PART_ID, PRODUCT_ID, 3, SHOP_ID);
+        }
+
+        @Test
         @DisplayName("blocks the issue when owned stock at the site is short")
         void blocksWhenShort() {
             WorkorderPart part = part(PART_ID, PRODUCT_ID, "4", "0");

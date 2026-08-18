@@ -49,6 +49,13 @@ import org.springframework.stereotype.Component;
  * was fed and then stopped. They call for different investigation, so they are reported as
  * different states rather than collapsed into one "stale" boolean.
  *
+ * <h2>No row count</h2>
+ *
+ * Deliberately absent. {@code count()} is {@code select count(*)}, a full scan on Postgres, and this
+ * endpoint is polled continuously by container healthchecks — a steady scan that grows with the
+ * replica, to report a number that answers nothing the newest-fact timestamp does not. "Never fed"
+ * is already reported as its own state, which is the only thing a count would have told us.
+ *
  * <p>Details are safe under {@code show-details: when-authorized}: they carry timestamps and a row
  * count, no stock figures, SKUs, or location identifiers.
  */
@@ -106,8 +113,6 @@ public class InventoryReplicaHealthIndicator implements HealthIndicator {
         details.put("stalenessThreshold", stalenessThreshold.toString());
         try {
             Optional<Instant> newest = newestUpdatedAt();
-            long rows = extInventoryAvailabilityRepository.count();
-            details.put("rows", rows);
             if (newest.isEmpty()) {
                 details.put("replicaState", "never-fed");
                 details.put("newestFactAt", null);

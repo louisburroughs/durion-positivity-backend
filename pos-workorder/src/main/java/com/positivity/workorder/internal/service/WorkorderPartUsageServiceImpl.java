@@ -15,6 +15,7 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkorderPartUsageService;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -254,7 +255,23 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             return;
         }
         publisher.requestReservation(
-                part.getId(), part.getProductEntityId(), quantity.intValue(), workorder.getShopId());
+                part.getId(), part.getProductEntityId(), reservableQuantity(quantity), workorder.getShopId());
+    }
+
+    /**
+     * Part quantities are {@code numeric(19,4)} and the API accepts down to {@code 0.0001}, but the
+     * reservation command and its outcome fact are both integer-only (ADR-0044, CAP #1315 Phase 1).
+     * Something has to give at that boundary, and rounding <em>up</em> is the only safe direction.
+     *
+     * <p>Truncating instead would be silently wrong twice over: issuing {@code 0.5} would ask
+     * pos-inventory to reserve {@code 0}, which its outcome fact rejects outright as non-positive,
+     * so the part would be issued and then never reconciled; and issuing {@code 2.7} would reserve
+     * {@code 2}, leaving stock we have already handed out unaccounted for. Reserving the whole unit
+     * holds slightly more than was issued, which is visible and self-correcting — the reservation
+     * is released when the part is consumed or returned.
+     */
+    private static int reservableQuantity(BigDecimal quantity) {
+        return quantity.setScale(0, RoundingMode.CEILING).intValueExact();
     }
 
     /**

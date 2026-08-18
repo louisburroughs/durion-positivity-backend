@@ -47,6 +47,13 @@ import org.springframework.stereotype.Component;
  * every gated part issue outright. An old replica was fed and stopped. Different investigations,
  * so they are reported as different states.
  *
+ * <h2>No row count</h2>
+ *
+ * Deliberately absent. {@code count()} is {@code select count(*)}, a full scan on Postgres, and this
+ * endpoint is polled continuously by container healthchecks — a steady scan that grows with the
+ * replica, to report a number that answers nothing the newest-fact timestamp does not. "Never fed"
+ * is already reported as its own state, which is the only thing a count would have told us.
+ *
  * <p>Details are safe under {@code show-details: when-authorized}: timestamps and a row count, no
  * stock figures, part numbers, or location identifiers.
  */
@@ -103,7 +110,6 @@ public class InventoryReplicaHealthIndicator implements HealthIndicator {
         details.put("stalenessThreshold", stalenessThreshold.toString());
         try {
             Optional<Instant> newest = availabilityRepository.findNewestUpdatedAt();
-            details.put("rows", availabilityRepository.count());
             if (newest.isEmpty()) {
                 details.put("replicaState", "never-fed");
                 details.put("newestFactAt", null);

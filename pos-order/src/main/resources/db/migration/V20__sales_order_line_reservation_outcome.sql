@@ -16,6 +16,6 @@
 ALTER TABLE sales_order_line ADD COLUMN reservation_id UUID;
 ALTER TABLE sales_order_line ADD COLUMN backorder_id UUID;
 
--- Resolving an outcome fact is a lookup by the line the fact names.
-CREATE INDEX IF NOT EXISTS idx_sales_order_line_reservation_id
-    ON sales_order_line (reservation_id);
+-- Deliberately unindexed. Resolving an outcome fact is a lookup by the line the fact names, which
+-- is the primary key; nothing reads these columns as a search key. An index here would carry write
+-- cost on every checkout for a query no code makes.
