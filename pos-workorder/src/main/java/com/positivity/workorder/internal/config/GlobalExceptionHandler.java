@@ -4,6 +4,7 @@ import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException;
 import com.positivity.workorder.internal.exception.DuplicateSubstituteLinkException;
+import com.positivity.workorder.internal.exception.InsufficientPartAvailabilityException;
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
 import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
 import com.positivity.workorder.internal.exception.TimeEntryNotFoundException;
@@ -41,6 +42,29 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(WorkorderNotFoundException.class)
     public ResponseEntity<ApiError> handleWorkorderNotFound(WorkorderNotFoundException ex, HttpServletRequest request) {
         return buildErrorResponse(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request);
+    }
+
+    /**
+     * A shortfall is a conflict with current stock, not a malformed request, and it is actionable:
+     * the advisor can order, transfer, or substitute. The nextAction says so rather than leaving a
+     * dead end (ADR-0017 response-code matrix, docs/ERROR_ENVELOPE.md).
+     */
+    @ExceptionHandler(InsufficientPartAvailabilityException.class)
+    public ResponseEntity<ApiError> handleInsufficientPartAvailability(
+            InsufficientPartAvailabilityException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        ApiError body = ApiError.guided(
+                "INSUFFICIENT_PART_AVAILABILITY",
+                ex.getMessage(),
+                HttpStatus.CONFLICT.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                ex.getPartLineId() == null ? null : ex.getPartLineId().toString(),
+                InsufficientPartAvailabilityException.NEXT_ACTION,
+                null);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(body, headers, HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(IllegalStateException.class)

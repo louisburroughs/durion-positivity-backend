@@ -77,6 +77,18 @@ class WorkorderPartUsageServiceImplTest {
     @Mock
     private WorkorderFactPublisher workorderFactPublisher;
 
+    @Mock
+    private PartAvailabilityService partAvailabilityService;
+
+    @Mock
+    private WorkorderStateMachine workorderStateMachine;
+
+    @SuppressWarnings("unchecked")
+    private final org.springframework.beans.factory.ObjectProvider<
+                    com.positivity.workorder.internal.config.InventoryCommandPublisher>
+            inventoryCommandPublisher =
+                    org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+
     private WorkorderPartUsageServiceImpl service;
 
     @BeforeEach
@@ -87,7 +99,20 @@ class WorkorderPartUsageServiceImplTest {
                 usageEventRepository,
                 idempotencyService,
                 workorderFactPublisher,
+                partAvailabilityService,
+                workorderStateMachine,
+                inventoryCommandPublisher,
                 Clock.fixed(NOW, ZoneOffset.UTC));
+
+        // These existing cases predate the CAP #1315 gate and are about idempotency, quantity
+        // arithmetic and ownership checks, not stock. Default to covered so they keep asserting
+        // what they were written to assert; the gate has its own tests.
+        org.mockito.Mockito.lenient()
+                .when(partAvailabilityService.covers(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
 
         UsernamePasswordAuthenticationToken token =
                 new UsernamePasswordAuthenticationToken("jane.smith", "n/a", List.of());

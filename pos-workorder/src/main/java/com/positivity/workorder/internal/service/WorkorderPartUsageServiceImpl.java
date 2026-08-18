@@ -1,9 +1,13 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.workorder.internal.config.InventoryCommandPublisher;
 import com.positivity.workorder.internal.dto.WorkorderPartUsageEventResponse;
+import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartUsageEvent;
+import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.InsufficientPartAvailabilityException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartUsageEventRepository;
@@ -20,6 +24,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,6 +62,15 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
     private final WorkorderPartUsageEventRepository usageEventRepository;
     private final IdempotencyService idempotencyService;
     private final WorkorderFactPublisher workorderFactPublisher;
+    private final PartAvailabilityService partAvailabilityService;
+    private final WorkorderStateMachine workorderStateMachine;
+
+    /**
+     * Absent when this module runs with Kafka disabled (local/dev profiles). The gate still reads
+     * the replica in that case; it simply registers no demand with pos-inventory, which is the
+     * position every profile was in before CAP #1315.
+     */
+    private final ObjectProvider<InventoryCommandPublisher> inventoryCommandPublisher;
 
     public WorkorderPartUsageServiceImpl(
             WorkorderRepository workorderRepository,
@@ -64,6 +78,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             WorkorderPartUsageEventRepository usageEventRepository,
             IdempotencyService idempotencyService,
             WorkorderFactPublisher workorderFactPublisher,
+            PartAvailabilityService partAvailabilityService,
+            WorkorderStateMachine workorderStateMachine,
+            ObjectProvider<InventoryCommandPublisher> inventoryCommandPublisher,
             Clock clock) {
         this.clock = clock;
         this.workorderRepository = workorderRepository;
@@ -71,6 +88,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         this.usageEventRepository = usageEventRepository;
         this.idempotencyService = idempotencyService;
         this.workorderFactPublisher = workorderFactPublisher;
+        this.partAvailabilityService = partAvailabilityService;
+        this.workorderStateMachine = workorderStateMachine;
+        this.inventoryCommandPublisher = inventoryCommandPublisher;
     }
 
     /**
@@ -113,7 +133,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         }
 
         // Validate workorder and part exist
-        workorderRepository.findById(workorderId).orElseThrow(() -> new WorkorderNotFoundException(workorderId));
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         WorkorderPart part = workorderPartRepository
                 .findById(partLineId)
@@ -123,6 +145,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         if (!workorderId.equals(getWorkorderIdForPart(part))) {
             throw new IllegalStateException("Part " + partLineId + " does not belong to workorder " + workorderId);
         }
+
+        requireOwnedStock(workorder, part, quantity);
 
         // Create usage event
         WorkorderPartUsageEvent event = WorkorderPartUsageEvent.builder()
@@ -148,8 +172,89 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
                     IDEMPOTENCY_OPERATION_PART_ISSUE, idempotencyKey, event.getId());
         }
 
+        registerDemand(workorder, part, quantity);
+
         log.info("Issued part quantity for workorder {}", workorderId);
         return event;
+    }
+
+    /**
+     * The per-part gate (CAP #1315): a part is issued only when owned stock at the servicing site
+     * covers it.
+     *
+     * <h2>Why the gate sits here and not on {@code startWorkorder()}</h2>
+     *
+     * Starting a job is planning; issuing a part is the moment metal is supposed to leave the
+     * shelf. Blocking the start would stop a technician working on the four items whose parts are
+     * present because a fifth is not. Blocking the issue stops exactly the item that cannot
+     * proceed, which is the smallest true statement the shortfall supports.
+     *
+     * <h2>Carrying the job to AWAITING_PARTS</h2>
+     *
+     * When nothing outstanding on the job can be issued, the job really is waiting on parts and is
+     * moved into the status that already means that. When something else can still be issued the
+     * status is left alone — the job is not blocked, one item is. The transition is attempted only
+     * from {@code WORK_IN_PROGRESS} because that is the only source the state table allows into
+     * {@code AWAITING_PARTS}; from anywhere else the shortfall still blocks the part, it simply
+     * does not move the job.
+     */
+    private void requireOwnedStock(Workorder workorder, WorkorderPart part, BigDecimal quantity) {
+        if (partAvailabilityService.covers(workorder, part, quantity)) {
+            return;
+        }
+        carryToAwaitingPartsIfWhollyBlocked(workorder);
+        throw new InsufficientPartAvailabilityException(
+                part.getId(),
+                part.getDescription() == null ? String.valueOf(part.getProductEntityId()) : part.getDescription(),
+                quantity,
+                partAvailabilityService.availableFor(workorder, part));
+    }
+
+    private void carryToAwaitingPartsIfWhollyBlocked(Workorder workorder) {
+        if (workorder.getStatus() != WorkorderStatus.WORK_IN_PROGRESS) {
+            return;
+        }
+        boolean anythingIssuable = workorderPartRepository.findByWorkorderId(workorder.getId()).stream()
+                .filter(WorkorderPartUsageServiceImpl::hasOutstandingQuantity)
+                .anyMatch(other -> partAvailabilityService.covers(workorder, other, outstandingQuantity(other)));
+        if (anythingIssuable) {
+            return;
+        }
+        try {
+            workorderStateMachine.transitionWorkorder(
+                    workorder.getId(),
+                    WorkorderStatus.AWAITING_PARTS,
+                    SecurityContextHelper.getCurrentUsername().orElse("system"),
+                    "No outstanding part can be issued from owned stock at the servicing site");
+        } catch (RuntimeException e) {
+            // The shortfall itself is the answer the caller needs. A status transition the state
+            // machine refuses must not replace that with a less useful error.
+            log.warn("Could not carry workorder {} into AWAITING_PARTS: {}", workorder.getId(), e.getMessage());
+        }
+    }
+
+    private static boolean hasOutstandingQuantity(WorkorderPart part) {
+        return outstandingQuantity(part).compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    private static BigDecimal outstandingQuantity(WorkorderPart part) {
+        BigDecimal ordered = part.getQuantity() == null ? BigDecimal.ZERO : part.getQuantity();
+        BigDecimal issued = part.getQuantityIssued() == null ? BigDecimal.ZERO : part.getQuantityIssued();
+        return ordered.subtract(issued);
+    }
+
+    /**
+     * Asks pos-inventory to reserve what was just issued. The gate above decided what to tell the
+     * technician from the replica; this asks the owner to decide from its own ledger, and the
+     * outcome fact corrects the part if the two disagree.
+     */
+    private void registerDemand(Workorder workorder, WorkorderPart part, BigDecimal quantity) {
+        InventoryCommandPublisher publisher = inventoryCommandPublisher.getIfAvailable();
+        if (publisher == null || workorder.getShopId() == null || part.getProductEntityId() == null) {
+            return;
+        }
+        publisher.requestReservation(
+                part.getId(), part.getProductEntityId(), quantity.intValue(), workorder.getShopId());
     }
 
     /**

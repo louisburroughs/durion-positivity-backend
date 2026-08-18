@@ -34,17 +34,33 @@ class InventoryEventsListenerTest {
     private static final UUID WORKORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
     private static final UUID SKU_ID = UUID.fromString("00000000-0000-0000-0000-000000000004");
     private static final UUID LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000005");
+    private static final UUID AVAILABILITY_AGGREGATE_ID = UUID.fromString("00000000-0000-0000-0000-000000000006");
+    private static final UUID PRODUCT_ID = UUID.fromString("00000000-0000-0000-0000-000000000007");
+    private static final UUID PART_ID = UUID.fromString("00000000-0000-0000-0000-000000000008");
+    private static final UUID RESERVATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000009");
+    private static final UUID BACKORDER_ID = UUID.fromString("00000000-0000-0000-0000-00000000000a");
 
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final ExtPickListReplicaRepository pickLists = mock(ExtPickListReplicaRepository.class);
     private final ExtPickTaskReplicaRepository pickTasks = mock(ExtPickTaskReplicaRepository.class);
+    private final com.positivity.workorder.internal.repository.ExtInventoryAvailabilityReplicaRepository availability =
+            mock(com.positivity.workorder.internal.repository.ExtInventoryAvailabilityReplicaRepository.class);
+    private final com.positivity.workorder.internal.repository.WorkorderPartRepository workorderParts =
+            mock(com.positivity.workorder.internal.repository.WorkorderPartRepository.class);
 
     private InventoryEventsListener listener;
 
     @BeforeEach
     void setUp() {
         listener = new InventoryEventsListener(
-                TEST_CLOCK, new ObjectMapper(), processedEvents, pickLists, pickTasks, mock(ObjectProvider.class));
+                TEST_CLOCK,
+                new ObjectMapper(),
+                processedEvents,
+                pickLists,
+                pickTasks,
+                availability,
+                workorderParts,
+                mock(ObjectProvider.class));
     }
 
     private String pickListEvent(String eventId, long version) {
@@ -166,12 +182,12 @@ class InventoryEventsListenerTest {
     }
 
     @Test
-    @DisplayName("Ignored event types (availability, lead-time, ...) still record their eventId")
+    @DisplayName("Ignored event types (lead-time, on-hand, ...) still record their eventId")
     void ignoredTypesStillRecordEventId() {
         when(processedEvents.existsById("e-other")).thenReturn(false);
 
         listener.onInventoryEvent("""
-                {"eventId":"e-other","eventType":"inventory.availability.updated","payload":{}}
+                {"eventId":"e-other","eventType":"inventory.lead-time.updated","payload":{}}
                 """);
 
         verify(pickLists, never()).save(any());
@@ -189,5 +205,97 @@ class InventoryEventsListenerTest {
                 .isThrownBy(() -> listener.onInventoryEvent(pickListEvent("e-4", 1)));
 
         verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Applies an availability fact into the gate's replica")
+    void appliesAvailabilityFact() {
+        when(processedEvents.existsById("e-avail")).thenReturn(false);
+        when(availability.findById(AVAILABILITY_AGGREGATE_ID)).thenReturn(Optional.empty());
+
+        listener.onInventoryEvent("""
+                {"eventId":"e-avail","eventType":"inventory.availability.updated","schemaVersion":2,
+                 "aggregateId":"%s","aggregateVersion":3,
+                 "payload":{"stockItemId":"%s","locationId":"%s","onHandQuantity":9,"allocatedQuantity":2,
+                            "availableToPromiseQuantity":7,"unitOfMeasure":"EA","incomingQuantity":0,
+                            "outgoingQuantity":0,"projectedAvailableQuantity":7}}
+                """.formatted(AVAILABILITY_AGGREGATE_ID, PRODUCT_ID, LOCATION_ID));
+
+        ArgumentCaptor<com.positivity.workorder.internal.entity.ExtInventoryAvailabilityReplica> saved =
+                ArgumentCaptor.forClass(com.positivity.workorder.internal.entity.ExtInventoryAvailabilityReplica.class);
+        verify(availability).save(saved.capture());
+        assertThat(saved.getValue().getAvailableToPromiseQuantity()).isEqualTo(7);
+        assertThat(saved.getValue().getAggregateVersion()).isEqualTo(3L);
+    }
+
+    @Test
+    @DisplayName("Reverses an issue pos-inventory could not cover, and records the backorder")
+    void reversesUncoveredIssue() {
+        when(processedEvents.existsById("e-out-1")).thenReturn(false);
+        com.positivity.workorder.internal.entity.WorkorderPart part =
+                new com.positivity.workorder.internal.entity.WorkorderPart();
+        part.setId(PART_ID);
+        part.setQuantityIssued(new java.math.BigDecimal("3"));
+        when(workorderParts.findById(PART_ID)).thenReturn(Optional.of(part));
+
+        listener.onInventoryEvent(outcomeEvent("e-out-1", false));
+
+        // The issue asserted metal left the shelf; the owner says it did not, so it goes back.
+        assertThat(part.getQuantityIssued()).isEqualByComparingTo("1");
+        assertThat(part.getBackorderId()).isEqualTo(BACKORDER_ID);
+        assertThat(part.getReservationId()).isEqualTo(RESERVATION_ID);
+        verify(workorderParts).save(part);
+    }
+
+    @Test
+    @DisplayName("Leaves a covered issue standing and clears any backorder")
+    void keepsCoveredIssue() {
+        when(processedEvents.existsById("e-out-2")).thenReturn(false);
+        com.positivity.workorder.internal.entity.WorkorderPart part =
+                new com.positivity.workorder.internal.entity.WorkorderPart();
+        part.setId(PART_ID);
+        part.setQuantityIssued(new java.math.BigDecimal("3"));
+        part.setBackorderId(BACKORDER_ID);
+        when(workorderParts.findById(PART_ID)).thenReturn(Optional.of(part));
+
+        listener.onInventoryEvent(outcomeEvent("e-out-2", true));
+
+        assertThat(part.getQuantityIssued()).isEqualByComparingTo("3");
+        assertThat(part.getBackorderId()).isNull();
+    }
+
+    @Test
+    @DisplayName("Ignores a reservation outcome for a sales-order line")
+    void ignoresSalesOrderOutcome() {
+        when(processedEvents.existsById("e-out-3")).thenReturn(false);
+
+        listener.onInventoryEvent("""
+                {"eventId":"e-out-3","eventType":"inventory.reservation.outcome.recorded","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":1,
+                 "payload":{"reservationId":"%s","workorderLineId":null,"salesOrderLineId":"%s",
+                            "stockItemId":"%s","requiredQuantity":2,"covered":true,"backorderId":null,
+                            "occurredAt":"2026-08-17T12:00:00Z"}}
+                """.formatted(RESERVATION_ID, RESERVATION_ID, PART_ID, PRODUCT_ID));
+
+        // The topic carries both modules' outcomes; this one belongs to pos-order.
+        verify(workorderParts, never()).save(any());
+        verify(processedEvents).save(any());
+    }
+
+    private String outcomeEvent(String eventId, boolean covered) {
+        return """
+                {"eventId":"%s","eventType":"inventory.reservation.outcome.recorded","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":1,
+                 "payload":{"reservationId":"%s","workorderLineId":"%s","salesOrderLineId":null,
+                            "stockItemId":"%s","requiredQuantity":2,"covered":%s,"backorderId":%s,
+                            "occurredAt":"2026-08-17T12:00:00Z"}}
+                """.formatted(
+                        eventId,
+                        RESERVATION_ID,
+                        RESERVATION_ID,
+                        PART_ID,
+                        PRODUCT_ID,
+                        covered,
+                        covered ? "null" : "\"" + BACKORDER_ID + "\"");
     }
 }

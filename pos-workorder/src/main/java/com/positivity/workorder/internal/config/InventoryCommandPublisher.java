@@ -36,6 +36,7 @@ public class InventoryCommandPublisher {
 
     public static final String CONFIRM_COMMAND_TYPE = "inventory.pick-task.confirm-requested";
     public static final String CONSUME_COMMAND_TYPE = "inventory.items.consume-requested";
+    public static final String RESERVATION_REQUEST_COMMAND_TYPE = "inventory.reservation.request-requested";
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
@@ -84,6 +85,27 @@ public class InventoryCommandPublisher {
         log.info("Queued items consume command {} for workorder {}", commandId, workorderId);
     }
 
+    /**
+     * Register demand for one workorder part at the servicing site (CAP #1315).
+     *
+     * <p>Issued alongside the replica-backed gate, not instead of it: the gate decides what the
+     * technician is told now, this command asks the owner to decide against its own ledger. The
+     * outcome fact carries that answer back and corrects the part if the two disagree.
+     *
+     * <p>The command id is derived from (part, item, quantity), so re-issuing the same part
+     * collapses to one command under pos-inventory's dedupe while a different quantity is a new
+     * command against the same reservation.
+     */
+    public void requestReservation(
+            @NonNull UUID workorderLineId, @NonNull UUID stockItemId, int requiredQuantity, @NonNull UUID locationId) {
+        UUID commandId = deterministicCommandId(
+                RESERVATION_REQUEST_COMMAND_TYPE, workorderLineId + ":" + stockItemId + ":" + requiredQuantity);
+        ReservationRequestPayload payload =
+                new ReservationRequestPayload(workorderLineId, stockItemId, requiredQuantity, locationId);
+        send(RESERVATION_REQUEST_COMMAND_TYPE, commandId, workorderLineId.toString(), payload);
+        log.info("Queued reservation request command {} for workorder line {}", commandId, workorderLineId);
+    }
+
     private void send(@NonNull String commandType, @NonNull UUID commandId, @NonNull String key, Object payload) {
         try {
             String command = objectMapper.writeValueAsString(new Command(commandId.toString(), commandType, payload));
@@ -119,6 +141,13 @@ public class InventoryCommandPublisher {
     /** One consumed line; matches pos-inventory's {@code ConsumeItemLine}. */
     public record ConsumeLine(
             @NonNull UUID pickTaskId, @Nullable UUID skuId, int quantity) {}
+
+    /** Matches the fields pos-inventory's {@code handleReservationRequestRequested} reads. */
+    record ReservationRequestPayload(
+            @NonNull UUID workorderLineId,
+            @NonNull UUID stockItemId,
+            int requiredQuantity,
+            @NonNull UUID locationId) {}
 
     record ConsumePayload(
             @NonNull UUID workorderId,

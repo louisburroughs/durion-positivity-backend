@@ -1,18 +1,26 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.domainevents.inventory.ConsumptionRecordedV1;
+import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
 import com.positivity.domainevents.inventory.PickListUpdatedV1;
 import com.positivity.domainevents.inventory.PickTaskUpdatedV1;
+import com.positivity.domainevents.inventory.ReservationOutcomeV1;
+import com.positivity.workorder.internal.entity.ExtInventoryAvailabilityReplica;
 import com.positivity.workorder.internal.entity.ExtPickListReplica;
 import com.positivity.workorder.internal.entity.ExtPickTaskReplica;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
+import com.positivity.workorder.internal.entity.WorkorderPart;
+import com.positivity.workorder.internal.repository.ExtInventoryAvailabilityReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPickListReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPickTaskReplicaRepository;
 import com.positivity.workorder.internal.repository.ProcessedEventRepository;
+import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
@@ -49,6 +57,8 @@ public class InventoryEventsListener {
     private final ProcessedEventRepository processedEventRepository;
     private final ExtPickListReplicaRepository pickListReplicaRepository;
     private final ExtPickTaskReplicaRepository pickTaskReplicaRepository;
+    private final ExtInventoryAvailabilityReplicaRepository availabilityReplicaRepository;
+    private final WorkorderPartRepository workorderPartRepository;
     private final Counter payloadRejectedCounter;
 
     public InventoryEventsListener(
@@ -57,12 +67,16 @@ public class InventoryEventsListener {
             ProcessedEventRepository processedEventRepository,
             ExtPickListReplicaRepository pickListReplicaRepository,
             ExtPickTaskReplicaRepository pickTaskReplicaRepository,
+            ExtInventoryAvailabilityReplicaRepository availabilityReplicaRepository,
+            WorkorderPartRepository workorderPartRepository,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.pickListReplicaRepository = pickListReplicaRepository;
         this.pickTaskReplicaRepository = pickTaskReplicaRepository;
+        this.availabilityReplicaRepository = availabilityReplicaRepository;
+        this.workorderPartRepository = workorderPartRepository;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -103,6 +117,10 @@ public class InventoryEventsListener {
                 applyPickTaskUpdated(envelope);
             } else if (ConsumptionRecordedV1.EVENT_TYPE.equals(eventType)) {
                 applyConsumptionRecorded(envelope);
+            } else if (InventoryAvailabilityUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                applyAvailabilityUpdated(envelope);
+            } else if (ReservationOutcomeV1.EVENT_TYPE.equals(eventType)) {
+                applyReservationOutcome(envelope);
             } else {
                 // Ignored types still fall through to the processed_events insert below: the
                 // owner's manifest counts every fact in the window.
@@ -123,6 +141,99 @@ public class InventoryEventsListener {
                 .owner(OWNER)
                 .processedAt(Instant.now(clock))
                 .build());
+    }
+
+    /**
+     * Maintains the owned-availability replica behind the part-issue gate (CAP #1315).
+     *
+     * <p>Availability is a snapshot rather than a delta, so an out-of-order arrival is discarded
+     * instead of applied: replaying an older full state would roll the replica backwards and
+     * nothing would correct it until that (item, location) is touched again.
+     */
+    private void applyAvailabilityUpdated(JsonNode envelope) {
+        InventoryAvailabilityUpdatedV1 payload =
+                objectMapper.treeToValue(envelope.path("payload"), InventoryAvailabilityUpdatedV1.class);
+        String rawAggregateId = envelope.path("aggregateId").stringValue(null);
+        if (rawAggregateId == null || rawAggregateId.isBlank()) {
+            log.warn("Skipping availability fact without aggregateId for item {}", payload.stockItemId());
+            return;
+        }
+        UUID aggregateId = UUID.fromString(rawAggregateId);
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+
+        ExtInventoryAvailabilityReplica existing =
+                availabilityReplicaRepository.findById(aggregateId).orElse(null);
+        if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
+            return;
+        }
+
+        availabilityReplicaRepository.save(ExtInventoryAvailabilityReplica.builder()
+                .aggregateId(aggregateId)
+                .stockItemId(payload.stockItemId())
+                .locationId(payload.locationId())
+                .onHandQuantity(payload.onHandQuantity())
+                .allocatedQuantity(payload.allocatedQuantity())
+                .availableToPromiseQuantity(payload.availableToPromiseQuantity())
+                .unitOfMeasure(payload.unitOfMeasure())
+                .aggregateVersion(aggregateVersion)
+                .updatedAt(Instant.now(clock))
+                .build());
+    }
+
+    /**
+     * Resolves a part issued on the replica's provisional answer against what pos-inventory
+     * actually decided (CAP #1315).
+     *
+     * <h2>An uncovered outcome reverses the issue</h2>
+     *
+     * This is where the work-order gate diverges from the sales-order one. A short sale is still a
+     * sale, so pos-order keeps the line and marks it backordered. A short part is different: the
+     * issue asserted that metal left the shelf, and the owner has now said it did not. Leaving the
+     * issued quantity standing would make the shop's own records claim a technician holds a part
+     * that was never there, and every consume, return and billing figure derived from it would
+     * inherit that. So the issued quantity is put back and the part carries the backorder that now
+     * covers it.
+     *
+     * <p>The reversal is floored at zero and never touches consumed or returned quantities — those
+     * describe things that physically happened, and no fact from another module can un-happen them.
+     *
+     * <h2>Facts for other modules' lines</h2>
+     *
+     * The topic carries every reservation outcome, sales-order ones included. A fact naming no
+     * workorder line, or one this module does not hold, belongs to someone else.
+     */
+    private void applyReservationOutcome(JsonNode envelope) {
+        ReservationOutcomeV1 outcome = objectMapper.treeToValue(envelope.path("payload"), ReservationOutcomeV1.class);
+        if (outcome.workorderLineId() == null) {
+            return;
+        }
+        WorkorderPart part =
+                workorderPartRepository.findById(outcome.workorderLineId()).orElse(null);
+        if (part == null) {
+            log.debug(
+                    "Reservation outcome {} names workorder line {} which this module does not hold",
+                    outcome.reservationId(),
+                    outcome.workorderLineId());
+            return;
+        }
+
+        part.setReservationId(outcome.reservationId());
+        if (outcome.covered()) {
+            part.setBackorderId(null);
+            workorderPartRepository.save(part);
+            return;
+        }
+
+        BigDecimal issued = part.getQuantityIssued() == null ? BigDecimal.ZERO : part.getQuantityIssued();
+        BigDecimal reversed = issued.subtract(BigDecimal.valueOf(outcome.requiredQuantity()));
+        part.setQuantityIssued(reversed.signum() < 0 ? BigDecimal.ZERO : reversed);
+        part.setBackorderId(outcome.backorderId());
+        workorderPartRepository.save(part);
+        log.warn(
+                "Reversed issue of {} on workorder part {}: pos-inventory could not cover it (backorder {})",
+                outcome.requiredQuantity(),
+                part.getId(),
+                outcome.backorderId());
     }
 
     private void applyPickListUpdated(JsonNode envelope) {
