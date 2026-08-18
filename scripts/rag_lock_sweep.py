@@ -73,6 +73,8 @@ CLASSPATH_PREFIX = "classpath:"
 # #1124: the corpus reached 39 documents. A sweep that finds fewer is itself drift — the manifest
 # was trimmed rather than the database.
 MIN_DOCS = 39
+# Rendered in place of a manifest entry whose `id` is missing or blank.
+MISSING_ID_LABEL = "<MISSING ID>"
 
 # Terminal statuses that mean "this exact content is embedded". QUEUED is in-flight (the reconcile
 # pass on the next startup resolves it) and FAILED means the ingest never landed.
@@ -182,7 +184,9 @@ def load_manifest(config_path):
     for entry in raw_docs:
         source_path = entry.get("source-path") or ""
         manifest.append({
-            "id": entry.get("id"),
+            # A missing or blank id is itself drift, not a crash: normalize to "" here and let
+            # sweep_document/do_dry_run report it alongside the other lock failures.
+            "id": entry.get("id") or "",
             "source_path": source_path,
             "rag_scope": normalize_scope(entry.get("rag-scope")),
             "required_permissions": entry.get("required-permissions") or [],
@@ -261,6 +265,8 @@ def embedded_chunk_counts(con):
 def sweep_document(doc, records, chunk_counts, check_embeddings):
     """Locks one manifest entry against the DB. Returns (verdict, [reason, ...], detail)."""
     reasons = []
+    if not doc["id"]:
+        reasons.append("INVALID_ID: manifest entry declares no `id`; it can never match a DB row")
     expected_hash = disk_hash(doc["relative_path"])
     key = (doc["id"], doc["rag_scope"])
     record = records.get(key)
@@ -355,7 +361,10 @@ def print_table(results):
 def build_markdown(args, results, orphans, started, cfg, parser):
     locked = [r for r in results if r["verdict"] == OK]
     drifted = [r for r in results if r["verdict"] != OK]
-    passed = not drifted and not orphans and len(results) >= MIN_DOCS
+    # Must mirror the exit-code rule in main() exactly, or the evidence block can say HOLD while the
+    # script exits 0 (or the reverse): honour --min-docs and --allow-orphans rather than the floor.
+    orphans_fail = bool(orphans) and not args.allow_orphans
+    passed = not drifted and not orphans_fail and len(results) >= args.min_docs
     decision = "Pass" if passed else "HOLD"
     permissioned = [r for r in results if r["required_permissions"]]
     public = [r for r in results if not r["required_permissions"]]
@@ -380,9 +389,9 @@ def build_markdown(args, results, orphans, started, cfg, parser):
         "",
         "#### Retrieval lock (every doc)",
         "",
-        ev(len(results) >= MIN_DOCS,
+        ev(len(results) >= args.min_docs,
            f"Corpus size — _ev: {len(results)} documents declared in "
-           f"`mcp.rag.preload.docs` (floor {MIN_DOCS})_"),
+           f"`mcp.rag.preload.docs` (floor {args.min_docs})_"),
         ev(True,
            "Deterministic ID, `rag-scope`, permission metadata, `source-path`, documented chunking "
            "— _ev: asserted offline by `RetrievalLockTest` in the pos-mcp-server surefire build_"),
@@ -410,10 +419,11 @@ def build_markdown(args, results, orphans, started, cfg, parser):
         "",
         "| Metric | Value | Pass/Fail |",
         "| ------ | ----: | --------- |",
-        f"| documents declared | {len(results)} | {PASS if len(results) >= MIN_DOCS else FAIL} |",
+        f"| documents declared | {len(results)} | {PASS if len(results) >= args.min_docs else FAIL} |",
         f"| documents hash-locked | {len(locked)} | {PASS if not drifted else FAIL} |",
         f"| documents drifted | {len(drifted)} | {PASS if not drifted else FAIL} |",
-        f"| orphaned documents | {len(orphans)} | {PASS if not orphans else FAIL} |",
+        f"| orphaned documents | {len(orphans)} | {PASS if not orphans_fail else FAIL} |"
+        + (" <!-- waived by --allow-orphans -->" if orphans and args.allow_orphans else ""),
         f"| embedded chunks | {sum(r['chunks'] or 0 for r in results)} | "
         f"{PASS if not args.check_embeddings or all(r['chunks'] for r in results) else FAIL} |",
         "",
@@ -461,7 +471,7 @@ def do_dry_run(args, manifest, parser, cfg):
     if args.check_embeddings:
         print(f"  2. chunk + non-null-embedding counts per (document_id, rag_scope) from "
               f"{EMBEDDING_TABLE} where source_path LIKE 'classpath:rag/%'")
-    print(f"\nper-document checks ({len(manifest)} documents, floor {MIN_DOCS}):")
+    print(f"\nper-document checks ({len(manifest)} documents, floor {args.min_docs}):")
     print("  * source file present under src/main/resources")
     print(f"  * newest preload row exists for the declared scope and its status is one of "
           f"{list(EMBEDDED_STATUSES)}")
@@ -471,11 +481,12 @@ def do_dry_run(args, manifest, parser, cfg):
         print("  * at least one chunk row, with no NULL embedding vectors")
     print("  plus a corpus-wide orphan check for DB documents absent from the manifest")
     print()
-    width = max(len(doc["id"]) for doc in manifest)
-    for doc in manifest:
+    labels = [doc["id"] or MISSING_ID_LABEL for doc in manifest]
+    width = max((len(label) for label in labels), default=20)
+    for doc, label in zip(manifest, labels):
         computed = disk_hash(doc["relative_path"])
         perms = ",".join(doc["required_permissions"]) or "<public>"
-        print(f"  {doc['id']:<{width}}  scope={doc['rag_scope']:<12} "
+        print(f"  {label:<{width}}  scope={doc['rag_scope']:<12} "
               f"sha256={computed[:16] + '...' if computed else 'FILE MISSING':<19} perms={perms}")
     print(f"\n{len(manifest)} documents planned. Exit 0 (dry run).")
 
