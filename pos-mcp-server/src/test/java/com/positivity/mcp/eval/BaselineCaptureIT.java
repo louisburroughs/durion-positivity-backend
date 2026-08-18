@@ -154,10 +154,20 @@ class BaselineCaptureIT {
         List<Map.Entry<String, Boolean>> forbiddenViolations = new ArrayList<>();
         int scored = 0;
 
-        // Match production's cosine similarity floor so recall@k isn't over-reported: the assistant's
-        // scoped retrievers use 0.6 (primary) / 0.55 (broad) in SessionAgentManager. Score at the
-        // loosest value a doc must clear to enter the pipeline (0.55). Override -Dmcp.eval.rag-min-score.
-        double ragMinScore = Double.parseDouble(System.getProperty("mcp.eval.rag-min-score", "0.55"));
+        // Match production's cosine similarity floor so recall@k is neither over- nor under-reported:
+        // score at the loosest value a doc must clear to enter the pipeline. That value is
+        // `mcp.rag.tier2-min-score` in application.yml, and it is CALIBRATED PER EMBEDDING MODEL — the
+        // #1194 bge-m3 cutover moved production from 0.6/0.55 (nomic-embed-text) to 0.45/0.40, because
+        // the two models put cosine similarity on different scales.
+        //
+        // This constant previously hardcoded 0.55 and went stale at that cutover, which made the test
+        // score ~0.10 stricter than production and under-report recall: measured live on alpha
+        // 2026-08-18, the same 51 fixtures over the same corpus scored 0.6373 at 0.55 versus 0.8922 at
+        // 0.45. That looked like a retrieval regression and was purely a measurement artifact.
+        //
+        // Keep this in step with `mcp.rag.min-score` in application.yml whenever the embedding model
+        // changes. Override with -Dmcp.eval.rag-min-score.
+        double ragMinScore = Double.parseDouble(System.getProperty("mcp.eval.rag-min-score", "0.45"));
 
         for (Path file : suiteFiles("rag-retrieval")) {
             JsonNode root = MAPPER.readTree(file.toFile());
