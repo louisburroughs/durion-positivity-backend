@@ -87,7 +87,7 @@ gate on the same soak).
 | # | Work | Serves |
 |---|---|---|
 | 0.1 | Record fixture-count evidence + rerun log into the Gate 0 checklist; strike the stale "seed-only 4/4/4" HOLD line | #1212 |
-| 0.2 | Retrieval-lock sweep: offline `RetrievalLockTest` asserting all 39 `application.yml` static docs have deterministic id, `rag-scope`, `required-permissions`, `source-path`, documented chunking; `scripts/rag_lock_sweep.py` for the live half (content hash vs `rag_preload` rows) | #1217 |
+| 0.2 | Retrieval-lock sweep: **build** an offline `RetrievalLockTest` (doesn't exist yet) asserting all 39 `application.yml` static docs have deterministic id, `rag-scope`, `required-permissions`, `source-path`, documented chunking; **build** `scripts/rag_lock_sweep.py` (doesn't exist yet) for the live half (content hash vs `rag_preload` rows) — Wave 1 step 2 runs this script, so it must land in this wave first | #1217 |
 | 0.3 | Build `scripts/nlti_live_verify.py` — per-suite harness (`equivalence`, `persona`, `workflow`, `router`, `write-gate`, `admin`); auths as N personas via the gateway, harvests `nlti.request.telemetry` from Loki by correlationId, emits JSON + paste-ready markdown evidence | **#1367**, feeds #1213 #1214 #1215 #1216 #1218 #1219 |
 | 0.4 | `V34__processing_return_workflow_seed.sql` (+ h2 twin), pending decision D below | #1215 |
 | 0.5 | Dashboard JSON + extend `docs/dashboards/nlti-overview.md` with the missing routing/tier/fallback/RAG/prompt-layer/write-gate panels; cross-check `docs/alerts/nlti-alerts.md` covers the 7 required alerts | **#1368**, feeds #1219 |
@@ -101,7 +101,7 @@ Run against the #1367 harness instead of ad hoc commands:
 
 1. `scripts/eval_live.py` + `scripts/run-live-eval.sh BaselineCaptureIT` → commit baseline into
    `src/test/resources/eval/baseline.json` → **closes #1212**
-2. `scripts/rag_lock_sweep.py` → **closes #1217**
+2. `scripts/rag_lock_sweep.py` (built in Wave 0.2) → **closes #1217**
 3. `nlti_live_verify.py --suite equivalence,persona` → **closes #1213, #1214**
 4. Apply V34, set a session to `PROCESSING_RETURN` via
    `POST /v1/nlt/sessions/{id}/workflow-state`, `--suite workflow` → **closes #1215**
