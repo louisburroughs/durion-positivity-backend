@@ -61,7 +61,7 @@ class BackorderControllerTest {
 
     @Test
     void list_withViewAuthority_returns200() throws Exception {
-        when(backorderService.listBackorders(any(), any(), any(), any())).thenReturn(List.of(sample()));
+        when(backorderService.listBackorders(any(), any(), any(), any(), any())).thenReturn(List.of(sample()));
 
         mockMvc.perform(get("/v1/inventory/backorders").header("X-Authorities", VIEW))
                 .andExpect(status().isOk())

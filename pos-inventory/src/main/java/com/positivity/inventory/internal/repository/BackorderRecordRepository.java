@@ -21,6 +21,10 @@ public interface BackorderRecordRepository
     Optional<BackorderRecord> findByWorkorderLineIdAndSkuAndStatus(
             UUID workorderLineId, String sku, BackorderStatus status);
 
+    /** Duplicate-open guard for the sales-order demand key (CAP #1315). */
+    Optional<BackorderRecord> findBySalesOrderLineIdAndSkuAndStatus(
+            UUID salesOrderLineId, String sku, BackorderStatus status);
+
     /**
      * Open backorders for one SKU at one site, oldest-first — the auto-resolution candidate set
      * (odoo-parity G1). Base ordering is {@code createdAt ASC}; the service refines it with the

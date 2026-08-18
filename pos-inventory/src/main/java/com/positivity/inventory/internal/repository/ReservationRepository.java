@@ -17,6 +17,15 @@ public interface ReservationRepository extends JpaRepository<ReservationEntity, 
 
     Optional<ReservationEntity> findByWorkorderLineId(UUID workorderLineId);
 
+    Optional<ReservationEntity> findBySalesOrderLineId(UUID salesOrderLineId);
+
+    /**
+     * Looks a reservation up by whichever demand line it's keyed on (CAP #1315): pass the same id
+     * for both parameters when the caller only knows "this line id," not which kind it is. Safe
+     * because the two id spaces never collide — each is independently minted by its own module.
+     */
+    Optional<ReservationEntity> findByWorkorderLineIdOrSalesOrderLineId(UUID workorderLineId, UUID salesOrderLineId);
+
     /**
      * Open reservation remainders for one SKU (odoo-parity A2, issue #1028): sum of
      * {@code requiredQuantity - allocatedQuantity} (per reservation, floored at zero) over

@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -87,6 +88,47 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
     @Override
     public @NonNull BackorderResponse createBackorder(
             @NonNull UUID workorderLineId, @NonNull String sku, int quantityShort, @Nullable UUID locationId) {
+        return createBackorder(
+                workorderLineId,
+                null,
+                sku,
+                quantityShort,
+                locationId,
+                () -> backorderRepository.findByWorkorderLineIdAndSkuAndStatus(
+                        workorderLineId, sku, BackorderStatus.OPEN),
+                "workorderLine",
+                workorderLineId);
+    }
+
+    @Override
+    public @NonNull BackorderResponse createBackorderForSalesOrderLine(
+            @NonNull UUID salesOrderLineId, @NonNull String sku, int quantityShort, @Nullable UUID locationId) {
+        return createBackorder(
+                null,
+                salesOrderLineId,
+                sku,
+                quantityShort,
+                locationId,
+                () -> backorderRepository.findBySalesOrderLineIdAndSkuAndStatus(
+                        salesOrderLineId, sku, BackorderStatus.OPEN),
+                "salesOrderLine",
+                salesOrderLineId);
+    }
+
+    /**
+     * Shared open-or-create path for both demand kinds (CAP #1315): the idempotent-open-guard
+     * lookup differs by which column is keyed, so the caller supplies it; everything after — the
+     * row shape, the ledger entry, the fact — is identical regardless of demand kind.
+     */
+    private BackorderResponse createBackorder(
+            @Nullable UUID workorderLineId,
+            @Nullable UUID salesOrderLineId,
+            @NonNull String sku,
+            int quantityShort,
+            @Nullable UUID locationId,
+            Supplier<Optional<BackorderRecord>> findExistingOpen,
+            String demandLineLabel,
+            UUID demandLineId) {
         if (sku.isBlank()) {
             throw new IllegalArgumentException("sku must not be blank");
         }
@@ -94,16 +136,16 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
             throw new IllegalArgumentException("quantityShort must be positive");
         }
 
-        Optional<BackorderRecord> existingOpen =
-                backorderRepository.findByWorkorderLineIdAndSkuAndStatus(workorderLineId, sku, BackorderStatus.OPEN);
+        Optional<BackorderRecord> existingOpen = findExistingOpen.get();
         if (existingOpen.isPresent()) {
-            log.info("Backorder already OPEN for workorderLine {} sku {}; returning existing", workorderLineId, sku);
+            log.info("Backorder already OPEN for {} {} sku {}; returning existing", demandLineLabel, demandLineId, sku);
             return toResponse(existingOpen.get());
         }
 
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
         BackorderRecord backorder = backorderRepository.save(BackorderRecord.builder()
                 .workorderLineId(workorderLineId)
+                .salesOrderLineId(salesOrderLineId)
                 .sku(sku)
                 .locationId(locationId)
                 .quantityShort(quantityShort)
@@ -117,12 +159,19 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
         backorder = backorderRepository.save(backorder);
 
         inventoryFactPublisher.recordBackorderCreated(new BackorderCreatedV1(
-                backorder.getBackorderId(), workorderLineId, sku, quantityShort, locationId, Instant.now(clock)));
-
-        log.info(
-                "Backorder {} opened for workorderLine {} sku {} qtyShort {} at {}",
                 backorder.getBackorderId(),
                 workorderLineId,
+                salesOrderLineId,
+                sku,
+                quantityShort,
+                locationId,
+                Instant.now(clock)));
+
+        log.info(
+                "Backorder {} opened for {} {} sku {} qtyShort {} at {}",
+                backorder.getBackorderId(),
+                demandLineLabel,
+                demandLineId,
                 sku,
                 quantityShort,
                 locationId);
@@ -154,7 +203,7 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
                 continue;
             }
             try {
-                resolve(backorder, reservations.get(backorder.getWorkorderLineId()), now);
+                resolve(backorder, reservations.get(backorder.getDemandLineId()), now);
                 budget -= shortage;
             } catch (RuntimeException e) {
                 // Best-effort per candidate: one bad backorder must not roll back the inbound posting.
@@ -187,6 +236,7 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
         inventoryFactPublisher.recordBackorderResolved(new BackorderResolvedV1(
                 backorder.getBackorderId(),
                 backorder.getWorkorderLineId(),
+                backorder.getSalesOrderLineId(),
                 backorder.getSku(),
                 backorder.getQuantityShort(),
                 BackorderResolutionSource.AVAILABILITY.name(),
@@ -194,9 +244,9 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
                 now));
 
         log.info(
-                "Backorder {} auto-resolved (AVAILABILITY) for workorderLine {} sku {} qty {} at {}",
+                "Backorder {} auto-resolved (AVAILABILITY) for demand line {} sku {} qty {} at {}",
                 backorder.getBackorderId(),
-                backorder.getWorkorderLineId(),
+                backorder.getDemandLineId(),
                 backorder.getSku(),
                 backorder.getQuantityShort(),
                 backorder.getLocationId());
@@ -216,7 +266,8 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
             @Nullable BackorderStatus status,
             @Nullable String sku,
             @Nullable UUID locationId,
-            @Nullable UUID workorderLineId) {
+            @Nullable UUID workorderLineId,
+            @Nullable UUID salesOrderLineId) {
         Specification<BackorderRecord> spec = (root, query, cb) -> cb.conjunction();
         if (status != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
@@ -229,6 +280,9 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
         }
         if (workorderLineId != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("workorderLineId"), workorderLineId));
+        }
+        if (salesOrderLineId != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("salesOrderLineId"), salesOrderLineId));
         }
         return backorderRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "createdAt")).stream()
                 .map(this::toResponse)
@@ -273,14 +327,16 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
     }
 
     private Map<UUID, ReservationEntity> loadBackingReservations(List<BackorderRecord> backorders) {
-        Map<UUID, ReservationEntity> byWorkorderLine = new HashMap<>();
+        Map<UUID, ReservationEntity> byDemandLine = new HashMap<>();
         for (BackorderRecord backorder : backorders) {
-            byWorkorderLine.computeIfAbsent(
-                    backorder.getWorkorderLineId(),
-                    lineId ->
-                            reservationRepository.findByWorkorderLineId(lineId).orElse(null));
+            UUID demandLineId = backorder.getDemandLineId();
+            byDemandLine.computeIfAbsent(
+                    demandLineId,
+                    lineId -> reservationRepository
+                            .findByWorkorderLineIdOrSalesOrderLineId(lineId, lineId)
+                            .orElse(null));
         }
-        return byWorkorderLine;
+        return byDemandLine;
     }
 
     /**
@@ -291,10 +347,10 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
      */
     private Comparator<BackorderRecord> oldestPriorityFirst(Map<UUID, ReservationEntity> reservations, Instant now) {
         return Comparator.comparingInt(
-                        (BackorderRecord b) -> effectivePriority(reservations.get(b.getWorkorderLineId()), now))
-                .thenComparing(b -> dueDate(reservations.get(b.getWorkorderLineId())))
-                .thenComparing(b -> waitingSince(reservations.get(b.getWorkorderLineId()), b))
-                .thenComparing(b -> scheduleStart(reservations.get(b.getWorkorderLineId())))
+                        (BackorderRecord b) -> effectivePriority(reservations.get(b.getDemandLineId()), now))
+                .thenComparing(b -> dueDate(reservations.get(b.getDemandLineId())))
+                .thenComparing(b -> waitingSince(reservations.get(b.getDemandLineId()), b))
+                .thenComparing(b -> scheduleStart(reservations.get(b.getDemandLineId())))
                 .thenComparing(BackorderRecord::getCreatedAt);
     }
 
@@ -338,6 +394,7 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
         return BackorderResponse.builder()
                 .backorderId(backorder.getBackorderId())
                 .workorderLineId(backorder.getWorkorderLineId())
+                .salesOrderLineId(backorder.getSalesOrderLineId())
                 .sku(backorder.getSku())
                 .locationId(backorder.getLocationId())
                 .quantityShort(backorder.getQuantityShort())

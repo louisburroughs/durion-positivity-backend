@@ -20,8 +20,14 @@ public class BackorderResponse {
     @Schema(description = "Backorder record identifier")
     private UUID backorderId;
 
-    @Schema(description = "Workorder line whose demand was short")
+    @Schema(description = "Workorder line whose demand was short, when demand was from a workorder; null otherwise")
     private UUID workorderLineId;
+
+    @Schema(
+            description =
+                    "Sales-order line whose demand was short (CAP #1315), when demand was from a sales order; null"
+                            + " otherwise")
+    private UUID salesOrderLineId;
 
     @Schema(description = "SKU / stock-item identifier that was short")
     private String sku;

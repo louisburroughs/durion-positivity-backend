@@ -86,7 +86,12 @@ class DomainEventContractTest {
             "com.positivity.domainevents.payment.SettlementReportedV1",
             "com.positivity.domainevents.vehicle.VehicleCarePreferenceUpdatedV1",
             "com.positivity.domainevents.inventory.ExpectedSupplyDroppedV1",
-            "com.positivity.domainevents.inventory.TransferOrderUpdatedV1");
+            "com.positivity.domainevents.inventory.TransferOrderUpdatedV1",
+            // CAP #1315: exactly one of workorderLineId/salesOrderLineId, which the blanket
+            // same-UUID-for-every-field sample generator cannot satisfy.
+            "com.positivity.domainevents.inventory.BackorderCreatedV1",
+            "com.positivity.domainevents.inventory.BackorderResolvedV1",
+            "com.positivity.domainevents.inventory.ReservationOutcomeV1");
 
     static List<Class<?>> constructibleEventRecords() {
         return eventRecords().stream()

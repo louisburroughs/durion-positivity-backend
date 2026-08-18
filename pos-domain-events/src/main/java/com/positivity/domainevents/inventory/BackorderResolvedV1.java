@@ -14,8 +14,14 @@ import org.jspecify.annotations.Nullable;
  * fact is emitted exactly once per backorder even under replayed availability signals. pos-workorder
  * consumes it read-side to clear the workorder-line shortage marker.
  *
+ * <p>Schema v2 (CAP #1315): mirrors {@link BackorderCreatedV1}'s widening — a resolved backorder's
+ * demand line can now be a sales-order line instead of a workorder line. Exactly one of
+ * {@code workorderLineId}/{@code salesOrderLineId} is non-null.
+ *
  * @param backorderId backorder record identifier (aggregate id of the fact)
- * @param workorderLineId workorder line whose demand was short
+ * @param workorderLineId workorder line whose demand was short, when demand was from a workorder
+ * @param salesOrderLineId sales-order line whose demand was short, when demand was from a sales
+ *     order (additive, schema v2)
  * @param sku stock-item identifier that was short (ledger stock-item string)
  * @param quantityShort quantity that was resolved (positive; the whole backorder)
  * @param resolutionSource what drove the resolution: {@code AVAILABILITY},
@@ -24,7 +30,8 @@ import org.jspecify.annotations.Nullable;
  */
 public record BackorderResolvedV1(
         @NonNull UUID backorderId,
-        @NonNull UUID workorderLineId,
+        @Nullable UUID workorderLineId,
+        @Nullable UUID salesOrderLineId,
         @NonNull String sku,
         int quantityShort,
         @NonNull String resolutionSource,
@@ -32,14 +39,14 @@ public record BackorderResolvedV1(
         @NonNull Instant occurredAt) {
 
     public static final String EVENT_TYPE = "inventory.backorder.resolved";
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
 
     public BackorderResolvedV1 {
         if (backorderId == null) {
             throw new IllegalArgumentException("backorderId must not be null");
         }
-        if (workorderLineId == null) {
-            throw new IllegalArgumentException("workorderLineId must not be null");
+        if ((workorderLineId == null) == (salesOrderLineId == null)) {
+            throw new IllegalArgumentException("exactly one of workorderLineId/salesOrderLineId must be set");
         }
         if (sku == null || sku.isBlank()) {
             throw new IllegalArgumentException("sku must not be blank");

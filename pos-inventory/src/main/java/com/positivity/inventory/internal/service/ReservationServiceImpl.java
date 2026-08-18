@@ -21,6 +21,7 @@ import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -42,9 +43,17 @@ public class ReservationServiceImpl implements ReservationService {
 
     @Override
     public @NonNull ReservationResponse createOrUpdateReservation(@NonNull CreateReservationRequest request) {
-        ReservationEntity reservation = reservationRepository
-                .findByWorkorderLineId(request.getWorkorderLineId())
-                .map(existing -> updateExistingReservation(existing, request))
+        UUID workorderLineId = request.getWorkorderLineId();
+        UUID salesOrderLineId = request.getSalesOrderLineId();
+        if ((workorderLineId == null) == (salesOrderLineId == null)) {
+            throw new IllegalArgumentException(
+                    "exactly one of workorderLineId/salesOrderLineId must be set (CAP #1315)");
+        }
+
+        Optional<ReservationEntity> existing = workorderLineId != null
+                ? reservationRepository.findByWorkorderLineId(workorderLineId)
+                : reservationRepository.findBySalesOrderLineId(salesOrderLineId);
+        ReservationEntity reservation = existing.map(found -> updateExistingReservation(found, request))
                 .orElseGet(() -> createReservationWithSoftAllocation(request));
 
         return toResponse(reservation);
@@ -129,7 +138,18 @@ public class ReservationServiceImpl implements ReservationService {
         ReservationEntity reservation = reservationRepository
                 .findByWorkorderLineId(workorderLineId)
                 .orElseThrow(() -> new ResourceNotFoundException("Reservation", workorderLineId.toString()));
+        cancel(reservation);
+    }
 
+    @Override
+    public void cancelReservationForSalesOrderLine(@NonNull UUID salesOrderLineId) {
+        ReservationEntity reservation = reservationRepository
+                .findBySalesOrderLineId(salesOrderLineId)
+                .orElseThrow(() -> new ResourceNotFoundException("Reservation", salesOrderLineId.toString()));
+        cancel(reservation);
+    }
+
+    private void cancel(ReservationEntity reservation) {
         List<AllocationEntity> allocations = allocationRepository.findByReservation(reservation);
 
         // Only located HARD allocations had a matching ALLOCATION_CREATED ledger
@@ -231,6 +251,7 @@ public class ReservationServiceImpl implements ReservationService {
     private ReservationEntity createReservationWithSoftAllocation(CreateReservationRequest request) {
         ReservationEntity reservation = ReservationEntity.builder()
                 .workorderLineId(request.getWorkorderLineId())
+                .salesOrderLineId(request.getSalesOrderLineId())
                 .stockItemId(request.getStockItemId())
                 .requiredQuantity(request.getRequiredQuantity())
                 .allocatedQuantity(request.getRequiredQuantity())
@@ -260,6 +281,7 @@ public class ReservationServiceImpl implements ReservationService {
         return ReservationResponse.builder()
                 .reservationId(reservation.getReservationId())
                 .workorderLineId(reservation.getWorkorderLineId())
+                .salesOrderLineId(reservation.getSalesOrderLineId())
                 .stockItemId(reservation.getStockItemId())
                 .requiredQuantity(reservation.getRequiredQuantity())
                 .allocatedQuantity(reservation.getAllocatedQuantity())
