@@ -809,7 +809,52 @@ module's own base directory). The aggregate XML is uploaded separately as
 
 Importing the **per-module** reports is also the right choice, and matches the
 ratchet: Sonar sees each module's own coverage rather than the aggregate's
-consumer-credited figure for shared libraries. No work is outstanding here.
+consumer-credited figure for shared libraries.
+
+### 6.4 One branch analysis, and only one (2026-08-18)
+
+§6.3's closing claim that "no work is outstanding here" was wrong, and the way it
+was wrong cost the project its headline coverage number for three months.
+
+Two jobs in `ci.yml` were publishing to the same SonarCloud project:
+
+- `code-quality-full` (nightly, `schedule`) — imports the aggregate report from
+  `pos-coverage-aggregate` and therefore sees all 37 modules.
+- `code-quality` (`if: github.event_name != 'schedule'`, so also every push to
+  `main`) — indexes the **whole** reactor for analysis but imports coverage only
+  from the artifacts the selective `build-test` run produced, i.e. the changed
+  modules. Sonar's Zero Coverage Sensor scores every other module 0%.
+
+Whichever ran last won, and pushes are far more frequent than the nightly, so
+`main` spent nearly all of its time showing the changed modules' share of the
+reactor:
+
+```
+2026-08-18T06:25  78.0   <- nightly aggregate
+2026-08-18T11:25  14.9   <- push (merge of #1363: pos-order + pos-workorder)
+```
+
+The 14.9% was arithmetically exact, not a glitch: 10,622 covered lines out of
+84,981, which is pos-order (4,267 lines at 84.6%) plus pos-workorder (7,888 at
+77.7%) plus their `-amd` dependents. The run's Sonar log says so directly —
+`Importing 2 report(s).` for a 37-module reactor.
+
+The fix, applied in `ci.yml`:
+
+- The coverage download and the Sonar scan in `code-quality` are now gated on
+  `github.event_name == 'pull_request'`. A PR analysis is stored against the PR,
+  scores `Coverage on New Code` from the changed files only, and never writes
+  branch measures — so partial coverage is correct there. Checkstyle and SpotBugs
+  still run on push, unchanged.
+- The scan's push/branch fallback branch was deleted. PR mode is now forced
+  unconditionally via the four `sonar.pullrequest.*` properties; there is no path
+  left that can auto-detect a branch and publish over it.
+- `code-quality-full` also accepts `workflow_dispatch`, so `main` can be
+  re-measured on demand instead of waiting for 06:00 UTC.
+
+Branch-level coverage for `main` now has exactly one source: the aggregate report.
+Keep it that way — any new job that runs `sonar-maven-plugin` outside PR mode must
+import the aggregate XML, never per-module reports.
 
 ## 7. What is still open
 
