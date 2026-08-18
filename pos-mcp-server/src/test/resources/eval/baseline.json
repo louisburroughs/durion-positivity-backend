@@ -1,38 +1,45 @@
 {
-  "_comment": "Gate 0 baseline. First live run 2026-06-30 against a local 1-container stack (pgvector pg16 :5433 + local ollama nomic-embed-text). Chat smoke via ollama.com qwen3.5:cloud. NOTE: the ollama.com cloud key is CHAT-ONLY (/api/embed -> unauthorized); embeddings require a local/embedding-capable backend. tool_selection metrics are over the 3 seed fixtures only and reflect the facade-vs-discovered naming mismatch (see observations); re-run after fixture retargeting + with real fixtures.",
+  "_comment": "Gate 0 baseline (#1212, plan Wave 1 step 1). Captured 2026-08-18 by BaselineCaptureIT against the deployed alpha stack via scripts/run-live-eval.sh, read-only (Flyway disabled, no web server, no Eureka; only the alpha Postgres and the local Ollama embedding container are contacted). Supersedes the 2026-06-30 local 1-container run, whose tool_selection metrics were 0.0 over 3 seed fixtures because they targeted discovered-convention tool names that the live facade tool set does not use. Recall is scored at production's tier-2 cosine floor (mcp.rag.tier2-min-score); see the note in metrics.rag_recall_at_k.",
   "schema_version": 1,
-  "captured_at": "2026-06-30",
+  "captured_at": "2026-08-18",
+  "captured_by": "BaselineCaptureIT via scripts/run-live-eval.sh BaselineCaptureIT",
   "backend": {
-    "chat_base_url": "https://ollama.com",
+    "environment": "alpha (durion-alpha, deployed stack)",
     "chat_model": "qwen3.5:cloud",
-    "chat_reachable": true,
-    "chat_key_is_chat_only": true,
-    "embedding_base_url": "local ollama (NOT ollama:11434)",
-    "embedding_model": "nomic-embed-text",
-    "embedding_reachable": true,
-    "postgres": "local pgvector/pgvector:pg16 on :5433"
+    "embedding_base_url": "http://localhost:11434",
+    "embedding_model": "bge-m3 (1024-dim, post-#1194 cutover)",
+    "postgres": "alpha pgvector, pos_mcp @ localhost:5432",
+    "rag_min_score": 0.45,
+    "rag_tier2_min_score": 0.4
   },
-  "boot": {
-    "flyway_migrations_applied": "V1..V22 (incl V19/V20/V21/V22)",
-    "started_seconds": 11.8,
-    "rag_docs_embedded": 13,
-    "facade_tools": 16,
-    "discovered_openapi_tools": 0,
-    "fail_closed_verified": "only mcp_role_deprecated / mcp_tool_role_deprecated exist (originals gone)",
-    "readiness": "OUT_OF_SERVICE (environmental — no eureka/security-service/gateway in the 1-container stack)"
+  "corpus": {
+    "static_docs_declared": 39,
+    "embedded_chunks": 163,
+    "hash_locked": "39/39, 0 drifted, 0 orphaned (scripts/rag_lock_sweep.py, same day)"
   },
-  "observations": {
-    "tool_selection_hit_at_5_zero": "The 3 seed fixtures targeted discovered-convention tool names (e.g. workorders_getallworkorders), but the live tool set is 16 coarse facade tools whose mcp_tool.name = the class name (WorkorderFacadeTool, ...). So expected tools were never in top-5. Two seed fixtures retargeted to facade names (WorkorderFacadeTool; forbidden AccountingFacadeTool). Real fixtures (Gate 0 exit) must target the live tool set.",
-    "leakage_guard": "forbidden_violations = 0 (permission-negative held)."
-  },
-  "fixture_counts": { "tool_selection": 4, "rag_retrieval": 4, "write_safety": 4 },
+  "fixture_counts": { "tool_selection": 105, "rag_retrieval": 60, "write_safety": 34 },
   "metrics": {
-    "tool_selection_hit_at_5": 0.0,
-    "tool_selection_mrr": 0.0,
+    "tool_selection_hit_at_5": 0.7733333333333333,
+    "tool_selection_mrr": 0.7433333333333333,
+    "tool_selection_fixtures_scored": 75,
     "tool_selection_forbidden_violations": 0,
-    "rag_recall_at_k": null,
+    "rag_recall_at_k": 0.8921568627450981,
+    "rag_fixtures_scored": 51,
+    "rag_forbidden_violations": 0,
     "write_gate_safety_pass_rate": null,
     "latency_p50_ms_by_tier": null,
     "latency_p95_ms_by_tier": null
+  },
+  "floors": {
+    "tool_selection_hit_at_5": "mcp.eval.min-hit5",
+    "tool_selection_mrr": "mcp.eval.min-mrr",
+    "rag_recall_at_k": 0.76,
+    "_note": "Floors are asserted by BaselineCaptureIT and were not modified by this capture."
+  },
+  "observations": {
+    "leakage_guard": "forbidden_violations = 0 on both suites; no permission-negative document or tool was ever visible.",
+    "rag_recall_scoring_floor": "Scored at 0.45, production's mcp.rag.min-score. The test previously hardcoded 0.55, which was production's value for nomic-embed-text before the #1194 bge-m3 cutover recalibrated it. Measured the same day on the same corpus and the same 51 fixtures: 0.6373 at 0.55 versus 0.8922 at 0.45. The earlier figure was a measurement artifact, not a retrieval regression.",
+    "partial_coverage": "write_gate_safety_pass_rate and the per-tier latency percentiles are still null: BaselineCaptureIT captures only the RAG-recall and tool-selection suites. Write-safety belongs to Gate 6 (#1218) and the tier latencies to Gate 4 (#1216), both of which need the live HTTP harness and are plan Waves 1-2.",
+    "fixtures_scored_vs_declared": "51 of 60 rag-retrieval and 75 of 105 tool-selection fixtures scored; the remainder are not scoreable by this IT (no expected-document/tool assertion to measure against) and are exercised by other suites."
   }
 }
