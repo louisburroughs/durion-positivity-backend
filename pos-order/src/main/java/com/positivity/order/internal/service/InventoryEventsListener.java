@@ -2,12 +2,19 @@ package com.positivity.order.internal.service;
 
 import com.positivity.domainevents.inventory.GoodsReceiptLine;
 import com.positivity.domainevents.inventory.GoodsReceiptRecordedV1;
+import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
+import com.positivity.domainevents.inventory.ReservationOutcomeV1;
+import com.positivity.order.internal.entity.ExtInventoryAvailability;
+import com.positivity.order.internal.entity.FulfillmentStatus;
 import com.positivity.order.internal.entity.ProcessedEvent;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
+import com.positivity.order.internal.entity.SalesOrderLine;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
+import com.positivity.order.internal.repository.ExtInventoryAvailabilityRepository;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
+import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -27,7 +34,17 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Applies what pos-inventory received against a purchase order (CAP-320 #1334, ADR-0044 §4).
+ * This module's single consumer of {@code inventory.events.v1} (ADR-0044 §4/§6).
+ *
+ * <h2>Why one class for several unrelated facts</h2>
+ *
+ * {@code processed_events} is keyed by {@code eventId} alone, so a second listener on this topic
+ * would race the first to insert the same id. One consumer per (module, topic) dispatching by
+ * {@code eventType} is therefore the only shape that keeps the idempotency log correct — the same
+ * shape pos-catalog uses. It handles goods receipts (CAP-320 #1334), availability snapshots and
+ * reservation outcomes (both CAP #1315).
+ *
+ * <h2>Goods receipts: applying what pos-inventory received against a purchase order</h2>
  *
  * <h2>The order decides what a receipt means</h2>
  *
@@ -48,12 +65,19 @@ import tools.jackson.databind.ObjectMapper;
  * Its value still comes off the outstanding balance, but no quantity moves. Guessing which line it
  * belonged to would settle the wrong one, and settling the wrong line is worse than leaving the
  * quantity outstanding: the balance shows something arrived, and the line stays visibly open.
+ *
+ * <h2>Availability: the replica behind the checkout gate</h2>
+ *
+ * Availability snapshots maintain {@code ext_inventory_availability}, which checkout reads to
+ * decide whether a line is covered at the selling location or must be admitted as a backorder.
+ * Snapshots are full state rather than deltas, so a stale one is discarded outright via the
+ * strictly-below {@code aggregateVersion} guard instead of being applied out of order.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "pos.order.kafka", name = "enabled", havingValue = "true")
-public class GoodsReceiptListener {
+public class InventoryEventsListener {
 
     /** Producing domain, per the repo-wide {@code processed_events} convention. */
     static final String OWNER = "inventory";
@@ -63,6 +87,8 @@ public class GoodsReceiptListener {
     private final ProcessedEventRepository processedEventRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderFactPublisher purchaseOrderFactPublisher;
+    private final ExtInventoryAvailabilityRepository extInventoryAvailabilityRepository;
+    private final SalesOrderLineRepository salesOrderLineRepository;
 
     @KafkaListener(
             topics = "${pos.order.kafka.inventory-events-topic:inventory.events.v1}",
@@ -87,10 +113,13 @@ public class GoodsReceiptListener {
         }
 
         try {
-            if (GoodsReceiptRecordedV1.EVENT_TYPE.equals(eventType)) {
-                apply(envelope);
-            } else {
-                log.debug("Ignoring inventory event type={} eventId={}", eventType, eventId);
+            switch (eventType == null ? "" : eventType) {
+                case GoodsReceiptRecordedV1.EVENT_TYPE -> apply(envelope);
+                case InventoryAvailabilityUpdatedV1.EVENT_TYPE -> applyAvailabilityUpdated(envelope);
+                case ReservationOutcomeV1.EVENT_TYPE -> applyReservationOutcome(envelope);
+                // Ignored types still fall through to the processed_events insert below: the
+                // owner's reconciliation manifest counts every fact this module was offered.
+                default -> log.debug("Ignoring inventory event type={} eventId={}", eventType, eventId);
             }
         } catch (TransientDataAccessException e) {
             // Rethrown so the container retries. Recording this as processed would leave goods on
@@ -106,6 +135,103 @@ public class GoodsReceiptListener {
                 .owner(OWNER)
                 .processedAt(Instant.now(clock))
                 .build());
+    }
+
+    /**
+     * Resolves a checked-out line against what pos-inventory actually decided (CAP #1315).
+     *
+     * <h2>Why the line is relabelled rather than left as checkout found it</h2>
+     *
+     * Checkout labels each line from the availability replica, which trails the owning ledger.
+     * This fact is the owner's own answer, read from its ledger, so where the two disagree this
+     * one wins: a line checked out as {@code AVAILABLE} against a stale replica is corrected to
+     * {@code BACKORDER}, and a line pessimistically marked {@code BACKORDER} — which is what an
+     * absent replica row produces — is corrected back to {@code AVAILABLE}. Leaving the checkout
+     * guess in place would make the order permanently disagree with inventory about a sale that
+     * has already happened.
+     *
+     * <h2>Nothing is reversed</h2>
+     *
+     * An uncovered outcome does not undo the checkout. The sale is already made and the customer
+     * has already paid; the shortfall is a promise to fulfil, tracked by the backorder the owner
+     * opened and recorded here so the order can answer for it. (Work orders differ — a short part
+     * there blocks the item — but that is pos-workorder's gate, not this one.)
+     *
+     * <h2>Facts for other modules' lines</h2>
+     *
+     * The topic carries every reservation outcome, including those for workorder lines. A fact
+     * naming no sales-order line, or one this module does not hold, is not an error — it belongs
+     * to someone else.
+     */
+    private void applyReservationOutcome(JsonNode envelope) {
+        ReservationOutcomeV1 outcome = objectMapper.treeToValue(envelope.path("payload"), ReservationOutcomeV1.class);
+        if (outcome.salesOrderLineId() == null) {
+            return;
+        }
+        SalesOrderLine line =
+                salesOrderLineRepository.findById(outcome.salesOrderLineId()).orElse(null);
+        if (line == null) {
+            log.debug(
+                    "Reservation outcome {} names sales-order line {} which this module does not hold",
+                    outcome.reservationId(),
+                    outcome.salesOrderLineId());
+            return;
+        }
+
+        FulfillmentStatus resolved = outcome.covered() ? FulfillmentStatus.AVAILABLE : FulfillmentStatus.BACKORDER;
+        if (line.getFulfillmentStatus() != resolved) {
+            log.info(
+                    "Reservation outcome {} corrects line {} from {} to {}",
+                    outcome.reservationId(),
+                    line.getOrderLineId(),
+                    line.getFulfillmentStatus(),
+                    resolved);
+        }
+        line.setFulfillmentStatus(resolved);
+        line.setReservationId(outcome.reservationId());
+        line.setBackorderId(outcome.backorderId());
+        salesOrderLineRepository.save(line);
+    }
+
+    /**
+     * Availability is a snapshot, not a delta, so an out-of-order arrival is dropped rather than
+     * applied: replaying an older full state would silently roll the replica backwards, and no
+     * later event would correct it until that (sku, location) is touched again.
+     */
+    private void applyAvailabilityUpdated(JsonNode envelope) {
+        InventoryAvailabilityUpdatedV1 payload =
+                objectMapper.treeToValue(envelope.path("payload"), InventoryAvailabilityUpdatedV1.class);
+        String rawAggregateId = envelope.path("aggregateId").stringValue(null);
+        if (rawAggregateId == null || rawAggregateId.isBlank()) {
+            log.warn("Skipping availability fact without aggregateId for sku {}", payload.stockItemId());
+            return;
+        }
+        UUID aggregateId = UUID.fromString(rawAggregateId);
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+
+        ExtInventoryAvailability existing =
+                extInventoryAvailabilityRepository.findById(aggregateId).orElse(null);
+        if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
+            return;
+        }
+
+        extInventoryAvailabilityRepository.save(ExtInventoryAvailability.builder()
+                .aggregateId(aggregateId)
+                .stockItemId(payload.stockItemId())
+                .locationId(payload.locationId())
+                .onHandQuantity(payload.onHandQuantity())
+                .allocatedQuantity(payload.allocatedQuantity())
+                .availableToPromiseQuantity(payload.availableToPromiseQuantity())
+                .unitOfMeasure(payload.unitOfMeasure())
+                .aggregateVersion(aggregateVersion)
+                .updatedAt(Instant.now(clock))
+                .build());
+        log.debug(
+                "Updated ext_inventory_availability sku={} locationId={} atp={} version={}",
+                payload.stockItemId(),
+                payload.locationId(),
+                payload.availableToPromiseQuantity(),
+                aggregateVersion);
     }
 
     private void apply(JsonNode envelope) {

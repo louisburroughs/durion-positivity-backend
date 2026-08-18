@@ -170,6 +170,17 @@ class SalesOrderCartLifecycleTest {
 
     private SalesOrderServiceImpl service;
 
+    /**
+     * CAP #1315: checkout registers demand through this publisher, which is absent whenever Kafka
+     * is disabled. These unit tests exercise the labelling half of the gate, so they supply the
+     * absent case — the publishing half is covered in SalesOrderCheckoutReservationTest.
+     */
+    @SuppressWarnings("unchecked")
+    private final org.springframework.beans.factory.ObjectProvider<
+                    com.positivity.order.internal.config.InventoryCommandPublisher>
+            inventoryCommandPublisherProvider =
+                    org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+
     @BeforeEach
     void setUp() {
         service = new SalesOrderServiceImpl(
@@ -190,6 +201,7 @@ class SalesOrderCartLifecycleTest {
                 orderNumberService,
                 totalsCalculator,
                 orderTaxService,
+                inventoryCommandPublisherProvider,
                 Clock.fixed(NOW, ZoneOffset.UTC));
         // @Value-injected field; no Spring context here.
         ReflectionTestUtils.setField(service, "quoteValidity", Duration.ofDays(7));
@@ -213,7 +225,7 @@ class SalesOrderCartLifecycleTest {
             }
             return line;
         });
-        when(inventoryPort.checkAvailability(anyString(), anyInt())).thenReturn(new InventoryResult(true, 99));
+        when(inventoryPort.checkAvailability(anyString(), anyInt(), any())).thenReturn(new InventoryResult(true, 99));
         when(pricingPort.quoteForSku(anyString(), anyInt(), any(), any())).thenReturn(priced("12.50", "Oil filter"));
         when(paymentRecordRepository.findByOrderId(any())).thenReturn(List.of());
         when(salesOrderRepository.findByCheckoutIdempotencyKey(anyString())).thenReturn(Optional.empty());
@@ -610,7 +622,8 @@ class SalesOrderCartLifecycleTest {
         @DisplayName("marks the line BACKORDER when inventory is short")
         void marksBackorder() {
             givenOrder(order(SalesOrderStatus.DRAFT));
-            when(inventoryPort.checkAvailability(anyString(), anyInt())).thenReturn(new InventoryResult(false, 0));
+            when(inventoryPort.checkAvailability(anyString(), anyInt(), any()))
+                    .thenReturn(new InventoryResult(false, 0));
 
             assertThat(service.addItem(ORDER_ID, new AddItemCommand("SKU-1", 5, null, null, null, null, null, null))
                             .fulfillmentStatus())
@@ -1321,14 +1334,36 @@ class SalesOrderCartLifecycleTest {
         }
 
         @Test
-        @DisplayName("refuses checkout when a line cannot be fulfilled")
-        void refusesInsufficientAvailability() {
-            givenOrder(checkoutReadyOrder());
-            when(inventoryPort.checkAvailability(anyString(), anyInt())).thenReturn(new InventoryResult(false, 0));
+        @DisplayName("admits a short line as a backorder instead of refusing checkout")
+        void admitsShortLineAsBackorder() {
+            // CAP #1315: checkout used to throw on the first short line. A counter sale is real
+            // even when the shelf is empty, so the shortfall becomes a promise to fulfil rather
+            // than a lost sale — pos-inventory's backorder machinery exists for exactly this.
+            SalesOrder order = checkoutReadyOrder();
+            givenOrder(order);
+            when(inventoryPort.checkAvailability(anyString(), anyInt(), any()))
+                    .thenReturn(new InventoryResult(false, 0));
 
-            assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", null))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("Insufficient availability");
+            CheckoutResult result = service.checkout(ORDER_ID, "co-1", null);
+
+            assertThat(result.replay()).isFalse();
+            assertThat(order.getLines().get(0).getFulfillmentStatus()).isEqualTo(FulfillmentStatus.BACKORDER);
+            verify(invoicingPort).createInvoiceForOrder(any());
+        }
+
+        @Test
+        @DisplayName("labels a covered line AVAILABLE from the replica answer")
+        void labelsCoveredLineAvailable() {
+            SalesOrder order = checkoutReadyOrder();
+            order.getLines().get(0).setFulfillmentStatus(FulfillmentStatus.BACKORDER);
+            givenOrder(order);
+            when(inventoryPort.checkAvailability(anyString(), anyInt(), any()))
+                    .thenReturn(new InventoryResult(true, 10));
+
+            service.checkout(ORDER_ID, "co-1", null);
+
+            // Re-evaluated at checkout, not trusted from line-add: stock moves in between.
+            assertThat(order.getLines().get(0).getFulfillmentStatus()).isEqualTo(FulfillmentStatus.AVAILABLE);
         }
 
         @Test

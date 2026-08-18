@@ -160,6 +160,21 @@ public class WorkorderPart {
     private BigDecimal quantityReturned = BigDecimal.ZERO;
 
     /**
+     * pos-inventory's reservation for this part, recorded when its outcome fact arrives (CAP
+     * #1315). Null until then, and null for a part no reservation could be requested for.
+     */
+    @Column(columnDefinition = "UUID")
+    private UUID reservationId;
+
+    /**
+     * The backorder pos-inventory opened when it could not cover this part. Set only alongside a
+     * reversal of the optimistic issue — the gate itself never opens a backorder, because only the
+     * owner can.
+     */
+    @Column(columnDefinition = "UUID")
+    private UUID backorderId;
+
+    /**
      * Check if this item can be executed (not pending approval unless emergency
      * exception)
      */

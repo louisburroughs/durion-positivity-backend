@@ -33,6 +33,33 @@ public class ArchitectureTest {
                 }
             };
 
+    /**
+     * CAP #1315: the owned-ATP gate must never be satisfied by a supplier's stock hint.
+     *
+     * <p>A vendor snapshot says what someone else might be able to ship. It is not owned stock, and
+     * treating it as availability would commit goods this business does not have — the exact
+     * confusion #1315 was split out of #1312 to prevent. The two paths are allowed to coexist in
+     * this module ({@code ProcurementAvailabilityService} legitimately asks suppliers what they
+     * hold); what is forbidden is the gate reading them.
+     *
+     * <p>Asserted structurally rather than with a mock verification because the risk is someone
+     * later wiring the client in as a fallback for the "no replica row" case, which no existing
+     * test would fail on.
+     */
+    @ArchTest
+    static final ArchRule owned_atp_gate_should_not_read_supplier_stock_hints = noClasses()
+            .that()
+            .haveSimpleName("ReplicaInventoryPortAdapter")
+            .or()
+            .haveSimpleName("InventoryEventsListener")
+            .or()
+            .haveSimpleName("SalesOrderServiceImpl")
+            .should()
+            .dependOnClassesThat()
+            .haveSimpleNameStartingWith("SupplierStock")
+            .allowEmptyShould(true)
+            .because("owned-ATP is owned stock only; a supplier hint never satisfies the gate (CAP #1315)");
+
     @ArchTest
     static final ArchRule controllers_should_not_access_repositories_directly = noClasses()
             .that()
