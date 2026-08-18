@@ -114,6 +114,17 @@ class SalesOrderServiceImplTest {
     // Issue #21: SalesOrderService is the public interface under test (ADR-0026)
     private SalesOrderService salesOrderService;
 
+    /**
+     * CAP #1315: checkout registers demand through this publisher, which is absent whenever Kafka
+     * is disabled. These unit tests exercise the labelling half of the gate, so they supply the
+     * absent case — the publishing half is covered in SalesOrderCheckoutReservationTest.
+     */
+    @SuppressWarnings("unchecked")
+    private final org.springframework.beans.factory.ObjectProvider<
+                    com.positivity.order.internal.config.InventoryCommandPublisher>
+            inventoryCommandPublisherProvider =
+                    org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+
     @BeforeEach
     void setUp() {
         salesOrderService = new SalesOrderServiceImpl(
@@ -134,6 +145,7 @@ class SalesOrderServiceImplTest {
                 orderNumberService,
                 new com.positivity.order.internal.service.OrderTotalsCalculator(),
                 orderTaxService,
+                inventoryCommandPublisherProvider,
                 java.time.Clock.systemUTC());
         org.mockito.Mockito.lenient().when(orderNumberService.nextNumber(any())).thenReturn("SO-TEST-2607-000001");
     }
@@ -286,7 +298,7 @@ class SalesOrderServiceImplTest {
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(expectedLine);
         when(pricingPort.quoteForSku(eq("ABC-123"), anyInt(), any(), any()))
                 .thenReturn(priced(new BigDecimal("10.5000")));
-        when(inventoryPort.checkAvailability("ABC-123", 2)).thenReturn(new InventoryResult(true, 100));
+        when(inventoryPort.checkAvailability(eq("ABC-123"), eq(2), any())).thenReturn(new InventoryResult(true, 100));
 
         // when
         SalesOrderLineSummary result = salesOrderService.addItem(orderId, "ABC-123", 2, null, null);
@@ -333,7 +345,7 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(updatedOrder);
         when(pricingPort.quoteForSku(eq("ABC-123"), anyInt(), any(), any()))
                 .thenReturn(priced(new BigDecimal("10.5000")));
-        when(inventoryPort.checkAvailability("ABC-123", 2)).thenReturn(new InventoryResult(true, 100));
+        when(inventoryPort.checkAvailability(eq("ABC-123"), eq(2), any())).thenReturn(new InventoryResult(true, 100));
 
         // when
         salesOrderService.addItem(orderId, "ABC-123", 2, null, null);
@@ -511,7 +523,8 @@ class SalesOrderServiceImplTest {
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(backorderLine);
         when(pricingPort.quoteForSku(eq("LOW-STOCK-SKU"), anyInt(), any(), any()))
                 .thenReturn(priced(new BigDecimal("10.5000")));
-        when(inventoryPort.checkAvailability("LOW-STOCK-SKU", 50)).thenReturn(new InventoryResult(false, 0));
+        when(inventoryPort.checkAvailability(eq("LOW-STOCK-SKU"), eq(50), any()))
+                .thenReturn(new InventoryResult(false, 0));
 
         // when
         SalesOrderLineSummary result = salesOrderService.addItem(orderId, "LOW-STOCK-SKU", 50, null, null);
@@ -557,7 +570,8 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(updatedOrder);
         when(pricingPort.quoteForSku(eq("LOW-STOCK-SKU"), anyInt(), any(), any()))
                 .thenReturn(priced(new BigDecimal("10.5000")));
-        when(inventoryPort.checkAvailability("LOW-STOCK-SKU", 50)).thenReturn(new InventoryResult(false, 0));
+        when(inventoryPort.checkAvailability(eq("LOW-STOCK-SKU"), eq(50), any()))
+                .thenReturn(new InventoryResult(false, 0));
 
         // when
         salesOrderService.addItem(orderId, "LOW-STOCK-SKU", 50, null, null);
@@ -766,7 +780,7 @@ class SalesOrderServiceImplTest {
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(cachedPriceLine);
         when(pricingPort.quoteForSku(eq("ABC-123"), anyInt(), any(), any()))
                 .thenReturn(priced(new BigDecimal("10.5000")));
-        when(inventoryPort.checkAvailability("ABC-123", 1)).thenReturn(new InventoryResult(true, 100));
+        when(inventoryPort.checkAvailability(eq("ABC-123"), eq(1), any())).thenReturn(new InventoryResult(true, 100));
 
         // when
         SalesOrderLineSummary result = salesOrderService.addItem(orderId, "ABC-123", 1, null, null);
@@ -811,7 +825,7 @@ class SalesOrderServiceImplTest {
                 .reasonCode("Manual entry")
                 .build();
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        when(inventoryPort.checkAvailability("ABC-123", 1)).thenReturn(new InventoryResult(true, 100));
+        when(inventoryPort.checkAvailability(eq("ABC-123"), eq(1), any())).thenReturn(new InventoryResult(true, 100));
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(savedLine);
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(order);
 

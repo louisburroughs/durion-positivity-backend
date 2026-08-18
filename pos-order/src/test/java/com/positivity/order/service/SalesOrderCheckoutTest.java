@@ -110,6 +110,17 @@ class SalesOrderCheckoutTest {
 
     private SalesOrderServiceImpl salesOrderService;
 
+    /**
+     * CAP #1315: checkout registers demand through this publisher, which is absent whenever Kafka
+     * is disabled. These unit tests exercise the labelling half of the gate, so they supply the
+     * absent case — the publishing half is covered in SalesOrderCheckoutReservationTest.
+     */
+    @SuppressWarnings("unchecked")
+    private final org.springframework.beans.factory.ObjectProvider<
+                    com.positivity.order.internal.config.InventoryCommandPublisher>
+            inventoryCommandPublisherProvider =
+                    org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+
     @BeforeEach
     void setUp() {
         salesOrderService = new SalesOrderServiceImpl(
@@ -130,13 +141,14 @@ class SalesOrderCheckoutTest {
                 orderNumberService,
                 new OrderTotalsCalculator(),
                 orderTaxService,
+                inventoryCommandPublisherProvider,
                 java.time.Clock.systemUTC());
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(extProductRepository.findFirstBySkuIgnoreCaseAndActiveTrue(anyString()))
                 .thenReturn(java.util.Optional.empty());
         when(orderPaymentRecordRepository.findByOrderId(any())).thenReturn(java.util.List.of());
         when(salesOrderRepository.findByCheckoutIdempotencyKey(anyString())).thenReturn(Optional.empty());
-        when(inventoryPort.checkAvailability(anyString(), anyInt())).thenReturn(new InventoryResult(true, 999));
+        when(inventoryPort.checkAvailability(anyString(), anyInt(), any())).thenReturn(new InventoryResult(true, 999));
         when(pricingPort.quoteForSku(anyString(), anyInt(), any(), any()))
                 .thenReturn(new PricingQuote(
                         PricingQuote.Status.PRICED, money("50.00"), UUID.randomUUID(), "Widget", null, null));
@@ -255,15 +267,27 @@ class SalesOrderCheckoutTest {
     }
 
     @Test
-    @DisplayName("CHK-006: insufficient availability → IllegalStateException")
-    void checkout_insufficientAvailability_rejected() {
+    @DisplayName("CHK-006: insufficient availability is admitted as a backorder, not rejected (CAP #1315)")
+    void checkout_insufficientAvailability_admittedAsBackorder() {
         SalesOrder order = draftOrderWithLine();
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(inventoryPort.checkAvailability(anyString(), anyInt())).thenReturn(new InventoryResult(false, 0));
+        when(inventoryPort.checkAvailability(anyString(), anyInt(), any())).thenReturn(new InventoryResult(false, 0));
 
-        assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-key-1"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("availability");
+        salesOrderService.checkout(ORDER_ID, "chk-key-1");
+
+        assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.PENDING_PAYMENT);
+        assertThat(order.getLines().getFirst().getFulfillmentStatus()).isEqualTo(FulfillmentStatus.BACKORDER);
+    }
+
+    @Test
+    @DisplayName("CHK-006b: a covered line checks out labelled AVAILABLE")
+    void checkout_sufficientAvailability_labelledAvailable() {
+        SalesOrder order = draftOrderWithLine();
+        when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+
+        salesOrderService.checkout(ORDER_ID, "chk-key-1");
+
+        assertThat(order.getLines().getFirst().getFulfillmentStatus()).isEqualTo(FulfillmentStatus.AVAILABLE);
     }
 
     @Test

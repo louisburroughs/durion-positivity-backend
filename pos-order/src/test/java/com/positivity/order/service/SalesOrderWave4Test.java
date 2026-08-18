@@ -127,6 +127,17 @@ class SalesOrderWave4Test {
 
     private SalesOrderServiceImpl salesOrderService;
 
+    /**
+     * CAP #1315: checkout registers demand through this publisher, which is absent whenever Kafka
+     * is disabled. These unit tests exercise the labelling half of the gate, so they supply the
+     * absent case — the publishing half is covered in SalesOrderCheckoutReservationTest.
+     */
+    @SuppressWarnings("unchecked")
+    private final org.springframework.beans.factory.ObjectProvider<
+                    com.positivity.order.internal.config.InventoryCommandPublisher>
+            inventoryCommandPublisherProvider =
+                    org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+
     @BeforeEach
     void setUp() {
         salesOrderService = new SalesOrderServiceImpl(
@@ -147,12 +158,13 @@ class SalesOrderWave4Test {
                 orderNumberService,
                 new OrderTotalsCalculator(),
                 orderTaxService,
+                inventoryCommandPublisherProvider,
                 java.time.Clock.systemUTC());
         when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(salesOrderRepository.findByCheckoutIdempotencyKey(anyString())).thenReturn(Optional.empty());
         when(orderPaymentRecordRepository.findByOrderId(any())).thenReturn(List.of());
         when(orderPaymentRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(inventoryPort.checkAvailability(anyString(), anyInt())).thenReturn(new InventoryResult(true, 999));
+        when(inventoryPort.checkAvailability(anyString(), anyInt(), any())).thenReturn(new InventoryResult(true, 999));
         when(extProductRepository.findFirstBySkuIgnoreCaseAndActiveTrue(anyString()))
                 .thenReturn(Optional.empty());
         when(pricingPort.quoteForSku(anyString(), anyInt(), any(), any()))

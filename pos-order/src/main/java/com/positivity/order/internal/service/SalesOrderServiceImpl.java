@@ -10,6 +10,7 @@ import com.positivity.order.internal.client.PricingPort;
 import com.positivity.order.internal.client.PricingQuote;
 import com.positivity.order.internal.client.SourceDocumentLine;
 import com.positivity.order.internal.client.SourceDocumentPort;
+import com.positivity.order.internal.config.InventoryCommandPublisher;
 import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.entity.*;
 import com.positivity.order.internal.exception.CartIdempotencyConflictException;
@@ -47,12 +48,15 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SalesOrderServiceImpl implements SalesOrderService {
@@ -74,6 +78,14 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     private final OrderNumberService orderNumberService;
     private final OrderTotalsCalculator totalsCalculator;
     private final OrderTaxService orderTaxService;
+
+    /**
+     * Absent when this module runs with Kafka disabled (local/dev profiles). Checkout still
+     * labels lines from availability in that case; it simply registers no demand, which is the
+     * behaviour every profile had before CAP #1315.
+     */
+    private final ObjectProvider<InventoryCommandPublisher> inventoryCommandPublisher;
+
     private final Clock clock;
 
     /** Quote validity horizon (parity story A3); ISO-8601 duration. */
@@ -197,7 +209,10 @@ public class SalesOrderServiceImpl implements SalesOrderService {
             breakdownJson = pricingQuote.breakdownJson();
         }
 
-        InventoryResult inventoryResult = inventoryPort.checkAvailability(command.itemSku(), command.quantity());
+        // Advisory at line-add (an estimate may legitimately be built from out-of-stock items);
+        // checkout re-evaluates and is what actually registers the demand.
+        InventoryResult inventoryResult =
+                inventoryPort.checkAvailability(command.itemSku(), command.quantity(), order.getLocationId());
         FulfillmentStatus fulfillmentStatus =
                 inventoryResult.sufficient() ? FulfillmentStatus.AVAILABLE : FulfillmentStatus.BACKORDER;
 
@@ -454,16 +469,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         if (onAccount) {
             requireOnAccountEligibility(order);
         }
-        for (SalesOrderLine line : order.getLines()) {
-            if (line == null) {
-                continue;
-            }
-            InventoryResult availability = inventoryPort.checkAvailability(line.getItemSku(), line.getQuantity());
-            if (!availability.sufficient()) {
-                throw new IllegalStateException(
-                        "Insufficient availability for SKU " + line.getItemSku() + "; cannot check out");
-            }
-        }
+        applyAvailabilityAndRegisterDemand(order);
 
         requireSerialsForTrackedProducts(order);
 
@@ -488,6 +494,61 @@ public class SalesOrderServiceImpl implements SalesOrderService {
             completeOnAccount(saved);
         }
         return new CheckoutResult(toSummary(salesOrderRepository.save(saved)), false);
+    }
+
+    /**
+     * Re-labels each line against owned availability at the selling location and registers the
+     * demand with pos-inventory (CAP #1315).
+     *
+     * <h2>Short lines are admitted, not rejected</h2>
+     *
+     * Checkout used to throw on the first short line. That was wrong for a counter sale: the
+     * customer is standing there, the order is real, and refusing it loses the sale rather than
+     * recording it. A short line is instead marked {@code BACKORDER} and the order proceeds — the
+     * shortfall becomes a promise to fulfil, which is what pos-inventory's backorder machinery
+     * exists to track. Availability is only re-evaluated here (not trusted from line-add time)
+     * because stock moves between building a cart and paying for it.
+     *
+     * <h2>The command is the commitment, this labelling is not</h2>
+     *
+     * The replica answer decides what the customer is told. What is actually reserved is decided
+     * by pos-inventory against its own ledger when it handles the command, which is why a line can
+     * be labelled available here and still come back backordered — a race this design accepts,
+     * since the outcome fact carries the truth and arrives within seconds.
+     *
+     * <p>A line whose SKU resolves to no replicated product cannot have a reservation requested
+     * (the command is keyed by stock-item id, which only the product replica can supply). That
+     * line is still sold and still labelled from availability; it simply carries no reservation,
+     * the same position it was in before this gate existed.
+     */
+    private void applyAvailabilityAndRegisterDemand(SalesOrder order) {
+        UUID locationId = order.getLocationId();
+        InventoryCommandPublisher publisher = inventoryCommandPublisher.getIfAvailable();
+        for (SalesOrderLine line : order.getLines()) {
+            if (line == null) {
+                continue;
+            }
+            InventoryResult availability =
+                    inventoryPort.checkAvailability(line.getItemSku(), line.getQuantity(), locationId);
+            line.setFulfillmentStatus(
+                    availability.sufficient() ? FulfillmentStatus.AVAILABLE : FulfillmentStatus.BACKORDER);
+
+            if (publisher == null || locationId == null) {
+                continue;
+            }
+            UUID stockItemId = extProductRepository
+                    .findFirstBySkuIgnoreCaseAndActiveTrue(line.getItemSku())
+                    .map(ExtProduct::getProductId)
+                    .orElse(null);
+            if (stockItemId == null) {
+                log.warn(
+                        "No replicated product for SKU {} on order {}; line checked out without a reservation",
+                        line.getItemSku(),
+                        order.getOrderId());
+                continue;
+            }
+            publisher.requestReservation(line.getOrderLineId(), stockItemId, line.getQuantity(), locationId);
+        }
     }
 
     /**

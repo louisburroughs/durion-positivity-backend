@@ -67,6 +67,21 @@ public class SalesOrderLine {
     @Column(nullable = false)
     private FulfillmentStatus fulfillmentStatus;
 
+    /**
+     * pos-inventory's reservation for this line, recorded when its outcome fact arrives (CAP
+     * #1315). Null until then, and null for a line no reservation could be requested for.
+     */
+    @Column(columnDefinition = "UUID")
+    private UUID reservationId;
+
+    /**
+     * The backorder pos-inventory opened for this line's shortfall, if any. Set only alongside a
+     * {@link FulfillmentStatus#BACKORDER} label that the owner itself decided — the replica-derived
+     * label at checkout carries no backorder, because no backorder exists until the owner opens one.
+     */
+    @Column(columnDefinition = "UUID")
+    private UUID backorderId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PriceSource priceSource;
