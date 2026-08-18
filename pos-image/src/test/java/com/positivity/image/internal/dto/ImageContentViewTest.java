@@ -29,6 +29,9 @@ class ImageContentViewTest {
     @Test
     @DisplayName("an instance is equal to itself")
     void reflexive() {
+        // Deliberately self-compared: exercises the `this == o` shortcut in equals(), which the
+        // cross-instance check above never reaches. Field-by-field equality is verified there;
+        // this test only pins the reflexivity part of the equals contract.
         ImageContentView view = new ImageContentView("logo.png", "image/png", BYTES.clone());
 
         assertThat(view).isEqualTo(view);
