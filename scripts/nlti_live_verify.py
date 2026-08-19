@@ -1830,7 +1830,11 @@ def run_write_gate(ctx):
     # offer seeded one step earlier) and finally into the prompt and clientContext.
     seeds = (target or {}).get("seeds") or []
     if seeds and ctx.args.allow_writes:
-        tokens = {}
+        # {runId} is pre-populated so seed bodies can carry per-run-unique values (e.g. promoCode
+        # "NLTI-PROBE-{runId}"): pos-price enforces promoCode uniqueness, and a static fixture
+        # collided with its own previous run's orphan (observed live: HTTP 409 after a 201 run
+        # whose id capture failed). A time-based suffix keeps every run self-contained.
+        tokens = {"{runId}": now_utc().strftime("%Y%m%d%H%M%S")}
         for index, seed in enumerate(seeds):
             check_id = "wg-seed" if index == 0 else f"wg-seed-{index + 1}"
             path = substitute_tokens(seed["path"], tokens)
