@@ -90,11 +90,17 @@ Every role in the baseline seed receives four conversational entrypoints:
 | `nlti:request:submit` | Submit a natural-language task-interface request |
 | `nlti:request:read` | Read submitted NLTI request status |
 
-These grant reach to the assistant, not to data: the assistant enforces domain permissions per
-request, so a role that cannot read an invoice still cannot read one by asking for it. They are
-applied to every role the seed knows about, including the customer-facing `CUSTOMER` and
+These grant reach to the assistant, not directly to role-backed data — but with one important
+MCP caveat. The tool-selection layer mirrors downstream controller authorization from
+`mcp_tool_permission`: when an endpoint is guarded only by `isAuthenticated()`, has no
+`@PreAuthorize`, or uses role checks without a permission code, MCP has no "normal" permission to
+copy and falls back to the synthetic `AUTHENTICATED` tier instead. Those operations therefore are
+not bounded here by a domain permission grant from `role_permissions`; they are bounded only by the
+downstream authenticated/role gate that the service itself declares. These entrypoints are applied
+to every role the seed knows about, including the customer-facing `CUSTOMER` and
 `SELF_SERVICE_CUSTOMER`, which previously held nothing at all — so external self-service users can
-now reach the assistant and submit NLTI requests.
+now reach the assistant and submit NLTI requests, plus any MCP surface still sitting on that
+`AUTHENTICATED` floor.
 
 This is a list of explicit grants, not a rule the database enforces. A role created later through
 `POST /v1/roles` or the role-permission admin API starts with **no** grants at all, assistant
