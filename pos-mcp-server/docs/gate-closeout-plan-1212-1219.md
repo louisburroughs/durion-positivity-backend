@@ -16,7 +16,7 @@
 | 1 | **DONE** | PRs #1371, #1382, #1385–#1390 — gates 0/1/2A/2C/5/6 all carry dated live evidence in `implementation_checklist.md` |
 | 2 | **DONE** | PRs #1391–#1393 — Gate 4 router evidence (7/7, p95 5653 ms) |
 | 3 | **IN PROGRESS** | shadow soak started 2026-08-19 ~16:50 UTC (PR #1394 + manual compose sync); 3 nights, then one gated live promotion (~2026-08-22 UTC), then revert |
-| 4 | **IN PROGRESS** | metrics filled (PR #1399); gates 0/1/2A/2B/2C/4/6 PASS (approver Louis Burroughs, 2026-08-19); Gate 5 awaits the post-#1400 live sweep, Gate 7 the soak |
+| 4 | **IN PROGRESS** | metrics filled (PR #1399); gates 0/1/2A/2B/2C/3/4/5/6 PASS (approver Louis Burroughs, 2026-08-19; Gate 5 flipped after the post-#1400 sweep verified `security.guide` permission-bound); only Gate 7 remains, awaiting the soak |
 
 Standing findings feeding sign-off (each documented in the relevant gate block / PR):
 
