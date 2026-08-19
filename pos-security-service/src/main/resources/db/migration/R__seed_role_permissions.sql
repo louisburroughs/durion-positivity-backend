@@ -12,12 +12,16 @@
 --   role already exercised through the retired hardcoded expansion, or (for
 --   SYSTEM_ADMINISTRATOR and DISPATCHER, which the hardcoded switch never
 --   covered) the role's documented job function.
--- * Assistant baseline: EVERY role that exists receives mcp:chat:execute,
+-- * Assistant baseline: every role listed in section 3 receives mcp:chat:execute,
 --   mcp:chat:stream, nlti:request:submit and nlti:request:read. These are the
 --   conversational entrypoints; the assistant still enforces domain permissions
 --   per request, so holding them grants reach to the assistant, not to data.
 --   NOTE this includes the customer-facing CUSTOMER and SELF_SERVICE_CUSTOMER
 --   roles, which previously held nothing at all.
+--   These are explicit grants, not a rule the database enforces: a role created
+--   later through the role-permission admin API starts with NO grants, assistant
+--   entrypoints included, until something grants them. To make a new role part of
+--   the baseline, add it to section 3 here.
 -- * SYSTEM_ADMINISTRATOR is deliberately NOT a superuser. It holds the
 --   security/admin surface plus MCP administration (system prompts, LLM API
 --   configuration, tool management, document ingest) and no accounting, catalog,

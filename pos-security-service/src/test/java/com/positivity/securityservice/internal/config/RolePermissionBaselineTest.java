@@ -19,6 +19,7 @@ import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -83,7 +84,7 @@ class RolePermissionBaselineTest {
     private static final Set<String> ASSISTANT_BASELINE =
             Set.of("mcp:chat:execute", "mcp:chat:stream", "nlti:request:submit", "nlti:request:read");
 
-    /** MCP administration, reserved for ADMIN and SYSTEM_ADMINISTRATOR. */
+    /** MCP administration that both ADMIN and SYSTEM_ADMINISTRATOR must hold. */
     private static final Set<String> MCP_ADMINISTRATION = Set.of(
             "mcp:system_prompt:view",
             "mcp:system_prompt:create",
@@ -95,6 +96,16 @@ class RolePermissionBaselineTest {
             "mcp:llm_api:delete",
             "mcp:tool:manage",
             "mcp:document:ingest");
+
+    /**
+     * Everything on the MCP administration surface, which no role outside ADMIN and
+     * SYSTEM_ADMINISTRATOR may hold. Wider than {@link #MCP_ADMINISTRATION} because
+     * {@code mcp:tool:view} is restricted too but is currently held by ADMIN alone, so it is
+     * not something both admin roles are required to have.
+     */
+    private static final Set<String> MCP_ADMINISTRATION_SURFACE = Stream.concat(
+                    MCP_ADMINISTRATION.stream(), Stream.of("mcp:tool:view"))
+            .collect(Collectors.toUnmodifiableSet());
 
     private static Map<String, Set<String>> seededGrants;
     private static Set<String> definedPermissions;
@@ -251,8 +262,11 @@ class RolePermissionBaselineTest {
         assertThat(seededGrants.get("ADMIN")).containsAll(MCP_ADMINISTRATION);
         assertThat(seededGrants.get("SYSTEM_ADMINISTRATOR")).containsAll(MCP_ADMINISTRATION);
 
+        // Scan the whole restricted surface, not just what both admin roles must hold:
+        // mcp:tool:view is equally restricted, and checking only MCP_ADMINISTRATION would let it
+        // leak to any role undetected.
         Set<String> holders = seededGrants.entrySet().stream()
-                .filter(entry -> entry.getValue().stream().anyMatch(MCP_ADMINISTRATION::contains))
+                .filter(entry -> entry.getValue().stream().anyMatch(MCP_ADMINISTRATION_SURFACE::contains))
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toCollection(TreeSet::new));
 

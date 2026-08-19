@@ -81,7 +81,7 @@ therefore creates those two roles itself rather than relying on bean lifecycle.
 
 ### Assistant baseline
 
-Every role that exists receives four conversational entrypoints:
+Every role in the baseline seed receives four conversational entrypoints:
 
 | Permission | Meaning |
 | --- | --- |
@@ -92,9 +92,14 @@ Every role that exists receives four conversational entrypoints:
 
 These grant reach to the assistant, not to data: the assistant enforces domain permissions per
 request, so a role that cannot read an invoice still cannot read one by asking for it. They are
-applied to **all** roles, including the customer-facing `CUSTOMER` and `SELF_SERVICE_CUSTOMER`,
-which previously held nothing at all — so external self-service users can now reach the assistant
-and submit NLTI requests. If that is not wanted, remove those two roles from the universal list in
+applied to every role the seed knows about, including the customer-facing `CUSTOMER` and
+`SELF_SERVICE_CUSTOMER`, which previously held nothing at all — so external self-service users can
+now reach the assistant and submit NLTI requests.
+
+This is a list of explicit grants, not a rule the database enforces. A role created later through
+`POST /v1/roles` or the role-permission admin API starts with **no** grants at all, assistant
+entrypoints included, until something grants them; add it to the seed to make it part of the
+baseline. If that is not wanted, remove those two roles from the universal list in
 the seed; `RolePermissionBaselineTest.everyRoleReceivesTheAssistantBaseline` pins the current
 policy and will need updating alongside.
 
