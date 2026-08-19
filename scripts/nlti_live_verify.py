@@ -398,11 +398,34 @@ def load_queries(path):
     return queries
 
 
-def load_write_target(path):
-    """The #1218 write target — plan decision C, deliberately not defaulted.
+def substitute_seeded_id(value, seeded_id):
+    """Recursively replaces the {seededId} token in a clientContext structure. The executor
+    contract nests args as {"pathParams": {...}, "body": {...}} (OperationProxyFactory:71-74), so
+    top-level-only substitution would leave the token inside pathParams."""
+    if isinstance(value, str):
+        return value.replace("{seededId}", seeded_id)
+    if isinstance(value, dict):
+        return {k: substitute_seeded_id(v, seeded_id) for k, v in value.items()}
+    if isinstance(value, list):
+        return [substitute_seeded_id(v, seeded_id) for v in value]
+    return value
 
-    Shape: {"prompt": "...", "expectedTool": "...", "clientContext": {...},
-            "cleanupNote": "how to undo this on alpha"}
+
+def load_write_target(path):
+    """The #1218 write target — plan decision C. Current agreed target: seed-then-cancel of a probe
+    appointment via the discovered `shop-manager_cancelappointment` tool; the example fixture is
+    the authoritative config, and this loader is target-agnostic.
+
+    Shape: {"prompt": "...", "expectedTool": "...", "actor": "<persona name>",
+            "clientContext": {...}, "cleanupNote": "how to undo this on alpha",
+            "seed": {"method": "POST", "path": "...", "body": {...}, "idField": "id"}}
+
+    The optional "seed" block creates the record the gated write will target, so each run owns its
+    whole lifecycle. The seeded record's id (read from "idField" in the create response) replaces
+    the literal token "{seededId}" wherever it appears in "prompt" and recursively throughout
+    "clientContext". Seeding only happens under --allow-writes, through the same safety gate as
+    every other mutating request. "actor" selects the persona that seeds and executes; it must
+    hold the target tool's own domain permission.
     """
     file = Path(path)
     if not file.is_file():
@@ -411,11 +434,22 @@ def load_write_target(path):
     prompt = target.get("prompt")
     if not prompt:
         raise SystemExit(f"--write-target {file} must define a non-empty 'prompt'")
-    if "<" in prompt and ">" in prompt:
+    placeholder = prompt.replace("{seededId}", "")
+    if "<" in placeholder and ">" in placeholder:
         raise SystemExit(
             f"--write-target {file} still contains a template placeholder in 'prompt'. The #1218 "
-            "write target is an open decision (plan decision C): choose a real downstream action, "
-            "agree that dirtying alpha with it is acceptable, and record it in the file.")
+            "write target is decision C in pos-mcp-server/docs/gate-closeout-plan-1212-1219.md: "
+            "copy the example fixture and fill in the agreed target.")
+    seed = target.get("seed")
+    if seed is not None:
+        for key in ("method", "path", "body", "idField"):
+            if not seed.get(key):
+                raise SystemExit(f"--write-target {file} 'seed' block is missing '{key}'")
+        flat = json.dumps(seed["body"])
+        if "<" in flat and ">" in flat:
+            raise SystemExit(
+                f"--write-target {file} seed body still contains a <PLACEHOLDER>. Replace the "
+                "example ids with real alpha values before a live run.")
     return target
 
 
@@ -1747,10 +1781,16 @@ def plan_write_gate(ctx):
 def run_write_gate(ctx):
     gate, issue, title = SUITES["write-gate"]
     suite = SuiteResult("write-gate", gate, issue, title)
-    persona = ctx.personas[0]
-    ctx.authenticate(persona)
-
     target = load_write_target(ctx.args.write_target) if ctx.args.write_target else None
+    # Decision C: the write-target config may name its acting persona ("actor"), because the actor
+    # must hold the target tool's own permission (e.g. appointments:cancel), which is a domain
+    # grant the admin persona does not necessarily carry. Default stays personas[0].
+    actor_name = (target or {}).get("actor")
+    persona = next((p for p in ctx.personas if p.name == actor_name), None) if actor_name \
+        else ctx.personas[0]
+    if persona is None:
+        raise SystemExit(f"--write-target actor '{actor_name}' is not among the loaded personas")
+    ctx.authenticate(persona)
     if target is None:
         suite.notes.append(
             "OPEN DECISION C: no --write-target supplied, so the executing half of the flow is "
@@ -1758,6 +1798,43 @@ def run_write_gate(ctx):
     prompt = ((target or {}).get("prompt") or ctx.args.write_gate_action_prompt
               or ctx.queries["write-gate"][0]["prompt"])
     client_context = (target or {}).get("clientContext")
+
+    # Decision C seed step: create the record the gated write will target, so the run owns its
+    # whole lifecycle. Only under --allow-writes; without it the substitution token stays in place
+    # and the executing half is skipped below exactly as before. The token may appear in the
+    # prompt, in clientContext (e.g. args.pathParams), or both — check the whole target, not just
+    # the prompt.
+    seed = (target or {}).get("seed")
+    needs_seed = seed and ("{seededId}" in prompt
+                           or "{seededId}" in json.dumps(client_context or {}))
+    if needs_seed and ctx.args.allow_writes:
+        seeded = ctx.runner.send(RequestPlan(
+            label="wg-seed",
+            method=seed["method"],
+            url=ctx.mcp_url(seed["path"]),
+            # The seed creates a business record in the target domain (an appointment today), so it
+            # is a BUSINESS_WRITE — labelling it ADMIN_WRITE misstated it in skip reasons/output.
+            impact=BUSINESS_WRITE,
+            persona=persona.name,
+            headers=ctx.headers(persona),
+            body=seed["body"],
+            note="decision C seed: creates the probe record the gated write targets",
+        ))
+        seeded_id = (seeded.json_body or {}).get(seed["idField"]) \
+            if seeded is not None and isinstance(seeded.json_body, dict) else None
+        suite.expect("wg-seed", "Probe record seeded for the gated write",
+                     bool(seeded_id),
+                     f"{seed['method']} {seed['path']} -> HTTP "
+                     f"{getattr(seeded, 'status', 'refused')} {seed['idField']}={seeded_id}")
+        if not seeded_id:
+            suite.notes.append("Seed failed — the executing half cannot run against a real record.")
+            return suite
+        prompt = prompt.replace("{seededId}", str(seeded_id))
+        if client_context:
+            client_context = substitute_seeded_id(client_context, str(seeded_id))
+    elif needs_seed:
+        suite.skip("wg-seed", "Probe record seeded for the gated write",
+                   "seed block configured but --allow-writes not passed; executing half will skip")
 
     correlation = uuid7ish()
     submit = ctx.runner.send(ctx.plan_nlti_submit(persona, prompt, correlation,
@@ -2302,8 +2379,11 @@ def build_parser():
                         help="delay between Loki polls (default 2)")
     parser.add_argument("--telemetry-window-pad-seconds", type=float, default=3.0,
                         help="clock-skew padding on the request window join (default 3)")
-    parser.add_argument("--workflow-state", default="CREATING_PO", choices=WORKFLOW_STATES,
-                        help="workflow state the workflow suite activates (default CREATING_PO)")
+    parser.add_argument("--workflow-state", default="PROCESSING_RETURN", choices=WORKFLOW_STATES,
+                        help="workflow state the workflow suite activates (default "
+                             "PROCESSING_RETURN — the state the Gate 2C completeness clause names "
+                             "and the V34 seed populates; a broad-permission actor's IDLE baseline "
+                             "swallowed the CREATING_PO delta on the 2026-08-19 run)")
     parser.add_argument("--admin-tool-name", default="listInventoryItems",
                         help="discovered tool name used by the admin permission read probe")
     parser.add_argument("--tuning-window-hours", type=float, default=48.0,

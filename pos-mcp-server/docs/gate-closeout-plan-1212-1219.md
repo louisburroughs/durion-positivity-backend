@@ -133,10 +133,37 @@ list — repeated here as the checklist):
 
 - **A.** Alpha access — session gets it directly, or someone else runs the harness and pastes
   output?
-- **B.** Tier models for #1216 — which models for `mcp.model.simple`/`complex`, pulled on alpha
-  Ollama? (leaning: `simple=qwen3:8b`, `complex` left blank)
-- **C.** #1218 write target — which downstream service/action, and is dirtying alpha data
-  acceptable?
+- **B.** ~~Tier models for #1216~~ **RESOLVED 2026-08-19**: `MCP_MODEL_SIMPLE=gpt-oss:20b`,
+  `MCP_MODEL_COMPLEX` unset (default executor `gpt-oss:120b` is already the complex-class model).
+  Both tiers on the ollama.com cloud backend — chat does NOT run on alpha's local Ollama (that
+  container serves embeddings only), so the plan's "pulled on alpha Ollama" framing was wrong; a
+  local simple model would have measured CPU inference, not tiering. All three models
+  (router `qwen3.5:397b`, both tiers) verified serving HTTP 200 on the rotated key. Set in
+  `/opt/durion/alpha/.env`, live in the container.
+- **C.** ~~#1218 write target~~ **RESOLVED 2026-08-19 (revised same day)**: seed-then-cancel of a
+  probe appointment via the discovered tool `shop-manager_cancelappointment`
+  (`DELETE /v1/appointments/{appointmentId}/cancel`), actor = the DISPATCHER persona.
+  - **First choice, `prompts_deletesystemprompt`, proved structurally impossible on alpha**: the
+    gateway's api-docs aggregation (swagger-config, 23 services) does not include pos-mcp-server,
+    so its operations are never discovered and no `prompts_*` tool exists for a write plan to bind
+    (observed live: 403 from `requireToolPermission`; 389 discovered tools, none from
+    pos-mcp-server). Whether pos-mcp-server *should* be aggregated is an open product question,
+    deliberately not decided here.
+  - **Why cancelappointment**: discovered live with `appointments:cancel` attached; the DISPATCHER
+    and LOCATION_MANAGER personas hold `appointments:create` + `appointments:cancel` with no grant
+    changes; the write crosses a real service boundary (mcp-server → gateway → shop-manager) under
+    a NON-admin actor; shop-manager is not a Kafka-enabled domain. Residue: one inert CANCELLED
+    probe appointment on a far-future slot (cancel is a status write, not a row delete).
+  - **Rejected alternatives**: `security-service_deleterole` — pos-security-service cannot emit
+    `x-required-permissions` (no pos-security-common dependency), so its discovered ops carry zero
+    grants and would need a manual tool-permission grant, an extra registry mutation;
+    `price_deletepromotioneligibilityrule` — at decision time only the unassigned ADMIN role held
+    `pricing:promotion:manage` (a LOCATION_MANAGER grant is now in flight, making this the
+    documented fallback if appointment seeding fails validation; note its seed is two-step —
+    offer, then rule — and the harness `seed` block currently supports one request).
+  - Dirtying: acceptable only as self-seeded data — the harness `seed` block creates the probe
+    record under `--allow-writes` and the gated write consumes it. Config:
+    `scripts/fixtures/nlti-write-target.example.json` (authoritative).
 - **D.** #1215 — seed `PROCESSING_RETURN` (which tools?) or except it in the sign-off; does
   `routing.workflowState` + the `NLTI_SESSION_WORKFLOW_STATE_SET` audit event satisfy "workflow
   transitions in telemetry," or is a dedicated transition event wanted?

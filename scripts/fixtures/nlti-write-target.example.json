@@ -1,20 +1,51 @@
 {
   "_comment": [
-    "TEMPLATE for scripts/nlti_live_verify.py --write-target (#1218, Gate 6).",
+    "Write-target config for scripts/nlti_live_verify.py --write-target (#1218, Gate 6).",
     "",
-    "THIS FILE INTENTIONALLY DOES NOT NAME A TARGET. Which downstream service/action the live",
-    "write-gate run executes — and whether dirtying alpha data with it is acceptable — is OPEN",
-    "DECISION C in pos-mcp-server/docs/gate-closeout-plan-1212-1219.md. Copy this file, replace",
-    "every <PLACEHOLDER>, and keep it outside the repo. The harness refuses to run a prompt that",
-    "still contains a <...> placeholder.",
+    "DECISION C (revised 2026-08-19): seed-then-cancel of a probe appointment via the discovered",
+    "OpenAPI tool `shop-manager_cancelappointment` (DELETE /v1/appointments/{appointmentId}/cancel).",
+    "The original target (deleteSystemPrompt) is structurally impossible today: the gateway's",
+    "api-docs aggregation does not include pos-mcp-server, so its ops are never discovered.",
+    "cancelappointment was chosen because the discovered tool is live on alpha with its permission",
+    "attached (appointments:cancel), the DISPATCHER and LOCATION_MANAGER personas hold both",
+    "appointments:create and appointments:cancel TODAY (no grant changes), the write crosses a real",
+    "service boundary (mcp-server -> gateway -> shop-manager) under a NON-admin actor, and",
+    "shop-manager is not a Kafka-enabled domain on alpha.",
     "",
-    "prompt        : the ACTION-intent natural-language prompt submitted to POST /v1/nlt/requests.",
-    "expectedTool  : the mcp_tool name the previewed plan must target (asserted, optional).",
-    "clientContext : optional key-value map forwarded as NltiRequestDTO.clientContext.",
-    "cleanupNote   : how an operator undoes the write on alpha; copied into the evidence block."
+    "actor names the persona that seeds and executes; it must hold the target tool's permission.",
+    "The `seed` block creates the probe appointment under --allow-writes; its id replaces the",
+    "{seededId} token everywhere (deep substitution, including args.pathParams). The executor",
+    "contract for discovered tools is args = {pathParams, queryParams, body}",
+    "(OperationProxyFactory:71-74); targetTool and args ride in clientContext",
+    "(NltiWritePlanService:129, CONTEXT_ARGS).",
+    "",
+    "Replace the <PLACEHOLDER> ids with real alpha values before a live run (read them from",
+    "pos-customer / pos-location; the far-future slot avoids conflict checks). Cancellation is a",
+    "status write: the cancelled probe appointment row remains, inert, as the run's residue."
   ],
-  "prompt": "<ACTION prompt naming the agreed write target>",
-  "expectedTool": "<mcp_tool name the plan must target>",
-  "clientContext": {},
-  "cleanupNote": "<how to reverse this write on alpha>"
+  "actor": "terrence-blake",
+  "prompt": "Remove appointment {seededId} from the schedule",
+  "expectedTool": "shop-manager_cancelappointment",
+  "clientContext": {
+    "targetTool": "shop-manager_cancelappointment",
+    "args": {
+      "pathParams": { "appointmentId": "{seededId}" },
+      "body": { "cancellationReason": "NLTI write-gate verification probe (#1218)" }
+    }
+  },
+  "seed": {
+    "method": "POST",
+    "path": "appointments",
+    "body": {
+      "crmCustomerId": "<REAL_ALPHA_CRM_CUSTOMER_UUID>",
+      "crmVehicleId": "<REAL_ALPHA_CRM_VEHICLE_UUID>",
+      "locationId": "<REAL_ALPHA_LOCATION_UUID>",
+      "serviceRequestIds": [],
+      "startAt": "2027-03-01T15:00:00Z",
+      "endAt": "2027-03-01T16:00:00Z",
+      "sourceType": "NLTI_PROBE"
+    },
+    "idField": "id"
+  },
+  "cleanupNote": "Self-limiting: the gated cancel leaves the probe appointment in CANCELLED state (rows are not deleted). It references a real customer/vehicle/location read-only and sits on a far-future slot, so it affects no live scheduling. If a run aborts between seed and confirm, cancel it via DELETE /v1/appointments/{id}/cancel as any appointments:cancel holder."
 }
