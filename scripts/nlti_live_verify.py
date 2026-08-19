@@ -1960,7 +1960,15 @@ def run_write_gate(ctx):
         # audit-capable persona — the config's admin persona — falling back to the actor.
         auditor = next((p for p in ctx.personas if p.admin), persona)
         if auditor.name != persona.name:
-            ctx.authenticate(auditor)
+            try:
+                ctx.authenticate(auditor)
+            except (ConfigError, InfraError) as exc:
+                # The fallback must actually fall back: an unauthenticatable admin persona
+                # degrades the read to the actor (who may 403) instead of aborting the suite.
+                suite.notes.append(
+                    f"audit reader '{auditor.name}' could not authenticate ({exc}); "
+                    "falling back to the write actor")
+                auditor = persona
         audit = ctx.runner.send(ctx.plan_audit(auditor, correlation))
         entries = ((audit.json_body or {}).get("content") or []) if audit and audit.ok else []
         types = sorted({entry.get("eventType") for entry in entries})
