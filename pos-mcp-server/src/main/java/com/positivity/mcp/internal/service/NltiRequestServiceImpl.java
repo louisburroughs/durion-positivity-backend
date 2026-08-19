@@ -15,6 +15,9 @@ import com.positivity.mcp.internal.exception.SessionOwnershipViolationException;
 import com.positivity.mcp.internal.observability.NltiSpanAttributes;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
+import com.positivity.mcp.internal.security.PermissionCodes;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.WriteSignal;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryPublisher;
 import com.positivity.mcp.service.IntentParserService;
 import com.positivity.mcp.service.NltiRequestService;
 import com.positivity.security.common.SecurityContextHelper;
@@ -45,10 +48,16 @@ import org.springframework.stereotype.Service;
 @Service
 public class NltiRequestServiceImpl implements NltiRequestService {
 
+    /** {@code outcome.status} values, matching the chat path's vocabulary. */
+    static final String TELEMETRY_STATUS_SUCCESS = "SUCCESS";
+
+    static final String TELEMETRY_STATUS_ERROR = "ERROR";
+
     private final NltiSessionRepository sessionRepository;
     private final NltiRequestRepository requestRepository;
     private final IntentParserService intentParserService;
     private final NltiWritePlanService writePlanService;
+    private final NltiRequestTelemetryPublisher telemetryPublisher;
     private final Clock clock;
     private final MeterRegistry meterRegistry;
     private final Counter requestCount;
@@ -73,12 +82,14 @@ public class NltiRequestServiceImpl implements NltiRequestService {
             @NonNull NltiRequestRepository requestRepository,
             @NonNull IntentParserService intentParserService,
             @NonNull NltiWritePlanService writePlanService,
+            @NonNull NltiRequestTelemetryPublisher telemetryPublisher,
             @NonNull Clock clock,
             @NonNull MeterRegistry meterRegistry) {
         this.sessionRepository = Objects.requireNonNull(sessionRepository, "sessionRepository must not be null");
         this.requestRepository = Objects.requireNonNull(requestRepository, "requestRepository must not be null");
         this.intentParserService = Objects.requireNonNull(intentParserService, "intentParserService must not be null");
         this.writePlanService = Objects.requireNonNull(writePlanService, "writePlanService must not be null");
+        this.telemetryPublisher = Objects.requireNonNull(telemetryPublisher, "telemetryPublisher must not be null");
         this.clock = clock;
         this.meterRegistry = meterRegistry;
         this.requestCount = meterRegistry.counter("nlt.request.count");
@@ -96,12 +107,18 @@ public class NltiRequestServiceImpl implements NltiRequestService {
     @Override
     public @NonNull NltiResponseV1 submit(@NonNull NltiRequestDTO request, @Nullable UUID correlationId) {
         Timer.Sample sample = Timer.start(meterRegistry);
+        long startedAtNanos = System.nanoTime();
+        UUID effectiveCorrelationId = (correlationId != null) ? correlationId : UUIDv7Generator.generate();
+        // #1397: the fields the telemetry event needs are filled in as the request progresses, so
+        // the finally-block emission below describes how far the request actually got — an error
+        // before session resolution still produces a record, just with fewer fields populated.
+        TelemetryState telemetry = new TelemetryState();
         try {
             requestCount.increment();
 
             @NonNull String subjectId = SecurityContextHelper.getCurrentUsernameOrDefault("system");
-            UUID effectiveCorrelationId = (correlationId != null) ? correlationId : UUIDv7Generator.generate();
             UUID resolvedSessionId = resolveSession(request.sessionId(), subjectId);
+            telemetry.sessionId = resolvedSessionId;
 
             Span currentSpan = Span.current();
             @NonNull AttributeKey<String> correlationIdKey = NltiSpanAttributes.NLT_CORRELATION_ID;
@@ -126,6 +143,7 @@ public class NltiRequestServiceImpl implements NltiRequestService {
             nltiRequest.setStatus(NltiRequestStatus.ACCEPTED);
             nltiRequest.setPromptHash(promptHash);
             requestRepository.save(nltiRequest);
+            telemetry.requestId = newRequestId;
 
             @NonNull AttributeKey<String> requestIdKey = NltiSpanAttributes.NLT_REQUEST_ID;
             @NonNull String requestIdValue = newRequestId.toString();
@@ -137,7 +155,13 @@ public class NltiRequestServiceImpl implements NltiRequestService {
             // Gate 6 (#1193): an ACTION-classified request yields a persisted write-plan preview —
             // never a direct execution. QUERY/UNKNOWN requests keep the plain ACCEPTED envelope.
             IntentV1 intent = intentParserService.parse(request.prompt(), resolvedSessionId, effectiveCorrelationId);
+            telemetry.intentType = intent.intentType();
+            telemetry.riskLevel = intent.riskLevel();
             if (NltiIntentType.ACTION.name().equals(intent.intentType())) {
+                // The request reached the write gate: mark it as a write whatever the gate then
+                // decides (plan preview, reused pending plan, or NEEDS_CLARIFICATION), so
+                // write.isWrite counts write intents detected, not writes ultimately performed.
+                telemetry.isWrite = true;
                 Set<String> callerPermissionCodes = PermissionCodes.extract(SecurityContextHelper.getAuthorities());
                 return writePlanService.previewAction(nltiRequest, request, intent, callerPermissionCodes);
             }
@@ -145,10 +169,33 @@ public class NltiRequestServiceImpl implements NltiRequestService {
             return new NltiResponseV1(newRequestId, effectiveCorrelationId, resolvedSessionId, "ACCEPTED", null, null);
         } catch (Exception exception) {
             errorCount.increment();
+            telemetry.status = TELEMETRY_STATUS_ERROR;
+            telemetry.errorCode = exception.getClass().getSimpleName();
             throw exception;
         } finally {
             sample.stop(requestLatency);
+            telemetryPublisher.emit(
+                    effectiveCorrelationId,
+                    telemetry.sessionId,
+                    telemetry.requestId,
+                    telemetry.intentType,
+                    telemetry.riskLevel,
+                    telemetry.isWrite ? new WriteSignal(true, null, null) : null,
+                    Duration.ofNanos(System.nanoTime() - startedAtNanos).toMillis(),
+                    telemetry.status,
+                    telemetry.errorCode);
         }
+    }
+
+    /** Mutable accumulator for the telemetry fields {@link #submit} fills in as it progresses. */
+    private static final class TelemetryState {
+        private @Nullable UUID sessionId;
+        private @Nullable UUID requestId;
+        private @Nullable String intentType;
+        private @Nullable String riskLevel;
+        private boolean isWrite;
+        private String status = TELEMETRY_STATUS_SUCCESS;
+        private @Nullable String errorCode;
     }
 
     @SuppressWarnings("null")

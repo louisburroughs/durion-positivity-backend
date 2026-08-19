@@ -14,6 +14,27 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>Privacy: this event carries counts, enums, ids, and scores only. Raw permission codes,
  * customer PII, VINs, and full utterances must NOT be placed in this event (see design 4.3).
+ *
+ * <p><strong>Coverage.</strong> Two paths emit this event and they populate different subsets, so
+ * a consumer must treat an absent block as "not applicable to that path", never as a zero:
+ *
+ * <ul>
+ *   <li><em>Chat</em> ({@code SessionAgentManager}, {@code StreamingSessionAgentManager}) —
+ *       {@code routing}, {@code model}, {@code tools}, {@code rag.promptLayers}, {@code latency},
+ *       {@code outcome}, and {@code write.isWrite}. It has no NLTI session or request row, so
+ *       {@code sessionId} and {@code requestId} are null.
+ *   <li><em>NLTI</em> ({@code NltiRequestServiceImpl}, {@code NltiWritePlanService}) —
+ *       {@code sessionId}, {@code requestId}, {@code routing.intentType}, {@code routing.riskLevel},
+ *       the full {@code write} block, {@code latency.totalMs}, and {@code outcome}. This path runs
+ *       no model tier, prompt composition, RAG retrieval, or tool selection, so {@code model},
+ *       {@code rag}, and {@code tools} are omitted.
+ * </ul>
+ *
+ * <p>Three fields are still unpopulated by every emitter and must not be read as data:
+ * {@link Tools#rejectedPermissionCount} (tool permission gating happens in SQL, so the rejected set
+ * is never materialized in Java), {@link Rag#retrieved}, and {@link Quality}. They are retained
+ * rather than removed because v1 consumers already query them; see the GAP notes on the Gate 7
+ * dashboard panels.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record NltiRequestTelemetry(

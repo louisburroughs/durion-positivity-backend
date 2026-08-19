@@ -1,4 +1,4 @@
-package com.positivity.mcp.internal.service;
+package com.positivity.mcp.internal.security;
 
 import java.util.LinkedHashSet;
 import java.util.Set;

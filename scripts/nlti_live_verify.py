@@ -720,6 +720,23 @@ class TelemetryHarvester:
         hits[0]["_join"] = "correlationId"
         return hits[0]
 
+    def confirmation_outcome_by_correlation(self, correlation_id, start, end):
+        """#1397: the write-plan confirm/cancel record for this correlation id.
+
+        Submit and confirm share one correlation id (confirm reuses the request's), so both legs
+        land in the same query result — this selects the leg carrying write.confirmationOutcome
+        rather than taking whichever record Loki returned first, as by_correlation does.
+        """
+        hits = self._poll(start, end, str(correlation_id),
+                          lambda record: (record.get("correlationId") == str(correlation_id)
+                                          and tel_confirmation_outcome(record) is not None))
+        if not hits:
+            return None
+        # Latest wins: a plan can be superseded before it is confirmed on the same correlation id.
+        hits.sort(key=lambda record: record.get("_lokiTimestampNs", 0))
+        hits[-1]["_join"] = "correlationId"
+        return hits[-1]
+
     def transition_by_correlation(self, correlation_id, start, end):
         """Gate 2C: the dedicated `nlti.workflow.transition` event, joined by the X-Correlation-Id
         the harness sent on POST /v1/nlt/sessions/{id}/workflow-state."""
@@ -822,6 +839,18 @@ def tel_fallback(record):
 
 def tel_is_write(record):
     return ((record or {}).get("write") or {}).get("isWrite")
+
+
+def tel_confirmation_outcome(record):
+    return ((record or {}).get("write") or {}).get("confirmationOutcome")
+
+
+def tel_intent_type(record):
+    return ((record or {}).get("routing") or {}).get("intentType")
+
+
+def tel_risk_level(record):
+    return ((record or {}).get("routing") or {}).get("riskLevel")
 
 
 def tel_unsupported(record):
@@ -1823,6 +1852,25 @@ def plan_write_gate(ctx):
     return plans
 
 
+def expect_confirmation_outcome(ctx, suite, correlation, response, expected):
+    """#1397 acceptance criterion 2: the confirmation outcome must be observable outside the
+    `nlti_audit_event` table. `NltiWritePlanService` emits it on the telemetry stream as
+    `write.confirmationOutcome` and mirrors it onto the `nlt_write_plan_confirmation_count_total`
+    counter; this asserts the telemetry half, which is the one this harness can read."""
+    label = "Confirmation outcome observable outside the audit table"
+    record = ctx.harvester.confirmation_outcome_by_correlation(
+        correlation, response.started, response.ended)
+    if record is None:
+        suite.add("wg-telemetry-outcome", label, FAIL,
+                  "no nlti.request.telemetry record carried write.confirmationOutcome for this "
+                  f"correlationId (expected {expected}); since #1397 NltiWritePlanService emits "
+                  "one at every terminal confirmation decision")
+        return
+    actual = tel_confirmation_outcome(record)
+    suite.expect("wg-telemetry-outcome", label, actual == expected,
+                 f"write.confirmationOutcome={actual} (expected {expected})")
+
+
 def run_write_gate(ctx):
     gate, issue, title = SUITES["write-gate"]
     suite = SuiteResult("write-gate", gate, issue, title)
@@ -1931,15 +1979,20 @@ def run_write_gate(ctx):
                      f"targetTool={plan_payload.get('targetTool')} "
                      f"expected={target['expectedTool']}")
 
+    # #1397: the NLTI submit path emits nlti.request.telemetry, so an absent record is a real
+    # failure here rather than the documented product gap it used to be.
     telemetry = ctx.harvester.by_correlation(correlation, submit.started, submit.ended)
     if telemetry is None:
-        suite.skip("wg-telemetry", "Write signal present in telemetry",
-                   "no nlti.request.telemetry record carried this correlationId — the NLTI submit "
-                   "path does not emit telemetry today (only the two chat managers do)")
+        suite.add("wg-telemetry", "Write signal present in telemetry", FAIL,
+                  "no nlti.request.telemetry record carried this correlationId; since #1397 "
+                  "NltiRequestServiceImpl.submit emits one for every request — check that the "
+                  "server carries that change and that promtail is shipping the nlti.telemetry "
+                  "logger")
     else:
         suite.expect("wg-telemetry", "Write signal present in telemetry",
                      tel_is_write(telemetry) is True,
-                     f"write.isWrite={tel_is_write(telemetry)}")
+                     f"write.isWrite={tel_is_write(telemetry)} "
+                     f"intentType={tel_intent_type(telemetry)} riskLevel={tel_risk_level(telemetry)}")
 
     idempotency_key = plan_payload.get("idempotencyKey")
     if not ctx.args.allow_writes or not target:
@@ -1994,6 +2047,8 @@ def run_write_gate(ctx):
                      and any(str(t).startswith("EXECUTION") for t in types),
                      f"HTTP {getattr(audit, 'status', 'refused')} audit eventTypes={types} "
                      f"reader={auditor.name} correlationId={correlation}")
+        # #1397 acceptance criterion 2: the outcome must be readable without the audit table.
+        expect_confirmation_outcome(ctx, suite, correlation, confirm, "confirmed")
         if target.get("cleanupNote"):
             suite.notes.append(f"Write target cleanup: {target['cleanupNote']}")
 
@@ -2010,9 +2065,17 @@ def run_write_gate(ctx):
                          f"first HTTP {cancel.status or cancel.error}, "
                          f"repeat HTTP {getattr(again, 'status', 'refused')}; "
                          f"status={(cancel.json_body or {}).get('status')}")
+            # #1397 acceptance criterion 2, read-only half: a cancellation is a terminal
+            # confirmation outcome too, so this criterion is verifiable without --allow-writes.
+            expect_confirmation_outcome(ctx, suite, correlation, cancel, "cancelled")
     else:
         suite.skip("wg-cancel", "Preview can be cancelled and cancellation is idempotent",
                    "plan was confirmed in this run; cancelling a COMPLETE plan is a 409 by design")
+
+    if not any(check.id == "wg-telemetry-outcome" for check in suite.checks):
+        suite.skip("wg-telemetry-outcome",
+                   "Confirmation outcome observable outside the audit table",
+                   "neither a confirm nor a cancel ran in this configuration")
 
     # #1398 (closing the #1218 sign-off gap): create/update phrasings now classify as ACTION and
     # must reach the write gate. With a targetTool client context the probe must get a write-plan

@@ -66,6 +66,8 @@ class NltiSessionServiceTest {
     @Mock
     private Clock clock;
 
+    private final RecordingTelemetry telemetry = new RecordingTelemetry();
+
     private NltiRequestServiceImpl service;
 
     private SimpleMeterRegistry meterRegistry;
@@ -74,7 +76,13 @@ class NltiSessionServiceTest {
     void setUpSecurityContext() {
         meterRegistry = new SimpleMeterRegistry();
         service = new NltiRequestServiceImpl(
-                sessionRepository, requestRepository, intentParserService, writePlanService, clock, meterRegistry);
+                sessionRepository,
+                requestRepository,
+                intentParserService,
+                writePlanService,
+                telemetry.publisher(),
+                clock,
+                meterRegistry);
 
         UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(SUBJECT, null, List.of());
         auth.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, SUBJECT));

@@ -349,7 +349,7 @@
       "id": 19,
       "type": "timeseries",
       "title": "Tool candidates rejected for permissions (tools.rejectedPermissionCount)",
-      "description": "GAP: NltiRequestTelemetryFactory hardcodes Tools.rejectedPermissionCount=0, and PermissionAwareMetadataFilter logs its drop count only at DEBUG (deployed baseline is INFO per ADR-0046). The query is correct against the v1 schema; it reads 0 until the tool-selection path threads the reject count through.",
+      "description": "GAP: NltiRequestTelemetryFactory hardcodes Tools.rejectedPermissionCount=0. Tool permission gating runs in SQL (ToolMetadataRepository.findEnabledByPermissionsAndWorkflow), so the rejected candidates are never materialized in Java and there is no count to thread through; PermissionAwareMetadataFilter's DEBUG drop count is RAG documents, not tools, and must not be substituted here. The query is correct against the v1 schema and reads 0 until tool selection returns its rejected set \u2014 use the 403 panel above meanwhile.",
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 7, "w": 8, "x": 16, "y": 33 },
       "targets": [
@@ -448,7 +448,7 @@
       "id": 25,
       "type": "timeseries",
       "title": "Write-plan confirm / cancel outcomes by HTTP status",
-      "description": "The authoritative write-gate outcome signal available today. NltiExceptionHandler maps the write-plan failure modes onto distinct statuses: 404 WRITE_PLAN_NOT_FOUND, 409 WRITE_PLAN_CONFLICT / WRITE_PLAN_STALE, 410 WRITE_PLAN_EXPIRED, 403 permission re-check failure, 5xx WRITE_PLAN_EXECUTION_FAILED.",
+      "description": "Corroborating HTTP view of the write-gate endpoints \u2014 kept beside the telemetry outcome panel below rather than as its substitute (#1397). NltiExceptionHandler maps the write-plan failure modes onto distinct statuses: 404 WRITE_PLAN_NOT_FOUND, 409 WRITE_PLAN_CONFLICT / WRITE_PLAN_STALE, 410 WRITE_PLAN_EXPIRED, 403 permission re-check failure, 5xx WRITE_PLAN_EXECUTION_FAILED. It still answers something the outcome panel cannot: a confirm that passed the gate and then failed downstream reports outcome=confirmed with a 5xx here.",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 49 },
       "targets": [
@@ -465,7 +465,7 @@
       "id": 26,
       "type": "timeseries",
       "title": "Write-capable requests and plans created",
-      "description": "write.isWrite is emitted (as true) only when the request's candidate tools included a write-capable tool — the Gate 6 preview trigger. The plan-created series is the INFO log NltiWritePlanService emits after persisting a PENDING_CONFIRMATION plan. A widening gap between them means write intents are being detected but not turned into plans.",
+      "description": "write.isWrite is emitted by both paths: by the chat managers when the request's candidate tools included a write-capable tool, and (since #1397) by NltiRequestServiceImpl for every ACTION-classified NLTI submit \u2014 the Gate 6 preview trigger. The plan-created series is the INFO log NltiWritePlanService emits after persisting a PENDING_CONFIRMATION plan. A widening gap between them means write intents are being detected but not turned into plans.",
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 49 },
       "targets": [
@@ -487,7 +487,7 @@
       "id": 27,
       "type": "timeseries",
       "title": "Confirmation outcome mix (write.confirmationOutcome)",
-      "description": "GAP: NltiRequestTelemetryFactory always passes null for Write.confirmationOutcome and Write.planArgsProvenance — the confirm/cancel path records its outcomes in the nlti_audit_event ledger (outcome=confirmed|cancelled|expired|stale-data|superseded), not in the telemetry stream, and the ledger is a database table with no log or metric mirror. Until that is wired, take confirmation outcomes from the HTTP-status panel or from GET /v1/nlt/audit.",
+      "description": "Live since #1397: NltiWritePlanService emits an nlti.request.telemetry record carrying write.confirmationOutcome at every terminal confirmation decision (confirmed|cancelled|expired|stale-data|superseded), alongside the nlti_audit_event ledger row. The same outcomes are mirrored onto the nlt_write_plan_confirmation_count_total counter, tagged outcome \u2014 use that for alerting, since Prometheus alert rules cannot query Loki. GET /v1/nlt/audit remains the authoritative compliance record.",
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 56 },
       "targets": [

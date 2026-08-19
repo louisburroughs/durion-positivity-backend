@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.service;
 
+import com.positivity.mcp.internal.security.PermissionCodes;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.McpRoleResolver;
 import com.positivity.security.common.SecurityContextHelper;
