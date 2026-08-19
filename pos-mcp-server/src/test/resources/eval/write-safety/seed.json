@@ -62,6 +62,77 @@
       "assertions": { "idempotency_single_execution": true },
       "tags": ["idempotency"],
       "notes": "Second confirmation with same idempotency key returns original result, no second cancel. Confirm exact operationId vs pos-shop-manager openapi.yaml."
+    },
+    {
+      "fixture_id": "create-po-reaches-write-gate",
+      "utterance": "Create a purchase order for 10 oil filters.",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["order:purchase_order:create", "inventory:part:view"] },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "purchaseorders_createpurchaseorder",
+        "required_args": ["vendorId", "sku", "quantity"]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "plan_args_equal_executed_args": true,
+        "permission_recheck_at_execute": true
+      },
+      "tags": ["intent-classification"],
+      "notes": "#1398: the wg-intent-gap live-probe prompt. Create phrasings must classify as MEDIUM-risk ACTION and produce a write-plan preview — never the old UNKNOWN/plain-ACCEPTED dead end."
+    },
+    {
+      "fixture_id": "update-price-medium-risk",
+      "utterance": "Update the price of SKU BRK-9920 to 49.99.",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["pricing:price:update"] },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "MEDIUM",
+        "tool_id": "pricing_updateprice",
+        "required_args": ["sku", "price"]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "stale_data_forces_repreview": true,
+        "permission_recheck_at_execute": true
+      },
+      "tags": ["intent-classification", "stale-data"],
+      "notes": "#1398: update phrasing is a MEDIUM-risk ACTION even though 'price' is also a query indicator — a prompt that writes must reach the write gate, never resolve to a silent read. MEDIUM risk keeps the source-entity version stale-check at confirm."
+    },
+    {
+      "fixture_id": "additive-write-low-risk",
+      "utterance": "Add a secondary contact to customer C-1002.",
+      "actor": { "role": "ROLE_SERVICE_ADVISOR", "permission_codes": ["crm:contact:create", "crm:party:view"] },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "LOW",
+        "tool_id": "customers_addcontact",
+        "required_args": ["customerId", "contactName"]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "permission_recheck_at_execute": true
+      },
+      "tags": ["intent-classification"],
+      "notes": "#1398: purely additive verbs (add/register) are LOW-risk ACTIONs — still gated behind preview→confirm, but differentiated from mutating (MEDIUM) and destructive (HIGH) writes."
+    },
+    {
+      "fixture_id": "bulk-create-stays-high-risk",
+      "utterance": "Bulk create price overrides for all winter tires.",
+      "actor": { "role": "ROLE_LOCATION_MANAGER", "permission_codes": ["pricing:override:create"] },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "pricing_bulkcreateoverrides",
+        "required_args": ["skuFilter", "overridePrice"]
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "inferred_defaults_disclosed": true,
+        "permission_recheck_at_execute": true
+      },
+      "tags": ["intent-classification", "bulk"],
+      "notes": "#1398 drift guard: the 'bulk ' prefix outranks the create verb — bulk writes stay HIGH risk regardless of verb class, so HIGH-risk invariants (no inferred defaults) still apply."
     }
   ]
 }

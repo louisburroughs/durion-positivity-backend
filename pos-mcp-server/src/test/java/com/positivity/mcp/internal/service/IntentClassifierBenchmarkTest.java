@@ -21,9 +21,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Benchmark tests verifying that {@link IntentParserServiceImpl} correctly
- * classifies a representative set of POS-domain utterances across three
- * categories: QUERY/READY (read-only), NEEDS_CLARIFICATION (ambiguous), and
- * HIGH-risk ACTION (destructive/bulk).
+ * classifies a representative set of POS-domain utterances across five
+ * categories: QUERY/READY (read-only), NEEDS_CLARIFICATION (ambiguous),
+ * HIGH-risk ACTION (destructive/bulk), MEDIUM-risk ACTION (create/update,
+ * #1398), and LOW-risk ACTION (additive, #1398).
  *
  * Issue: NLTI-002
  */
@@ -100,7 +101,7 @@ class IntentClassifierBenchmarkTest {
                 Arguments.of("help me with orders", "UNKNOWN", "NEEDS_CLARIFICATION", "LOW"),
                 Arguments.of("I need to do something with tires", "UNKNOWN", "NEEDS_CLARIFICATION", "LOW"),
                 Arguments.of("can you process the request", "UNKNOWN", "NEEDS_CLARIFICATION", "LOW"),
-                Arguments.of("update the records", "UNKNOWN", "NEEDS_CLARIFICATION", "LOW"),
+                Arguments.of("sort out the records from yesterday", "UNKNOWN", "NEEDS_CLARIFICATION", "LOW"),
                 Arguments.of("fix it", "UNKNOWN", "NEEDS_CLARIFICATION", "LOW"));
     }
 
@@ -113,6 +114,39 @@ class IntentClassifierBenchmarkTest {
                 Arguments.of("delete all workorders from last year", "ACTION", "NEEDS_CLARIFICATION", "HIGH"),
                 Arguments.of("bulk close all open invoices", "ACTION", "NEEDS_CLARIFICATION", "HIGH"),
                 Arguments.of("remove all customer records", "ACTION", "NEEDS_CLARIFICATION", "HIGH"));
+    }
+
+    /**
+     * Create/update POS utterances (#1398) that must classify as
+     * intentType=ACTION with MEDIUM risk so they reach the Gate 6 write gate;
+     * previously these dead-ended as UNKNOWN.
+     */
+    static Stream<Arguments> mediumRiskActionUtterances() {
+        return Stream.of(
+                Arguments.of("Create a purchase order for 10 oil filters", "ACTION", "NEEDS_CLARIFICATION", "MEDIUM"),
+                Arguments.of("update the records", "ACTION", "NEEDS_CLARIFICATION", "MEDIUM"),
+                Arguments.of("cancel appointment APPT-5512", "ACTION", "NEEDS_CLARIFICATION", "MEDIUM"),
+                Arguments.of(
+                        "adjust on-hand quantity for SKU BRK-9920 by -2", "ACTION", "NEEDS_CLARIFICATION", "MEDIUM"),
+                Arguments.of(
+                        "set the tax mode for this location to inclusive", "ACTION", "NEEDS_CLARIFICATION", "MEDIUM"),
+                Arguments.of(
+                        "reschedule appointment APPT-5512 to tomorrow at 9am",
+                        "ACTION",
+                        "NEEDS_CLARIFICATION",
+                        "MEDIUM"));
+    }
+
+    /**
+     * Purely additive POS utterances (#1398) that must classify as
+     * intentType=ACTION with LOW risk — still gated, but differentiated from
+     * mutating and destructive writes.
+     */
+    static Stream<Arguments> lowRiskActionUtterances() {
+        return Stream.of(
+                Arguments.of(
+                        "add a cabin air filter line to workorder WO-1042", "ACTION", "NEEDS_CLARIFICATION", "LOW"),
+                Arguments.of("register a new Silverado for ACME Fleet", "ACTION", "NEEDS_CLARIFICATION", "LOW"));
     }
 
     // ─── Benchmark tests ─────────────────────────────────────────────────────
@@ -182,6 +216,50 @@ class IntentClassifierBenchmarkTest {
     void benchmark_highRisk_shouldClassifyCorrectly(
             String utterance, String expectedType, String expectedStatus, String expectedRisk) {
         // Issue NLTI-002: AC2 benchmark — 3 destructive/bulk POS utterances → ACTION/NEEDS_CLARIFICATION/HIGH
+        IntentV1 result = service.parse(utterance, SESSION_ID, CORRELATION_ID);
+
+        assertThat(result.intentType()).isEqualTo(expectedType);
+        assertThat(result.status()).isEqualTo(expectedStatus);
+        assertThat(result.riskLevel()).isEqualTo(expectedRisk);
+    }
+
+    /**
+     * Verifies that create/update POS utterances are flagged as
+     * ACTION / NEEDS_CLARIFICATION / MEDIUM risk (#1398 benchmark).
+     *
+     * @param utterance      source natural-language text
+     * @param expectedType   expected intentType ("ACTION")
+     * @param expectedStatus expected status ("NEEDS_CLARIFICATION")
+     * @param expectedRisk   expected riskLevel ("MEDIUM")
+     */
+    @ParameterizedTest(name = "[{index}] ''{0}'' → {1}/{2}/{3}")
+    @MethodSource("mediumRiskActionUtterances")
+    @DisplayName("Benchmark: create/update utterances classify as MEDIUM-risk ACTION")
+    void benchmark_mediumRiskAction_shouldClassifyCorrectly(
+            String utterance, String expectedType, String expectedStatus, String expectedRisk) {
+        // Issue #1398 — create/update phrasings must reach the Gate 6 write gate as ACTION
+        IntentV1 result = service.parse(utterance, SESSION_ID, CORRELATION_ID);
+
+        assertThat(result.intentType()).isEqualTo(expectedType);
+        assertThat(result.status()).isEqualTo(expectedStatus);
+        assertThat(result.riskLevel()).isEqualTo(expectedRisk);
+    }
+
+    /**
+     * Verifies that purely additive POS utterances are flagged as
+     * ACTION / NEEDS_CLARIFICATION / LOW risk (#1398 benchmark).
+     *
+     * @param utterance      source natural-language text
+     * @param expectedType   expected intentType ("ACTION")
+     * @param expectedStatus expected status ("NEEDS_CLARIFICATION")
+     * @param expectedRisk   expected riskLevel ("LOW")
+     */
+    @ParameterizedTest(name = "[{index}] ''{0}'' → {1}/{2}/{3}")
+    @MethodSource("lowRiskActionUtterances")
+    @DisplayName("Benchmark: additive utterances classify as LOW-risk ACTION")
+    void benchmark_lowRiskAction_shouldClassifyCorrectly(
+            String utterance, String expectedType, String expectedStatus, String expectedRisk) {
+        // Issue #1398 — additive writes are gated too, at LOW risk
         IntentV1 result = service.parse(utterance, SESSION_ID, CORRELATION_ID);
 
         assertThat(result.intentType()).isEqualTo(expectedType);

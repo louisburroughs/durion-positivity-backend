@@ -137,14 +137,14 @@ TELEMETRY_EVENT_TYPE = "nlti.request.telemetry"
 # emitted on the same `nlti.telemetry` logger and keyed by the caller's X-Correlation-Id.
 TRANSITION_EVENT_TYPE = "nlti.workflow.transition"
 
-# 2026-08-19 live-run defect 3: IntentParserServiceImpl:40 classifies ACTION only when risk is
-# HIGH, and HIGH means the prompt contains "delete"/"remove" or starts with "bulk ". Create/update
-# phrasings are UNKNOWN -> no write plan -> planId=None, so the write-gate ACTION probe must use a
-# delete-verb phrasing to reach the gate at all. --write-gate-action-prompt overrides this default;
+# The default ACTION probe keeps a delete-verb phrasing (HIGH risk exercises the strictest gate
+# invariants, e.g. inferred-default rejection). --write-gate-action-prompt overrides this default;
 # a --write-target prompt takes precedence over both.
 DEFAULT_WRITE_GATE_ACTION_PROMPT = "Delete the draft purchase order PO-NLTI-PROBE-001"
-# wg-intent-gap ALWAYS submits this create-style prompt to document, on every run, that
-# create/update phrasings cannot reach the write gate (#1218 product gap; see run_write_gate).
+# wg-intent-gap ALWAYS submits this create-style prompt. #1398 closed the #1218 intent-parser gap
+# (create/update phrasings now classify as ACTION), so the probe asserts the NEW contract: a
+# create prompt must reach the write gate — a write-plan preview when a targetTool is supplied,
+# NEEDS_CLARIFICATION (missing targetTool) otherwise — and never the plain ACCEPTED envelope.
 WRITE_GATE_INTENT_GAP_PROMPT = "Create a purchase order for 10 oil filters"
 
 # Default probe prompts. Deliberately read-only phrasings for everything except the router's write
@@ -1801,9 +1801,9 @@ def plan_write_gate(ctx):
     correlation = "<generated-uuid>"
     intent_gap = ctx.plan_nlti_submit(persona, WRITE_GATE_INTENT_GAP_PROMPT, "<generated-uuid>")
     intent_gap.label = "wg-intent-gap"
-    intent_gap.note = ("wg-intent-gap probe — create-style prompt; documents on every run that "
-                       "IntentParserServiceImpl:40 never classifies create/update phrasings as "
-                       "ACTION (#1218 product gap)")
+    intent_gap.note = ("wg-intent-gap probe — create-style prompt; asserts the #1398 contract "
+                       "that create/update phrasings classify as ACTION and reach the write "
+                       "gate (plan preview or NEEDS_CLARIFICATION, never plain ACCEPTED)")
     plans = [
         ctx.plan_login(persona),
         ctx.plan_nlti_submit(persona, prompt, correlation, client_context=client_context),
@@ -2014,19 +2014,18 @@ def run_write_gate(ctx):
         suite.skip("wg-cancel", "Preview can be cancelled and cancellation is idempotent",
                    "plan was confirmed in this run; cancelling a COMPLETE plan is a 409 by design")
 
-    # 2026-08-19 live-run defect 3 / #1218 sign-off evidence: create/update prompts can never
-    # reach the write gate. IntentParserServiceImpl:40 (HIGH_RISK_VERBS = {"delete", "remove"})
-    # classifies ACTION only when risk is HIGH ("delete"/"remove" anywhere in the prompt or a
-    # "bulk " prefix); create-style prompts parse as UNKNOWN -> plain ACCEPTED envelope, no write
-    # plan. This check ALWAYS runs and is EXPECTED to FAIL until the parser gains create/update
-    # coverage — do not silence it by changing the probe prompt.
+    # #1398 (closing the #1218 sign-off gap): create/update phrasings now classify as ACTION and
+    # must reach the write gate. With a targetTool client context the probe must get a write-plan
+    # preview (planId); without one it must get NEEDS_CLARIFICATION (missing targetTool). Either
+    # way the plain ACCEPTED envelope — the old UNKNOWN dead-end — is now a real FAIL.
     gap_correlation = uuid7ish()
-    gap_plan = ctx.plan_nlti_submit(persona, WRITE_GATE_INTENT_GAP_PROMPT, gap_correlation)
+    gap_plan = ctx.plan_nlti_submit(persona, WRITE_GATE_INTENT_GAP_PROMPT, gap_correlation,
+                                    client_context=client_context)
     gap_plan.label = "wg-intent-gap"
-    gap_plan.note = ("wg-intent-gap probe — create-style prompt; documents the #1218 "
-                     "intent-parser gap")
+    gap_plan.note = ("wg-intent-gap probe — create-style prompt; asserts the #1398 contract "
+                     "that create/update phrasings reach the write gate")
     gap = ctx.runner.send(gap_plan)
-    gap_label = "Create-style prompts can reach the write gate (#1218 intent-parser gap)"
+    gap_label = "Create-style prompts reach the write gate (#1398 intent-parser coverage)"
     if gap is None:
         suite.skip("wg-intent-gap", gap_label, "request refused by the safety gate")
     elif not isinstance(gap.json_body, dict):
@@ -2035,24 +2034,30 @@ def run_write_gate(ctx):
                   "body for the create-style probe")
     else:
         gap_body = gap.json_body
+        gap_status = gap_body.get("status")
         gap_result = gap_body.get("result") if isinstance(gap_body.get("result"), dict) else {}
         gap_payload = (gap_result if gap_result.get("planId")
                        else (gap_body.get("writePlan") or {}))
+        gap_meta = gap_body.get("meta") if isinstance(gap_body.get("meta"), dict) else {}
+        if client_context:
+            # A targetTool was supplied, so the create prompt must yield a plan preview.
+            gap_ok = gap_status == "PENDING_CONFIRMATION" and bool(gap_payload.get("planId"))
+        else:
+            # Bare submit: reaching the gate front door means being asked for the missing
+            # targetTool, never the plain ACCEPTED envelope of an UNKNOWN intent.
+            gap_ok = (gap_status == "NEEDS_CLARIFICATION"
+                      and gap_meta.get("missing") == "targetTool")
         suite.expect(
-            "wg-intent-gap", gap_label,
-            bool(gap_payload.get("planId")),
-            f"'{WRITE_GATE_INTENT_GAP_PROMPT}' -> HTTP {gap.status} "
-            f"status={gap_body.get('status')} planId={gap_payload.get('planId')} — "
-            "IntentParserServiceImpl:40 classifies ACTION only for HIGH risk (prompt contains "
-            "'delete'/'remove' or starts with 'bulk '), so create/update prompts return the "
-            "plain ACCEPTED envelope and can never produce a write-plan preview "
-            "(#1218 product gap)")
-    suite.notes.append(
-        "wg-intent-gap is EXPECTED to FAIL until IntentParserServiceImpl classifies create/update "
-        "phrasings as ACTION; it documents the #1218 product gap on every run and feeds the gate "
-        "sign-off discussion. The wg-action probe uses a delete-verb prompt "
-        "(--write-gate-action-prompt) because that is the only phrasing the parser routes to the "
-        "write gate today.")
+            "wg-intent-gap", gap_label, gap_ok,
+            f"'{WRITE_GATE_INTENT_GAP_PROMPT}' -> HTTP {gap.status} status={gap_status} "
+            f"planId={gap_payload.get('planId')} meta={gap_meta or None} "
+            f"(targetTool {'supplied' if client_context else 'omitted'}; expected "
+            f"{'PENDING_CONFIRMATION with planId' if client_context else 'NEEDS_CLARIFICATION with missing=targetTool'})")
+        if gap_ok and not client_context:
+            suite.notes.append(
+                "wg-intent-gap ran without a --write-target clientContext, so it verified the "
+                "NEEDS_CLARIFICATION half of the #1398 contract only; pass --write-target to "
+                "also verify the create-prompt plan preview (planId) end to end.")
 
     # The fail-closed persona must LACK the target tool's permission and differ from the actor.
     # It is config-selectable ("failClosedActor") because grants move: #1384 gave LOCATION_MANAGER
