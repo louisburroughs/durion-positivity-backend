@@ -133,10 +133,25 @@ list — repeated here as the checklist):
 
 - **A.** Alpha access — session gets it directly, or someone else runs the harness and pastes
   output?
-- **B.** Tier models for #1216 — which models for `mcp.model.simple`/`complex`, pulled on alpha
-  Ollama? (leaning: `simple=qwen3:8b`, `complex` left blank)
-- **C.** #1218 write target — which downstream service/action, and is dirtying alpha data
-  acceptable?
+- **B.** ~~Tier models for #1216~~ **RESOLVED 2026-08-19**: `MCP_MODEL_SIMPLE=gpt-oss:20b`,
+  `MCP_MODEL_COMPLEX` unset (default executor `gpt-oss:120b` is already the complex-class model).
+  Both tiers on the ollama.com cloud backend — chat does NOT run on alpha's local Ollama (that
+  container serves embeddings only), so the plan's "pulled on alpha Ollama" framing was wrong; a
+  local simple model would have measured CPU inference, not tiering. All three models
+  (router `qwen3.5:397b`, both tiers) verified serving HTTP 200 on the rotated key. Set in
+  `/opt/durion/alpha/.env`, live in the container.
+- **C.** ~~#1218 write target~~ **RESOLVED 2026-08-19**: seed-then-delete of a probe MCP system
+  prompt via the discovered tool `prompts_deletesystemprompt` (pos-mcp-server
+  `DELETE /v1/prompts/{id}`). Rationale: the discovered tool arrives already permission-bound
+  (pos-mcp-server emits `x-required-permissions`; pos-security-service cannot, since it does not
+  depend on pos-security-common — its ops would need a manual tool-permission grant, an extra
+  registry mutation); the actor already holds `mcp:system_prompt:create/delete`; a probe-named
+  prompt row is referenced by nothing and lives in no Kafka-enabled domain; and the whole
+  preview→confirm→execute loop stays inside the service under test. Dirtying: acceptable only as
+  self-seeded data — the harness `seed` block creates the probe record and the gated delete
+  removes it (net-zero). Config: `scripts/fixtures/nlti-write-target.example.json`. Runner-up
+  (documented, not chosen): role create/delete on pos-security-service, rejected for the
+  tool-grant side effect.
 - **D.** #1215 — seed `PROCESSING_RETURN` (which tools?) or except it in the sign-off; does
   `routing.workflowState` + the `NLTI_SESSION_WORKFLOW_STATE_SET` audit event satisfy "workflow
   transitions in telemetry," or is a dedicated transition event wanted?
