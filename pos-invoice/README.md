@@ -71,15 +71,17 @@ capability. There are two ways to obtain it:
 - **Service advisor naming a manager (employee-number approval).** The named manager
   must hold the `invoice:finalize:override` **authority**. The permission is registered
   at startup from `permissions.yaml`, and role grants live in pos-security's
-  `role_permissions` table. **No role holds it by default** — pos-security's baseline seed
-  (`R__seed_role_permissions.sql`) deliberately does not grant it to any role, including
-  `ADMIN`. For this path, an admin must, after deploy:
-  1. Grant `invoice:finalize:override` to the manager/admin roles via the pos-security
-     role-permission admin API
-     (`PUT /v1/roles/{roleId}/permissions/invoice:finalize:override`).
-  2. Ensure managers are assigned those roles via the **user-role** admin API (the
-     `person-decision` check resolves authorities through `User.roles`, not
-     `role_assignments`).
+  `role_permissions` table. Since #1374, pos-security's baseline seed
+  (`R__seed_role_permissions.sql`) grants it to the manager roles —
+  `ACCOUNT_MANAGER`, `GENERAL_MANAGER`, `LOCATION_MANAGER`, `MANAGER`, and
+  `SHOP_MANAGER` — so no manual grant is needed after deploy. The only remaining
+  setup is ensuring managers are assigned one of those roles via the **user-role**
+  admin API (the `person-decision` check resolves authorities through `User.roles`,
+  not `role_assignments`). Additional roles can still be granted the permission via
+  the role-permission admin API
+  (`PUT /v1/roles/{roleId}/permissions/invoice:finalize:override`), but keep the
+  holder set small: this permission is the control that caps what a service advisor
+  can finalize by naming an absent manager.
 
 ## Dependencies
 

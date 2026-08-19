@@ -3,10 +3,12 @@ package com.positivity.securityservice.migration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.securityservice.service.AuthorizationService;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -51,6 +53,9 @@ class RolePermissionSeedIT {
 
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private AuthorizationService authorizationService;
 
     /**
      * The seed migration for {@code admin.alpha} interpolates this placeholder. It is a
@@ -164,6 +169,41 @@ class RolePermissionSeedIT {
     }
 
     @Test
+    @DisplayName("manager-approval elevation: a manager person resolves invoice:finalize:override, "
+            + "a service advisor does not")
+    void managerApprovalElevation_resolvesFinalizeOverrideThroughPersonDecision() {
+        // The grant half: exactly the manager roles agreed on #1374 hold the permission.
+        for (String role :
+                List.of("ACCOUNT_MANAGER", "GENERAL_MANAGER", "LOCATION_MANAGER", "MANAGER", "SHOP_MANAGER")) {
+            assertThat(grantedTo(role)).as("grants for %s", role).contains("invoice:finalize:override");
+        }
+        assertThat(grantedTo("SERVICE_ADVISOR"))
+                .as("the permission caps what a service advisor can finalize; the advisor must not hold it")
+                .doesNotContain("invoice:finalize:override");
+
+        // The resolution half, end to end: pos-invoice's employee-number approval flow calls
+        // GET /v1/users/authorization/person-decision, which lands on
+        // AuthorizationService.authorizePerson and resolves
+        // users.person_id -> user_roles -> roles -> role_permissions -> permissions.
+        // Run that real code path against the seeded baseline for a manager and a
+        // non-manager, so the flow cannot silently regress to "no role holds it" (#1374).
+        UUID managerPersonId = UUID.fromString("01990010-0000-7000-8000-000000000001");
+        UUID advisorPersonId = UUID.fromString("01990010-0000-7000-8000-000000000002");
+        insertUserWithRole("it.elevation.manager", managerPersonId, "LOCATION_MANAGER");
+        insertUserWithRole("it.elevation.advisor", advisorPersonId, "SERVICE_ADVISOR");
+        try {
+            assertThat(authorizationService.authorizePerson(managerPersonId, "invoice:finalize:override"))
+                    .isEqualTo(AuthorizationService.Decision.ALLOW);
+            assertThat(authorizationService.authorizePerson(advisorPersonId, "invoice:finalize:override"))
+                    .isEqualTo(AuthorizationService.Decision.DENY);
+        } finally {
+            jdbc().update("DELETE FROM user_roles WHERE user_id IN "
+                    + "(SELECT id FROM users WHERE username IN ('it.elevation.manager', 'it.elevation.advisor'))");
+            jdbc().update("DELETE FROM users WHERE username IN ('it.elevation.manager', 'it.elevation.advisor')");
+        }
+    }
+
+    @Test
     @DisplayName("a user holding only an ungranted role resolves no permissions")
     void userWithOnlyUngrantedRole_failsClosed() {
         // Every seeded role now carries the assistant entrypoints, so fail-closed has to be
@@ -179,6 +219,19 @@ class RolePermissionSeedIT {
                 + "WHERE u.username = 'ungranted.user' AND r.name = 'IT_UNGRANTED_ROLE'");
 
         assertThat(effectivePermissionsOf("ungranted.user")).isEmpty();
+    }
+
+    private void insertUserWithRole(String username, UUID personId, String roleName) {
+        jdbc().update(
+                        "INSERT INTO users (id, username, password, enabled, person_id) "
+                                + "VALUES (gen_random_uuid(), ?, 'x', true, ?)",
+                        username,
+                        personId);
+        jdbc().update(
+                        "INSERT INTO user_roles (user_id, role_id) "
+                                + "SELECT u.id, r.id FROM users u, roles r WHERE u.username = ? AND r.name = ?",
+                        username,
+                        roleName);
     }
 
     private JdbcTemplate jdbc() {

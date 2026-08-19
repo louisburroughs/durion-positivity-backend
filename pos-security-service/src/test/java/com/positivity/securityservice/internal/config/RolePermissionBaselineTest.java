@@ -295,6 +295,24 @@ class RolePermissionBaselineTest {
     }
 
     @Test
+    @DisplayName("invoice:finalize:override is held by exactly the manager roles agreed on #1374")
+    void finalizeOverrideIsHeldByExactlyTheAgreedManagerRoles() {
+        Set<String> holders = seededGrants.entrySet().stream()
+                .filter(entry -> entry.getValue().contains("invoice:finalize:override"))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toCollection(TreeSet::new));
+
+        // pos-invoice's employee-number approval flow resolves the named manager's
+        // authority through role_permissions, so an empty holder set silently breaks
+        // manager-approval elevation (#1374). Equality rather than containment: the
+        // permission caps what a service advisor can finalize, so widening the set is
+        // as much a regression as losing it.
+        assertThat(holders)
+                .as("roles holding invoice:finalize:override")
+                .containsExactly("ACCOUNT_MANAGER", "GENERAL_MANAGER", "LOCATION_MANAGER", "MANAGER", "SHOP_MANAGER");
+    }
+
+    @Test
     @DisplayName("ADMIN holds both tool permissions")
     void adminHoldsToolViewAndManage() {
         assertThat(seededGrants.get("ADMIN")).contains("mcp:tool:view", "mcp:tool:manage");
