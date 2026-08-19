@@ -37,7 +37,7 @@
       "method": "POST",
       "path": "promotions/offers",
       "body": {
-        "promoCode": "NLTI-PROBE-1218",
+        "promoCode": "NLTI-PROBE-{runId}",
         "name": "NLTI write-gate verification probe (#1218)",
         "description": "Synthetic promotion created by nlti_live_verify.py; safe to ignore or delete.",
         "discountType": "FIXED_INVOICE",
@@ -63,5 +63,5 @@
       "route": "price"
     }
   ],
-  "cleanupNote": "The gated delete removes the rule; the probe offer remains (pos-price exposes no delete-offer endpoint). It is inert: 0.01 fixed discount, usageLimit 1, a one-day far-future window, and a promoCode nobody knows. If desired, deactivate or remove it directly in pos_price_db. An aborted run between seeds leaves the offer with one never-matching CAMPAIGN_CODE rule - equally inert."
+  "cleanupNote": "The gated delete removes the rule; the probe offer remains (pos-price exposes no delete-offer endpoint). It is inert: 0.01 fixed discount, usageLimit 1, a one-day far-future window, and a per-run promoCode (NLTI-PROBE-<timestamp>) nobody knows. If desired, deactivate or remove it directly in pos_price_db. An aborted run between seeds leaves the offer with one never-matching CAMPAIGN_CODE rule - equally inert."
 }
