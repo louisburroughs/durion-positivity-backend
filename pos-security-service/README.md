@@ -59,8 +59,15 @@ this way — the seed only inserts — so removing a capability means a `DELETE`
 API, or a versioned migration.
 
 `RolePermissionBaselineTest` parses the seed and pins its contents;
-`role-authority-legacy-baseline.tsv` is the exact expansion the retired hardcoded switch
-produced, so any drift from the historical grant set fails the build.
+`role-authority-legacy-baseline.tsv` is the expansion the retired hardcoded switch produced for
+the roles that can actually be assigned, so any drift from the historical grant set fails the
+build. It also asserts that every role the seed grants to is created by a migration — granting to
+a role that does not exist yet aborts startup, because the join resolves nothing and the seed's
+own assertion raises.
+
+Note the ordering trap this guards against: `RoleInitializer` creates `GENERAL_MANAGER` and
+`MANAGER` from Java, but it is an `@PostConstruct` bean and runs *after* Flyway. The seed
+therefore creates those two roles itself rather than relying on bean lifecycle.
 
 ### Role policy
 
@@ -68,7 +75,8 @@ produced, so any drift from the historical grant set fails the build.
 | --- | --- |
 | `ADMIN` | All domains. The intentional blast-radius role. |
 | `SYSTEM_ADMINISTRATOR` | **Security and admin surface only** — `security:*` plus `mcp:chat:execute`. Deliberately *not* a superuser: it holds no accounting, catalog, workorder, inventory, or shop authority, and it does **not** auto-acquire newly registered permissions. Widening it is an explicit edit to the seed. |
-| `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN`, `DISPATCHER`, `ACCOUNTING_ASSOCIATE`, `ACCOUNT_MANAGER`, and the CRM/accounting personas | Least privilege, scoped to the role's job function. |
+| `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN`, `DISPATCHER`, `ACCOUNTING_ASSOCIATE`, `ACCOUNT_MANAGER`, `MANAGER`, `GENERAL_MANAGER` | Least privilege, scoped to the role's job function. |
+| `ACCOUNTANT`, `AP_CLERK`, `CONTROLLER`, `CSR`, `FLEET_MANAGER`, `GL_ANALYST` | **Not granted, and not created.** The retired hardcoded switch expanded these, but no migration or initializer creates the role, and `user_roles` / `role_assignments` are foreign-keyed to `roles(id)` — so no user could ever hold one. They were unreachable branches, documentation personas rather than security roles. To make one real, create the role first, then grant it. |
 | `CUSTOMER`, `SELF_SERVICE_CUSTOMER`, `SHOP_MANAGER`, `SECURITY_ADMIN`, `READ_ONLY_SCHEDULER`, `INVENTORY_LEAD`, `INVENTORY_MANAGER`, `INVENTORY_CONTROLLER` | No grants. Seeded as identity only; granting them capability is a product decision. |
 
 ### Role grants vs. role assignments

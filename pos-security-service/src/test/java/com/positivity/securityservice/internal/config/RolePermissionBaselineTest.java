@@ -6,6 +6,8 @@ import com.positivity.securityservice.internal.enums.PermissionCode;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -52,8 +54,27 @@ class RolePermissionBaselineTest {
     private static final Pattern PERMISSION_ROW =
             Pattern.compile("^\\s*\\('([^']+)', '([^']*)', '([^']*)', '([^']+)', (\\d+)\\),?$");
 
-    /** {@code ('ROLE_NAME', 'domain:resource:action'),} — a role grant row. */
-    private static final Pattern GRANT_ROW = Pattern.compile("^\\s*\\('([^']+)', '([^']+)'\\),?$");
+    /**
+     * {@code ('ROLE_NAME', 'domain:resource:action'),} — a role grant row.
+     *
+     * <p>The permission half must be colon-bearing and space-free so this cannot also match the
+     * {@code ('ROLE_NAME', 'description')} rows in the seed's role-creation block, whose second
+     * value is prose.
+     */
+    private static final Pattern GRANT_ROW =
+            Pattern.compile("^\\s*\\('([A-Z][A-Z_]+)', '([a-zA-Z][a-zA-Z0-9_.-]*(?::[a-zA-Z0-9_.-]+)+)'\\),?$");
+
+    /** Directory holding the Flyway migrations, relative to the module root. */
+    private static final Path MIGRATIONS = Path.of("src/main/resources/db/migration");
+
+    /**
+     * Roles the retired hardcoded switch expanded that no migration and no runtime initializer
+     * ever creates. Both {@code user_roles} and {@code role_assignments} are foreign-keyed to
+     * {@code roles(id)}, so no user could hold one — they were unreachable branches, and their
+     * grants are deliberately not carried into the baseline.
+     */
+    private static final Set<String> UNREACHABLE_LEGACY_ROLES =
+            Set.of("ACCOUNTANT", "AP_CLERK", "CONTROLLER", "CSR", "FLEET_MANAGER", "GL_ANALYST");
 
     /** Roles that are seeded as identity only and intentionally carry no grants. */
     private static final Set<String> INTENTIONALLY_UNGRANTED = Set.of(
@@ -208,6 +229,50 @@ class RolePermissionBaselineTest {
         Set<String> unique = new LinkedHashSet<>(rawGrantRows);
 
         assertThat(rawGrantRows).hasSameSizeAs(unique);
+    }
+
+    @Test
+    @DisplayName("every role granted to exists by the time the seed runs")
+    void everyGrantedRoleIsCreatableAtMigrationTime() throws IOException {
+        Set<String> creatable = new TreeSet<>();
+
+        // Roles created by the other migrations, plus the ones this seed creates itself.
+        //
+        // Each statement is bounded at its terminating semicolon rather than by a character
+        // window. Under-reading would fail a correct migration whose VALUES list is long;
+        // over-reading is worse, because running past the statement into this file's own grant
+        // block would harvest the role names out of ('ADMIN', 'crm:party:view') rows and the
+        // guard would vacuously pass. "INSERT INTO roles" does not prefix-match
+        // "INSERT INTO role_permissions", so the grant block is not picked up as a source.
+        Pattern quotedRoleName = Pattern.compile("'([A-Z][A-Z_]{2,})'");
+        try (var files = Files.list(MIGRATIONS)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".sql")).toList()) {
+                String body = Files.readString(file);
+                int from = body.indexOf("INSERT INTO roles");
+                while (from >= 0) {
+                    int end = body.indexOf(';', from);
+                    Matcher name = quotedRoleName.matcher(body.substring(from, end < 0 ? body.length() : end));
+                    while (name.find()) {
+                        creatable.add(name.group(1));
+                    }
+                    from = body.indexOf("INSERT INTO roles", from + 1);
+                }
+            }
+        }
+
+        assertThat(creatable).as("no role-creating migration found").isNotEmpty();
+        assertThat(seededGrants.keySet())
+                .as("granting to a role no migration creates aborts startup: the JOIN resolves "
+                        + "nothing and the seed's own assertion raises. RoleInitializer runs "
+                        + "@PostConstruct, i.e. after Flyway, so roles it creates do not count "
+                        + "unless this seed creates them too.")
+                .isSubsetOf(creatable);
+    }
+
+    @Test
+    @DisplayName("does not grant to the legacy roles nothing can ever assign")
+    void doesNotGrantToUnreachableLegacyRoles() {
+        assertThat(seededGrants.keySet()).doesNotContainAnyElementsOf(UNREACHABLE_LEGACY_ROLES);
     }
 
     private static String readResource(String name) throws IOException {
