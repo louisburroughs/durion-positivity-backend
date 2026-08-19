@@ -198,7 +198,8 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Gate 1 sign-off
 
-- Metrics filled: [ ] (answer-quality eval needs live stack) · Decision: **HOLD** (2 items pending) · Close-out tracked → #1213
+- Metrics filled: [ ] · Decision: **HOLD — live prompt-layer emission verified 2026-08-19 (below); remaining: metrics table + sign-off approval (decision G)** · Close-out tracked → #1213
+- **2026-08-19 — live persona run on alpha (#1213, harness `nlti_live_verify.py --suite persona`): PASS, 17/17 checks, telemetry joined by correlation id (0 fallback joins).** Four personas (marcus.webb/SYSTEM_ADMINISTRATOR, diana.rowe/LOCATION_MANAGER, terrence.blake/DISPATCHER, olivia.chen/ACCOUNTING_ASSOCIATE) each completed a chat turn HTTP 200; `rag.promptLayers=[BASE, ROLE, TOOL_USE, WRITE_GATE]` emitted for every persona with BASE+ROLE asserted; `actor.permissionCodeCount` correctly attributed per persona (15/33/86/18). expectsPermissions/lacksPermissions asserted as endpoint probes (403 required on lacks). _ev: /tmp/nlti-verify2.{json,md} on the alpha host; prerequisite fix PR #1382 (X-Correlation-Id filter)._
 - Exceptions: n/a · Approver/date: pending · Rollback (swap assemble→resolvePrompt in both managers) verified: [x] documented
 - 2026-08-07: assembly carried through the Spring AI migration (PR #987); live answer-quality eval still open, no dedicated tracker (see Re-baseline table).
 
@@ -264,7 +265,8 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Gate 2A sign-off
 
-- Metrics filled: [ ] (live equivalence run deferred) · Decision: **HOLD** (live equivalence pending) · Close-out tracked → #1214
+- Metrics filled: [ ] · Decision: **HOLD — live equivalence verified 2026-08-19 (below, 96/96); remaining: metrics table + sign-off approval (decision G)** · Close-out tracked → #1214
+- **2026-08-19 — live blocking-vs-streaming equivalence on alpha (#1214, `--suite equivalence`): PASS, 96/96 checks, all telemetry joined by correlation id.** Same request through `/v1/mcp/chat` and `/v1/mcp/chat/stream` per persona: same candidate tools, same persona attribution, same workflow state, same prompt layers. The first run's off-by-one persona misattribution was proven to be the harness's time-window fallback join and eliminated by the `CorrelationIdMdcFilter` (PR #1382). _ev: /tmp/nlti-verify2.{json,md} on the alpha host._
 - 2026-08-07: shared path preserved through the Spring AI migration (PR #987); T0 blocking-vs-streaming divergence now tracked with the router wiring → #1192.
 - 2026-08-08: T0 divergence closed — PR #1199 (#1192 CLOSED) ships a shared T0 fast path used by both the blocking and streaming managers. Remaining 2A HOLD item is only the live "same request → same tools/prompt/persona/scope/workflow" equivalence run.
 
@@ -394,7 +396,8 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Gate 2C sign-off
 
-- Metrics filled: [ ] · Decision: **HOLD** (runtime session propagation + non-IDLE DB activation deferred to live) · Close-out tracked → #1215
+- Metrics filled: [ ] · Decision: **HOLD — session propagation + non-IDLE activation verified live 2026-08-19 (below, 8/8); remaining: metrics table + sign-off approval (decision G)** · Close-out tracked → #1215
+- **2026-08-19 — non-IDLE activation live on alpha (#1215, `--suite workflow`, state `PROCESSING_RETURN` per the completeness clause and the V34 seed): PASS 8/8.** Session advanced via `POST /v1/nlt/sessions/{id}/workflow-state` (HTTP 200); dedicated `nlti.workflow.transition` event emitted (fromState=IDLE toState=PROCESSING_RETURN changed=true); `routing.workflowState=PROCESSING_RETURN` in request telemetry; gated selection RESTRICTED the tool set ([Catalog, Order, Pricing] vs an IDLE baseline additionally carrying Admin+Events — workflow gating manifests as removal for a broad-permission actor); audit ledger records the session activity; ownership fail-closed (second persona on the owner's session → 403). _ev: /tmp/nlti-verify4.{json,md} on the alpha host._
 - 2026-08-07: **shipped** via #778 (CLOSED) — persisted session workflow state threaded into tool gating (`8cb5157c7`) with blocking/streaming parity test (`28105bd40`).
 
 #### Gate 2C — Execution results (2026-06-30, code-first)
@@ -708,7 +711,8 @@ the Permission lock. So it is specified implementation-ready and verified live t
 
 ### Gate 6 sign-off
 
-- Metrics filled: [ ] (write-safety fixture pass rate not yet captured live) · Decision: **HOLD — implementation shipped, live full-flow verification pending** · Close-out tracked → #1218
+- Metrics filled: [ ] (write-safety fixture pass rate not yet captured live) · Decision: **HOLD — live full-flow verified 2026-08-19 (below); remaining: metrics table, sign-off approval (decision G), and ownership of the two documented gaps (no submit-path telemetry; intent parser gate-unreachable for create/update)** · Close-out tracked → #1218
+- **2026-08-19 — live write-gate full flow on alpha (#1218, `--suite write-gate --allow-writes`, decision C target `price_deletepromotioneligibilityrule`): core chain PASS.** Seeded probe offer+rule (201/201, per-run-unique promoCode); ACTION prompt → 202 `PENDING_CONFIRMATION` with planId, `riskLevel=HIGH`, correct targetTool, `inferredDefaultArgs` disclosed; **confirm → HTTP 200 `COMPLETE`** (persisted plan args executed against pos-price, rule deleted); **re-confirm replayed `COMPLETE` without double-executing**; audit ledger carries `[CONFIRMATION, EXECUTION_STEP, EXECUTION_COMPLETE, INTENT, PLAN]` for the correlation id; fail-closed proven (persona without `pricing:promotion:manage` → 403, no plan). Two documented gaps remain deliberately visible: `wg-telemetry` SKIP (the NLTI submit path emits no `nlti.request.telemetry`; only the chat managers do) and `wg-intent-gap` FAIL-by-design (`IntentParserServiceImpl:40` classifies ACTION only for delete/remove/bulk phrasings, so create/update prompts can never reach the gate — sign-off must own this). Residue: one inert probe offer per run (no delete-offer endpoint exists). _ev: /tmp/nlti-verify8.{json,md} on the alpha host; PRs #1385-#1389._
 - 2026-08-07: still pending — write-action confirmation gate implementation tracked → #1193 (OPEN).
 - 2026-08-08: **implementation shipped** — PR #1199 (#1193 CLOSED): `NltiWritePlanService` — ACTION intents produce a persisted preview plan (never execute); `POST /v1/nlt/requests/{id}/confirm` executes the exact persisted args with dual permission check, TTL expiry, idempotent re-confirm (`execution_result` column, V30 pg / V22 h2), stale-data cancel at risk≥MEDIUM, single-pending supersede; `/cancel`; full PLAN→…→EXECUTION audit chain; WRITE-GATE prompt layer per request; 29 write-gate tests. Remaining: live full-flow + DB verification on alpha (runbook §B.9), then Write-lock assertion + metrics + Pass decision.
 
