@@ -593,9 +593,23 @@ python3 scripts/nlti_live_verify.py --suite write-gate --allow-writes \
   suite additionally requires `--write-target` (there is deliberately no default). `--read-only`
   restricts the run to GET/auth requests only.
 - Telemetry is harvested from Loki (`--loki-url`, `observability/loki-config.yml`), never from
-  `docker compose logs`. The chat endpoints accept no correlation id, so those records are joined
-  by request time window plus actor role; the NLTI endpoints (including the Gate 2C
-  `nlti.workflow.transition` event) are joined by `X-Correlation-Id`.
+  `docker compose logs`. Every request — the chat endpoints included — is sent with a generated
+  `X-Correlation-Id` and joined primarily by correlationId (the server-side correlation filter
+  echoes the header on all endpoints). Against a server predating that filter the harness falls
+  back to the legacy time-window + actor-role join and downgrades every dependent check to
+  `UNVERIFIED-ATTRIBUTION` (renders unchecked, holds the gate decision, never flips the exit
+  code): the 2026-08-19 live run proved the window join can attribute the previous persona's
+  record.
+- The persona suite asserts the fixture's `expectsPermissions`/`lacksPermissions` for real: the
+  telemetry actor block carries only `permissionCodeCount` (never the code list), so each declared
+  code is verified by probing the endpoint class it gates — non-401/403 proves a held code, 403
+  proves an absent one. `mcp:tool:manage` uses a no-op revoke of a nonexistent permission code so
+  the probe cannot mutate.
+- The write-gate ACTION probe defaults to a delete-verb prompt (`--write-gate-action-prompt`)
+  because `IntentParserServiceImpl` classifies ACTION only for HIGH-risk prompts
+  ("delete"/"remove" or a "bulk " prefix). The always-on `wg-intent-gap` check submits a
+  create-style prompt and is EXPECTED to FAIL, documenting on every run that create/update
+  phrasings cannot reach the write gate (#1218 product gap).
 - Exit codes: `0` all executed checks passed (or `--dry-run`), `1` a check failed, `2` configuration
   error, `3` infrastructure error (auth/gateway/Loki unreachable).
 - Plan: `pos-mcp-server/docs/gate-closeout-plan-1212-1219.md` (Wave 0.3).
