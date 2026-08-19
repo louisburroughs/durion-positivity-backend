@@ -116,4 +116,34 @@ class CorrelationIdMdcFilterTest {
         assertThat(request.getAttribute(NltiCorrelationIdSupport.CORRELATION_ID_ATTRIBUTE))
                 .isEqualTo(resolvedInsideChain.get());
     }
+
+    @Test
+    @DisplayName("pre-existing MDC value set by upstream instrumentation is restored, not clobbered")
+    void preExistingMdcValueIsRestoredAfterChain() throws Exception {
+        UUID supplied = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b");
+        request.addHeader(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, supplied.toString());
+        MDC.put(CorrelationIdMdcFilter.MDC_CORRELATION_ID_KEY, "upstream-agent-id");
+
+        AtomicReference<String> mdcDuringChain = new AtomicReference<>();
+        filter.doFilter(
+                request,
+                response,
+                (req, res) -> mdcDuringChain.set(MDC.get(CorrelationIdMdcFilter.MDC_CORRELATION_ID_KEY)));
+
+        assertThat(mdcDuringChain.get()).isEqualTo(supplied.toString());
+        assertThat(MDC.get(CorrelationIdMdcFilter.MDC_CORRELATION_ID_KEY)).isEqualTo("upstream-agent-id");
+    }
+
+    @Test
+    @DisplayName("pre-existing MDC value is restored even when the chain throws")
+    void preExistingMdcValueIsRestoredWhenChainThrows() {
+        MDC.put(CorrelationIdMdcFilter.MDC_CORRELATION_ID_KEY, "upstream-agent-id");
+
+        assertThatThrownBy(() -> filter.doFilter(request, response, (req, res) -> {
+                    throw new ServletException("boom");
+                }))
+                .isInstanceOf(ServletException.class);
+
+        assertThat(MDC.get(CorrelationIdMdcFilter.MDC_CORRELATION_ID_KEY)).isEqualTo("upstream-agent-id");
+    }
 }

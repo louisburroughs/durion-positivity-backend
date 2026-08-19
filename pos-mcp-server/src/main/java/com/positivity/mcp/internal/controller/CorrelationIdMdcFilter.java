@@ -54,12 +54,20 @@ public class CorrelationIdMdcFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain)
             throws ServletException, IOException {
         UUID correlationId = NltiCorrelationIdSupport.resolveFromRequest(request);
+        // Save-and-restore rather than remove: upstream instrumentation (container agents, other
+        // trace filters) may have set its own correlationId, and clobbering it would break their
+        // post-request logging. Restore composes; remove does not.
+        String previous = MDC.get(MDC_CORRELATION_ID_KEY);
         MDC.put(MDC_CORRELATION_ID_KEY, correlationId.toString());
         try {
             response.setHeader(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString());
             filterChain.doFilter(request, response);
         } finally {
-            MDC.remove(MDC_CORRELATION_ID_KEY);
+            if (previous != null) {
+                MDC.put(MDC_CORRELATION_ID_KEY, previous);
+            } else {
+                MDC.remove(MDC_CORRELATION_ID_KEY);
+            }
         }
     }
 }

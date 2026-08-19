@@ -221,8 +221,9 @@ PERMISSION_PROBES = {
     "mcp:tool:manage": ("DELETE",
                         "tools/{tool}/permissions?permissionCode=" + PROBE_NONEXISTENT_CODE,
                         SESSION, None, False,
-                        "ToolPermissionController#revoke — no-op probe (nonexistent code, "
-                        "idempotent revoke cannot mutate)"),
+                        "ToolPermissionController#revoke — state no-op (nonexistent code) but the "
+                        "handler carries @EmitEvent(MCP_TOOL_PERMISSION_REVOKE); the 'expects' "
+                        "probe is therefore escalated to ADMIN_WRITE at plan time"),
 }
 
 
@@ -934,6 +935,15 @@ class Context:
         telemetry carries only actor.permissionCodeCount, so the endpoint class the code gates is
         probed instead — @PreAuthorize rejects with 403 before the handler runs."""
         method, probe_path, impact, body, stream, note = PERMISSION_PROBES[permission]
+        # PR #1382 review: ToolPermissionController#revoke carries
+        # @EmitEvent(MCP_TOOL_PERMISSION_REVOKE), so when the persona HOLDS mcp:tool:manage the
+        # "expects" probe executes the handler and emits an event even though the revoke itself is
+        # a state no-op. That is a side effect, so it is gated behind --allow-writes. The "lacks"
+        # probe stays SESSION: @PreAuthorize rejects with 403 before the handler (and its
+        # @EmitEvent aspect) ever runs, so a denied probe emits nothing.
+        if permission == "mcp:tool:manage" and expectation == "expects":
+            impact = ADMIN_WRITE
+            note += " — success executes the handler and emits MCP_TOOL_PERMISSION_REVOKE"
         probe_path = probe_path.replace("{tool}", self.args.admin_tool_name)
         extra = {"Accept": "text/event-stream"} if stream else None
         expected = "non-401/403 proves the code is held" if expectation == "expects" \
