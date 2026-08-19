@@ -1551,10 +1551,18 @@ def run_workflow(ctx):
                             bool(gated_tools),
                             f"tools.selected={gated_tools} (IDLE baseline={idle_tools})",
                             gated_record)
+        # Symmetric difference: workflow gating shows up as REMOVED tools at least as often as
+        # added ones. A broad-permission actor's IDLE baseline is a superset (it selects from every
+        # tool its codes allow), and a non-IDLE state RESTRICTS selection to the workflow-mapped
+        # set — observed live 2026-08-19: PROCESSING_RETURN selected [Catalog, Order, Pricing]
+        # against an IDLE baseline that also carried Admin and Events. The old added-only check
+        # read that correct restriction as a failure.
         added = sorted(set(gated_tools) - set(idle_tools))
+        removed = sorted(set(idle_tools) - set(gated_tools))
         suite.expect_joined("wf-tool-delta", "Gated tool set differs from the IDLE baseline",
-                            bool(added) or (bool(gated_tools) and not idle_tools),
-                            f"tools added vs IDLE={added}", gated_record)
+                            bool(added or removed) or (bool(gated_tools) and not idle_tools),
+                            f"tools added vs IDLE={added} removed vs IDLE={removed}",
+                            gated_record)
         suite.observations["gated"] = {"tools": gated_tools,
                                        "telemetryJoin": gated_record.get("_join"),
                                        "workflowState": tel_workflow(gated_record),
