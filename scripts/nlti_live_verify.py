@@ -398,16 +398,19 @@ def load_queries(path):
     return queries
 
 
-def substitute_seeded_id(value, seeded_id):
-    """Recursively replaces the {seededId} token in a clientContext structure. The executor
-    contract nests args as {"pathParams": {...}, "body": {...}} (OperationProxyFactory:71-74), so
-    top-level-only substitution would leave the token inside pathParams."""
+def substitute_tokens(value, tokens):
+    """Recursively replaces seed tokens (e.g. {"{offerId}": "<uuid>"}) in any nested structure.
+    The executor contract nests args as {"pathParams": {...}, "body": {...}}
+    (OperationProxyFactory:71-74), so top-level-only substitution would leave tokens inside
+    pathParams; later seed steps also reference earlier tokens in their own path/body."""
     if isinstance(value, str):
-        return value.replace("{seededId}", seeded_id)
+        for token, replacement in tokens.items():
+            value = value.replace(token, replacement)
+        return value
     if isinstance(value, dict):
-        return {k: substitute_seeded_id(v, seeded_id) for k, v in value.items()}
+        return {k: substitute_tokens(v, tokens) for k, v in value.items()}
     if isinstance(value, list):
-        return [substitute_seeded_id(v, seeded_id) for v in value]
+        return [substitute_tokens(v, tokens) for v in value]
     return value
 
 
@@ -440,16 +443,24 @@ def load_write_target(path):
             f"--write-target {file} still contains a template placeholder in 'prompt'. The #1218 "
             "write target is decision C in pos-mcp-server/docs/gate-closeout-plan-1212-1219.md: "
             "copy the example fixture and fill in the agreed target.")
-    seed = target.get("seed")
-    if seed is not None:
-        for key in ("method", "path", "body", "idField"):
-            if not seed.get(key):
-                raise SystemExit(f"--write-target {file} 'seed' block is missing '{key}'")
-        flat = json.dumps(seed["body"])
-        if "<" in flat and ">" in flat:
-            raise SystemExit(
-                f"--write-target {file} seed body still contains a <PLACEHOLDER>. Replace the "
-                "example ids with real alpha values before a live run.")
+    # "seeds" is an ordered list for multi-step lifecycles (e.g. offer -> rule); the singular
+    # "seed" form remains as sugar and normalizes to a one-element list with the {seededId} token.
+    seeds = target.get("seeds")
+    if seeds is None and target.get("seed") is not None:
+        seeds = [dict(target["seed"], token=target["seed"].get("token", "{seededId}"))]
+    if seeds is not None:
+        for index, seed in enumerate(seeds):
+            for key in ("method", "path", "body", "idField", "token"):
+                if not seed.get(key):
+                    raise SystemExit(
+                        f"--write-target {file} seed #{index + 1} is missing '{key}'")
+            flat = json.dumps(seed["body"])
+            if "<" in flat and ">" in flat:
+                raise SystemExit(
+                    f"--write-target {file} seed #{index + 1} body still contains a "
+                    "<PLACEHOLDER>. Replace the example ids with real alpha values before a "
+                    "live run.")
+        target["seeds"] = seeds
     return target
 
 
@@ -1540,10 +1551,18 @@ def run_workflow(ctx):
                             bool(gated_tools),
                             f"tools.selected={gated_tools} (IDLE baseline={idle_tools})",
                             gated_record)
+        # Symmetric difference: workflow gating shows up as REMOVED tools at least as often as
+        # added ones. A broad-permission actor's IDLE baseline is a superset (it selects from every
+        # tool its codes allow), and a non-IDLE state RESTRICTS selection to the workflow-mapped
+        # set — observed live 2026-08-19: PROCESSING_RETURN selected [Catalog, Order, Pricing]
+        # against an IDLE baseline that also carried Admin and Events. The old added-only check
+        # read that correct restriction as a failure.
         added = sorted(set(gated_tools) - set(idle_tools))
+        removed = sorted(set(idle_tools) - set(gated_tools))
         suite.expect_joined("wf-tool-delta", "Gated tool set differs from the IDLE baseline",
-                            bool(added) or (bool(gated_tools) and not idle_tools),
-                            f"tools added vs IDLE={added}", gated_record)
+                            bool(added or removed) or (bool(gated_tools) and not idle_tools),
+                            f"tools added vs IDLE={added} removed vs IDLE={removed}",
+                            gated_record)
         suite.observations["gated"] = {"tools": gated_tools,
                                        "telemetryJoin": gated_record.get("_join"),
                                        "workflowState": tel_workflow(gated_record),
@@ -1799,42 +1818,52 @@ def run_write_gate(ctx):
               or ctx.queries["write-gate"][0]["prompt"])
     client_context = (target or {}).get("clientContext")
 
-    # Decision C seed step: create the record the gated write will target, so the run owns its
-    # whole lifecycle. Only under --allow-writes; without it the substitution token stays in place
-    # and the executing half is skipped below exactly as before. The token may appear in the
-    # prompt, in clientContext (e.g. args.pathParams), or both — check the whole target, not just
-    # the prompt.
-    seed = (target or {}).get("seed")
-    needs_seed = seed and ("{seededId}" in prompt
-                           or "{seededId}" in json.dumps(client_context or {}))
-    if needs_seed and ctx.args.allow_writes:
-        seeded = ctx.runner.send(RequestPlan(
-            label="wg-seed",
-            method=seed["method"],
-            url=ctx.mcp_url(seed["path"]),
-            # The seed creates a business record in the target domain (an appointment today), so it
-            # is a BUSINESS_WRITE — labelling it ADMIN_WRITE misstated it in skip reasons/output.
-            impact=BUSINESS_WRITE,
-            persona=persona.name,
-            headers=ctx.headers(persona),
-            body=seed["body"],
-            note="decision C seed: creates the probe record the gated write targets",
-        ))
-        seeded_id = (seeded.json_body or {}).get(seed["idField"]) \
-            if seeded is not None and isinstance(seeded.json_body, dict) else None
-        suite.expect("wg-seed", "Probe record seeded for the gated write",
-                     bool(seeded_id),
-                     f"{seed['method']} {seed['path']} -> HTTP "
-                     f"{getattr(seeded, 'status', 'refused')} {seed['idField']}={seeded_id}")
-        if not seeded_id:
-            suite.notes.append("Seed failed — the executing half cannot run against a real record.")
-            return suite
-        prompt = prompt.replace("{seededId}", str(seeded_id))
+    # Decision C seed steps: create the record(s) the gated write will target, so the run owns its
+    # whole lifecycle. Only under --allow-writes; without it the substitution tokens stay in place
+    # and the executing half is skipped below exactly as before. Seeds run in order; each captured
+    # id is substituted into every LATER seed's path/body (an eligibility rule is created under the
+    # offer seeded one step earlier) and finally into the prompt and clientContext.
+    seeds = (target or {}).get("seeds") or []
+    if seeds and ctx.args.allow_writes:
+        tokens = {}
+        for index, seed in enumerate(seeds):
+            check_id = "wg-seed" if index == 0 else f"wg-seed-{index + 1}"
+            path = substitute_tokens(seed["path"], tokens)
+            body = substitute_tokens(seed["body"], tokens)
+            seeded = ctx.runner.send(RequestPlan(
+                label=check_id,
+                method=seed["method"],
+                url=ctx.mcp_url(path),
+                # Seeds create business records in the target domain, so BUSINESS_WRITE.
+                impact=BUSINESS_WRITE,
+                persona=persona.name,
+                headers=ctx.headers(persona),
+                body=body,
+                note="decision C seed: creates a probe record the gated write targets",
+            ))
+            seeded_id = (seeded.json_body or {}).get(seed["idField"]) \
+                if seeded is not None and isinstance(seeded.json_body, dict) else None
+            suite.expect(check_id, f"Probe record seeded ({seed['token']})",
+                         bool(seeded_id),
+                         f"{seed['method']} {path} -> HTTP "
+                         f"{getattr(seeded, 'status', 'refused')} {seed['idField']}={seeded_id}")
+            if not seeded_id:
+                suite.notes.append(
+                    f"Seed {seed['token']} failed — the executing half cannot run against a real "
+                    "record.")
+                return suite
+            tokens[seed["token"]] = str(seeded_id)
+        prompt = substitute_tokens(prompt, tokens)
         if client_context:
-            client_context = substitute_seeded_id(client_context, str(seeded_id))
-    elif needs_seed:
-        suite.skip("wg-seed", "Probe record seeded for the gated write",
-                   "seed block configured but --allow-writes not passed; executing half will skip")
+            client_context = substitute_tokens(client_context, tokens)
+    elif seeds:
+        # Emit one SKIP per configured seed under the same check ids the live path uses
+        # (wg-seed, wg-seed-2, ...), so evidence output is structurally identical between
+        # read-only and live runs and a diff shows status changes, not appearing checks.
+        for index, seed in enumerate(seeds):
+            check_id = "wg-seed" if index == 0 else f"wg-seed-{index + 1}"
+            suite.skip(check_id, f"Probe record seeded ({seed['token']})",
+                       "seed configured but --allow-writes not passed; executing half will skip")
 
     correlation = uuid7ish()
     submit = ctx.runner.send(ctx.plan_nlti_submit(persona, prompt, correlation,
