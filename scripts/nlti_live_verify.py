@@ -1857,8 +1857,13 @@ def run_write_gate(ctx):
         if client_context:
             client_context = substitute_tokens(client_context, tokens)
     elif seeds:
-        suite.skip("wg-seed", "Probe record(s) seeded for the gated write",
-                   "seed block configured but --allow-writes not passed; executing half will skip")
+        # Emit one SKIP per configured seed under the same check ids the live path uses
+        # (wg-seed, wg-seed-2, ...), so evidence output is structurally identical between
+        # read-only and live runs and a diff shows status changes, not appearing checks.
+        for index, seed in enumerate(seeds):
+            check_id = "wg-seed" if index == 0 else f"wg-seed-{index + 1}"
+            suite.skip(check_id, f"Probe record seeded ({seed['token']})",
+                       "seed configured but --allow-writes not passed; executing half will skip")
 
     correlation = uuid7ish()
     submit = ctx.runner.send(ctx.plan_nlti_submit(persona, prompt, correlation,
