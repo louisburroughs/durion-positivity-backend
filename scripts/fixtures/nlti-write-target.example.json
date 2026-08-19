@@ -6,18 +6,19 @@
     "rule in pos-price, then gate-delete the RULE via the discovered tool",
     "`price_deletepromotioneligibilityrule` (DELETE /v1/promotions/offers/{promotionId}/rules/{ruleId}).",
     "",
-    "History: target #1 (prompts_deletesystemprompt) is impossible — the gateway api-docs",
+    "History: target #1 (prompts_deletesystemprompt) is impossible \u2014 the gateway api-docs",
     "aggregation excludes pos-mcp-server, so its ops are never discovered. Target #2",
-    "(shop-manager_cancelappointment) is dead on alpha — createAppointment validates against",
+    "(shop-manager_cancelappointment) is dead on alpha \u2014 createAppointment validates against",
     "shop-manager's ADR-0044 local replica and ext_vehicle has ZERO rows, so appointment creation",
     "404s for every vehicle id. This target has no cross-service references at all: offer and rule",
     "are synthetic, self-contained in pos-price, pricing is not a Kafka-enabled domain, and the",
     "LOCATION_MANAGER persona holds pricing:promotion:manage (PR #1384) for create and delete alike.",
     "",
     "Seeds run in order; each captured id substitutes into later seed paths and finally into the",
-    "prompt and clientContext (tokens {offerId}, {ruleId}). All values below are synthetic — no",
+    "prompt and clientContext (tokens {offerId}, {ruleId}). All values below are synthetic \u2014 no",
     "placeholders to fill. Residue: the probe offer remains (no delete-offer endpoint exists) with",
-    "zero eligibility rules and a random probe promoCode; see cleanupNote."
+    "zero eligibility rules and a random probe promoCode; see cleanupNote.",
+    "Each seed names its gateway service route ('route': 'price') \u2014 seeds execute in the target service's domain, not pos-mcp-server's."
   ],
   "actor": "diana-rowe",
   "prompt": "Remove eligibility rule {ruleId} from promotion {offerId}",
@@ -25,7 +26,10 @@
   "clientContext": {
     "targetTool": "price_deletepromotioneligibilityrule",
     "args": {
-      "pathParams": { "promotionId": "{offerId}", "ruleId": "{ruleId}" }
+      "pathParams": {
+        "promotionId": "{offerId}",
+        "ruleId": "{ruleId}"
+      }
     }
   },
   "seeds": [
@@ -43,7 +47,8 @@
         "usageLimit": 1
       },
       "idField": "id",
-      "token": "{offerId}"
+      "token": "{offerId}",
+      "route": "price"
     },
     {
       "method": "POST",
@@ -54,7 +59,8 @@
         "value": "NLTI-PROBE-NEVER-MATCHES"
       },
       "idField": "id",
-      "token": "{ruleId}"
+      "token": "{ruleId}",
+      "route": "price"
     }
   ],
   "cleanupNote": "The gated delete removes the rule; the probe offer remains (pos-price exposes no delete-offer endpoint). It is inert: 0.01 fixed discount, usageLimit 1, a one-day far-future window, and a promoCode nobody knows. If desired, deactivate or remove it directly in pos_price_db. An aborted run between seeds leaves the offer with one never-matching CAMPAIGN_CODE rule - equally inert."
