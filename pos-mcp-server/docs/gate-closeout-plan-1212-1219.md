@@ -28,7 +28,7 @@ Standing findings feeding sign-off (each documented in the relevant gate block /
 - shop-manager's `ext_vehicle` replica is empty on alpha (appointment creation impossible via API)
 - `security-service_deleterole` / `_deleterole_1` discovered-tool name collision
 - CI's Detect Changed Services skips `docker-compose.yml` changes (two silent non-deploys)
-- `security.guide` RAG visibility policy call (→ #1396, blocks Gate 5 Pass)
+- ~~`security.guide` RAG visibility policy call~~ RESOLVED 2026-08-19 — tagged via #1396/PR #1400, verified live (39/39 sweep, 15/15 chunks permission-bound); Gate 5 PASS
 
 ## Issue map
 
