@@ -15,16 +15,20 @@
 | 0 | **DONE** | PR #1370 (merged) — closed #1367, #1368 |
 | 1 | **DONE** | PRs #1371, #1382, #1385–#1390 — gates 0/1/2A/2C/5/6 all carry dated live evidence in `implementation_checklist.md` |
 | 2 | **DONE** | PRs #1391–#1393 — Gate 4 router evidence (7/7, p95 5653 ms) |
-| 3 | **IN PROGRESS** | shadow soak started 2026-08-19 ~16:50 UTC (PR #1394 + manual compose sync); 3 nights, then one gated live promotion (~Aug 22), then revert |
+| 3 | **IN PROGRESS** | shadow soak started 2026-08-19 ~16:50 UTC (PR #1394 + manual compose sync); 3 nights, then one gated live promotion (~2026-08-22 UTC), then revert |
 | 4 | pending | single HOLD→Pass PR; blocked on decision G and the Gate 5 `security.guide` policy call |
 
 Standing findings feeding sign-off (each documented in the relevant gate block / PR):
-the NLTI submit path emits no request telemetry; `IntentParserServiceImpl:40` makes the write gate
-unreachable for create/update phrasings; `model.fallbackUsed` is hardcoded false with no failover
-path in code; the gateway api-docs aggregation excludes pos-mcp-server (12 of 23 aggregated
-services produce no discovered tools); shop-manager's `ext_vehicle` replica is empty on alpha;
-`security-service_deleterole`/`_deleterole_1` name collision; CI's Detect Changed Services skips
-`docker-compose.yml` changes (two silent non-deploys).
+
+- the NLTI submit path emits no request telemetry (→ #1397)
+- `IntentParserServiceImpl:40` makes the write gate unreachable for create/update phrasings (→ #1398)
+- `model.fallbackUsed` is hardcoded false with no failover path in code (folded into #1397's scope)
+- the gateway api-docs aggregation excludes pos-mcp-server, and 12 of 23 aggregated services
+  produce no discovered tools
+- shop-manager's `ext_vehicle` replica is empty on alpha (appointment creation impossible via API)
+- `security-service_deleterole` / `_deleterole_1` discovered-tool name collision
+- CI's Detect Changed Services skips `docker-compose.yml` changes (two silent non-deploys)
+- `security.guide` RAG visibility policy call (→ #1396, blocks Gate 5 Pass)
 
 ## Issue map
 
@@ -149,8 +153,9 @@ evidence/approver/date, close #1212–#1219, #1367, #1368.
 Answers needed before the corresponding wave item can complete (see chat history for the full
 list — repeated here as the checklist):
 
-- **A.** ~~Alpha access~~ **RESOLVED 2026-08-18**: the session drives alpha directly via SSM
-  (`aws ssm send-command` on `i-06d434c7593e70f5c`); all live runs executed this way.
+- **A.** ~~Alpha access~~ **RESOLVED 2026-08-18**: the session drives the alpha host directly via
+  AWS SSM (`aws ssm send-command`; instance id in the operations memory / SSM console, not
+  pinned here); all live runs executed this way.
 - **B.** ~~Tier models for #1216~~ **RESOLVED 2026-08-19**: `MCP_MODEL_SIMPLE=gpt-oss:20b`,
   `MCP_MODEL_COMPLEX` unset (default executor `gpt-oss:120b` is already the complex-class model).
   Both tiers on the ollama.com cloud backend — chat does NOT run on alpha's local Ollama (that
