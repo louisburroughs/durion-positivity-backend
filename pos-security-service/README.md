@@ -74,10 +74,33 @@ therefore creates those two roles itself rather than relying on bean lifecycle.
 | Role | Baseline |
 | --- | --- |
 | `ADMIN` | All domains. The intentional blast-radius role. |
-| `SYSTEM_ADMINISTRATOR` | **Security and admin surface only** — `security:*` plus `mcp:chat:execute`. Deliberately *not* a superuser: it holds no accounting, catalog, workorder, inventory, or shop authority, and it does **not** auto-acquire newly registered permissions. Widening it is an explicit edit to the seed. |
+| `SYSTEM_ADMINISTRATOR` | **Security and MCP administration only** — `security:*`, plus MCP administration (`mcp:system_prompt:*`, `mcp:llm_api:*`, `mcp:tool:manage`, `mcp:document:ingest`) and the assistant entrypoints. Deliberately *not* a superuser: it holds no accounting, catalog, workorder, inventory, or shop authority, and it does **not** auto-acquire newly registered permissions. Widening it is an explicit edit to the seed. |
 | `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN`, `DISPATCHER`, `ACCOUNTING_ASSOCIATE`, `ACCOUNT_MANAGER`, `MANAGER`, `GENERAL_MANAGER` | Least privilege, scoped to the role's job function. |
 | `ACCOUNTANT`, `AP_CLERK`, `CONTROLLER`, `CSR`, `FLEET_MANAGER`, `GL_ANALYST` | **Not granted, and not created.** The retired hardcoded switch expanded these, but no migration or initializer creates the role, and `user_roles` / `role_assignments` are foreign-keyed to `roles(id)` — so no user could ever hold one. They were unreachable branches, documentation personas rather than security roles. To make one real, create the role first, then grant it. |
-| `CUSTOMER`, `SELF_SERVICE_CUSTOMER`, `SHOP_MANAGER`, `SECURITY_ADMIN`, `READ_ONLY_SCHEDULER`, `INVENTORY_LEAD`, `INVENTORY_MANAGER`, `INVENTORY_CONTROLLER` | No grants. Seeded as identity only; granting them capability is a product decision. |
+| `CUSTOMER`, `SELF_SERVICE_CUSTOMER`, `SHOP_MANAGER`, `SECURITY_ADMIN`, `READ_ONLY_SCHEDULER`, `INVENTORY_LEAD`, `INVENTORY_MANAGER`, `INVENTORY_CONTROLLER` | **Assistant entrypoints only.** No domain capability; granting them any is still a product decision. |
+
+### Assistant baseline
+
+Every role that exists receives four conversational entrypoints:
+
+| Permission | Meaning |
+| --- | --- |
+| `mcp:chat:execute` | Synchronous chat request via the Spring AI assistant runtime |
+| `mcp:chat:stream` | Streaming SSE chat request |
+| `nlti:request:submit` | Submit a natural-language task-interface request |
+| `nlti:request:read` | Read submitted NLTI request status |
+
+These grant reach to the assistant, not to data: the assistant enforces domain permissions per
+request, so a role that cannot read an invoice still cannot read one by asking for it. They are
+applied to **all** roles, including the customer-facing `CUSTOMER` and `SELF_SERVICE_CUSTOMER`,
+which previously held nothing at all — so external self-service users can now reach the assistant
+and submit NLTI requests. If that is not wanted, remove those two roles from the universal list in
+the seed; `RolePermissionBaselineTest.everyRoleReceivesTheAssistantBaseline` pins the current
+policy and will need updating alongside.
+
+MCP administration — `mcp:system_prompt:*`, `mcp:llm_api:*`, `mcp:tool:manage`,
+`mcp:document:ingest`, and for `ADMIN` also `mcp:tool:view` — is restricted to `ADMIN` and
+`SYSTEM_ADMINISTRATOR`, and a test asserts no other role holds any of it.
 
 ### Role grants vs. role assignments
 

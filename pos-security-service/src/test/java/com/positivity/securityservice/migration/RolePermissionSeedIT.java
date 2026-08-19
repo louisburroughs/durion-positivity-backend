@@ -97,8 +97,9 @@ class RolePermissionSeedIT {
                 .doesNotContain("accounting:je:post");
 
         assertThat(grantedTo("CUSTOMER"))
-                .as("roles left ungranted on purpose stay empty")
-                .isEmpty();
+                .as("customer-facing roles receive the assistant entrypoints and nothing else")
+                .containsExactlyInAnyOrder(
+                        "mcp:chat:execute", "mcp:chat:stream", "nlti:request:submit", "nlti:request:read");
     }
 
     @Test
@@ -165,13 +166,17 @@ class RolePermissionSeedIT {
     @Test
     @DisplayName("a user holding only an ungranted role resolves no permissions")
     void userWithOnlyUngrantedRole_failsClosed() {
+        // Every seeded role now carries the assistant entrypoints, so fail-closed has to be
+        // proven against a role with genuinely no grants rather than against a seeded one.
+        jdbc().update("INSERT INTO roles (id, name, description, created_at, created_by) "
+                + "VALUES (gen_random_uuid(), 'IT_UNGRANTED_ROLE', 'no grants', NOW(), 'test')");
         jdbc().update(
                         "INSERT INTO users (id, username, password, enabled) "
                                 + "VALUES (gen_random_uuid(), ?, 'x', true)",
                         "ungranted.user");
         jdbc().update("INSERT INTO user_roles (user_id, role_id) "
                 + "SELECT u.id, r.id FROM users u, roles r "
-                + "WHERE u.username = 'ungranted.user' AND r.name = 'CUSTOMER'");
+                + "WHERE u.username = 'ungranted.user' AND r.name = 'IT_UNGRANTED_ROLE'");
 
         assertThat(effectivePermissionsOf("ungranted.user")).isEmpty();
     }
