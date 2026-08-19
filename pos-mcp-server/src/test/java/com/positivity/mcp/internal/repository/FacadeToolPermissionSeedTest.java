@@ -134,22 +134,25 @@ class FacadeToolPermissionSeedTest {
                 codes.remove(AUTHENTICATED);
             }
         }
+    }
 
-        private static Map<String, Set<String>> netGrants() throws IOException {
-            Map<String, Set<String>> grants = parseSeed(read("V18__seed_facade_tool_permissions.sql"));
-            applyAuthenticatedDeletes(grants, read("V29__fix_facade_authenticated_gating.sql"));
-            mergeSeed(grants, read("V35__retarget_facade_authenticated_gating.sql"));
-            applyAuthenticatedDeletes(grants, read("V35__retarget_facade_authenticated_gating.sql"));
-            return grants;
-        }
+    private static Map<String, Set<String>> netGrants() throws IOException {
+        Map<String, Set<String>> grants = parseSeed(read("V18__seed_facade_tool_permissions.sql"));
+        applyAuthenticatedDeletes(grants, read("V29__fix_facade_authenticated_gating.sql"));
+        mergeSeed(grants, read("V35__retarget_facade_authenticated_gating.sql"));
+        applyAuthenticatedDeletes(grants, read("V35__retarget_facade_authenticated_gating.sql"));
+        return grants;
+    }
 
-        private static void mergeSeed(Map<String, Set<String>> grants, String sql) {
-            parseSeed(sql).forEach((tool, codes) -> grants.computeIfAbsent(tool, ignored -> new LinkedHashSet<>()).addAll(codes));
-        }
+    private static void mergeSeed(Map<String, Set<String>> grants, String sql) {
+        parseSeed(sql)
+                .forEach(
+                        (tool, codes) ->
+                                grants.computeIfAbsent(tool, ignored -> new LinkedHashSet<>()).addAll(codes));
+    }
 
-        private static boolean intersectsAssistantBaseline(Set<String> codes) {
-            return codes != null && codes.stream().anyMatch(ASSISTANT_ENTRYPOINTS::contains);
-        }
+    private static boolean intersectsAssistantBaseline(Set<String> codes) {
+        return codes != null && codes.stream().anyMatch(ASSISTANT_ENTRYPOINTS::contains);
     }
 
     private static String read(String migration) throws IOException {
