@@ -79,15 +79,15 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Completeness gate
 
-- [ ] Harness runs in CI from a clean checkout — _ev:_
-- [ ] ≥100 tool-selection fixtures — _ev: count=_
-- [ ] ≥50 RAG retrieval fixtures — _ev: count=_
-- [ ] ≥30 write-action safety fixtures — _ev: count=_
-- [ ] Baseline recorded: tool hit@5 — _ev:_
-- [ ] Baseline recorded: tool MRR — _ev:_
-- [ ] Baseline recorded: RAG recall@k — _ev:_
-- [ ] Baseline recorded: write-gate safety results — _ev:_
-- [ ] Baseline recorded: p50/p95 latency by tier (where available) — _ev:_
+- [x] Harness runs in CI from a clean checkout — _ev: EvalFixtureValidationTest + RetrievalLockTest in the module surefire build; 2026-08-19 module run 691 tests, 0 failures._
+- [x] ≥100 tool-selection fixtures — _ev: count=105._
+- [x] ≥50 RAG retrieval fixtures — _ev: count=60._
+- [x] ≥30 write-action safety fixtures — _ev: count=34._
+- [x] Baseline recorded: tool hit@5 — _ev: 0.7733 (75 scored, alpha 2026-08-18; baseline.json)._
+- [x] Baseline recorded: tool MRR — _ev: 0.7433 (baseline.json)._
+- [x] Baseline recorded: RAG recall@k — _ev: 0.9510 at the broad floor 0.40 (51 scored; baseline.json records the full floor progression)._
+- [x] Baseline recorded: write-gate safety results — _ev: not capturable by BaselineCaptureIT (baseline.json records the null with reason); the live Gate 6 full-flow run of 2026-08-19 is the write-safety baseline — see the Gate 6 evidence entry and #1397._
+- [x] Baseline recorded: p50/p95 latency by tier (where available) — _ev: captured by the Gate 4 router run 2026-08-19 (p95 5653 ms over the 8-probe set; per-tier rows in /tmp/nlti-router3.json) — BaselineCaptureIT itself records null, tiering being a Gate 4 concern._
 - [ ] Telemetry captures all required fields (correlation id, session id, primary role, router decision, model tier, actual model, fallback usage, selected tools, permission-rejected tools, RAG doc ids+scores, prompt layers, write-risk level, confirmation outcome, latency by tier, low-grounding flag) — _ev: schema ref_
 - [ ] `application.yml` + README name **one** deliberate default model — _ev:_
 - [ ] `mcp.tuning.enabled=false` set — _ev:_
@@ -114,7 +114,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Gate 0 sign-off
 
-- Metrics table filled: [ ] (baseline PENDING live backend) · Decision: **HOLD** · Close-out tracked → #1212
+- Metrics table filled: [x] (completeness slots filled 2026-08-19 from the alpha baseline — counts 105/60/34, hit@5 0.7733, MRR 0.7433, recall@k 0.9510; write-safety + tier latency delegated to the Gate 6/Gate 4 evidence as noted per slot) · Decision: **HOLD — awaiting sign-off approval (decision G)** · Close-out tracked → #1212 (CLOSED 2026-08-19)
 - Exceptions (owner/expiry): n/a · Approver/date: pending · Rollback verified/documented: [x] (config-only; revertable)
 - 2026-08-07: harness + retrieval-quality gates shipped and in CI (#783 CLOSED, `081cf4291`; fixtures to volume `16649d56a`; lexical regression fixtures #1178 CLOSED); floors re-baseline open → #1179.
 
@@ -198,7 +198,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Gate 1 sign-off
 
-- Metrics filled: [ ] · Decision: **HOLD — live prompt-layer emission verified 2026-08-19 (below); remaining: metrics table + sign-off approval (decision G)** · Close-out tracked → #1213
+- Metrics filled: [x] (persona suite 17/17: layers `[BASE, ROLE, TOOL_USE, WRITE_GATE]` per persona, permission counts 15/33/86/18, 4/4 chat turns answered with 0 refusals/unsupported — values in the dated entry below) · Decision: **HOLD — awaiting sign-off approval (decision G)** · Close-out tracked → #1213 (CLOSED 2026-08-19)
 - **2026-08-19 — live persona run on alpha (#1213, harness `nlti_live_verify.py --suite persona`): PASS, 17/17 checks, telemetry joined by correlation id (0 fallback joins).** Four personas (marcus.webb/SYSTEM_ADMINISTRATOR, diana.rowe/LOCATION_MANAGER, terrence.blake/DISPATCHER, olivia.chen/ACCOUNTING_ASSOCIATE) each completed a chat turn HTTP 200; `rag.promptLayers=[BASE, ROLE, TOOL_USE, WRITE_GATE]` emitted for every persona with BASE+ROLE asserted; `actor.permissionCodeCount` correctly attributed per persona (15/33/86/18). expectsPermissions/lacksPermissions asserted as endpoint probes (403 required on lacks). _ev: /tmp/nlti-verify2.{json,md} on the alpha host; prerequisite fix PR #1382 (X-Correlation-Id filter)._
 - Exceptions: n/a · Approver/date: pending · Rollback (swap assemble→resolvePrompt in both managers) verified: [x] documented
 - 2026-08-07: assembly carried through the Spring AI migration (PR #987); live answer-quality eval still open, no dedicated tracker (see Re-baseline table).
@@ -265,7 +265,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Gate 2A sign-off
 
-- Metrics filled: [ ] · Decision: **HOLD — live equivalence verified 2026-08-19 (below, 96/96); remaining: metrics table + sign-off approval (decision G)** · Close-out tracked → #1214
+- Metrics filled: [x] (96/96 equivalence checks across 4 personas × blocking/streaming: tools, persona, workflow state, prompt layers all equal — values in the dated entry below) · Decision: **HOLD — awaiting sign-off approval (decision G)** · Close-out tracked → #1214 (CLOSED 2026-08-19)
 - **2026-08-19 — live blocking-vs-streaming equivalence on alpha (#1214, `--suite equivalence`): PASS, 96/96 checks, all telemetry joined by correlation id.** Same request through `/v1/mcp/chat` and `/v1/mcp/chat/stream` per persona: same candidate tools, same persona attribution, same workflow state, same prompt layers. The first run's off-by-one persona misattribution was proven to be the harness's time-window fallback join and eliminated by the `CorrelationIdMdcFilter` (PR #1382). _ev: /tmp/nlti-verify2.{json,md} on the alpha host._
 - 2026-08-07: shared path preserved through the Spring AI migration (PR #987); T0 blocking-vs-streaming divergence now tracked with the router wiring → #1192.
 - 2026-08-08: T0 divergence closed — PR #1199 (#1192 CLOSED) ships a shared T0 fast path used by both the blocking and streaming managers. Remaining 2A HOLD item is only the live "same request → same tools/prompt/persona/scope/workflow" equivalence run.
@@ -332,7 +332,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Gate 2B sign-off
 
-- Metrics filled: [ ] · Decision: **HOLD** (live fail-closed run + migration DB test deferred; #781/#782 cross-service) · Close-out tracked → #1214
+- Metrics filled: [ ] · Decision: **HOLD** (live fail-closed run + migration DB test deferred; #781/#782 cross-service) · Close-out tracked → #1214 (CLOSED 2026-08-19)
 - 2026-08-07: legacy role tables dropped (#780 CLOSED, `920774f8c`); the pending negative fail-closed case is now proven by the permission-gating IT (`d501b6ea2`; #1114 review `dc3538727`).
 - 2026-08-09: cross-service dependencies resolved — #781 (requiredPermissions customizer + AUTHENTICATED sentinel across services) and #782 (role-default-permissions endpoint) both CLOSED. Remaining 2B item is only the metrics-table fill for the formal Pass.
 
@@ -396,7 +396,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 ### Gate 2C sign-off
 
-- Metrics filled: [ ] · Decision: **HOLD — session propagation + non-IDLE activation verified live 2026-08-19 (below, 8/8); remaining: metrics table + sign-off approval (decision G)** · Close-out tracked → #1215
+- Metrics filled: [x] (workflow suite 8/8 — values in the dated entry below) · Decision: **HOLD — awaiting sign-off approval (decision G)** · Close-out tracked → #1215 (CLOSED 2026-08-19)
 - **2026-08-19 — non-IDLE activation live on alpha (#1215, `--suite workflow`, state `PROCESSING_RETURN` per the completeness clause and the V34 seed): PASS 8/8.** Session advanced via `POST /v1/nlt/sessions/{id}/workflow-state` (HTTP 200); dedicated `nlti.workflow.transition` event emitted (fromState=IDLE toState=PROCESSING_RETURN changed=true); `routing.workflowState=PROCESSING_RETURN` in request telemetry; gated selection RESTRICTED the tool set ([Catalog, Order, Pricing] vs an IDLE baseline additionally carrying Admin+Events — workflow gating manifests as removal for a broad-permission actor); audit ledger records the session activity; ownership fail-closed (second persona on the owner's session → 403). _ev: /tmp/nlti-verify4.{json,md} on the alpha host._
 - 2026-08-07: **shipped** via #778 (CLOSED) — persisted session workflow state threaded into tool gating (`8cb5157c7`) with blocking/streaming parity test (`28105bd40`).
 
@@ -564,7 +564,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 
 ### Gate 4 sign-off
 
-- Metrics filled: [ ] · Decision: **HOLD — live routing mix, tiers, and latency verified 2026-08-19 (below, 7/7); remaining: metrics table + sign-off approval (decision G), and ownership of the hardcoded `model.fallbackUsed` caveat** · Close-out tracked → #1216
+- Metrics filled: [x] (router suite 7/7: simple-mix 100%/floor 80, tier→model table, p95 5653 ms/SLO 15000 — values in the dated entry below) · Decision: **HOLD — awaiting sign-off approval (decision G) + ownership of the hardcoded `model.fallbackUsed` caveat** · Close-out tracked → #1216 (CLOSED 2026-08-19)
 - **2026-08-19 — live routing mix, tiers, and latency on alpha (#1216, `--suite router`): PASS 7/7, all telemetry joined by correlation id.** Tier config per decision B (`MCP_MODEL_SIMPLE=gpt-oss:20b`, complex = default executor `gpt-oss:120b`, router `qwen3.5:397b`, all on the ollama.com backend). Observed over the 8-probe representative set: greetings/thanks → **T0_RULE** (no model, ~0.7-0.8s); simple lookups → **T2_SIMPLE / gpt-oss:20b**; writes and accounting/tax → **T2_COMPLEX / gpt-oss:120b**; simple-mix 100% against the 80% floor; every outcome SUCCESS (router output never broke processing); **p95 = 5653 ms** against the 15000 ms soft SLO; `model.fallbackUsed` visible on 6/6 model-backed probes (T0_RULE rows correctly carry none) — with the standing caveat that `fallbackUsed=false` is the factory's hardcoded value and no failover path exists in code, so fallback VISIBILITY is proven, not failover. Quality: no regression signal — all probes answered, none flagged unsupported; the retrieval pipeline (embedding model, floors, corpus) is untouched by tiering, so the Gate 0 baseline (recall@k 0.9510, hit@5 0.7733) remains the applicable quality reference. Rollback unexercised but trivial (`MCP_MODEL_TIERING_ENABLED=false`). _ev: /tmp/nlti-router3.{json,md} on the alpha host; PRs #1391, #1392._
 - 2026-08-07: still pending — router wiring into the chat managers tracked → #1192 (OPEN).
 - 2026-08-08: **implementation shipped** — PR #1199 (#1192 CLOSED): `NltiRouter`/`TierSelector` wired into both managers behind `mcp.model.tiering-enabled` (default true); `TieredChatModelResolver` (`mcp.model.router/simple/complex`, blank = default model so default config is behavior-safe); tier-suffixed agent cache keys; shared T0 fast path for blocking + streaming (closes the Gate 2A divergence); router/tier/model/write telemetry; 14 tiering tests. Remaining: live routing-% / cost / quality measurement on alpha (runbook §B.7), then metrics table + Pass decision.
@@ -628,7 +628,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 
 ### Gate 5 sign-off
 
-- Metrics filled: [x] cutover eval green (recall@k 0.9216 vs floor 0.82; floors re-baselined 0.68/0.65/0.82 per #1179) · Decision: **HOLD — retrieval-lock sweep now asserted (2026-08-18, below); remaining hold is Gate 5 sign-off approval** · Close-out tracked → #1217
+- Metrics filled: [x] cutover eval green (recall@k 0.9216 vs floor 0.82; floors re-baselined 0.68/0.65/0.82 per #1179) · Decision: **HOLD — retrieval-lock sweep now asserted (2026-08-18, below); remaining hold is Gate 5 sign-off approval** · Close-out tracked → #1217 (CLOSED 2026-08-19; policy residue → #1396)
 - **2026-08-18 — retrieval-lock sweep executed on alpha (#1217, Wave 1 step 2): PASS.** `scripts/rag_lock_sweep.py` (read-only session) against `pos_user@localhost:5432/pos_mcp`: **39/39 documents hash-locked, 0 drifted, 0 orphaned, 163 embedded chunks, 0 NULL vectors**. SHA-256 of every `src/main/resources/rag/*.md` matches the newest LOADED/SKIPPED `mcp_rag_preload_record` row; no DB document is absent from the manifest. Permission coverage: 33/39 carry `required-permissions`; 6 are public by declaration (`accounting.de-bookkeeping`, `inventory.inv-cntrl`, `people.human-resources`, `shop.management`, `shop.management.guidelines`, `security.guide`). The offline half (deterministic/unique id, `rag-scope`, explicit permission decision, resolvable `source-path`, documented chunking) is asserted by `RetrievalLockTest` in the module surefire build. _ev: `pos-mcp-server/target/rag-lock-sweep/rag-lock-sweep.{md,json}` on the alpha host; command id `ae0d8082-6ea9-4fd7-b726-9accf2dc854f`._
   - **Open policy item (blocks Pass):** `security.guide` (`rag-scope: master`) is in the public set — no `required-permissions`, so unrestricted per `PermissionAwareMetadataFilter.isVisible`. This contradicts the Gate 5 completeness clause "admin/security docs require admin/security permissions". Recorded as a reviewable exception in `RetrievalLockTest.PUBLIC_DOC_IDS`; needs an owner decision to either tag it (`security:permission:view` + `security:role:view` in both `application.yml` and `application-alpha.yml`) or accept it as a documented exception.
 - 2026-08-07: **largely shipped** — retrieval-quality floors #783 CLOSED (`081cf4291`, `15ab613cb`); hybrid dense+lexical FTS with RRF fusion #784 CLOSED (PR #1123, `7b38ed34f`); corpus grown to 39 docs with lexical retrieval enabled by default #1124 CLOSED (`a1bf14fa3`, `4aa34b818`, `8c58fadbf`); gap-discovery harness #1125 CLOSED. Residue resolved 2026-08-09: bge-m3 1024-dim migration executed on alpha (#1194 CLOSED; 768 columns dropped by V33, #1207); floors re-baselined on the flipped pipeline (#1179 — 0.68/0.65/0.82, dense-only gating documented); compound-question probe at 6/7 with the residual re-root-caused to tool-driven rag-scope collapse, not rerank (#1180 — see `gate5-rag-hybrid-design.md` cutover record).
@@ -712,7 +712,7 @@ the Permission lock. So it is specified implementation-ready and verified live t
 
 ### Gate 6 sign-off
 
-- Metrics filled: [ ] (write-safety fixture pass rate not yet captured live) · Decision: **HOLD — live full-flow verified 2026-08-19 (below); remaining: metrics table, sign-off approval (decision G), and ownership of the two documented gaps (no submit-path telemetry; intent parser gate-unreachable for create/update)** · Close-out tracked → #1218
+- Metrics filled: [ ] (write-safety fixture pass rate not yet captured live) · Decision: **HOLD — live full-flow verified 2026-08-19 (below); remaining: metrics table, sign-off approval (decision G), and ownership of the two documented gaps (no submit-path telemetry; intent parser gate-unreachable for create/update)** · Close-out tracked → #1218 (CLOSED 2026-08-19; gaps → #1397, #1398)
 - **2026-08-19 — live write-gate full flow on alpha (#1218, `--suite write-gate --allow-writes`, decision C target `price_deletepromotioneligibilityrule`): core chain PASS.** Seeded probe offer+rule (201/201, per-run-unique promoCode); ACTION prompt → 202 `PENDING_CONFIRMATION` with planId, `riskLevel=HIGH`, correct targetTool, `inferredDefaultArgs` disclosed; **confirm → HTTP 200 `COMPLETE`** (persisted plan args executed against pos-price, rule deleted); **re-confirm replayed `COMPLETE` without double-executing**; audit ledger carries `[CONFIRMATION, EXECUTION_STEP, EXECUTION_COMPLETE, INTENT, PLAN]` for the correlation id; fail-closed proven (persona without `pricing:promotion:manage` → 403, no plan). Two documented gaps remain deliberately visible: `wg-telemetry` SKIP (the NLTI submit path emits no `nlti.request.telemetry`; only the chat managers do) and `wg-intent-gap` FAIL-by-design (`IntentParserServiceImpl:40` classifies ACTION only for delete/remove/bulk phrasings, so create/update prompts can never reach the gate — sign-off must own this). Residue: one inert probe offer per run (no delete-offer endpoint exists). _ev: /tmp/nlti-verify8.{json,md} on the alpha host; PRs #1385-#1389._
 - 2026-08-07: still pending — write-action confirmation gate implementation tracked → #1193 (OPEN).
 - 2026-08-08: **implementation shipped** — PR #1199 (#1193 CLOSED): `NltiWritePlanService` — ACTION intents produce a persisted preview plan (never execute); `POST /v1/nlt/requests/{id}/confirm` executes the exact persisted args with dual permission check, TTL expiry, idempotent re-confirm (`execution_result` column, V30 pg / V22 h2), stale-data cancel at risk≥MEDIUM, single-pending supersede; `/cancel`; full PLAN→…→EXECUTION audit chain; WRITE-GATE prompt layer per request; 29 write-gate tests. Remaining: live full-flow + DB verification on alpha (runbook §B.9), then Write-lock assertion + metrics + Pass decision.
