@@ -907,6 +907,8 @@ FROM (VALUES
     ('LOCATION_MANAGER', 'people:timekeeping:approve'),
     ('LOCATION_MANAGER', 'people:timekeeping:reject'),
     ('LOCATION_MANAGER', 'people:timekeeping:view'),
+    ('LOCATION_MANAGER', 'pricing:promotion:apply'),
+    ('LOCATION_MANAGER', 'pricing:promotion:manage'),
     ('LOCATION_MANAGER', 'pricing:promotion:view'),
     ('LOCATION_MANAGER', 'shop:bay:assign'),
     ('LOCATION_MANAGER', 'shop:bay:create'),
