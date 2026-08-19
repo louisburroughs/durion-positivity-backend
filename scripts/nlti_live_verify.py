@@ -412,18 +412,20 @@ def substitute_seeded_id(value, seeded_id):
 
 
 def load_write_target(path):
-    """The #1218 write target — plan decision C: seed-then-delete of a probe system prompt via the
-    discovered `prompts_deletesystemprompt` tool (see the example fixture for the agreed config).
+    """The #1218 write target — plan decision C. Current agreed target: seed-then-cancel of a probe
+    appointment via the discovered `shop-manager_cancelappointment` tool; the example fixture is
+    the authoritative config, and this loader is target-agnostic.
 
-    Shape: {"prompt": "...", "expectedTool": "...", "clientContext": {...},
-            "cleanupNote": "how to undo this on alpha",
-            "seed": {"method": "POST", "path": "prompts", "body": {...}, "idField": "id"}}
+    Shape: {"prompt": "...", "expectedTool": "...", "actor": "<persona name>",
+            "clientContext": {...}, "cleanupNote": "how to undo this on alpha",
+            "seed": {"method": "POST", "path": "...", "body": {...}, "idField": "id"}}
 
-    The optional "seed" block creates the record the gated delete will target, so each run owns its
-    whole lifecycle (net-zero on alpha). The seeded record's id (read from "idField" in the create
-    response) is substituted for the literal token "{seededId}" wherever it appears in "prompt" and
-    in "clientContext" values. Seeding only happens under --allow-writes, through the same safety
-    gate as every other mutating request.
+    The optional "seed" block creates the record the gated write will target, so each run owns its
+    whole lifecycle. The seeded record's id (read from "idField" in the create response) replaces
+    the literal token "{seededId}" wherever it appears in "prompt" and recursively throughout
+    "clientContext". Seeding only happens under --allow-writes, through the same safety gate as
+    every other mutating request. "actor" selects the persona that seeds and executes; it must
+    hold the target tool's own domain permission.
     """
     file = Path(path)
     if not file.is_file():
@@ -1797,24 +1799,30 @@ def run_write_gate(ctx):
               or ctx.queries["write-gate"][0]["prompt"])
     client_context = (target or {}).get("clientContext")
 
-    # Decision C seed step: create the record the gated delete will target, so the run owns its
-    # whole lifecycle. Only under --allow-writes; without it the substitution token stays in the
-    # prompt and the executing half is skipped below exactly as before.
+    # Decision C seed step: create the record the gated write will target, so the run owns its
+    # whole lifecycle. Only under --allow-writes; without it the substitution token stays in place
+    # and the executing half is skipped below exactly as before. The token may appear in the
+    # prompt, in clientContext (e.g. args.pathParams), or both — check the whole target, not just
+    # the prompt.
     seed = (target or {}).get("seed")
-    if seed and "{seededId}" in prompt and ctx.args.allow_writes:
+    needs_seed = seed and ("{seededId}" in prompt
+                           or "{seededId}" in json.dumps(client_context or {}))
+    if needs_seed and ctx.args.allow_writes:
         seeded = ctx.runner.send(RequestPlan(
             label="wg-seed",
             method=seed["method"],
             url=ctx.mcp_url(seed["path"]),
-            impact=ADMIN_WRITE,
+            # The seed creates a business record in the target domain (an appointment today), so it
+            # is a BUSINESS_WRITE — labelling it ADMIN_WRITE misstated it in skip reasons/output.
+            impact=BUSINESS_WRITE,
             persona=persona.name,
             headers=ctx.headers(persona),
             body=seed["body"],
-            note="decision C seed: creates the probe record the gated delete targets",
+            note="decision C seed: creates the probe record the gated write targets",
         ))
         seeded_id = (seeded.json_body or {}).get(seed["idField"]) \
             if seeded is not None and isinstance(seeded.json_body, dict) else None
-        suite.expect("wg-seed", "Probe record seeded for the gated delete",
+        suite.expect("wg-seed", "Probe record seeded for the gated write",
                      bool(seeded_id),
                      f"{seed['method']} {seed['path']} -> HTTP "
                      f"{getattr(seeded, 'status', 'refused')} {seed['idField']}={seeded_id}")
@@ -1824,8 +1832,8 @@ def run_write_gate(ctx):
         prompt = prompt.replace("{seededId}", str(seeded_id))
         if client_context:
             client_context = substitute_seeded_id(client_context, str(seeded_id))
-    elif seed and "{seededId}" in prompt:
-        suite.skip("wg-seed", "Probe record seeded for the gated delete",
+    elif needs_seed:
+        suite.skip("wg-seed", "Probe record seeded for the gated write",
                    "seed block configured but --allow-writes not passed; executing half will skip")
 
     correlation = uuid7ish()

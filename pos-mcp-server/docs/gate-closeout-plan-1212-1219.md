@@ -140,18 +140,30 @@ list — repeated here as the checklist):
   local simple model would have measured CPU inference, not tiering. All three models
   (router `qwen3.5:397b`, both tiers) verified serving HTTP 200 on the rotated key. Set in
   `/opt/durion/alpha/.env`, live in the container.
-- **C.** ~~#1218 write target~~ **RESOLVED 2026-08-19**: seed-then-delete of a probe MCP system
-  prompt via the discovered tool `prompts_deletesystemprompt` (pos-mcp-server
-  `DELETE /v1/prompts/{id}`). Rationale: the discovered tool arrives already permission-bound
-  (pos-mcp-server emits `x-required-permissions`; pos-security-service cannot, since it does not
-  depend on pos-security-common — its ops would need a manual tool-permission grant, an extra
-  registry mutation); the actor already holds `mcp:system_prompt:create/delete`; a probe-named
-  prompt row is referenced by nothing and lives in no Kafka-enabled domain; and the whole
-  preview→confirm→execute loop stays inside the service under test. Dirtying: acceptable only as
-  self-seeded data — the harness `seed` block creates the probe record and the gated delete
-  removes it (net-zero). Config: `scripts/fixtures/nlti-write-target.example.json`. Runner-up
-  (documented, not chosen): role create/delete on pos-security-service, rejected for the
-  tool-grant side effect.
+- **C.** ~~#1218 write target~~ **RESOLVED 2026-08-19 (revised same day)**: seed-then-cancel of a
+  probe appointment via the discovered tool `shop-manager_cancelappointment`
+  (`DELETE /v1/appointments/{appointmentId}/cancel`), actor = the DISPATCHER persona.
+  - **First choice, `prompts_deletesystemprompt`, proved structurally impossible on alpha**: the
+    gateway's api-docs aggregation (swagger-config, 23 services) does not include pos-mcp-server,
+    so its operations are never discovered and no `prompts_*` tool exists for a write plan to bind
+    (observed live: 403 from `requireToolPermission`; 389 discovered tools, none from
+    pos-mcp-server). Whether pos-mcp-server *should* be aggregated is an open product question,
+    deliberately not decided here.
+  - **Why cancelappointment**: discovered live with `appointments:cancel` attached; the DISPATCHER
+    and LOCATION_MANAGER personas hold `appointments:create` + `appointments:cancel` with no grant
+    changes; the write crosses a real service boundary (mcp-server → gateway → shop-manager) under
+    a NON-admin actor; shop-manager is not a Kafka-enabled domain. Residue: one inert CANCELLED
+    probe appointment on a far-future slot (cancel is a status write, not a row delete).
+  - **Rejected alternatives**: `security-service_deleterole` — pos-security-service cannot emit
+    `x-required-permissions` (no pos-security-common dependency), so its discovered ops carry zero
+    grants and would need a manual tool-permission grant, an extra registry mutation;
+    `price_deletepromotioneligibilityrule` — at decision time only the unassigned ADMIN role held
+    `pricing:promotion:manage` (a LOCATION_MANAGER grant is now in flight, making this the
+    documented fallback if appointment seeding fails validation; note its seed is two-step —
+    offer, then rule — and the harness `seed` block currently supports one request).
+  - Dirtying: acceptable only as self-seeded data — the harness `seed` block creates the probe
+    record under `--allow-writes` and the gated write consumes it. Config:
+    `scripts/fixtures/nlti-write-target.example.json` (authoritative).
 - **D.** #1215 — seed `PROCESSING_RETURN` (which tools?) or except it in the sign-off; does
   `routing.workflowState` + the `NLTI_SESSION_WORKFLOW_STATE_SET` audit event satisfy "workflow
   transitions in telemetry," or is a dedicated transition event wanted?
