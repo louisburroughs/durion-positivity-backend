@@ -28,7 +28,6 @@ class OpenApiAccessIT {
         assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
         assertThat(response.body()).contains("summary: Render document to PDF");
         assertThat(response.body())
-                .contains(
-                        "Renders the supplied source content into a PDF document and returns the PDF bytes inline.");
+                .contains("Renders the supplied source content into a PDF document and returns the PDF bytes inline.");
     }
 }
