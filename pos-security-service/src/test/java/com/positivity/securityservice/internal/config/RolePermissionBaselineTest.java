@@ -19,6 +19,7 @@ import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -76,16 +77,35 @@ class RolePermissionBaselineTest {
     private static final Set<String> UNREACHABLE_LEGACY_ROLES =
             Set.of("ACCOUNTANT", "AP_CLERK", "CONTROLLER", "CSR", "FLEET_MANAGER", "GL_ANALYST");
 
-    /** Roles that are seeded as identity only and intentionally carry no grants. */
-    private static final Set<String> INTENTIONALLY_UNGRANTED = Set.of(
-            "CUSTOMER",
-            "SELF_SERVICE_CUSTOMER",
-            "SHOP_MANAGER",
-            "SECURITY_ADMIN",
-            "READ_ONLY_SCHEDULER",
-            "INVENTORY_LEAD",
-            "INVENTORY_MANAGER",
-            "INVENTORY_CONTROLLER");
+    /**
+     * Conversational entrypoints every role receives. Holding these grants reach to the
+     * assistant, not to data: the assistant still enforces domain permissions per request.
+     */
+    private static final Set<String> ASSISTANT_BASELINE =
+            Set.of("mcp:chat:execute", "mcp:chat:stream", "nlti:request:submit", "nlti:request:read");
+
+    /** MCP administration that both ADMIN and SYSTEM_ADMINISTRATOR must hold. */
+    private static final Set<String> MCP_ADMINISTRATION = Set.of(
+            "mcp:system_prompt:view",
+            "mcp:system_prompt:create",
+            "mcp:system_prompt:update",
+            "mcp:system_prompt:delete",
+            "mcp:llm_api:view",
+            "mcp:llm_api:create",
+            "mcp:llm_api:update",
+            "mcp:llm_api:delete",
+            "mcp:tool:manage",
+            "mcp:document:ingest");
+
+    /**
+     * Everything on the MCP administration surface, which no role outside ADMIN and
+     * SYSTEM_ADMINISTRATOR may hold. Wider than {@link #MCP_ADMINISTRATION} because
+     * {@code mcp:tool:view} is restricted too but is currently held by ADMIN alone, so it is
+     * not something both admin roles are required to have.
+     */
+    private static final Set<String> MCP_ADMINISTRATION_SURFACE = Stream.concat(
+                    MCP_ADMINISTRATION.stream(), Stream.of("mcp:tool:view"))
+            .collect(Collectors.toUnmodifiableSet());
 
     private static Map<String, Set<String>> seededGrants;
     private static Set<String> definedPermissions;
@@ -116,8 +136,8 @@ class RolePermissionBaselineTest {
     }
 
     @Test
-    @DisplayName("reproduces the retired hardcoded expansion exactly for every legacy role")
-    void seed_reproducesLegacyRoleExpansionExactly() throws IOException {
+    @DisplayName("still grants everything the retired hardcoded expansion gave every legacy role")
+    void seed_losesNoLegacyCapability() throws IOException {
         Map<String, Set<String>> legacy = new TreeMap<>();
         for (String line : readResource(LEGACY_BASELINE).lines().toList()) {
             if (line.isBlank()) {
@@ -129,10 +149,13 @@ class RolePermissionBaselineTest {
 
         assertThat(legacy).as("legacy baseline fixture is empty").isNotEmpty();
 
+        // Containment, not equality: the baseline deliberately exceeds the legacy expansion now
+        // (every role gains the assistant entrypoints). The fixture is the no-regression floor —
+        // a capability the switch used to grant must never silently disappear.
         // Per role rather than in bulk, so a failure names the role that drifted.
         legacy.forEach((role, expected) -> assertThat(seededGrants.get(role))
                 .as("grants for legacy role %s", role)
-                .containsExactlyInAnyOrderElementsOf(expected));
+                .containsAll(expected));
     }
 
     @Test
@@ -144,8 +167,12 @@ class RolePermissionBaselineTest {
                 .as("SYSTEM_ADMINISTRATOR must carry the security admin surface")
                 .isNotEmpty();
         assertThat(granted)
-                .as("SYSTEM_ADMINISTRATOR may hold security:* and the chat entrypoint only")
-                .allMatch(permission -> permission.startsWith("security:") || permission.equals("mcp:chat:execute"));
+                .as("SYSTEM_ADMINISTRATOR may hold security:*, MCP administration and the assistant "
+                        + "entrypoints only — never domain authority")
+                .allMatch(permission -> permission.startsWith("security:")
+                        || permission.startsWith("mcp:")
+                        || permission.startsWith("nlti:"));
+        assertThat(granted).containsAll(MCP_ADMINISTRATION);
 
         // ADMIN is the all-domain role; SYSTEM_ADMINISTRATOR must stay strictly narrower.
         assertThat(granted)
@@ -172,7 +199,11 @@ class RolePermissionBaselineTest {
                         "workorder:workorder:view",
                         "workorder:workorder:assign-technician",
                         "people:availability:view",
-                        "mcp:chat:execute");
+                        // the assistant entrypoints every role carries
+                        "mcp:chat:execute",
+                        "mcp:chat:stream",
+                        "nlti:request:submit",
+                        "nlti:request:read");
     }
 
     @Test
@@ -218,9 +249,36 @@ class RolePermissionBaselineTest {
     }
 
     @Test
-    @DisplayName("roles left ungranted on purpose have no rows")
-    void intentionallyUngrantedRoles_haveNoGrants() {
-        assertThat(seededGrants.keySet()).doesNotContainAnyElementsOf(INTENTIONALLY_UNGRANTED);
+    @DisplayName("every role receives the assistant entrypoints")
+    void everyRoleReceivesTheAssistantBaseline() {
+        // Per role, so a failure names the role that is missing them rather than just failing.
+        seededGrants.forEach((role, granted) ->
+                assertThat(granted).as("assistant baseline for %s", role).containsAll(ASSISTANT_BASELINE));
+    }
+
+    @Test
+    @DisplayName("MCP administration is reserved for ADMIN and SYSTEM_ADMINISTRATOR")
+    void mcpAdministrationIsReservedToAdminRoles() {
+        assertThat(seededGrants.get("ADMIN")).containsAll(MCP_ADMINISTRATION);
+        assertThat(seededGrants.get("SYSTEM_ADMINISTRATOR")).containsAll(MCP_ADMINISTRATION);
+
+        // Scan the whole restricted surface, not just what both admin roles must hold:
+        // mcp:tool:view is equally restricted, and checking only MCP_ADMINISTRATION would let it
+        // leak to any role undetected.
+        Set<String> holders = seededGrants.entrySet().stream()
+                .filter(entry -> entry.getValue().stream().anyMatch(MCP_ADMINISTRATION_SURFACE::contains))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toCollection(TreeSet::new));
+
+        assertThat(holders)
+                .as("MCP administration must not leak to operational or customer-facing roles")
+                .containsExactly("ADMIN", "SYSTEM_ADMINISTRATOR");
+    }
+
+    @Test
+    @DisplayName("ADMIN holds both tool permissions")
+    void adminHoldsToolViewAndManage() {
+        assertThat(seededGrants.get("ADMIN")).contains("mcp:tool:view", "mcp:tool:manage");
     }
 
     @Test

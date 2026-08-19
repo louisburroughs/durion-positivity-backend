@@ -8,26 +8,30 @@
 -- so this baseline must stay complete.
 --
 -- POLICY
--- * Least privilege for operational roles. Each grant below mirrors a capability
---   the role already exercised through the retired hardcoded expansion, or (for
+-- * Least privilege for operational roles. Domain grants mirror a capability the
+--   role already exercised through the retired hardcoded expansion, or (for
 --   SYSTEM_ADMINISTRATOR and DISPATCHER, which the hardcoded switch never
 --   covered) the role's documented job function.
--- * SYSTEM_ADMINISTRATOR is deliberately NOT a superuser. It receives the
---   security/admin surface only (security:*, plus mcp:chat:execute) and holds no
---   accounting, catalog, workorder, inventory, or shop authority. ADMIN remains
---   the all-domain role. Granting SYSTEM_ADMINISTRATOR a new permission is an
---   explicit decision recorded here, never an automatic consequence of a new
---   permission being registered.
--- * Roles intentionally left with zero grants: CUSTOMER, SELF_SERVICE_CUSTOMER,
---   SHOP_MANAGER, SECURITY_ADMIN, READ_ONLY_SCHEDULER, INVENTORY_LEAD,
---   INVENTORY_MANAGER, INVENTORY_CONTROLLER. They had none under the hardcoded
---   expansion either; adding grants is a product decision, not a migration.
+-- * Assistant baseline: every role listed in section 3 receives mcp:chat:execute,
+--   mcp:chat:stream, nlti:request:submit and nlti:request:read. These are the
+--   conversational entrypoints; the assistant still enforces domain permissions
+--   per request, so holding them grants reach to the assistant, not to data.
+--   NOTE this includes the customer-facing CUSTOMER and SELF_SERVICE_CUSTOMER
+--   roles, which previously held nothing at all.
+--   These are explicit grants, not a rule the database enforces: a role created
+--   later through the role-permission admin API starts with NO grants, assistant
+--   entrypoints included, until something grants them. To make a new role part of
+--   the baseline, add it to section 3 here.
+-- * SYSTEM_ADMINISTRATOR is deliberately NOT a superuser. It holds the
+--   security/admin surface plus MCP administration (system prompts, LLM API
+--   configuration, tool management, document ingest) and no accounting, catalog,
+--   workorder, inventory or shop authority. ADMIN remains the all-domain role
+--   and is a strict superset.
 -- * The retired switch also expanded ACCOUNTANT, AP_CLERK, CONTROLLER, CSR,
---   FLEET_MANAGER and GL_ANALYST. Those rows are NOT reproduced here: no
---   migration and no runtime initializer ever creates them, and both user_roles
---   and role_assignments are foreign-keyed to roles(id), so no user could hold
---   one. They were unreachable branches. If a persona is ever wanted for real,
---   create the role first, then grant it here.
+--   FLEET_MANAGER and GL_ANALYST. Those are NOT reproduced here: no migration
+--   and no runtime initializer creates them, and both user_roles and
+--   role_assignments are foreign-keyed to roles(id), so no user could hold one.
+--   To make a persona real, create the role first, then grant it here.
 -- * Grants are additive. Nothing here deletes a row, so permissions an operator
 --   granted through the role-permission admin API survive re-runs.
 --
@@ -41,17 +45,20 @@ SET TIME ZONE 'UTC';
 -- ---------------------------------------------------------------------------
 -- 1. Ensure the roles this baseline grants to exist.
 --
--- RoleInitializer creates GENERAL_MANAGER and MANAGER from Java, but it is an
--- @PostConstruct bean and therefore runs AFTER Flyway. On a fresh database they
--- are absent while this migration executes, so granting to them by name would
--- resolve nothing and trip the assertion in section 4. Creating them here makes
--- the ordering deterministic instead of dependent on bean lifecycle. Descriptions
--- match RoleInitializer so the two agree whichever runs first.
+-- RoleInitializer creates these from Java, but it is an @PostConstruct bean and
+-- therefore runs AFTER Flyway. On a fresh database they are absent while this
+-- migration executes, so granting to them by name would resolve nothing and trip
+-- the assertion in section 4. Creating them here makes the ordering deterministic
+-- instead of dependent on bean lifecycle. Descriptions match RoleInitializer so
+-- the two agree whichever runs first.
 -- ---------------------------------------------------------------------------
 INSERT INTO roles (id, name, description, created_at, created_by)
 SELECT gen_random_uuid(), r.name, r.description, NOW(), 'system'
 FROM (VALUES
     ('GENERAL_MANAGER', 'General manager with broad organizational access'),
+    ('INVENTORY_CONTROLLER', 'Inventory controller with global adjustment approval authority'),
+    ('INVENTORY_LEAD', 'Inventory lead with permission to create adjustment requests'),
+    ('INVENTORY_MANAGER', 'Inventory manager with permission to create and approve adjustments'),
     ('MANAGER', 'Department or location manager')
 ) AS r(name, description)
 ON CONFLICT (name) DO NOTHING;
@@ -249,6 +256,8 @@ FROM (VALUES
     ('mcp:system_prompt:delete', 'mcp', 'system_prompt', 'delete', 102),
     ('mcp:system_prompt:update', 'mcp', 'system_prompt', 'update', 101),
     ('mcp:system_prompt:view', 'mcp', 'system_prompt', 'view', 99),
+    ('mcp:tool:manage', 'mcp', 'tool', 'manage', 347),
+    ('mcp:tool:view', 'mcp', 'tool', 'view', 348),
     ('nlti:audit:read', 'nlti', 'audit', 'read', 223),
     ('nlti:request:read', 'nlti', 'request', 'read', 222),
     ('nlti:request:submit', 'nlti', 'request', 'submit', 221),
@@ -432,6 +441,9 @@ FROM (VALUES
     ('ACCOUNTING_ASSOCIATE', 'accounting:mapping:view'),
     ('ACCOUNTING_ASSOCIATE', 'accounting:posting_rules:view'),
     ('ACCOUNTING_ASSOCIATE', 'mcp:chat:execute'),
+    ('ACCOUNTING_ASSOCIATE', 'mcp:chat:stream'),
+    ('ACCOUNTING_ASSOCIATE', 'nlti:request:read'),
+    ('ACCOUNTING_ASSOCIATE', 'nlti:request:submit'),
     ('ACCOUNT_MANAGER', 'accounting:ap:approve'),
     ('ACCOUNT_MANAGER', 'accounting:ap:pay'),
     ('ACCOUNT_MANAGER', 'accounting:ap:reject'),
@@ -477,6 +489,9 @@ FROM (VALUES
     ('ACCOUNT_MANAGER', 'invoice:billing-rules'),
     ('ACCOUNT_MANAGER', 'invoice:manage'),
     ('ACCOUNT_MANAGER', 'mcp:chat:execute'),
+    ('ACCOUNT_MANAGER', 'mcp:chat:stream'),
+    ('ACCOUNT_MANAGER', 'nlti:request:read'),
+    ('ACCOUNT_MANAGER', 'nlti:request:submit'),
     ('ACCOUNT_MANAGER', 'reporting:view:financial-statements'),
     ('ADMIN', 'accounting:ap:approve'),
     ('ADMIN', 'accounting:ap:pay'),
@@ -651,6 +666,8 @@ FROM (VALUES
     ('ADMIN', 'mcp:system_prompt:delete'),
     ('ADMIN', 'mcp:system_prompt:update'),
     ('ADMIN', 'mcp:system_prompt:view'),
+    ('ADMIN', 'mcp:tool:manage'),
+    ('ADMIN', 'mcp:tool:view'),
     ('ADMIN', 'nlti:audit:read'),
     ('ADMIN', 'nlti:request:read'),
     ('ADMIN', 'nlti:request:submit'),
@@ -813,11 +830,18 @@ FROM (VALUES
     ('ADMIN', 'workorder:workorder:reopen_completed'),
     ('ADMIN', 'workorder:workorder:start'),
     ('ADMIN', 'workorder:workorder:view'),
+    ('CUSTOMER', 'mcp:chat:execute'),
+    ('CUSTOMER', 'mcp:chat:stream'),
+    ('CUSTOMER', 'nlti:request:read'),
+    ('CUSTOMER', 'nlti:request:submit'),
     ('DISPATCHER', 'appointments:cancel'),
     ('DISPATCHER', 'appointments:create'),
     ('DISPATCHER', 'appointments:reschedule'),
     ('DISPATCHER', 'appointments:view'),
     ('DISPATCHER', 'mcp:chat:execute'),
+    ('DISPATCHER', 'mcp:chat:stream'),
+    ('DISPATCHER', 'nlti:request:read'),
+    ('DISPATCHER', 'nlti:request:submit'),
     ('DISPATCHER', 'people:availability:view'),
     ('DISPATCHER', 'shop:bay:assign'),
     ('DISPATCHER', 'shop:bay:view'),
@@ -828,6 +852,9 @@ FROM (VALUES
     ('DISPATCHER', 'workorder:workorder:assign-technician'),
     ('DISPATCHER', 'workorder:workorder:view'),
     ('GENERAL_MANAGER', 'mcp:chat:execute'),
+    ('GENERAL_MANAGER', 'mcp:chat:stream'),
+    ('GENERAL_MANAGER', 'nlti:request:read'),
+    ('GENERAL_MANAGER', 'nlti:request:submit'),
     ('GENERAL_MANAGER', 'people:timekeeping:approve'),
     ('GENERAL_MANAGER', 'people:timekeeping:reject'),
     ('GENERAL_MANAGER', 'people:timekeeping:view'),
@@ -839,6 +866,18 @@ FROM (VALUES
     ('GENERAL_MANAGER', 'security:role:view'),
     ('GENERAL_MANAGER', 'workorder:timeEntry:approve'),
     ('GENERAL_MANAGER', 'workorder:timeEntry:reject'),
+    ('INVENTORY_CONTROLLER', 'mcp:chat:execute'),
+    ('INVENTORY_CONTROLLER', 'mcp:chat:stream'),
+    ('INVENTORY_CONTROLLER', 'nlti:request:read'),
+    ('INVENTORY_CONTROLLER', 'nlti:request:submit'),
+    ('INVENTORY_LEAD', 'mcp:chat:execute'),
+    ('INVENTORY_LEAD', 'mcp:chat:stream'),
+    ('INVENTORY_LEAD', 'nlti:request:read'),
+    ('INVENTORY_LEAD', 'nlti:request:submit'),
+    ('INVENTORY_MANAGER', 'mcp:chat:execute'),
+    ('INVENTORY_MANAGER', 'mcp:chat:stream'),
+    ('INVENTORY_MANAGER', 'nlti:request:read'),
+    ('INVENTORY_MANAGER', 'nlti:request:submit'),
     ('LOCATION_MANAGER', 'appointments:cancel'),
     ('LOCATION_MANAGER', 'appointments:create'),
     ('LOCATION_MANAGER', 'appointments:reschedule'),
@@ -852,6 +891,9 @@ FROM (VALUES
     ('LOCATION_MANAGER', 'invoice:finalize'),
     ('LOCATION_MANAGER', 'invoice:manage'),
     ('LOCATION_MANAGER', 'mcp:chat:execute'),
+    ('LOCATION_MANAGER', 'mcp:chat:stream'),
+    ('LOCATION_MANAGER', 'nlti:request:read'),
+    ('LOCATION_MANAGER', 'nlti:request:submit'),
     ('LOCATION_MANAGER', 'people:availability:view'),
     ('LOCATION_MANAGER', 'people:timeAdjustment:approve'),
     ('LOCATION_MANAGER', 'people:timeAdjustment:create'),
@@ -922,6 +964,9 @@ FROM (VALUES
     ('LOCATION_MANAGER', 'workorder:workorder:reopen_completed'),
     ('LOCATION_MANAGER', 'workorder:workorder:view'),
     ('MANAGER', 'mcp:chat:execute'),
+    ('MANAGER', 'mcp:chat:stream'),
+    ('MANAGER', 'nlti:request:read'),
+    ('MANAGER', 'nlti:request:submit'),
     ('MANAGER', 'people:timekeeping:approve'),
     ('MANAGER', 'people:timekeeping:reject'),
     ('MANAGER', 'people:timekeeping:view'),
@@ -933,6 +978,18 @@ FROM (VALUES
     ('MANAGER', 'security:role:view'),
     ('MANAGER', 'workorder:timeEntry:approve'),
     ('MANAGER', 'workorder:timeEntry:reject'),
+    ('READ_ONLY_SCHEDULER', 'mcp:chat:execute'),
+    ('READ_ONLY_SCHEDULER', 'mcp:chat:stream'),
+    ('READ_ONLY_SCHEDULER', 'nlti:request:read'),
+    ('READ_ONLY_SCHEDULER', 'nlti:request:submit'),
+    ('SECURITY_ADMIN', 'mcp:chat:execute'),
+    ('SECURITY_ADMIN', 'mcp:chat:stream'),
+    ('SECURITY_ADMIN', 'nlti:request:read'),
+    ('SECURITY_ADMIN', 'nlti:request:submit'),
+    ('SELF_SERVICE_CUSTOMER', 'mcp:chat:execute'),
+    ('SELF_SERVICE_CUSTOMER', 'mcp:chat:stream'),
+    ('SELF_SERVICE_CUSTOMER', 'nlti:request:read'),
+    ('SELF_SERVICE_CUSTOMER', 'nlti:request:submit'),
     ('SERVICE_ADVISOR', 'appointments:cancel'),
     ('SERVICE_ADVISOR', 'appointments:create'),
     ('SERVICE_ADVISOR', 'appointments:reschedule'),
@@ -943,6 +1000,9 @@ FROM (VALUES
     ('SERVICE_ADVISOR', 'invoice:finalize'),
     ('SERVICE_ADVISOR', 'invoice:manage'),
     ('SERVICE_ADVISOR', 'mcp:chat:execute'),
+    ('SERVICE_ADVISOR', 'mcp:chat:stream'),
+    ('SERVICE_ADVISOR', 'nlti:request:read'),
+    ('SERVICE_ADVISOR', 'nlti:request:submit'),
     ('SERVICE_ADVISOR', 'pricing:promotion:view'),
     ('SERVICE_ADVISOR', 'shop:bay:view'),
     ('SERVICE_ADVISOR', 'shop:location:view'),
@@ -980,7 +1040,24 @@ FROM (VALUES
     ('SERVICE_ADVISOR', 'workorder:workorder:create'),
     ('SERVICE_ADVISOR', 'workorder:workorder:generate_invoice'),
     ('SERVICE_ADVISOR', 'workorder:workorder:view'),
+    ('SHOP_MANAGER', 'mcp:chat:execute'),
+    ('SHOP_MANAGER', 'mcp:chat:stream'),
+    ('SHOP_MANAGER', 'nlti:request:read'),
+    ('SHOP_MANAGER', 'nlti:request:submit'),
     ('SYSTEM_ADMINISTRATOR', 'mcp:chat:execute'),
+    ('SYSTEM_ADMINISTRATOR', 'mcp:chat:stream'),
+    ('SYSTEM_ADMINISTRATOR', 'mcp:document:ingest'),
+    ('SYSTEM_ADMINISTRATOR', 'mcp:llm_api:create'),
+    ('SYSTEM_ADMINISTRATOR', 'mcp:llm_api:delete'),
+    ('SYSTEM_ADMINISTRATOR', 'mcp:llm_api:update'),
+    ('SYSTEM_ADMINISTRATOR', 'mcp:llm_api:view'),
+    ('SYSTEM_ADMINISTRATOR', 'mcp:system_prompt:create'),
+    ('SYSTEM_ADMINISTRATOR', 'mcp:system_prompt:delete'),
+    ('SYSTEM_ADMINISTRATOR', 'mcp:system_prompt:update'),
+    ('SYSTEM_ADMINISTRATOR', 'mcp:system_prompt:view'),
+    ('SYSTEM_ADMINISTRATOR', 'mcp:tool:manage'),
+    ('SYSTEM_ADMINISTRATOR', 'nlti:request:read'),
+    ('SYSTEM_ADMINISTRATOR', 'nlti:request:submit'),
     ('SYSTEM_ADMINISTRATOR', 'security:audit:create'),
     ('SYSTEM_ADMINISTRATOR', 'security:audit:export'),
     ('SYSTEM_ADMINISTRATOR', 'security:audit:view'),
@@ -1003,6 +1080,9 @@ FROM (VALUES
     ('TECHNICIAN', 'inventory:pick_list:execute'),
     ('TECHNICIAN', 'inventory:pick_list:view'),
     ('TECHNICIAN', 'mcp:chat:execute'),
+    ('TECHNICIAN', 'mcp:chat:stream'),
+    ('TECHNICIAN', 'nlti:request:read'),
+    ('TECHNICIAN', 'nlti:request:submit'),
     ('TECHNICIAN', 'people:timeAdjustment:create'),
     ('TECHNICIAN', 'people:timeAdjustment:view'),
     ('TECHNICIAN', 'people:timeException:acknowledge'),
@@ -1047,11 +1127,19 @@ BEGIN
         ('ACCOUNTING_ASSOCIATE'),
         ('ACCOUNT_MANAGER'),
         ('ADMIN'),
+        ('CUSTOMER'),
         ('DISPATCHER'),
         ('GENERAL_MANAGER'),
+        ('INVENTORY_CONTROLLER'),
+        ('INVENTORY_LEAD'),
+        ('INVENTORY_MANAGER'),
         ('LOCATION_MANAGER'),
         ('MANAGER'),
+        ('READ_ONLY_SCHEDULER'),
+        ('SECURITY_ADMIN'),
+        ('SELF_SERVICE_CUSTOMER'),
         ('SERVICE_ADVISOR'),
+        ('SHOP_MANAGER'),
         ('SYSTEM_ADMINISTRATOR'),
         ('TECHNICIAN')
       ) AS g(role_name)
@@ -1233,6 +1321,8 @@ BEGIN
         ('mcp:system_prompt:delete'),
         ('mcp:system_prompt:update'),
         ('mcp:system_prompt:view'),
+        ('mcp:tool:manage'),
+        ('mcp:tool:view'),
         ('nlti:audit:read'),
         ('nlti:request:read'),
         ('nlti:request:submit'),
