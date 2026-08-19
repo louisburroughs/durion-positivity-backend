@@ -9,7 +9,17 @@
 --     and read the merged @PreAuthorize on class + method.
 --   * hasAuthority('X') / hasAnyAuthority('X','Y') → codes X, Y.
 --   * isAuthenticated() or no @PreAuthorize → 'AUTHENTICATED'.
+--   * hasRole(...) only → also 'AUTHENTICATED': this table stores permission codes,
+--     not role names, so role-only controller guards do not provide a normal
+--     permission code the MCP selection layer can mirror here.
 --   * Union all codes across every @Tool method in the tool class.
+--
+-- Why some facade reads are not gated here with their "normal" business permission:
+-- this seed mirrors the downstream controller's declared authorization, not the
+-- product intent of the facade. If the downstream endpoint is only
+-- isAuthenticated(), is ungated, or is role-gated without a permission code, the
+-- tool-selection layer has no normal permission code to seed and must fall back to
+-- AUTHENTICATED.
 --
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 1. InventoryFacadeTool
@@ -37,6 +47,8 @@ WHERE mcp_tool.name = 'InventoryFacadeTool';
 --                    → SalesOrderController (/v1/orders) class-level: @PreAuthorize("isAuthenticated()")
 --    searchOrders  → /order/v1/orders/search?q={query}
 --                    → SalesOrderController (same, isAuthenticated())
+--    Why not order:* here? These GETs inherit only the controller's
+--    isAuthenticated() floor, so there is no order permission code for MCP to seed.
 --    Union: AUTHENTICATED
 -- ─────────────────────────────────────────────────────────────────────────────
 INSERT INTO mcp_tool_permission (tool_id, permission_code)
@@ -74,6 +86,8 @@ WHERE mcp_tool.name = 'CustomerFacadeTool';
 --                     → PricingSnapshotController (/v1/price/snapshots): @PreAuthorize("isAuthenticated()")
 --    getPriceList   → /price/v1/pricing/lists/{priceListId}
 --                     → PricingSnapshotController or PriceNormalizationController: isAuthenticated()
+--    Why not pricing:* here? The mapped read endpoints are all
+--    isAuthenticated()-only, so MCP sees no permission-coded guard to copy.
 --    Union: AUTHENTICATED
 -- ─────────────────────────────────────────────────────────────────────────────
 INSERT INTO mcp_tool_permission (tool_id, permission_code)
@@ -114,7 +128,9 @@ WHERE mcp_tool.name = 'WorkorderFacadeTool';
 --                         → ProductController (/v1/products/search) — same role gate
 --    getCatalogByCategory → /catalog/v1/catalog/categories/{category}
 --                         → CatalogController (/v1/catalogs) — same role gate
---    Union: AUTHENTICATED  (role gates are enforced separately at the gateway)
+--    Why not catalog:* here? The catalog reads are guarded with roles, not
+--    permission codes, and this table can only store permission-code gates.
+--    Union: AUTHENTICATED  (role gates are enforced in the downstream service via Spring Security)
 -- ─────────────────────────────────────────────────────────────────────────────
 INSERT INTO mcp_tool_permission (tool_id, permission_code)
 SELECT id, code
@@ -308,6 +324,8 @@ WHERE mcp_tool.name = 'AdminFacadeTool';
 --                     → EventSummaryController (/v1/events/summary): no @PreAuthorize → AUTHENTICATED
 --    getEventHistory→ /event-receiver/v1/events/events/summary?entityId={entityId}
 --                     → EventSummaryController: no @PreAuthorize → AUTHENTICATED
+--    Why not events:* here? These endpoints declare no permission gate at all, so
+--    MCP can only model the authenticated floor.
 --    Union: AUTHENTICATED
 -- ─────────────────────────────────────────────────────────────────────────────
 INSERT INTO mcp_tool_permission (tool_id, permission_code)

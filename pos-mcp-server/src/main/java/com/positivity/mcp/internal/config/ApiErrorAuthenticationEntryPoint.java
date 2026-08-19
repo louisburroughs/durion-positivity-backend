@@ -60,7 +60,7 @@ class ApiErrorAuthenticationEntryPoint implements AuthenticationEntryPoint {
         if (incoming != null && !incoming.isBlank()) {
             try {
                 return UUID.fromString(incoming);
-            } catch (IllegalArgumentException _) {
+            } catch (IllegalArgumentException ignored) {
                 // fall through
             }
         }

@@ -17,7 +17,7 @@ final class NltiCorrelationIdSupport {
         if (headerValue != null && !headerValue.isBlank()) {
             try {
                 return UUID.fromString(headerValue);
-            } catch (IllegalArgumentException _) {
+            } catch (IllegalArgumentException ignored) {
                 // fall through to generate
             }
         }

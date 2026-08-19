@@ -239,7 +239,7 @@ public class StaticRagPreloadServiceImpl implements StaticRagPreloadService {
         try {
             Resource resource = new ClassPathResource(resourcePath(sourcePath));
             return computeHash(resource.getContentAsByteArray());
-        } catch (Exception _) {
+        } catch (Exception ignored) {
             return null;
         }
     }
