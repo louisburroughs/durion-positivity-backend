@@ -30,11 +30,23 @@ import org.jspecify.annotations.Nullable;
  *       {@code rag}, and {@code tools} are omitted.
  * </ul>
  *
- * <p>Three fields are still unpopulated by every emitter and must not be read as data:
- * {@link Tools#rejectedPermissionCount} (tool permission gating happens in SQL, so the rejected set
- * is never materialized in Java), {@link Rag#retrieved}, and {@link Quality}. They are retained
- * rather than removed because v1 consumers already query them; see the GAP notes on the Gate 7
- * dashboard panels.
+ * <p>Three fields carry no real measurement from any emitter, and they fail differently — a
+ * consumer must not read either kind as data:
+ *
+ * <ul>
+ *   <li>{@link Tools#rejectedPermissionCount} is <strong>present but always literally {@code 0}</strong>
+ *       on every record that carries a {@code tools} block. It is a primitive, so {@code NON_NULL}
+ *       does not suppress it and it serializes as a number that looks like a count. Tool permission
+ *       gating runs in SQL ({@code ToolMetadataRepository.findEnabledByPermissionsAndWorkflow}), so
+ *       the rejected candidates are never materialized in Java and there is nothing to count; the
+ *       {@code 0} is a placeholder, not "no tools were rejected".
+ *   <li>{@link Rag#retrieved} and {@link Quality} are <strong>always null, so {@code NON_NULL} omits
+ *       them from the JSON entirely.</strong> Their absence is the honest signal — unlike the field
+ *       above, no value is ever presented for a consumer to misread.
+ * </ul>
+ *
+ * <p>All three are retained rather than removed because v1 consumers already query them; see the GAP
+ * notes on the Gate 7 dashboard panels.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record NltiRequestTelemetry(
