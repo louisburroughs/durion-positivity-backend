@@ -780,7 +780,7 @@ def _seconds(value):
 
 # --- telemetry field accessors (schema: internal/telemetry/NltiRequestTelemetry) -----------------
 def tel_tools(record):
-    return sorted(((record or {}).get("tools") or {}).get("selected") or [])
+    return sorted(((record or {}).get("tools") or {}).get("selected") or [], key=str)
 
 
 def tel_prompt_layers(record):
@@ -788,7 +788,8 @@ def tel_prompt_layers(record):
 
 
 def tel_rag_docs(record):
-    return sorted(doc.get("docId") for doc in (((record or {}).get("rag") or {}).get("retrieved") or []))
+    return sorted((doc.get("docId") for doc in
+                   (((record or {}).get("rag") or {}).get("retrieved") or [])), key=str)
 
 
 def tel_workflow(record):
@@ -1688,7 +1689,8 @@ def run_router(ctx):
     suite.expect_joined("router-telemetry", "Model tier + actual model name in telemetry",
                         all(row["tier"] for row in observed),
                         f"{len(observed)}/{len(rows)} probes reported routing.tier; "
-                        f"tierModel values={sorted({row['tierModel'] for row in observed})}",
+                        f"tierModel values="
+                        f"{sorted({row['tierModel'] for row in observed}, key=str)}",
                         joined)
 
     simple = [row for row in observed if row["class"] == "simple"]
@@ -1971,7 +1973,7 @@ def run_write_gate(ctx):
                 auditor = persona
         audit = ctx.runner.send(ctx.plan_audit(auditor, correlation))
         entries = ((audit.json_body or {}).get("content") or []) if audit and audit.ok else []
-        types = sorted({entry.get("eventType") for entry in entries})
+        types = sorted({entry.get("eventType") for entry in entries}, key=str)
         suite.expect("wg-audit-execution", "CONFIRMATION + EXECUTION audit entries appended",
                      "CONFIRMATION" in types
                      and any(str(t).startswith("EXECUTION") for t in types),
