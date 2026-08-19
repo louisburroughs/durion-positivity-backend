@@ -237,13 +237,21 @@ class RolePermissionBaselineTest {
         Set<String> creatable = new TreeSet<>();
 
         // Roles created by the other migrations, plus the ones this seed creates itself.
+        //
+        // Each statement is bounded at its terminating semicolon rather than by a character
+        // window. Under-reading would fail a correct migration whose VALUES list is long;
+        // over-reading is worse, because running past the statement into this file's own grant
+        // block would harvest the role names out of ('ADMIN', 'crm:party:view') rows and the
+        // guard would vacuously pass. "INSERT INTO roles" does not prefix-match
+        // "INSERT INTO role_permissions", so the grant block is not picked up as a source.
+        Pattern quotedRoleName = Pattern.compile("'([A-Z][A-Z_]{2,})'");
         try (var files = Files.list(MIGRATIONS)) {
             for (Path file : files.filter(f -> f.toString().endsWith(".sql")).toList()) {
                 String body = Files.readString(file);
                 int from = body.indexOf("INSERT INTO roles");
                 while (from >= 0) {
-                    Matcher name = Pattern.compile("'([A-Z][A-Z_]{2,})'")
-                            .matcher(body.substring(from, Math.min(body.length(), from + 4000)));
+                    int end = body.indexOf(';', from);
+                    Matcher name = quotedRoleName.matcher(body.substring(from, end < 0 ? body.length() : end));
                     while (name.find()) {
                         creatable.add(name.group(1));
                     }
