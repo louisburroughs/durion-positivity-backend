@@ -171,6 +171,50 @@ docker volume prune
 
 The POS Security Service provides Role-Based Access Control (RBAC) for all microservices.
 
+A caller's authorities are resolved from the database along one chain, and only this chain:
+
+```
+users -> user_roles -> roles -> role_permissions -> permissions
+```
+
+`RoleAuthorityService` reads it at login, `JwtService` encodes the result into the `perm_bits`
+claim, and the gateway decodes `perm_bits` into `X-Authorities` for downstream `@PreAuthorize`
+checks. There is no hardcoded role-to-authority map: a role grants exactly what
+`role_permissions` holds, and a role with no grants yields no permissions at all.
+
+Do not confuse the three tables:
+
+| Table | Meaning |
+| --- | --- |
+| `role_permissions` | **role → permission** grants — what a role can do |
+| `user_roles` | **user → role**, unscoped — feeds token issuance |
+| `role_assignments` | **user → role** with scope type, location scope and effective dating — read by `check-permission`, but does **not** narrow a JWT |
+
+### Provisioning Role Grants
+
+Baseline grants for the canonical roles ship as a repeatable Flyway migration,
+`pos-security-service/src/main/resources/db/migration/R__seed_role_permissions.sql`. It applies
+in every environment where Flyway runs, resolves roles and permissions by name rather than by
+UUID, and is idempotent — re-running it inserts nothing new.
+
+**To change the baseline:** edit the seed file. Flyway re-applies a repeatable migration when
+its checksum changes, so the grants land on the next pos-security-service startup. The seed only
+inserts, so it can add a capability but never revoke one; to remove a grant, use the admin API
+below or write a versioned migration.
+
+**To adjust one environment without touching the baseline:** use the role-permission admin API
+(next section). Those grants survive seed re-runs.
+
+**If the migration aborts** with `role_permissions baseline references unknown roles: ...` or
+`... unknown permissions: ...`, a name in the baseline no longer resolves — usually a role
+renamed through the admin API, or a permission renamed in a `permissions.yaml` manifest. This is
+deliberate: a silent name mismatch would under-grant authority with no signal. Reconcile the
+name, then restart.
+
+`SYSTEM_ADMINISTRATOR` is scoped to the security/admin surface only and is **not** a superuser;
+it does not acquire newly registered permissions automatically. `ADMIN` is the all-domain role.
+See `pos-security-service/README.md` for the full role policy.
+
 ### Creating Roles and Permissions
 
 **1. Register a Permission:**

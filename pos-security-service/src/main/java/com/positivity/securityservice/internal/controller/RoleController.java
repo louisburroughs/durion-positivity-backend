@@ -384,10 +384,14 @@ public class RoleController {
     }
 
     /**
-     * Get the default authority codes a role expands to (#782).
+     * Get the authority codes a role expands to (#782).
      *
      * <p>Consumed by pos-mcp-server to prebuild per-role agent tool caches with the role's real
      * permission set instead of an AUTHENTICATED-only warm-up.
+     *
+     * <p>Reads the role's persisted {@code role_permissions} grants — the same resolution the
+     * login path uses to build {@code perm_bits} — so the response matches what a token issued
+     * for that role actually carries.
      */
     @GetMapping("/{role}/default-permissions")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -398,18 +402,18 @@ public class RoleController {
             operationId = "getRoleDefaultPermissions",
             summary = "Get a Role's Default Authority Expansion",
             description = """
-                    Returns the authority codes a role name expands to: the ROLE_ prefixed authority plus the \
-                    domain permission codes hardwired for known roles.
+                    Returns the authority codes a role name expands to: the ROLE_ prefixed authority plus every \
+                    permission code granted to that role in role_permissions.
                     Use this tool to prebuild per-role permission or tool caches, as pos-mcp-server does; do not \
-                    use getUserPermissions, which reads a specific user's database assignments instead of the \
-                    static role expansion.
+                    use getUserPermissions, which reads one specific user's scoped role assignments rather than \
+                    the authority set a role carries.
                     Preconditions: the caller must hold security:role:view; the role name does not need to exist in \
                     the database.
                     Required inputs: role name as a path parameter, for example SHOP_MGR.
-                    No events are emitted and no state changes; this is a read-only expansion of the compiled \
-                    role-authority map.
-                    Returns 200 in all cases; an unrecognized role yields only its ROLE_ authority with no domain \
-                    codes rather than an error.
+                    No events are emitted and no state changes; this is a read-only lookup of the role's persisted \
+                    permission grants.
+                    Returns 200 in all cases; an unrecognized role, or a role with no grants, yields only its \
+                    ROLE_ authority with no domain codes rather than an error.
                     """)
     @ApiResponse(responseCode = "200", description = "Role default permissions returned")
     public ResponseEntity<RoleDefaultPermissionsResponse> getRoleDefaultPermissions(@PathVariable String role) {

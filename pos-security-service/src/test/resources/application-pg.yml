@@ -1,0 +1,40 @@
+# Test profile that runs the real Flyway migration chain plus the repeatable seeds against a
+# Testcontainers Postgres, with Hibernate ddl-auto=validate. The H2 profile disables Flyway
+# entirely, so it cannot catch seed drift, Postgres-only syntax, or a role-permission grant
+# that silently fails to resolve. The datasource is supplied at runtime by @ServiceConnection.
+spring:
+  application:
+    name: pos-security-pg-test
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  flyway:
+    enabled: true
+  kafka:
+    bootstrap-servers: localhost:9092
+
+security:
+  jwt:
+    secret: test-jwt-secret-key-01234567890123456789
+  redis:
+    enabled: false
+
+pos:
+  security:
+    api-secret: test-permission-secret
+  events:
+    base-url: http://localhost:1
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+logging:
+  level:
+    com.positivity: INFO
