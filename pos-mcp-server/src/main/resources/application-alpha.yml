@@ -104,6 +104,7 @@ mcp:
         - id: "security.guide"
           source-path: "classpath:rag/security-service-guide.md"
           rag-scope: "master"
+          required-permissions: ["security:permission:view", "security:role:view"]
         # Gate 5 documents. `required-permissions` is bound by StaticDocEntry (G5.2) and enforced by
         # the permission-aware RAG filter (G5.1). Permission codes verified against the service
         # permissions.yaml files. Kept in parity with application.yml so alpha's corpus matches the
