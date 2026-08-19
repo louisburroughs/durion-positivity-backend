@@ -809,7 +809,9 @@ services:
     volumes:
       # Gate 7 live-tuning eval gate: ToolPriorityTuningService reads eval-result-path from the
       # container filesystem; scripts/eval_live.py writes the file on the host. Read-only.
-      - ${MCP_TUNING_EVAL_HOST_DIR:-/opt/durion/alpha/eval}:/opt/eval:ro
+      # Repo-relative default matches where eval_live.py writes locally; the alpha host overrides
+      # via MCP_TUNING_EVAL_HOST_DIR in its .env (e.g. /opt/durion/alpha/eval).
+      - ${MCP_TUNING_EVAL_HOST_DIR:-./pos-mcp-server/target/eval}:/opt/eval:ro
     environment:
       SPRING_PROFILES_ACTIVE: alpha
       POS_MCP_DB_HOST: postgres
