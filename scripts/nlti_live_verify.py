@@ -450,7 +450,7 @@ def load_write_target(path):
         seeds = [dict(target["seed"], token=target["seed"].get("token", "{seededId}"))]
     if seeds is not None:
         for index, seed in enumerate(seeds):
-            for key in ("method", "path", "body", "idField", "token"):
+            for key in ("method", "path", "body", "idField", "token", "route"):
                 if not seed.get(key):
                     raise SystemExit(
                         f"--write-target {file} seed #{index + 1} is missing '{key}'")
@@ -912,11 +912,16 @@ class Context:
 
     # -- URL building: gateway contract is X-API-Version + path rewrite /{domain}/vN/... ----------
     def mcp_url(self, path):
+        return self.route_url(self.args.service_route, path)
+
+    def route_url(self, route, path):
+        """Gateway URL for any service route (mcp-server, price, shop-manager, ...) under the
+        same X-API-Version rewrite contract mcp_url uses."""
         path = path.lstrip("/")
         base = self.args.gateway_url.rstrip("/")
         if self.args.already_versioned:
-            return f"{base}/{self.args.service_route}/v{self.args.api_version}/{path}"
-        return f"{base}/{self.args.service_route}/{path}"
+            return f"{base}/{route}/v{self.args.api_version}/{path}"
+        return f"{base}/{route}/{path}"
 
     def auth_url(self):
         # /security-service/v1/auth/** bypasses the gateway's version rewrite
@@ -1830,10 +1835,13 @@ def run_write_gate(ctx):
             check_id = "wg-seed" if index == 0 else f"wg-seed-{index + 1}"
             path = substitute_tokens(seed["path"], tokens)
             body = substitute_tokens(seed["body"], tokens)
+            # Seeds live in the TARGET service's domain, so they route to that service through the
+            # gateway ("route"), not to pos-mcp-server — the 2026-08-19 run 404'd on
+            # POST /mcp-server/promotions/offers because mcp_url() hardcoded the mcp-server route.
             seeded = ctx.runner.send(RequestPlan(
                 label=check_id,
                 method=seed["method"],
-                url=ctx.mcp_url(path),
+                url=ctx.route_url(seed.get("route", ctx.args.service_route), path),
                 # Seeds create business records in the target domain, so BUSINESS_WRITE.
                 impact=BUSINESS_WRITE,
                 persona=persona.name,
