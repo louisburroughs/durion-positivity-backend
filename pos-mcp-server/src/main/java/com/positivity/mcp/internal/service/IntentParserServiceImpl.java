@@ -21,6 +21,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.NoSuchElementException;
@@ -37,7 +38,25 @@ import org.springframework.stereotype.Service;
 public class IntentParserServiceImpl implements IntentParserService {
     private static final Logger log = LoggerFactory.getLogger(IntentParserServiceImpl.class);
 
+    // #1398: risk and intent-type are distinct dimensions — every write verb classifies as ACTION,
+    // and the verb class sets the risk level (destructive HIGH, mutating MEDIUM, additive LOW), so
+    // create/update phrasings reach the Gate 6 write gate instead of dead-ending as UNKNOWN.
+    // Keyword lists are an interim classifier; the T1 router model is the planned successor.
     private static final Set<String> HIGH_RISK_VERBS = Set.of("delete", "remove");
+    private static final Set<String> MEDIUM_RISK_VERBS = Set.of(
+            "create",
+            "update",
+            "change",
+            "modify",
+            "edit",
+            "adjust",
+            "set",
+            "cancel",
+            "reschedule",
+            "apply",
+            "transfer",
+            "receive");
+    private static final Set<String> LOW_RISK_VERBS = Set.of("add", "register");
     private static final Set<String> QUERY_INDICATORS =
             Set.of("check", "show", "list", "find", "get", "what", "how many", "price");
 
@@ -77,7 +96,8 @@ public class IntentParserServiceImpl implements IntentParserService {
     @SuppressWarnings("java:S2583")
     public @NonNull IntentV1 parse(@NonNull String prompt, @NonNull UUID sessionId, @NonNull UUID correlationId) {
         log.debug("Parsing intent for sessionId={}, correlationId={}", sessionId, correlationId);
-        String lower = prompt.toLowerCase(Locale.ROOT);
+        // Stripped so surrounding whitespace can't defeat prefix rules (e.g. " bulk delete ...").
+        String lower = prompt.toLowerCase(Locale.ROOT).strip();
 
         NltiRiskLevel risk = classifyRisk(lower);
         NltiIntentType type = classifyType(lower, risk);
@@ -167,6 +187,11 @@ public class IntentParserServiceImpl implements IntentParserService {
         if (lower.startsWith("bulk ")) {
             return NltiRiskLevel.HIGH;
         }
+        Set<String> words = wordsOf(lower);
+        // Mutating verbs outrank additive ones so a mixed prompt carries the higher risk.
+        if (MEDIUM_RISK_VERBS.stream().anyMatch(words::contains)) {
+            return NltiRiskLevel.MEDIUM;
+        }
         return NltiRiskLevel.LOW;
     }
 
@@ -174,10 +199,23 @@ public class IntentParserServiceImpl implements IntentParserService {
         if (risk == NltiRiskLevel.HIGH) {
             return NltiIntentType.ACTION;
         }
+        Set<String> words = wordsOf(lower);
+        // A write verb of any risk class wins over query indicators: a prompt that both reads and
+        // writes must reach the write gate's preview→confirm flow, never a silent read.
+        if (MEDIUM_RISK_VERBS.stream().anyMatch(words::contains)
+                || LOW_RISK_VERBS.stream().anyMatch(words::contains)) {
+            return NltiIntentType.ACTION;
+        }
         if (QUERY_INDICATORS.stream().anyMatch(lower::contains)) {
             return NltiIntentType.QUERY;
         }
         return NltiIntentType.UNKNOWN;
+    }
+
+    // Whole-word matching for the new verb classes: substring matching would misfire on nouns
+    // ("address" contains "add"). Base forms only — prompts are dominantly imperative.
+    private static Set<String> wordsOf(String lower) {
+        return Set.copyOf(Arrays.asList(lower.split("[^a-z0-9]+")));
     }
 
     private NltiIntentStatus classifyStatus(NltiIntentType type) {

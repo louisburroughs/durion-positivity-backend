@@ -606,10 +606,12 @@ python3 scripts/nlti_live_verify.py --suite write-gate --allow-writes \
   proves an absent one. `mcp:tool:manage` uses a no-op revoke of a nonexistent permission code so
   the probe cannot mutate.
 - The write-gate ACTION probe defaults to a delete-verb prompt (`--write-gate-action-prompt`)
-  because `IntentParserServiceImpl` classifies ACTION only for HIGH-risk prompts
-  ("delete"/"remove" or a "bulk " prefix). The always-on `wg-intent-gap` check submits a
-  create-style prompt and is EXPECTED to FAIL, documenting on every run that create/update
-  phrasings cannot reach the write gate (#1218 product gap).
+  because HIGH-risk prompts exercise the strictest gate invariants. The always-on
+  `wg-intent-gap` check submits a create-style prompt and asserts the #1398 contract
+  (create/update phrasings classify as ACTION and reach the write gate): with a
+  `--write-target` clientContext it must yield a write-plan preview (`planId`), without one it
+  must yield `NEEDS_CLARIFICATION` (missing `targetTool`) — the plain ACCEPTED envelope of the
+  old UNKNOWN dead-end (#1218 product gap) is a real FAIL.
 - Exit codes: `0` all executed checks passed (or `--dry-run`), `1` a check failed, `2` configuration
   error, `3` infrastructure error (auth/gateway/Loki unreachable).
 - Plan: `pos-mcp-server/docs/gate-closeout-plan-1212-1219.md` (Wave 0.3).

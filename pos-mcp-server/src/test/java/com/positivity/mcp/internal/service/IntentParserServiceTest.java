@@ -205,6 +205,76 @@ class IntentParserServiceTest {
         assertThat(result.status()).isEqualTo("NEEDS_CLARIFICATION");
     }
 
+    // ─── #1398: create/update phrasings are ACTION with graded risk ──────────
+
+    /**
+     * A create-phrased prompt must classify as ACTION so it can reach the Gate 6
+     * write gate, with MEDIUM risk (mutates business state, not destructive).
+     *
+     * @see <a href=
+     *      "https://github.com/louisburroughs/durion-positivity-backend/issues/1398">#1398</a>
+     */
+    @Test
+    @DisplayName("parse: create-phrased prompt returns MEDIUM-risk ACTION")
+    void parse_createPrompt_returnsMediumRiskAction() {
+        // #1398: the wg-intent-gap live probe prompt — previously UNKNOWN/plain ACCEPTED
+        IntentV1 result = service.parse("Create a purchase order for 10 oil filters", SESSION_ID, CORRELATION_ID);
+
+        assertThat(result.intentType()).isEqualTo("ACTION");
+        assertThat(result.riskLevel()).isEqualTo("MEDIUM");
+        assertThat(result.status()).isEqualTo("NEEDS_CLARIFICATION");
+    }
+
+    /**
+     * An update-phrased prompt must classify as ACTION/MEDIUM even when the prompt
+     * also contains a query indicator ("price"): a prompt that writes must reach
+     * the write gate, never resolve to a silent read.
+     */
+    @Test
+    @DisplayName("parse: update-phrased prompt outranks query indicators and returns MEDIUM-risk ACTION")
+    void parse_updatePrompt_returnsMediumRiskAction() {
+        IntentV1 result = service.parse("Update the price of SKU BRK-9920 to 49.99", SESSION_ID, CORRELATION_ID);
+
+        assertThat(result.intentType()).isEqualTo("ACTION");
+        assertThat(result.riskLevel()).isEqualTo("MEDIUM");
+    }
+
+    /** A purely additive prompt (add/register) is an ACTION at LOW risk. */
+    @Test
+    @DisplayName("parse: additive prompt returns LOW-risk ACTION")
+    void parse_additivePrompt_returnsLowRiskAction() {
+        IntentV1 result = service.parse("Add a new customer named Delgado Logistics", SESSION_ID, CORRELATION_ID);
+
+        assertThat(result.intentType()).isEqualTo("ACTION");
+        assertThat(result.riskLevel()).isEqualTo("LOW");
+    }
+
+    /**
+     * Risk stays graded when verb classes mix: a destructive verb anywhere in the
+     * prompt keeps HIGH risk even alongside create/update verbs.
+     */
+    @Test
+    @DisplayName("parse: destructive verb outranks create/update verbs (HIGH risk)")
+    void parse_mixedDestructiveAndCreate_returnsHighRisk() {
+        IntentV1 result = service.parse("Delete the old pricing rule and create a new one", SESSION_ID, CORRELATION_ID);
+
+        assertThat(result.intentType()).isEqualTo("ACTION");
+        assertThat(result.riskLevel()).isEqualTo("HIGH");
+    }
+
+    /**
+     * Write verbs match whole words only — a noun containing a verb as a substring
+     * ("address" contains "add") must not classify as ACTION.
+     */
+    @Test
+    @DisplayName("parse: verb-substring inside a noun does not classify as ACTION")
+    void parse_verbSubstringInsideNoun_staysQuery() {
+        IntentV1 result = service.parse("What is the address of the downtown store", SESSION_ID, CORRELATION_ID);
+
+        assertThat(result.intentType()).isEqualTo("QUERY");
+        assertThat(result.riskLevel()).isEqualTo("LOW");
+    }
+
     // ─── AC5: metric emission ────────────────────────────────────────────────
 
     /**
@@ -417,6 +487,15 @@ class IntentParserServiceTest {
     @DisplayName("parse: 'bulk ' prefix is classified as HIGH risk ACTION")
     void parse_withBulkPrefix_returnsHighRiskAction() {
         IntentV1 result = service.parse("bulk update prices", SESSION_ID, CORRELATION_ID);
+
+        assertThat(result.riskLevel()).isEqualTo("HIGH");
+        assertThat(result.intentType()).isEqualTo("ACTION");
+    }
+
+    @Test
+    @DisplayName("parse: leading whitespace does not defeat the 'bulk ' prefix rule")
+    void parse_withWhitespaceBeforeBulkPrefix_returnsHighRiskAction() {
+        IntentV1 result = service.parse("  \nbulk update prices", SESSION_ID, CORRELATION_ID);
 
         assertThat(result.riskLevel()).isEqualTo("HIGH");
         assertThat(result.intentType()).isEqualTo("ACTION");
