@@ -14,11 +14,10 @@
 --   covered) the role's documented job function.
 -- * Assistant baseline: every role listed in section 3 receives mcp:chat:execute,
 --   mcp:chat:stream, nlti:request:submit and nlti:request:read. These are the
---   conversational entrypoints. Most MCP access is still bounded by domain
---   permissions per request, but facade operations whose downstream endpoints are
---   only isAuthenticated(), have no @PreAuthorize, or use role-only checks fall
---   back to the synthetic AUTHENTICATED tool tier because MCP has no normal
---   permission code to mirror for them.
+--   conversational entrypoints. MCP now gates the order, pricing and catalog
+--   facades on explicit domain permission codes rather than the synthetic
+--   AUTHENTICATED tier; only domains that still lack a real permission code for
+--   MCP to mirror remain on that floor.
 --   NOTE this includes the customer-facing CUSTOMER and SELF_SERVICE_CUSTOMER
 --   roles, which previously held nothing at all.
 --   These are explicit grants, not a rule the database enforces: a role created

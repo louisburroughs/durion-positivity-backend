@@ -90,17 +90,15 @@ Every role in the baseline seed receives four conversational entrypoints:
 | `nlti:request:submit` | Submit a natural-language task-interface request |
 | `nlti:request:read` | Read submitted NLTI request status |
 
-These grant reach to the assistant, not directly to role-backed data — but with one important
-MCP caveat. The tool-selection layer mirrors downstream controller authorization from
-`mcp_tool_permission`: when an endpoint is guarded only by `isAuthenticated()`, has no
-`@PreAuthorize`, or uses role checks without a permission code, MCP has no "normal" permission to
-copy and falls back to the synthetic `AUTHENTICATED` tier instead. Those operations therefore are
-not bounded here by a domain permission grant from `role_permissions`; they are bounded only by the
-downstream authenticated/role gate that the service itself declares. These entrypoints are applied
-to every role the seed knows about, including the customer-facing `CUSTOMER` and
-`SELF_SERVICE_CUSTOMER`, which previously held nothing at all — so external self-service users can
-now reach the assistant and submit NLTI requests, plus any MCP surface still sitting on that
-`AUTHENTICATED` floor.
+These grant reach to the assistant, not directly to role-backed data. MCP tool selection now uses
+explicit domain permission codes for the order, pricing, and catalog facades, so holding only these
+entrypoints no longer qualifies a caller for those data-bearing tools. The remaining caveat is the
+synthetic `AUTHENTICATED` tier: when a downstream surface still has no domain permission code for
+MCP to mirror, the selection layer must fall back to `AUTHENTICATED` until that domain defines one.
+These entrypoints are applied to every role the seed knows about, including the customer-facing
+`CUSTOMER` and `SELF_SERVICE_CUSTOMER`, which previously held nothing at all — so external
+self-service users can now reach the assistant and submit NLTI requests, but not the explicitly
+permission-gated facades above.
 
 This is a list of explicit grants, not a rule the database enforces. A role created later through
 `POST /v1/roles` or the role-permission admin API starts with **no** grants at all, assistant

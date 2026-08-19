@@ -30,6 +30,8 @@ class FacadeToolPermissionSeedTest {
 
     private static final Path MIGRATIONS = Paths.get(System.getProperty("user.dir"), "src/main/resources/db/migration");
     private static final String AUTHENTICATED = "AUTHENTICATED";
+    private static final Set<String> ASSISTANT_ENTRYPOINTS =
+            Set.of("mcp:chat:execute", "mcp:chat:stream", "nlti:request:submit", "nlti:request:read", AUTHENTICATED);
 
     // One INSERT block: VALUES ('code'), ('code2') ... WHERE mcp_tool.name = 'ToolName';
     private static final Pattern TOOL_NAME = Pattern.compile("mcp_tool\\.name\\s*=\\s*'([^']+)'");
@@ -38,8 +40,7 @@ class FacadeToolPermissionSeedTest {
     @Test
     @DisplayName("no facade grants AUTHENTICATED alongside a privileged permission (net of V18 + V29)")
     void noFacadeMixesAuthenticatedWithPrivilege() throws IOException {
-        Map<String, Set<String>> grants = parseSeed(read("V18__seed_facade_tool_permissions.sql"));
-        applyAuthenticatedDeletes(grants, read("V29__fix_facade_authenticated_gating.sql"));
+        Map<String, Set<String>> grants = netGrants();
 
         assertThat(grants).isNotEmpty();
         grants.forEach((tool, codes) -> {
@@ -57,8 +58,7 @@ class FacadeToolPermissionSeedTest {
     @Test
     @DisplayName("the mixed facades no longer carry AUTHENTICATED after V29")
     void mixedFacadesLoseAuthenticated() throws IOException {
-        Map<String, Set<String>> grants = parseSeed(read("V18__seed_facade_tool_permissions.sql"));
-        applyAuthenticatedDeletes(grants, read("V29__fix_facade_authenticated_gating.sql"));
+        Map<String, Set<String>> grants = netGrants();
 
         assertThat(grants.get("WorkorderFacadeTool"))
                 .doesNotContain(AUTHENTICATED)
@@ -68,6 +68,30 @@ class FacadeToolPermissionSeedTest {
                 .contains("security:user:view", "security:permission:view", "security:audit:view");
         // #1115 under-enumerated: TaxFacadeTool is a third mixed facade (tax:calculate + AUTHENTICATED).
         assertThat(grants.get("TaxFacadeTool")).doesNotContain(AUTHENTICATED).contains("tax:calculate");
+    }
+
+    @Test
+    @DisplayName("order, pricing, and catalog facades are retargeted to explicit domain permissions")
+    void explicitFacadesUseExplicitPermissions() throws IOException {
+        Map<String, Set<String>> grants = netGrants();
+
+        assertThat(grants.get("OrderFacadeTool")).doesNotContain(AUTHENTICATED).containsExactly("order:order:view");
+        assertThat(grants.get("PricingFacadeTool"))
+                .doesNotContain(AUTHENTICATED)
+                .containsExactlyInAnyOrder("pricing:price_book:view", "pricing:rule:view");
+        assertThat(grants.get("CatalogFacadeTool"))
+                .doesNotContain(AUTHENTICATED)
+                .containsExactlyInAnyOrder("catalog:product:view", "catalog:category:view");
+    }
+
+    @Test
+    @DisplayName("assistant entrypoints alone do not qualify order, pricing, or catalog facades")
+    void assistantOnlyCallerCannotQualifyExplicitFacades() throws IOException {
+        Map<String, Set<String>> grants = netGrants();
+
+        assertThat(intersectsAssistantBaseline(grants.get("OrderFacadeTool"))).isFalse();
+        assertThat(intersectsAssistantBaseline(grants.get("PricingFacadeTool"))).isFalse();
+        assertThat(intersectsAssistantBaseline(grants.get("CatalogFacadeTool"))).isFalse();
     }
 
     // ── parsing ───────────────────────────────────────────────────────────────
@@ -109,6 +133,22 @@ class FacadeToolPermissionSeedTest {
             if (codes != null) {
                 codes.remove(AUTHENTICATED);
             }
+        }
+
+        private static Map<String, Set<String>> netGrants() throws IOException {
+            Map<String, Set<String>> grants = parseSeed(read("V18__seed_facade_tool_permissions.sql"));
+            applyAuthenticatedDeletes(grants, read("V29__fix_facade_authenticated_gating.sql"));
+            mergeSeed(grants, read("V35__retarget_facade_authenticated_gating.sql"));
+            applyAuthenticatedDeletes(grants, read("V35__retarget_facade_authenticated_gating.sql"));
+            return grants;
+        }
+
+        private static void mergeSeed(Map<String, Set<String>> grants, String sql) {
+            parseSeed(sql).forEach((tool, codes) -> grants.computeIfAbsent(tool, ignored -> new LinkedHashSet<>()).addAll(codes));
+        }
+
+        private static boolean intersectsAssistantBaseline(Set<String> codes) {
+            return codes != null && codes.stream().anyMatch(ASSISTANT_ENTRYPOINTS::contains);
         }
     }
 
