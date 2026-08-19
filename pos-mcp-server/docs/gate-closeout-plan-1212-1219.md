@@ -8,6 +8,24 @@
 > **Created:** 2026-08-18. **Tracks:** #1212, #1213, #1214, #1215, #1216, #1217, #1218, #1219,
 > plus two build-gap stories discovered while planning: #1367, #1368.
 
+## Execution status (2026-08-19)
+
+| Wave | Status | Record |
+|---|---|---|
+| 0 | **DONE** | PR #1370 (merged) — closed #1367, #1368 |
+| 1 | **DONE** | PRs #1371, #1382, #1385–#1390 — gates 0/1/2A/2C/5/6 all carry dated live evidence in `implementation_checklist.md` |
+| 2 | **DONE** | PRs #1391–#1393 — Gate 4 router evidence (7/7, p95 5653 ms) |
+| 3 | **IN PROGRESS** | shadow soak started 2026-08-19 ~16:50 UTC (PR #1394 + manual compose sync); 3 nights, then one gated live promotion (~Aug 22), then revert |
+| 4 | pending | single HOLD→Pass PR; blocked on decision G and the Gate 5 `security.guide` policy call |
+
+Standing findings feeding sign-off (each documented in the relevant gate block / PR):
+the NLTI submit path emits no request telemetry; `IntentParserServiceImpl:40` makes the write gate
+unreachable for create/update phrasings; `model.fallbackUsed` is hardcoded false with no failover
+path in code; the gateway api-docs aggregation excludes pos-mcp-server (12 of 23 aggregated
+services produce no discovered tools); shop-manager's `ext_vehicle` replica is empty on alpha;
+`security-service_deleterole`/`_deleterole_1` name collision; CI's Detect Changed Services skips
+`docker-compose.yml` changes (two silent non-deploys).
+
 ## Issue map
 
 | Issue | Gate | One-line scope |
@@ -131,8 +149,8 @@ evidence/approver/date, close #1212–#1219, #1367, #1368.
 Answers needed before the corresponding wave item can complete (see chat history for the full
 list — repeated here as the checklist):
 
-- **A.** Alpha access — session gets it directly, or someone else runs the harness and pastes
-  output?
+- **A.** ~~Alpha access~~ **RESOLVED 2026-08-18**: the session drives alpha directly via SSM
+  (`aws ssm send-command` on `i-06d434c7593e70f5c`); all live runs executed this way.
 - **B.** ~~Tier models for #1216~~ **RESOLVED 2026-08-19**: `MCP_MODEL_SIMPLE=gpt-oss:20b`,
   `MCP_MODEL_COMPLEX` unset (default executor `gpt-oss:120b` is already the complex-class model).
   Both tiers on the ollama.com cloud backend — chat does NOT run on alpha's local Ollama (that
@@ -167,10 +185,16 @@ list — repeated here as the checklist):
 - **D.** #1215 — seed `PROCESSING_RETURN` (which tools?) or except it in the sign-off; does
   `routing.workflowState` + the `NLTI_SESSION_WORKFLOW_STATE_SET` audit event satisfy "workflow
   transitions in telemetry," or is a dedicated transition event wanted?
-- **E.** #1219 — shadow soak length; do we exercise `live` tuning promotion on alpha (it writes
+- **E.** ~~#1219 soak~~ **RESOLVED 2026-08-19**: 3 nights shadow (02:00 UTC cron), then ONE gated
+  `live` promotion exercised on alpha (fresh `eval_live.py` baseline into the `/opt/eval` mount
+  first), then immediate revert to shadow. Rationale: exercises the full #1219 admin flow rather
+  than accepting shadow-only evidence. (Original text: shadow soak length; do we exercise `live`
+  tuning promotion on alpha — it writes
   `mcp_tool.priority`)?
-- **F.** #1217 — if a doc fails the sweep, fix content or record an exception; make the sweep a
-  permanent CI test?
+- **F.** #1217 — **PARTLY RESOLVED**: no doc failed the mechanical sweep (39/39 locked); the
+  offline `RetrievalLockTest` IS a permanent CI test. Residue: the `security.guide` public-doc
+  policy call (fix content vs record exception) — blocks Gate 5 Pass; and whether
+  `rag_lock_sweep.py` itself joins CI (optional).
 - **G.** Sign-off approver for the eight gate blocks.
-- **H.** Telemetry harvest — Loki/LogQL (provisioned, `observability/loki-config.yml`) confirmed
-  as the harvest path for #1367 rather than raw `docker compose logs`.
+- **H.** ~~Telemetry harvest~~ **RESOLVED**: Loki/LogQL is the harvest path; every suite joins
+  telemetry by correlation id since PR #1382 (fallback joins render as UNVERIFIED-ATTRIBUTION).
