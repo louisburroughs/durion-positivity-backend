@@ -16,7 +16,7 @@
 | 1 | **DONE** | PRs #1371, #1382, #1385–#1390 — gates 0/1/2A/2C/5/6 all carry dated live evidence in `implementation_checklist.md` |
 | 2 | **DONE** | PRs #1391–#1393 — Gate 4 router evidence (7/7, p95 5653 ms) |
 | 3 | **IN PROGRESS** | shadow soak started 2026-08-19 ~16:50 UTC (PR #1394 + manual compose sync); 3 nights, then one gated live promotion (~2026-08-22 UTC), then revert |
-| 4 | pending | single HOLD→Pass PR; blocked on decision G and the Gate 5 `security.guide` policy call |
+| 4 | **IN PROGRESS** | metrics filled (PR #1399); gates 0/1/2A/2B/2C/4/6 PASS (approver Louis Burroughs, 2026-08-19); Gate 5 awaits the post-#1400 live sweep, Gate 7 the soak |
 
 Standing findings feeding sign-off (each documented in the relevant gate block / PR):
 
@@ -200,6 +200,8 @@ list — repeated here as the checklist):
   offline `RetrievalLockTest` IS a permanent CI test. Residue: the `security.guide` public-doc
   policy call (fix content vs record exception) — blocks Gate 5 Pass; and whether
   `rag_lock_sweep.py` itself joins CI (optional).
-- **G.** Sign-off approver for the eight gate blocks.
+- **G.** ~~Sign-off approver~~ **RESOLVED 2026-08-19**: Louis Burroughs. Gates 0/1/2A/2B/2C/4/6
+  flipped to PASS the same day; Gate 5 flips after the #1400 tag deploys and the live sweep
+  re-verifies `security.guide` permission-bound; Gate 7 flips after the Wave 3 soak.
 - **H.** ~~Telemetry harvest~~ **RESOLVED**: Loki/LogQL is the harvest path; every suite joins
   telemetry by correlation id since PR #1382 (fallback joins render as UNVERIFIED-ATTRIBUTION).
