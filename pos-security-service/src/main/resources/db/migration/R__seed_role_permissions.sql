@@ -22,25 +22,50 @@
 --   SHOP_MANAGER, SECURITY_ADMIN, READ_ONLY_SCHEDULER, INVENTORY_LEAD,
 --   INVENTORY_MANAGER, INVENTORY_CONTROLLER. They had none under the hardcoded
 --   expansion either; adding grants is a product decision, not a migration.
+-- * The retired switch also expanded ACCOUNTANT, AP_CLERK, CONTROLLER, CSR,
+--   FLEET_MANAGER and GL_ANALYST. Those rows are NOT reproduced here: no
+--   migration and no runtime initializer ever creates them, and both user_roles
+--   and role_assignments are foreign-keyed to roles(id), so no user could hold
+--   one. They were unreachable branches. If a persona is ever wanted for real,
+--   create the role first, then grant it here.
 -- * Grants are additive. Nothing here deletes a row, so permissions an operator
 --   granted through the role-permission admin API survive re-runs.
 --
 -- IDEMPOTENCY
--- Both statements below are ON CONFLICT DO NOTHING, and role/permission ids are
+-- Every statement below is ON CONFLICT DO NOTHING, and role/permission ids are
 -- resolved by NAME rather than hardcoded UUIDs, so re-running this repeatable
 -- migration against a populated database is a no-op.
 
 SET TIME ZONE 'UTC';
 
 -- ---------------------------------------------------------------------------
--- 1. Ensure a permissions row exists for every permission this baseline grants.
+-- 1. Ensure the roles this baseline grants to exist.
+--
+-- RoleInitializer creates GENERAL_MANAGER and MANAGER from Java, but it is an
+-- @PostConstruct bean and therefore runs AFTER Flyway. On a fresh database they
+-- are absent while this migration executes, so granting to them by name would
+-- resolve nothing and trip the assertion in section 4. Creating them here makes
+-- the ordering deterministic instead of dependent on bean lifecycle. Descriptions
+-- match RoleInitializer so the two agree whichever runs first.
+-- ---------------------------------------------------------------------------
+INSERT INTO roles (id, name, description, created_at, created_by)
+SELECT gen_random_uuid(), r.name, r.description, NOW(), 'system'
+FROM (VALUES
+    ('GENERAL_MANAGER', 'General manager with broad organizational access'),
+    ('MANAGER', 'Department or location manager')
+) AS r(name, description)
+ON CONFLICT (name) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- 2. Ensure a permissions row exists for every permission this baseline grants.
 --
 -- Most rows already exist (SQL-seeded, or registered at startup by the owning
 -- module). Some are registered only by services that may not have booted yet on
 -- a fresh database, and role_permissions has a foreign key to permissions, so a
 -- missing row would silently drop the grant. Names and bit indexes come from the
 -- PermissionCode catalog -- the same compiled catalog pos-api-gateway decodes
--- perm_bits against -- so nothing here is invented.
+-- perm_bits against -- so nothing here is invented. The placeholder description
+-- is overwritten when the owning module registers the permission at startup.
 --
 -- ON CONFLICT DO NOTHING (no conflict target) so an existing row is preserved
 -- untouched, whatever unique constraint it collides on.
@@ -391,55 +416,11 @@ FROM (VALUES
 ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
--- 2. Role -> permission grants, resolved by name.
+-- 3. Role -> permission grants, resolved by name.
 -- ---------------------------------------------------------------------------
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM (VALUES
-    ('ACCOUNTANT', 'accounting:ap:approve'),
-    ('ACCOUNTANT', 'accounting:ap:pay'),
-    ('ACCOUNTANT', 'accounting:ap:reject'),
-    ('ACCOUNTANT', 'accounting:ap:view'),
-    ('ACCOUNTANT', 'accounting:coa:create'),
-    ('ACCOUNTANT', 'accounting:coa:deactivate'),
-    ('ACCOUNTANT', 'accounting:coa:edit'),
-    ('ACCOUNTANT', 'accounting:coa:view'),
-    ('ACCOUNTANT', 'accounting:credit-memo:create'),
-    ('ACCOUNTANT', 'accounting:credit-memo:read'),
-    ('ACCOUNTANT', 'accounting:default-mapping:create'),
-    ('ACCOUNTANT', 'accounting:default-mapping:delete'),
-    ('ACCOUNTANT', 'accounting:default-mapping:edit'),
-    ('ACCOUNTANT', 'accounting:default-mapping:view'),
-    ('ACCOUNTANT', 'accounting:events:reprocess'),
-    ('ACCOUNTANT', 'accounting:events:retry'),
-    ('ACCOUNTANT', 'accounting:events:submit'),
-    ('ACCOUNTANT', 'accounting:events:view'),
-    ('ACCOUNTANT', 'accounting:export:view'),
-    ('ACCOUNTANT', 'accounting:gl-mapping:create'),
-    ('ACCOUNTANT', 'accounting:gl-mapping:resolve'),
-    ('ACCOUNTANT', 'accounting:je:create'),
-    ('ACCOUNTANT', 'accounting:je:post'),
-    ('ACCOUNTANT', 'accounting:je:reverse'),
-    ('ACCOUNTANT', 'accounting:je:view'),
-    ('ACCOUNTANT', 'accounting:mapping-key:create'),
-    ('ACCOUNTANT', 'accounting:mapping-key:deactivate'),
-    ('ACCOUNTANT', 'accounting:mapping-key:edit'),
-    ('ACCOUNTANT', 'accounting:mapping-key:view'),
-    ('ACCOUNTANT', 'accounting:mapping:create'),
-    ('ACCOUNTANT', 'accounting:mapping:deactivate'),
-    ('ACCOUNTANT', 'accounting:mapping:edit'),
-    ('ACCOUNTANT', 'accounting:mapping:view'),
-    ('ACCOUNTANT', 'accounting:payment:apply'),
-    ('ACCOUNTANT', 'accounting:payment:reverse'),
-    ('ACCOUNTANT', 'accounting:posting-category:create'),
-    ('ACCOUNTANT', 'accounting:posting-category:deactivate'),
-    ('ACCOUNTANT', 'accounting:posting-category:edit'),
-    ('ACCOUNTANT', 'accounting:posting-category:view'),
-    ('ACCOUNTANT', 'accounting:posting_rules:create'),
-    ('ACCOUNTANT', 'accounting:posting_rules:publish'),
-    ('ACCOUNTANT', 'accounting:posting_rules:view'),
-    ('ACCOUNTANT', 'mcp:chat:execute'),
-    ('ACCOUNTANT', 'reporting:view:financial-statements'),
     ('ACCOUNTING_ASSOCIATE', 'accounting:ap:approve'),
     ('ACCOUNTING_ASSOCIATE', 'accounting:ap:pay'),
     ('ACCOUNTING_ASSOCIATE', 'accounting:ap:reject'),
@@ -832,103 +813,6 @@ FROM (VALUES
     ('ADMIN', 'workorder:workorder:reopen_completed'),
     ('ADMIN', 'workorder:workorder:start'),
     ('ADMIN', 'workorder:workorder:view'),
-    ('AP_CLERK', 'accounting:ap:approve'),
-    ('AP_CLERK', 'accounting:ap:pay'),
-    ('AP_CLERK', 'accounting:ap:reject'),
-    ('AP_CLERK', 'accounting:ap:view'),
-    ('AP_CLERK', 'accounting:coa:create'),
-    ('AP_CLERK', 'accounting:coa:edit'),
-    ('AP_CLERK', 'accounting:coa:view'),
-    ('AP_CLERK', 'accounting:credit-memo:create'),
-    ('AP_CLERK', 'accounting:credit-memo:read'),
-    ('AP_CLERK', 'accounting:default-mapping:create'),
-    ('AP_CLERK', 'accounting:default-mapping:edit'),
-    ('AP_CLERK', 'accounting:default-mapping:view'),
-    ('AP_CLERK', 'accounting:events:submit'),
-    ('AP_CLERK', 'accounting:events:view'),
-    ('AP_CLERK', 'accounting:export:view'),
-    ('AP_CLERK', 'accounting:gl-mapping:create'),
-    ('AP_CLERK', 'accounting:je:create'),
-    ('AP_CLERK', 'accounting:je:view'),
-    ('AP_CLERK', 'accounting:mapping-key:create'),
-    ('AP_CLERK', 'accounting:mapping-key:edit'),
-    ('AP_CLERK', 'accounting:mapping-key:view'),
-    ('AP_CLERK', 'accounting:mapping:create'),
-    ('AP_CLERK', 'accounting:mapping:edit'),
-    ('AP_CLERK', 'accounting:mapping:view'),
-    ('AP_CLERK', 'accounting:payment:apply'),
-    ('AP_CLERK', 'accounting:posting-category:view'),
-    ('AP_CLERK', 'accounting:posting_rules:create'),
-    ('AP_CLERK', 'accounting:posting_rules:view'),
-    ('AP_CLERK', 'mcp:chat:execute'),
-    ('CONTROLLER', 'accounting:ap:approve'),
-    ('CONTROLLER', 'accounting:ap:pay'),
-    ('CONTROLLER', 'accounting:ap:reject'),
-    ('CONTROLLER', 'accounting:ap:view'),
-    ('CONTROLLER', 'accounting:coa:create'),
-    ('CONTROLLER', 'accounting:coa:deactivate'),
-    ('CONTROLLER', 'accounting:coa:edit'),
-    ('CONTROLLER', 'accounting:coa:view'),
-    ('CONTROLLER', 'accounting:credit-memo:create'),
-    ('CONTROLLER', 'accounting:credit-memo:read'),
-    ('CONTROLLER', 'accounting:default-mapping:create'),
-    ('CONTROLLER', 'accounting:default-mapping:delete'),
-    ('CONTROLLER', 'accounting:default-mapping:edit'),
-    ('CONTROLLER', 'accounting:default-mapping:view'),
-    ('CONTROLLER', 'accounting:events:reprocess'),
-    ('CONTROLLER', 'accounting:events:retry'),
-    ('CONTROLLER', 'accounting:events:submit'),
-    ('CONTROLLER', 'accounting:events:view'),
-    ('CONTROLLER', 'accounting:export:request'),
-    ('CONTROLLER', 'accounting:export:view'),
-    ('CONTROLLER', 'accounting:gl-mapping:create'),
-    ('CONTROLLER', 'accounting:gl-mapping:resolve'),
-    ('CONTROLLER', 'accounting:je:create'),
-    ('CONTROLLER', 'accounting:je:post'),
-    ('CONTROLLER', 'accounting:je:reverse'),
-    ('CONTROLLER', 'accounting:je:view'),
-    ('CONTROLLER', 'accounting:mapping-key:create'),
-    ('CONTROLLER', 'accounting:mapping-key:deactivate'),
-    ('CONTROLLER', 'accounting:mapping-key:edit'),
-    ('CONTROLLER', 'accounting:mapping-key:view'),
-    ('CONTROLLER', 'accounting:mapping:create'),
-    ('CONTROLLER', 'accounting:mapping:deactivate'),
-    ('CONTROLLER', 'accounting:mapping:edit'),
-    ('CONTROLLER', 'accounting:mapping:view'),
-    ('CONTROLLER', 'accounting:payment:apply'),
-    ('CONTROLLER', 'accounting:payment:reverse'),
-    ('CONTROLLER', 'accounting:posting-category:create'),
-    ('CONTROLLER', 'accounting:posting-category:deactivate'),
-    ('CONTROLLER', 'accounting:posting-category:edit'),
-    ('CONTROLLER', 'accounting:posting-category:view'),
-    ('CONTROLLER', 'accounting:posting_rules:archive'),
-    ('CONTROLLER', 'accounting:posting_rules:create'),
-    ('CONTROLLER', 'accounting:posting_rules:publish'),
-    ('CONTROLLER', 'accounting:posting_rules:view'),
-    ('CONTROLLER', 'accounting:report:export'),
-    ('CONTROLLER', 'accounting:time:export'),
-    ('CONTROLLER', 'mcp:chat:execute'),
-    ('CONTROLLER', 'reporting:view:financial-statements'),
-    ('CSR', 'crm:contact:create'),
-    ('CSR', 'crm:contact:edit'),
-    ('CSR', 'crm:contact:view'),
-    ('CSR', 'crm:contact_preference:edit'),
-    ('CSR', 'crm:contact_preference:view'),
-    ('CSR', 'crm:contact_role:assign'),
-    ('CSR', 'crm:contact_role:view'),
-    ('CSR', 'crm:party:search'),
-    ('CSR', 'crm:party:view'),
-    ('CSR', 'crm:person:read'),
-    ('CSR', 'crm:processing_log:view'),
-    ('CSR', 'crm:promotion_redemption:record'),
-    ('CSR', 'crm:promotion_redemption:view'),
-    ('CSR', 'crm:relationship:read'),
-    ('CSR', 'crm:suspense:view'),
-    ('CSR', 'crm:vehicle:search'),
-    ('CSR', 'crm:vehicle:view'),
-    ('CSR', 'crm:vehicle_party_association:view'),
-    ('CSR', 'mcp:chat:execute'),
-    ('CSR', 'pricing:promotion:view'),
     ('DISPATCHER', 'appointments:cancel'),
     ('DISPATCHER', 'appointments:create'),
     ('DISPATCHER', 'appointments:reschedule'),
@@ -943,35 +827,6 @@ FROM (VALUES
     ('DISPATCHER', 'shop:technician:view'),
     ('DISPATCHER', 'workorder:workorder:assign-technician'),
     ('DISPATCHER', 'workorder:workorder:view'),
-    ('FLEET_MANAGER', 'crm:contact:create'),
-    ('FLEET_MANAGER', 'crm:contact:edit'),
-    ('FLEET_MANAGER', 'crm:contact:view'),
-    ('FLEET_MANAGER', 'crm:contact_preference:edit'),
-    ('FLEET_MANAGER', 'crm:contact_preference:view'),
-    ('FLEET_MANAGER', 'crm:contact_role:assign'),
-    ('FLEET_MANAGER', 'crm:contact_role:view'),
-    ('FLEET_MANAGER', 'crm:party:edit'),
-    ('FLEET_MANAGER', 'crm:party:search'),
-    ('FLEET_MANAGER', 'crm:party:view'),
-    ('FLEET_MANAGER', 'crm:person:read'),
-    ('FLEET_MANAGER', 'crm:processing_log:view'),
-    ('FLEET_MANAGER', 'crm:promotion_redemption:record'),
-    ('FLEET_MANAGER', 'crm:promotion_redemption:view'),
-    ('FLEET_MANAGER', 'crm:relationship:read'),
-    ('FLEET_MANAGER', 'crm:suspense:view'),
-    ('FLEET_MANAGER', 'crm:vehicle:create'),
-    ('FLEET_MANAGER', 'crm:vehicle:search'),
-    ('FLEET_MANAGER', 'crm:vehicle:view'),
-    ('FLEET_MANAGER', 'crm:vehicle_party_association:create'),
-    ('FLEET_MANAGER', 'crm:vehicle_party_association:edit'),
-    ('FLEET_MANAGER', 'crm:vehicle_party_association:view'),
-    ('FLEET_MANAGER', 'crm:vehicle_preference:edit'),
-    ('FLEET_MANAGER', 'crm:vehicle_preference:view'),
-    ('FLEET_MANAGER', 'mcp:chat:execute'),
-    ('FLEET_MANAGER', 'pricing:promotion:view'),
-    ('FLEET_MANAGER', 'vehicle-inventory:registry:create'),
-    ('FLEET_MANAGER', 'vehicle-inventory:registry:update'),
-    ('FLEET_MANAGER', 'vehicle-inventory:registry:view'),
     ('GENERAL_MANAGER', 'mcp:chat:execute'),
     ('GENERAL_MANAGER', 'people:timekeeping:approve'),
     ('GENERAL_MANAGER', 'people:timekeeping:reject'),
@@ -984,30 +839,6 @@ FROM (VALUES
     ('GENERAL_MANAGER', 'security:role:view'),
     ('GENERAL_MANAGER', 'workorder:timeEntry:approve'),
     ('GENERAL_MANAGER', 'workorder:timeEntry:reject'),
-    ('GL_ANALYST', 'accounting:ap:view'),
-    ('GL_ANALYST', 'accounting:coa:create'),
-    ('GL_ANALYST', 'accounting:coa:edit'),
-    ('GL_ANALYST', 'accounting:coa:view'),
-    ('GL_ANALYST', 'accounting:credit-memo:read'),
-    ('GL_ANALYST', 'accounting:default-mapping:create'),
-    ('GL_ANALYST', 'accounting:default-mapping:edit'),
-    ('GL_ANALYST', 'accounting:default-mapping:view'),
-    ('GL_ANALYST', 'accounting:events:submit'),
-    ('GL_ANALYST', 'accounting:events:view'),
-    ('GL_ANALYST', 'accounting:export:view'),
-    ('GL_ANALYST', 'accounting:gl-mapping:create'),
-    ('GL_ANALYST', 'accounting:je:create'),
-    ('GL_ANALYST', 'accounting:je:view'),
-    ('GL_ANALYST', 'accounting:mapping-key:create'),
-    ('GL_ANALYST', 'accounting:mapping-key:edit'),
-    ('GL_ANALYST', 'accounting:mapping-key:view'),
-    ('GL_ANALYST', 'accounting:mapping:create'),
-    ('GL_ANALYST', 'accounting:mapping:edit'),
-    ('GL_ANALYST', 'accounting:mapping:view'),
-    ('GL_ANALYST', 'accounting:posting-category:view'),
-    ('GL_ANALYST', 'accounting:posting_rules:create'),
-    ('GL_ANALYST', 'accounting:posting_rules:view'),
-    ('GL_ANALYST', 'mcp:chat:execute'),
     ('LOCATION_MANAGER', 'appointments:cancel'),
     ('LOCATION_MANAGER', 'appointments:create'),
     ('LOCATION_MANAGER', 'appointments:reschedule'),
@@ -1199,11 +1030,11 @@ JOIN permissions p ON p.name = g.permission_name
 ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
--- 3. Fail loudly if any baseline name did not resolve.
+-- 4. Fail loudly if any baseline name did not resolve.
 --
 -- The JOINs above drop unmatched rows silently, which would under-grant
--- authority without any signal. Assert every baseline role and permission
--- resolved, and abort the migration naming what is missing if not.
+-- authority with no signal. Assert every baseline role and permission resolved,
+-- and abort the migration naming what is missing if not.
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE
@@ -1213,17 +1044,11 @@ BEGIN
     SELECT string_agg(DISTINCT g.role_name, ', ' ORDER BY g.role_name)
       INTO missing_roles
       FROM (VALUES
-        ('ACCOUNTANT'),
         ('ACCOUNTING_ASSOCIATE'),
         ('ACCOUNT_MANAGER'),
         ('ADMIN'),
-        ('AP_CLERK'),
-        ('CONTROLLER'),
-        ('CSR'),
         ('DISPATCHER'),
-        ('FLEET_MANAGER'),
         ('GENERAL_MANAGER'),
-        ('GL_ANALYST'),
         ('LOCATION_MANAGER'),
         ('MANAGER'),
         ('SERVICE_ADVISOR'),
