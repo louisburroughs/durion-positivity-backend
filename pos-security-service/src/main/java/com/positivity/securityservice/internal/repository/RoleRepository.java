@@ -29,9 +29,13 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
      * role being created through the admin API under a different casing, and a case-sensitive
      * match would silently resolve zero grants for it.
      *
+     * <p>{@code DISTINCT} because roles overlap heavily — {@code mcp:chat:execute} alone is
+     * granted to nearly every role — so a multi-role principal would otherwise make the
+     * database materialize the same name once per granting role on every token issuance.
+     *
      * @param names role names, already normalized to upper case with any {@code ROLE_} prefix stripped
      * @return the granted permission names; empty when no role matches or no role has grants
      */
-    @Query("SELECT p.name FROM Role r JOIN r.permissions p WHERE UPPER(r.name) IN :names")
+    @Query("SELECT DISTINCT p.name FROM Role r JOIN r.permissions p WHERE UPPER(r.name) IN :names")
     Set<String> findPermissionNamesByRoleNames(@Param("names") Collection<String> names);
 }

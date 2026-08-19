@@ -62,6 +62,7 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
     }
 
     private String normalizeRole(String role) {
-        return role.trim().toUpperCase(Locale.ROOT).replaceFirst("^" + ROLE_PREFIX, "");
+        String normalized = role.trim().toUpperCase(Locale.ROOT);
+        return normalized.startsWith(ROLE_PREFIX) ? normalized.substring(ROLE_PREFIX.length()) : normalized;
     }
 }
