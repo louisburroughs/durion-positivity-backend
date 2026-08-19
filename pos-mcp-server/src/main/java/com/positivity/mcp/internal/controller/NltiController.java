@@ -92,8 +92,10 @@ public class NltiController {
             @RequestHeader(value = NltiCorrelationIdSupport.CORRELATION_ID_HEADER, required = false)
                     String correlationIdHeader,
             @NonNull HttpServletRequest servletRequest) {
-        UUID resolvedCorrelationId = NltiCorrelationIdSupport.resolveFromHeader(correlationIdHeader);
-        servletRequest.setAttribute(NltiCorrelationIdSupport.CORRELATION_ID_ATTRIBUTE, resolvedCorrelationId);
+        // resolveFromRequest reuses the id CorrelationIdMdcFilter already resolved (request
+        // attribute), so the MDC/telemetry id and the persisted request id can never diverge when
+        // the header is absent or invalid. resolveFromHeader here would mint a second id.
+        UUID resolvedCorrelationId = NltiCorrelationIdSupport.resolveFromRequest(servletRequest);
         NltiResponseV1 response = nltiRequestService.submit(request, resolvedCorrelationId);
         return ResponseEntity.accepted()
                 .header(

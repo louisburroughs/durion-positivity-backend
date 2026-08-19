@@ -39,11 +39,13 @@ Safety model (non-negotiable):
 Telemetry harvest (plan decision H): Loki/LogQL only — never `docker compose logs`. The emitter is
 `internal/telemetry/LoggingNltiTelemetryEmitter`, which writes one JSON line per request to the
 dedicated `nlti.telemetry` logger; promtail (`observability/promtail-config.yml`) ships it with the
-`service` label set from the compose service name. Records are matched by correlationId when the
-caller controls it (the NLTI endpoints honour `X-Correlation-Id`), and by request time-window +
-actor role otherwise — the chat endpoints do not accept a correlation id and
-`SessionAgentManager.emitChatTelemetry` falls back to a random UUID when the `correlationId` MDC key
-is absent, so the window is the only join key available there.
+`service` label set from the compose service name. Every request — the chat endpoints included —
+is sent with a generated `X-Correlation-Id` and records are joined primarily by correlationId (the
+servlet correlation filter echoes the header on all endpoints). Against a server that predates that
+filter the chat records still carry a random correlationId; the harness then falls back to the
+request time-window + actor-role join and downgrades every check that depended on it to
+UNVERIFIED-ATTRIBUTION, because the 2026-08-19 live run proved the window join can attribute the
+PREVIOUS persona's record (role/permCount shifted one position across all four personas).
 
 No third-party dependencies: stdlib only (urllib/json/argparse), matching `scripts/eval_live.py` and
 `scripts/gap_harness/api.py`. YAML persona files are supported only when PyYAML happens to be
@@ -51,6 +53,8 @@ installed; JSON always works.
 
 Exit codes: 0 = every executed check passed (or `--dry-run`), 1 = at least one check FAILED,
 2 = configuration / usage error, 3 = infrastructure error (auth, gateway, or Loki unreachable).
+UNVERIFIED-ATTRIBUTION checks do not flip the exit code but hold the gate decision (HOLD) in the
+markdown — they are never countable as evidence.
 
 Usage:
     # offline review of the exact request plan (Wave 0 — no alpha access needed)
@@ -102,6 +106,11 @@ ADMIN_WRITE = "ADMIN_WRITE"
 PASS = "PASS"
 FAIL = "FAIL"
 SKIP = "SKIP"
+# A check whose telemetry evidence had to be joined by the legacy time-window+role fallback
+# (server predating the X-Correlation-Id servlet filter). Deliberately NOT PASS/FAIL: it renders
+# unchecked in markdown, holds the gate decision, and is counted separately, so a fallback-joined
+# check can never be read as solid evidence (2026-08-19 live-run defect 1).
+UNVERIFIED = "UNVERIFIED-ATTRIBUTION"
 
 # suite -> (gate id, issue, human title)
 SUITES = {
@@ -126,6 +135,16 @@ TELEMETRY_EVENT_TYPE = "nlti.request.telemetry"
 # Gate 2C dedicated transition event (internal/telemetry/NltiWorkflowTransitionTelemetry),
 # emitted on the same `nlti.telemetry` logger and keyed by the caller's X-Correlation-Id.
 TRANSITION_EVENT_TYPE = "nlti.workflow.transition"
+
+# 2026-08-19 live-run defect 3: IntentParserServiceImpl:40 classifies ACTION only when risk is
+# HIGH, and HIGH means the prompt contains "delete"/"remove" or starts with "bulk ". Create/update
+# phrasings are UNKNOWN -> no write plan -> planId=None, so the write-gate ACTION probe must use a
+# delete-verb phrasing to reach the gate at all. --write-gate-action-prompt overrides this default;
+# a --write-target prompt takes precedence over both.
+DEFAULT_WRITE_GATE_ACTION_PROMPT = "Delete the draft purchase order PO-NLTI-PROBE-001"
+# wg-intent-gap ALWAYS submits this create-style prompt to document, on every run, that
+# create/update phrasings cannot reach the write gate (#1218 product gap; see run_write_gate).
+WRITE_GATE_INTENT_GAP_PROMPT = "Create a purchase order for 10 oil filters"
 
 # Default probe prompts. Deliberately read-only phrasings for everything except the router's write
 # class (which must still classify as an ACTION without any confirmation being issued). Override the
@@ -161,7 +180,7 @@ DEFAULT_QUERIES = {
          "class": "write", "expect_tier": TIER_COMPLEX},
     ],
     "write-gate": [
-        {"id": "wg-action", "prompt": "Create a purchase order for 10 oil filters"},
+        {"id": "wg-action", "prompt": DEFAULT_WRITE_GATE_ACTION_PROMPT},
     ],
 }
 
@@ -174,6 +193,37 @@ REFUSAL_MARKERS = (
     "i am not able to",
     "i cannot help with",
 )
+
+# Persona permission probes (2026-08-19 live-run defect 2: expectsPermissions/lacksPermissions were
+# parsed but never asserted). NltiRequestTelemetry.Actor carries only (primaryRole,
+# permissionCodeCount) — the permission-code list is NOT emitted — so every declared code is
+# verified by probing the endpoint class it gates: @PreAuthorize rejects before the handler, so any
+# non-401/403 response proves the authority is held and a 403 proves it is absent.
+# Entries: permission -> (method, path, impact, body, stream, note). "{tool}" is substituted with
+# --admin-tool-name. mcp:tool:manage uses a no-op revoke of a nonexistent permission code
+# (ToolPermissionController#revoke is idempotent and changes nothing for a code that is not
+# granted), so the probe cannot mutate even when the persona unexpectedly holds the permission.
+PROBE_NONEXISTENT_CODE = "nlti:probe:nonexistent"
+PERMISSION_PROBES = {
+    "mcp:chat:execute": ("POST", "mcp/chat", SESSION, {"message": "hello"}, False,
+                         "McpChatController#chat"),
+    "mcp:chat:stream": ("POST", "mcp/chat/stream", SESSION, {"message": "hello"}, True,
+                        "McpStreamingChatController#streamChat"),
+    "nlti:request:submit": ("POST", "nlt/requests", SESSION,
+                            {"prompt": "What is the status of this session?"}, False,
+                            "NltiController#submitRequest — previews only, never executes"),
+    "nlti:audit:read": ("GET", "nlt/audit", READ, None, False, "AuditController#queryAudit"),
+    "mcp:system_prompt:view": ("GET", "prompts", READ, None, False,
+                               "SystemPromptController#list"),
+    "mcp:llm_api:view": ("GET", "llm-apis", READ, None, False, "LlmApiConfigController#list"),
+    "mcp:tool:view": ("GET", "tools/{tool}/permissions", READ, None, False,
+                      "ToolPermissionController#list"),
+    "mcp:tool:manage": ("DELETE",
+                        "tools/{tool}/permissions?permissionCode=" + PROBE_NONEXISTENT_CODE,
+                        SESSION, None, False,
+                        "ToolPermissionController#revoke — no-op probe (nonexistent code, "
+                        "idempotent revoke cannot mutate)"),
+}
 
 
 # --- small helpers -------------------------------------------------------------------------------
@@ -585,13 +635,17 @@ class TelemetryHarvester:
         self.args = args
         self.errors = []
 
-    def _poll(self, start, end, extra_filter, predicate, event_type=TELEMETRY_EVENT_TYPE):
-        """Poll Loki until a matching record lands or --telemetry-wait-seconds is exhausted.
+    def _poll(self, start, end, extra_filter, predicate, event_type=TELEMETRY_EVENT_TYPE,
+              wait_seconds=None):
+        """Poll Loki until a matching record lands or the wait budget is exhausted.
 
         promtail tails the docker json log and pushes on an interval, so a record written at t is
-        not queryable at t; a bounded poll is required, not a single shot.
+        not queryable at t; a bounded poll is required, not a single shot. `wait_seconds` overrides
+        --telemetry-wait-seconds (used to keep the window-fallback poll short after the primary
+        correlationId poll has already waited the full budget).
         """
-        deadline = time.monotonic() + self.args.telemetry_wait_seconds
+        budget = self.args.telemetry_wait_seconds if wait_seconds is None else wait_seconds
+        deadline = time.monotonic() + budget
         pad = self.args.telemetry_window_pad_seconds
         window_start = start - _seconds(pad)
         attempt = 0
@@ -606,14 +660,14 @@ class TelemetryHarvester:
             hits = [record for record in records if predicate(record)]
             if hits or time.monotonic() >= deadline:
                 if not hits and self.args.verbose:
-                    print(f"  telemetry: no match after {attempt} poll(s) "
-                          f"({self.args.telemetry_wait_seconds}s)")
+                    print(f"  telemetry: no match after {attempt} poll(s) ({budget}s)")
                 return hits
             time.sleep(min(2.0, max(0.5, self.args.telemetry_poll_seconds)))
 
-    def by_correlation(self, correlation_id, start, end):
+    def by_correlation(self, correlation_id, start, end, wait_seconds=None):
         hits = self._poll(start, end, str(correlation_id),
-                          lambda record: record.get("correlationId") == str(correlation_id))
+                          lambda record: record.get("correlationId") == str(correlation_id),
+                          wait_seconds=wait_seconds)
         if not hits:
             return None
         hits[0]["_join"] = "correlationId"
@@ -630,11 +684,11 @@ class TelemetryHarvester:
         hits[0]["_join"] = "correlationId"
         return hits[0]
 
-    def for_window(self, start, end, role=None):
-        """Chat-path join: /v1/mcp/chat and /v1/mcp/chat/stream accept no correlation id and
-        SessionAgentManager.emitChatTelemetry generates a random one when the `correlationId` MDC
-        key is unset (nothing in the repo sets it), so the request window plus the actor role is
-        the only available join key. Probes are issued serially to keep it unambiguous."""
+    def for_window(self, start, end, role=None, wait_seconds=None):
+        """Legacy time-window + actor-role join. Since the correlation servlet filter, this is
+        ONLY the explicit fallback for servers that predate it (see chat_record): the 2026-08-19
+        live run proved this join can attribute the PREVIOUS persona's record, so results based on
+        it must be reported UNVERIFIED-ATTRIBUTION, never as solid evidence."""
         start_ns = int(start.timestamp() * 1_000_000_000)
         end_ns = int(end.timestamp() * 1_000_000_000)
         pad_ns = int(self.args.telemetry_window_pad_seconds * 1_000_000_000)
@@ -647,13 +701,29 @@ class TelemetryHarvester:
                 return False
             return True
 
-        hits = self._poll(start, end, None, in_window)
+        hits = self._poll(start, end, None, in_window, wait_seconds=wait_seconds)
         if not hits:
             return None
         # closest to the request end is the turn we just issued
         hits.sort(key=lambda record: abs(record.get("_lokiTimestampNs", 0) - end_ns))
         hits[0]["_join"] = "window"
         return hits[0]
+
+    def chat_record(self, correlation_id, start, end, role=None):
+        """Chat-path join (2026-08-19 live-run defect 1). The harness sends a generated
+        X-Correlation-Id on /v1/mcp/chat and /v1/mcp/chat/stream and joins primarily by it — the
+        correlation servlet filter echoes the header on every endpoint. When no harvested record
+        carries the sent id the server predates the filter; the legacy time-window+role join then
+        runs as an explicit fallback and the record is tagged _join="window-fallback" so every
+        dependent check is downgraded to UNVERIFIED-ATTRIBUTION."""
+        hit = self.by_correlation(correlation_id, start, end)
+        if hit is not None:
+            return hit
+        record = self.for_window(start, end, role,
+                                 wait_seconds=min(self.args.telemetry_wait_seconds, 5.0))
+        if record is not None:
+            record["_join"] = "window-fallback"
+        return record
 
 
 def _seconds(value):
@@ -745,6 +815,21 @@ class SuiteResult:
     def expect(self, check_id, label, condition, evidence):
         self.add(check_id, label, PASS if condition else FAIL, evidence)
 
+    def expect_joined(self, check_id, label, condition, evidence, record):
+        """expect(), except the evidence came from a harvested telemetry record: when that record
+        was joined by the time-window+role fallback (no harvested record carried the sent
+        X-Correlation-Id) the check is reported UNVERIFIED-ATTRIBUTION instead of PASS/FAIL, so a
+        fallback-joined check can never be read as solid evidence."""
+        if (record or {}).get("_join") == "window-fallback":
+            verdict = PASS if condition else FAIL
+            self.add(check_id, label, UNVERIFIED,
+                     "UNVERIFIED-ATTRIBUTION (telemetry joined by the time-window+actor-role "
+                     "fallback; no harvested record carried the sent X-Correlation-Id, so the "
+                     "server predates the correlation filter and the record may belong to another "
+                     f"request) would-be {verdict} — {evidence}")
+        else:
+            self.expect(check_id, label, condition, evidence)
+
     def skip(self, check_id, label, reason):
         self.add(check_id, label, SKIP, f"SKIPPED — {reason}")
 
@@ -754,6 +839,7 @@ class SuiteResult:
             PASS: sum(1 for c in self.checks if c.status == PASS),
             FAIL: sum(1 for c in self.checks if c.status == FAIL),
             SKIP: sum(1 for c in self.checks if c.status == SKIP),
+            UNVERIFIED: sum(1 for c in self.checks if c.status == UNVERIFIED),
         }
 
     @property
@@ -761,6 +847,8 @@ class SuiteResult:
         counts = self.counts
         if counts[FAIL]:
             return FAIL
+        if counts[UNVERIFIED]:
+            return UNVERIFIED
         if counts[PASS] == 0:
             return SKIP
         return PASS
@@ -810,29 +898,56 @@ class Context:
             note=f"skipped when ${persona.token_env} supplies a token directly",
         )
 
-    def plan_chat(self, persona, prompt, label="chat"):
+    def plan_chat(self, persona, prompt, label="chat", correlation_id=None):
+        extra = {"X-Correlation-Id": str(correlation_id)} if correlation_id else None
         return RequestPlan(
             label=label,
             method="POST",
             url=self.mcp_url("mcp/chat"),
             impact=SESSION,
             persona=persona.name,
-            headers=self.headers(persona),
+            headers=self.headers(persona, extra),
             body={"message": prompt},
-            note="McpChatController#chat — requires mcp:chat:execute",
+            note="McpChatController#chat — requires mcp:chat:execute; the X-Correlation-Id keys "
+                 "the telemetry join on servers with the correlation filter",
         )
 
-    def plan_stream(self, persona, prompt, label="chat-stream"):
+    def plan_stream(self, persona, prompt, label="chat-stream", correlation_id=None):
+        extra = {"Accept": "text/event-stream"}
+        if correlation_id:
+            extra["X-Correlation-Id"] = str(correlation_id)
         return RequestPlan(
             label=label,
             method="POST",
             url=self.mcp_url("mcp/chat/stream"),
             impact=SESSION,
             persona=persona.name,
-            headers=self.headers(persona, {"Accept": "text/event-stream"}),
+            headers=self.headers(persona, extra),
             body={"message": prompt},
             stream=True,
-            note="McpStreamingChatController#streamChat — requires mcp:chat:stream",
+            note="McpStreamingChatController#streamChat — requires mcp:chat:stream; the "
+                 "X-Correlation-Id keys the telemetry join on servers with the correlation filter",
+        )
+
+    def plan_permission_probe(self, persona, permission, expectation):
+        """Persona-suite probe proving a permission is held ('expects') or absent ('lacks'):
+        telemetry carries only actor.permissionCodeCount, so the endpoint class the code gates is
+        probed instead — @PreAuthorize rejects with 403 before the handler runs."""
+        method, probe_path, impact, body, stream, note = PERMISSION_PROBES[permission]
+        probe_path = probe_path.replace("{tool}", self.args.admin_tool_name)
+        extra = {"Accept": "text/event-stream"} if stream else None
+        expected = "non-401/403 proves the code is held" if expectation == "expects" \
+            else "403 proves the code is absent"
+        return RequestPlan(
+            label=f"perm-{expectation}:{permission}",
+            method=method,
+            url=self.mcp_url(probe_path),
+            impact=impact,
+            persona=persona.name,
+            headers=self.headers(persona, extra),
+            body=body,
+            stream=stream,
+            note=f"{note} — {expectation}Permissions probe for '{permission}' ({expected})",
         )
 
     def plan_nlti_submit(self, persona, prompt, correlation_id, session_id=None, client_context=None):
@@ -980,8 +1095,10 @@ def plan_equivalence(ctx):
     for persona in ctx.personas:
         plans.append(ctx.plan_login(persona))
         for query in ctx.queries["equivalence"]:
-            plans.append(ctx.plan_chat(persona, query["prompt"], f"eq-blocking:{query['id']}"))
-            plans.append(ctx.plan_stream(persona, query["prompt"], f"eq-streaming:{query['id']}"))
+            plans.append(ctx.plan_chat(persona, query["prompt"], f"eq-blocking:{query['id']}",
+                                       "<generated-uuid>"))
+            plans.append(ctx.plan_stream(persona, query["prompt"], f"eq-streaming:{query['id']}",
+                                         "<generated-uuid>"))
     return plans
 
 
@@ -1001,20 +1118,25 @@ def run_equivalence(ctx):
         role = persona.expected_role or None
         for query in ctx.queries["equivalence"]:
             case = f"{query['id']}@{persona.name}"
+            blocking_cid = uuid7ish()
             blocking = ctx.runner.send(ctx.plan_chat(persona, query["prompt"],
-                                                     f"eq-blocking:{query['id']}"))
+                                                     f"eq-blocking:{query['id']}", blocking_cid))
             tel_block = None
             if blocking is not None and blocking.ok:
                 blocking_ms.append(blocking.elapsed_ms)
-                tel_block = ctx.harvester.for_window(blocking.started, blocking.ended, role)
+                tel_block = ctx.harvester.chat_record(blocking_cid, blocking.started,
+                                                      blocking.ended, role)
+            streaming_cid = uuid7ish()
             streaming = ctx.runner.send(ctx.plan_stream(persona, query["prompt"],
-                                                        f"eq-streaming:{query['id']}"))
+                                                        f"eq-streaming:{query['id']}",
+                                                        streaming_cid))
             tel_stream = None
             if streaming is not None and streaming.ok:
                 streaming_ms.append(streaming.elapsed_ms)
                 if streaming.first_token_ms is not None:
                     ttft_ms.append(streaming.first_token_ms)
-                tel_stream = ctx.harvester.for_window(streaming.started, streaming.ended, role)
+                tel_stream = ctx.harvester.chat_record(streaming_cid, streaming.started,
+                                                       streaming.ended, role)
 
             if blocking is None or streaming is None:
                 suite.skip(f"eq-http:{case}", "Both endpoints answered the same request",
@@ -1030,35 +1152,46 @@ def run_equivalence(ctx):
                            "no nlti.request.telemetry record matched in Loki for the request window")
                 continue
 
-            pairs.append({"case": case, "blocking": tel_block, "streaming": tel_stream})
-            suite.expect(f"eq-tools:{case}", "Same candidate tools",
-                         tel_tools(tel_block) == tel_tools(tel_stream),
-                         f"blocking={tel_tools(tel_block)} streaming={tel_tools(tel_stream)}")
-            suite.expect(f"eq-layers:{case}", "Same prompt layers",
-                         tel_prompt_layers(tel_block) == tel_prompt_layers(tel_stream),
-                         f"blocking={tel_prompt_layers(tel_block)} "
-                         f"streaming={tel_prompt_layers(tel_stream)}")
-            suite.expect(f"eq-persona:{case}", "Same persona",
-                         tel_role(tel_block) == tel_role(tel_stream)
-                         and tel_perm_count(tel_block) == tel_perm_count(tel_stream),
-                         f"role={tel_role(tel_block)}/{tel_role(tel_stream)} "
-                         f"permCount={tel_perm_count(tel_block)}/{tel_perm_count(tel_stream)}")
-            suite.expect(f"eq-ragscope:{case}", "Same RAG scope",
-                         tel_rag_docs(tel_block) == tel_rag_docs(tel_stream),
-                         f"retrieved docIds blocking={tel_rag_docs(tel_block)} "
-                         f"streaming={tel_rag_docs(tel_stream)} "
-                         "(telemetry carries retrieved docIds, not a ragScope field — docId set is "
-                         "the scope proxy)")
-            suite.expect(f"eq-workflow:{case}", "Same workflow state",
-                         tel_workflow(tel_block) == tel_workflow(tel_stream),
-                         f"blocking={tel_workflow(tel_block)} streaming={tel_workflow(tel_stream)}")
-            suite.expect(f"eq-tier:{case}", "Same routing tier",
-                         tel_tier(tel_block) == tel_tier(tel_stream),
-                         f"blocking={tel_tier(tel_block)} streaming={tel_tier(tel_stream)}")
-            suite.expect(f"eq-outcome:{case}", "Telemetry distinguishes endpoint type while showing "
-                                               "equivalent decisions",
-                         tel_status(tel_block) == "SUCCESS" and tel_status(tel_stream) == "SUCCESS",
-                         f"outcome blocking={tel_status(tel_block)} streaming={tel_status(tel_stream)}")
+            fallback = (tel_block.get("_join") == "window-fallback"
+                        or tel_stream.get("_join") == "window-fallback")
+            joined = {"_join": "window-fallback"} if fallback else tel_block
+            pairs.append({"case": case, "blocking": tel_block, "streaming": tel_stream,
+                          "telemetryJoin": "window-fallback" if fallback else "correlationId"})
+            suite.expect_joined(f"eq-tools:{case}", "Same candidate tools",
+                                tel_tools(tel_block) == tel_tools(tel_stream),
+                                f"blocking={tel_tools(tel_block)} streaming={tel_tools(tel_stream)}",
+                                joined)
+            suite.expect_joined(f"eq-layers:{case}", "Same prompt layers",
+                                tel_prompt_layers(tel_block) == tel_prompt_layers(tel_stream),
+                                f"blocking={tel_prompt_layers(tel_block)} "
+                                f"streaming={tel_prompt_layers(tel_stream)}", joined)
+            suite.expect_joined(f"eq-persona:{case}", "Same persona",
+                                tel_role(tel_block) == tel_role(tel_stream)
+                                and tel_perm_count(tel_block) == tel_perm_count(tel_stream),
+                                f"role={tel_role(tel_block)}/{tel_role(tel_stream)} "
+                                f"permCount={tel_perm_count(tel_block)}/{tel_perm_count(tel_stream)}",
+                                joined)
+            suite.expect_joined(f"eq-ragscope:{case}", "Same RAG scope",
+                                tel_rag_docs(tel_block) == tel_rag_docs(tel_stream),
+                                f"retrieved docIds blocking={tel_rag_docs(tel_block)} "
+                                f"streaming={tel_rag_docs(tel_stream)} "
+                                "(telemetry carries retrieved docIds, not a ragScope field — docId "
+                                "set is the scope proxy)", joined)
+            suite.expect_joined(f"eq-workflow:{case}", "Same workflow state",
+                                tel_workflow(tel_block) == tel_workflow(tel_stream),
+                                f"blocking={tel_workflow(tel_block)} "
+                                f"streaming={tel_workflow(tel_stream)}", joined)
+            suite.expect_joined(f"eq-tier:{case}", "Same routing tier",
+                                tel_tier(tel_block) == tel_tier(tel_stream),
+                                f"blocking={tel_tier(tel_block)} streaming={tel_tier(tel_stream)}",
+                                joined)
+            suite.expect_joined(f"eq-outcome:{case}",
+                                "Telemetry distinguishes endpoint type while showing "
+                                "equivalent decisions",
+                                tel_status(tel_block) == "SUCCESS"
+                                and tel_status(tel_stream) == "SUCCESS",
+                                f"outcome blocking={tel_status(tel_block)} "
+                                f"streaming={tel_status(tel_stream)}", joined)
 
     suite.metrics = [
         Metric("Blocking p50 latency", percentile(blocking_ms, 50), "ms"),
@@ -1070,6 +1203,7 @@ def run_equivalence(ctx):
     ]
     suite.observations["pairs"] = [
         {"case": pair["case"],
+         "telemetryJoin": pair["telemetryJoin"],
          "blockingTools": tel_tools(pair["blocking"]),
          "streamingTools": tel_tools(pair["streaming"]),
          "blockingLayers": tel_prompt_layers(pair["blocking"]),
@@ -1077,10 +1211,10 @@ def run_equivalence(ctx):
         for pair in pairs
     ]
     suite.notes.append(
-        "Telemetry join for the chat endpoints is by request time window + actor role: neither "
-        "/v1/mcp/chat nor /v1/mcp/chat/stream accepts X-Correlation-Id, and "
-        "SessionAgentManager.emitChatTelemetry generates a random correlationId when the MDC key is "
-        "absent. Probes are issued serially so the window is unambiguous.")
+        "Chat telemetry is joined by the X-Correlation-Id the harness sends on every request. "
+        "Records that only matched the legacy time-window+role fallback (server predating the "
+        "correlation filter) downgrade their checks to UNVERIFIED-ATTRIBUTION: the 2026-08-19 "
+        "live run proved that join can attribute the previous persona's record.")
     return suite
 
 
@@ -1089,14 +1223,69 @@ def plan_persona(ctx):
     for persona in ctx.personas:
         plans.append(ctx.plan_login(persona))
         prompt = persona.probe_prompt or ctx.queries["persona"][0]["prompt"]
-        plans.append(ctx.plan_chat(persona, prompt, f"persona:{persona.name}"))
+        plans.append(ctx.plan_chat(persona, prompt, f"persona:{persona.name}",
+                                   "<generated-uuid>"))
+        for perm in persona.expects_permissions:
+            if perm != "mcp:chat:execute" and perm in PERMISSION_PROBES:
+                plans.append(ctx.plan_permission_probe(persona, perm, "expects"))
+        for perm in persona.lacks_permissions:
+            if perm in PERMISSION_PROBES:
+                plans.append(ctx.plan_permission_probe(persona, perm, "lacks"))
     return plans
+
+
+def _persona_permission_checks(ctx, suite, persona, chat_result):
+    """2026-08-19 live-run defect 2: expectsPermissions/lacksPermissions were parsed but never
+    asserted. NltiRequestTelemetry.Actor emits only (primaryRole, permissionCodeCount) — never the
+    permission-code list — so every declared code is verified by probing the endpoint class it
+    gates: @PreAuthorize rejects with 401/403 before the handler, so any other status proves the
+    authority is held and a 403 proves it is absent."""
+    for perm in persona.expects_permissions:
+        check_id = f"persona-expects:{persona.name}:{perm}"
+        label = f"Persona holds '{perm}'"
+        if perm == "mcp:chat:execute" and chat_result is not None:
+            suite.expect(check_id, label,
+                         bool(chat_result.status) and chat_result.status not in (401, 403),
+                         f"persona chat turn HTTP {chat_result.status or chat_result.error} "
+                         "(non-401/403 proves mcp:chat:execute; probe reused, no extra request)")
+            continue
+        if perm not in PERMISSION_PROBES:
+            suite.skip(check_id, label,
+                       f"no read-safe probe mapped for '{perm}' and telemetry carries only "
+                       "actor.permissionCodeCount, not the code list")
+            continue
+        probe = ctx.runner.send(ctx.plan_permission_probe(persona, perm, "expects"))
+        if probe is None:
+            suite.skip(check_id, label, "probe refused by the safety gate")
+            continue
+        suite.expect(check_id, label,
+                     bool(probe.status) and probe.status not in (401, 403),
+                     f"{probe.plan.method} {probe.plan.url} -> "
+                     f"HTTP {probe.status or probe.error} (any non-401/403 status proves the "
+                     "authority: @PreAuthorize rejects before the handler)")
+    for perm in persona.lacks_permissions:
+        check_id = f"persona-lacks:{persona.name}:{perm}"
+        label = f"Persona is denied '{perm}' (403)"
+        if perm not in PERMISSION_PROBES:
+            suite.skip(check_id, label,
+                       f"no read-safe probe mapped for '{perm}' and telemetry carries only "
+                       "actor.permissionCodeCount, not the code list")
+            continue
+        probe = ctx.runner.send(ctx.plan_permission_probe(persona, perm, "lacks"))
+        if probe is None:
+            suite.skip(check_id, label, "probe refused by the safety gate")
+            continue
+        suite.expect(check_id, label, probe.status == 403,
+                     f"{probe.plan.method} {probe.plan.url} -> "
+                     f"HTTP {probe.status or probe.error} (403 required to prove the permission "
+                     "is absent)")
 
 
 def run_persona(ctx):
     gate, issue, title = SUITES["persona"]
     suite = SuiteResult("persona", gate, issue, title)
     layers_by_persona = {}
+    fallback_personas = []
     answers = []
     refusals = 0
     unsupported = 0
@@ -1110,42 +1299,53 @@ def run_persona(ctx):
                        str(exc))
             continue
         prompt = persona.probe_prompt or ctx.queries["persona"][0]["prompt"]
-        result = ctx.runner.send(ctx.plan_chat(persona, prompt, f"persona:{persona.name}"))
+        chat_cid = uuid7ish()
+        result = ctx.runner.send(ctx.plan_chat(persona, prompt, f"persona:{persona.name}",
+                                               chat_cid))
         if result is None:
             suite.skip(f"persona-http:{persona.name}", "Persona chat turn executed",
                        "request refused by the safety gate")
+            _persona_permission_checks(ctx, suite, persona, None)
             continue
         suite.expect(f"persona-http:{persona.name}", "Persona chat turn executed", result.ok,
                      f"HTTP {result.status or result.error}")
+        _persona_permission_checks(ctx, suite, persona, result)
         answer = answer_of(result)
-        record = ctx.harvester.for_window(result.started, result.ended,
-                                          persona.expected_role or None)
+        record = ctx.harvester.chat_record(chat_cid, result.started, result.ended,
+                                           persona.expected_role or None)
         if record is None:
             suite.skip(f"persona-telemetry:{persona.name}", "Prompt-layer telemetry emitted",
-                       "no nlti.request.telemetry record matched in Loki for the request window")
+                       "no nlti.request.telemetry record matched the sent correlationId or the "
+                       "request window in Loki")
             continue
         answered += 1
         layers = tel_prompt_layers(record)
         layers_by_persona[persona.name] = layers
-        suite.expect(f"persona-layers:{persona.name}", "Prompt-layer telemetry emitted",
-                     bool(layers), f"rag.promptLayers={layers}")
-        suite.expect(f"persona-layers-required:{persona.name}",
-                     "Layered prompt carries BASE + ROLE",
-                     all(layer in layers for layer in REQUIRED_PROMPT_LAYERS),
-                     f"rag.promptLayers={layers} required={list(REQUIRED_PROMPT_LAYERS)}")
+        if record.get("_join") == "window-fallback":
+            fallback_personas.append(persona.name)
+        suite.expect_joined(f"persona-layers:{persona.name}", "Prompt-layer telemetry emitted",
+                            bool(layers), f"rag.promptLayers={layers}", record)
+        suite.expect_joined(f"persona-layers-required:{persona.name}",
+                            "Layered prompt carries BASE + ROLE",
+                            all(layer in layers for layer in REQUIRED_PROMPT_LAYERS),
+                            f"rag.promptLayers={layers} required={list(REQUIRED_PROMPT_LAYERS)}",
+                            record)
         if persona.expected_role:
-            suite.expect(f"persona-role:{persona.name}", "Telemetry actor matches the persona role",
-                         tel_role(record) == persona.expected_role,
-                         f"actor.primaryRole={tel_role(record)} expected={persona.expected_role}")
-        suite.expect(f"persona-perms:{persona.name}", "Permission-scoped actor recorded",
-                     isinstance(tel_perm_count(record), int) and tel_perm_count(record) > 0,
-                     f"actor.permissionCodeCount={tel_perm_count(record)}")
+            suite.expect_joined(f"persona-role:{persona.name}",
+                                "Telemetry actor matches the persona role",
+                                tel_role(record) == persona.expected_role,
+                                f"actor.primaryRole={tel_role(record)} "
+                                f"expected={persona.expected_role}", record)
+        suite.expect_joined(f"persona-perms:{persona.name}", "Permission-scoped actor recorded",
+                            isinstance(tel_perm_count(record), int) and tel_perm_count(record) > 0,
+                            f"actor.permissionCodeCount={tel_perm_count(record)}", record)
         if looks_like_refusal(answer):
             refusals += 1
         if tel_unsupported(record):
             unsupported += 1
         answers.append({
             "persona": persona.name,
+            "telemetryJoin": record.get("_join"),
             "role": tel_role(record),
             "prompt": prompt,
             "answerChars": len(answer),
@@ -1159,9 +1359,12 @@ def run_persona(ctx):
 
     if len(layers_by_persona) >= 2:
         distinct = {tuple(layers) for layers in layers_by_persona.values()}
-        suite.expect("persona-differentiation", "Role layer differentiates personas",
-                     len(distinct) >= 1 and all(layers for layers in layers_by_persona.values()),
-                     f"promptLayers per persona={layers_by_persona}")
+        joined = ({"_join": "window-fallback"} if fallback_personas
+                  else {"_join": "correlationId"})
+        suite.expect_joined("persona-differentiation", "Role layer differentiates personas",
+                            len(distinct) >= 1
+                            and all(layers for layers in layers_by_persona.values()),
+                            f"promptLayers per persona={layers_by_persona}", joined)
     else:
         suite.skip("persona-differentiation", "Role layer differentiates personas",
                    "fewer than two personas produced telemetry")
@@ -1175,6 +1378,11 @@ def run_persona(ctx):
     suite.notes.append(
         "Answer quality is captured, not graded: run scripts/rag_gap_harness.py replay over the "
         "captured answers for source-grounded judging.")
+    suite.notes.append(
+        "expectsPermissions/lacksPermissions are verified by endpoint probes: "
+        "NltiRequestTelemetry.Actor emits only (primaryRole, permissionCodeCount) — the "
+        "permission-code list is not in telemetry — so a held code is proven by a non-401/403 "
+        "response from the endpoint it gates and an absent code by a 403.")
     return suite
 
 
@@ -1186,10 +1394,12 @@ def plan_workflow(ctx):
         ctx.plan_nlti_submit(persona, ctx.queries["workflow"][0]["prompt"], correlation),
         ctx.plan_workflow_state(persona, "<sessionId from the submit response>", "IDLE",
                                 "<generated-uuid>"),
-        ctx.plan_chat(persona, ctx.queries["workflow"][0]["prompt"], "workflow-baseline-chat"),
+        ctx.plan_chat(persona, ctx.queries["workflow"][0]["prompt"], "workflow-baseline-chat",
+                      "<generated-uuid>"),
         ctx.plan_workflow_state(persona, "<sessionId>", ctx.args.workflow_state,
                                 "<generated-uuid>"),
-        ctx.plan_chat(persona, ctx.queries["workflow"][0]["prompt"], "workflow-gated-chat"),
+        ctx.plan_chat(persona, ctx.queries["workflow"][0]["prompt"], "workflow-gated-chat",
+                      "<generated-uuid>"),
         ctx.plan_audit(persona, correlation),
     ]
     if len(ctx.personas) > 1:
@@ -1228,9 +1438,12 @@ def run_workflow(ctx):
         ctx.plan_workflow_state(persona, session_id, baseline_state, uuid7ish()))
     idle_tools = []
     if idle_set is not None and idle_set.ok:
-        idle_chat = ctx.runner.send(ctx.plan_chat(persona, prompt, "workflow-baseline-chat"))
+        idle_cid = uuid7ish()
+        idle_chat = ctx.runner.send(ctx.plan_chat(persona, prompt, "workflow-baseline-chat",
+                                                  idle_cid))
         if idle_chat is not None and idle_chat.ok:
-            idle_record = ctx.harvester.for_window(idle_chat.started, idle_chat.ended, role)
+            idle_record = ctx.harvester.chat_record(idle_cid, idle_chat.started,
+                                                    idle_chat.ended, role)
             idle_tools = tel_tools(idle_record) if idle_record else []
             suite.observations["idle"] = {"tools": idle_tools,
                                           "workflowState": tel_workflow(idle_record)}
@@ -1262,26 +1475,33 @@ def run_workflow(ctx):
                      f"correlationId={advance_correlation}")
         suite.observations["transition"] = moved
 
-    gated_chat = ctx.runner.send(ctx.plan_chat(persona, prompt, "workflow-gated-chat"))
+    gated_cid = uuid7ish()
+    gated_chat = ctx.runner.send(ctx.plan_chat(persona, prompt, "workflow-gated-chat", gated_cid))
     gated_record = None
     if gated_chat is not None and gated_chat.ok:
-        gated_record = ctx.harvester.for_window(gated_chat.started, gated_chat.ended, role)
+        gated_record = ctx.harvester.chat_record(gated_cid, gated_chat.started,
+                                                 gated_chat.ended, role)
     if gated_record is None:
         suite.skip("wf-telemetry", "Workflow state visible in telemetry",
-                   "no nlti.request.telemetry record matched in Loki for the request window")
+                   "no nlti.request.telemetry record matched the sent correlationId or the "
+                   "request window in Loki")
     else:
         gated_tools = tel_tools(gated_record)
-        suite.expect("wf-telemetry", "Workflow state visible in telemetry",
-                     tel_workflow(gated_record) == target_state,
-                     f"routing.workflowState={tel_workflow(gated_record)} expected={target_state}")
-        suite.expect("wf-gated-tools", f"Non-IDLE gated tool set activates for {target_state}",
-                     bool(gated_tools),
-                     f"tools.selected={gated_tools} (IDLE baseline={idle_tools})")
+        suite.expect_joined("wf-telemetry", "Workflow state visible in telemetry",
+                            tel_workflow(gated_record) == target_state,
+                            f"routing.workflowState={tel_workflow(gated_record)} "
+                            f"expected={target_state}", gated_record)
+        suite.expect_joined("wf-gated-tools",
+                            f"Non-IDLE gated tool set activates for {target_state}",
+                            bool(gated_tools),
+                            f"tools.selected={gated_tools} (IDLE baseline={idle_tools})",
+                            gated_record)
         added = sorted(set(gated_tools) - set(idle_tools))
-        suite.expect("wf-tool-delta", "Gated tool set differs from the IDLE baseline",
-                     bool(added) or (bool(gated_tools) and not idle_tools),
-                     f"tools added vs IDLE={added}")
+        suite.expect_joined("wf-tool-delta", "Gated tool set differs from the IDLE baseline",
+                            bool(added) or (bool(gated_tools) and not idle_tools),
+                            f"tools added vs IDLE={added}", gated_record)
         suite.observations["gated"] = {"tools": gated_tools,
+                                       "telemetryJoin": gated_record.get("_join"),
                                        "workflowState": tel_workflow(gated_record),
                                        "addedVsIdle": added}
 
@@ -1339,7 +1559,8 @@ def plan_router(ctx):
     persona = ctx.personas[0]
     plans = [ctx.plan_login(persona)]
     for query in ctx.queries["router"]:
-        plans.append(ctx.plan_chat(persona, query["prompt"], f"router:{query['id']}"))
+        plans.append(ctx.plan_chat(persona, query["prompt"], f"router:{query['id']}",
+                                   "<generated-uuid>"))
     return plans
 
 
@@ -1353,14 +1574,18 @@ def run_router(ctx):
     rows = []
     latencies = []
     for query in ctx.queries["router"]:
-        result = ctx.runner.send(ctx.plan_chat(persona, query["prompt"], f"router:{query['id']}"))
+        query_cid = uuid7ish()
+        result = ctx.runner.send(ctx.plan_chat(persona, query["prompt"], f"router:{query['id']}",
+                                               query_cid))
         if result is None:
             continue
-        record = ctx.harvester.for_window(result.started, result.ended, role) if result.ok else None
+        record = (ctx.harvester.chat_record(query_cid, result.started, result.ended, role)
+                  if result.ok else None)
         if result.ok:
             latencies.append(result.elapsed_ms)
         rows.append({
             "id": query["id"],
+            "telemetryJoin": (record or {}).get("_join"),
             "class": query.get("class", "unclassified"),
             "expectTier": query.get("expect_tier"),
             "httpStatus": result.status or result.error,
@@ -1384,10 +1609,15 @@ def run_router(ctx):
         suite.observations["rows"] = rows
         return suite
 
-    suite.expect("router-telemetry", "Model tier + actual model name in telemetry",
-                 all(row["tier"] for row in observed),
-                 f"{len(observed)}/{len(rows)} probes reported routing.tier; "
-                 f"tierModel values={sorted({row['tierModel'] for row in observed})}")
+    # Aggregate checks inherit the weakest join: one fallback-joined record poisons attribution
+    # for the whole aggregate, so those checks are downgraded to UNVERIFIED-ATTRIBUTION.
+    fallback_ids = sorted(r["id"] for r in observed if r["telemetryJoin"] == "window-fallback")
+    joined = {"_join": "window-fallback"} if fallback_ids else {"_join": "correlationId"}
+    suite.expect_joined("router-telemetry", "Model tier + actual model name in telemetry",
+                        all(row["tier"] for row in observed),
+                        f"{len(observed)}/{len(rows)} probes reported routing.tier; "
+                        f"tierModel values={sorted({row['tierModel'] for row in observed})}",
+                        joined)
 
     simple = [row for row in observed if row["class"] == "simple"]
     small_tiers = {TIER_SIMPLE, TIER_RULE}
@@ -1395,19 +1625,20 @@ def run_router(ctx):
     simple_pct = (100.0 * len(simple_small) / len(simple)) if simple else None
     if simple:
         simple_tiers = {row["id"]: row["tier"] for row in simple}
-        suite.expect("router-simple-mix", "≥80% simple fixtures routed to T2-simple (or the T0 rule)",
-                     simple_pct is not None and simple_pct >= ctx.args.simple_tier_floor,
-                     f"%={simple_pct:.1f} floor={ctx.args.simple_tier_floor:.0f} "
-                     f"({len(simple_small)}/{len(simple)}); tiers={simple_tiers}")
+        suite.expect_joined("router-simple-mix",
+                            "≥80% simple fixtures routed to T2-simple (or the T0 rule)",
+                            simple_pct is not None and simple_pct >= ctx.args.simple_tier_floor,
+                            f"%={simple_pct:.1f} floor={ctx.args.simple_tier_floor:.0f} "
+                            f"({len(simple_small)}/{len(simple)}); tiers={simple_tiers}", joined)
     else:
         suite.skip("router-simple-mix", "≥80% simple fixtures routed to T2-simple", "no simple probes")
 
     writes = [row for row in observed if row["class"] == "write"]
     if writes:
         write_tiers = {row["id"]: row["tier"] for row in writes}
-        suite.expect("router-write-complex", "All write fixtures routed to T2-complex",
-                     all(row["tier"] == TIER_COMPLEX for row in writes),
-                     f"tiers={write_tiers}")
+        suite.expect_joined("router-write-complex", "All write fixtures routed to T2-complex",
+                            all(row["tier"] == TIER_COMPLEX for row in writes),
+                            f"tiers={write_tiers}", joined)
     else:
         suite.skip("router-write-complex", "All write fixtures routed to T2-complex",
                    "no write-class probes")
@@ -1415,25 +1646,25 @@ def run_router(ctx):
     sensitive = [row for row in observed if row["class"] == "sensitive"]
     if sensitive:
         sensitive_tiers = {row["id"]: row["tier"] for row in sensitive}
-        suite.expect("router-sensitive-complex",
-                     "All accounting/tax/admin/security fixtures routed to T2-complex",
-                     all(row["tier"] == TIER_COMPLEX for row in sensitive),
-                     f"tiers={sensitive_tiers}")
+        suite.expect_joined("router-sensitive-complex",
+                            "All accounting/tax/admin/security fixtures routed to T2-complex",
+                            all(row["tier"] == TIER_COMPLEX for row in sensitive),
+                            f"tiers={sensitive_tiers}", joined)
     else:
         suite.skip("router-sensitive-complex",
                    "All accounting/tax/admin/security fixtures routed to T2-complex",
                    "no sensitive-class probes")
 
     outcomes = {row["id"]: row["outcome"] for row in observed}
-    suite.expect("router-no-break", "Router output never breaks processing",
-                 all(row["outcome"] in (None, "SUCCESS") for row in observed),
-                 f"outcomes={outcomes}")
+    suite.expect_joined("router-no-break", "Router output never breaks processing",
+                        all(row["outcome"] in (None, "SUCCESS") for row in observed),
+                        f"outcomes={outcomes}", joined)
     reported = sum(1 for row in observed if row["fallbackUsed"] is not None)
     fell_back = sorted(row["id"] for row in observed if row["fallbackUsed"])
-    suite.expect("router-fallback-visible", "Fallback usage visible in telemetry",
-                 all(row["fallbackUsed"] is not None for row in observed),
-                 f"model.fallbackUsed reported for {reported}/{len(observed)} probes; "
-                 f"used on {fell_back}")
+    suite.expect_joined("router-fallback-visible", "Fallback usage visible in telemetry",
+                        all(row["fallbackUsed"] is not None for row in observed),
+                        f"model.fallbackUsed reported for {reported}/{len(observed)} probes; "
+                        f"used on {fell_back}", joined)
 
     p95 = percentile(latencies, 95)
     suite.expect("router-p95", "p95 latency within the soft SLO",
@@ -1472,13 +1703,18 @@ def _mix(rows):
 
 def plan_write_gate(ctx):
     persona = ctx.personas[0]
-    prompt = ctx.queries["write-gate"][0]["prompt"]
+    prompt = ctx.args.write_gate_action_prompt or ctx.queries["write-gate"][0]["prompt"]
     client_context = None
     if ctx.args.write_target:
         target = load_write_target(ctx.args.write_target)
         prompt = target.get("prompt", prompt)
         client_context = target.get("clientContext")
     correlation = "<generated-uuid>"
+    intent_gap = ctx.plan_nlti_submit(persona, WRITE_GATE_INTENT_GAP_PROMPT, "<generated-uuid>")
+    intent_gap.label = "wg-intent-gap"
+    intent_gap.note = ("wg-intent-gap probe — create-style prompt; documents on every run that "
+                       "IntentParserServiceImpl:40 never classifies create/update phrasings as "
+                       "ACTION (#1218 product gap)")
     plans = [
         ctx.plan_login(persona),
         ctx.plan_nlti_submit(persona, prompt, correlation, client_context=client_context),
@@ -1486,6 +1722,7 @@ def plan_write_gate(ctx):
         ctx.plan_confirm(persona, "<requestId>", "<plan idempotencyKey>"),
         ctx.plan_audit(persona, correlation),
         ctx.plan_cancel(persona, "<requestId>"),
+        intent_gap,
     ]
     if len(ctx.personas) > 1:
         other = ctx.personas[1]
@@ -1508,7 +1745,8 @@ def run_write_gate(ctx):
         suite.notes.append(
             "OPEN DECISION C: no --write-target supplied, so the executing half of the flow is "
             "SKIPPED. The preview/fail-closed half below is read-safe and still meaningful.")
-    prompt = (target or {}).get("prompt") or ctx.queries["write-gate"][0]["prompt"]
+    prompt = ((target or {}).get("prompt") or ctx.args.write_gate_action_prompt
+              or ctx.queries["write-gate"][0]["prompt"])
     client_context = (target or {}).get("clientContext")
 
     correlation = uuid7ish()
@@ -1609,6 +1847,46 @@ def run_write_gate(ctx):
     else:
         suite.skip("wg-cancel", "Preview can be cancelled and cancellation is idempotent",
                    "plan was confirmed in this run; cancelling a COMPLETE plan is a 409 by design")
+
+    # 2026-08-19 live-run defect 3 / #1218 sign-off evidence: create/update prompts can never
+    # reach the write gate. IntentParserServiceImpl:40 (HIGH_RISK_VERBS = {"delete", "remove"})
+    # classifies ACTION only when risk is HIGH ("delete"/"remove" anywhere in the prompt or a
+    # "bulk " prefix); create-style prompts parse as UNKNOWN -> plain ACCEPTED envelope, no write
+    # plan. This check ALWAYS runs and is EXPECTED to FAIL until the parser gains create/update
+    # coverage — do not silence it by changing the probe prompt.
+    gap_correlation = uuid7ish()
+    gap_plan = ctx.plan_nlti_submit(persona, WRITE_GATE_INTENT_GAP_PROMPT, gap_correlation)
+    gap_plan.label = "wg-intent-gap"
+    gap_plan.note = ("wg-intent-gap probe — create-style prompt; documents the #1218 "
+                     "intent-parser gap")
+    gap = ctx.runner.send(gap_plan)
+    gap_label = "Create-style prompts can reach the write gate (#1218 intent-parser gap)"
+    if gap is None:
+        suite.skip("wg-intent-gap", gap_label, "request refused by the safety gate")
+    elif not isinstance(gap.json_body, dict):
+        suite.add("wg-intent-gap", gap_label, FAIL,
+                  f"POST /v1/nlt/requests returned HTTP {gap.status or gap.error} with no JSON "
+                  "body for the create-style probe")
+    else:
+        gap_body = gap.json_body
+        gap_result = gap_body.get("result") if isinstance(gap_body.get("result"), dict) else {}
+        gap_payload = (gap_result if gap_result.get("planId")
+                       else (gap_body.get("writePlan") or {}))
+        suite.expect(
+            "wg-intent-gap", gap_label,
+            bool(gap_payload.get("planId")),
+            f"'{WRITE_GATE_INTENT_GAP_PROMPT}' -> HTTP {gap.status} "
+            f"status={gap_body.get('status')} planId={gap_payload.get('planId')} — "
+            "IntentParserServiceImpl:40 classifies ACTION only for HIGH risk (prompt contains "
+            "'delete'/'remove' or starts with 'bulk '), so create/update prompts return the "
+            "plain ACCEPTED envelope and can never produce a write-plan preview "
+            "(#1218 product gap)")
+    suite.notes.append(
+        "wg-intent-gap is EXPECTED to FAIL until IntentParserServiceImpl classifies create/update "
+        "phrasings as ACTION; it documents the #1218 product gap on every run and feeds the gate "
+        "sign-off discussion. The wg-action probe uses a delete-verb prompt "
+        "(--write-gate-action-prompt) because that is the only phrasing the parser routes to the "
+        "write gate today.")
 
     if len(ctx.personas) > 1:
         other = ctx.personas[1]
@@ -1854,9 +2132,11 @@ def build_json(args, personas, suites, runner, harvester, started):
             "passed": sum(1 for s in suites if s.status == PASS),
             "failed": sum(1 for s in suites if s.status == FAIL),
             "skipped": sum(1 for s in suites if s.status == SKIP),
+            "unverifiedAttribution": sum(1 for s in suites if s.status == UNVERIFIED),
             "checksPassed": sum(s.counts[PASS] for s in suites),
             "checksFailed": sum(s.counts[FAIL] for s in suites),
             "checksSkipped": sum(s.counts[SKIP] for s in suites),
+            "checksUnverifiedAttribution": sum(s.counts[UNVERIFIED] for s in suites),
         },
     }
 
@@ -1878,14 +2158,14 @@ def build_markdown(args, personas, suites, baseline, started):
     ]
     for suite in suites:
         counts = suite.counts
-        decision = {PASS: "Pass", FAIL: "HOLD", SKIP: "HOLD"}[suite.status]
+        decision = {PASS: "Pass", FAIL: "HOLD", SKIP: "HOLD", UNVERIFIED: "HOLD"}[suite.status]
         out += [
             f"### Gate {suite.gate} — {suite.title} ({suite.issue})",
             "",
             f"- Command: `scripts/nlti_live_verify.py --suite {suite.name}` · "
             f"run `{iso(started)}` · mode `{mode}`",
             f"- Result: **{suite.status}** — {counts[PASS]} passed, {counts[FAIL]} failed, "
-            f"{counts[SKIP]} skipped",
+            f"{counts[SKIP]} skipped, {counts[UNVERIFIED]} unverified-attribution",
             "",
             "#### Correctness tests",
             "",
@@ -1920,7 +2200,8 @@ def build_markdown(args, personas, suites, baseline, started):
             f"Scope complete: {counts[PASS]}/{len(suite.checks)} checked",
             "Cross-locks:    <fill from the Cross-Phase Locks block>",
             f"Decision:       {decision}",
-            f"Exceptions:     {counts[SKIP]} skipped check(s) — see evidence lines",
+            f"Exceptions:     {counts[SKIP]} skipped, {counts[UNVERIFIED]} "
+            "unverified-attribution check(s) — see evidence lines",
             "Rollback:       n/a (verification only)",
             "Next-gate appr: <approver / date / conditions>",
             "```",
@@ -2026,6 +2307,14 @@ def build_parser():
                              "alpha data is mutated")
     parser.add_argument("--read-only", action="store_true",
                         help="stricter than the default: only READ requests execute")
+    parser.add_argument("--write-gate-action-prompt", default=None,
+                        help="ACTION probe prompt for the write-gate suite (default: "
+                             f"'{DEFAULT_WRITE_GATE_ACTION_PROMPT}'). Must contain "
+                             "'delete'/'remove' or start with 'bulk ' — "
+                             "IntentParserServiceImpl classifies ACTION only for HIGH-risk "
+                             "prompts, anything else never reaches the write gate. A "
+                             "--write-target prompt takes precedence; a --queries override "
+                             "applies only when this flag is not passed.")
     parser.add_argument("--write-target", default=None,
                         help="JSON file describing the #1218 write target (OPEN DECISION C — there "
                              "is deliberately no default). Required with --allow-writes for the "
@@ -2135,9 +2424,11 @@ def main(argv=None):
     summary = payload["summary"]
     print("")
     print(f"suites: {summary['suitesRun']} run — {summary['passed']} pass, "
-          f"{summary['failed']} fail, {summary['skipped']} skipped")
+          f"{summary['failed']} fail, {summary['skipped']} skipped, "
+          f"{summary['unverifiedAttribution']} unverified-attribution")
     print(f"checks: {summary['checksPassed']} pass, {summary['checksFailed']} fail, "
-          f"{summary['checksSkipped']} skipped")
+          f"{summary['checksSkipped']} skipped, "
+          f"{summary['checksUnverifiedAttribution']} unverified-attribution")
     if runner.skipped_for_safety:
         print(f"safety: {len(runner.skipped_for_safety)} request(s) not issued "
               "(pass --allow-writes to include them)")
