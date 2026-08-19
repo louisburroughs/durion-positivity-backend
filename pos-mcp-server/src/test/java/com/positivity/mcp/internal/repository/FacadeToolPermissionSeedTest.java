@@ -146,9 +146,8 @@ class FacadeToolPermissionSeedTest {
 
     private static void mergeSeed(Map<String, Set<String>> grants, String sql) {
         parseSeed(sql)
-                .forEach(
-                        (tool, codes) ->
-                                grants.computeIfAbsent(tool, ignored -> new LinkedHashSet<>()).addAll(codes));
+                .forEach((tool, codes) -> grants.computeIfAbsent(tool, ignored -> new LinkedHashSet<>())
+                        .addAll(codes));
     }
 
     private static boolean intersectsAssistantBaseline(Set<String> codes) {

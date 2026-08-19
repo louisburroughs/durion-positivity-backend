@@ -194,7 +194,7 @@ final class SpringAiToolCallbackResolver {
                     if (value instanceof String stringValue && !stringValue.isBlank()) {
                         return stringValue;
                     }
-                } catch (ReflectiveOperationException _) {
+                } catch (ReflectiveOperationException ignored) {
                     // ToolParam variants may not expose a parameter-name field.
                 }
             }
