@@ -115,7 +115,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 ### Gate 0 sign-off
 
 - Metrics table filled: [x] (completeness slots filled 2026-08-19 from the alpha baseline — counts 105/60/34, hit@5 0.7733, MRR 0.7433, recall@k 0.9510; write-safety + tier latency delegated to the Gate 6/Gate 4 evidence as noted per slot) · Decision: **PASS** (approved Louis Burroughs / 2026-08-19) · Close-out tracked → #1212 (CLOSED 2026-08-19)
-- Exceptions (owner/expiry): n/a · Approver/date: Louis Burroughs / 2026-08-19 · Rollback verified/documented: [x] (config-only; revertable)
+- Exceptions (owner/expiry): n/a · Approver/date: Louis Burroughs / 2026-08-19 · Rollback verified/documented: [x] (config-only; revertible)
 - 2026-08-07: harness + retrieval-quality gates shipped and in CI (#783 CLOSED, `081cf4291`; fixtures to volume `16649d56a`; lexical regression fixtures #1178 CLOSED); floors re-baseline open → #1179.
 
 #### Gate 0 — Execution results (2026-06-29, branch `feat/nl-interface-gates`)
@@ -200,7 +200,7 @@ First live run against the deployed stack (`durion-alpha`, containers up, `pos_m
 
 - Metrics filled: [x] (persona suite 17/17: layers `[BASE, ROLE, TOOL_USE, WRITE_GATE]` per persona, permission counts 15/33/86/18, 4/4 chat turns answered with 0 refusals/unsupported — values in the dated entry below) · Decision: **PASS** (approved Louis Burroughs / 2026-08-19) · Close-out tracked → #1213 (CLOSED 2026-08-19)
 - **2026-08-19 — live persona run on alpha (#1213, harness `nlti_live_verify.py --suite persona`): PASS, 17/17 checks, telemetry joined by correlation id (0 fallback joins).** Four personas (marcus.webb/SYSTEM_ADMINISTRATOR, diana.rowe/LOCATION_MANAGER, terrence.blake/DISPATCHER, olivia.chen/ACCOUNTING_ASSOCIATE) each completed a chat turn HTTP 200; `rag.promptLayers=[BASE, ROLE, TOOL_USE, WRITE_GATE]` emitted for every persona with BASE+ROLE asserted; `actor.permissionCodeCount` correctly attributed per persona (15/33/86/18). expectsPermissions/lacksPermissions asserted as endpoint probes (403 required on lacks). _ev: /tmp/nlti-verify2.{json,md} on the alpha host; prerequisite fix PR #1382 (X-Correlation-Id filter)._
-- Exceptions: n/a · Approver/date: pending · Rollback (swap assemble→resolvePrompt in both managers) verified: [x] documented
+- Exceptions: n/a · Approver/date: Louis Burroughs / 2026-08-19 · Rollback (swap assemble→resolvePrompt in both managers) verified: [x] documented
 - 2026-08-07: assembly carried through the Spring AI migration (PR #987); live answer-quality eval still open, no dedicated tracker (see Re-baseline table).
 
 #### Gate 1 — Execution results (2026-06-30)
