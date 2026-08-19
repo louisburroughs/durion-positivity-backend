@@ -330,6 +330,9 @@
 		<jackson-2-bom.version>2.21.5</jackson-2-bom.version>
 		<!-- CVE-2026-54399, CVE-2026-54428 -->
 		<httpcore5.version>5.4.3</httpcore5.version>
+		<!-- CVE-2026-71290 (BearerScheme fails to reject control characters in bearer
+		     tokens, fixed in 5.6.4) -->
+		<httpclient5.version>5.6.4</httpclient5.version>
 		<!-- CVE-2026-34481, CVE-2026-49844 -->
 		<log4j2.version>2.25.5</log4j2.version>
 		<!-- CVE-2026-41115 (fixed in 4.3.1); spring-kafka 4.0.x manages 4.2.1 -->
