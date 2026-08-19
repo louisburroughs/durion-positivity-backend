@@ -96,7 +96,8 @@ public class IntentParserServiceImpl implements IntentParserService {
     @SuppressWarnings("java:S2583")
     public @NonNull IntentV1 parse(@NonNull String prompt, @NonNull UUID sessionId, @NonNull UUID correlationId) {
         log.debug("Parsing intent for sessionId={}, correlationId={}", sessionId, correlationId);
-        String lower = prompt.toLowerCase(Locale.ROOT);
+        // Stripped so surrounding whitespace can't defeat prefix rules (e.g. " bulk delete ...").
+        String lower = prompt.toLowerCase(Locale.ROOT).strip();
 
         NltiRiskLevel risk = classifyRisk(lower);
         NltiIntentType type = classifyType(lower, risk);

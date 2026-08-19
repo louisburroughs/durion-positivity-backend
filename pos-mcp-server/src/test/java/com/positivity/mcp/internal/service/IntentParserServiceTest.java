@@ -492,6 +492,15 @@ class IntentParserServiceTest {
         assertThat(result.intentType()).isEqualTo("ACTION");
     }
 
+    @Test
+    @DisplayName("parse: leading whitespace does not defeat the 'bulk ' prefix rule")
+    void parse_withWhitespaceBeforeBulkPrefix_returnsHighRiskAction() {
+        IntentV1 result = service.parse("  \nbulk update prices", SESSION_ID, CORRELATION_ID);
+
+        assertThat(result.riskLevel()).isEqualTo("HIGH");
+        assertThat(result.intentType()).isEqualTo("ACTION");
+    }
+
     // ─── resolve: answer blank (answer.isBlank() true, second && short-circuits)
 
     @Test
