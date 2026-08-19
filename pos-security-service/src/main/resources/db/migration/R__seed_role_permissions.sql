@@ -34,6 +34,12 @@
 --   and no runtime initializer creates them, and both user_roles and
 --   role_assignments are foreign-keyed to roles(id), so no user could hold one.
 --   To make a persona real, create the role first, then grant it here.
+-- * invoice:finalize:override (#1374) gates manager-approval elevation for
+--   invoice finalization above the service-advisor cap. It is held by ADMIN
+--   and the manager roles only — ACCOUNT_MANAGER, GENERAL_MANAGER,
+--   LOCATION_MANAGER, MANAGER and SHOP_MANAGER — per the product decision on
+--   that issue. Do not widen it: the permission exists specifically to cap
+--   what a service advisor can finalize by naming an absent manager.
 -- * Grants are additive. Nothing here deletes a row, so permissions an operator
 --   granted through the role-permission admin API survive re-runs.
 --
@@ -236,6 +242,7 @@ FROM (VALUES
     ('inventory:stock_movement:create', 'inventory', 'stock_movement', 'create', 260),
     ('invoice:billing-rules', 'invoice', '', 'billing-rules', 83),
     ('invoice:finalize', 'invoice', '', 'finalize', 84),
+    ('invoice:finalize:override', 'invoice', 'finalize', 'override', 346),
     ('invoice:manage', 'invoice', '', 'manage', 82),
     ('location:bay:manage', 'location', 'bay', 'manage', 88),
     ('location:bay:read', 'location', 'bay', 'read', 87),
@@ -489,6 +496,7 @@ FROM (VALUES
     ('ACCOUNT_MANAGER', 'accounting:posting_rules:publish'),
     ('ACCOUNT_MANAGER', 'accounting:posting_rules:view'),
     ('ACCOUNT_MANAGER', 'invoice:billing-rules'),
+    ('ACCOUNT_MANAGER', 'invoice:finalize:override'),
     ('ACCOUNT_MANAGER', 'invoice:manage'),
     ('ACCOUNT_MANAGER', 'mcp:chat:execute'),
     ('ACCOUNT_MANAGER', 'mcp:chat:stream'),
@@ -646,6 +654,7 @@ FROM (VALUES
     ('ADMIN', 'inventory:stock_movement:create'),
     ('ADMIN', 'invoice:billing-rules'),
     ('ADMIN', 'invoice:finalize'),
+    ('ADMIN', 'invoice:finalize:override'),
     ('ADMIN', 'invoice:manage'),
     ('ADMIN', 'location:bay:manage'),
     ('ADMIN', 'location:bay:read'),
@@ -855,6 +864,7 @@ FROM (VALUES
     ('DISPATCHER', 'workorder:workorder:view'),
     ('GENERAL_MANAGER', 'catalog:category:view'),
     ('GENERAL_MANAGER', 'catalog:product:view'),
+    ('GENERAL_MANAGER', 'invoice:finalize:override'),
     ('GENERAL_MANAGER', 'mcp:chat:execute'),
     ('GENERAL_MANAGER', 'mcp:chat:stream'),
     ('GENERAL_MANAGER', 'nlti:request:read'),
@@ -913,6 +923,7 @@ FROM (VALUES
     ('LOCATION_MANAGER', 'inventory:pick_list:execute'),
     ('LOCATION_MANAGER', 'inventory:pick_list:view'),
     ('LOCATION_MANAGER', 'invoice:finalize'),
+    ('LOCATION_MANAGER', 'invoice:finalize:override'),
     ('LOCATION_MANAGER', 'invoice:manage'),
     ('LOCATION_MANAGER', 'mcp:chat:execute'),
     ('LOCATION_MANAGER', 'mcp:chat:stream'),
@@ -992,6 +1003,7 @@ FROM (VALUES
     ('LOCATION_MANAGER', 'workorder:workorder:generate_invoice'),
     ('LOCATION_MANAGER', 'workorder:workorder:reopen_completed'),
     ('LOCATION_MANAGER', 'workorder:workorder:view'),
+    ('MANAGER', 'invoice:finalize:override'),
     ('MANAGER', 'mcp:chat:execute'),
     ('MANAGER', 'mcp:chat:stream'),
     ('MANAGER', 'nlti:request:read'),
@@ -1069,6 +1081,7 @@ FROM (VALUES
     ('SERVICE_ADVISOR', 'workorder:workorder:create'),
     ('SERVICE_ADVISOR', 'workorder:workorder:generate_invoice'),
     ('SERVICE_ADVISOR', 'workorder:workorder:view'),
+    ('SHOP_MANAGER', 'invoice:finalize:override'),
     ('SHOP_MANAGER', 'mcp:chat:execute'),
     ('SHOP_MANAGER', 'mcp:chat:stream'),
     ('SHOP_MANAGER', 'nlti:request:read'),
@@ -1330,6 +1343,7 @@ BEGIN
         ('inventory:stock_movement:create'),
         ('invoice:billing-rules'),
         ('invoice:finalize'),
+        ('invoice:finalize:override'),
         ('invoice:manage'),
         ('location:bay:manage'),
         ('location:bay:read'),
