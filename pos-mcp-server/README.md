@@ -101,7 +101,22 @@ sentinel marks operations available to any authenticated caller.
 17 curated facade tools live in `internal/orchestration/tools/`: Accounting, Admin, Catalog, Customer, Events,
 Hr, Inventory, Invoice, Location, Order, Pricing, Reporting, ShopManager, Tax, Vehicle, Workorder, and the always-on
 Exa web search. Each maps to backend endpoints via a `@LoadBalanced` RestClient. Permission mappings for these tools
-are seeded by migration `V18`.
+are seeded by migration `V18` (retargeted by `V35`).
+
+The seed mirrors each downstream controller's *declared* authorization, not the product intent of the facade: for
+every backend endpoint a `@Tool` method calls, the merged class + method `@PreAuthorize` is read and
+`hasAuthority('X')` / `hasAnyAuthority('X','Y')` contribute codes `X`, `Y`, unioned across every `@Tool` method in
+the tool class. Some facade reads therefore fall back to the `AUTHENTICATED` sentinel instead of a "normal" business
+permission code:
+
+- **`isAuthenticated()` or no `@PreAuthorize` at all** (e.g. Order and Pricing reads, EventSummaryController) — there
+  is no permission-coded guard for MCP to copy, only the authenticated floor.
+- **Role-only guards** (`hasRole(...)`, e.g. Catalog reads) — `mcp_tool_permission` stores permission codes, not role
+  names, so role-only controller guards cannot be mirrored here; the role gates are still enforced in the downstream
+  service via Spring Security.
+
+> **Do not edit `V18` (or any applied migration) in place** — even comment-only changes alter the Flyway checksum and
+> fail validation on deployed environments. Document rationale here or add a new migration instead.
 
 ### OpenAPI-discovered tools
 
