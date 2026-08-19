@@ -225,16 +225,33 @@ class UomDocumentBoundaryIT {
     // ─── B3: HALF_UP rounding at base precision scale ────────────────────────────
 
     @Test
-    @DisplayName("conversion rounds HALF_UP at the base UoM's precision scale (1.5 BAG × 1.005 = 1.51 LB)")
+    @DisplayName("conversion rounds HALF_UP at the base UoM's precision scale (100 BAG × 1.005 = 101 EA, not 100)")
     void conversionRoundsHalfUpAtBasePrecisionScale() {
         UUID productId = UUID.randomUUID();
-        seedProduct(productId, "LB", 2);
+        // Base scale 0: the ledger posts whole base units, so the rounding boundary this test
+        // proves — HALF_UP, not DOWN — has to land on a whole number either way.
+        seedProduct(productId, "EA", 0);
         seedUom(productId, "BAG", "PACK", new BigDecimal("1.005"), 3);
 
-        UUID po = createPo(productId, "1.51", 3_000L);
-        // 1.5 × 1.005 = 1.5075 → HALF_UP at scale 2 → 1.51 (receipts round HALF_UP, not DOWN).
-        // Effective factor reflects the rounding actually applied: 1.51 / 1.5.
-        // Money math unchanged: documentQuantity × unitCostMinor = 1.5 × 2000 = 3000.
+        UUID po = createPo(productId, "101", 3_000L);
+        // 100 × 1.005 = 100.500 → HALF_UP at scale 0 → 101 (receipts round HALF_UP, not DOWN,
+        // which would truncate to 100). Money math unchanged: documentQuantity × unitCostMinor =
+        // 100 × 30 = 3000.
+
+        CreateGoodsReceiptRequest receipt =
+                receiptRequest(po, receiptLine(productId.toString(), "BAG", new BigDecimal("100"), 30L));
+        GoodsReceiptResponse response = asnService.createGoodsReceipt(receipt, ACTOR);
+
+        assertThat(response.getTotalAccruedAmountMinor()).isEqualTo(3_000L);
+        var receiptLine = response.getLines().getFirst();
+        assertThat(receiptLine.getQuantityReceived()).isEqualByComparingTo("101");
+        assertThat(receiptLine.getDocumentUom()).isEqualTo("BAG");
+        assertThat(receiptLine.getDocumentQuantity()).isEqualByComparingTo("100");
+        assertThat(receiptLine.getConversionFactor()).isEqualByComparingTo("1.01");
+
+        List<InventoryLedgerEntry> entries = ledgerEntriesFor(productId);
+        assertThat(entries).hasSize(1);
+        assertThat(entries.getFirst().getChangeInQuantity()).isEqualTo(101);
     }
 
     // ─── ledger funnel unitOfMeasure validation + documented tolerance ───────────

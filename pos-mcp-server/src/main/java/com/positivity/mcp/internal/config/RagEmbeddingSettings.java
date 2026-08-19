@@ -27,7 +27,7 @@ public class RagEmbeddingSettings {
     private static final int DIMENSION = 1024;
 
     private final String embeddingColumn;
-    private final int dimension;
+    private final int vectorDimension;
 
     public RagEmbeddingSettings(
             @Value("${mcp.rag.embedding-column:embedding}") @NonNull String embeddingColumn,
@@ -43,7 +43,7 @@ public class RagEmbeddingSettings {
                     + ". The 768-dim nomic path was retired by V33 (#1207); remove any MCP_RAG_DIMENSION override.");
         }
         this.embeddingColumn = normalized;
-        this.dimension = dimension;
+        this.vectorDimension = dimension;
     }
 
     /** Validated vector column name, safe to interpolate into SQL. */
@@ -52,7 +52,7 @@ public class RagEmbeddingSettings {
     }
 
     public int dimension() {
-        return dimension;
+        return vectorDimension;
     }
 
     /**
