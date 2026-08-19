@@ -35,11 +35,11 @@
 --   role_assignments are foreign-keyed to roles(id), so no user could hold one.
 --   To make a persona real, create the role first, then grant it here.
 -- * invoice:finalize:override (#1374) gates manager-approval elevation for
---   invoice finalization above the service-advisor cap. It is held by the
---   manager roles only — ACCOUNT_MANAGER, GENERAL_MANAGER, LOCATION_MANAGER,
---   MANAGER and SHOP_MANAGER — per the product decision on that issue. Do not
---   widen it: the permission exists specifically to cap what a service advisor
---   can finalize by naming an absent manager.
+--   invoice finalization above the service-advisor cap. It is held by ADMIN
+--   and the manager roles only — ACCOUNT_MANAGER, GENERAL_MANAGER,
+--   LOCATION_MANAGER, MANAGER and SHOP_MANAGER — per the product decision on
+--   that issue. Do not widen it: the permission exists specifically to cap
+--   what a service advisor can finalize by naming an absent manager.
 -- * Grants are additive. Nothing here deletes a row, so permissions an operator
 --   granted through the role-permission admin API survive re-runs.
 --
@@ -654,6 +654,7 @@ FROM (VALUES
     ('ADMIN', 'inventory:stock_movement:create'),
     ('ADMIN', 'invoice:billing-rules'),
     ('ADMIN', 'invoice:finalize'),
+    ('ADMIN', 'invoice:finalize:override'),
     ('ADMIN', 'invoice:manage'),
     ('ADMIN', 'location:bay:manage'),
     ('ADMIN', 'location:bay:read'),

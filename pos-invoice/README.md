@@ -72,7 +72,7 @@ capability. There are two ways to obtain it:
   must hold the `invoice:finalize:override` **authority**. The permission is registered
   at startup from `permissions.yaml`, and role grants live in pos-security's
   `role_permissions` table. Since #1374, pos-security's baseline seed
-  (`R__seed_role_permissions.sql`) grants it to the manager roles —
+  (`R__seed_role_permissions.sql`) grants it to `ADMIN` and the manager roles —
   `ACCOUNT_MANAGER`, `GENERAL_MANAGER`, `LOCATION_MANAGER`, `MANAGER`, and
   `SHOP_MANAGER` — so no manual grant is needed after deploy. The only remaining
   setup is ensuring managers are assigned one of those roles via the **user-role**

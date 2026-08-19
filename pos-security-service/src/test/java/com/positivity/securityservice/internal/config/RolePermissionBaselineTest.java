@@ -295,7 +295,7 @@ class RolePermissionBaselineTest {
     }
 
     @Test
-    @DisplayName("invoice:finalize:override is held by exactly the manager roles agreed on #1374")
+    @DisplayName("invoice:finalize:override is held by exactly ADMIN and the manager roles agreed on #1374")
     void finalizeOverrideIsHeldByExactlyTheAgreedManagerRoles() {
         Set<String> holders = seededGrants.entrySet().stream()
                 .filter(entry -> entry.getValue().contains("invoice:finalize:override"))
@@ -309,7 +309,8 @@ class RolePermissionBaselineTest {
         // as much a regression as losing it.
         assertThat(holders)
                 .as("roles holding invoice:finalize:override")
-                .containsExactly("ACCOUNT_MANAGER", "GENERAL_MANAGER", "LOCATION_MANAGER", "MANAGER", "SHOP_MANAGER");
+                .containsExactly(
+                        "ACCOUNT_MANAGER", "ADMIN", "GENERAL_MANAGER", "LOCATION_MANAGER", "MANAGER", "SHOP_MANAGER");
     }
 
     @Test

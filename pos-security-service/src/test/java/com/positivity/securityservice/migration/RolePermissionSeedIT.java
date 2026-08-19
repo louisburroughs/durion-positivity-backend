@@ -174,7 +174,7 @@ class RolePermissionSeedIT {
     void managerApprovalElevation_resolvesFinalizeOverrideThroughPersonDecision() {
         // The grant half: exactly the manager roles agreed on #1374 hold the permission.
         for (String role :
-                List.of("ACCOUNT_MANAGER", "GENERAL_MANAGER", "LOCATION_MANAGER", "MANAGER", "SHOP_MANAGER")) {
+                List.of("ACCOUNT_MANAGER", "ADMIN", "GENERAL_MANAGER", "LOCATION_MANAGER", "MANAGER", "SHOP_MANAGER")) {
             assertThat(grantedTo(role)).as("grants for %s", role).contains("invoice:finalize:override");
         }
         assertThat(grantedTo("SERVICE_ADVISOR"))
