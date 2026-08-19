@@ -2,32 +2,50 @@
   "_comment": [
     "Write-target config for scripts/nlti_live_verify.py --write-target (#1218, Gate 6).",
     "",
-    "DECISION C (resolved 2026-08-19): seed-then-delete of a probe MCP system prompt via the",
-    "discovered OpenAPI tool `prompts_deletesystemprompt` (pos-mcp-server DELETE /v1/prompts/{id},",
-    "operationId deleteSystemPrompt). Chosen because: the discovered tool arrives already",
-    "permission-bound (pos-mcp-server emits x-required-permissions, unlike pos-security-service);",
-    "the acting persona already holds mcp:system_prompt:create/delete; a probe-named prompt row is",
-    "referenced by nothing (SystemPromptDefaults never resolves it) and lives in no Kafka-enabled",
-    "domain; and the whole preview->confirm->execute loop stays inside the service under test.",
+    "DECISION C (revised 2026-08-19): seed-then-cancel of a probe appointment via the discovered",
+    "OpenAPI tool `shop-manager_cancelappointment` (DELETE /v1/appointments/{appointmentId}/cancel).",
+    "The original target (deleteSystemPrompt) is structurally impossible today: the gateway's",
+    "api-docs aggregation does not include pos-mcp-server, so its ops are never discovered.",
+    "cancelappointment was chosen because the discovered tool is live on alpha with its permission",
+    "attached (appointments:cancel), the DISPATCHER and LOCATION_MANAGER personas hold both",
+    "appointments:create and appointments:cancel TODAY (no grant changes), the write crosses a real",
+    "service boundary (mcp-server -> gateway -> shop-manager) under a NON-admin actor, and",
+    "shop-manager is not a Kafka-enabled domain on alpha.",
     "",
-    "The `seed` block makes each run own its lifecycle: the harness creates the probe prompt under",
-    "--allow-writes, substitutes its id for {seededId}, and the gated delete removes it (net-zero).",
-    "Re-confirming after deletion hits 404, which is the wg-idempotent evidence.",
+    "actor names the persona that seeds and executes; it must hold the target tool's permission.",
+    "The `seed` block creates the probe appointment under --allow-writes; its id replaces the",
+    "{seededId} token everywhere (deep substitution, including args.pathParams). The executor",
+    "contract for discovered tools is args = {pathParams, queryParams, body}",
+    "(OperationProxyFactory:71-74); targetTool and args ride in clientContext",
+    "(NltiWritePlanService:129, CONTEXT_ARGS).",
     "",
-    "Copy this file outside the repo (e.g. /opt/durion/alpha/nlti-write-target.json) and adjust the",
-    "probe name suffix if runs collide. cleanupNote is copied into the evidence block."
+    "Replace the <PLACEHOLDER> ids with real alpha values before a live run (read them from",
+    "pos-customer / pos-location; the far-future slot avoids conflict checks). Cancellation is a",
+    "status write: the cancelled probe appointment row remains, inert, as the run's residue."
   ],
-  "prompt": "Delete the system prompt {seededId}",
-  "expectedTool": "prompts_deletesystemprompt",
-  "clientContext": { "targetTool": "prompts_deletesystemprompt", "id": "{seededId}" },
+  "actor": "terrence-blake",
+  "prompt": "Remove appointment {seededId} from the schedule",
+  "expectedTool": "shop-manager_cancelappointment",
+  "clientContext": {
+    "targetTool": "shop-manager_cancelappointment",
+    "args": {
+      "pathParams": { "appointmentId": "{seededId}" },
+      "body": { "cancellationReason": "NLTI write-gate verification probe (#1218)" }
+    }
+  },
   "seed": {
     "method": "POST",
-    "path": "prompts",
+    "path": "appointments",
     "body": {
-      "name": "NLTI_PROBE_PROMPT_DECISION_C",
-      "content": "Probe prompt created by nlti_live_verify.py for the #1218 write-gate verification. Safe to delete."
+      "crmCustomerId": "<REAL_ALPHA_CRM_CUSTOMER_UUID>",
+      "crmVehicleId": "<REAL_ALPHA_CRM_VEHICLE_UUID>",
+      "locationId": "<REAL_ALPHA_LOCATION_UUID>",
+      "serviceRequestIds": [],
+      "startAt": "2027-03-01T15:00:00Z",
+      "endAt": "2027-03-01T16:00:00Z",
+      "sourceType": "NLTI_PROBE"
     },
     "idField": "id"
   },
-  "cleanupNote": "Self-cleaning: the gated delete removes the seeded probe prompt. If a run aborts between seed and confirm, DELETE /v1/prompts/{id} as any holder of mcp:system_prompt:delete, or ignore it - a prompt named NLTI_PROBE_PROMPT_DECISION_C is referenced by nothing."
+  "cleanupNote": "Self-limiting: the gated cancel leaves the probe appointment in CANCELLED state (rows are not deleted). It references a real customer/vehicle/location read-only and sits on a far-future slot, so it affects no live scheduling. If a run aborts between seed and confirm, cancel it via DELETE /v1/appointments/{id}/cancel as any appointments:cancel holder."
 }

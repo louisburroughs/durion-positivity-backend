@@ -398,6 +398,19 @@ def load_queries(path):
     return queries
 
 
+def substitute_seeded_id(value, seeded_id):
+    """Recursively replaces the {seededId} token in a clientContext structure. The executor
+    contract nests args as {"pathParams": {...}, "body": {...}} (OperationProxyFactory:71-74), so
+    top-level-only substitution would leave the token inside pathParams."""
+    if isinstance(value, str):
+        return value.replace("{seededId}", seeded_id)
+    if isinstance(value, dict):
+        return {k: substitute_seeded_id(v, seeded_id) for k, v in value.items()}
+    if isinstance(value, list):
+        return [substitute_seeded_id(v, seeded_id) for v in value]
+    return value
+
+
 def load_write_target(path):
     """The #1218 write target — plan decision C: seed-then-delete of a probe system prompt via the
     discovered `prompts_deletesystemprompt` tool (see the example fixture for the agreed config).
@@ -430,6 +443,11 @@ def load_write_target(path):
         for key in ("method", "path", "body", "idField"):
             if not seed.get(key):
                 raise SystemExit(f"--write-target {file} 'seed' block is missing '{key}'")
+        flat = json.dumps(seed["body"])
+        if "<" in flat and ">" in flat:
+            raise SystemExit(
+                f"--write-target {file} seed body still contains a <PLACEHOLDER>. Replace the "
+                "example ids with real alpha values before a live run.")
     return target
 
 
@@ -1761,10 +1779,16 @@ def plan_write_gate(ctx):
 def run_write_gate(ctx):
     gate, issue, title = SUITES["write-gate"]
     suite = SuiteResult("write-gate", gate, issue, title)
-    persona = ctx.personas[0]
-    ctx.authenticate(persona)
-
     target = load_write_target(ctx.args.write_target) if ctx.args.write_target else None
+    # Decision C: the write-target config may name its acting persona ("actor"), because the actor
+    # must hold the target tool's own permission (e.g. appointments:cancel), which is a domain
+    # grant the admin persona does not necessarily carry. Default stays personas[0].
+    actor_name = (target or {}).get("actor")
+    persona = next((p for p in ctx.personas if p.name == actor_name), None) if actor_name \
+        else ctx.personas[0]
+    if persona is None:
+        raise SystemExit(f"--write-target actor '{actor_name}' is not among the loaded personas")
+    ctx.authenticate(persona)
     if target is None:
         suite.notes.append(
             "OPEN DECISION C: no --write-target supplied, so the executing half of the flow is "
@@ -1799,9 +1823,7 @@ def run_write_gate(ctx):
             return suite
         prompt = prompt.replace("{seededId}", str(seeded_id))
         if client_context:
-            client_context = {k: (v.replace("{seededId}", str(seeded_id))
-                                  if isinstance(v, str) else v)
-                              for k, v in client_context.items()}
+            client_context = substitute_seeded_id(client_context, str(seeded_id))
     elif seed and "{seededId}" in prompt:
         suite.skip("wg-seed", "Probe record seeded for the gated delete",
                    "seed block configured but --allow-writes not passed; executing half will skip")
@@ -2349,8 +2371,11 @@ def build_parser():
                         help="delay between Loki polls (default 2)")
     parser.add_argument("--telemetry-window-pad-seconds", type=float, default=3.0,
                         help="clock-skew padding on the request window join (default 3)")
-    parser.add_argument("--workflow-state", default="CREATING_PO", choices=WORKFLOW_STATES,
-                        help="workflow state the workflow suite activates (default CREATING_PO)")
+    parser.add_argument("--workflow-state", default="PROCESSING_RETURN", choices=WORKFLOW_STATES,
+                        help="workflow state the workflow suite activates (default "
+                             "PROCESSING_RETURN — the state the Gate 2C completeness clause names "
+                             "and the V34 seed populates; a broad-permission actor's IDLE baseline "
+                             "swallowed the CREATING_PO delta on the 2026-08-19 run)")
     parser.add_argument("--admin-tool-name", default="listInventoryItems",
                         help="discovered tool name used by the admin permission read probe")
     parser.add_argument("--tuning-window-hours", type=float, default=48.0,
