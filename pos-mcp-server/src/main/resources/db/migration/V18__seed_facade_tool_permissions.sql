@@ -130,7 +130,7 @@ WHERE mcp_tool.name = 'WorkorderFacadeTool';
 --                         → CatalogController (/v1/catalogs) — same role gate
 --    Why not catalog:* here? The catalog reads are guarded with roles, not
 --    permission codes, and this table can only store permission-code gates.
---    Union: AUTHENTICATED  (role gates are enforced separately at the gateway)
+--    Union: AUTHENTICATED  (role gates are enforced in the downstream service via Spring Security)
 -- ─────────────────────────────────────────────────────────────────────────────
 INSERT INTO mcp_tool_permission (tool_id, permission_code)
 SELECT id, code
