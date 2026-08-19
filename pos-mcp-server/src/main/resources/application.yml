@@ -123,6 +123,7 @@ mcp:
         - id: "security.guide"
           source-path: "classpath:rag/security-service-guide.md"
           rag-scope: "master"
+          required-permissions: ["security:permission:view", "security:role:view"]
         # Gate 5 documents. `required-permissions` is the G5.2 metadata field (not yet bound by
         # StaticDocEntry — ignored until G5.2 adds the field + permission-aware filter G5.1);
         # carried here so it is ready and records intent. Permission codes verified against the

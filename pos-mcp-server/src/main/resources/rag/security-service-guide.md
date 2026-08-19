@@ -1,5 +1,7 @@
 # Security Service — Administrator Guide
 
+> Access to this guide requires security-administration permissions (`security:permission:view`, `security:role:view`).
+
 This guide is for platform administrators and security operators who manage user accounts, roles, permissions, and access policies in the Durion Positivity platform. It describes what each capability does and who is authorised to use it.
 
 ---

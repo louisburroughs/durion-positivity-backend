@@ -72,14 +72,11 @@ import org.springframework.core.io.ClassPathResource;
  * the assertion is an equality both ways. A new doc that forgets the key fails; a doc that silently
  * loses its permission tags fails; and removing a doc from the public set without adding tags fails.
  *
- * <p><strong>Recorded exception (#1217, plan decision F):</strong> {@code security.guide}
- * ({@code rag/security-service-guide.md}) is in {@link #PUBLIC_DOC_IDS}. Its own opening line reads
- * "This guide is for platform administrators and security operators", which sits badly with the
- * Gate 5 completeness clause "admin/security docs require admin/security permissions". It is
- * carried as an explicit, reviewable exception rather than silently — the fix (tagging it
- * {@code security:permission:view} / {@code security:role:view}, or at minimum
- * {@code AUTHENTICATED}) is a content decision for #1217, not a test decision. The other five
- * public docs are pre-Gate-5 operational guides with no restricted content.
+ * <p><strong>#1396 resolved (2026-08-19):</strong> {@code security.guide} was the recorded
+ * exception here — an admin-and-security-operator guide shipped world-readable. The owner decision
+ * was to tag it ({@code security:permission:view} + {@code security:role:view} in both
+ * {@code application.yml} and {@code application-alpha.yml}), so it left this set. The remaining
+ * five public docs are pre-Gate-5 operational guides with no restricted content.
  */
 class RetrievalLockTest {
 
@@ -117,10 +114,7 @@ class RetrievalLockTest {
             "inventory.inv-cntrl",
             "people.human-resources",
             "shop.management",
-            "shop.management.guidelines",
-            // FINDING / recorded exception (#1217, plan decision F): admin-and-security-operator
-            // facing guide shipped without permission tags. Tracked, not silently blessed.
-            "security.guide");
+            "shop.management.guidelines");
 
     /**
      * {@code domain:resource:action}, snake_case, plus the synthetic {@code AUTHENTICATED} code that
