@@ -1741,13 +1741,19 @@ def run_router(ctx):
     model_rows = [row for row in observed if row["tier"] != TIER_RULE]
     reported = sum(1 for row in model_rows if row["fallbackUsed"] is not None)
     fell_back = sorted(row["id"] for row in model_rows if row["fallbackUsed"])
-    suite.expect_joined("router-fallback-visible",
-                        "Fallback usage visible in telemetry (model-backed tiers)",
-                        all(row["fallbackUsed"] is not None for row in model_rows),
-                        f"model.fallbackUsed reported for {reported}/{len(model_rows)} "
-                        f"model-backed probes ({len(observed) - len(model_rows)} T0_RULE rows "
-                        f"correctly carry none); used on {fell_back}; NOTE fallbackUsed=false is "
-                        "the factory's hardcoded value — no failover path exists in code", joined)
+    if not model_rows:
+        suite.skip("router-fallback-visible",
+                   "Fallback usage visible in telemetry (model-backed tiers)",
+                   f"all {len(observed)} probes routed to T0_RULE — no model-backed request to "
+                   "assert visibility on (all() over an empty set would pass vacuously)")
+    else:
+        suite.expect_joined("router-fallback-visible",
+                            "Fallback usage visible in telemetry (model-backed tiers)",
+                            all(row["fallbackUsed"] is not None for row in model_rows),
+                            f"model.fallbackUsed reported for {reported}/{len(model_rows)} "
+                            f"model-backed probes ({len(observed) - len(model_rows)} T0_RULE rows "
+                            f"correctly carry none); used on {fell_back}; NOTE fallbackUsed=false is "
+                            "the factory's hardcoded value — no failover path exists in code", joined)
 
     p95 = percentile(latencies, 95)
     suite.expect("router-p95", "p95 latency within the soft SLO",
