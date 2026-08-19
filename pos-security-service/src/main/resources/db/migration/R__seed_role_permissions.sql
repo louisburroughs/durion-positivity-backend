@@ -1056,6 +1056,8 @@ FROM (VALUES
     ('SYSTEM_ADMINISTRATOR', 'mcp:system_prompt:update'),
     ('SYSTEM_ADMINISTRATOR', 'mcp:system_prompt:view'),
     ('SYSTEM_ADMINISTRATOR', 'mcp:tool:manage'),
+    ('SYSTEM_ADMINISTRATOR', 'mcp:tool:view'),
+    ('SYSTEM_ADMINISTRATOR', 'nlti:audit:read'),
     ('SYSTEM_ADMINISTRATOR', 'nlti:request:read'),
     ('SYSTEM_ADMINISTRATOR', 'nlti:request:submit'),
     ('SYSTEM_ADMINISTRATOR', 'security:audit:create'),

@@ -276,6 +276,25 @@ class RolePermissionBaselineTest {
     }
 
     @Test
+    @DisplayName("SYSTEM_ADMINISTRATOR holds tool visibility and the NLTI audit ledger")
+    void systemAdministratorHoldsToolViewAndNltiAudit() {
+        assertThat(seededGrants.get("SYSTEM_ADMINISTRATOR")).contains("mcp:tool:view", "nlti:audit:read");
+    }
+
+    @Test
+    @DisplayName("the NLTI audit ledger is reserved for ADMIN and SYSTEM_ADMINISTRATOR")
+    void nltiAuditReadIsReservedToAdminRoles() {
+        Set<String> holders = seededGrants.entrySet().stream()
+                .filter(entry -> entry.getValue().contains("nlti:audit:read"))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toCollection(TreeSet::new));
+
+        assertThat(holders)
+                .as("the NLTI audit ledger exposes other principals' request history")
+                .containsExactly("ADMIN", "SYSTEM_ADMINISTRATOR");
+    }
+
+    @Test
     @DisplayName("ADMIN holds both tool permissions")
     void adminHoldsToolViewAndManage() {
         assertThat(seededGrants.get("ADMIN")).contains("mcp:tool:view", "mcp:tool:manage");
