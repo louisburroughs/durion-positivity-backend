@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -232,6 +233,6 @@ class SupplierStockHintResolverTest {
         when(hints.findByResolutionStatusOrderByFetchedAtAsc(any(), any(Limit.class)))
                 .thenThrow(new IllegalStateException("boom"));
 
-        resolver.resolvePending();
+        assertThatCode(() -> resolver.resolvePending()).doesNotThrowAnyException();
     }
 }

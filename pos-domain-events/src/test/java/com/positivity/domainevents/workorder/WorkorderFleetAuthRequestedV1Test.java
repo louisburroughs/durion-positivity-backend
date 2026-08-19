@@ -1,5 +1,6 @@
 package com.positivity.domainevents.workorder;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
@@ -40,12 +41,22 @@ class WorkorderFleetAuthRequestedV1Test {
     @Test
     @DisplayName("any single identifier is enough")
     void oneIdentifierIsEnough() {
-        new WorkorderFleetAuthRequestedV1(WORKORDER_ID, "michelin-de", null, "ABC-123", null, null, null, 1, List.of());
-        new WorkorderFleetAuthRequestedV1(
-                WORKORDER_ID, "michelin-de", null, null, "1HGCM82633A004352", null, null, 1, List.of());
-        new WorkorderFleetAuthRequestedV1(WORKORDER_ID, "michelin-de", null, null, null, "FLEET-9", null, 1, List.of());
-        new WorkorderFleetAuthRequestedV1(
-                WORKORDER_ID, "michelin-de", "VENDOR-1", null, null, null, null, 1, List.of());
+        assertThat(new WorkorderFleetAuthRequestedV1(
+                                WORKORDER_ID, "michelin-de", null, "ABC-123", null, null, null, 1, List.of())
+                        .licensePlate())
+                .isEqualTo("ABC-123");
+        assertThat(new WorkorderFleetAuthRequestedV1(
+                                WORKORDER_ID, "michelin-de", null, null, "1HGCM82633A004352", null, null, 1, List.of())
+                        .vin())
+                .isEqualTo("1HGCM82633A004352");
+        assertThat(new WorkorderFleetAuthRequestedV1(
+                                WORKORDER_ID, "michelin-de", null, null, null, "FLEET-9", null, 1, List.of())
+                        .fleetNumber())
+                .isEqualTo("FLEET-9");
+        assertThat(new WorkorderFleetAuthRequestedV1(
+                                WORKORDER_ID, "michelin-de", "VENDOR-1", null, null, null, null, 1, List.of())
+                        .vendorVehicleId())
+                .isEqualTo("VENDOR-1");
     }
 
     @Test
