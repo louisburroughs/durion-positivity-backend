@@ -1588,8 +1588,11 @@ def run_workflow(ctx):
                      f"HTTP {audit.status or audit.error}, {len(entries)} entries for "
                      f"correlationId={correlation}")
 
-    if len(ctx.personas) > 1:
-        other = ctx.personas[1]
+    # Ownership probe: any persona other than the session owner works — no permission
+    # requirement, the 403 comes from session ownership.
+    candidates = [p for p in ctx.personas if p.name != persona.name]
+    other = candidates[0] if candidates else None
+    if other is not None:
         try:
             ctx.authenticate(other)
         except (ConfigError, InfraError) as exc:
@@ -1952,13 +1955,20 @@ def run_write_gate(ctx):
                      and replayed.get("status") == confirmed.get("status"),
                      f"first={confirmed.get('status')} replay={replayed.get('status')} "
                      f"HTTP {getattr(replay, 'status', 'refused')}")
-        audit = ctx.runner.send(ctx.plan_audit(persona, correlation))
+        # The audit ledger read requires nlti:audit:read, which the WRITE actor does not
+        # necessarily hold (observed live: diana's 403 rendered as empty eventTypes). Read as an
+        # audit-capable persona — the config's admin persona — falling back to the actor.
+        auditor = next((p for p in ctx.personas if p.admin), persona)
+        if auditor.name != persona.name:
+            ctx.authenticate(auditor)
+        audit = ctx.runner.send(ctx.plan_audit(auditor, correlation))
         entries = ((audit.json_body or {}).get("content") or []) if audit and audit.ok else []
         types = sorted({entry.get("eventType") for entry in entries})
         suite.expect("wg-audit-execution", "CONFIRMATION + EXECUTION audit entries appended",
                      "CONFIRMATION" in types
                      and any(str(t).startswith("EXECUTION") for t in types),
-                     f"audit eventTypes={types} for correlationId={correlation}")
+                     f"HTTP {getattr(audit, 'status', 'refused')} audit eventTypes={types} "
+                     f"reader={auditor.name} correlationId={correlation}")
         if target.get("cleanupNote"):
             suite.notes.append(f"Write target cleanup: {target['cleanupNote']}")
 
@@ -2019,8 +2029,15 @@ def run_write_gate(ctx):
         "(--write-gate-action-prompt) because that is the only phrasing the parser routes to the "
         "write gate today.")
 
-    if len(ctx.personas) > 1:
-        other = ctx.personas[1]
+    # The fail-closed persona must LACK the target tool's permission and differ from the actor.
+    # It is config-selectable ("failClosedActor") because grants move: #1384 gave LOCATION_MANAGER
+    # pricing:promotion:manage, which silently turned the old hardcoded personas[1] (diana) into a
+    # legitimate holder — her plan was CORRECT behavior misread as a fail-closed violation.
+    fail_closed_name = (target or {}).get("failClosedActor")
+    candidates = [p for p in ctx.personas if p.name != persona.name]
+    other = next((p for p in candidates if p.name == fail_closed_name), None) if fail_closed_name \
+        else (candidates[-1] if candidates else None)
+    if other is not None:
         try:
             ctx.authenticate(other)
         except (ConfigError, InfraError) as exc:

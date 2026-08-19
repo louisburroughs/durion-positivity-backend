@@ -18,7 +18,8 @@
     "prompt and clientContext (tokens {offerId}, {ruleId}). All values below are synthetic \u2014 no",
     "placeholders to fill. Residue: the probe offer remains (no delete-offer endpoint exists) with",
     "zero eligibility rules and a random probe promoCode; see cleanupNote.",
-    "Each seed names its gateway service route ('route': 'price') \u2014 seeds execute in the target service's domain, not pos-mcp-server's."
+    "Each seed names its gateway service route ('route': 'price') \u2014 seeds execute in the target service's domain, not pos-mcp-server's.",
+    "failClosedActor names the persona for the fail-closed probe; it must LACK the target tool's permission (grants move: #1384 made diana a legitimate holder)."
   ],
   "actor": "diana-rowe",
   "prompt": "Remove eligibility rule {ruleId} from promotion {offerId}",
@@ -63,5 +64,6 @@
       "route": "price"
     }
   ],
-  "cleanupNote": "The gated delete removes the rule; the probe offer remains (pos-price exposes no delete-offer endpoint). It is inert: 0.01 fixed discount, usageLimit 1, a one-day far-future window, and a per-run promoCode (NLTI-PROBE-<timestamp>) nobody knows. If desired, deactivate or remove it directly in pos_price_db. An aborted run between seeds leaves the offer with one never-matching CAMPAIGN_CODE rule - equally inert."
+  "cleanupNote": "The gated delete removes the rule; the probe offer remains (pos-price exposes no delete-offer endpoint). It is inert: 0.01 fixed discount, usageLimit 1, a one-day far-future window, and a per-run promoCode (NLTI-PROBE-<timestamp>) nobody knows. If desired, deactivate or remove it directly in pos_price_db. An aborted run between seeds leaves the offer with one never-matching CAMPAIGN_CODE rule - equally inert.",
+  "failClosedActor": "olivia-chen"
 }
