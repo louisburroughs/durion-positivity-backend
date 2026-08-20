@@ -2,8 +2,13 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.entity.ExtProductUomReplica;
 import com.positivity.inventory.internal.repository.ExtProductUomReplicaRepository;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
@@ -46,5 +51,34 @@ public class BaseUnitOfMeasureResolver {
                 .map(ExtProductUomReplica::getUomCode)
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * Batch form of {@link #resolve(UUID)} for a page of rows: one {@code IN} query instead of one
+     * round trip per row. A product with no declared base UoM, or that is not among
+     * {@code productIds}, is simply absent from the returned map rather than mapped to
+     * {@code null} — callers already read a missing key as "nothing to show", same as the
+     * single-id form.
+     *
+     * @param productIds catalog product ids to resolve; {@code null} entries are ignored
+     */
+    public @NonNull Map<UUID, String> resolveAll(@Nullable Collection<UUID> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> distinctIds = productIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (distinctIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> resolved = new HashMap<>();
+        for (ExtProductUomReplica row : extProductUomReplicaRepository.findByProductIdIn(distinctIds)) {
+            if (UOM_TYPE_BASE.equals(row.getUomType())) {
+                resolved.putIfAbsent(row.getProductId(), row.getUomCode());
+            }
+        }
+        return resolved;
     }
 }

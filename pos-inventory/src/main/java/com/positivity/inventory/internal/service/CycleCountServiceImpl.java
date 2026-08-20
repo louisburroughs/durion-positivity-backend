@@ -133,6 +133,7 @@ public class CycleCountServiceImpl implements CycleCountService {
         task.setLatestCountEntryId(countEntry.getCountEntryId());
         task.setCountEntriesCount(1);
         boolean conflict = applyConflictStatus(task);
+        reconcileWithinToleranceForConflict(countEntry, conflict);
         acceptIfWithinTolerance(task, countEntry, conflict);
         taskRepository.save(task);
 
@@ -193,6 +194,7 @@ public class CycleCountServiceImpl implements CycleCountService {
         task.setLatestCountEntryId(recountEntry.getCountEntryId());
         task.setCountEntriesCount(task.getCountEntriesCount() + 1);
         boolean conflict = applyConflictStatus(task);
+        reconcileWithinToleranceForConflict(recountEntry, conflict);
         acceptIfWithinTolerance(task, recountEntry, conflict);
 
         boolean limitReached = task.getCountEntriesCount() >= MAX_TOTAL_COUNTS;
@@ -362,6 +364,20 @@ public class CycleCountServiceImpl implements CycleCountService {
     private void acceptIfWithinTolerance(CycleCountTask task, CountEntry countEntry, boolean conflict) {
         if (!conflict && countEntry.isWithinTolerance()) {
             task.setStatus(TaskStatus.ACCEPTED_WITHIN_TOLERANCE);
+        }
+    }
+
+    /**
+     * Forces the entry's {@code withinTolerance} to {@code false} once a movement conflict is
+     * detected, even when the raw variance-vs-tolerance comparison passed. A conflict means the
+     * expected-quantity snapshot that comparison ran against is already known stale, so nothing
+     * was actually reconciled — the field must not go on claiming otherwise, matching what
+     * {@code CountEntryResponse}/{@code CountResponse} document: "true: reconciled, no adjustment
+     * created".
+     */
+    private void reconcileWithinToleranceForConflict(CountEntry countEntry, boolean conflict) {
+        if (conflict && countEntry.isWithinTolerance()) {
+            countEntry.setWithinTolerance(false);
         }
     }
 

@@ -63,7 +63,10 @@ public class CycleCountToleranceResolver {
      *     as no location scope)
      */
     public @NonNull Resolution resolve(@Nullable UUID productId, @Nullable String storageLocation) {
-        String location = (storageLocation == null || storageLocation.isBlank()) ? null : storageLocation;
+        // Mirrors CycleCountToleranceServiceImpl.normalize(): the row was stored trimmed, so the
+        // lookup key has to be trimmed the same way or a task location keyed with incidental
+        // whitespace (" BIN-1 ") would silently miss a tolerance configured for "BIN-1".
+        String location = (storageLocation == null || storageLocation.isBlank()) ? null : storageLocation.trim();
 
         Optional<CycleCountTolerance> match = Optional.empty();
         if (productId != null && location != null) {

@@ -153,6 +153,35 @@ class CycleCountConflictDetectionTest {
     }
 
     @Test
+    @DisplayName("a conflicted count whose raw variance fits tolerance is still not auto-accepted or"
+            + " reported withinTolerance=true")
+    void conflictWithVarianceWithinTolerance_notAutoAcceptedNorReportedWithinTolerance() {
+        String sku = "SKU-I2-" + UUID.randomUUID();
+        UUID location = UUID.randomUUID();
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("10"), 10);
+        CycleCountTask task = task(location.toString(), sku, 10);
+        tick();
+        post(sku, location, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-3"), 7);
+
+        // Counted exactly the stale expected quantity (10): the raw variance-vs-tolerance
+        // comparison passes (zero variance against the snapshot), but a movement landed in the
+        // window, so nothing here was actually reconciled -- the CONFLICT must win and
+        // withinTolerance must not claim otherwise (CountResponse doc: "true: reconciled, no
+        // adjustment created").
+        CountResponse response = cycleCountService.submitCount(SubmitCountRequest.builder()
+                .taskId(task.getTaskId())
+                .auditorId(AUDITOR)
+                .actualQuantity(BigDecimal.valueOf(10))
+                .build());
+
+        assertThat(response.getTaskStatus()).isEqualTo(TaskStatus.CONFLICT);
+        assertThat(response.getVariance()).isEqualByComparingTo("0");
+        assertThat(response.isWithinTolerance()).isFalse();
+        assertThat(taskRepository.findById(task.getTaskId()).orElseThrow().getStatus())
+                .isEqualTo(TaskStatus.CONFLICT);
+    }
+
+    @Test
     @DisplayName("no movement in the window keeps the pre-I2 COUNTED_PENDING_REVIEW flow (regression)")
     void noMovement_staysPendingReview() {
         String sku = "SKU-I2-" + UUID.randomUUID();

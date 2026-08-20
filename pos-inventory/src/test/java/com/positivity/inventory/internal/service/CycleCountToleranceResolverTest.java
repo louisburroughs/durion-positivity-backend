@@ -129,6 +129,20 @@ class CycleCountToleranceResolverTest {
     }
 
     @Test
+    void resolve_trimsLocationSoATaskKeyedWithWhitespaceStillMatchesTheStoredScope() {
+        resolver = newResolver();
+        // CycleCountToleranceServiceImpl stores storageLocation trimmed ("BIN-1"); a task location
+        // carrying incidental whitespace (" BIN-1 ") must resolve the same row, not miss it.
+        when(repository.findByProductIdAndStorageLocationAndActiveTrue(PRODUCT_ID, "BIN-1"))
+                .thenReturn(Optional.of(tolerance(PRODUCT_ID, "BIN-1", "9")));
+
+        CycleCountToleranceResolver.Resolution resolution = resolver.resolve(PRODUCT_ID, " BIN-1 ");
+
+        assertThat(resolution.absoluteTolerance()).isEqualByComparingTo("9");
+        verify(repository).findByProductIdAndStorageLocationAndActiveTrue(PRODUCT_ID, "BIN-1");
+    }
+
+    @Test
     void isWithinTolerance_zeroToleranceRequiresExactMatch() {
         resolver = newResolver();
         CycleCountToleranceResolver.Resolution none = CycleCountToleranceResolver.Resolution.NONE;

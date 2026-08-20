@@ -24,6 +24,11 @@ ALTER TABLE count_entry
 --    two are equal whenever uom_code is null, which is every count until a bulk product is
 --    seeded. measurement_method defaults MANUAL_COUNT so every pre-existing and future
 --    non-bulk count needs no behavior change to keep meaning "someone counted it by hand".
+-- within_tolerance defaults false, not true: a pre-existing row's variance was never checked
+-- against a tolerance, so claiming it landed inside one would be a fact this migration has no
+-- basis for. false is the safe, inert default (matches "not reconciled") for any row this
+-- backfills; every row this module itself writes from here on sets the column explicitly from
+-- the real comparison (CycleCountServiceImpl.buildCountEntry).
 ALTER TABLE count_entry
     ADD COLUMN measured_quantity numeric(19,4),
     ADD COLUMN uom_code varchar(32),
@@ -31,7 +36,7 @@ ALTER TABLE count_entry
     ADD COLUMN variance_percentage numeric(9,4),
     ADD COLUMN allowed_tolerance_absolute numeric(19,4),
     ADD COLUMN allowed_tolerance_percentage numeric(7,4),
-    ADD COLUMN within_tolerance boolean NOT NULL DEFAULT true,
+    ADD COLUMN within_tolerance boolean NOT NULL DEFAULT false,
     ADD COLUMN variance_reason varchar(500);
 
 -- Backfill measured_quantity for any pre-existing rows: with no uom_code, measured and actual
