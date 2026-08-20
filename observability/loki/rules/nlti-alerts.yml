@@ -215,7 +215,8 @@ groups:
     interval: 1m
     rules:
       # Doc rule 8. rag.promptLayers is a JSON array, hence the parameterized | json;
-      # the regex matches both a missing field ("") and an empty array ("[]").
+      # the regex matches only a missing field ("") or an empty array ("[]") — LogQL
+      # label-filter regexes are fully anchored, but the ^$ anchors make that explicit.
       - alert: NltiPromptLayerMissing
         expr: |
           sum(count_over_time(
@@ -224,7 +225,7 @@ groups:
               | line_format "{{.telemetry}}"
               | json prompt_layers="rag.promptLayers"
               | __error__=""
-              | prompt_layers =~ `(\[\])?` [15m]
+              | prompt_layers =~ `^(\[\])?$` [15m]
           )) > 0
         labels:
           severity: P2

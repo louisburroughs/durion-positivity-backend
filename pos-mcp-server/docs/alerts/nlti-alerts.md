@@ -175,8 +175,9 @@ populated yet, the rule states the substitute signal it fires on today.
   `observability/loki/rules/nlti-alerts.yml` (compose-mounted at `/loki/rules/fake`) carries rules
   2, 5–8, 10 and the Loki supplements of 9 and 11. That file is the deployed form; this document
   stays the source of truth for intent and thresholds — change both together. Verify with
-  `curl loki:3100/loki/api/v1/rules` (loaded rule files) and `curl loki:3100/prometheus/api/v1/rules`
-  (evaluation state). No Alertmanager is deployed and Grafana's embedded Alertmanager only accepts
+  `curl localhost:3100/loki/api/v1/rules` (loaded rule files) and
+  `curl localhost:3100/prometheus/api/v1/rules` (evaluation state) — Loki is bound to
+  `127.0.0.1:3100` on the host; use `loki:3100` from inside the compose network. No Alertmanager is deployed and Grafana's embedded Alertmanager only accepts
   Grafana-managed alerts, so ruler alert state is dashboard/UI-only (Grafana → Alerting → Alert
   rules, via the Loki datasource) until an Alertmanager is added and `ruler.alertmanager_url` set.
 - Every Loki rule filters `service="pos-mcp-server"`, the label Promtail derives from the Docker

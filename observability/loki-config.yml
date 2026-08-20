@@ -55,7 +55,7 @@ compactor:
 # observability/loki/rules/ and are bind-mounted by docker-compose at
 # /loki/rules/fake — "fake" is the tenant id Loki uses while auth_enabled is
 # false, and the local rule store expects one <tenant> directory per tenant
-# under its root. enable_api serves GET /ruler/api/v1/rules (the verification
+# under its root. enable_api serves GET /loki/api/v1/rules (the verification
 # endpoint) and lets Grafana's Alerting UI list the rules and their firing
 # state via the Loki datasource.
 #

@@ -147,8 +147,9 @@ alpha single-host EC2 box; not multi-tenant/clustered.
 - Storage: `tsdb` index + filesystem chunks under the `loki-data` volume
 - Ruler (#1424): evaluates the NLTI Gate 7 LogQL alert rules from `loki/rules/nlti-alerts.yml`
   (mounted at `/loki/rules/fake`; source doc `pos-mcp-server/docs/alerts/nlti-alerts.md`).
-  Verify with `curl loki:3100/loki/api/v1/rules` (loaded rule files) and
-  `curl loki:3100/prometheus/api/v1/rules` (evaluation state). No Alertmanager is deployed;
+  Verify from the host with `curl localhost:3100/loki/api/v1/rules` (loaded rule files) and
+  `curl localhost:3100/prometheus/api/v1/rules` (evaluation state; use `loki:3100` from inside
+  the compose network). No Alertmanager is deployed;
   alert state shows in Grafana's Alerting UI via the Loki datasource.
 
 ### `promtail-config.yml`
