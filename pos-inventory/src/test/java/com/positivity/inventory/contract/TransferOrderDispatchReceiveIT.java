@@ -465,15 +465,15 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
         assertThat(perLotRow(sku, SOURCE_SITE, lotId)
                         .map(row -> row.getOnHand())
                         .orElse(BigDecimal.ZERO))
-                .isEqualTo(sourceOnHand);
+                .isEqualByComparingTo(BigDecimal.valueOf(sourceOnHand));
         assertThat(perLotRow(sku, DESTINATION_SITE, lotId)
                         .map(row -> row.getInTransitQty())
                         .orElse(BigDecimal.ZERO))
-                .isEqualTo(destinationInTransit);
+                .isEqualByComparingTo(BigDecimal.valueOf(destinationInTransit));
         assertThat(perLotRow(sku, DESTINATION_SITE, lotId)
                         .map(row -> row.getOnHand())
                         .orElse(BigDecimal.ZERO))
-                .isEqualTo(destinationOnHand);
+                .isEqualByComparingTo(BigDecimal.valueOf(destinationOnHand));
     }
 
     private java.util.Optional<com.positivity.inventory.internal.entity.InventoryStockSummary> perLotRow(
@@ -488,12 +488,12 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
      * conservation invariant holds globally, not just over the asserted keys.
      */
     private void assertBalances(String sku, long sourceOnHand, long destinationInTransit, long destinationOnHand) {
-        assertThat(onHand(sku, SOURCE_SITE)).isEqualTo(sourceOnHand);
-        assertThat(inTransit(sku, DESTINATION_SITE)).isEqualTo(destinationInTransit);
-        assertThat(onHand(sku, DESTINATION_SITE)).isEqualTo(destinationOnHand);
+        assertThat(onHand(sku, SOURCE_SITE)).isEqualByComparingTo(BigDecimal.valueOf(sourceOnHand));
+        assertThat(inTransit(sku, DESTINATION_SITE)).isEqualByComparingTo(BigDecimal.valueOf(destinationInTransit));
+        assertThat(onHand(sku, DESTINATION_SITE)).isEqualByComparingTo(BigDecimal.valueOf(destinationOnHand));
         assertThat(totalAcrossAllKeys(sku))
                 .as("conservation: no stock outside source on-hand + destination in-transit + destination on-hand")
-                .isEqualTo(sourceOnHand + destinationInTransit + destinationOnHand);
+                .isEqualByComparingTo(BigDecimal.valueOf(sourceOnHand + destinationInTransit + destinationOnHand));
     }
 
     private BigDecimal totalAcrossAllKeys(String sku) {
