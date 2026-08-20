@@ -194,6 +194,7 @@ class SessionAgentManagerTest {
                 null, // answerResolutionLadder
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
+                null, // toolInvocationRecorder
                 workflowStateService,
                 null, // nltiRouter
                 null, // tieredChatModelResolver
@@ -404,6 +405,7 @@ class SessionAgentManagerTest {
                 null, // answerResolutionLadder
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
+                null, // toolInvocationRecorder
                 workflowStateService,
                 null, // nltiRouter
                 null, // tieredChatModelResolver
@@ -475,6 +477,7 @@ class SessionAgentManagerTest {
                 null, // answerResolutionLadder
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
+                null, // toolInvocationRecorder
                 workflowStateService,
                 null, // nltiRouter
                 null, // tieredChatModelResolver

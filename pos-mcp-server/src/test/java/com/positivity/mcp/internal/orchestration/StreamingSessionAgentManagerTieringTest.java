@@ -189,6 +189,7 @@ class StreamingSessionAgentManagerTieringTest {
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
+                null, // toolInvocationRecorder
                 workflowStateService,
                 router,
                 null, // tieredChatModelResolver

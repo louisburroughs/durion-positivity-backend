@@ -55,6 +55,7 @@ class SpringAiPosAssistantTest {
                 ragRetriever,
                 ignored -> chatMemory,
                 openApiToolProvider,
+                null,
                 null);
 
         String response = assistant.chat("user-1::ROLE_TECH", "where is stock", "ctx:role=TECH");
@@ -123,6 +124,7 @@ class SpringAiPosAssistantTest {
                 ragRetriever,
                 ignored -> chatMemory,
                 openApiToolProvider,
+                null,
                 null);
 
         assistant.chat("user-1::ROLE_TECH", "PO number format", "ctx:role=TECH");
@@ -178,7 +180,7 @@ class SpringAiPosAssistantTest {
                         new LadderResult("View them here — Work Orders: /workorders", Rung.DEEP_LINK, "/workorders"));
 
         SpringAiPosAssistant assistant = new SpringAiPosAssistant(
-                chatModel, () -> "base prompt", List.of(), ragRetriever, ignored -> chatMemory, null, ladder);
+                chatModel, () -> "base prompt", List.of(), ragRetriever, ignored -> chatMemory, null, ladder, null);
 
         String response = assistant.chat("user-1::ROLE_ADMIN", "how many workorders are open", "ctx");
 
@@ -203,7 +205,7 @@ class SpringAiPosAssistantTest {
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("There are 12 open work orders."));
 
         SpringAiPosAssistant assistant = new SpringAiPosAssistant(
-                chatModel, () -> "base prompt", List.of(), ragRetriever, ignored -> chatMemory, null, ladder);
+                chatModel, () -> "base prompt", List.of(), ragRetriever, ignored -> chatMemory, null, ladder, null);
 
         String response = assistant.chat("user-1::ROLE_ADMIN", "how many workorders are open", "ctx");
 

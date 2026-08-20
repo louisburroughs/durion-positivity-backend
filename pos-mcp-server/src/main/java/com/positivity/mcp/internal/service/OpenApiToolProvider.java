@@ -175,6 +175,7 @@ public class OpenApiToolProvider {
     private final ObjectMapper objectMapper;
     private final int candidateLimit;
     private final Duration executionTimeout;
+    private final @Nullable ToolInvocationRecorder invocationRecorder;
 
     public OpenApiToolProvider(
             @NonNull ToolMetadataRepository repository,
@@ -183,7 +184,8 @@ public class OpenApiToolProvider {
             @NonNull OperationProxyFactory proxyFactory,
             @NonNull ObjectMapper objectMapper,
             @Value("${mcp.agent.candidate-tool-limit:8}") int candidateLimit,
-            @Value("${mcp.openapi.tool.timeout:30s}") @NonNull Duration executionTimeout) {
+            @Value("${mcp.openapi.tool.timeout:30s}") @NonNull Duration executionTimeout,
+            @Nullable ToolInvocationRecorder invocationRecorder) {
         this.repository = repository;
         this.embeddingModel = embeddingModel;
         this.userContext = userContext;
@@ -191,6 +193,7 @@ public class OpenApiToolProvider {
         this.objectMapper = objectMapper;
         this.candidateLimit = Math.max(1, candidateLimit);
         this.executionTimeout = executionTimeout;
+        this.invocationRecorder = invocationRecorder;
     }
 
     public @NonNull List<ToolCallback> resolveToolCallbacks(@Nullable String userMessage) {
@@ -221,13 +224,15 @@ public class OpenApiToolProvider {
             writeCapableToolsPresent = writeCapableToolsPresent || isWriteCapable(op);
             OpenApiOperationExecutor executor =
                     new OpenApiOperationExecutor(proxyFactory, op, objectMapper, executionTimeout, authHeader);
-            tools.add(new OpenApiSpringAiToolCallback(
+            ToolCallback callback = new OpenApiSpringAiToolCallback(
                     DefaultToolDefinition.builder()
                             .name(op.name())
                             .description(describeOperation(op))
                             .inputSchema(buildParameterSchema(op))
                             .build(),
-                    executor));
+                    executor);
+            // #1422: per-execution invocation logging; discovered names match mcp_tool.name exactly.
+            tools.add(invocationRecorder != null ? invocationRecorder.wrap(callback, op.name()) : callback);
         }
         userContext.recordDiscoveredOpenapiTools(tools.stream()
                 .map(callback -> callback.getToolDefinition().name())

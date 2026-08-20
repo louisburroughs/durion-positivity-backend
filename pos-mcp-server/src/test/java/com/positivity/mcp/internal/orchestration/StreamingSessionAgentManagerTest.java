@@ -190,6 +190,7 @@ class StreamingSessionAgentManagerTest {
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
+                null, // toolInvocationRecorder
                 workflowStateService,
                 null, // nltiRouter
                 null, // tieredChatModelResolver
@@ -391,6 +392,7 @@ class StreamingSessionAgentManagerTest {
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
+                null, // toolInvocationRecorder
                 workflowStateService,
                 null, // nltiRouter
                 null, // tieredChatModelResolver
@@ -432,6 +434,7 @@ class StreamingSessionAgentManagerTest {
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
+                null, // toolInvocationRecorder
                 workflowStateService,
                 null, // nltiRouter
                 null, // tieredChatModelResolver
@@ -498,6 +501,7 @@ class StreamingSessionAgentManagerTest {
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
+                null, // toolInvocationRecorder
                 workflowStateService,
                 null, // nltiRouter
                 null, // tieredChatModelResolver
@@ -550,6 +554,7 @@ class StreamingSessionAgentManagerTest {
                 null, // openApiToolProvider
                 null, // requestScopedUserContext
                 null, // roleDefaultPermissionsClient
+                null, // toolInvocationRecorder
                 workflowStateService,
                 null, // nltiRouter
                 null, // tieredChatModelResolver
@@ -618,6 +623,7 @@ class StreamingSessionAgentManagerTest {
                 openApiToolProvider,
                 requestContext,
                 null, // roleDefaultPermissionsClient
+                null, // toolInvocationRecorder
                 workflowStateService,
                 null, // nltiRouter
                 null, // tieredChatModelResolver

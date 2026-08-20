@@ -53,7 +53,8 @@ class SpringAiStreamingPosAssistantTest {
                 List.of(new PingTool()),
                 ragRetriever,
                 ignored -> chatMemory,
-                openApiToolProvider);
+                openApiToolProvider,
+                null);
 
         List<String> tokens = assistant
                 .chat("user-2::ROLE_TECH", "where is stock", "ctx:role=TECH")
@@ -116,7 +117,8 @@ class SpringAiStreamingPosAssistantTest {
                 List.of(new PingTool()),
                 ragRetriever,
                 ignored -> chatMemory,
-                openApiToolProvider);
+                openApiToolProvider,
+                null);
 
         assistant
                 .chat("user-3::ROLE_TECH", "where is stock", "ctx:role=TECH")

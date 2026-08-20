@@ -18,6 +18,33 @@ class SpringAiToolCallbackResolverTest {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Test
+    void fromObjects_decoratorReceivesOwningFacadeClassSimpleName() {
+        // #1422: mcp_tool facade rows are keyed by the facade CLASS name, not the @Tool method
+        // name, so the recorder wrap must be handed the owning class simple name as lookup key.
+        java.util.List<String> lookupNames = new java.util.ArrayList<>();
+        com.positivity.mcp.internal.service.ToolAuditService auditService =
+                org.mockito.Mockito.mock(com.positivity.mcp.internal.service.ToolAuditService.class);
+        com.positivity.mcp.internal.repository.ToolMetadataRepository repository =
+                org.mockito.Mockito.mock(com.positivity.mcp.internal.repository.ToolMetadataRepository.class);
+        org.mockito.Mockito.when(repository.findToolIdByName(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(java.util.Optional.empty());
+        com.positivity.mcp.internal.service.ToolInvocationRecorder recorder =
+                new com.positivity.mcp.internal.service.ToolInvocationRecorder(
+                        auditService, repository, new com.positivity.mcp.internal.service.RequestScopedUserContext()) {
+                    @Override
+                    public ToolCallback wrap(ToolCallback delegate, String toolLookupName) {
+                        lookupNames.add(toolLookupName);
+                        return delegate;
+                    }
+                };
+
+        List<ToolCallback> callbacks = SpringAiToolCallbackResolver.fromObjects(List.of(new SampleTool()), recorder);
+
+        assertThat(callbacks).isNotEmpty();
+        assertThat(lookupNames).containsOnly("SampleTool");
+    }
+
+    @Test
     void call_bindsArgumentsUsingArgIndexFallbackNames() {
         ToolCallback callback = SpringAiToolCallbackResolver.fromObjects(List.of(new SampleTool()))
                 .getFirst();

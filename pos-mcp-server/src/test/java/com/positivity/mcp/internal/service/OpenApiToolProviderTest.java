@@ -30,7 +30,7 @@ class OpenApiToolProviderTest {
     private final OperationProxyFactory proxyFactory = mock(OperationProxyFactory.class);
     private final RequestScopedUserContext userContext = new RequestScopedUserContext();
     private final OpenApiToolProvider provider = new OpenApiToolProvider(
-            repository, embeddingModel, userContext, proxyFactory, new ObjectMapper(), 8, Duration.ofSeconds(30));
+            repository, embeddingModel, userContext, proxyFactory, new ObjectMapper(), 8, Duration.ofSeconds(30), null);
 
     @AfterEach
     void cleanup() {
