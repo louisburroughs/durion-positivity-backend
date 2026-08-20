@@ -25,16 +25,22 @@ import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
 import com.positivity.mcp.internal.repository.NltiWritePlanRepository;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.WriteSignal;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryPublisher;
 import com.positivity.mcp.service.AuditLedgerService;
 import com.positivity.shared.id.UUIDv7Generator;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -75,6 +81,25 @@ public class NltiWritePlanService {
 
     static final String STATUS_NEEDS_CLARIFICATION = "NEEDS_CLARIFICATION";
 
+    /**
+     * Terminal confirmation outcomes, mirrored out of the audit ledger onto the telemetry stream
+     * ({@code write.confirmationOutcome}) and the {@link #CONFIRMATION_OUTCOME_METRIC} counter by
+     * #1397 — the ledger is a database table, so before this it could back neither a dashboard
+     * panel nor an alert.
+     */
+    static final String OUTCOME_CONFIRMED = "confirmed";
+
+    static final String OUTCOME_CANCELLED = "cancelled";
+
+    static final String OUTCOME_EXPIRED = "expired";
+
+    static final String OUTCOME_STALE_DATA = "stale-data";
+
+    static final String OUTCOME_SUPERSEDED = "superseded";
+
+    /** Counter mirroring every confirmation outcome, tagged {@code outcome}. */
+    static final String CONFIRMATION_OUTCOME_METRIC = "nlt.write_plan.confirmation.count";
+
     private static final TypeReference<Map<String, Object>> MAP_OF_OBJECT = new TypeReference<>() {};
     private static final TypeReference<Map<String, ArgProvenance>> MAP_OF_PROVENANCE = new TypeReference<>() {};
     private static final TypeReference<Map<String, String>> MAP_OF_STRING = new TypeReference<>() {};
@@ -86,6 +111,8 @@ public class NltiWritePlanService {
     private final WritePlanExecutor writePlanExecutor;
     private final SourceEntityVersionProbe versionProbe;
     private final AuditLedgerService auditLedgerService;
+    private final NltiRequestTelemetryPublisher telemetryPublisher;
+    private final MeterRegistry meterRegistry;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
@@ -100,6 +127,8 @@ public class NltiWritePlanService {
             @NonNull WritePlanExecutor writePlanExecutor,
             @NonNull SourceEntityVersionProbe versionProbe,
             @NonNull AuditLedgerService auditLedgerService,
+            @NonNull NltiRequestTelemetryPublisher telemetryPublisher,
+            @NonNull MeterRegistry meterRegistry,
             @NonNull ObjectMapper objectMapper,
             @NonNull Clock clock) {
         this.planRepository = planRepository;
@@ -109,6 +138,8 @@ public class NltiWritePlanService {
         this.writePlanExecutor = writePlanExecutor;
         this.versionProbe = versionProbe;
         this.auditLedgerService = auditLedgerService;
+        this.telemetryPublisher = telemetryPublisher;
+        this.meterRegistry = meterRegistry;
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
@@ -192,6 +223,10 @@ public class NltiWritePlanService {
                     request.getSessionId(),
                     existing.getRequestId(),
                     "outcome=superseded plan=" + existing.getId());
+            // Keyed exactly like the audit entry above: this request's correlation id, the
+            // superseded plan's own request. It carries no latency — it is a side effect of the
+            // request being served, not a call of its own.
+            recordConfirmationOutcome(existing, request.getCorrelationId(), OUTCOME_SUPERSEDED, null);
         }
 
         OffsetDateTime now = OffsetDateTime.now(clock);
@@ -245,6 +280,7 @@ public class NltiWritePlanService {
             @NonNull Set<String> callerPermissionCodes,
             @Nullable String idempotencyKey,
             @Nullable String authHeader) {
+        long startedAtNanos = System.nanoTime();
         NltiWritePlan plan = loadOwnedPlan(requestId, subjectId);
         NltiRequest request = requestRepository
                 .findById(requestId)
@@ -273,6 +309,7 @@ public class NltiWritePlanService {
         if (WritePlanPolicy.isExpired(plan.getExpiresAt(), now)) {
             transition(plan, request, NltiRequestStatus.EXPIRED);
             appendPlanAudit(plan, request, NltiAuditEventType.CONFIRMATION, "outcome=expired");
+            recordConfirmationOutcome(plan, request.getCorrelationId(), OUTCOME_EXPIRED, elapsedMs(startedAtNanos));
             throw new WritePlanExpiredException(
                     "Write plan expired at " + plan.getExpiresAt() + "; re-preview required");
         }
@@ -288,6 +325,8 @@ public class NltiWritePlanService {
             if (!captured.equals(current)) {
                 transition(plan, request, NltiRequestStatus.CANCELLED);
                 appendPlanAudit(plan, request, NltiAuditEventType.CONFIRMATION, "outcome=stale-data");
+                recordConfirmationOutcome(
+                        plan, request.getCorrelationId(), OUTCOME_STALE_DATA, elapsedMs(startedAtNanos));
                 throw new WritePlanStaleException(
                         "Source data changed since the plan was previewed; re-preview required");
             }
@@ -295,6 +334,11 @@ public class NltiWritePlanService {
 
         transition(plan, request, NltiRequestStatus.CONFIRMED);
         appendPlanAudit(plan, request, NltiAuditEventType.CONFIRMATION, "outcome=confirmed");
+        // Emitted at the confirmation decision, not after execution: the outcome being reported is
+        // "the caller confirmed and the gate let it through". Whether the target tool then
+        // succeeded is the EXECUTION_COMPLETE/EXECUTION_FAILED audit pair's business, and is
+        // already visible as the endpoint's HTTP status.
+        recordConfirmationOutcome(plan, request.getCorrelationId(), OUTCOME_CONFIRMED, elapsedMs(startedAtNanos));
 
         transition(plan, request, NltiRequestStatus.EXECUTING);
         // Destructive audit events propagate write failures — a non-auditable execution never runs.
@@ -325,6 +369,7 @@ public class NltiWritePlanService {
 
     /** Cancels a pending plan (idempotent for already-cancelled/expired plans). */
     public @NonNull WritePlanResponseV1 cancel(@NonNull UUID requestId, @NonNull String subjectId) {
+        long startedAtNanos = System.nanoTime();
         NltiWritePlan plan = loadOwnedPlan(requestId, subjectId);
         NltiRequest request = requestRepository
                 .findById(requestId)
@@ -339,6 +384,11 @@ public class NltiWritePlanService {
             case PENDING_CONFIRMATION, CONFIRMED, ACCEPTED -> {
                 transition(plan, request, NltiRequestStatus.CANCELLED);
                 appendPlanAudit(plan, request, NltiAuditEventType.CONFIRMATION, "outcome=cancelled");
+                // Only the branch that actually cancels reports an outcome — the idempotent replay
+                // above already reported one on the call that first cancelled the plan, and
+                // counting it again would inflate the cancellation rate.
+                recordConfirmationOutcome(
+                        plan, request.getCorrelationId(), OUTCOME_CANCELLED, elapsedMs(startedAtNanos));
                 return toResponse(plan);
             }
         }
@@ -396,6 +446,62 @@ public class NltiWritePlanService {
                 plan.getSessionId(),
                 plan.getRequestId(),
                 "plan=" + plan.getId() + " " + payloadRef);
+    }
+
+    /**
+     * Mirrors one terminal confirmation outcome out of the audit ledger (#1397): a tagged counter
+     * for alerting and an {@code nlti.request.telemetry} event carrying
+     * {@code write.confirmationOutcome} for the Gate 7 panels. Both are observability side effects
+     * of a decision that is already persisted, so neither may fail the call — the publisher
+     * swallows its own failures and the counter cannot throw.
+     *
+     * @param totalMs wall time of the confirm/cancel call, or null when the outcome was produced
+     *     as a side effect of serving some other request (a superseded plan)
+     */
+    private void recordConfirmationOutcome(
+            @NonNull NltiWritePlan plan, @NonNull UUID correlationId, @NonNull String outcome, @Nullable Long totalMs) {
+        meterRegistry.counter(CONFIRMATION_OUTCOME_METRIC, "outcome", outcome).increment();
+        telemetryPublisher.emit(
+                correlationId,
+                plan.getSessionId(),
+                plan.getRequestId(),
+                // The intent was classified on the submit leg and is joined by correlation id;
+                // risk travels with the plan, so it is repeated here.
+                null,
+                plan.getRiskLevel().name(),
+                new WriteSignal(true, outcome, provenanceCounts(plan)),
+                totalMs,
+                NltiRequestServiceImpl.TELEMETRY_STATUS_SUCCESS,
+                null);
+    }
+
+    /**
+     * Counts the plan's arguments by provenance kind for {@code write.planArgsProvenance}. Counts
+     * only — argument names and values must never reach the telemetry stream (see the privacy note
+     * on {@code NltiRequestTelemetry}). Returns null rather than an empty map for an argument-less
+     * plan, and never throws: unreadable provenance JSON must not break a confirmation.
+     */
+    private @Nullable Map<String, Integer> provenanceCounts(@NonNull NltiWritePlan plan) {
+        Map<ArgProvenance, Integer> counts = new EnumMap<>(ArgProvenance.class);
+        try {
+            for (ArgProvenance provenance :
+                    fromJson(plan.getArgProvenanceJson(), MAP_OF_PROVENANCE).values()) {
+                counts.merge(provenance, 1, Integer::sum);
+            }
+        } catch (RuntimeException unreadableProvenance) {
+            LOGGER.warn("Write-plan provenance unreadable for telemetry plan={}", plan.getId(), unreadableProvenance);
+            return null;
+        }
+        if (counts.isEmpty()) {
+            return null;
+        }
+        Map<String, Integer> byName = new TreeMap<>();
+        counts.forEach((provenance, count) -> byName.put(provenance.name(), count));
+        return Map.copyOf(byName);
+    }
+
+    private static long elapsedMs(long startedAtNanos) {
+        return Duration.ofNanos(System.nanoTime() - startedAtNanos).toMillis();
     }
 
     private void appendAudit(

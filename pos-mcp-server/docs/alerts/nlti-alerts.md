@@ -155,9 +155,16 @@ populated yet, the rule states the substitute signal it fires on today.
       `sum(count_over_time(TELEMETRY | write_isWrite = "true" [15m]))` versus
       `sum(count_over_time({job="docker", service="pos-mcp-server"} |= "NLTI write plan created" [15m]))`
       — write intents detected but no plan created is its own defect.
-      `write.confirmationOutcome` cannot back this alert: the factory always passes `null`, and the
-      confirm/cancel outcomes (`confirmed`/`cancelled`/`expired`/`stale-data`/`superseded`) are
-      written only to the `nlti_audit_event` table, which has no log or metric mirror.
+      **Outcome-based form (preferred, live since #1397)** — Prometheus:
+      `sum by (outcome) (rate(nlt_write_plan_confirmation_count_total{service="pos-mcp-server"}[15m]))`.
+      `NltiWritePlanService` increments this counter, tagged with the same five outcomes it writes to
+      the audit ledger (`confirmed`/`cancelled`/`expired`/`stale-data`/`superseded`), so the alert can
+      finally name the failure mode instead of inferring it from an HTTP code: a rising
+      `outcome="stale-data"` or `outcome="expired"` share is the TTL / stale-source signal directly.
+      Keep the HTTP form alongside it — a confirm that passes the gate and then fails downstream is
+      `outcome="confirmed"` with a `5xx`, so only the status query sees it. The same outcomes ride the
+      telemetry stream as `write.confirmationOutcome` for the Gate 7 panel; the counter is what alert
+      rules use, since Prometheus cannot query Loki.
     - Severity: P1 for 5xx, P2 for the conflict/expiry ratio
     - Runbook: pos-mcp-server/docs/runbooks/confirmation-gate-mismatch.md
 

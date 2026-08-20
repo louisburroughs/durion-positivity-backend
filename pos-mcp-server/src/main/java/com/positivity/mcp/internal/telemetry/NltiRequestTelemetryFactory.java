@@ -12,21 +12,40 @@ import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.Tools;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.Write;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Pure builder for {@link NltiRequestTelemetry} events from the chat path (Gate 1 emission).
+ * Pure builder for {@link NltiRequestTelemetry} events from the two emitting paths: the chat
+ * managers ({@link #forChatRequest}, Gate 1) and the NLTI request pipeline
+ * ({@link #forNltiRequest}, Gate 6).
  *
  * <p>Deterministic by design: {@code correlationId} and {@code timestamp} are supplied by the
- * caller (never read from the clock or MDC here) so the mapping is fully unit-testable. It carries
- * only the fields available synchronously at request completion — actor, prompt layers (Gate 1),
- * selected tools, latency, and outcome. Routing tier/model (Gate 4), RAG doc scores (Gate 5), and
- * write provenance (Gate 6) are left null until those gates wire their inputs through.
+ * caller (never read from the clock or MDC here) so the mapping is fully unit-testable. Each
+ * builder carries only the fields available synchronously at request completion; fields belonging
+ * to gates a given path does not run through are left null rather than filled with a placeholder.
  */
 public final class NltiRequestTelemetryFactory {
 
     private NltiRequestTelemetryFactory() {}
+
+    /**
+     * Gate 6 write-gate signals for one NLTI request.
+     *
+     * @param isWrite the request was classified as a write (ACTION) intent and therefore went
+     *     through the write gate, whether or not a plan was ultimately produced
+     * @param confirmationOutcome terminal outcome of a write-plan confirmation —
+     *     {@code confirmed}, {@code cancelled}, {@code expired}, {@code stale-data} or
+     *     {@code superseded}; null on the submit/preview leg, which has no outcome yet
+     * @param planArgsProvenance count of plan arguments per {@code ArgProvenance} kind (counts
+     *     only — argument names and values must never enter this event)
+     */
+    public record WriteSignal(
+            boolean isWrite,
+            @Nullable String confirmationOutcome,
+            @Nullable Map<String, Integer> planArgsProvenance) {}
 
     /**
      * The Gate 4 router decision for one request: the T1 classification signals, the selected tier,
@@ -163,6 +182,62 @@ public final class NltiRequestTelemetryFactory {
                 null,
                 latency,
                 outcome);
+    }
+
+    /**
+     * Builds the telemetry event for one {@code /v1/nlt} request — the NLTI pipeline leg that the
+     * chat builder above never covers ({@code POST /v1/nlt/requests} and the write-plan
+     * confirm/cancel calls).
+     *
+     * <p>Unlike the chat path this leg knows its own {@code sessionId} and {@code requestId}, so
+     * both are carried; {@code routing} carries the parsed intent type and assessed risk level,
+     * and {@code write} carries the Gate 6 signals. There is no model tier, prompt-layer
+     * composition, RAG retrieval, or tool selection on this path, so {@code model}, {@code rag},
+     * {@code tools} and {@code quality} are omitted rather than zero-filled.
+     *
+     * @param intentType the {@code IntentV1} classification, when the request got far enough to be
+     *     parsed
+     * @param riskLevel the intent's assessed risk level, when classified
+     * @param write Gate 6 write-gate signals, or null for a request that never touched the gate
+     * @param totalMs wall time for the request, or null for an event that does not correspond to
+     *     one call of its own (a plan superseded while another request was being served)
+     */
+    public static @NonNull NltiRequestTelemetry forNltiRequest(
+            @NonNull String correlationId,
+            @NonNull String timestamp,
+            @Nullable UUID sessionId,
+            @Nullable UUID requestId,
+            @NonNull String primaryRole,
+            int permissionCodeCount,
+            @Nullable String intentType,
+            @Nullable String riskLevel,
+            @Nullable WriteSignal write,
+            @Nullable Long totalMs,
+            @NonNull String status,
+            @Nullable String errorCode) {
+
+        Routing routing = (intentType == null && riskLevel == null)
+                ? null
+                : new Routing(intentType, riskLevel, null, null, null, null, null);
+
+        return new NltiRequestTelemetry(
+                NltiRequestTelemetry.SCHEMA_VERSION,
+                NltiRequestTelemetry.EVENT_TYPE,
+                correlationId,
+                sessionId == null ? null : sessionId.toString(),
+                requestId == null ? null : requestId.toString(),
+                timestamp,
+                new Actor(primaryRole, permissionCodeCount),
+                routing,
+                null,
+                null,
+                null,
+                write == null
+                        ? null
+                        : new Write(write.isWrite(), write.confirmationOutcome(), write.planArgsProvenance()),
+                null,
+                totalMs == null ? null : new Latency(null, null, null, totalMs),
+                new Outcome(status, errorCode));
     }
 
     private static @Nullable PromptLayer toPromptLayer(@NonNull String name) {

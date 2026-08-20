@@ -14,6 +14,39 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>Privacy: this event carries counts, enums, ids, and scores only. Raw permission codes,
  * customer PII, VINs, and full utterances must NOT be placed in this event (see design 4.3).
+ *
+ * <p><strong>Coverage.</strong> Two paths emit this event and they populate different subsets, so
+ * a consumer must treat an absent block as "not applicable to that path", never as a zero:
+ *
+ * <ul>
+ *   <li><em>Chat</em> ({@code SessionAgentManager}, {@code StreamingSessionAgentManager}) —
+ *       {@code routing}, {@code model}, {@code tools}, {@code rag.promptLayers}, {@code latency},
+ *       {@code outcome}, and {@code write.isWrite}. It has no NLTI session or request row, so
+ *       {@code sessionId} and {@code requestId} are null.
+ *   <li><em>NLTI</em> ({@code NltiRequestServiceImpl}, {@code NltiWritePlanService}) —
+ *       {@code sessionId}, {@code requestId}, {@code routing.intentType}, {@code routing.riskLevel},
+ *       the full {@code write} block, {@code latency.totalMs}, and {@code outcome}. This path runs
+ *       no model tier, prompt composition, RAG retrieval, or tool selection, so {@code model},
+ *       {@code rag}, and {@code tools} are omitted.
+ * </ul>
+ *
+ * <p>Three fields carry no real measurement from any emitter, and they fail differently — a
+ * consumer must not read either kind as data:
+ *
+ * <ul>
+ *   <li>{@link Tools#rejectedPermissionCount} is <strong>present but always literally {@code 0}</strong>
+ *       on every record that carries a {@code tools} block. It is a primitive, so {@code NON_NULL}
+ *       does not suppress it and it serializes as a number that looks like a count. Tool permission
+ *       gating runs in SQL ({@code ToolMetadataRepository.findEnabledByPermissionsAndWorkflow}), so
+ *       the rejected candidates are never materialized in Java and there is nothing to count; the
+ *       {@code 0} is a placeholder, not "no tools were rejected".
+ *   <li>{@link Rag#retrieved} and {@link Quality} are <strong>always null, so {@code NON_NULL} omits
+ *       them from the JSON entirely.</strong> Their absence is the honest signal — unlike the field
+ *       above, no value is ever presented for a consumer to misread.
+ * </ul>
+ *
+ * <p>All three are retained rather than removed because v1 consumers already query them; see the GAP
+ * notes on the Gate 7 dashboard panels.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record NltiRequestTelemetry(

@@ -5,9 +5,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.PromptLayer;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry.Tier;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class NltiRequestTelemetryFactoryTest {
+
+    // Hardcoded test UUIDs — no UUID.randomUUID() per ADR
+    private static final UUID SESSION_ID = UUID.fromString("00000000-0000-7000-8000-000000000201");
+    private static final UUID REQUEST_ID = UUID.fromString("00000000-0000-7000-8000-000000000202");
 
     @Test
     void forChatRequest_toolPath_populatesActorToolsLayersLatencyOutcome() {
@@ -113,5 +119,101 @@ class NltiRequestTelemetryFactoryTest {
 
         // Unknown names dropped; known names case-insensitively mapped.
         assertThat(event.rag().promptLayers()).containsExactly(PromptLayer.BASE, PromptLayer.ROLE);
+    }
+
+    // ─── #1397: the NLTI pipeline builder ────────────────────────────────────
+
+    @Test
+    void forNltiRequest_writeSubmit_carriesIdsIntentRiskAndWriteSignal() {
+        NltiRequestTelemetry event = NltiRequestTelemetryFactory.forNltiRequest(
+                "corr-5",
+                "2026-08-19T00:00:00Z",
+                SESSION_ID,
+                REQUEST_ID,
+                "ROLE_MANAGER",
+                12,
+                "ACTION",
+                "MEDIUM",
+                new NltiRequestTelemetryFactory.WriteSignal(true, null, null),
+                77L,
+                "SUCCESS",
+                null);
+
+        assertThat(event.schemaVersion()).isEqualTo(NltiRequestTelemetry.SCHEMA_VERSION);
+        assertThat(event.eventType()).isEqualTo(NltiRequestTelemetry.EVENT_TYPE);
+        // The NLTI path is the only one that knows these two — the chat path leaves them null.
+        assertThat(event.sessionId()).isEqualTo(SESSION_ID.toString());
+        assertThat(event.requestId()).isEqualTo(REQUEST_ID.toString());
+        assertThat(event.actor().primaryRole()).isEqualTo("ROLE_MANAGER");
+        assertThat(event.actor().permissionCodeCount()).isEqualTo(12);
+        assertThat(event.routing()).isNotNull();
+        assertThat(event.routing().intentType()).isEqualTo("ACTION");
+        assertThat(event.routing().riskLevel()).isEqualTo("MEDIUM");
+        assertThat(event.write()).isNotNull();
+        assertThat(event.write().isWrite()).isTrue();
+        assertThat(event.write().confirmationOutcome()).isNull();
+        assertThat(event.latency().totalMs()).isEqualTo(77L);
+        assertThat(event.outcome().status()).isEqualTo("SUCCESS");
+        // No model tier, prompt composition, RAG retrieval or tool selection runs on this path,
+        // so those blocks are omitted rather than zero-filled.
+        assertThat(event.model()).isNull();
+        assertThat(event.tools()).isNull();
+        assertThat(event.rag()).isNull();
+        assertThat(event.quality()).isNull();
+    }
+
+    @Test
+    void forNltiRequest_confirmation_carriesOutcomeAndProvenanceCounts() {
+        NltiRequestTelemetry event = NltiRequestTelemetryFactory.forNltiRequest(
+                "corr-6",
+                "2026-08-19T00:00:00Z",
+                SESSION_ID,
+                REQUEST_ID,
+                "ROLE_MANAGER",
+                12,
+                null,
+                "HIGH",
+                new NltiRequestTelemetryFactory.WriteSignal(
+                        true, "confirmed", Map.of("USER_TEXT", 2, "USER_CONTEXT", 1)),
+                21L,
+                "SUCCESS",
+                null);
+
+        assertThat(event.write().confirmationOutcome()).isEqualTo("confirmed");
+        assertThat(event.write().planArgsProvenance())
+                .containsExactlyInAnyOrderEntriesOf(Map.of(
+                        "USER_TEXT", 2,
+                        "USER_CONTEXT", 1));
+        // Risk alone is enough to warrant a routing block; intent was classified on the submit leg.
+        assertThat(event.routing()).isNotNull();
+        assertThat(event.routing().intentType()).isNull();
+        assertThat(event.routing().riskLevel()).isEqualTo("HIGH");
+    }
+
+    @Test
+    void forNltiRequest_withoutLatencyOrRouting_omitsBothBlocks() {
+        NltiRequestTelemetry event = NltiRequestTelemetryFactory.forNltiRequest(
+                "corr-7",
+                "2026-08-19T00:00:00Z",
+                null,
+                null,
+                "ROLE_USER",
+                1,
+                null,
+                null,
+                null,
+                null,
+                "ERROR",
+                "RateLimitExceededException");
+
+        // A superseded plan is not a call of its own, so it reports no latency; a request that
+        // failed before classification has no routing signals to report.
+        assertThat(event.latency()).isNull();
+        assertThat(event.routing()).isNull();
+        assertThat(event.write()).isNull();
+        assertThat(event.sessionId()).isNull();
+        assertThat(event.requestId()).isNull();
+        assertThat(event.outcome().status()).isEqualTo("ERROR");
+        assertThat(event.outcome().errorCode()).isEqualTo("RateLimitExceededException");
     }
 }

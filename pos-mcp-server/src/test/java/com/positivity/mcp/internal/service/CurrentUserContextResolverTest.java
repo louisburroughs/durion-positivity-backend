@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import com.positivity.mcp.internal.security.PermissionCodes;
 import com.positivity.mcp.service.CurrentUserContext;
 import com.positivity.mcp.service.McpRoleResolver;
 import com.positivity.security.common.GatewaySecurityConstants;

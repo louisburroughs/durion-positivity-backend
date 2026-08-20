@@ -82,6 +82,8 @@ class NltiMetricsTest {
 
     // Service constructed directly — @InjectMocks not used because the registry
     // is not yet a constructor parameter; GREEN will add it.
+    private final RecordingTelemetry telemetry = new RecordingTelemetry();
+
     private NltiRequestServiceImpl service;
 
     private NltiRequestDTO request;
@@ -95,7 +97,13 @@ class NltiMetricsTest {
         errorCount = Counter.builder("nlt.error.count").register(registry);
 
         service = new NltiRequestServiceImpl(
-                sessionRepository, requestRepository, intentParserService, writePlanService, clock, registry);
+                sessionRepository,
+                requestRepository,
+                intentParserService,
+                writePlanService,
+                telemetry.publisher(),
+                clock,
+                registry);
 
         UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(SUBJECT, null, List.of());
         auth.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, SUBJECT));

@@ -31,7 +31,9 @@ import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
 import com.positivity.mcp.internal.repository.NltiWritePlanRepository;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
+import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.service.AuditLedgerService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -95,6 +97,10 @@ class NltiWritePlanServiceTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    private final RecordingTelemetry telemetry = new RecordingTelemetry();
+
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+
     private NltiWritePlanService service;
 
     @BeforeEach
@@ -107,6 +113,8 @@ class NltiWritePlanServiceTest {
                 writePlanExecutor,
                 versionProbe,
                 auditLedgerService,
+                telemetry.publisher(),
+                meterRegistry,
                 objectMapper,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
@@ -431,6 +439,121 @@ class NltiWritePlanServiceTest {
         when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request()));
 
         assertThatThrownBy(() -> service.cancel(REQUEST_ID, SUBJECT)).isInstanceOf(WritePlanConflictException.class);
+    }
+
+    // ─── #1397: confirmation outcomes mirrored out of the audit ledger ───────
+
+    /**
+     * Before #1397 these five outcomes existed only as rows in {@code nlti_audit_event} — a
+     * database table with no log or metric mirror, so the Gate 7 confirmation panel ran on HTTP
+     * status codes and the alert on a proxy. Each outcome must now reach both the telemetry stream
+     * and the tagged counter.
+     */
+    @Test
+    @DisplayName("confirm → telemetry and counter both record outcome=confirmed")
+    void confirm_recordsConfirmedOutcome() {
+        stubOwnership();
+        NltiWritePlan plan = pendingPlan();
+        when(planRepository.findByRequestId(REQUEST_ID)).thenReturn(Optional.of(plan));
+        when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request()));
+        when(toolMetadataRepository.findDiscoveredToolIdByName(TOOL)).thenReturn(Optional.of(TOOL_ID));
+        when(toolMetadataRepository.listToolPermissions(TOOL_ID)).thenReturn(List.of(PERMISSION));
+        when(writePlanExecutor.execute(anyString(), anyString(), any())).thenReturn("{\"ok\":true}");
+
+        service.confirm(REQUEST_ID, SUBJECT, CALLER_PERMS, null, null);
+
+        assertThat(outcomeCount(NltiWritePlanService.OUTCOME_CONFIRMED)).isEqualTo(1.0);
+        NltiRequestTelemetry event = telemetry.only();
+        assertThat(event.correlationId()).isEqualTo(CORRELATION_ID.toString());
+        assertThat(event.write().isWrite()).isTrue();
+        assertThat(event.write().confirmationOutcome()).isEqualTo(NltiWritePlanService.OUTCOME_CONFIRMED);
+        assertThat(event.routing().riskLevel()).isEqualTo(NltiRiskLevel.MEDIUM.name());
+        assertThat(event.sessionId()).isEqualTo(SESSION_ID.toString());
+        assertThat(event.requestId()).isEqualTo(REQUEST_ID.toString());
+        // Counts by provenance kind only — the plan's one USER_TEXT arg, never its name or value.
+        assertThat(event.write().planArgsProvenance()).containsExactlyInAnyOrderEntriesOf(Map.of("USER_TEXT", 1));
+        assertThat(event.write().planArgsProvenance().toString()).doesNotContain("poNumber", "PO-77");
+    }
+
+    @Test
+    @DisplayName("cancel → telemetry and counter both record outcome=cancelled, once per real cancellation")
+    void cancel_recordsCancelledOutcomeOnlyOnTheCancellingCall() {
+        stubOwnership();
+        NltiWritePlan plan = pendingPlan();
+        when(planRepository.findByRequestId(REQUEST_ID)).thenReturn(Optional.of(plan));
+        when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request()));
+
+        service.cancel(REQUEST_ID, SUBJECT);
+        service.cancel(REQUEST_ID, SUBJECT);
+
+        // The idempotent replay must not inflate the cancellation rate.
+        assertThat(outcomeCount(NltiWritePlanService.OUTCOME_CANCELLED)).isEqualTo(1.0);
+        assertThat(telemetry.withConfirmationOutcome()).hasSize(1);
+        assertThat(telemetry.only().write().confirmationOutcome()).isEqualTo(NltiWritePlanService.OUTCOME_CANCELLED);
+    }
+
+    @Test
+    @DisplayName("confirm of an expired plan → outcome=expired")
+    void confirm_expiredPlan_recordsExpiredOutcome() {
+        stubOwnership();
+        NltiWritePlan plan = pendingPlan();
+        plan.setExpiresAt(OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC).minusMinutes(1));
+        when(planRepository.findByRequestId(REQUEST_ID)).thenReturn(Optional.of(plan));
+        when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request()));
+
+        assertThatThrownBy(() -> service.confirm(REQUEST_ID, SUBJECT, CALLER_PERMS, null, null))
+                .isInstanceOf(WritePlanExpiredException.class);
+
+        assertThat(outcomeCount(NltiWritePlanService.OUTCOME_EXPIRED)).isEqualTo(1.0);
+        assertThat(telemetry.only().write().confirmationOutcome()).isEqualTo(NltiWritePlanService.OUTCOME_EXPIRED);
+    }
+
+    @Test
+    @DisplayName("confirm against changed source data → outcome=stale-data")
+    void confirm_staleSourceData_recordsStaleDataOutcome() {
+        stubOwnership();
+        NltiWritePlan plan = pendingPlan();
+        plan.setSourceEntityVersionsJson("{\"po:1\":\"v1\"}");
+        when(planRepository.findByRequestId(REQUEST_ID)).thenReturn(Optional.of(plan));
+        when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request()));
+        when(toolMetadataRepository.findDiscoveredToolIdByName(TOOL)).thenReturn(Optional.of(TOOL_ID));
+        when(toolMetadataRepository.listToolPermissions(TOOL_ID)).thenReturn(List.of(PERMISSION));
+        when(versionProbe.currentVersions(anyString(), any())).thenReturn(Map.of("po:1", "v2"));
+
+        assertThatThrownBy(() -> service.confirm(REQUEST_ID, SUBJECT, CALLER_PERMS, null, null))
+                .isInstanceOf(WritePlanStaleException.class);
+
+        assertThat(outcomeCount(NltiWritePlanService.OUTCOME_STALE_DATA)).isEqualTo(1.0);
+        assertThat(telemetry.only().write().confirmationOutcome()).isEqualTo(NltiWritePlanService.OUTCOME_STALE_DATA);
+    }
+
+    @Test
+    @DisplayName("a pending plan displaced by a materially different preview → outcome=superseded")
+    void previewAction_supersedingPendingPlan_recordsSupersededOutcome() {
+        NltiWritePlan existing = pendingPlan();
+        existing.setArgsJson("{\"poNumber\":\"PO-OLD\"}");
+        when(planRepository.findBySessionIdAndStatus(SESSION_ID, NltiRequestStatus.PENDING_CONFIRMATION))
+                .thenReturn(List.of(existing));
+        when(toolMetadataRepository.findDiscoveredToolIdByName(TOOL)).thenReturn(Optional.of(TOOL_ID));
+        when(toolMetadataRepository.listToolPermissions(TOOL_ID)).thenReturn(List.of(PERMISSION));
+
+        service.previewAction(
+                request(),
+                new NltiRequestDTO("create a purchase order", SESSION_ID, Map.of("targetTool", TOOL)),
+                actionIntent("MEDIUM", List.of(new IntentSlot("poNumber", "PO-NEW", 1.0))),
+                CALLER_PERMS);
+
+        assertThat(outcomeCount(NltiWritePlanService.OUTCOME_SUPERSEDED)).isEqualTo(1.0);
+        NltiRequestTelemetry event = telemetry.only();
+        assertThat(event.write().confirmationOutcome()).isEqualTo(NltiWritePlanService.OUTCOME_SUPERSEDED);
+        // Not a call of its own — it happened while another request was being served.
+        assertThat(event.latency()).isNull();
+    }
+
+    private double outcomeCount(String outcome) {
+        return meterRegistry
+                .counter(NltiWritePlanService.CONFIRMATION_OUTCOME_METRIC, "outcome", outcome)
+                .count();
     }
 
     private String toJson(Map<String, Object> value) {
