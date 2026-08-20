@@ -109,7 +109,7 @@ class TransferOrderServiceImplTest {
         });
         when(ledgerPostingService.postAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(ledgerRepository.calculateOnHandQuantityAtLocation(anyString(), any(UUID.class)))
-                .thenReturn(50);
+                .thenReturn(new BigDecimal("50"));
         when(storageLocationRepository.findById(any())).thenReturn(Optional.empty());
         when(lotOutboundService.resolveOutboundLot(anyString(), any())).thenReturn(null);
     }
@@ -376,8 +376,8 @@ class TransferOrderServiceImplTest {
             List<InventoryLedgerEntry> entries = postedEntries();
             assertThat(entries).hasSize(1);
             assertThat(entries.get(0).getEventType()).isEqualTo(InventoryLedgerEventType.TRANSFER_OUT);
-            assertThat(entries.get(0).getChangeInQuantity()).isEqualTo(-10);
-            assertThat(entries.get(0).getQuantityAfter()).isEqualTo(40);
+            assertThat(entries.get(0).getChangeInQuantity()).isEqualByComparingTo("-10");
+            assertThat(entries.get(0).getQuantityAfter()).isEqualByComparingTo("40");
             assertThat(entries.get(0).getLocationId()).isEqualTo(SOURCE_SITE);
             assertThat(entries.get(0).getToLocationId()).isEqualTo(DESTINATION_SITE);
             assertThat(entries.get(0).getSourceTransactionId()).isEqualTo(ORDER_ID.toString());
@@ -399,7 +399,7 @@ class TransferOrderServiceImplTest {
                                     .build()))
                             .build());
 
-            assertThat(postedEntries().get(0).getChangeInQuantity()).isEqualTo(-4);
+            assertThat(postedEntries().get(0).getChangeInQuantity()).isEqualByComparingTo("-4");
         }
 
         @Test
@@ -517,7 +517,7 @@ class TransferOrderServiceImplTest {
             List<InventoryLedgerEntry> entries = postedEntries();
             assertThat(entries).hasSize(1);
             assertThat(entries.get(0).getEventType()).isEqualTo(InventoryLedgerEventType.TRANSFER_IN);
-            assertThat(entries.get(0).getChangeInQuantity()).isEqualTo(10);
+            assertThat(entries.get(0).getChangeInQuantity()).isEqualByComparingTo("10");
             assertThat(entries.get(0).getLocationId()).isEqualTo(DESTINATION_SITE);
             assertThat(dispatched.getLines().get(0).getReceivedQty()).isEqualTo(10);
             assertThat(response.getStatus()).isEqualTo(TransferOrderStatus.RECEIVED);
@@ -600,9 +600,9 @@ class TransferOrderServiceImplTest {
             List<InventoryLedgerEntry> entries = postedEntries();
             assertThat(entries).hasSize(2);
             assertThat(entries.get(0).getEventType()).isEqualTo(InventoryLedgerEventType.TRANSFER_IN);
-            assertThat(entries.get(0).getChangeInQuantity()).isEqualTo(6);
+            assertThat(entries.get(0).getChangeInQuantity()).isEqualByComparingTo("6");
             assertThat(entries.get(1).getEventType()).isEqualTo(InventoryLedgerEventType.SCRAP_OUT);
-            assertThat(entries.get(1).getChangeInQuantity()).isEqualTo(-6);
+            assertThat(entries.get(1).getChangeInQuantity()).isEqualByComparingTo("-6");
             assertThat(entries.get(1).getReasonCode()).isEqualTo(ScrapReasonCode.LOST.name());
             assertThat(entries.get(1).getUnitCost()).isEqualByComparingTo("12.50");
             assertThat(entries.get(1).getNotes()).isEqualTo("claim filed");
@@ -651,7 +651,7 @@ class TransferOrderServiceImplTest {
             assertThat(entries.get(1).getToLocationId()).isEqualTo(SOURCE_SITE);
             assertThat(entries.get(2).getEventType()).isEqualTo(InventoryLedgerEventType.TRANSFER_IN);
             assertThat(entries.get(2).getLocationId()).isEqualTo(SOURCE_SITE);
-            assertThat(entries.get(2).getChangeInQuantity()).isEqualTo(3);
+            assertThat(entries.get(2).getChangeInQuantity()).isEqualByComparingTo("3");
         }
 
         @Test

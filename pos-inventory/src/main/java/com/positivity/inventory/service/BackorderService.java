@@ -2,6 +2,7 @@ package com.positivity.inventory.service;
 
 import com.positivity.inventory.internal.dto.backorder.BackorderResponse;
 import com.positivity.inventory.internal.enums.BackorderStatus;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -32,7 +33,10 @@ public interface BackorderService {
      */
     @NonNull
     BackorderResponse createBackorder(
-            @NonNull UUID workorderLineId, @NonNull String sku, int quantityShort, @Nullable UUID locationId);
+            @NonNull UUID workorderLineId,
+            @NonNull String sku,
+            @NonNull BigDecimal quantityShort,
+            @Nullable UUID locationId);
 
     /**
      * Opens a backorder for a sales-order line whose demand was short (CAP #1315), the sales-order
@@ -47,7 +51,10 @@ public interface BackorderService {
      */
     @NonNull
     BackorderResponse createBackorderForSalesOrderLine(
-            @NonNull UUID salesOrderLineId, @NonNull String sku, int quantityShort, @Nullable UUID locationId);
+            @NonNull UUID salesOrderLineId,
+            @NonNull String sku,
+            @NonNull BigDecimal quantityShort,
+            @Nullable UUID locationId);
 
     /**
      * Retrieves one backorder.

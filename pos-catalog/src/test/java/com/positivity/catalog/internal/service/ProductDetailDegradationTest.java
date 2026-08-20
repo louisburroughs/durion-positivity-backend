@@ -111,7 +111,8 @@ class ProductDetailDegradationTest {
 
     private void availabilityWorks() {
         when(inventoryClient.fetchAvailability(any(), any()))
-                .thenReturn(Optional.of(new InventoryClient.AvailabilityClientResponse(12, 2, 10, "EA")));
+                .thenReturn(Optional.of(new InventoryClient.AvailabilityClientResponse(
+                        BigDecimal.valueOf(12), BigDecimal.valueOf(2), BigDecimal.valueOf(10), "EA")));
     }
 
     private void leadTimeAbsent() {
@@ -134,7 +135,7 @@ class ProductDetailDegradationTest {
         assertThat(view.getAvailability().getStatus()).isEqualTo(DataStatus.OK);
         assertThat(view.getPricing().getMsrp()).isEqualTo(129.99);
         assertThat(view.getPricing().getStorePrice()).isEqualTo(99.99);
-        assertThat(view.getAvailability().getOnHandQuantity()).isEqualTo(12);
+        assertThat(view.getAvailability().getOnHandQuantity()).isEqualByComparingTo("12");
     }
 
     @ParameterizedTest(name = "pricing up={0}, availability up={1} -> {2}")

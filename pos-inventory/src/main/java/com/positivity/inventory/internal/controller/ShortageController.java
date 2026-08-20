@@ -18,6 +18,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -61,7 +62,8 @@ public class ShortageController {
                     Preconditions: none beyond a positive shortQuantity; SUBSTITUTE and TRANSFER_IN options appear \
                     only when locationId is provided, and SUBSTITUTE additionally requires sku to parse as a \
                     product UUID.
-                    Required inputs: allocationId (UUID), sku (non-blank) and shortQuantity (positive integer); \
+                    Required inputs: allocationId (UUID), sku (non-blank) and shortQuantity (positive, decimal-capable \
+                    per the product's catalog precision_scale declaration); \
                     workorderLineId and locationId are optional but drive which options appear.
                     No events are emitted and no state changes; this is a read-only computation.
                     Returns 400 when shortQuantity is not positive or sku is blank.
@@ -85,7 +87,7 @@ public class ShortageController {
     public ResponseEntity<List<ShortageOptionDto>> listShortageOptions(
             @Parameter(description = "Allocation experiencing the shortage") @RequestParam UUID allocationId,
             @Parameter(description = "SKU / stock-item identifier that is short") @RequestParam @NotBlank String sku,
-            @Parameter(description = "Quantity that is short") @RequestParam @Positive int shortQuantity,
+            @Parameter(description = "Quantity that is short") @RequestParam @Positive BigDecimal shortQuantity,
             @Parameter(description = "Workorder line whose demand is short") @RequestParam(required = false)
                     UUID workorderLineId,
             @Parameter(description = "Site the demand is short at") @RequestParam(required = false) UUID locationId) {

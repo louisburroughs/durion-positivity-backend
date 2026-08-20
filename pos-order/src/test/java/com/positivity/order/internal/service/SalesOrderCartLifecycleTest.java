@@ -225,7 +225,8 @@ class SalesOrderCartLifecycleTest {
             }
             return line;
         });
-        when(inventoryPort.checkAvailability(anyString(), anyInt(), any())).thenReturn(new InventoryResult(true, 99));
+        when(inventoryPort.checkAvailability(anyString(), any(), any()))
+                .thenReturn(new InventoryResult(true, BigDecimal.valueOf(99)));
         when(pricingPort.quoteForSku(anyString(), anyInt(), any(), any())).thenReturn(priced("12.50", "Oil filter"));
         when(paymentRecordRepository.findByOrderId(any())).thenReturn(List.of());
         when(salesOrderRepository.findByCheckoutIdempotencyKey(anyString())).thenReturn(Optional.empty());
@@ -622,8 +623,8 @@ class SalesOrderCartLifecycleTest {
         @DisplayName("marks the line BACKORDER when inventory is short")
         void marksBackorder() {
             givenOrder(order(SalesOrderStatus.DRAFT));
-            when(inventoryPort.checkAvailability(anyString(), anyInt(), any()))
-                    .thenReturn(new InventoryResult(false, 0));
+            when(inventoryPort.checkAvailability(anyString(), any(), any()))
+                    .thenReturn(new InventoryResult(false, BigDecimal.valueOf(0)));
 
             assertThat(service.addItem(ORDER_ID, new AddItemCommand("SKU-1", 5, null, null, null, null, null, null))
                             .fulfillmentStatus())
@@ -1341,8 +1342,8 @@ class SalesOrderCartLifecycleTest {
             // than a lost sale — pos-inventory's backorder machinery exists for exactly this.
             SalesOrder order = checkoutReadyOrder();
             givenOrder(order);
-            when(inventoryPort.checkAvailability(anyString(), anyInt(), any()))
-                    .thenReturn(new InventoryResult(false, 0));
+            when(inventoryPort.checkAvailability(anyString(), any(), any()))
+                    .thenReturn(new InventoryResult(false, BigDecimal.valueOf(0)));
 
             CheckoutResult result = service.checkout(ORDER_ID, "co-1", null);
 
@@ -1357,8 +1358,8 @@ class SalesOrderCartLifecycleTest {
             SalesOrder order = checkoutReadyOrder();
             order.getLines().get(0).setFulfillmentStatus(FulfillmentStatus.BACKORDER);
             givenOrder(order);
-            when(inventoryPort.checkAvailability(anyString(), anyInt(), any()))
-                    .thenReturn(new InventoryResult(true, 10));
+            when(inventoryPort.checkAvailability(anyString(), any(), any()))
+                    .thenReturn(new InventoryResult(true, BigDecimal.valueOf(10)));
 
             service.checkout(ORDER_ID, "co-1", null);
 

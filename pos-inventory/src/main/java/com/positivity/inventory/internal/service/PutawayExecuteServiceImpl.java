@@ -14,6 +14,7 @@ import com.positivity.inventory.internal.repository.PutawayTaskRepository;
 import com.positivity.inventory.service.PutawayExecuteService;
 import com.positivity.inventory.service.PutawayValidationService;
 import com.positivity.security.common.SecurityContextHelper;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
@@ -49,19 +50,24 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
         ensureValidationPassed(validationResult);
 
         Instant now = Instant.now(clock);
-        int sourceOnHandBefore = onHandQuantityAtLocation(request.getSkuId(), request.getSourceLocationId());
-        int sourceOnHandAfter = sourceOnHandBefore - request.getQuantity();
+        // The putaway request quantity is still an int (a bin move of discrete units; the UOM
+        // work in ADR-0055 stage 3 revisits it), so this widens at the boundary — the ledger
+        // running totals it is added to are decimal.
+        BigDecimal movedQuantity = BigDecimal.valueOf(request.getQuantity());
+        BigDecimal sourceOnHandBefore = onHandQuantityAtLocation(request.getSkuId(), request.getSourceLocationId());
+        BigDecimal sourceOnHandAfter = sourceOnHandBefore.subtract(movedQuantity);
 
-        int destinationOnHandBefore = onHandQuantityAtLocation(request.getSkuId(), request.getDestinationLocationId());
-        int destinationBaseOnHand = request.getSourceLocationId().equals(request.getDestinationLocationId())
+        BigDecimal destinationOnHandBefore =
+                onHandQuantityAtLocation(request.getSkuId(), request.getDestinationLocationId());
+        BigDecimal destinationBaseOnHand = request.getSourceLocationId().equals(request.getDestinationLocationId())
                 ? sourceOnHandAfter
                 : destinationOnHandBefore;
-        int destinationOnHandAfter = destinationBaseOnHand + request.getQuantity();
+        BigDecimal destinationOnHandAfter = destinationBaseOnHand.add(movedQuantity);
 
         InventoryLedgerEntry sourceLedgerEntry = InventoryLedgerEntry.builder()
                 .stockItemId(request.getSkuId())
                 .eventType(InventoryLedgerEventType.PUTAWAY)
-                .changeInQuantity(-request.getQuantity())
+                .changeInQuantity(movedQuantity.negate())
                 .quantityAfter(sourceOnHandAfter)
                 .transactionUserId(actorId)
                 .locationId(request.getSourceLocationId())
@@ -75,7 +81,7 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
         InventoryLedgerEntry destinationLedgerEntry = InventoryLedgerEntry.builder()
                 .stockItemId(request.getSkuId())
                 .eventType(InventoryLedgerEventType.PUTAWAY)
-                .changeInQuantity(request.getQuantity())
+                .changeInQuantity(movedQuantity)
                 .quantityAfter(destinationOnHandAfter)
                 .transactionUserId(actorId)
                 .locationId(request.getDestinationLocationId())
@@ -135,8 +141,7 @@ public class PutawayExecuteServiceImpl implements PutawayExecuteService {
         throw new PutawayValidationException(errorCode, message);
     }
 
-    private int onHandQuantityAtLocation(String skuId, UUID locationId) {
-        Integer currentOnHand = inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(skuId, locationId);
-        return currentOnHand != null ? currentOnHand : 0;
+    private BigDecimal onHandQuantityAtLocation(String skuId, UUID locationId) {
+        return Quantities.nz(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(skuId, locationId));
     }
 }

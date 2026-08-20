@@ -1,5 +1,6 @@
 package com.positivity.order.internal.client;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -22,5 +23,5 @@ public interface InventoryPort {
      *     known stock, which reports insufficient rather than guessing
      */
     @NonNull
-    InventoryResult checkAvailability(@NonNull String itemSku, int quantity, @Nullable UUID locationId);
+    InventoryResult checkAvailability(@NonNull String itemSku, @NonNull BigDecimal quantity, @Nullable UUID locationId);
 }

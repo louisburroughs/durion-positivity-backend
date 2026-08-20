@@ -16,6 +16,7 @@ import com.positivity.inventory.internal.dto.rollup.StorageLocationRollupNode;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.RollupExpansionTooLargeException;
 import com.positivity.inventory.service.LocationInventoryRollupService;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -49,8 +50,12 @@ class LocationInventoryRollupContractBehaviorIT extends BaseContractIntegrationT
         LocationInventoryRollupResponse response = new LocationInventoryRollupResponse(
                 BUILDING_ID,
                 "PHYSICAL",
-                RollupQuantities.of(150, 15),
-                List.of(new SiteRollupSummary(SITE_A, "Main Workshop", RollupQuantities.of(150, 15), null)));
+                RollupQuantities.of(new BigDecimal("150"), new BigDecimal("15")),
+                List.of(new SiteRollupSummary(
+                        SITE_A,
+                        "Main Workshop",
+                        RollupQuantities.of(new BigDecimal("150"), new BigDecimal("15")),
+                        null)));
         when(locationInventoryRollupService.getLocationInventoryRollup(
                         eq(BUILDING_ID), isNull(), isNull(), eq(false), isNull(), eq(false)))
                 .thenReturn(response);
@@ -74,14 +79,18 @@ class LocationInventoryRollupContractBehaviorIT extends BaseContractIntegrationT
                 "Floor A",
                 "FLOOR",
                 "ACTIVE",
-                RollupQuantities.of(150, 15),
-                RollupQuantities.of(150, 15),
+                RollupQuantities.of(new BigDecimal("150"), new BigDecimal("15")),
+                RollupQuantities.of(new BigDecimal("150"), new BigDecimal("15")),
                 List.of());
         LocationInventoryRollupResponse response = new LocationInventoryRollupResponse(
                 BUILDING_ID,
                 "PHYSICAL",
-                RollupQuantities.of(150, 15),
-                List.of(new SiteRollupSummary(SITE_A, "Main Workshop", RollupQuantities.of(150, 15), List.of(node))));
+                RollupQuantities.of(new BigDecimal("150"), new BigDecimal("15")),
+                List.of(new SiteRollupSummary(
+                        SITE_A,
+                        "Main Workshop",
+                        RollupQuantities.of(new BigDecimal("150"), new BigDecimal("15")),
+                        List.of(node))));
         when(locationInventoryRollupService.getLocationInventoryRollup(
                         eq(BUILDING_ID), isNull(), isNull(), eq(true), isNull(), eq(false)))
                 .thenReturn(response);

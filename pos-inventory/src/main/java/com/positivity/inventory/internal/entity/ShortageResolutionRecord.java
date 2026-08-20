@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -76,8 +77,8 @@ public class ShortageResolutionRecord {
     private String sku;
 
     /** Quantity that was short. */
-    @Column(name = "short_quantity", nullable = false)
-    private Integer shortQuantity;
+    @Column(name = "short_quantity", nullable = false, precision = 19, scale = 4)
+    private BigDecimal shortQuantity;
 
     /** Site the demand was short at; null when the caller did not supply one. */
     @Column(name = "location_id")

@@ -130,7 +130,7 @@ class RevaluationServiceImplTest {
         assertThat(fact.costingMethod()).isEqualTo("AVERAGE");
         assertThat(fact.previousUnitCost()).isEqualByComparingTo("4.00");
         assertThat(fact.newUnitCost()).isEqualByComparingTo("5.00");
-        assertThat(fact.onHandQuantity()).isEqualTo(10L);
+        assertThat(fact.onHandQuantity()).isEqualByComparingTo("10");
         assertThat(fact.totalValueDelta()).isEqualByComparingTo("10.00");
         assertThat(fact.actor()).isEqualTo(ACTOR);
     }
@@ -163,7 +163,7 @@ class RevaluationServiceImplTest {
                 .costingMethod(CostingMethod.STANDARD)
                 .previousUnitCost(new BigDecimal("6.000000"))
                 .newUnitCost(new BigDecimal("8.000000"))
-                .onHandQuantity(150L)
+                .onHandQuantity(new BigDecimal("150"))
                 .valueDelta(new BigDecimal("300.0000"))
                 .reason("Standard price correction")
                 .status(RevaluationStatus.PENDING_APPROVAL)
@@ -199,7 +199,7 @@ class RevaluationServiceImplTest {
                 .stockItemId(SKU)
                 .costingMethod(CostingMethod.AVERAGE)
                 .newUnitCost(new BigDecimal("9.000000"))
-                .onHandQuantity(200L)
+                .onHandQuantity(new BigDecimal("200"))
                 .valueDelta(new BigDecimal("1000.0000"))
                 .reason("r")
                 .status(RevaluationStatus.PENDING_APPROVAL)
@@ -282,7 +282,7 @@ class RevaluationServiceImplTest {
                 .stockItemId(SKU)
                 .avgCost(avgCost)
                 .standardCost(standardCost)
-                .onHandQty(onHand)
+                .onHandQty(BigDecimal.valueOf(onHand))
                 .build();
     }
 

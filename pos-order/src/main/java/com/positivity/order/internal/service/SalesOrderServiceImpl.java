@@ -211,8 +211,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
 
         // Advisory at line-add (an estimate may legitimately be built from out-of-stock items);
         // checkout re-evaluates and is what actually registers the demand.
-        InventoryResult inventoryResult =
-                inventoryPort.checkAvailability(command.itemSku(), command.quantity(), order.getLocationId());
+        InventoryResult inventoryResult = inventoryPort.checkAvailability(
+                command.itemSku(), BigDecimal.valueOf(command.quantity()), order.getLocationId());
         FulfillmentStatus fulfillmentStatus =
                 inventoryResult.sufficient() ? FulfillmentStatus.AVAILABLE : FulfillmentStatus.BACKORDER;
 
@@ -528,8 +528,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
             if (line == null) {
                 continue;
             }
-            InventoryResult availability =
-                    inventoryPort.checkAvailability(line.getItemSku(), line.getQuantity(), locationId);
+            InventoryResult availability = inventoryPort.checkAvailability(
+                    line.getItemSku(), BigDecimal.valueOf(line.getQuantity()), locationId);
             line.setFulfillmentStatus(
                     availability.sufficient() ? FulfillmentStatus.AVAILABLE : FulfillmentStatus.BACKORDER);
 
@@ -547,7 +547,10 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                         order.getOrderId());
                 continue;
             }
-            publisher.requestReservation(line.getOrderLineId(), stockItemId, line.getQuantity(), locationId);
+            // Sales-order demand stays integral by decision (ADR-0055 leaves SalesOrderLine.quantity
+            // an int); the command is decimal, so this widens rather than narrowing.
+            publisher.requestReservation(
+                    line.getOrderLineId(), stockItemId, BigDecimal.valueOf(line.getQuantity()), locationId);
         }
     }
 

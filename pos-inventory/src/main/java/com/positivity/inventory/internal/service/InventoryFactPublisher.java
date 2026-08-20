@@ -301,9 +301,9 @@ public class InventoryFactPublisher {
                                 view.getAllocatedQuantity(),
                                 view.getAvailableToPromiseQuantity(),
                                 view.getUnitOfMeasure(),
-                                zeroIfNull(view.getIncomingQty()),
-                                zeroIfNull(view.getOutgoingQty()),
-                                zeroIfNull(view.getProjectedAvailable())));
+                                Quantities.nz(view.getIncomingQty()),
+                                Quantities.nz(view.getOutgoingQty()),
+                                Quantities.nz(view.getProjectedAvailable())));
             } catch (Exception e) {
                 // A snapshot that cannot be computed must not roll back the business write;
                 // the next mutation or a manifest replay repairs the replica.
@@ -320,7 +320,7 @@ public class InventoryFactPublisher {
                         StorageLocationOnHandUpdatedV1.SCHEMA_VERSION,
                         storageLocationId,
                         new StorageLocationOnHandUpdatedV1(
-                                storageLocationId, Math.toIntExact(inquiry.getOnHandQuantity())));
+                                storageLocationId, Quantities.nz(inquiry.getOnHandQuantity())));
             } catch (Exception e) {
                 log.warn("Skipping storage-location on-hand fact for {}: {}", storageLocationId, e.getMessage());
             }
@@ -520,10 +520,6 @@ public class InventoryFactPublisher {
                 payload,
                 clock);
         writer.publish(eventsTopic, envelope);
-    }
-
-    private static long zeroIfNull(@Nullable Long value) {
-        return value == null ? 0L : value;
     }
 
     /** Deterministic aggregate identity for a (stockItemId, locationId) availability key. */

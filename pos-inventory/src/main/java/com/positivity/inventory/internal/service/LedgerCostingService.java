@@ -79,7 +79,7 @@ public class LedgerCostingService {
             }
             SkuCostState state = stateCache.computeIfAbsent(stockItemId, this::loadOrSeedState);
 
-            int change = entry.getChangeInQuantity() == null ? 0 : entry.getChangeInQuantity();
+            BigDecimal change = Quantities.nz(entry.getChangeInQuantity());
             CostingStrategy.CostState currentState =
                     new CostingStrategy.CostState(state.getAvgCost(), state.getOnHandQty(), state.getStandardCost());
             CostingStrategy.CostingInput input =

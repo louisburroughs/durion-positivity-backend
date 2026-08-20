@@ -10,6 +10,7 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -67,8 +68,8 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     @Test
     @DisplayName("AC-1: queryAvailability_returns200_withCorrectOnHandAndAtp")
     void queryAvailability_returns200_withCorrectOnHandAndAtp() throws Exception {
-        seedGoodsReceipt("SKU-TEST-1", LOC_ALPHA, 100);
-        seedAllocationCreated("SKU-TEST-1", LOC_ALPHA, 20);
+        seedGoodsReceipt("SKU-TEST-1", LOC_ALPHA, new BigDecimal("100"));
+        seedAllocationCreated("SKU-TEST-1", LOC_ALPHA, new BigDecimal("20"));
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/by-sku")
                         .param("productSku", "SKU-TEST-1")
@@ -90,7 +91,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     void queryAvailability_returnsZeroQuantities_whenProductKnownButNoStockAtLocation() throws Exception {
         // Seed an entry for SKU-ZERO at a DIFFERENT location so the product is
         // "known" in the system; the queried location has no stock.
-        seedGoodsReceipt("SKU-ZERO", LOC_OTHER, 50);
+        seedGoodsReceipt("SKU-ZERO", LOC_OTHER, new BigDecimal("50"));
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/by-sku")
                         .param("productSku", "SKU-ZERO")
@@ -122,8 +123,8 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     @Test
     @DisplayName("AC-4: queryAvailability_aggregatesAllStorageLocations_whenNoStorageLocationId")
     void queryAvailability_aggregatesAllStorageLocations_whenNoStorageLocationId() throws Exception {
-        seedGoodsReceipt("SKU-BETA", LOC_BETA, 40);
-        seedGoodsReceipt("SKU-BETA", LOC_BETA, 60);
+        seedGoodsReceipt("SKU-BETA", LOC_BETA, new BigDecimal("40"));
+        seedGoodsReceipt("SKU-BETA", LOC_BETA, new BigDecimal("60"));
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/by-sku")
                         .param("productSku", "SKU-BETA")
@@ -142,11 +143,11 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     @Test
     @DisplayName("AC-5: queryAvailability_atpReflectsAllocations_notReservations")
     void queryAvailability_atpReflectsAllocations_notReservations() throws Exception {
-        seedGoodsReceipt("SKU-ATP", LOC_GAMMA, 200);
-        seedAllocationCreated("SKU-ATP", LOC_GAMMA, 50);
-        seedAllocationReleased("SKU-ATP", LOC_GAMMA, 10);
+        seedGoodsReceipt("SKU-ATP", LOC_GAMMA, new BigDecimal("200"));
+        seedAllocationCreated("SKU-ATP", LOC_GAMMA, new BigDecimal("50"));
+        seedAllocationReleased("SKU-ATP", LOC_GAMMA, new BigDecimal("10"));
         // RESERVATION_CREATED must NOT count toward allocatedQuantity or ATP
-        seedReservationCreated("SKU-ATP", LOC_GAMMA, 30);
+        seedReservationCreated("SKU-ATP", LOC_GAMMA, new BigDecimal("30"));
 
         // allocatedQuantity = 50 (ALLOCATION_CREATED) - 10 (ALLOCATION_RELEASED) = 40
         // ATP = 200 (onHand) - 40 (allocated) = 160
@@ -164,8 +165,8 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     @Test
     @DisplayName("CP-665-001: GET /v1/inventory/availability?sku=... returns list with one element")
     void queryAvailabilityBySkuList_returns200_withListWrappingResult() throws Exception {
-        seedGoodsReceipt("SKU-LIST-1", LOC_ALPHA, 50);
-        seedAllocationCreated("SKU-LIST-1", LOC_ALPHA, 10);
+        seedGoodsReceipt("SKU-LIST-1", LOC_ALPHA, new BigDecimal("50"));
+        seedAllocationCreated("SKU-LIST-1", LOC_ALPHA, new BigDecimal("10"));
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability")
                         .param("sku", "SKU-LIST-1")
@@ -195,7 +196,7 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
     // Seed helpers
     // -------------------------------------------------------------------------
 
-    private void seedGoodsReceipt(String productSku, UUID locationId, int quantity) {
+    private void seedGoodsReceipt(String productSku, UUID locationId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productSku)
                 .locationId(locationId)
@@ -208,39 +209,39 @@ class InventoryAvailabilityQueryContractBehaviorIT extends BaseContractIntegrati
                 .build());
     }
 
-    private void seedAllocationCreated(String productSku, UUID locationId, int quantity) {
+    private void seedAllocationCreated(String productSku, UUID locationId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productSku)
                 .locationId(locationId)
                 .eventType(InventoryLedgerEventType.ALLOCATION_CREATED)
                 .changeInQuantity(quantity)
-                .quantityAfter(0)
+                .quantityAfter(new BigDecimal("0"))
                 .transactionUserId("contract-seed")
                 .timestamp(Instant.now(TEST_CLOCK))
                 .notes("seed allocation created")
                 .build());
     }
 
-    private void seedAllocationReleased(String productSku, UUID locationId, int quantity) {
+    private void seedAllocationReleased(String productSku, UUID locationId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productSku)
                 .locationId(locationId)
                 .eventType(InventoryLedgerEventType.ALLOCATION_RELEASED)
                 .changeInQuantity(quantity)
-                .quantityAfter(0)
+                .quantityAfter(new BigDecimal("0"))
                 .transactionUserId("contract-seed")
                 .timestamp(Instant.now(TEST_CLOCK))
                 .notes("seed allocation released")
                 .build());
     }
 
-    private void seedReservationCreated(String productSku, UUID locationId, int quantity) {
+    private void seedReservationCreated(String productSku, UUID locationId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productSku)
                 .locationId(locationId)
                 .eventType(InventoryLedgerEventType.RESERVATION_CREATED)
                 .changeInQuantity(quantity)
-                .quantityAfter(0)
+                .quantityAfter(new BigDecimal("0"))
                 .transactionUserId("contract-seed")
                 .timestamp(Instant.now(TEST_CLOCK))
                 .notes("seed reservation (must not affect allocated qty per ADR-0001)")

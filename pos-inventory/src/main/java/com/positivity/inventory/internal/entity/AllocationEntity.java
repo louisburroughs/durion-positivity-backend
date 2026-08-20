@@ -14,6 +14,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -45,8 +46,12 @@ public class AllocationEntity {
     @Column(nullable = true)
     private UUID locationId;
 
-    @Column(nullable = false)
-    private int allocatedQuantity;
+    /**
+     * Quantity hard-allocated by this allocation. Decimal-capable (ADR-0055, #1414); the
+     * product's declared {@code precision_scale} is what constrains it, not the type.
+     */
+    @Column(nullable = false, precision = 19, scale = 4)
+    private BigDecimal allocatedQuantity;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

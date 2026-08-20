@@ -19,6 +19,7 @@ import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.security.PutawayPermissions;
 import com.positivity.security.common.GatewaySecurityConstants;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -80,10 +81,10 @@ class PutawayValidationServiceImplTest {
                 .thenReturn(locationValidation(true, true, 100));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
                         eq(DESTINATION_LOCATION_ID), any(List.class)))
-                .thenReturn(0);
+                .thenReturn(new BigDecimal("0"));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
                         eq(SKU), eq(SOURCE_LOCATION_ID), any(List.class)))
-                .thenReturn(50);
+                .thenReturn(new BigDecimal("50"));
     }
 
     @AfterEach
@@ -257,7 +258,7 @@ class PutawayValidationServiceImplTest {
         void countsExistingStockTowardTheLimit() {
             when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
                             eq(DESTINATION_LOCATION_ID), any(List.class)))
-                    .thenReturn(95);
+                    .thenReturn(new BigDecimal("95"));
 
             assertThatThrownBy(() -> service.validateLocationCapacity(DESTINATION_LOCATION_ID, 20))
                     .isInstanceOf(LocationAtCapacityException.class);
@@ -278,7 +279,7 @@ class PutawayValidationServiceImplTest {
         void refusesASourceWithNothingOnHand() {
             when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
                             eq(SKU), eq(SOURCE_LOCATION_ID), any(List.class)))
-                    .thenReturn(0);
+                    .thenReturn(new BigDecimal("0"));
 
             assertThatThrownBy(() -> service.validateSourceOnHand(SOURCE_LOCATION_ID, SKU, 10))
                     .isInstanceOf(NoOnHandAtSourceLocationException.class);
@@ -288,7 +289,7 @@ class PutawayValidationServiceImplTest {
         void reportsAShortfallRatherThanThrowing() {
             when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
                             eq(SKU), eq(SOURCE_LOCATION_ID), any(List.class)))
-                    .thenReturn(4);
+                    .thenReturn(new BigDecimal("4"));
 
             ValidationResult result = service.validateSourceOnHand(SOURCE_LOCATION_ID, SKU, 10);
 
@@ -313,7 +314,7 @@ class PutawayValidationServiceImplTest {
         void collectsASourceShortfallAsAnError() {
             when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
                             eq(SKU), eq(SOURCE_LOCATION_ID), any(List.class)))
-                    .thenReturn(4);
+                    .thenReturn(new BigDecimal("4"));
 
             ValidationResult result = service.validatePutawayExecution(request(10));
 
@@ -361,7 +362,7 @@ class PutawayValidationServiceImplTest {
         void turnsAMissingSourceIntoAReconciliationWarningWhenCompatibilityIsOverridden() {
             when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
                             eq(SKU), eq(SOURCE_LOCATION_ID), any(List.class)))
-                    .thenReturn(0);
+                    .thenReturn(new BigDecimal("0"));
             PutawayExecutionRequest request = request(10);
             request.setOverrideLocationCompatibility(true);
             request.setOverrideReasonCode(OverrideReasonCode.CAPACITY_OVERRIDE);
@@ -377,7 +378,7 @@ class PutawayValidationServiceImplTest {
         void stillRefusesAMissingSourceWhenNothingIsOverridden() {
             when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
                             eq(SKU), eq(SOURCE_LOCATION_ID), any(List.class)))
-                    .thenReturn(0);
+                    .thenReturn(new BigDecimal("0"));
             PutawayExecutionRequest request = request(10);
 
             assertThatThrownBy(() -> service.validatePutawayExecution(request))

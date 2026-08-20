@@ -61,7 +61,7 @@ class ForecastAvailabilityContractBehaviorIT extends BaseContractIntegrationTest
     @DisplayName("AC-1: per-location availability rows expose forecast fields; existing fields unchanged")
     void perLocationRowsExposeForecastFields() throws Exception {
         UUID productId = UUID.randomUUID();
-        seedOnHand(productId, SITE, 100);
+        seedOnHand(productId, SITE, new BigDecimal("100"));
         seedApprovedPo(productId, SITE, "25", LocalDate.parse("2026-07-30"));
         seedPendingReservation(productId, 10, 0, null); // remainder 10, site-agnostic
 
@@ -82,7 +82,7 @@ class ForecastAvailabilityContractBehaviorIT extends BaseContractIntegrationTest
     @DisplayName("AC-2: horizon bounds the forecast; undated documents drop out of bounded results")
     void horizonBoundsForecast() throws Exception {
         UUID productId = UUID.randomUUID();
-        seedOnHand(productId, SITE, 50);
+        seedOnHand(productId, SITE, new BigDecimal("50"));
         seedApprovedPo(productId, SITE, "20", LocalDate.parse("2026-07-25")); // inside horizon
         seedApprovedPo(productId, SITE, "40", LocalDate.parse("2026-12-01")); // beyond horizon
         seedApprovedPo(productId, SITE, "5", null); // undated
@@ -109,7 +109,7 @@ class ForecastAvailabilityContractBehaviorIT extends BaseContractIntegrationTest
     @DisplayName("AC-3: by-sku availability views expose forecast fields with unchanged ATP semantics")
     void bySkuViewExposesForecastFields() throws Exception {
         UUID productId = UUID.randomUUID();
-        seedOnHand(productId, SITE, 30);
+        seedOnHand(productId, SITE, new BigDecimal("30"));
         seedApprovedPo(productId, SITE, "12", null);
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/by-sku")
@@ -132,7 +132,7 @@ class ForecastAvailabilityContractBehaviorIT extends BaseContractIntegrationTest
                 .andExpect(jsonPath("$[0].projectedAvailable").value(42));
     }
 
-    private void seedOnHand(UUID productId, UUID locationId, int quantity) {
+    private void seedOnHand(UUID productId, UUID locationId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productId.toString())
                 .locationId(locationId)
@@ -164,8 +164,8 @@ class ForecastAvailabilityContractBehaviorIT extends BaseContractIntegrationTest
         reservationRepository.save(ReservationEntity.builder()
                 .workorderLineId(UUID.randomUUID())
                 .stockItemId(stockItemId)
-                .requiredQuantity(required)
-                .allocatedQuantity(allocated)
+                .requiredQuantity(BigDecimal.valueOf(required))
+                .allocatedQuantity(BigDecimal.valueOf(allocated))
                 .status(ReservationStatus.PENDING)
                 .dueDateTime(dueDateTime)
                 .build());

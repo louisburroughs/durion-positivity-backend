@@ -45,14 +45,14 @@ public class CreateAdjustmentRequest {
     @Schema(description = "Quantity physically counted by the auditor", example = "12", requiredMode = REQUIRED)
     @NotNull(message = "Counted quantity is required")
     @Min(value = 0, message = "Counted quantity cannot be negative")
-    private Integer countedQuantity;
+    private BigDecimal countedQuantity;
 
     @Schema(
             description = "Quantity on hand recorded before the count was applied",
             example = "15",
             requiredMode = REQUIRED)
     @NotNull(message = "Quantity on-hand before count is required")
-    private Integer quantityOnHandBefore;
+    private BigDecimal quantityOnHandBefore;
 
     @Schema(
             description = "Unit cost to capture at the time of the adjustment",

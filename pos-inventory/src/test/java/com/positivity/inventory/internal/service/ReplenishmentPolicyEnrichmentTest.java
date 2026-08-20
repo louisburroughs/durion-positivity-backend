@@ -78,7 +78,7 @@ class ReplenishmentPolicyEnrichmentTest {
         return "SKU-F3-" + UUID.randomUUID();
     }
 
-    private void receive(String sku, UUID locationId, int quantity) {
+    private void receive(String sku, UUID locationId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(locationId)
@@ -116,7 +116,7 @@ class ReplenishmentPolicyEnrichmentTest {
         ReplenishmentPolicy policy = seedPolicy(sku, location, 5, 10);
         policy.setOrderMultiple(6);
         policyRepository.save(policy);
-        receive(sku, location, 3); // need = 10 - 3 = 7 → rounded to 12
+        receive(sku, location, new BigDecimal("3")); // need = 10 - 3 = 7 → rounded to 12
 
         replenishmentService.runBatchReplenishmentScan();
 
@@ -133,7 +133,7 @@ class ReplenishmentPolicyEnrichmentTest {
         ReplenishmentPolicy policy = seedPolicy(sku, location, 10, 20);
         policy.setOrderMultiple(6);
         policyRepository.save(policy);
-        receive(sku, location, 8); // need = 20 - 8 = 12, exact multiple of 6
+        receive(sku, location, new BigDecimal("8")); // need = 20 - 8 = 12, exact multiple of 6
 
         replenishmentService.runBatchReplenishmentScan();
 
@@ -150,7 +150,7 @@ class ReplenishmentPolicyEnrichmentTest {
         ReplenishmentPolicy policy = seedPolicy(sku, location, 5, 20);
         policy.setOrderMultiple(6);
         policyRepository.save(policy);
-        receive(sku, location, 3);
+        receive(sku, location, new BigDecimal("3"));
 
         // Scan creates the open task (need 17 → rounded to 18); its quantity is now the
         // in-progress supply covering the breach.
@@ -182,7 +182,7 @@ class ReplenishmentPolicyEnrichmentTest {
         // which is exercised separately in ReplenishmentSourcingScanTest.
         policy.setPreferredSourceType(ReplenishmentSourceType.INTERNAL_TRANSFER);
         policyRepository.save(policy);
-        receive(sku, location, 3);
+        receive(sku, location, new BigDecimal("3"));
         savePo("APPROVED", location, LocalDate.now(ZoneOffset.UTC).plusDays(1), skuId, "7");
 
         assertThat(leadTimeResolver.resolve(policy).source())
@@ -208,7 +208,7 @@ class ReplenishmentPolicyEnrichmentTest {
         ReplenishmentPolicy policy = seedPolicy(sku, location, 5, 20);
         policy.setSnoozedUntil(Instant.now().plus(Duration.ofHours(1)));
         policyRepository.save(policy);
-        receive(sku, location, 3); // below min — would trigger if not snoozed
+        receive(sku, location, new BigDecimal("3")); // below min — would trigger if not snoozed
 
         ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
 
@@ -229,7 +229,7 @@ class ReplenishmentPolicyEnrichmentTest {
         ReplenishmentPolicy policy = seedPolicy(sku, location, 5, 20);
         policy.setSnoozedUntil(Instant.now().minus(Duration.ofSeconds(1)));
         policyRepository.save(policy);
-        receive(sku, location, 3);
+        receive(sku, location, new BigDecimal("3"));
 
         replenishmentService.runBatchReplenishmentScan();
 
@@ -244,7 +244,7 @@ class ReplenishmentPolicyEnrichmentTest {
         ReplenishmentPolicy policy = seedPolicy(sku, location, 5, 20);
         policy.setActive(Boolean.FALSE);
         policyRepository.save(policy);
-        receive(sku, location, 3);
+        receive(sku, location, new BigDecimal("3"));
 
         ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
 
@@ -346,15 +346,15 @@ class ReplenishmentPolicyEnrichmentTest {
         ReplenishmentPolicy policy = seedPolicy(sku, location, 5, 10);
         policy.setOrderMultiple(6);
         policyRepository.save(policy);
-        receive(sku, location, 3); // need 7 → rounded 12
+        receive(sku, location, new BigDecimal("3")); // need 7 → rounded 12
 
         long tasksBefore = taskRepository.count();
         ReplenishmentNeedResponse need = needFor(sku);
         assertThat(taskRepository.count()).isEqualTo(tasksBefore); // side-effect free
 
         assertThat(need.isWouldTrigger()).isTrue();
-        assertThat(need.getOnHand()).isEqualTo(3);
-        assertThat(need.getProjectedAvailable()).isEqualTo(3);
+        assertThat(need.getOnHand()).isEqualByComparingTo("3");
+        assertThat(need.getProjectedAvailable()).isEqualByComparingTo("3");
         assertThat(need.getSuggestedQuantity()).isEqualTo(12);
         assertThat(need.getMinimumQuantity()).isEqualTo(5);
         assertThat(need.getMaximumQuantity()).isEqualTo(10);
@@ -379,15 +379,15 @@ class ReplenishmentPolicyEnrichmentTest {
         ReplenishmentPolicy policy = seedPolicy(sku, location, 10, 20);
         policy.setLeadTimeDaysOverride(5);
         policyRepository.save(policy);
-        receive(sku, location, 5);
+        receive(sku, location, new BigDecimal("5"));
         // Open reservation remainder of 8 due in 2 days: projected(now) = 5 >= 0, but at
         // the due-date cutoff the projection drops to 5 - 8 = -3 < 0 → deadline = due date.
         Instant due = Instant.now().plus(Duration.ofDays(2));
         reservationRepository.save(ReservationEntity.builder()
                 .workorderLineId(UUID.randomUUID())
                 .stockItemId(skuId)
-                .requiredQuantity(13)
-                .allocatedQuantity(5)
+                .requiredQuantity(new BigDecimal("13"))
+                .allocatedQuantity(new BigDecimal("5"))
                 .status(ReservationStatus.PENDING)
                 .dueDateTime(due)
                 .build());
@@ -411,13 +411,13 @@ class ReplenishmentPolicyEnrichmentTest {
         String sku = skuId.toString();
         UUID location = UUID.randomUUID();
         seedPolicy(sku, location, 5, 20);
-        receive(sku, location, 2);
+        receive(sku, location, new BigDecimal("2"));
         // Overdue reservation remainder of 5: projected(now) = 2 - 5 = -3 < 0 → deadline today.
         reservationRepository.save(ReservationEntity.builder()
                 .workorderLineId(UUID.randomUUID())
                 .stockItemId(skuId)
-                .requiredQuantity(5)
-                .allocatedQuantity(0)
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("0"))
                 .status(ReservationStatus.PENDING)
                 .dueDateTime(Instant.now().minus(Duration.ofHours(1)))
                 .build());
@@ -435,7 +435,7 @@ class ReplenishmentPolicyEnrichmentTest {
         String sku = uniqueSku();
         UUID location = UUID.randomUUID();
         seedPolicy(sku, location, 5, 20);
-        receive(sku, location, 3); // below min but never below zero
+        receive(sku, location, new BigDecimal("3")); // below min but never below zero
 
         replenishmentService.runBatchReplenishmentScan();
 

@@ -12,6 +12,7 @@ import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -51,8 +52,8 @@ class InventoryLedgerServiceImplTest {
                 .ledgerEntryId(id)
                 .stockItemId("SKU-TEST")
                 .eventType(InventoryLedgerEventType.ADJUSTMENT_IN)
-                .changeInQuantity(1)
-                .quantityAfter(10)
+                .changeInQuantity(new BigDecimal("1"))
+                .quantityAfter(new BigDecimal("10"))
                 .transactionUserId("user-1")
                 .build();
     }

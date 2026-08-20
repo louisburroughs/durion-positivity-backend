@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.dto.rollup;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 
 /**
  * Quantity triple used at every rollup node. {@code available} is
@@ -10,31 +11,32 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "On-hand, allocated and available quantity triple used at every rollup node")
 public record RollupQuantities(
         @Schema(description = "On-hand quantity", example = "120", requiredMode = Schema.RequiredMode.REQUIRED)
-        long onHand,
+        BigDecimal onHand,
 
         @Schema(
                 description = "Outstanding allocated quantity",
                 example = "30",
                 requiredMode = Schema.RequiredMode.REQUIRED)
-        long allocated,
+        BigDecimal allocated,
 
         @Schema(
                 description = "Available to promise: onHand - allocated (may be negative)",
                 example = "90",
                 requiredMode = Schema.RequiredMode.REQUIRED)
-        long available) {
+        BigDecimal available) {
 
-    public static final RollupQuantities ZERO = new RollupQuantities(0, 0, 0);
+    public static final RollupQuantities ZERO = new RollupQuantities(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
 
-    public static RollupQuantities of(long onHand, long allocated) {
-        return new RollupQuantities(onHand, allocated, onHand - allocated);
+    public static RollupQuantities of(BigDecimal onHand, BigDecimal allocated) {
+        return new RollupQuantities(onHand, allocated, onHand.subtract(allocated));
     }
 
     public RollupQuantities plus(RollupQuantities other) {
-        return of(onHand + other.onHand, allocated + other.allocated);
+        return of(onHand.add(other.onHand), allocated.add(other.allocated));
     }
 
+    /** {@code signum}, not {@code equals}: {@code 0.0000} from numeric(19,4) is still empty. */
     public boolean isEmpty() {
-        return onHand == 0 && allocated == 0;
+        return onHand.signum() == 0 && allocated.signum() == 0;
     }
 }

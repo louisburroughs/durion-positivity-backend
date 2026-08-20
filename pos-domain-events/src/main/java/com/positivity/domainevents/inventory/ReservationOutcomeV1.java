@@ -1,5 +1,6 @@
 package com.positivity.domainevents.inventory;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -27,7 +28,10 @@ import org.jspecify.annotations.Nullable;
  * @param workorderLineId workorder line the demand is for, when demand is from a workorder
  * @param salesOrderLineId sales-order line the demand is for, when demand is from a sales order
  * @param stockItemId stock-item identifier that was requested
- * @param requiredQuantity quantity requested
+ * @param requiredQuantity quantity requested; decimal-capable, and permitted to carry decimals
+ *     only to the scale the product's catalog declaration allows (ADR-0055, #1414). Zero and
+ *     negative remain rejected — a reservation for nothing is not an outcome. Compare with
+ *     {@code compareTo}, never {@code equals}.
  * @param covered whether owned ATP at the requested location currently covers the full quantity
  * @param backorderId the backorder opened for the shortfall, when {@code covered} is false
  * @param occurredAt when the outcome was determined
@@ -37,7 +41,7 @@ public record ReservationOutcomeV1(
         @Nullable UUID workorderLineId,
         @Nullable UUID salesOrderLineId,
         @NonNull String stockItemId,
-        int requiredQuantity,
+        @NonNull BigDecimal requiredQuantity,
         boolean covered,
         @Nullable UUID backorderId,
         @NonNull Instant occurredAt) {
@@ -55,7 +59,7 @@ public record ReservationOutcomeV1(
         if (stockItemId == null || stockItemId.isBlank()) {
             throw new IllegalArgumentException("stockItemId must not be blank");
         }
-        if (requiredQuantity <= 0) {
+        if (requiredQuantity == null || requiredQuantity.signum() <= 0) {
             throw new IllegalArgumentException("requiredQuantity must be positive");
         }
         if (!covered && backorderId == null) {

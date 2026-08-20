@@ -16,6 +16,7 @@ import com.positivity.inventory.internal.dto.replenishment.ReplenishmentTaskResp
 import com.positivity.inventory.internal.dto.replenishment.UpdateReplenishmentPolicyRequest;
 import com.positivity.inventory.internal.exception.SnoozeUntilNotInFutureException;
 import com.positivity.inventory.service.ReplenishmentService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -401,8 +402,8 @@ class ReplenishmentContractBehaviorIT extends BaseContractIntegrationTest {
                         .policyId("00000000-0000-0000-0000-000000000001")
                         .itemSKU("SKU-BOLT-M5")
                         .locationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
-                        .onHand(3)
-                        .projectedAvailable(3)
+                        .onHand(new BigDecimal("3"))
+                        .projectedAvailable(new BigDecimal("3"))
                         .leadHorizonDate("2024-01-06")
                         .leadTimeSource("POLICY_OVERRIDE")
                         .minimumQuantity(5)

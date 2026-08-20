@@ -116,7 +116,7 @@ public class StockSummaryRebuildServiceImpl implements StockSummaryRebuildServic
                         .locationId(missing.locationId())
                         .lotId(missing.lotId())
                         .build());
-        row.setInTransitQty(row.getInTransitQty() + outbound.getInTransit());
+        row.setInTransitQty(Quantities.nz(row.getInTransitQty()).add(Quantities.nz(outbound.getInTransit())));
     }
 
     private InventoryStockSummary toSummaryRow(
@@ -139,7 +139,7 @@ public class StockSummaryRebuildServiceImpl implements StockSummaryRebuildServic
                 .onHand(aggregate.getOnHand())
                 .allocated(aggregate.getAllocated())
                 .reserved(aggregate.getReserved())
-                .atp(aggregate.getOnHand() - aggregate.getAllocated())
+                .atp(Quantities.nz(aggregate.getOnHand()).subtract(Quantities.nz(aggregate.getAllocated())))
                 .inTransitQty(aggregate.getInTransitArrived())
                 .lastLedgerEntryId(latest == null ? null : latest.getLedgerEntryId())
                 .lastEventAt(latest == null ? null : latest.getTimestamp())

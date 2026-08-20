@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.dto.rollup.SiteInventoryRollupResponse;
 import com.positivity.inventory.internal.dto.rollup.StorageLocationRollupNode;
 import com.positivity.inventory.internal.service.StorageLocationTopologyService.StorageLocationNode;
 import com.positivity.inventory.service.SiteInventoryRollupService;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -60,8 +61,8 @@ public class SiteInventoryRollupServiceImpl implements SiteInventoryRollupServic
                     new MutableNode(
                             node,
                             RollupQuantities.of(
-                                    quantities.onHand().getOrDefault(node.id(), 0L),
-                                    quantities.allocated().getOrDefault(node.id(), 0L))));
+                                    quantities.onHand().getOrDefault(node.id(), BigDecimal.ZERO),
+                                    quantities.allocated().getOrDefault(node.id(), BigDecimal.ZERO))));
         }
         List<MutableNode> roots = new ArrayList<>();
         for (MutableNode node : byId.values()) {

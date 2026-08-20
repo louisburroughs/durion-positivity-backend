@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import jakarta.persistence.LockModeType;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.HashMap;
@@ -106,7 +107,7 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
                         FROM InventoryStockSummary s
                         WHERE s.lotId = :lotId
                         """)
-    long sumLotStockAcrossLocations(@Param("lotId") UUID lotId);
+    BigDecimal sumLotStockAcrossLocations(@Param("lotId") UUID lotId);
 
     /**
      * Σ per-lot on-hand of the SKU's EXPIRED, ACTIVE lots at the given scope (odoo-parity E3,
@@ -128,7 +129,7 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
                       AND l.expiration_date IS NOT NULL
                       AND l.expiration_date < :today
                     """, nativeQuery = true)
-    long sumExpiredActiveLotOnHand(
+    BigDecimal sumExpiredActiveLotOnHand(
             @Param("stockItemId") String stockItemId,
             @Param("locationId") UUID locationId,
             @Param("today") LocalDate today);
@@ -183,21 +184,21 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
                         WHERE s.locationId = :locationId AND s.onHand > :onHand AND s.lotId IS NULL
                         """)
     List<InventoryStockSummary> findByLocationIdAndOnHandGreaterThan(
-            @Param("locationId") UUID locationId, @Param("onHand") long onHand);
+            @Param("locationId") UUID locationId, @Param("onHand") BigDecimal onHand);
 
     @Query("""
                         SELECT COALESCE(SUM(s.onHand), 0)
                         FROM InventoryStockSummary s
                         WHERE s.locationId = :locationId AND s.lotId IS NULL
                         """)
-    long sumOnHandAtLocation(@Param("locationId") UUID locationId);
+    BigDecimal sumOnHandAtLocation(@Param("locationId") UUID locationId);
 
     @Query("""
                         SELECT COALESCE(SUM(s.allocated), 0)
                         FROM InventoryStockSummary s
                         WHERE s.locationId = :locationId AND s.lotId IS NULL
                         """)
-    long sumAllocatedAtLocation(@Param("locationId") UUID locationId);
+    BigDecimal sumAllocatedAtLocation(@Param("locationId") UUID locationId);
 
     @Query("""
                         SELECT s.locationId AS locationId, COALESCE(SUM(s.onHand), 0) AS onHand,
@@ -223,9 +224,9 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
     interface LocationSummary {
         UUID getLocationId();
 
-        long getOnHand();
+        BigDecimal getOnHand();
 
-        long getAllocated();
+        BigDecimal getAllocated();
     }
 
     // ─── Valuation read model on-hand aggregation (odoo-parity J2, issue #1052) ──
@@ -260,12 +261,12 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
                         FROM InventoryStockSummary s
                         WHERE s.stockItemId = :stockItemId AND s.lotId IS NULL
                         """)
-    long sumOnHandForSku(@Param("stockItemId") String stockItemId);
+    BigDecimal sumOnHandForSku(@Param("stockItemId") String stockItemId);
 
     interface SkuOnHand {
         String getStockItemId();
 
-        long getOnHand();
+        BigDecimal getOnHand();
     }
 
     /**
@@ -407,21 +408,21 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
         /** Rendered as text in SQL; null on lot-agnostic keys (log-only field). */
         String getLotId();
 
-        long getLedgerOnHand();
+        BigDecimal getLedgerOnHand();
 
-        long getLedgerAllocated();
+        BigDecimal getLedgerAllocated();
 
-        long getLedgerReserved();
+        BigDecimal getLedgerReserved();
 
-        long getLedgerInTransit();
+        BigDecimal getLedgerInTransit();
 
-        Long getSummaryOnHand();
+        BigDecimal getSummaryOnHand();
 
-        Long getSummaryAllocated();
+        BigDecimal getSummaryAllocated();
 
-        Long getSummaryReserved();
+        BigDecimal getSummaryReserved();
 
-        Long getSummaryInTransit();
+        BigDecimal getSummaryInTransit();
     }
 
     /**
@@ -473,9 +474,9 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
         /** Rendered as text in SQL; null for the null-location (site-level) key. */
         String getLocationId();
 
-        long getLedgerOutstanding();
+        BigDecimal getLedgerOutstanding();
 
-        long getSummaryAllocated();
+        BigDecimal getSummaryAllocated();
     }
 
     /**
@@ -484,8 +485,8 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
      * summary rows are absent from the maps (treat as 0).
      */
     default LocationQuantityMaps sumByLocationChunked(Collection<UUID> locationIds, String stockItemIdOrNull) {
-        Map<UUID, Long> onHand = new HashMap<>();
-        Map<UUID, Long> allocated = new HashMap<>();
+        Map<UUID, BigDecimal> onHand = new HashMap<>();
+        Map<UUID, BigDecimal> allocated = new HashMap<>();
         if (locationIds != null && !locationIds.isEmpty()) {
             List<UUID> distinctIds = locationIds.stream().distinct().toList();
             for (int start = 0; start < distinctIds.size(); start += LOCATION_ID_CHUNK_SIZE) {
@@ -495,13 +496,13 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
                         ? sumByLocation(chunk)
                         : sumByLocationForSku(stockItemIdOrNull, chunk);
                 for (LocationSummary row : rows) {
-                    onHand.merge(row.getLocationId(), row.getOnHand(), Long::sum);
-                    allocated.merge(row.getLocationId(), row.getAllocated(), Long::sum);
+                    onHand.merge(row.getLocationId(), row.getOnHand(), BigDecimal::add);
+                    allocated.merge(row.getLocationId(), row.getAllocated(), BigDecimal::add);
                 }
             }
         }
         return new LocationQuantityMaps(Map.copyOf(onHand), Map.copyOf(allocated));
     }
 
-    record LocationQuantityMaps(Map<UUID, Long> onHand, Map<UUID, Long> allocated) {}
+    record LocationQuantityMaps(Map<UUID, BigDecimal> onHand, Map<UUID, BigDecimal> allocated) {}
 }

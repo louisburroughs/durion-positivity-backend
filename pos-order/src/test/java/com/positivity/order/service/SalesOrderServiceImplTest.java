@@ -298,7 +298,8 @@ class SalesOrderServiceImplTest {
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(expectedLine);
         when(pricingPort.quoteForSku(eq("ABC-123"), anyInt(), any(), any()))
                 .thenReturn(priced(new BigDecimal("10.5000")));
-        when(inventoryPort.checkAvailability(eq("ABC-123"), eq(2), any())).thenReturn(new InventoryResult(true, 100));
+        when(inventoryPort.checkAvailability(eq("ABC-123"), eq(BigDecimal.valueOf(2)), any()))
+                .thenReturn(new InventoryResult(true, BigDecimal.valueOf(100)));
 
         // when
         SalesOrderLineSummary result = salesOrderService.addItem(orderId, "ABC-123", 2, null, null);
@@ -345,7 +346,8 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(updatedOrder);
         when(pricingPort.quoteForSku(eq("ABC-123"), anyInt(), any(), any()))
                 .thenReturn(priced(new BigDecimal("10.5000")));
-        when(inventoryPort.checkAvailability(eq("ABC-123"), eq(2), any())).thenReturn(new InventoryResult(true, 100));
+        when(inventoryPort.checkAvailability(eq("ABC-123"), eq(BigDecimal.valueOf(2)), any()))
+                .thenReturn(new InventoryResult(true, BigDecimal.valueOf(100)));
 
         // when
         salesOrderService.addItem(orderId, "ABC-123", 2, null, null);
@@ -523,8 +525,8 @@ class SalesOrderServiceImplTest {
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(backorderLine);
         when(pricingPort.quoteForSku(eq("LOW-STOCK-SKU"), anyInt(), any(), any()))
                 .thenReturn(priced(new BigDecimal("10.5000")));
-        when(inventoryPort.checkAvailability(eq("LOW-STOCK-SKU"), eq(50), any()))
-                .thenReturn(new InventoryResult(false, 0));
+        when(inventoryPort.checkAvailability(eq("LOW-STOCK-SKU"), eq(BigDecimal.valueOf(50)), any()))
+                .thenReturn(new InventoryResult(false, BigDecimal.valueOf(0)));
 
         // when
         SalesOrderLineSummary result = salesOrderService.addItem(orderId, "LOW-STOCK-SKU", 50, null, null);
@@ -570,8 +572,8 @@ class SalesOrderServiceImplTest {
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(updatedOrder);
         when(pricingPort.quoteForSku(eq("LOW-STOCK-SKU"), anyInt(), any(), any()))
                 .thenReturn(priced(new BigDecimal("10.5000")));
-        when(inventoryPort.checkAvailability(eq("LOW-STOCK-SKU"), eq(50), any()))
-                .thenReturn(new InventoryResult(false, 0));
+        when(inventoryPort.checkAvailability(eq("LOW-STOCK-SKU"), eq(BigDecimal.valueOf(50)), any()))
+                .thenReturn(new InventoryResult(false, BigDecimal.valueOf(0)));
 
         // when
         salesOrderService.addItem(orderId, "LOW-STOCK-SKU", 50, null, null);
@@ -780,7 +782,8 @@ class SalesOrderServiceImplTest {
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(cachedPriceLine);
         when(pricingPort.quoteForSku(eq("ABC-123"), anyInt(), any(), any()))
                 .thenReturn(priced(new BigDecimal("10.5000")));
-        when(inventoryPort.checkAvailability(eq("ABC-123"), eq(1), any())).thenReturn(new InventoryResult(true, 100));
+        when(inventoryPort.checkAvailability(eq("ABC-123"), eq(BigDecimal.valueOf(1)), any()))
+                .thenReturn(new InventoryResult(true, BigDecimal.valueOf(100)));
 
         // when
         SalesOrderLineSummary result = salesOrderService.addItem(orderId, "ABC-123", 1, null, null);
@@ -825,7 +828,8 @@ class SalesOrderServiceImplTest {
                 .reasonCode("Manual entry")
                 .build();
         when(salesOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        when(inventoryPort.checkAvailability(eq("ABC-123"), eq(1), any())).thenReturn(new InventoryResult(true, 100));
+        when(inventoryPort.checkAvailability(eq("ABC-123"), eq(BigDecimal.valueOf(1)), any()))
+                .thenReturn(new InventoryResult(true, BigDecimal.valueOf(100)));
         when(salesOrderLineRepository.save(any(SalesOrderLine.class))).thenReturn(savedLine);
         when(salesOrderRepository.save(any(SalesOrder.class))).thenReturn(order);
 

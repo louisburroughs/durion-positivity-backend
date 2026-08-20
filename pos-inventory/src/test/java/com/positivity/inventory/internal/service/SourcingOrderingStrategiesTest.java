@@ -15,6 +15,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingCandidate;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingSelection;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -152,15 +153,15 @@ class SourcingOrderingStrategiesTest {
                 .thenReturn(Optional.of(InventoryStockSummary.builder()
                         .stockItemId(SKU)
                         .locationId(LOC_A)
-                        .onHand(9)
-                        .allocated(2)
+                        .onHand(new BigDecimal("9"))
+                        .allocated(new BigDecimal("2"))
                         .build()));
 
         List<SourcingCandidate> ordered = highestStock.order(selectionOf(
                 null,
                 new SourcingCandidate(LOC_A, null), // 9 - 2 = 7 available
-                new SourcingCandidate(LOC_B, 3L),
-                new SourcingCandidate(LOC_C, 7L))); // ties with LOC_A → id tie-break
+                new SourcingCandidate(LOC_B, new BigDecimal("3")),
+                new SourcingCandidate(LOC_C, new BigDecimal("7")))); // ties with LOC_A → id tie-break
 
         assertThat(locations(ordered)).containsExactly(LOC_A, LOC_C, LOC_B);
     }

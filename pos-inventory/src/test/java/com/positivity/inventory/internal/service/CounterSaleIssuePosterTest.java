@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,8 +38,8 @@ class CounterSaleIssuePosterTest {
         return InventoryLedgerEntry.builder()
                 .stockItemId("SKU-1")
                 .eventType(InventoryLedgerEventType.GOODS_ISSUE)
-                .changeInQuantity(-1)
-                .quantityAfter(0)
+                .changeInQuantity(new BigDecimal("-1"))
+                .quantityAfter(new BigDecimal("0"))
                 .sourceTransactionId(sourceTransactionId)
                 .build();
     }

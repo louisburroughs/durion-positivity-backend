@@ -5,6 +5,7 @@ import com.positivity.domainevents.inventory.BackorderResolvedV1;
 import com.positivity.inventory.internal.dto.backorder.BackorderResponse;
 import com.positivity.inventory.internal.entity.BackorderRecord;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
+import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.BackorderResolutionSource;
 import com.positivity.inventory.internal.enums.BackorderStatus;
@@ -17,6 +18,7 @@ import com.positivity.inventory.internal.repository.InventoryStockSummaryReposit
 import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.inventory.service.BackorderService;
 import com.positivity.security.common.SecurityContextHelper;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -87,7 +89,10 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
 
     @Override
     public @NonNull BackorderResponse createBackorder(
-            @NonNull UUID workorderLineId, @NonNull String sku, int quantityShort, @Nullable UUID locationId) {
+            @NonNull UUID workorderLineId,
+            @NonNull String sku,
+            @NonNull BigDecimal quantityShort,
+            @Nullable UUID locationId) {
         return createBackorder(
                 workorderLineId,
                 null,
@@ -102,7 +107,10 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
 
     @Override
     public @NonNull BackorderResponse createBackorderForSalesOrderLine(
-            @NonNull UUID salesOrderLineId, @NonNull String sku, int quantityShort, @Nullable UUID locationId) {
+            @NonNull UUID salesOrderLineId,
+            @NonNull String sku,
+            @NonNull BigDecimal quantityShort,
+            @Nullable UUID locationId) {
         return createBackorder(
                 null,
                 salesOrderLineId,
@@ -124,7 +132,7 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
             @Nullable UUID workorderLineId,
             @Nullable UUID salesOrderLineId,
             @NonNull String sku,
-            int quantityShort,
+            @NonNull BigDecimal quantityShort,
             @Nullable UUID locationId,
             Supplier<Optional<BackorderRecord>> findExistingOpen,
             String demandLineLabel,
@@ -132,7 +140,9 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
         if (sku.isBlank()) {
             throw new IllegalArgumentException("sku must not be blank");
         }
-        if (quantityShort <= 0) {
+        // Positivity survives the widening at every scale a decimal type makes expressible:
+        // 0.0000 is as much "no shortfall" as 0 was, and the DB CHECK says the same thing.
+        if (quantityShort == null || quantityShort.signum() <= 0) {
             throw new IllegalArgumentException("quantityShort must be positive");
         }
 
@@ -195,16 +205,16 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
                 .sorted(oldestPriorityFirst(reservations, now))
                 .toList();
 
-        long budget = availableToPromise(sku, locationId);
+        BigDecimal budget = availableToPromise(sku, locationId);
         for (BackorderRecord backorder : ordered) {
-            int shortage = backorder.getQuantityShort();
-            if (shortage > budget) {
+            BigDecimal shortage = Quantities.nz(backorder.getQuantityShort());
+            if (Quantities.gt(shortage, budget)) {
                 // Partial availability: whole-backorder resolution only — leave larger shortages OPEN.
                 continue;
             }
             try {
                 resolve(backorder, reservations.get(backorder.getDemandLineId()), now);
-                budget -= shortage;
+                budget = budget.subtract(shortage);
             } catch (RuntimeException e) {
                 // Best-effort per candidate: one bad backorder must not roll back the inbound posting.
                 log.warn("Failed to auto-resolve backorder {}: {}", backorder.getBackorderId(), e.getMessage());
@@ -299,14 +309,12 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
     private InventoryLedgerEntry postNeutralEntry(
             InventoryLedgerEventType eventType,
             BackorderRecord backorder,
-            int quantityShort,
+            BigDecimal quantityShort,
             @Nullable UUID locationId,
             String actor) {
-        int onHand = locationId == null
-                ? 0
-                : Optional.ofNullable(
-                                ledgerRepository.calculateOnHandQuantityAtLocation(backorder.getSku(), locationId))
-                        .orElse(0);
+        BigDecimal onHand = locationId == null
+                ? BigDecimal.ZERO
+                : Quantities.nz(ledgerRepository.calculateOnHandQuantityAtLocation(backorder.getSku(), locationId));
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
                 .stockItemId(backorder.getSku())
                 .eventType(eventType)
@@ -319,11 +327,12 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
         return ledgerPostingService.post(entry);
     }
 
-    private long availableToPromise(String sku, UUID locationId) {
+    private BigDecimal availableToPromise(String sku, UUID locationId) {
         return summaryRepository
                 .findByStockItemIdAndLocationId(sku, locationId)
-                .map(row -> row.getAtp())
-                .orElse(0L);
+                .map(InventoryStockSummary::getAtp)
+                .map(Quantities::nz)
+                .orElse(BigDecimal.ZERO);
     }
 
     private Map<UUID, ReservationEntity> loadBackingReservations(List<BackorderRecord> backorders) {

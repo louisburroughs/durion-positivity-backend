@@ -4,6 +4,7 @@ import com.positivity.domainevents.inventory.ReservationOutcomeV1;
 import com.positivity.inventory.internal.dto.backorder.BackorderResponse;
 import com.positivity.inventory.internal.dto.reservation.CreateReservationRequest;
 import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
+import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.ReservationStatus;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
@@ -11,6 +12,7 @@ import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.inventory.service.BackorderService;
 import com.positivity.inventory.service.ReservationRequestService;
 import com.positivity.inventory.service.ReservationService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
@@ -71,7 +73,7 @@ public class ReservationRequestHandler implements ReservationRequestService {
             @Nullable UUID workorderLineId,
             @Nullable UUID salesOrderLineId,
             @NonNull UUID stockItemId,
-            int requiredQuantity,
+            @NonNull BigDecimal requiredQuantity,
             @NonNull UUID locationId) {
         if ((workorderLineId == null) == (salesOrderLineId == null)) {
             throw new IllegalArgumentException(
@@ -81,10 +83,10 @@ public class ReservationRequestHandler implements ReservationRequestService {
         ReservationResponse reservation = reservationService.createOrUpdateReservation(
                 new CreateReservationRequest(workorderLineId, salesOrderLineId, stockItemId, requiredQuantity));
 
-        long atp = availableToPromise(stockItemId, locationId);
+        BigDecimal atp = availableToPromise(stockItemId, locationId);
         Instant now = Instant.now(clock);
 
-        if (atp >= requiredQuantity) {
+        if (Quantities.gte(atp, requiredQuantity)) {
             log.info(
                     "Reservation {} covered: demandLine={} sku={} qty={} atp={}",
                     reservation.getReservationId(),
@@ -104,7 +106,12 @@ public class ReservationRequestHandler implements ReservationRequestService {
             return;
         }
 
-        int quantityShort = (int) Math.min(requiredQuantity, requiredQuantity - atp);
+        // The shortfall, never more than the whole demand: a negative ATP means the site is
+        // already oversold, and backordering more than this line asked for would charge it with
+        // someone else's deficit. Decimal since ADR-0055 (#1414) — a shortfall on a divisible
+        // product is itself divisible, and the old (int) cast would have floored it toward zero,
+        // quietly backordering less than is actually missing.
+        BigDecimal quantityShort = Quantities.min(requiredQuantity, requiredQuantity.subtract(atp));
         markBackordered(reservation.getReservationId());
         BackorderResponse backorder = workorderLineId != null
                 ? backorderService.createBackorder(workorderLineId, stockItemId.toString(), quantityShort, locationId)
@@ -146,10 +153,11 @@ public class ReservationRequestHandler implements ReservationRequestService {
         }
     }
 
-    private long availableToPromise(UUID stockItemId, UUID locationId) {
+    private BigDecimal availableToPromise(UUID stockItemId, UUID locationId) {
         return summaryRepository
                 .findByStockItemIdAndLocationId(stockItemId.toString(), locationId)
-                .map(row -> row.getAtp())
-                .orElse(0L);
+                .map(InventoryStockSummary::getAtp)
+                .map(Quantities::nz)
+                .orElse(BigDecimal.ZERO);
     }
 }

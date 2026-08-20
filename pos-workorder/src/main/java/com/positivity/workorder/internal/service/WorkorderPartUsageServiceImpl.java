@@ -251,43 +251,19 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      * Asks pos-inventory to reserve what was just issued. The gate above decided what to tell the
      * technician from the replica; this asks the owner to decide from its own ledger, and the
      * outcome fact corrects the part if the two disagree.
+     *
+     * <p>The quantity passes through unchanged since ADR-0055 stage 2 (#1414): the reservation
+     * command and its outcome fact carry a {@code BigDecimal}, so there is no longer a seam to
+     * convert across. What guarantees the quantity is legitimate is the divisibility gate at
+     * estimate-item entry and part issue (#1413), not a conversion here — the product's declared
+     * {@code precision_scale} has already decided whether these decimals are allowed at all.
      */
     private void registerDemand(Workorder workorder, WorkorderPart part, BigDecimal quantity) {
         InventoryCommandPublisher publisher = inventoryCommandPublisher.getIfAvailable();
         if (publisher == null || workorder.getShopId() == null || part.getProductEntityId() == null) {
             return;
         }
-        publisher.requestReservation(
-                part.getId(), part.getProductEntityId(), reservableQuantity(quantity), workorder.getShopId());
-    }
-
-    /**
-     * The reservation command and its outcome fact are integer-only (ADR-0044, CAP #1315 Phase 1),
-     * and the quantity reaching here is already integral: the divisibility gate above rejects a
-     * fractional quantity for a product declaring scale 0, and no product declares anything else —
-     * {@code product_uom} is unpopulated platform-wide, so nothing can be divisible yet.
-     *
-     * <p>So this converts exactly and throws if it cannot. It replaces a {@code RoundingMode.CEILING}
-     * that turned an issue of {@code 0.5} into a reservation of {@code 1}, holding half a unit
-     * against demand nobody asked for. That rounding was the safe <em>direction</em> at a seam that
-     * should not have been crossed silently at all; with the quantity constrained at entry the seam
-     * is gone, and a fraction arriving here now means the gate was bypassed rather than that a
-     * rounding decision is needed.
-     *
-     * <p>Genuinely divisible stock gets a decimal reservation contract in #1414. Until then this
-     * throw is unreachable, and that is what makes it the right shape: it fails loudly if the
-     * premise stops holding instead of quietly reserving the wrong amount.
-     */
-    private static int reservableQuantity(BigDecimal quantity) {
-        try {
-            return quantity.intValueExact();
-        } catch (ArithmeticException e) {
-            throw new IllegalStateException(
-                    "Cannot reserve a fractional quantity " + quantity.toPlainString()
-                            + ": the reservation contract is integer-only and the divisibility gate should have"
-                            + " rejected this quantity at entry",
-                    e);
-        }
+        publisher.requestReservation(part.getId(), part.getProductEntityId(), quantity, workorder.getShopId());
     }
 
     /**

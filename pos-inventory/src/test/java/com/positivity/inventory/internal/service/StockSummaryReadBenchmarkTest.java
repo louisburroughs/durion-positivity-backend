@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.service.InventoryAvailabilityService;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -80,8 +81,8 @@ class StockSummaryReadBenchmarkTest {
                     .stockItemId(skus.get(random.nextInt(skuCount)).toString())
                     .locationId(locations.get(random.nextInt(locationCount)))
                     .eventType(issue ? InventoryLedgerEventType.GOODS_ISSUE : InventoryLedgerEventType.GOODS_RECEIPT)
-                    .changeInQuantity(issue ? -random.nextInt(3) : 1 + random.nextInt(10))
-                    .quantityAfter(0)
+                    .changeInQuantity(BigDecimal.valueOf(issue ? -random.nextInt(3) : 1 + random.nextInt(10)))
+                    .quantityAfter(new BigDecimal("0"))
                     .transactionUserId("benchmark")
                     .build());
             if (batch.size() == 1000) {

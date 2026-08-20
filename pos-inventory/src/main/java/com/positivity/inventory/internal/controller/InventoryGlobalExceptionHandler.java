@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.exception.CrossSiteTransferRequiresOrde
 import com.positivity.inventory.internal.exception.CycleCountConflictException;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
 import com.positivity.inventory.internal.exception.DuplicateAsnException;
+import com.positivity.inventory.internal.exception.FractionalQuantityNotAllowedException;
 import com.positivity.inventory.internal.exception.InsufficientAtpException;
 import com.positivity.inventory.internal.exception.InsufficientPermissionException;
 import com.positivity.inventory.internal.exception.InsufficientStockException;
@@ -305,6 +306,15 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(PartMatchPermissionException.class)
     public ResponseEntity<ApiError> handlePartMatchPermission(PartMatchPermissionException ex) {
         return build(HttpStatus.FORBIDDEN, "PART_MATCH_PERMISSION_REQUIRED", ex.getMessage());
+    }
+
+    @ExceptionHandler(FractionalQuantityNotAllowedException.class)
+    public ResponseEntity<ApiError> handleFractionalQuantityNotAllowed(FractionalQuantityNotAllowedException ex) {
+        // ADR-0055 (#1414): the posted quantity carries more decimals than the product's catalog
+        // declaration allows. 422, not 400 — the request is well-formed and passes its bounds;
+        // what it violates can only be known after looking the product up. Same code as
+        // pos-workorder's demand-side gate (#1413), because it is the same invariant.
+        return build(HttpStatus.valueOf(422), FractionalQuantityNotAllowedException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(UomConversionUndefinedException.class)

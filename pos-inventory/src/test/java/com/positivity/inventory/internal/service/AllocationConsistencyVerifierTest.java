@@ -15,6 +15,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -77,27 +78,31 @@ class AllocationConsistencyVerifierTest {
         ReservationEntity reservation = reservationRepository.save(ReservationEntity.builder()
                 .workorderLineId(UUID.randomUUID())
                 .stockItemId(stockItemId)
-                .requiredQuantity(quantity)
-                .allocatedQuantity(quantity)
+                .requiredQuantity(BigDecimal.valueOf(quantity))
+                .allocatedQuantity(BigDecimal.valueOf(quantity))
                 .status(ReservationStatus.PENDING)
                 .build());
         return allocationRepository.save(AllocationEntity.builder()
                 .reservation(reservation)
                 .locationId(locationId)
-                .allocatedQuantity(quantity)
+                .allocatedQuantity(BigDecimal.valueOf(quantity))
                 .allocationState(state)
                 .status(status)
                 .build());
     }
 
     private void postAllocationEvent(
-            InventoryLedgerEventType type, UUID stockItemId, UUID locationId, String sourceTransactionId, int qty) {
+            InventoryLedgerEventType type,
+            UUID stockItemId,
+            UUID locationId,
+            String sourceTransactionId,
+            BigDecimal qty) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(stockItemId.toString())
                 .locationId(locationId)
                 .eventType(type)
                 .changeInQuantity(qty)
-                .quantityAfter(0)
+                .quantityAfter(new BigDecimal("0"))
                 .transactionUserId("consistency-test")
                 .sourceTransactionId(sourceTransactionId)
                 .build());
@@ -121,7 +126,7 @@ class AllocationConsistencyVerifierTest {
                 sku,
                 location,
                 outstanding.getAllocationId().toString(),
-                5);
+                new BigDecimal("5"));
 
         // Partially consumed located HARD allocation: 0 < released < created.
         AllocationEntity partial =
@@ -131,13 +136,13 @@ class AllocationConsistencyVerifierTest {
                 sku,
                 location,
                 partial.getAllocationId().toString(),
-                6);
+                new BigDecimal("6"));
         postAllocationEvent(
                 InventoryLedgerEventType.ALLOCATION_RELEASED,
                 sku,
                 location,
                 partial.getAllocationId().toString(),
-                2);
+                new BigDecimal("2"));
 
         // Fully released located HARD allocation: released == created.
         AllocationEntity released =
@@ -147,13 +152,13 @@ class AllocationConsistencyVerifierTest {
                 sku,
                 location,
                 released.getAllocationId().toString(),
-                3);
+                new BigDecimal("3"));
         postAllocationEvent(
                 InventoryLedgerEventType.ALLOCATION_RELEASED,
                 sku,
                 location,
                 released.getAllocationId().toString(),
-                3);
+                new BigDecimal("3"));
 
         double before = violationCount();
 
@@ -180,7 +185,7 @@ class AllocationConsistencyVerifierTest {
                 allocationRepository.findById(broken.getAllocationId()).orElseThrow();
         assertThat(untouched.getAllocationState()).isEqualTo(AllocationState.HARD);
         assertThat(untouched.getStatus()).isEqualTo(AllocationStatus.ALLOCATED);
-        assertThat(untouched.getAllocatedQuantity()).isEqualTo(5);
+        assertThat(untouched.getAllocatedQuantity()).isEqualByComparingTo("5");
         assertThat(ledgerRepository.count()).isEqualTo(ledgerRowsBefore);
         assertThat(summaryRepository.findAll()).isEmpty();
 
@@ -198,13 +203,13 @@ class AllocationConsistencyVerifierTest {
                 sku,
                 location,
                 stale.getAllocationId().toString(),
-                5);
+                new BigDecimal("5"));
         postAllocationEvent(
                 InventoryLedgerEventType.ALLOCATION_RELEASED,
                 sku,
                 location,
                 stale.getAllocationId().toString(),
-                5);
+                new BigDecimal("5"));
 
         // Ledger outstanding is 0 and summary agrees, so this is purely an
         // invariant-A (status lag) finding.
@@ -223,7 +228,7 @@ class AllocationConsistencyVerifierTest {
                 sku,
                 location,
                 UUID.randomUUID().toString(),
-                3);
+                new BigDecimal("3"));
 
         assertThat(verifier.verify()).isEqualTo(1);
     }
@@ -241,7 +246,7 @@ class AllocationConsistencyVerifierTest {
                 sku,
                 location,
                 allocation.getAllocationId().toString(),
-                5);
+                new BigDecimal("5"));
 
         assertThat(verifier.verify()).isZero();
 
@@ -249,7 +254,7 @@ class AllocationConsistencyVerifierTest {
         InventoryStockSummary row = summaryRepository
                 .findByStockItemIdAndLocationId(sku.toString(), location)
                 .orElseThrow();
-        row.setAllocated(999);
+        row.setAllocated(new BigDecimal("999"));
         summaryRepository.save(row);
 
         double before = violationCount();
@@ -261,6 +266,6 @@ class AllocationConsistencyVerifierTest {
                         .findByStockItemIdAndLocationId(sku.toString(), location)
                         .orElseThrow()
                         .getAllocated())
-                .isEqualTo(999);
+                .isEqualByComparingTo("999");
     }
 }

@@ -25,6 +25,7 @@ import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingCandidate;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingDecision;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingSelection;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -110,8 +111,8 @@ class ConsumptionSourcingOrderingTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000009"))
                 .workorderLineId(WO_LINE_ID)
                 .stockItemId(STOCK_ITEM_ID)
-                .requiredQuantity(5)
-                .allocatedQuantity(5)
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("5"))
                 .status(ReservationStatus.FULFILLED)
                 .build();
 
@@ -131,10 +132,10 @@ class ConsumptionSourcingOrderingTest {
                         allocation(ALLOC_NEW, LOC_NEW, Instant.parse("2026-06-02T00:00:00Z")),
                         allocation(ALLOC_OLD, LOC_OLD, Instant.parse("2026-06-01T00:00:00Z"))));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantity(STOCK_ITEM_ID))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
         when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
                         any(), any(InventoryLedgerEventType.class)))
-                .thenReturn(0);
+                .thenReturn(new BigDecimal("0"));
         when(ledgerPostingService.postAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -143,7 +144,7 @@ class ConsumptionSourcingOrderingTest {
                 .allocationId(allocationId)
                 .reservation(reservation)
                 .locationId(locationId)
-                .allocatedQuantity(3)
+                .allocatedQuantity(new BigDecimal("3"))
                 .allocationState(AllocationState.HARD)
                 .status(AllocationStatus.ALLOCATED)
                 .createdAt(createdAt)

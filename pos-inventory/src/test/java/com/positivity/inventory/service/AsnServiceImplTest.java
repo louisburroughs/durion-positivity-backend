@@ -112,7 +112,11 @@ class AsnServiceImplTest {
                         org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
                 // Lot gate answers "untracked" for every SKU in these unit tests (E1 #1038):
                 // a mock resolveReceiptLot returns null by default.
-                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryLotCaptureService.class));
+                org.mockito.Mockito.mock(com.positivity.inventory.internal.service.InventoryLotCaptureService.class),
+                // The guard reads the product's declared precision_scale; a mocked conversion
+                // service declares none, which is the whole-units default every SKU has today.
+                new com.positivity.inventory.internal.service.QuantityScaleGuard(org.mockito.Mockito.mock(
+                        com.positivity.inventory.internal.service.UomConversionService.class)));
         authenticateAs("asn-test-user");
     }
 

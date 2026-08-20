@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.exception;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
@@ -14,14 +15,15 @@ public class LocationAtCapacityException extends PutawayValidationException {
     public static final String ERROR_CODE = "LOCATION_AT_CAPACITY";
 
     private final UUID locationId;
-    private final int currentCapacity;
-    private final int maxCapacity;
+    private final transient BigDecimal currentCapacity;
+    private final transient BigDecimal maxCapacity;
 
-    public LocationAtCapacityException(UUID locationId, int currentCapacity, int maxCapacity) {
+    public LocationAtCapacityException(UUID locationId, BigDecimal currentCapacity, BigDecimal maxCapacity) {
         super(
                 ERROR_CODE,
                 String.format(
-                        "Location %s is at full capacity (%d/%d units)", locationId, currentCapacity, maxCapacity));
+                        "Location %s is at full capacity (%s/%s units)",
+                        locationId, currentCapacity.toPlainString(), maxCapacity.toPlainString()));
         this.locationId = locationId;
         this.currentCapacity = currentCapacity;
         this.maxCapacity = maxCapacity;
@@ -31,11 +33,11 @@ public class LocationAtCapacityException extends PutawayValidationException {
         return locationId;
     }
 
-    public int getCurrentCapacity() {
+    public BigDecimal getCurrentCapacity() {
         return currentCapacity;
     }
 
-    public int getMaxCapacity() {
+    public BigDecimal getMaxCapacity() {
         return maxCapacity;
     }
 }

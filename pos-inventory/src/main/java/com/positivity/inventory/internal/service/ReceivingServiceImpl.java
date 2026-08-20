@@ -68,6 +68,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     private final WorkorderValidationService workorderValidationService;
     private final DocumentQuantityConverter documentQuantityConverter;
     private final InventoryLotCaptureService lotCaptureService;
+    private final QuantityScaleGuard quantityScaleGuard;
 
     @Value("${pos.inventory.receiving.source-document-service:}")
     private String configuredSourceDocumentService;
@@ -251,7 +252,7 @@ public class ReceivingServiceImpl implements ReceivingService {
         validatePartMatchOrOverride(
                 line, actorUserId, request.getWorkorderLineId(), workorderValidation.demandedProductId());
 
-        int quantityDelta = toWholeLedgerQuantity(request.getQuantity(), "quantity");
+        BigDecimal quantityDelta = toLedgerQuantity(line.getProductId(), request.getQuantity(), "quantity");
         BigDecimal existingReceivedQuantity =
                 line.getReceivedQuantity() != null ? line.getReceivedQuantity() : BigDecimal.ZERO;
         BigDecimal expectedQuantity = line.getExpectedQuantity() != null ? line.getExpectedQuantity() : BigDecimal.ZERO;
@@ -269,7 +270,8 @@ public class ReceivingServiceImpl implements ReceivingService {
         }
 
         UUID crossDockLocationId = resolveCrossDockLocationId();
-        int receiptQuantityAfter = calculateQuantityAfter(line.getProductId(), crossDockLocationId, quantityDelta);
+        BigDecimal receiptQuantityAfter =
+                calculateQuantityAfter(line.getProductId(), crossDockLocationId, quantityDelta);
 
         // odoo-parity E2 (#1042): cross-dock is lot-gated like any other receipt of a
         // LOT-tracked product (E1 deferred this because only the receipt half could have been
@@ -301,14 +303,15 @@ public class ReceivingServiceImpl implements ReceivingService {
 
         InventoryLedgerEntry savedReceiptEntry = ledgerPostingService.post(receiptEntry);
         inventoryFactPublisher.markEntry(savedReceiptEntry);
-        int issueQuantityAfter = calculateQuantityAfter(line.getProductId(), crossDockLocationId, -quantityDelta);
+        BigDecimal issueQuantityAfter =
+                calculateQuantityAfter(line.getProductId(), crossDockLocationId, quantityDelta.negate());
 
         InventoryLedgerEntry issueEntry = InventoryLedgerEntry.builder()
                 .stockItemId(line.getProductId())
                 .locationId(crossDockLocationId)
                 .fromLocationId(crossDockLocationId)
                 .eventType(InventoryLedgerEventType.GOODS_ISSUE)
-                .changeInQuantity(-quantityDelta)
+                .changeInQuantity(quantityDelta.negate())
                 .quantityAfter(issueQuantityAfter)
                 .lotId(lotId)
                 .transactionUserId(actorUserId)
@@ -384,7 +387,7 @@ public class ReceivingServiceImpl implements ReceivingService {
             UUID lotId,
             java.util.List<String> serialNumbers,
             String actorUserId) {
-        int quantityDelta = toWholeLedgerQuantity(quantity, "receivedQuantity");
+        BigDecimal quantityDelta = toLedgerQuantity(productId, quantity, "receivedQuantity");
         UUID stagingLocationId = resolveStagingLocationId();
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
                 .stockItemId(productId)
@@ -421,15 +424,25 @@ public class ReceivingServiceImpl implements ReceivingService {
         }
     }
 
-    private int toWholeLedgerQuantity(BigDecimal quantity, String fieldName) {
+    /**
+     * The base quantity a receipt may post, checked against the product's declared divisibility
+     * (ADR-0055, #1414).
+     *
+     * <p>This replaces an {@code intValueExact()} that refused every fraction for every product.
+     * That refusal was right for the whole catalog as seeded and would have been wrong for the
+     * first product to declare {@code precision_scale > 0} — the conversion subsystem already
+     * produces fractional base quantities for such a product (its scale-2 fixture asserts
+     * {@code 1 BAG -> 1.01 LB}), and the ledger would have refused to hold what the conversion
+     * computed. The guard is still fail-closed; what changed is that the rule is read from the
+     * catalog rather than hardcoded, so a product declaring nothing is refused a fraction exactly
+     * as before.
+     */
+    private BigDecimal toLedgerQuantity(String stockItemId, BigDecimal quantity, String fieldName) {
         if (quantity == null) {
             throw new IllegalArgumentException(fieldName + " is required");
         }
-        try {
-            return quantity.intValueExact();
-        } catch (ArithmeticException ex) {
-            throw new IllegalArgumentException(fieldName + " must be a whole number within 32-bit integer range", ex);
-        }
+        return quantityScaleGuard.requirePostable(
+                parseProductId(stockItemId), String.valueOf(stockItemId), fieldName, quantity);
     }
 
     /**
@@ -448,11 +461,10 @@ public class ReceivingServiceImpl implements ReceivingService {
         }
     }
 
-    private int calculateQuantityAfter(String stockItemId, UUID locationId, int quantityDelta) {
-        Integer currentOnHand =
+    private BigDecimal calculateQuantityAfter(String stockItemId, UUID locationId, BigDecimal quantityDelta) {
+        BigDecimal currentOnHand =
                 inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(stockItemId, locationId);
-        int onHand = currentOnHand != null ? currentOnHand : 0;
-        return onHand + quantityDelta;
+        return Quantities.nz(currentOnHand).add(quantityDelta);
     }
 
     private UUID resolveStagingLocationId() {

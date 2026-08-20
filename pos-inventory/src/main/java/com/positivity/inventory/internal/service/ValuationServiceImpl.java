@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.service;
 import com.positivity.inventory.internal.dto.valuation.ValuationReportResponse;
 import com.positivity.inventory.internal.dto.valuation.ValuationRow;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
+import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.entity.SkuCostState;
 import com.positivity.inventory.internal.enums.CostingMethod;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
@@ -132,47 +133,48 @@ public class ValuationServiceImpl implements ValuationService {
 
     private List<SkuQty> currentOnHands(@Nullable UUID locationId, @Nullable String sku) {
         if (sku != null && !sku.isBlank()) {
-            long onHand = locationId == null
-                    ? stockSummaryRepository.sumOnHandForSku(sku)
+            BigDecimal onHand = locationId == null
+                    ? Quantities.nz(stockSummaryRepository.sumOnHandForSku(sku))
                     : stockSummaryRepository
                             .findByStockItemIdAndLocationId(sku, locationId)
-                            .map(s -> s.getOnHand())
-                            .orElse(0L);
-            return onHand == 0L ? List.of() : List.of(new SkuQty(sku, onHand));
+                            .map(InventoryStockSummary::getOnHand)
+                            .map(Quantities::nz)
+                            .orElse(BigDecimal.ZERO);
+            return Quantities.isZero(onHand) ? List.of() : List.of(new SkuQty(sku, onHand));
         }
         List<InventoryStockSummaryRepository.SkuOnHand> rows = locationId == null
                 ? stockSummaryRepository.sumOnHandBySku()
                 : stockSummaryRepository.sumOnHandBySkuAtLocation(locationId);
         return rows.stream()
-                .map(r -> new SkuQty(r.getStockItemId(), r.getOnHand()))
+                .map(r -> new SkuQty(r.getStockItemId(), Quantities.nz(r.getOnHand())))
                 .toList();
     }
 
     private List<SkuQty> asOfOnHands(
             @Nullable UUID locationId, @Nullable String sku, Set<InventoryLedgerEventType> onHandTypes, Instant asOf) {
         if (sku != null && !sku.isBlank()) {
-            Integer onHand = locationId == null
+            BigDecimal onHand = locationId == null
                     ? sumChangeForSkuAsOf(sku, onHandTypes, asOf)
                     : ledgerRepository.calculateOnHandForStockItemAtLocationAsOf(sku, locationId, onHandTypes, asOf);
-            long value = onHand == null ? 0L : onHand.longValue();
-            return value == 0L ? List.of() : List.of(new SkuQty(sku, value));
+            BigDecimal value = Quantities.nz(onHand);
+            return Quantities.isZero(value) ? List.of() : List.of(new SkuQty(sku, value));
         }
         List<InventoryLedgerEntryRepository.LocationOnHand> rows = locationId == null
                 ? ledgerRepository.sumOnHandBySkuAsOf(onHandTypes, asOf)
                 : ledgerRepository.findPositiveOnHandByLocationAsOf(locationId, onHandTypes, asOf);
         return rows.stream()
-                .map(r -> new SkuQty(r.getStockItemId(), r.getOnHandQuantity()))
+                .map(r -> new SkuQty(r.getStockItemId(), Quantities.nz(r.getOnHandQuantity())))
                 .toList();
     }
 
-    private @Nullable Integer sumChangeForSkuAsOf(String sku, Set<InventoryLedgerEventType> onHandTypes, Instant asOf) {
+    private BigDecimal sumChangeForSkuAsOf(String sku, Set<InventoryLedgerEventType> onHandTypes, Instant asOf) {
         // Reuse the ordered replay stream to derive on-hand for a single SKU across all sites.
-        int total = 0;
+        BigDecimal total = BigDecimal.ZERO;
         for (InventoryLedgerEntry entry :
                 ledgerRepository
                         .findByStockItemIdAndEventTypeInAndTimestampLessThanEqualOrderByTimestampAscLedgerEntryIdAsc(
                                 sku, onHandTypes, asOf)) {
-            total += entry.getChangeInQuantity() == null ? 0 : entry.getChangeInQuantity();
+            total = total.add(Quantities.nz(entry.getChangeInQuantity()));
         }
         return total;
     }
@@ -189,9 +191,9 @@ public class ValuationServiceImpl implements ValuationService {
     private @Nullable BigDecimal unitCostAsOf(
             String sku, CostingMethod method, @Nullable BigDecimal standardCost, List<InventoryLedgerEntry> entries) {
         CostingStrategy strategy = strategy(method);
-        CostingStrategy.CostState state = new CostingStrategy.CostState(null, 0L, standardCost);
+        CostingStrategy.CostState state = new CostingStrategy.CostState(null, BigDecimal.ZERO, standardCost);
         for (InventoryLedgerEntry entry : entries) {
-            int change = entry.getChangeInQuantity() == null ? 0 : entry.getChangeInQuantity();
+            BigDecimal change = Quantities.nz(entry.getChangeInQuantity());
             CostingStrategy.CostingInput input =
                     new CostingStrategy.CostingInput(sku, entry.getEventType(), change, entry.getUnitCost(), state);
             state = strategy.cost(input).state();
@@ -265,11 +267,12 @@ public class ValuationServiceImpl implements ValuationService {
 
     // ─── Assembly ────────────────────────────────────────────────────────────
 
-    private static ValuationRow buildRow(String sku, long onHand, CostingMethod method, @Nullable BigDecimal unitCost) {
+    private static ValuationRow buildRow(
+            String sku, BigDecimal onHand, CostingMethod method, @Nullable BigDecimal unitCost) {
         boolean uncosted = unitCost == null;
         BigDecimal value = uncosted
                 ? BigDecimal.ZERO.setScale(VALUE_SCALE, RoundingMode.HALF_UP)
-                : unitCost.multiply(BigDecimal.valueOf(onHand)).setScale(VALUE_SCALE, RoundingMode.HALF_UP);
+                : unitCost.multiply(onHand).setScale(VALUE_SCALE, RoundingMode.HALF_UP);
         return ValuationRow.builder()
                 .stockItemId(sku)
                 .onHand(onHand)
@@ -294,5 +297,5 @@ public class ValuationServiceImpl implements ValuationService {
                 .build();
     }
 
-    private record SkuQty(String stockItemId, long onHand) {}
+    private record SkuQty(String stockItemId, BigDecimal onHand) {}
 }

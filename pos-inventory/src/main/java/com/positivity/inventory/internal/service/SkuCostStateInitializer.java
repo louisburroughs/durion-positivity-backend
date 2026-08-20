@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.entity.SkuCostState;
 import com.positivity.inventory.internal.repository.SkuCostStateRepository;
+import java.math.BigDecimal;
 import org.jspecify.annotations.NonNull;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
@@ -44,7 +45,7 @@ public class SkuCostStateInitializer {
             costStateRepository.saveAndFlush(SkuCostState.builder()
                     .stockItemId(stockItemId)
                     .avgCost(null)
-                    .onHandQty(0L)
+                    .onHandQty(BigDecimal.ZERO)
                     .standardCost(null)
                     .build());
         } catch (DataIntegrityViolationException raced) {

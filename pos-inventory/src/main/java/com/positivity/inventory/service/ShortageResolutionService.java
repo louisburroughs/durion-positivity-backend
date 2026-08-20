@@ -3,6 +3,7 @@ package com.positivity.inventory.service;
 import com.positivity.inventory.internal.dto.ShortageOptionDto;
 import com.positivity.inventory.internal.dto.ShortageResolutionResultDto;
 import com.positivity.inventory.internal.dto.ShortageResolveRequest;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -24,7 +25,8 @@ public interface ShortageResolutionService {
      * @param allocationId the allocation experiencing the shortage
      * @param workorderLineId the workorder line whose demand is short (optional)
      * @param sku the SKU / stock-item identifier that is short
-     * @param shortQuantity the quantity that is short (positive)
+     * @param shortQuantity the quantity that is short (positive); decimal-capable per the product's
+     *     catalog divisibility declaration (ADR-0055, #1414)
      * @param locationId the site the demand is short at (optional)
      * @return the computed options
      */
@@ -33,7 +35,7 @@ public interface ShortageResolutionService {
             @NonNull UUID allocationId,
             @Nullable UUID workorderLineId,
             @NonNull String sku,
-            int shortQuantity,
+            @NonNull BigDecimal shortQuantity,
             @Nullable UUID locationId);
 
     /**

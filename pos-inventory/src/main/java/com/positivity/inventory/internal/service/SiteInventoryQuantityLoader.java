@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
@@ -40,5 +41,5 @@ public class SiteInventoryQuantityLoader {
         return new QuantitySnapshot(maps.onHand(), maps.allocated());
     }
 
-    public record QuantitySnapshot(Map<UUID, Long> onHand, Map<UUID, Long> allocated) {}
+    public record QuantitySnapshot(Map<UUID, BigDecimal> onHand, Map<UUID, BigDecimal> allocated) {}
 }

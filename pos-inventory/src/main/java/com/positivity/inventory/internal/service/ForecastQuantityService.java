@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -47,8 +48,17 @@ public interface ForecastQuantityService {
      */
     @NonNull
     ForecastQuantities forecast(
-            @NonNull String stockItemId, @Nullable UUID siteId, @Nullable Instant horizon, long onHand);
+            @NonNull String stockItemId, @Nullable UUID siteId, @Nullable Instant horizon, @NonNull BigDecimal onHand);
 
-    /** Computed forecast triple; quantities floor fractional supply DOWN (never over-promise). */
-    record ForecastQuantities(long incomingQty, long outgoingQty, long projectedAvailable) {}
+    /**
+     * Computed forecast triple.
+     *
+     * <p>Decimal since ADR-0055 (#1414). These derive from the same arithmetic as
+     * {@code onHand} — {@code projectedAvailable = onHand + incoming - outgoing} — so leaving them
+     * integral once on-hand is decimal would only relocate the truncation into the projection,
+     * where it would be harder to see. The former {@code DOWN} floor on incoming supply went with
+     * the widening: it existed to squeeze a fractional expected quantity into an integer field
+     * without over-promising, and there is no longer a field to squeeze it into.
+     */
+    record ForecastQuantities(BigDecimal incomingQty, BigDecimal outgoingQty, BigDecimal projectedAvailable) {}
 }

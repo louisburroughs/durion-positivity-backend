@@ -19,6 +19,7 @@ import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRep
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
 import com.positivity.inventory.internal.service.PutawayDestinationResolver.ResolvedDestination;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingCandidate;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -163,7 +164,7 @@ class PutawayDestinationResolverTest {
         when(proximitySourcingStrategy.order(any()))
                 .thenReturn(List.of(candidate(NEAR), candidate(FAR), candidate(ANCHOR)));
         when(putawayValidationService.validateLocationCapacity(NEAR, QTY))
-                .thenThrow(new LocationAtCapacityException(NEAR, 10, 10));
+                .thenThrow(new LocationAtCapacityException(NEAR, new BigDecimal("10"), new BigDecimal("10")));
         when(putawayValidationService.validateLocationCapacity(FAR, QTY)).thenReturn(ValidationResult.success());
 
         ResolvedDestination result =
@@ -181,7 +182,7 @@ class PutawayDestinationResolverTest {
         when(proximitySourcingStrategy.order(any()))
                 .thenReturn(List.of(candidate(NEAR), candidate(FAR), candidate(ANCHOR)));
         when(putawayValidationService.validateLocationCapacity(any(UUID.class), eq(QTY)))
-                .thenThrow(new LocationAtCapacityException(NEAR, 10, 10));
+                .thenThrow(new LocationAtCapacityException(NEAR, new BigDecimal("10"), new BigDecimal("10")));
 
         ResolvedDestination result =
                 resolver().resolve(rule(PutawayDestinationStrategy.CLOSEST_AVAILABLE), PRODUCT, QTY);

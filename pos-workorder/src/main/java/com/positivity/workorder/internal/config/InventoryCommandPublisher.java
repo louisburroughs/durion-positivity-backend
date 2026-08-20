@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.config;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
@@ -97,9 +98,13 @@ public class InventoryCommandPublisher {
      * command against the same reservation.
      */
     public void requestReservation(
-            @NonNull UUID workorderLineId, @NonNull UUID stockItemId, int requiredQuantity, @NonNull UUID locationId) {
+            @NonNull UUID workorderLineId,
+            @NonNull UUID stockItemId,
+            @NonNull BigDecimal requiredQuantity,
+            @NonNull UUID locationId) {
         UUID commandId = deterministicCommandId(
-                RESERVATION_REQUEST_COMMAND_TYPE, workorderLineId + ":" + stockItemId + ":" + requiredQuantity);
+                RESERVATION_REQUEST_COMMAND_TYPE,
+                workorderLineId + ":" + stockItemId + ":" + normalizedQuantityKey(requiredQuantity));
         ReservationRequestPayload payload =
                 new ReservationRequestPayload(workorderLineId, stockItemId, requiredQuantity, locationId);
         send(RESERVATION_REQUEST_COMMAND_TYPE, commandId, workorderLineId.toString(), payload);
@@ -116,6 +121,18 @@ public class InventoryCommandPublisher {
         } catch (Exception e) {
             throw new IllegalStateException("Unable to publish " + commandType + " command " + commandId, e);
         }
+    }
+
+    /**
+     * The quantity as it appears in the idempotency key.
+     *
+     * <p>{@code stripTrailingZeros} first: since ADR-0055 (#1414) the quantity is a
+     * {@link BigDecimal}, and {@code 2} and {@code 2.00} are the same demand spelled two ways. A
+     * client retry that serialises the number differently must still collapse to the same command
+     * under pos-inventory's dedupe, which keying on the raw {@code toString} would not do.
+     */
+    private static String normalizedQuantityKey(@NonNull BigDecimal quantity) {
+        return quantity.stripTrailingZeros().toPlainString();
     }
 
     private static UUID deterministicCommandId(@NonNull String commandType, @NonNull String idempotencyKey) {
@@ -146,7 +163,7 @@ public class InventoryCommandPublisher {
     record ReservationRequestPayload(
             @NonNull UUID workorderLineId,
             @NonNull UUID stockItemId,
-            int requiredQuantity,
+            @NonNull BigDecimal requiredQuantity,
             @NonNull UUID locationId) {}
 
     record ConsumePayload(

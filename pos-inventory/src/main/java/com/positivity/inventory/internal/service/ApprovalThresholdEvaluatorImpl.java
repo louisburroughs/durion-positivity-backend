@@ -46,7 +46,7 @@ public class ApprovalThresholdEvaluatorImpl implements ApprovalThresholdEvaluato
         }
 
         // Calculate variance metrics
-        int absUnitVariance = Math.abs(adjustment.getQuantityChange());
+        BigDecimal absUnitVariance = adjustment.getQuantityChange().abs();
         BigDecimal absValueVariance = adjustment.getVarianceValue();
         BigDecimal percentVariance = adjustment.getVariancePercentage();
 
@@ -134,11 +134,11 @@ public class ApprovalThresholdEvaluatorImpl implements ApprovalThresholdEvaluato
      * Checks if variance exceeds ANY threshold in the configuration (OR logic).
      */
     private boolean exceedsThreshold(
-            int absUnitVariance,
+            BigDecimal absUnitVariance,
             BigDecimal absValueVariance,
             BigDecimal percentVariance,
             ApprovalThresholdConfig config) {
-        boolean exceedsUnit = absUnitVariance >= config.getUnitVarianceThreshold();
+        boolean exceedsUnit = absUnitVariance.compareTo(BigDecimal.valueOf(config.getUnitVarianceThreshold())) >= 0;
         boolean exceedsValue = absValueVariance.compareTo(config.getValueVarianceThreshold()) >= 0;
         boolean exceedsPercent = percentVariance.compareTo(config.getPercentageVarianceThreshold()) >= 0;
 

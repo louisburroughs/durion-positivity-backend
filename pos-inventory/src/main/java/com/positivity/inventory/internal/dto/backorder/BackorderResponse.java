@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.dto.backorder;
 import com.positivity.inventory.internal.enums.BackorderResolutionSource;
 import com.positivity.inventory.internal.enums.BackorderStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Builder;
@@ -36,7 +37,7 @@ public class BackorderResponse {
     private UUID locationId;
 
     @Schema(description = "Quantity that could not be fulfilled (positive)")
-    private Integer quantityShort;
+    private BigDecimal quantityShort;
 
     @Schema(description = "Lifecycle status: OPEN, RESOLVED, or CANCELLED")
     private BackorderStatus status;

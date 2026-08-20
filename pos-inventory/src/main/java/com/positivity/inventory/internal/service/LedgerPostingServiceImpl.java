@@ -11,6 +11,7 @@ import com.positivity.inventory.internal.exception.UomConversionUndefinedExcepti
 import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -220,10 +221,10 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         Set<SummaryKey> inboundKeys = new LinkedHashSet<>();
         for (InventoryLedgerEntry entry : entries) {
             InventoryLedgerEventType eventType = entry.getEventType();
-            int change = entry.getChangeInQuantity() == null ? 0 : entry.getChangeInQuantity();
+            BigDecimal change = Quantities.nz(entry.getChangeInQuantity());
             if (eventType != null
                     && eventType.affectsOnHand()
-                    && change > 0
+                    && Quantities.isPositive(change)
                     && entry.getStockItemId() != null
                     && entry.getLocationId() != null) {
                 inboundKeys.add(new SummaryKey(entry.getStockItemId(), entry.getLocationId(), null));
@@ -299,7 +300,7 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
             List<InventoryLedgerEntry> entries,
             Map<SummaryKey, InventoryStockSummary> lockedRows,
             boolean negativeStockOverride) {
-        Map<SummaryKey, Long> projectedOnHand = new HashMap<>();
+        Map<SummaryKey, BigDecimal> projectedOnHand = new HashMap<>();
         for (InventoryLedgerEntry entry : entries) {
             InventoryLedgerEventType eventType = entry.getEventType();
             if (eventType == null || !eventType.affectsOnHand()) {
@@ -308,14 +309,14 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
             // The matrix evaluates the lot-agnostic key only; the per-lot floor is a separate,
             // absolute check (enforcePerLotFloor — odoo-parity E2, #1042).
             SummaryKey key = new SummaryKey(entry.getStockItemId(), entry.getLocationId(), null);
-            long projected = projectedOnHand.computeIfAbsent(
+            BigDecimal projected = projectedOnHand.computeIfAbsent(
                     key,
-                    missing -> Objects.requireNonNull(
+                    missing -> Quantities.nz(Objects.requireNonNull(
                                     lockedRows.get(missing), "summary row must be locked for on-hand entry " + missing)
-                            .getOnHand());
-            projected += entry.getChangeInQuantity() == null ? 0 : entry.getChangeInQuantity();
+                            .getOnHand()));
+            projected = projected.add(Quantities.nz(entry.getChangeInQuantity()));
             projectedOnHand.put(key, projected);
-            if (projected < 0) {
+            if (Quantities.isNegative(projected)) {
                 rejectNegativeProjection(eventType, entry, projected, negativeStockOverride);
             }
         }
@@ -336,21 +337,21 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
      */
     private void enforcePerLotFloor(
             List<InventoryLedgerEntry> entries, Map<SummaryKey, InventoryStockSummary> lockedRows) {
-        Map<SummaryKey, Long> projectedOnHand = new HashMap<>();
+        Map<SummaryKey, BigDecimal> projectedOnHand = new HashMap<>();
         for (InventoryLedgerEntry entry : entries) {
             InventoryLedgerEventType eventType = entry.getEventType();
             if (entry.getLotId() == null || eventType == null || !eventType.affectsOnHand()) {
                 continue;
             }
             SummaryKey key = new SummaryKey(entry.getStockItemId(), entry.getLocationId(), entry.getLotId());
-            long projected = projectedOnHand.computeIfAbsent(
+            BigDecimal projected = projectedOnHand.computeIfAbsent(
                     key,
-                    missing -> Objects.requireNonNull(
+                    missing -> Quantities.nz(Objects.requireNonNull(
                                     lockedRows.get(missing), "per-lot summary row must be locked for entry " + missing)
-                            .getOnHand());
-            projected += entry.getChangeInQuantity() == null ? 0 : entry.getChangeInQuantity();
+                            .getOnHand()));
+            projected = projected.add(Quantities.nz(entry.getChangeInQuantity()));
             projectedOnHand.put(key, projected);
-            if (projected < 0) {
+            if (Quantities.isNegative(projected)) {
                 throw new LotInsufficientStockException(
                         entry.getStockItemId(), entry.getLotId(), entry.getLocationId(), projected);
             }
@@ -360,7 +361,7 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
     private void rejectNegativeProjection(
             InventoryLedgerEventType eventType,
             InventoryLedgerEntry entry,
-            long projectedOnHand,
+            BigDecimal projectedOnHand,
             boolean negativeStockOverride) {
         switch (NegativeStockPolicy.forEventType(eventType)) {
             case BLOCKED ->
@@ -395,26 +396,26 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
 
     private @Nullable SummaryDelta deltaFor(InventoryLedgerEntry entry) {
         InventoryLedgerEventType eventType = entry.getEventType();
-        int change = entry.getChangeInQuantity() == null ? 0 : entry.getChangeInQuantity();
-        long onHand = 0;
-        long allocated = 0;
-        long reserved = 0;
-        long inTransit = 0;
+        BigDecimal change = Quantities.nz(entry.getChangeInQuantity());
+        BigDecimal onHand = BigDecimal.ZERO;
+        BigDecimal allocated = BigDecimal.ZERO;
+        BigDecimal reserved = BigDecimal.ZERO;
+        BigDecimal inTransit = BigDecimal.ZERO;
         if (eventType != null && eventType.affectsOnHand()) {
             onHand = change;
             if (eventType == InventoryLedgerEventType.TRANSFER_IN) {
                 // Arrival at the destination key: goods leave transit as they land on-hand
                 // (odoo-parity C2, #1036). -change because arrivals carry a positive change.
-                inTransit = -change;
+                inTransit = change.negate();
             }
         } else if (eventType == InventoryLedgerEventType.ALLOCATION_CREATED) {
             allocated = change;
         } else if (eventType == InventoryLedgerEventType.ALLOCATION_RELEASED) {
-            allocated = -change;
+            allocated = change.negate();
         } else if (eventType == InventoryLedgerEventType.RESERVATION_CREATED) {
             reserved = change;
         } else if (eventType == InventoryLedgerEventType.RESERVATION_RELEASED) {
-            reserved = -change;
+            reserved = change.negate();
         } else {
             return null;
         }
@@ -433,16 +434,22 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
         if (entry.getEventType() != InventoryLedgerEventType.TRANSFER_OUT || entry.getToLocationId() == null) {
             return null;
         }
-        int change = entry.getChangeInQuantity() == null ? 0 : entry.getChangeInQuantity();
-        return new SummaryDelta(0, 0, 0, -change, entry.getLedgerEntryId(), entry.getTimestamp());
+        BigDecimal change = Quantities.nz(entry.getChangeInQuantity());
+        return new SummaryDelta(
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                change.negate(),
+                entry.getLedgerEntryId(),
+                entry.getTimestamp());
     }
 
     private void applyDelta(InventoryStockSummary row, SummaryDelta delta) {
-        row.setOnHand(row.getOnHand() + delta.onHand());
-        row.setAllocated(row.getAllocated() + delta.allocated());
-        row.setReserved(row.getReserved() + delta.reserved());
-        row.setAtp(row.getOnHand() - row.getAllocated());
-        row.setInTransitQty(row.getInTransitQty() + delta.inTransit());
+        row.setOnHand(Quantities.nz(row.getOnHand()).add(delta.onHand()));
+        row.setAllocated(Quantities.nz(row.getAllocated()).add(delta.allocated()));
+        row.setReserved(Quantities.nz(row.getReserved()).add(delta.reserved()));
+        row.setAtp(row.getOnHand().subtract(row.getAllocated()));
+        row.setInTransitQty(Quantities.nz(row.getInTransitQty()).add(delta.inTransit()));
         row.setLastLedgerEntryId(delta.lastLedgerEntryId());
         row.setLastEventAt(delta.lastEventAt());
         summaryRepository.save(row);
@@ -494,19 +501,19 @@ public class LedgerPostingServiceImpl implements LedgerPostingService {
     }
 
     private record SummaryDelta(
-            long onHand,
-            long allocated,
-            long reserved,
-            long inTransit,
+            BigDecimal onHand,
+            BigDecimal allocated,
+            BigDecimal reserved,
+            BigDecimal inTransit,
             @Nullable UUID lastLedgerEntryId,
             @Nullable Instant lastEventAt) {
 
         private SummaryDelta plus(SummaryDelta other) {
             return new SummaryDelta(
-                    onHand + other.onHand,
-                    allocated + other.allocated,
-                    reserved + other.reserved,
-                    inTransit + other.inTransit,
+                    onHand.add(other.onHand),
+                    allocated.add(other.allocated),
+                    reserved.add(other.reserved),
+                    inTransit.add(other.inTransit),
                     other.lastLedgerEntryId() != null ? other.lastLedgerEntryId() : lastLedgerEntryId,
                     other.lastEventAt() != null ? other.lastEventAt() : lastEventAt);
         }

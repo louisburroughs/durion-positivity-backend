@@ -49,36 +49,36 @@ public class AverageCostingStrategy implements CostingStrategy {
     @Override
     public @NonNull CostingResult cost(@NonNull CostingInput input) {
         BigDecimal oldAvg = input.state().avgCost();
-        long oldQty = input.state().onHandQty();
-        int change = input.changeInQuantity();
+        BigDecimal oldQty = Quantities.nz(input.state().onHandQty());
+        BigDecimal change = Quantities.nz(input.changeInQuantity());
         BigDecimal docCost = input.documentUnitCost();
         BigDecimal standardCost = input.state().standardCost();
 
-        if (change > 0 && docCost != null) {
+        if (Quantities.isPositive(change) && docCost != null) {
             // Receipt: recompute weighted average, stamp the received cost.
             BigDecimal newAvg;
-            if (oldQty <= 0 || oldAvg == null) {
+            if (!Quantities.isPositive(oldQty) || oldAvg == null) {
                 // Seed (first receipt) or reset from a non-positive on-hand: no meaningful
                 // prior value to blend — the receipt cost becomes the average.
                 newAvg = docCost;
             } else {
-                BigDecimal oldValue = oldAvg.multiply(BigDecimal.valueOf(oldQty));
-                BigDecimal rcvValue = docCost.multiply(BigDecimal.valueOf(change));
-                long newQty = oldQty + change;
-                newAvg = oldValue.add(rcvValue).divide(BigDecimal.valueOf(newQty), AVG_SCALE, RoundingMode.HALF_UP);
+                BigDecimal oldValue = oldAvg.multiply(oldQty);
+                BigDecimal rcvValue = docCost.multiply(change);
+                BigDecimal newQty = oldQty.add(change);
+                newAvg = oldValue.add(rcvValue).divide(newQty, AVG_SCALE, RoundingMode.HALF_UP);
             }
-            return new CostingResult(stamp(docCost), new CostState(newAvg, oldQty + change, standardCost));
+            return new CostingResult(stamp(docCost), new CostState(newAvg, oldQty.add(change), standardCost));
         }
 
-        if (change > 0) {
+        if (Quantities.isPositive(change)) {
             // Cost-less inbound: enters at the current average; quantity rises, average unchanged.
-            return new CostingResult(stamp(oldAvg), new CostState(oldAvg, oldQty + change, standardCost));
+            return new CostingResult(stamp(oldAvg), new CostState(oldAvg, oldQty.add(change), standardCost));
         }
 
         // Issue / consumption / scrap / transfer-out (and no-op zero change): stamp the current
         // average, decrement quantity, average unchanged. Negative branch (oldQty <= 0) keeps the
         // last known average by construction.
-        return new CostingResult(stamp(oldAvg), new CostState(oldAvg, oldQty + change, standardCost));
+        return new CostingResult(stamp(oldAvg), new CostState(oldAvg, oldQty.add(change), standardCost));
     }
 
     private static @Nullable BigDecimal stamp(@Nullable BigDecimal value) {

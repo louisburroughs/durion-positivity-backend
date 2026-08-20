@@ -38,7 +38,7 @@ public class RevaluationResponse {
     private BigDecimal newUnitCost;
 
     @Schema(description = "On-hand quantity the engine had costed at revaluation time (delta basis)")
-    private long onHandQuantity;
+    private BigDecimal onHandQuantity;
 
     @Schema(description = "Signed inventory value change: (newUnitCost - previousUnitCost) x onHandQuantity")
     private BigDecimal valueDelta;

@@ -6,6 +6,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -42,17 +43,20 @@ public class CreateReservationRequest {
     private UUID stockItemId;
 
     @Schema(
-            description = "Quantity of the stock item required by the reservation",
+            description = "Quantity of the stock item required by the reservation. Decimal-capable, and"
+                    + " permitted decimals only to the precision_scale the product's catalog declaration allows"
+                    + " (ADR-0055)",
             example = "4",
             requiredMode = REQUIRED)
+    @NotNull
     @Positive
-    private int requiredQuantity;
+    private BigDecimal requiredQuantity;
 
     /**
      * Workorder-line convenience constructor, predating the CAP #1315 sales-order-line addition.
      * Equivalent to the all-args constructor with {@code salesOrderLineId = null}.
      */
-    public CreateReservationRequest(UUID workorderLineId, UUID stockItemId, int requiredQuantity) {
+    public CreateReservationRequest(UUID workorderLineId, UUID stockItemId, BigDecimal requiredQuantity) {
         this(workorderLineId, null, stockItemId, requiredQuantity);
     }
 }

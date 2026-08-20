@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -39,7 +40,7 @@ public class ReturnResponse {
     private String returnReason;
 
     @Schema(description = "Total number of items returned across all lines", example = "5", requiredMode = REQUIRED)
-    private int totalItemsReturned;
+    private BigDecimal totalItemsReturned;
 
     @Schema(
             description = "Timestamp when the return was created",

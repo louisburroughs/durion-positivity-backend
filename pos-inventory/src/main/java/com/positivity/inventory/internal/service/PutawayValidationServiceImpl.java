@@ -14,6 +14,8 @@ import com.positivity.inventory.internal.security.PutawayPermissions;
 import com.positivity.inventory.internal.service.StorageLocationValidationService.StorageLocationValidation;
 import com.positivity.inventory.service.PutawayValidationService;
 import com.positivity.security.common.SecurityContextHelper;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -30,6 +32,9 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
 
     private static final Logger log = LoggerFactory.getLogger(PutawayValidationServiceImpl.class);
     private static final double CAPACITY_TOLERANCE_PERCENT = 0.10; // 10% tolerance
+    /** Scale for the capacity utilisation ratio; BigDecimal division needs an explicit one. */
+    private static final int CAPACITY_RATIO_SCALE = 6;
+
     private static final List<InventoryLedgerEventType> ON_HAND_EVENT_TYPES = Arrays.stream(
                     InventoryLedgerEventType.values())
             .filter(InventoryLedgerEventType::affectsOnHand)
@@ -138,26 +143,32 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
         StorageLocationValidation locationValidation = getStorageLocationValidation(destinationLocationId);
         validateStorageLocation(locationValidation);
 
-        int currentCapacity = safeInt(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
+        // Capacity is a bin's declared unit limit and stays an int; the on-hand it is compared
+        // against comes from the ledger and is decimal (ADR-0055, #1414). Comparing them widens
+        // the limit rather than narrowing the measurement, so a bin holding 10.5 units is not
+        // reported as holding 10.
+        BigDecimal currentCapacity = Quantities.nz(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
                 destinationLocationId, ON_HAND_EVENT_TYPES));
-        int maxCapacity = getMaxCapacity(destinationLocationId, locationValidation);
+        BigDecimal maxCapacity = BigDecimal.valueOf(getMaxCapacity(destinationLocationId, locationValidation));
 
-        if (maxCapacity <= 0) {
+        if (!Quantities.isPositive(maxCapacity)) {
             throw new LocationAtCapacityException(destinationLocationId, currentCapacity, maxCapacity);
         }
 
-        int projectedCapacity = currentCapacity + quantity;
-        if (projectedCapacity < maxCapacity) {
+        BigDecimal projectedCapacity = currentCapacity.add(BigDecimal.valueOf(quantity));
+        if (Quantities.lt(projectedCapacity, maxCapacity)) {
             addCapacityNearLimitWarning(result, projectedCapacity, maxCapacity);
             return result;
         }
 
-        if (projectedCapacity == maxCapacity) {
+        if (projectedCapacity.compareTo(maxCapacity) == 0) {
             throw new LocationAtCapacityException(destinationLocationId, currentCapacity, maxCapacity);
         }
 
-        int overfillUnits = projectedCapacity - maxCapacity;
-        double overfillPercent = (double) overfillUnits / maxCapacity;
+        BigDecimal overfillUnits = projectedCapacity.subtract(maxCapacity);
+        double overfillPercent = overfillUnits
+                .divide(maxCapacity, CAPACITY_RATIO_SCALE, RoundingMode.HALF_UP)
+                .doubleValue();
         if (overfillPercent > CAPACITY_TOLERANCE_PERCENT) {
             throw new LocationAtCapacityException(destinationLocationId, currentCapacity, maxCapacity);
         }
@@ -165,13 +176,16 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
         result.addWarning(
                 "CAPACITY_NEAR_LIMIT",
                 String.format(
-                        "Projected capacity exceeds configured limit by %d units (%.2f%%). Override may be required.",
-                        overfillUnits, overfillPercent * 100.0));
+                        "Projected capacity exceeds configured limit by %s units (%.2f%%). Override may be required.",
+                        overfillUnits.toPlainString(), overfillPercent * 100.0));
         return result;
     }
 
-    private void addCapacityNearLimitWarning(ValidationResult result, int projectedCapacity, int maxCapacity) {
-        double utilizationPercent = (double) projectedCapacity / maxCapacity;
+    private void addCapacityNearLimitWarning(
+            ValidationResult result, BigDecimal projectedCapacity, BigDecimal maxCapacity) {
+        double utilizationPercent = projectedCapacity
+                .divide(maxCapacity, CAPACITY_RATIO_SCALE, RoundingMode.HALF_UP)
+                .doubleValue();
         if (utilizationPercent >= 1.0 - CAPACITY_TOLERANCE_PERCENT) {
             result.addWarning(
                     "CAPACITY_NEAR_LIMIT",
@@ -188,18 +202,19 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
             return result;
         }
 
-        int onHandQuantity = inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
-                skuId, sourceLocationId, ON_HAND_EVENT_TYPES);
+        BigDecimal onHandQuantity = Quantities.nz(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
+                skuId, sourceLocationId, ON_HAND_EVENT_TYPES));
 
-        if (onHandQuantity <= 0) {
+        if (!Quantities.isPositive(onHandQuantity)) {
             throw new NoOnHandAtSourceLocationException(sourceLocationId, skuId);
         }
 
-        if (onHandQuantity < quantity) {
+        if (Quantities.lt(onHandQuantity, BigDecimal.valueOf(quantity))) {
             result.addError(
                     "INSUFFICIENT_QUANTITY",
                     String.format(
-                            "Insufficient on-hand quantity. Available: %d, Required: %d", onHandQuantity, quantity));
+                            "Insufficient on-hand quantity. Available: %s, Required: %d",
+                            onHandQuantity.toPlainString(), quantity));
         }
 
         return result;
@@ -347,14 +362,18 @@ public class PutawayValidationServiceImpl implements PutawayValidationService {
                 toleranceValidation.getErrors().forEach(err -> result.addError(err.getErrorCode(), err.getMessage()));
             }
         } catch (LocationAtCapacityException e) {
-            if (e.getMaxCapacity() <= 0) {
+            if (!Quantities.isPositive(e.getMaxCapacity())) {
                 result.addError(
                         "CAPACITY_OVERRIDE_TOLERANCE_UNCHECKABLE",
                         "Cannot evaluate capacity override tolerance because max capacity is not configured");
             } else {
-                int projectedCapacity = e.getCurrentCapacity() + request.getQuantity();
-                int overfillUnits = projectedCapacity - e.getMaxCapacity();
-                double overfillPercent = overfillUnits <= 0 ? 0.0 : (double) overfillUnits / e.getMaxCapacity();
+                BigDecimal projectedCapacity = e.getCurrentCapacity().add(BigDecimal.valueOf(request.getQuantity()));
+                BigDecimal overfillUnits = projectedCapacity.subtract(e.getMaxCapacity());
+                double overfillPercent = !Quantities.isPositive(overfillUnits)
+                        ? 0.0
+                        : overfillUnits
+                                .divide(e.getMaxCapacity(), CAPACITY_RATIO_SCALE, RoundingMode.HALF_UP)
+                                .doubleValue();
                 if (overfillPercent > CAPACITY_TOLERANCE_PERCENT) {
                     result.addError(
                             "CAPACITY_OVERRIDE_EXCEEDS_TOLERANCE",

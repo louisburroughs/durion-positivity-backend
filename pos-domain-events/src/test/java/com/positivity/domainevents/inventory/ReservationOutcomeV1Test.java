@@ -3,6 +3,7 @@ package com.positivity.domainevents.inventory;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -18,12 +19,13 @@ class ReservationOutcomeV1Test {
     private static final UUID WORKORDER_LINE_ID = UUID.fromString("01980a58-0000-7000-8000-000000000062");
     private static final UUID SALES_ORDER_LINE_ID = UUID.fromString("01980a58-0000-7000-8000-000000000063");
     private static final UUID BACKORDER_ID = UUID.fromString("01980a58-0000-7000-8000-000000000064");
+    private static final BigDecimal THREE = new BigDecimal("3");
     private static final Instant OCCURRED_AT = Instant.parse("2026-08-18T10:00:00Z");
 
     @Test
     void roundTripsCoveredForAWorkorderLine() {
-        ReservationOutcomeV1 evt =
-                new ReservationOutcomeV1(RESERVATION_ID, WORKORDER_LINE_ID, null, "SKU-1", 3, true, null, OCCURRED_AT);
+        ReservationOutcomeV1 evt = new ReservationOutcomeV1(
+                RESERVATION_ID, WORKORDER_LINE_ID, null, "SKU-1", THREE, true, null, OCCURRED_AT);
 
         String json = MAPPER.writeValueAsString(evt);
         ReservationOutcomeV1 back = MAPPER.readValue(json, ReservationOutcomeV1.class);
@@ -36,7 +38,7 @@ class ReservationOutcomeV1Test {
     @Test
     void roundTripsUncoveredForASalesOrderLine() {
         ReservationOutcomeV1 evt = new ReservationOutcomeV1(
-                RESERVATION_ID, null, SALES_ORDER_LINE_ID, "SKU-1", 3, false, BACKORDER_ID, OCCURRED_AT);
+                RESERVATION_ID, null, SALES_ORDER_LINE_ID, "SKU-1", THREE, false, BACKORDER_ID, OCCURRED_AT);
 
         String json = MAPPER.writeValueAsString(evt);
         ReservationOutcomeV1 back = MAPPER.readValue(json, ReservationOutcomeV1.class);
@@ -49,8 +51,8 @@ class ReservationOutcomeV1Test {
 
     @Test
     void rejectsNeitherDemandLine() {
-        assertThatThrownBy(
-                        () -> new ReservationOutcomeV1(RESERVATION_ID, null, null, "SKU-1", 3, true, null, OCCURRED_AT))
+        assertThatThrownBy(() ->
+                        new ReservationOutcomeV1(RESERVATION_ID, null, null, "SKU-1", THREE, true, null, OCCURRED_AT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("exactly one");
     }
@@ -58,7 +60,14 @@ class ReservationOutcomeV1Test {
     @Test
     void rejectsBothDemandLines() {
         assertThatThrownBy(() -> new ReservationOutcomeV1(
-                        RESERVATION_ID, WORKORDER_LINE_ID, SALES_ORDER_LINE_ID, "SKU-1", 3, true, null, OCCURRED_AT))
+                        RESERVATION_ID,
+                        WORKORDER_LINE_ID,
+                        SALES_ORDER_LINE_ID,
+                        "SKU-1",
+                        THREE,
+                        true,
+                        null,
+                        OCCURRED_AT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("exactly one");
     }
@@ -66,15 +75,67 @@ class ReservationOutcomeV1Test {
     @Test
     void rejectsUncoveredWithoutBackorderId() {
         assertThatThrownBy(() -> new ReservationOutcomeV1(
-                        RESERVATION_ID, WORKORDER_LINE_ID, null, "SKU-1", 3, false, null, OCCURRED_AT))
+                        RESERVATION_ID, WORKORDER_LINE_ID, null, "SKU-1", THREE, false, null, OCCURRED_AT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("backorderId");
     }
 
     @Test
+    void carriesAFractionalQuantityForADivisibleProduct() {
+        // ADR-0055 #1414: the widening exists so a product whose catalog declaration permits
+        // decimals can be reserved at its real quantity instead of a rounded one.
+        ReservationOutcomeV1 evt = new ReservationOutcomeV1(
+                RESERVATION_ID, WORKORDER_LINE_ID, null, "SKU-1", new BigDecimal("1.01"), true, null, OCCURRED_AT);
+
+        ReservationOutcomeV1 back = MAPPER.readValue(MAPPER.writeValueAsString(evt), ReservationOutcomeV1.class);
+
+        assertThat(back.requiredQuantity()).isEqualByComparingTo("1.01");
+    }
+
+    @Test
+    void rejectsZeroQuantityAtAnyScale() {
+        // Zero must stay rejected after the widening, including the scaled spellings a decimal
+        // type makes possible: a reservation for nothing is not an outcome.
+        assertThatThrownBy(() -> new ReservationOutcomeV1(
+                        RESERVATION_ID,
+                        WORKORDER_LINE_ID,
+                        null,
+                        "SKU-1",
+                        new BigDecimal("0.0000"),
+                        true,
+                        null,
+                        OCCURRED_AT))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("requiredQuantity must be positive");
+    }
+
+    @Test
+    void rejectsNegativeQuantity() {
+        assertThatThrownBy(() -> new ReservationOutcomeV1(
+                        RESERVATION_ID,
+                        WORKORDER_LINE_ID,
+                        null,
+                        "SKU-1",
+                        new BigDecimal("-1"),
+                        true,
+                        null,
+                        OCCURRED_AT))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("requiredQuantity must be positive");
+    }
+
+    @Test
+    void rejectsNullQuantity() {
+        assertThatThrownBy(() -> new ReservationOutcomeV1(
+                        RESERVATION_ID, WORKORDER_LINE_ID, null, "SKU-1", null, true, null, OCCURRED_AT))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("requiredQuantity must be positive");
+    }
+
+    @Test
     void rejectsCoveredWithBackorderId() {
         assertThatThrownBy(() -> new ReservationOutcomeV1(
-                        RESERVATION_ID, WORKORDER_LINE_ID, null, "SKU-1", 3, true, BACKORDER_ID, OCCURRED_AT))
+                        RESERVATION_ID, WORKORDER_LINE_ID, null, "SKU-1", THREE, true, BACKORDER_ID, OCCURRED_AT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("backorderId");
     }

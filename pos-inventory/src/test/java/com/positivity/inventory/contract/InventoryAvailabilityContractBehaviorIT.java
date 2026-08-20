@@ -11,6 +11,7 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -55,8 +56,8 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     void getAvailability_returnsPerLocationList_whenProductHasStock() throws Exception {
         UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-        seedOnHand(productId, LOC_1, 40);
-        seedOnHand(productId, LOC_2, 60);
+        seedOnHand(productId, LOC_1, new BigDecimal("40"));
+        seedOnHand(productId, LOC_2, new BigDecimal("60"));
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/{productId}", productId)))
                 .andExpect(status().isOk())
@@ -106,12 +107,12 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     void getAvailability_calculatesAtp_excludingInactiveReservations() throws Exception {
         UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-        seedOnHand(productId, LOC_ATP, 100);
+        seedOnHand(productId, LOC_ATP, new BigDecimal("100"));
 
-        seedReservationCreated(productId, LOC_ATP, 30);
+        seedReservationCreated(productId, LOC_ATP, new BigDecimal("30"));
 
-        seedReservationCreated(productId, LOC_ATP, 20);
-        seedReservationReleased(productId, LOC_ATP, 20);
+        seedReservationCreated(productId, LOC_ATP, new BigDecimal("20"));
+        seedReservationReleased(productId, LOC_ATP, new BigDecimal("20"));
 
         mockMvc.perform(withGatewayAuth(get("/v1/inventory/availability/{productId}", productId)))
                 .andExpect(status().isOk())
@@ -121,7 +122,7 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
                 .andExpect(jsonPath("$[0].availableToPromiseQuantity").value(70));
     }
 
-    private void seedOnHand(UUID productId, UUID locationId, int quantity) {
+    private void seedOnHand(UUID productId, UUID locationId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productId.toString())
                 .locationId(locationId)
@@ -134,26 +135,26 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
                 .build());
     }
 
-    private void seedReservationCreated(UUID productId, UUID locationId, int quantity) {
+    private void seedReservationCreated(UUID productId, UUID locationId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productId.toString())
                 .locationId(locationId)
                 .eventType(InventoryLedgerEventType.RESERVATION_CREATED)
                 .changeInQuantity(quantity)
-                .quantityAfter(0)
+                .quantityAfter(new BigDecimal("0"))
                 .transactionUserId("contract-seed")
                 .timestamp(Instant.now(TEST_CLOCK))
                 .notes("seed active reservation")
                 .build());
     }
 
-    private void seedReservationReleased(UUID productId, UUID locationId, int quantity) {
+    private void seedReservationReleased(UUID productId, UUID locationId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productId.toString())
                 .locationId(locationId)
                 .eventType(InventoryLedgerEventType.RESERVATION_RELEASED)
                 .changeInQuantity(quantity)
-                .quantityAfter(0)
+                .quantityAfter(new BigDecimal("0"))
                 .transactionUserId("contract-seed")
                 .timestamp(Instant.now(TEST_CLOCK))
                 .notes("seed released reservation")

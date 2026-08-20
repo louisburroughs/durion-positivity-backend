@@ -62,9 +62,16 @@ public class CycleCountAdjustment {
     /**
      * The variance quantity to be applied. Can be positive (overage) or negative
      * (shrinkage).
+     *
+     * <p>Decimal since ADR-0055 (#1414). The variance posts straight into the ledger, so it has to
+     * be able to hold what the ledger can — a bulk SKU's shrinkage is a fraction of a unit by
+     * nature, and an integral variance column would have rounded it away at the one place the
+     * platform gets to notice it. The count-capture DTOs are still {@code Integer}; making the
+     * counter able to key a decimal is stage 4 (#1416), and so is the tolerance policy that
+     * decides which small variances are worth surfacing.
      */
-    @Column(nullable = false)
-    private Integer quantityChange;
+    @Column(nullable = false, precision = 19, scale = 4)
+    private BigDecimal quantityChange;
 
     /**
      * The item's cost price at the time the adjustment was proposed.
@@ -76,14 +83,14 @@ public class CycleCountAdjustment {
     /**
      * Quantity on-hand in system before the adjustment.
      */
-    @Column(nullable = false)
-    private Integer quantityOnHandBefore;
+    @Column(nullable = false, precision = 19, scale = 4)
+    private BigDecimal quantityOnHandBefore;
 
     /**
      * Actual counted quantity that triggered this adjustment.
      */
-    @Column(nullable = false)
-    private Integer countedQuantity;
+    @Column(nullable = false, precision = 19, scale = 4)
+    private BigDecimal countedQuantity;
 
     /**
      * Current status of the adjustment in its lifecycle.
@@ -171,7 +178,7 @@ public class CycleCountAdjustment {
      * @return absolute value of (quantityChange * costAtTimeOfAdjustment)
      */
     public BigDecimal getVarianceValue() {
-        return costAtTimeOfAdjustment.multiply(BigDecimal.valueOf(Math.abs(quantityChange)));
+        return costAtTimeOfAdjustment.multiply(quantityChange.abs());
     }
 
     /**
@@ -180,11 +187,12 @@ public class CycleCountAdjustment {
      * @return percentage variance, or 100% if quantityOnHandBefore is 0
      */
     public BigDecimal getVariancePercentage() {
-        if (quantityOnHandBefore == 0) {
+        if (quantityOnHandBefore.signum() == 0) {
             return BigDecimal.valueOf(100);
         }
-        return BigDecimal.valueOf(Math.abs(quantityChange))
-                .divide(BigDecimal.valueOf(Math.abs(quantityOnHandBefore)), 4, java.math.RoundingMode.HALF_UP)
+        return quantityChange
+                .abs()
+                .divide(quantityOnHandBefore.abs(), 4, java.math.RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(100));
     }
 }

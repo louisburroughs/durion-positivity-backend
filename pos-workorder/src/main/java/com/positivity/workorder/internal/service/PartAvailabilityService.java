@@ -49,19 +49,20 @@ public class PartAvailabilityService {
      * @param workorder the job the part belongs to; supplies the servicing site
      * @param part the part line being asked about
      */
-    public int availableFor(@NonNull Workorder workorder, @NonNull WorkorderPart part) {
+    @NonNull
+    public BigDecimal availableFor(@NonNull Workorder workorder, @NonNull WorkorderPart part) {
         UUID locationId = workorder.getShopId();
         UUID stockItemId = part.getProductEntityId();
         if (locationId == null || stockItemId == null) {
             // A non-inventory part has no productEntityId and no owned stock to measure; a
             // workorder with no site has nowhere to measure it at. Both report short rather than
             // guessing, and the caller decides whether the gate applies at all.
-            return 0;
+            return BigDecimal.ZERO;
         }
         return lookup(stockItemId, locationId)
                 .map(ExtInventoryAvailabilityReplica::getAvailableToPromiseQuantity)
-                .map(atp -> Math.max(atp, 0))
-                .orElse(0);
+                .map(atp -> atp.max(BigDecimal.ZERO))
+                .orElse(BigDecimal.ZERO);
     }
 
     /**
@@ -76,7 +77,7 @@ public class PartAvailabilityService {
         if (part.getProductEntityId() == null) {
             return true;
         }
-        return BigDecimal.valueOf(availableFor(workorder, part)).compareTo(quantity) >= 0;
+        return availableFor(workorder, part).compareTo(quantity) >= 0;
     }
 
     /**

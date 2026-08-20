@@ -8,6 +8,7 @@ import com.positivity.inventory.service.ConsumptionService;
 import com.positivity.inventory.service.OutboxReplayService;
 import com.positivity.inventory.service.PickListService;
 import com.positivity.inventory.service.ReservationRequestService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -263,7 +264,10 @@ public class InventoryCommandListener {
         UUID salesOrderLineId = parseUuid(payload, "salesOrderLineId");
         UUID stockItemId = parseUuid(payload, "stockItemId");
         UUID locationId = parseUuid(payload, "locationId");
-        int requiredQuantity = payload.path("requiredQuantity").intValue(0);
+        // decimalValue() rather than intValue(): the reservation command carries a decimal
+        // quantity since ADR-0055 (#1414), and reading it as an int would truncate a divisible
+        // product's demand at the very edge the widening exists to open.
+        BigDecimal requiredQuantity = payload.path("requiredQuantity").decimalValue(BigDecimal.ZERO);
         if ((workorderLineId == null) == (salesOrderLineId == null)) {
             log.warn(
                     "Ignoring reservation-request command: exactly one of workorderLineId/salesOrderLineId must be"
@@ -271,7 +275,7 @@ public class InventoryCommandListener {
                     payload);
             return;
         }
-        if (stockItemId == null || locationId == null || requiredQuantity <= 0) {
+        if (stockItemId == null || locationId == null || requiredQuantity.signum() <= 0) {
             log.warn("Ignoring reservation-request command with missing/invalid fields: {}", payload);
             return;
         }

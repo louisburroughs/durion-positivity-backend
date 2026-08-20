@@ -1,3 +1,5 @@
 package com.positivity.order.internal.client;
 
-public record InventoryResult(boolean sufficient, int availableQuantity) {}
+import java.math.BigDecimal;
+
+public record InventoryResult(boolean sufficient, BigDecimal availableQuantity) {}

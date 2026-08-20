@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.TaskStatus;
 import com.positivity.inventory.internal.repository.CycleCountTaskRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,9 +45,9 @@ public class CycleCountConflictDetector {
      * was taken. Non-zero ⇒ the count window was interfered with.
      */
     @Transactional(readOnly = true)
-    public int movementDeltaSinceSnapshot(@NonNull CycleCountTask task) {
+    public BigDecimal movementDeltaSinceSnapshot(@NonNull CycleCountTask task) {
         Optional<UUID> locationId = locationIdOf(task);
-        Integer delta = locationId
+        BigDecimal delta = locationId
                 .map(location -> ledgerRepository.sumChangeForStockItemAtLocationSince(
                         task.getItemSku(),
                         location,
@@ -54,7 +55,7 @@ public class CycleCountConflictDetector {
                         task.getCreatedAt()))
                 .orElseGet(() -> ledgerRepository.sumChangeForStockItemSince(
                         task.getItemSku(), InventoryLedgerEventType.onHandAffectingTypes(), task.getCreatedAt()));
-        return delta == null ? 0 : delta;
+        return Quantities.nz(delta);
     }
 
     /**

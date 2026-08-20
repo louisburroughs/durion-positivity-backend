@@ -176,10 +176,10 @@ class ForecastQuantityServiceImplTest {
         saveReservation(sku, ReservationStatus.PENDING, 5, 5, null);
 
         ForecastQuantityService.ForecastQuantities forecast =
-                forecastQuantityService.forecast(sku.toString(), null, null, 0L);
+                forecastQuantityService.forecast(sku.toString(), null, null, new BigDecimal("0"));
 
-        assertThat(forecast.outgoingQty()).isEqualTo(9L);
-        assertThat(forecast.projectedAvailable()).isEqualTo(-9L);
+        assertThat(forecast.outgoingQty()).isEqualByComparingTo("9");
+        assertThat(forecast.projectedAvailable()).isEqualByComparingTo("-9");
     }
 
     @Test
@@ -193,13 +193,13 @@ class ForecastQuantityServiceImplTest {
         Instant horizon = Instant.parse("2026-08-01T12:00:00Z");
 
         assertThat(forecastQuantityService
-                        .forecast(sku.toString(), null, null, 0L)
+                        .forecast(sku.toString(), null, null, new BigDecimal("0"))
                         .outgoingQty())
-                .isEqualTo(33L);
+                .isEqualByComparingTo("33");
         assertThat(forecastQuantityService
-                        .forecast(sku.toString(), null, horizon, 0L)
+                        .forecast(sku.toString(), null, horizon, new BigDecimal("0"))
                         .outgoingQty())
-                .isEqualTo(10L);
+                .isEqualByComparingTo("10");
     }
 
     // ─── outgoing: released pick tasks ───────────────────────────────────────
@@ -216,10 +216,10 @@ class ForecastQuantityServiceImplTest {
         savePickTask(sku, PickListStatus.READY_TO_PICK, PickTaskStatus.CANCELLED, 9, 0, null);
 
         ForecastQuantityService.ForecastQuantities forecast =
-                forecastQuantityService.forecast(sku.toString(), null, null, 10L);
+                forecastQuantityService.forecast(sku.toString(), null, null, new BigDecimal("10"));
 
-        assertThat(forecast.outgoingQty()).isEqualTo(8L);
-        assertThat(forecast.projectedAvailable()).isEqualTo(2L);
+        assertThat(forecast.outgoingQty()).isEqualByComparingTo("8");
+        assertThat(forecast.projectedAvailable()).isEqualByComparingTo("2");
     }
 
     @Test
@@ -241,23 +241,23 @@ class ForecastQuantityServiceImplTest {
         saveReservation(sku, ReservationStatus.PARTIALLY_FULFILLED, 4, 1, null); // remainder 3, site-agnostic
 
         assertThat(forecastQuantityService
-                        .forecast(sku.toString(), siteA, null, 0L)
+                        .forecast(sku.toString(), siteA, null, new BigDecimal("0"))
                         .outgoingQty())
-                .isEqualTo(8L); // 5 (bin under site A) + 3 (global reservation demand)
+                .isEqualByComparingTo("8"); // 5 (bin under site A) + 3 (global reservation demand)
         assertThat(forecastQuantityService
-                        .forecast(sku.toString(), siteB, null, 0L)
+                        .forecast(sku.toString(), siteB, null, new BigDecimal("0"))
                         .outgoingQty())
-                .isEqualTo(5L); // 2 (task suggested at site B itself) + 3
+                .isEqualByComparingTo("5"); // 2 (task suggested at site B itself) + 3
         assertThat(forecastQuantityService
-                        .forecast(sku.toString(), null, null, 0L)
+                        .forecast(sku.toString(), null, null, new BigDecimal("0"))
                         .outgoingQty())
-                .isEqualTo(10L); // everything
+                .isEqualByComparingTo("10"); // everything
     }
 
     // ─── projection ──────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("projectedAvailable = onHand + incoming - outgoing; fractional supply floors DOWN")
+    @DisplayName("projectedAvailable = onHand + incoming - outgoing, at the precision the documents state")
     void projectedAvailableFormula() {
         UUID sku = UUID.randomUUID();
         UUID site = UUID.randomUUID();
@@ -265,22 +265,27 @@ class ForecastQuantityServiceImplTest {
         saveReservation(sku, ReservationStatus.PENDING, 3, 0, null);
 
         ForecastQuantityService.ForecastQuantities forecast =
-                forecastQuantityService.forecast(sku.toString(), site, null, 100L);
+                forecastQuantityService.forecast(sku.toString(), site, null, new BigDecimal("100"));
 
-        assertThat(forecast.incomingQty()).isEqualTo(7L); // 7.9 floored DOWN
-        assertThat(forecast.outgoingQty()).isEqualTo(3L);
-        assertThat(forecast.projectedAvailable()).isEqualTo(104L);
+        // ADR-0055 stage 2 (#1414): the forecast fields are decimal, so expected supply is no
+        // longer floored DOWN to fit an integer. The floor existed to squeeze a fractional
+        // expected quantity into a `long` without over-promising; with a decimal field there is
+        // nothing to squeeze it into, and losing 0.9 of a divisible product's inbound supply
+        // would understate the projection for exactly the stock this stage exists to serve.
+        assertThat(forecast.incomingQty()).isEqualByComparingTo("7.900000");
+        assertThat(forecast.outgoingQty()).isEqualByComparingTo("3");
+        assertThat(forecast.projectedAvailable()).isEqualByComparingTo("104.900000");
     }
 
     @Test
     @DisplayName("non-UUID stock item ids skip PO/reservation matching without failing")
     void nonUuidStockItemIdIsSafe() {
         ForecastQuantityService.ForecastQuantities forecast =
-                forecastQuantityService.forecast("SKU-FREE-TEXT", null, null, 5L);
+                forecastQuantityService.forecast("SKU-FREE-TEXT", null, null, new BigDecimal("5"));
 
         assertThat(forecast.incomingQty()).isZero();
         assertThat(forecast.outgoingQty()).isZero();
-        assertThat(forecast.projectedAvailable()).isEqualTo(5L);
+        assertThat(forecast.projectedAvailable()).isEqualByComparingTo("5");
     }
 
     // ─── seeding helpers ─────────────────────────────────────────────────────
@@ -335,8 +340,8 @@ class ForecastQuantityServiceImplTest {
         reservationRepository.save(ReservationEntity.builder()
                 .workorderLineId(UUID.randomUUID())
                 .stockItemId(stockItemId)
-                .requiredQuantity(required)
-                .allocatedQuantity(allocated)
+                .requiredQuantity(BigDecimal.valueOf(required))
+                .allocatedQuantity(BigDecimal.valueOf(allocated))
                 .status(status)
                 .dueDateTime(dueDateTime)
                 .build());

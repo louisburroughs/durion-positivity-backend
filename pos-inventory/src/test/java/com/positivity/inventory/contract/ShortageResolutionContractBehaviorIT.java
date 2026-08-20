@@ -10,6 +10,7 @@ import com.positivity.inventory.internal.dto.ShortageResolutionResultDto;
 import com.positivity.inventory.internal.dto.ShortageResolveRequest;
 import com.positivity.inventory.internal.enums.ShortageResolutionOption;
 import com.positivity.inventory.service.ShortageResolutionService;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -62,7 +63,7 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
                 .allocationId(allocationId)
                 .optionType(ShortageResolutionOption.BACKORDER)
                 .sku("00000000-0000-0000-0000-0000000000c1")
-                .shortQuantity(3)
+                .shortQuantity(new BigDecimal("3"))
                 .workorderLineId(UUID.fromString("00000000-0000-0000-0000-0000000000b1"))
                 .build();
 
@@ -112,7 +113,7 @@ class ShortageResolutionContractBehaviorIT extends BaseContractIntegrationTest {
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .optionType(ShortageResolutionOption.BACKORDER)
                 .sku("00000000-0000-0000-0000-0000000000c1")
-                .shortQuantity(3)
+                .shortQuantity(new BigDecimal("3"))
                 .build();
 
         mockMvc.perform(post("/v1/inventory/shortage/resolve")

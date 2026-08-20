@@ -14,6 +14,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -59,12 +60,17 @@ public class ReservationEntity {
     @Column(name = "stock_item_id", nullable = false)
     private UUID stockItemId;
 
-    @Column(nullable = false)
-    private int requiredQuantity;
+    /**
+     * Quantity demanded. Decimal-capable (ADR-0055, #1414) and gated by the referenced product's
+     * declared {@code precision_scale}, not by this type. Compare with {@code compareTo}.
+     */
+    @Column(nullable = false, precision = 19, scale = 4)
+    private BigDecimal requiredQuantity;
 
-    @Column(nullable = false)
+    /** Quantity hard-allocated against {@link #requiredQuantity}, on the same decimal basis. */
+    @Column(nullable = false, precision = 19, scale = 4)
     @Builder.Default
-    private int allocatedQuantity = 0;
+    private BigDecimal allocatedQuantity = BigDecimal.ZERO;
 
     @Column(nullable = false)
     @Builder.Default

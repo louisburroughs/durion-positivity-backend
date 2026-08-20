@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -41,6 +42,6 @@ public class LocationInventoryItemsResponse {
                 description = "On-hand quantity of this stock item at the location",
                 example = "24",
                 requiredMode = Schema.RequiredMode.REQUIRED)
-        private long onHandQuantity;
+        private BigDecimal onHandQuantity;
     }
 }

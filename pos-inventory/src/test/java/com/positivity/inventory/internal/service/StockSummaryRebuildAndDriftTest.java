@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,13 +48,13 @@ class StockSummaryRebuildAndDriftTest {
         ledgerRepository.deleteAll();
     }
 
-    private void post(String sku, UUID location, InventoryLedgerEventType type, int change) {
+    private void post(String sku, UUID location, InventoryLedgerEventType type, BigDecimal change) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(location)
                 .eventType(type)
                 .changeInQuantity(change)
-                .quantityAfter(0)
+                .quantityAfter(new BigDecimal("0"))
                 .transactionUserId("rebuild-test")
                 .build());
     }
@@ -65,15 +66,15 @@ class StockSummaryRebuildAndDriftTest {
         UUID loc1 = UUID.randomUUID();
         UUID loc2 = UUID.randomUUID();
 
-        post(skuA, loc1, InventoryLedgerEventType.GOODS_RECEIPT, 40);
-        post(skuA, loc1, InventoryLedgerEventType.ALLOCATION_CREATED, 15);
-        post(skuA, loc2, InventoryLedgerEventType.TRANSFER_IN, 7);
-        post(skuB, loc1, InventoryLedgerEventType.GOODS_RECEIPT, 3);
+        post(skuA, loc1, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("40"));
+        post(skuA, loc1, InventoryLedgerEventType.ALLOCATION_CREATED, new BigDecimal("15"));
+        post(skuA, loc2, InventoryLedgerEventType.TRANSFER_IN, new BigDecimal("7"));
+        post(skuB, loc1, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("3"));
         // K1 (#1027): consumption may not drive on-hand negative — seed the
         // null-location key before consuming from it.
-        post(skuB, null, InventoryLedgerEventType.GOODS_RECEIPT, 6);
-        post(skuB, null, InventoryLedgerEventType.WORKORDER_CONSUMPTION, -2);
-        post(skuB, loc1, InventoryLedgerEventType.RESERVATION_CREATED, 1);
+        post(skuB, null, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("6"));
+        post(skuB, null, InventoryLedgerEventType.WORKORDER_CONSUMPTION, new BigDecimal("-2"));
+        post(skuB, loc1, InventoryLedgerEventType.RESERVATION_CREATED, new BigDecimal("1"));
 
         var liveRows = summaryRepository.findAll();
 
@@ -100,14 +101,14 @@ class StockSummaryRebuildAndDriftTest {
     void verifier_reportsDriftWithoutMutating() {
         String sku = "SKU-DRIFT-" + UUID.randomUUID();
         UUID location = UUID.randomUUID();
-        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 25);
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("25"));
 
         assertThat(driftVerifier.verify()).isZero();
 
         // Corrupt the summary out-of-band (simulating a bypassing write).
         InventoryStockSummary row =
                 summaryRepository.findByStockItemIdAndLocationId(sku, location).orElseThrow();
-        row.setOnHand(999);
+        row.setOnHand(new BigDecimal("999"));
         summaryRepository.save(row);
 
         int drifted = driftVerifier.verify();
@@ -118,7 +119,7 @@ class StockSummaryRebuildAndDriftTest {
                         .findByStockItemIdAndLocationId(sku, location)
                         .orElseThrow()
                         .getOnHand())
-                .isEqualTo(999);
+                .isEqualByComparingTo("999");
 
         // Repair path is the rebuild.
         rebuildService.rebuildFromLedger();
@@ -126,7 +127,7 @@ class StockSummaryRebuildAndDriftTest {
                         .findByStockItemIdAndLocationId(sku, location)
                         .orElseThrow()
                         .getOnHand())
-                .isEqualTo(25);
+                .isEqualByComparingTo("25");
         assertThat(driftVerifier.verify()).isZero();
     }
 
@@ -138,15 +139,15 @@ class StockSummaryRebuildAndDriftTest {
         UUID source = UUID.randomUUID();
         UUID destination = UUID.randomUUID();
 
-        post(sku, source, InventoryLedgerEventType.GOODS_RECEIPT, 10);
+        post(sku, source, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("10"));
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(source)
                 .fromLocationId(source)
                 .toLocationId(destination)
                 .eventType(InventoryLedgerEventType.TRANSFER_OUT)
-                .changeInQuantity(-6)
-                .quantityAfter(4)
+                .changeInQuantity(new BigDecimal("-6"))
+                .quantityAfter(new BigDecimal("4"))
                 .transactionUserId("rebuild-test")
                 .build());
         ledgerPostingService.post(InventoryLedgerEntry.builder()
@@ -155,16 +156,16 @@ class StockSummaryRebuildAndDriftTest {
                 .fromLocationId(source)
                 .toLocationId(destination)
                 .eventType(InventoryLedgerEventType.TRANSFER_IN)
-                .changeInQuantity(2)
-                .quantityAfter(2)
+                .changeInQuantity(new BigDecimal("2"))
+                .quantityAfter(new BigDecimal("2"))
                 .transactionUserId("rebuild-test")
                 .build());
 
         InventoryStockSummary liveDestination = summaryRepository
                 .findByStockItemIdAndLocationId(sku, destination)
                 .orElseThrow();
-        assertThat(liveDestination.getOnHand()).isEqualTo(2);
-        assertThat(liveDestination.getInTransitQty()).isEqualTo(4);
+        assertThat(liveDestination.getOnHand()).isEqualByComparingTo("2");
+        assertThat(liveDestination.getInTransitQty()).isEqualByComparingTo("4");
         assertThat(driftVerifier.verify()).isZero();
 
         rebuildService.rebuildFromLedger();
@@ -172,16 +173,16 @@ class StockSummaryRebuildAndDriftTest {
         InventoryStockSummary rebuiltDestination = summaryRepository
                 .findByStockItemIdAndLocationId(sku, destination)
                 .orElseThrow();
-        assertThat(rebuiltDestination.getOnHand()).isEqualTo(2);
-        assertThat(rebuiltDestination.getInTransitQty()).isEqualTo(4);
+        assertThat(rebuiltDestination.getOnHand()).isEqualByComparingTo("2");
+        assertThat(rebuiltDestination.getInTransitQty()).isEqualByComparingTo("4");
         InventoryStockSummary rebuiltSource =
                 summaryRepository.findByStockItemIdAndLocationId(sku, source).orElseThrow();
-        assertThat(rebuiltSource.getOnHand()).isEqualTo(4);
+        assertThat(rebuiltSource.getOnHand()).isEqualByComparingTo("4");
         assertThat(rebuiltSource.getInTransitQty()).isZero();
         assertThat(driftVerifier.verify()).isZero();
 
         // Out-of-band in-transit corruption is drift like any other column.
-        rebuiltDestination.setInTransitQty(999);
+        rebuiltDestination.setInTransitQty(new BigDecimal("999"));
         summaryRepository.save(rebuiltDestination);
         assertThat(driftVerifier.verify()).isEqualTo(1);
     }
@@ -190,7 +191,7 @@ class StockSummaryRebuildAndDriftTest {
     void verifier_reportsMissingSummaryRowForLedgerBalance() {
         String sku = "SKU-MISSING-" + UUID.randomUUID();
         UUID location = UUID.randomUUID();
-        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 5);
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("5"));
 
         summaryRepository.deleteAll();
 
@@ -199,14 +200,14 @@ class StockSummaryRebuildAndDriftTest {
 
     // ─── odoo-parity E1 (#1038): per-lot rows follow the same funnel/rebuild/drift math ───
 
-    private void postWithLot(String sku, UUID location, UUID lotId, InventoryLedgerEventType type, int change) {
+    private void postWithLot(String sku, UUID location, UUID lotId, InventoryLedgerEventType type, BigDecimal change) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(location)
                 .lotId(lotId)
                 .eventType(type)
                 .changeInQuantity(change)
-                .quantityAfter(0)
+                .quantityAfter(new BigDecimal("0"))
                 .transactionUserId("rebuild-test")
                 .build());
     }
@@ -219,23 +220,23 @@ class StockSummaryRebuildAndDriftTest {
         UUID lotB = UUID.randomUUID();
 
         // Mixed stream: two lot-tagged receipts and one untracked receipt at the same key.
-        postWithLot(sku, location, lotA, InventoryLedgerEventType.GOODS_RECEIPT, 10);
-        postWithLot(sku, location, lotB, InventoryLedgerEventType.GOODS_RECEIPT, 4);
-        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 3);
+        postWithLot(sku, location, lotA, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("10"));
+        postWithLot(sku, location, lotB, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("4"));
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("3"));
 
         // Lot-agnostic row aggregates EVERYTHING (conservation: equal to pre-lot behavior).
         InventoryStockSummary agnostic =
                 summaryRepository.findByStockItemIdAndLocationId(sku, location).orElseThrow();
-        assertThat(agnostic.getOnHand()).isEqualTo(17);
+        assertThat(agnostic.getOnHand()).isEqualByComparingTo("17");
         assertThat(agnostic.getLotId()).isNull();
 
         // Per-lot rows carry only their lot's deltas.
         InventoryStockSummary lotARow =
                 summaryRepository.findByKey(sku, location, lotA).orElseThrow();
-        assertThat(lotARow.getOnHand()).isEqualTo(10);
+        assertThat(lotARow.getOnHand()).isEqualByComparingTo("10");
         InventoryStockSummary lotBRow =
                 summaryRepository.findByKey(sku, location, lotB).orElseThrow();
-        assertThat(lotBRow.getOnHand()).isEqualTo(4);
+        assertThat(lotBRow.getOnHand()).isEqualByComparingTo("4");
 
         // The three rows are consistent with the funnel's dual-row math → verifier clean.
         assertThat(driftVerifier.verify()).isZero();
@@ -248,16 +249,16 @@ class StockSummaryRebuildAndDriftTest {
                         .findByStockItemIdAndLocationId(sku, location)
                         .orElseThrow()
                         .getOnHand())
-                .isEqualTo(17);
+                .isEqualByComparingTo("17");
         InventoryStockSummary rebuiltLotA =
                 summaryRepository.findByKey(sku, location, lotA).orElseThrow();
-        assertThat(rebuiltLotA.getOnHand()).isEqualTo(10);
+        assertThat(rebuiltLotA.getOnHand()).isEqualByComparingTo("10");
         assertThat(rebuiltLotA.getLastLedgerEntryId()).isEqualTo(lotARow.getLastLedgerEntryId());
         assertThat(summaryRepository
                         .findByKey(sku, location, lotB)
                         .orElseThrow()
                         .getOnHand())
-                .isEqualTo(4);
+                .isEqualByComparingTo("4");
         assertThat(driftVerifier.verify()).isZero();
     }
 
@@ -266,13 +267,13 @@ class StockSummaryRebuildAndDriftTest {
         String sku = "SKU-LOT-DRIFT-" + UUID.randomUUID();
         UUID location = UUID.randomUUID();
         UUID lot = UUID.randomUUID();
-        postWithLot(sku, location, lot, InventoryLedgerEventType.GOODS_RECEIPT, 7);
+        postWithLot(sku, location, lot, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("7"));
 
         assertThat(driftVerifier.verify()).isZero();
 
         InventoryStockSummary lotRow =
                 summaryRepository.findByKey(sku, location, lot).orElseThrow();
-        lotRow.setOnHand(999);
+        lotRow.setOnHand(new BigDecimal("999"));
         summaryRepository.save(lotRow);
 
         // Exactly one drifted key: the per-lot row; the agnostic row is still consistent.
@@ -280,7 +281,7 @@ class StockSummaryRebuildAndDriftTest {
 
         rebuildService.rebuildFromLedger();
         assertThat(summaryRepository.findByKey(sku, location, lot).orElseThrow().getOnHand())
-                .isEqualTo(7);
+                .isEqualByComparingTo("7");
         assertThat(driftVerifier.verify()).isZero();
     }
 
@@ -293,7 +294,7 @@ class StockSummaryRebuildAndDriftTest {
         UUID destination = UUID.randomUUID();
         UUID lot = UUID.randomUUID();
 
-        postWithLot(sku, source, lot, InventoryLedgerEventType.GOODS_RECEIPT, 10);
+        postWithLot(sku, source, lot, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("10"));
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(source)
@@ -301,17 +302,17 @@ class StockSummaryRebuildAndDriftTest {
                 .toLocationId(destination)
                 .lotId(lot)
                 .eventType(InventoryLedgerEventType.TRANSFER_OUT)
-                .changeInQuantity(-6)
-                .quantityAfter(4)
+                .changeInQuantity(new BigDecimal("-6"))
+                .quantityAfter(new BigDecimal("4"))
                 .transactionUserId("rebuild-test")
                 .build());
 
         InventoryStockSummary agnosticDestination =
                 summaryRepository.findByKey(sku, destination, null).orElseThrow();
-        assertThat(agnosticDestination.getInTransitQty()).isEqualTo(6);
+        assertThat(agnosticDestination.getInTransitQty()).isEqualByComparingTo("6");
         InventoryStockSummary lotDestination =
                 summaryRepository.findByKey(sku, destination, lot).orElseThrow();
-        assertThat(lotDestination.getInTransitQty()).isEqualTo(6);
+        assertThat(lotDestination.getInTransitQty()).isEqualByComparingTo("6");
         assertThat(driftVerifier.verify()).isZero();
 
         rebuildService.rebuildFromLedger();
@@ -319,7 +320,7 @@ class StockSummaryRebuildAndDriftTest {
                         .findByKey(sku, destination, lot)
                         .orElseThrow()
                         .getInTransitQty())
-                .isEqualTo(6);
+                .isEqualByComparingTo("6");
         assertThat(driftVerifier.verify()).isZero();
     }
 }

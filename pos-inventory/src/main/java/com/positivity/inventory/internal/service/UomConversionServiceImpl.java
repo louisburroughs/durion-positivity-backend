@@ -10,6 +10,7 @@ import java.math.RoundingMode;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class UomConversionServiceImpl implements UomConversionService {
+
+    /** What a product that declares nothing resolves to: whole units (ADR-0055, #1414). */
+    private static final int UNDECLARED_SCALE = 0;
 
     private final ExtProductReplicaRepository extProductReplicaRepository;
     private final ExtProductUomReplicaRepository extProductUomReplicaRepository;
@@ -55,6 +59,28 @@ public class UomConversionServiceImpl implements UomConversionService {
                 .findByProductIdAndUomCode(productId, uomCode)
                 .map(ExtProductUomReplica::getPrecisionScale)
                 .orElseThrow(() -> UomConversionUndefinedException.unknownUom(productId, uomCode));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public int declaredBaseScale(@Nullable UUID productId) {
+        if (productId == null) {
+            return UNDECLARED_SCALE;
+        }
+        String baseUom = extProductReplicaRepository
+                .findById(productId)
+                .map(ExtProductReplica::getBaseUom)
+                .orElse(null);
+        if (baseUom == null || baseUom.isBlank()) {
+            return UNDECLARED_SCALE;
+        }
+        try {
+            return precisionScale(productId, baseUom);
+        } catch (UomConversionUndefinedException _) {
+            // The product exists but declares no BASE conversion row, which is every product
+            // today. Undeclared means whole units — see the interface contract.
+            return UNDECLARED_SCALE;
+        }
     }
 
     private BigDecimal convert(UUID productId, String uomCode, BigDecimal quantity, RoundingMode roundingMode) {

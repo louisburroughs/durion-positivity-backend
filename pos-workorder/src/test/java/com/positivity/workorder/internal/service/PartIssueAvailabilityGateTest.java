@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -152,9 +153,9 @@ class PartIssueAvailabilityGateTest {
                         .aggregateId(UUID.randomUUID())
                         .stockItemId(productId.toString())
                         .locationId(SHOP_ID)
-                        .onHandQuantity(atp)
-                        .allocatedQuantity(0)
-                        .availableToPromiseQuantity(atp)
+                        .onHandQuantity(BigDecimal.valueOf(atp))
+                        .allocatedQuantity(BigDecimal.ZERO)
+                        .availableToPromiseQuantity(BigDecimal.valueOf(atp))
                         .aggregateVersion(1L)
                         .updatedAt(NOW)
                         .build()));
@@ -182,7 +183,12 @@ class PartIssueAvailabilityGateTest {
             service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null);
 
             assertThat(part.getQuantityIssued()).isEqualByComparingTo("2");
-            verify(inventoryCommandPublisher).requestReservation(PART_ID, PRODUCT_ID, 2, SHOP_ID);
+            verify(inventoryCommandPublisher)
+                    .requestReservation(
+                            eq(PART_ID),
+                            eq(PRODUCT_ID),
+                            argThat(q -> q.compareTo(new BigDecimal("2")) == 0),
+                            eq(SHOP_ID));
         }
 
         @Test
@@ -202,8 +208,7 @@ class PartIssueAvailabilityGateTest {
 
             assertThat(part.getQuantityIssued()).isEqualByComparingTo("0");
             verify(usageEventRepository, never()).save(any());
-            verify(inventoryCommandPublisher, never())
-                    .requestReservation(any(), any(), org.mockito.ArgumentMatchers.anyInt(), any());
+            verify(inventoryCommandPublisher, never()).requestReservation(any(), any(), any(), any());
         }
 
         @Test
@@ -220,8 +225,7 @@ class PartIssueAvailabilityGateTest {
             // Nothing is recorded and no demand registered: the part did not leave the shelf.
             assertThat(part.getQuantityIssued()).isEqualByComparingTo("0");
             verify(usageEventRepository, never()).save(any());
-            verify(inventoryCommandPublisher, never())
-                    .requestReservation(any(), any(), org.mockito.ArgumentMatchers.anyInt(), any());
+            verify(inventoryCommandPublisher, never()).requestReservation(any(), any(), any(), any());
         }
 
         @Test
@@ -250,23 +254,29 @@ class PartIssueAvailabilityGateTest {
             service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("0.25"), null);
 
             assertThat(part.getQuantityIssued()).isEqualByComparingTo("0.25");
-            verify(inventoryCommandPublisher, never())
-                    .requestReservation(any(), any(), org.mockito.ArgumentMatchers.anyInt(), any());
+            verify(inventoryCommandPublisher, never()).requestReservation(any(), any(), any(), any());
         }
 
         @Test
-        @DisplayName("passes a divisible product's quantity but cannot reserve it until #1414")
-        void divisibleProductPassesTheGateButCannotReserveYet() {
+        @DisplayName("issues and reserves a divisible product at its real fractional quantity")
+        void divisibleProductIssuesAndReservesItsFractionalQuantity() {
             WorkorderPart part = part(PART_ID, PRODUCT_ID, "4", "0");
             givenWorkorderAndPart(workorder(WorkorderStatus.WORK_IN_PROGRESS), part);
             givenAtp(PRODUCT_ID, 10);
             when(productUomRepository.findBasePrecisionScales(PRODUCT_ID)).thenReturn(List.of(2));
 
-            // The divisibility gate passes, but the reservation contract is still integer-only
-            // until #1414 — so the issue fails loudly here rather than reserving a rounded amount.
-            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("1.01"), null))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("Cannot reserve a fractional quantity");
+            // ADR-0055 stage 2 (#1414): the reservation contract is decimal, so a product the
+            // catalog declares divisible to two places reserves exactly what left the shelf.
+            // Stage 1 could only fail loudly here; the seam it was guarding is gone.
+            service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("1.01"), null);
+
+            assertThat(part.getQuantityIssued()).isEqualByComparingTo("1.01");
+            verify(inventoryCommandPublisher)
+                    .requestReservation(
+                            eq(PART_ID),
+                            eq(PRODUCT_ID),
+                            argThat(q -> q.compareTo(new BigDecimal("1.01")) == 0),
+                            eq(SHOP_ID));
         }
     }
 

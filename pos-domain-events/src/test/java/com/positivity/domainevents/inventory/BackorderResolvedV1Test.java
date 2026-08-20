@@ -3,6 +3,7 @@ package com.positivity.domainevents.inventory;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -23,7 +24,14 @@ class BackorderResolvedV1Test {
     @Test
     void roundTripsForAWorkorderLine() {
         BackorderResolvedV1 evt = new BackorderResolvedV1(
-                BACKORDER_ID, WORKORDER_LINE_ID, null, "SKU-1", 3, "AVAILABILITY", LOCATION_ID, OCCURRED_AT);
+                BACKORDER_ID,
+                WORKORDER_LINE_ID,
+                null,
+                "SKU-1",
+                new BigDecimal("3"),
+                "AVAILABILITY",
+                LOCATION_ID,
+                OCCURRED_AT);
 
         String json = MAPPER.writeValueAsString(evt);
         BackorderResolvedV1 back = MAPPER.readValue(json, BackorderResolvedV1.class);
@@ -36,7 +44,14 @@ class BackorderResolvedV1Test {
     @Test
     void roundTripsForASalesOrderLine() {
         BackorderResolvedV1 evt = new BackorderResolvedV1(
-                BACKORDER_ID, null, SALES_ORDER_LINE_ID, "SKU-1", 3, "REPLENISHMENT_RECEIPT", LOCATION_ID, OCCURRED_AT);
+                BACKORDER_ID,
+                null,
+                SALES_ORDER_LINE_ID,
+                "SKU-1",
+                new BigDecimal("3"),
+                "REPLENISHMENT_RECEIPT",
+                LOCATION_ID,
+                OCCURRED_AT);
 
         String json = MAPPER.writeValueAsString(evt);
         BackorderResolvedV1 back = MAPPER.readValue(json, BackorderResolvedV1.class);
@@ -49,7 +64,7 @@ class BackorderResolvedV1Test {
     @Test
     void rejectsNeitherDemandLine() {
         assertThatThrownBy(() -> new BackorderResolvedV1(
-                        BACKORDER_ID, null, null, "SKU-1", 3, "MANUAL", LOCATION_ID, OCCURRED_AT))
+                        BACKORDER_ID, null, null, "SKU-1", new BigDecimal("3"), "MANUAL", LOCATION_ID, OCCURRED_AT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("exactly one");
     }
@@ -61,7 +76,7 @@ class BackorderResolvedV1Test {
                         WORKORDER_LINE_ID,
                         SALES_ORDER_LINE_ID,
                         "SKU-1",
-                        3,
+                        new BigDecimal("3"),
                         "MANUAL",
                         LOCATION_ID,
                         OCCURRED_AT))

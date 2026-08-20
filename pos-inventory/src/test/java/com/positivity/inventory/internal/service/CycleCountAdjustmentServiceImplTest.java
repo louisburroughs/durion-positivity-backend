@@ -102,8 +102,8 @@ class CycleCountAdjustmentServiceImplTest {
         @DisplayName("should throw IllegalArgumentException if quantity change is zero")
         void shouldThrowExceptionWhenQuantityIsUnchanged() {
             CreateAdjustmentRequest request = CreateAdjustmentRequest.builder()
-                    .countedQuantity(10)
-                    .quantityOnHandBefore(10)
+                    .countedQuantity(new BigDecimal("10"))
+                    .quantityOnHandBefore(new BigDecimal("10"))
                     .build();
 
             assertThatThrownBy(() -> service.createAdjustment(request))
@@ -116,8 +116,8 @@ class CycleCountAdjustmentServiceImplTest {
         void shouldCreatePendingAdjustmentWhenApprovalRequired() {
             CreateAdjustmentRequest request = CreateAdjustmentRequest.builder()
                     .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                    .countedQuantity(15)
-                    .quantityOnHandBefore(10)
+                    .countedQuantity(new BigDecimal("15"))
+                    .quantityOnHandBefore(new BigDecimal("10"))
                     .costAtTimeOfAdjustment(BigDecimal.TEN)
                     .build();
 
@@ -146,8 +146,8 @@ class CycleCountAdjustmentServiceImplTest {
             UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000009");
             CreateAdjustmentRequest request = CreateAdjustmentRequest.builder()
                     .stockItemId(stockItemId)
-                    .countedQuantity(15)
-                    .quantityOnHandBefore(10)
+                    .countedQuantity(new BigDecimal("15"))
+                    .quantityOnHandBefore(new BigDecimal("10"))
                     .costAtTimeOfAdjustment(new BigDecimal("99.0000")) // stale interim client value
                     .build();
 
@@ -175,8 +175,8 @@ class CycleCountAdjustmentServiceImplTest {
             UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-00000000000a");
             CreateAdjustmentRequest request = CreateAdjustmentRequest.builder()
                     .stockItemId(stockItemId)
-                    .countedQuantity(8)
-                    .quantityOnHandBefore(10)
+                    .countedQuantity(new BigDecimal("8"))
+                    .quantityOnHandBefore(new BigDecimal("10"))
                     .costAtTimeOfAdjustment(new BigDecimal("99.0000"))
                     .build();
 
@@ -205,8 +205,8 @@ class CycleCountAdjustmentServiceImplTest {
             UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             CreateAdjustmentRequest request = CreateAdjustmentRequest.builder()
                     .stockItemId(stockItemId)
-                    .countedQuantity(11)
-                    .quantityOnHandBefore(10)
+                    .countedQuantity(new BigDecimal("11"))
+                    .quantityOnHandBefore(new BigDecimal("10"))
                     .costAtTimeOfAdjustment(BigDecimal.ONE)
                     .build();
 
@@ -221,7 +221,7 @@ class CycleCountAdjustmentServiceImplTest {
                 return saved;
             });
 
-            when(ledgerRepository.calculateOnHandQuantity(stockItemId)).thenReturn(10);
+            when(ledgerRepository.calculateOnHandQuantity(stockItemId)).thenReturn(new BigDecimal("10"));
             when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(invocation -> {
                 InventoryLedgerEntry entry = invocation.getArgument(0);
                 entry.setLedgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
@@ -322,10 +322,10 @@ class CycleCountAdjustmentServiceImplTest {
                     .adjustmentId(adjustmentId)
                     .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                     .reasonCode("CYCLE_COUNT_SHRINK")
-                    .quantityChange(-2)
+                    .quantityChange(new BigDecimal("-2"))
                     .costAtTimeOfAdjustment(BigDecimal.ONE)
-                    .quantityOnHandBefore(10)
-                    .countedQuantity(8)
+                    .quantityOnHandBefore(new BigDecimal("10"))
+                    .countedQuantity(new BigDecimal("8"))
                     .createdByUserId("counter-user")
                     .status(AdjustmentStatus.PENDING_APPROVAL)
                     .build();

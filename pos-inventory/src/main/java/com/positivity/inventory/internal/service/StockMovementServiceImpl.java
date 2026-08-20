@@ -16,6 +16,7 @@ import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRe
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
 import com.positivity.inventory.service.StockMovementService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
@@ -40,6 +41,7 @@ public class StockMovementServiceImpl implements StockMovementService {
     private final LocationRefRepository locationRefRepository;
     private final ExtStorageLocationReplicaRepository storageLocationRepository;
     private final Clock clock;
+    private final QuantityScaleGuard quantityScaleGuard;
 
     public StockMovementServiceImpl(
             InventoryLedgerEntryRepository ledgerRepository,
@@ -47,12 +49,14 @@ public class StockMovementServiceImpl implements StockMovementService {
             LedgerPostingService ledgerPostingService,
             LocationRefRepository locationRefRepository,
             ExtStorageLocationReplicaRepository storageLocationRepository,
+            QuantityScaleGuard quantityScaleGuard,
             Clock clock) {
         this.ledgerRepository = ledgerRepository;
         this.adjustmentRepository = adjustmentRepository;
         this.ledgerPostingService = ledgerPostingService;
         this.locationRefRepository = locationRefRepository;
         this.storageLocationRepository = storageLocationRepository;
+        this.quantityScaleGuard = quantityScaleGuard;
         this.clock = clock;
     }
 
@@ -62,11 +66,18 @@ public class StockMovementServiceImpl implements StockMovementService {
             @NonNull RecordMovementRequest request, @NonNull String actorUserId) {
         MovementType movementType = request.getMovementType();
 
+        // ADR-0055 (#1414): a movement posts straight into the ledger, so it is gated by the
+        // product's declared divisibility exactly as receiving, ASN and returns are.
+        BigDecimal movementQuantity = quantityScaleGuard.requirePostable(
+                QuantityScaleGuard.productIdOf(request.getProductSku()),
+                request.getProductSku(),
+                "quantity",
+                request.getQuantity());
+
         if (movementType == MovementType.PICK || movementType == MovementType.ISSUE) {
-            Integer currentOnHand = ledgerRepository.calculateOnHandQuantityAtLocation(
-                    request.getProductSku(), request.getFromLocationId());
-            int onHand = currentOnHand != null ? currentOnHand : 0;
-            if (onHand < request.getQuantity()) {
+            BigDecimal onHand = Quantities.nz(ledgerRepository.calculateOnHandQuantityAtLocation(
+                    request.getProductSku(), request.getFromLocationId()));
+            if (Quantities.lt(onHand, request.getQuantity())) {
                 throw new InsufficientStockException(request.getProductSku(), request.getFromLocationId());
             }
         }
@@ -83,9 +94,9 @@ public class StockMovementServiceImpl implements StockMovementService {
                     .fromLocationId(request.getFromLocationId())
                     .toLocationId(request.getToLocationId())
                     .eventType(InventoryLedgerEventType.TRANSFER_IN)
-                    .changeInQuantity(request.getQuantity())
+                    .changeInQuantity(movementQuantity)
                     .quantityAfter(calculateQuantityAfter(
-                            request.getProductSku(), request.getToLocationId(), request.getQuantity()))
+                            request.getProductSku(), request.getToLocationId(), movementQuantity))
                     .unitOfMeasure(request.getUnitOfMeasure())
                     .sourceTransactionId(request.getSourceTransactionId())
                     .transactionUserId(actorUserId)
@@ -95,7 +106,7 @@ public class StockMovementServiceImpl implements StockMovementService {
         }
 
         InventoryLedgerEventType eventType = mapMovementTypeToEventType(movementType);
-        int quantityDelta = isOutbound(movementType) ? -request.getQuantity() : request.getQuantity();
+        BigDecimal quantityDelta = isOutbound(movementType) ? movementQuantity.negate() : movementQuantity;
 
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
                 .stockItemId(request.getProductSku())
@@ -162,9 +173,10 @@ public class StockMovementServiceImpl implements StockMovementService {
             throw new IllegalStateException("Adjustment request is not pending approval: " + adjustmentRequestId);
         }
 
-        int quantityDelta = adjustmentRequest.getQuantity();
-        InventoryLedgerEventType eventType =
-                quantityDelta >= 0 ? InventoryLedgerEventType.ADJUSTMENT_IN : InventoryLedgerEventType.ADJUSTMENT_OUT;
+        BigDecimal quantityDelta = Quantities.nz(adjustmentRequest.getQuantity());
+        InventoryLedgerEventType eventType = quantityDelta.signum() >= 0
+                ? InventoryLedgerEventType.ADJUSTMENT_IN
+                : InventoryLedgerEventType.ADJUSTMENT_OUT;
 
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
                 .stockItemId(adjustmentRequest.getProductSku())
@@ -246,10 +258,9 @@ public class StockMovementServiceImpl implements StockMovementService {
                 || movementType == MovementType.TRANSFER;
     }
 
-    private int calculateQuantityAfter(String stockItemId, UUID locationId, int quantityDelta) {
-        Integer currentOnHand = ledgerRepository.calculateOnHandQuantityAtLocation(stockItemId, locationId);
-        int onHand = currentOnHand != null ? currentOnHand : 0;
-        return onHand + quantityDelta;
+    private BigDecimal calculateQuantityAfter(String stockItemId, UUID locationId, BigDecimal quantityDelta) {
+        return Quantities.nz(ledgerRepository.calculateOnHandQuantityAtLocation(stockItemId, locationId))
+                .add(quantityDelta);
     }
 
     private @NonNull InventoryLedgerEntryResponse toResponse(@NonNull InventoryLedgerEntry entry) {

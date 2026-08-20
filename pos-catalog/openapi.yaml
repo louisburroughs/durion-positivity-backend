@@ -5585,13 +5585,11 @@ components:
       description: Availability information with status indicator
       properties:
         onHandQuantity:
-          type: integer
-          format: int32
+          type: number
           description: On-hand quantity at location
           example: 15
         availableToPromiseQuantity:
-          type: integer
-          format: int32
+          type: number
           description: Available to promise quantity
           example: 12
         leadTime:

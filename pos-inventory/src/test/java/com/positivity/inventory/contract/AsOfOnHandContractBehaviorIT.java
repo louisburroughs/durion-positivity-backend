@@ -11,6 +11,7 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -60,11 +61,11 @@ class AsOfOnHandContractBehaviorIT extends BaseContractIntegrationTest {
         UUID productId = UUID.randomUUID();
         UUID location = UUID.randomUUID();
 
-        post(productId, location, InventoryLedgerEventType.GOODS_RECEIPT, 10);
+        post(productId, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("10"));
         Thread.sleep(50);
-        post(productId, location, InventoryLedgerEventType.GOODS_ISSUE, -4);
+        post(productId, location, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-4"));
         Thread.sleep(50);
-        post(productId, location, InventoryLedgerEventType.GOODS_RECEIPT, 7);
+        post(productId, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("7"));
 
         List<InventoryLedgerEntry> entries =
                 inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString());
@@ -116,9 +117,9 @@ class AsOfOnHandContractBehaviorIT extends BaseContractIntegrationTest {
         UUID productId = UUID.randomUUID();
         UUID location = UUID.randomUUID();
 
-        post(productId, location, InventoryLedgerEventType.GOODS_RECEIPT, 9);
+        post(productId, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("9"));
         Thread.sleep(50);
-        post(productId, location, InventoryLedgerEventType.GOODS_ISSUE, -9);
+        post(productId, location, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-9"));
 
         List<InventoryLedgerEntry> entries =
                 inventoryLedgerEntryRepository.findByStockItemIdOrderByTimestampAsc(productId.toString());
@@ -148,7 +149,7 @@ class AsOfOnHandContractBehaviorIT extends BaseContractIntegrationTest {
     void asOfRequiresLedgerViewAuthority() throws Exception {
         UUID productId = UUID.randomUUID();
         UUID location = UUID.randomUUID();
-        post(productId, location, InventoryLedgerEventType.GOODS_RECEIPT, 5);
+        post(productId, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("5"));
 
         String pastInstant = Instant.now().minusSeconds(1).toString();
 
@@ -197,13 +198,13 @@ class AsOfOnHandContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.code").value("AS_OF_IN_FUTURE"));
     }
 
-    private void post(UUID productId, UUID locationId, InventoryLedgerEventType eventType, int change) {
+    private void post(UUID productId, UUID locationId, InventoryLedgerEventType eventType, BigDecimal change) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productId.toString())
                 .locationId(locationId)
                 .eventType(eventType)
                 .changeInQuantity(change)
-                .quantityAfter(0)
+                .quantityAfter(new BigDecimal("0"))
                 .transactionUserId("asof-contract-seed")
                 .build());
     }

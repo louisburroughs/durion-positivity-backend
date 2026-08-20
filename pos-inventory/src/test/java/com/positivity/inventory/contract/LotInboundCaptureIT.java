@@ -173,11 +173,11 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
         InventoryStockSummary agnostic = summaryRepository
                 .findByStockItemIdAndLocationId(productId.toString(), locationId)
                 .orElseThrow();
-        assertThat(agnostic.getOnHand()).isEqualTo(7);
+        assertThat(agnostic.getOnHand()).isEqualByComparingTo("7");
         InventoryStockSummary perLot = summaryRepository
                 .findByKey(productId.toString(), locationId, lot.getLotId())
                 .orElseThrow();
-        assertThat(perLot.getOnHand()).isEqualTo(7);
+        assertThat(perLot.getOnHand()).isEqualByComparingTo("7");
 
         // Second receipt of the same lot number reuses the lot (find-or-create).
         CreateGoodsReceiptRequest second = receiptRequest(po, locationId);

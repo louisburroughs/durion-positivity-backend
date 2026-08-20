@@ -10,6 +10,7 @@ import com.positivity.inventory.internal.dto.LedgerPage;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.service.InventoryLedgerService;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -35,8 +36,8 @@ class InventoryLedgerContractBehaviorIT extends BaseContractIntegrationTest {
                 .ledgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .stockItemId("SKU-1")
                 .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
-                .changeInQuantity(5)
-                .quantityAfter(5)
+                .changeInQuantity(new BigDecimal("5"))
+                .quantityAfter(new BigDecimal("5"))
                 .timestamp(Instant.parse("2024-01-01T00:00:00Z"))
                 .build();
 
@@ -64,8 +65,8 @@ class InventoryLedgerContractBehaviorIT extends BaseContractIntegrationTest {
                         .ledgerEntryId(entryId)
                         .stockItemId("SKU-1")
                         .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
-                        .changeInQuantity(2)
-                        .quantityAfter(2)
+                        .changeInQuantity(new BigDecimal("2"))
+                        .quantityAfter(new BigDecimal("2"))
                         .timestamp(Instant.parse("2024-01-01T00:00:00Z"))
                         .build());
 

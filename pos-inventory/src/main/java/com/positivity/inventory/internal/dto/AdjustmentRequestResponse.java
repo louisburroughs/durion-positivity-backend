@@ -4,6 +4,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Value;
@@ -44,7 +45,7 @@ public class AdjustmentRequestResponse {
             example = "12",
             requiredMode = REQUIRED)
     @NotNull
-    Integer quantity;
+    BigDecimal quantity;
 
     @Schema(
             description = "Reason code explaining why the adjustment was requested",

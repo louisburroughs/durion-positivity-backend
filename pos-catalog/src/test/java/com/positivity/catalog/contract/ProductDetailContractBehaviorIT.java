@@ -60,7 +60,8 @@ class ProductDetailContractBehaviorIT extends BaseContractIntegrationTest {
                         new BigDecimal("199.99"), "TIER_A")));
 
         Mockito.when(inventoryClient.fetchAvailability(Mockito.any(), Mockito.any()))
-                .thenReturn(Optional.of(new AvailabilityClientResponse(25, 5, 20, "EA")));
+                .thenReturn(Optional.of(new AvailabilityClientResponse(
+                        BigDecimal.valueOf(25), BigDecimal.valueOf(5), BigDecimal.valueOf(20), "EA")));
 
         UUID productId = createProductAndGetId(
                 "SKU-PD-001-" + UUID.fromString("00000000-0000-0000-0000-000000000001"), "MPN-PD-001");
@@ -92,7 +93,8 @@ class ProductDetailContractBehaviorIT extends BaseContractIntegrationTest {
                 .thenThrow(new RuntimeException("price service down"));
 
         Mockito.when(inventoryClient.fetchAvailability(Mockito.any(), Mockito.any()))
-                .thenReturn(Optional.of(new AvailabilityClientResponse(10, 2, 8, "EA")));
+                .thenReturn(Optional.of(new AvailabilityClientResponse(
+                        BigDecimal.valueOf(10), BigDecimal.valueOf(2), BigDecimal.valueOf(8), "EA")));
 
         UUID productId = createProductAndGetId(
                 "SKU-PD-002-" + UUID.fromString("00000000-0000-0000-0000-000000000001"), "MPN-PD-002");

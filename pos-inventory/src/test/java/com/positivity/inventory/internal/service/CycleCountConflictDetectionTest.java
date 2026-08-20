@@ -84,13 +84,13 @@ class CycleCountConflictDetectionTest {
         SecurityContextHolder.clearContext();
     }
 
-    private void post(String sku, UUID locationId, InventoryLedgerEventType type, int change, int after) {
+    private void post(String sku, UUID locationId, InventoryLedgerEventType type, BigDecimal change, int after) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(locationId)
                 .eventType(type)
                 .changeInQuantity(change)
-                .quantityAfter(after)
+                .quantityAfter(BigDecimal.valueOf(after))
                 .transactionUserId("i2-test")
                 .build());
     }
@@ -136,10 +136,10 @@ class CycleCountConflictDetectionTest {
     void movementMidCount_flagsConflictAtSubmission() {
         String sku = "SKU-I2-" + UUID.randomUUID();
         UUID location = UUID.randomUUID();
-        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 10, 10);
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("10"), 10);
         CycleCountTask task = task(location.toString(), sku, 10);
         tick();
-        post(sku, location, InventoryLedgerEventType.GOODS_ISSUE, -3, 7);
+        post(sku, location, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-3"), 7);
 
         CountResponse response = cycleCountService.submitCount(SubmitCountRequest.builder()
                 .taskId(task.getTaskId())
@@ -157,7 +157,7 @@ class CycleCountConflictDetectionTest {
     void noMovement_staysPendingReview() {
         String sku = "SKU-I2-" + UUID.randomUUID();
         UUID location = UUID.randomUUID();
-        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 10, 10);
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("10"), 10);
         CycleCountTask task = task(location.toString(), sku, 10);
 
         CountResponse response = cycleCountService.submitCount(SubmitCountRequest.builder()
@@ -175,10 +175,10 @@ class CycleCountConflictDetectionTest {
     void recountFromConflict_works() {
         String sku = "SKU-I2-" + UUID.randomUUID();
         UUID location = UUID.randomUUID();
-        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 10, 10);
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("10"), 10);
         CycleCountTask task = task(location.toString(), sku, 10);
         tick();
-        post(sku, location, InventoryLedgerEventType.GOODS_ISSUE, -3, 7);
+        post(sku, location, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-3"), 7);
 
         cycleCountService.submitCount(SubmitCountRequest.builder()
                 .taskId(task.getTaskId())
@@ -209,10 +209,10 @@ class CycleCountConflictDetectionTest {
         String sku = stockItemId.toString();
         // Non-UUID bin ⇒ detection and recomputation both use the global
         // (SKU-wide) on-hand math, like the adjustment posting path itself.
-        post(sku, null, InventoryLedgerEventType.GOODS_RECEIPT, 10, 10);
+        post(sku, null, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("10"), 10);
         CycleCountTask task = task("BIN-I2-APPROVE", sku, 10);
         tick();
-        post(sku, null, InventoryLedgerEventType.GOODS_ISSUE, -3, 7);
+        post(sku, null, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-3"), 7);
 
         CountResponse count = cycleCountService.submitCount(SubmitCountRequest.builder()
                 .taskId(task.getTaskId())
@@ -225,8 +225,8 @@ class CycleCountConflictDetectionTest {
                 .stockItemId(stockItemId)
                 .taskId(task.getTaskId())
                 .reasonCode("CYCLE_COUNT_VARIANCE")
-                .countedQuantity(5)
-                .quantityOnHandBefore(10) // stale snapshot: would imply -5
+                .countedQuantity(new BigDecimal("5"))
+                .quantityOnHandBefore(new BigDecimal("10")) // stale snapshot: would imply -5
                 .costAtTimeOfAdjustment(new BigDecimal("10.00"))
                 .createdByUserId(AUDITOR)
                 .build());
@@ -238,13 +238,13 @@ class CycleCountConflictDetectionTest {
         // Recomputed against CURRENT on-hand (7), never the stale snapshot (10):
         // counted 5 - current 7 = -2, not -5.
         assertThat(approved.getStatus()).isEqualTo(AdjustmentStatus.POSTED);
-        assertThat(approved.getQuantityChange()).isEqualTo(-2);
-        assertThat(approved.getQuantityOnHandBefore()).isEqualTo(7);
+        assertThat(approved.getQuantityChange()).isEqualByComparingTo("-2");
+        assertThat(approved.getQuantityOnHandBefore()).isEqualByComparingTo("7");
 
         InventoryLedgerEntry posted =
                 ledgerRepository.findByAdjustmentId(created.getAdjustmentId()).orElseThrow();
         assertThat(posted.getEventType()).isEqualTo(InventoryLedgerEventType.COUNT_VARIANCE_OUT);
-        assertThat(posted.getChangeInQuantity()).isEqualTo(-2);
+        assertThat(posted.getChangeInQuantity()).isEqualByComparingTo("-2");
 
         assertThat(taskRepository.findById(task.getTaskId()).orElseThrow().getStatus())
                 .isEqualTo(TaskStatus.APPROVED);
@@ -257,7 +257,7 @@ class CycleCountConflictDetectionTest {
 
         UUID stockItemId = UUID.randomUUID();
         String sku = stockItemId.toString();
-        post(sku, null, InventoryLedgerEventType.GOODS_RECEIPT, 10, 10);
+        post(sku, null, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("10"), 10);
         CycleCountTask task = task("BIN-I2-LATE", sku, 10);
 
         CountResponse count = cycleCountService.submitCount(SubmitCountRequest.builder()
@@ -271,8 +271,8 @@ class CycleCountConflictDetectionTest {
                 .stockItemId(stockItemId)
                 .taskId(task.getTaskId())
                 .reasonCode("CYCLE_COUNT_VARIANCE")
-                .countedQuantity(8)
-                .quantityOnHandBefore(10)
+                .countedQuantity(new BigDecimal("8"))
+                .quantityOnHandBefore(new BigDecimal("10"))
                 .costAtTimeOfAdjustment(new BigDecimal("10.00"))
                 .createdByUserId(AUDITOR)
                 .build());
@@ -280,7 +280,7 @@ class CycleCountConflictDetectionTest {
 
         // Movement lands between count and approval.
         tick();
-        post(sku, null, InventoryLedgerEventType.GOODS_ISSUE, -4, 6);
+        post(sku, null, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-4"), 6);
 
         assertThatExceptionOfType(CycleCountConflictException.class)
                 .isThrownBy(() -> adjustmentService.approveAdjustment(
@@ -299,11 +299,11 @@ class CycleCountConflictDetectionTest {
                 created.getAdjustmentId(), ApproveAdjustmentRequest.builder().build(), null);
 
         // counted 8 - current 6 = +2 → COUNT_VARIANCE_IN.
-        assertThat(approved.getQuantityChange()).isEqualTo(2);
+        assertThat(approved.getQuantityChange()).isEqualByComparingTo("2");
         InventoryLedgerEntry posted =
                 ledgerRepository.findByAdjustmentId(created.getAdjustmentId()).orElseThrow();
         assertThat(posted.getEventType()).isEqualTo(InventoryLedgerEventType.COUNT_VARIANCE_IN);
-        assertThat(posted.getChangeInQuantity()).isEqualTo(2);
+        assertThat(posted.getChangeInQuantity()).isEqualByComparingTo("2");
     }
 
     @Test
@@ -313,22 +313,22 @@ class CycleCountConflictDetectionTest {
         UUID location = UUID.randomUUID();
         UUID otherLocation = UUID.randomUUID();
         // Before the task snapshot — must NOT be listed.
-        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 5, 5);
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("5"), 5);
         CycleCountTask task = task(location.toString(), sku, 5);
         tick();
         // In-window entries at the task's location — must be listed, in order.
-        post(sku, location, InventoryLedgerEventType.GOODS_ISSUE, -2, 3);
-        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 3, 6);
+        post(sku, location, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-2"), 3);
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("3"), 6);
         // In-window but other location — must NOT be listed.
-        post(sku, otherLocation, InventoryLedgerEventType.GOODS_RECEIPT, 7, 7);
+        post(sku, otherLocation, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("7"), 7);
 
         List<InterferingMovementResponse> movements = cycleCountService.getInterferingMovements(task.getTaskId());
 
         assertThat(movements).hasSize(2);
         assertThat(movements.get(0).getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_ISSUE);
-        assertThat(movements.get(0).getChangeInQuantity()).isEqualTo(-2);
+        assertThat(movements.get(0).getChangeInQuantity()).isEqualByComparingTo("-2");
         assertThat(movements.get(1).getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_RECEIPT);
-        assertThat(movements.get(1).getChangeInQuantity()).isEqualTo(3);
+        assertThat(movements.get(1).getChangeInQuantity()).isEqualByComparingTo("3");
         assertThat(movements)
                 .allSatisfy(movement -> assertThat(movement.getLocationId()).isEqualTo(location));
     }

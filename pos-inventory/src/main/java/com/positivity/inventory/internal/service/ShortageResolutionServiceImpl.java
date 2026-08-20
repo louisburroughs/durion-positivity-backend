@@ -27,6 +27,7 @@ import com.positivity.inventory.service.ShortageResolutionService;
 import com.positivity.inventory.service.TransferOrderService;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -114,9 +115,9 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
             @NonNull UUID allocationId,
             @Nullable UUID workorderLineId,
             @NonNull String sku,
-            int shortQuantity,
+            BigDecimal shortQuantity,
             @Nullable UUID locationId) {
-        if (shortQuantity <= 0) {
+        if (shortQuantity == null || shortQuantity.signum() <= 0) {
             throw new IllegalArgumentException("shortQuantity must be positive");
         }
         LocalDate today = LocalDate.ofInstant(Instant.now(clock), ZoneOffset.UTC);
@@ -146,7 +147,7 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
     private List<ShortageOptionDto> substituteOptions(
             UUID allocationId,
             String sku,
-            int shortQuantity,
+            BigDecimal shortQuantity,
             @Nullable UUID locationId,
             @Nullable BigDecimal originalCost,
             LocalDate today) {
@@ -161,8 +162,8 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
                 continue; // the group carries the product itself; skip self
             }
             String memberSku = memberId.toString();
-            long atp = atpOf(memberSku, locationId);
-            if (atp <= 0) {
+            BigDecimal atp = atpOf(memberSku, locationId);
+            if (!Quantities.isPositive(atp)) {
                 continue; // only offer substitutes with live availability
             }
             options.add(ShortageOptionDto.builder()
@@ -179,12 +180,12 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
     }
 
     private List<ShortageOptionDto> transferInOptions(
-            UUID allocationId, String sku, int shortQuantity, @Nullable UUID locationId, LocalDate today) {
+            UUID allocationId, String sku, BigDecimal shortQuantity, @Nullable UUID locationId, LocalDate today) {
         if (locationId == null) {
             return List.of();
         }
         UUID shortageSite = forecastSiteResolver.resolveForecastSite(locationId);
-        Map<UUID, Long> surplusBySite = new LinkedHashMap<>();
+        Map<UUID, BigDecimal> surplusBySite = new LinkedHashMap<>();
         for (InventoryStockSummary row : stockSummaryRepository.findByStockItemId(sku)) {
             UUID loc = row.getLocationId();
             if (loc == null) {
@@ -194,19 +195,21 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
             if (rowSite == null || Objects.equals(rowSite, shortageSite)) {
                 continue; // same-site surplus is not a cross-site transfer
             }
-            long surplus = row.getOnHand() - row.getAllocated();
-            if (surplus > 0) {
-                surplusBySite.merge(rowSite, surplus, Long::sum);
+            BigDecimal surplus = Quantities.nz(row.getOnHand()).subtract(Quantities.nz(row.getAllocated()));
+            if (Quantities.isPositive(surplus)) {
+                surplusBySite.merge(rowSite, surplus, BigDecimal::add);
             }
         }
         List<ShortageOptionDto> options = new ArrayList<>();
         surplusBySite.forEach((site, surplus) -> {
-            if (surplus >= shortQuantity) {
+            if (Quantities.gte(surplus, shortQuantity)) {
                 options.add(ShortageOptionDto.builder()
                         .allocationId(allocationId)
                         .optionType(ShortageResolutionOption.TRANSFER_IN)
-                        .description("Transfer " + shortQuantity + " in from sibling site " + site + " (" + surplus
-                                + " surplus available)")
+                        .description(
+                                "Transfer " + shortQuantity.toPlainString() + " in from sibling site " + site + " ("
+                                        + surplus.toPlainString()
+                                        + " surplus available)")
                         .sourceLocationId(site)
                         .availableQuantity(surplus)
                         .expectedResolutionDate(today.plusDays(TRANSFER_LEAD_DAYS))
@@ -217,9 +220,13 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
     }
 
     private ShortageOptionDto emergencyPurchaseOption(
-            UUID allocationId, String sku, int shortQuantity, @Nullable BigDecimal originalCost, LocalDate today) {
+            UUID allocationId,
+            String sku,
+            BigDecimal shortQuantity,
+            @Nullable BigDecimal originalCost,
+            LocalDate today) {
         VendorSelectionService.VendorCandidate vendor = vendorSelectionService
-                .selectVendor(parseUuid(sku), shortQuantity)
+                .selectVendor(parseUuid(sku), orderableUnits(shortQuantity))
                 .chosen();
         int leadDays =
                 vendor != null && vendor.leadTimeDays() != null ? vendor.leadTimeDays() : DEFAULT_PURCHASE_LEAD_DAYS;
@@ -310,7 +317,8 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
         if (substituteId == null) {
             throw ShortageResolutionException.invalidIdentifier("substituteSku", request.getSubstituteSku());
         }
-        if (request.getLocationId() != null && atpOf(request.getSubstituteSku(), request.getLocationId()) <= 0) {
+        if (request.getLocationId() != null
+                && !Quantities.isPositive(atpOf(request.getSubstituteSku(), request.getLocationId()))) {
             throw ShortageResolutionException.substituteUnavailable(request.getSubstituteSku());
         }
         ReservationResponse reservation = reservationService.createOrUpdateReservation(
@@ -334,7 +342,7 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
                 .destinationLocationId(destinationSite)
                 .lines(List.of(TransferOrderLineRequest.builder()
                         .sku(request.getSku())
-                        .requestedQty(request.getShortQuantity())
+                        .requestedQty(Math.toIntExact(orderableUnits(request.getShortQuantity())))
                         .build()))
                 .notes("Auto-sourced by shortage resolution (odoo-parity G2) for allocation "
                         + request.getAllocationId())
@@ -346,7 +354,7 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
     private ArtifactRef executeEmergencyPurchase(ShortageResolveRequest request) {
         UUID productId = parseUuid(request.getSku());
         VendorSelectionService.VendorSelection selection =
-                vendorSelectionService.selectVendor(productId, request.getShortQuantity());
+                vendorSelectionService.selectVendor(productId, orderableUnits(request.getShortQuantity()));
         VendorSelectionService.VendorCandidate vendor = selection.chosen();
         int leadDays =
                 vendor != null && vendor.leadTimeDays() != null ? vendor.leadTimeDays() : DEFAULT_PURCHASE_LEAD_DAYS;
@@ -360,7 +368,7 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
                 .policyId(policyId)
                 .itemSKU(request.getSku())
                 .locationId(request.getLocationId() != null ? request.getLocationId() : policyId)
-                .suggestedQuantity(request.getShortQuantity())
+                .suggestedQuantity(Math.toIntExact(orderableUnits(request.getShortQuantity())))
                 .suggestedVendorType(vendor != null ? vendor.sourceType() : null)
                 .vendorRefId(vendor != null ? vendor.vendorRefId() : null)
                 .unitCostMinor(vendor != null ? vendor.unitCostMinor() : null)
@@ -403,11 +411,27 @@ public class ShortageResolutionServiceImpl implements ShortageResolutionService 
                 .orElse(DEFAULT_BACKORDER_LEAD_DAYS);
     }
 
-    private long atpOf(String sku, UUID locationId) {
+    /**
+     * A shortfall expressed as a whole number of units to buy or move.
+     *
+     * <p>The shortfall itself is decimal since ADR-0055 (#1414) — half a drum missing is half a
+     * drum missing — but a purchase suggestion and a transfer-order line are documents about
+     * containers, and neither a vendor nor a shipping label understands 3.5 of something. Rounding
+     * UP is the only safe direction here: ordering less than the shortfall leaves the shortage
+     * unresolved, which is the failure this whole path exists to prevent. The over-order is
+     * exactly the same one a whole-units catalog produces today. Purchase and transfer documents
+     * gain their own UoM handling in ADR-0055 stage 3.
+     */
+    private static long orderableUnits(BigDecimal shortQuantity) {
+        return shortQuantity.setScale(0, RoundingMode.CEILING).longValueExact();
+    }
+
+    private BigDecimal atpOf(String sku, UUID locationId) {
         return stockSummaryRepository
                 .findByStockItemIdAndLocationId(sku, locationId)
                 .map(InventoryStockSummary::getAtp)
-                .orElse(0L);
+                .map(Quantities::nz)
+                .orElse(BigDecimal.ZERO);
     }
 
     private @Nullable BigDecimal costOf(String sku) {

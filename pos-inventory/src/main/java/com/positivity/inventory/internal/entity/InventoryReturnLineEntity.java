@@ -42,8 +42,9 @@ public class InventoryReturnLineEntity {
     @Column(nullable = false)
     private UUID skuId;
 
-    @Column(nullable = false)
-    private int quantityReturned;
+    /** Base-UoM quantity returned; decimal-capable per the product's declaration (ADR-0055). */
+    @Column(nullable = false, precision = 19, scale = 4)
+    private BigDecimal quantityReturned;
 
     /** UoM the line was keyed in, when it differed from base (odoo-parity B2, #1034). */
     @Column(name = "document_uom", length = 32)

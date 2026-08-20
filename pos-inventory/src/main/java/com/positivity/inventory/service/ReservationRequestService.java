@@ -1,5 +1,6 @@
 package com.positivity.inventory.service;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -17,13 +18,14 @@ public interface ReservationRequestService {
      * @param workorderLineId workorder line the demand is for, when demand is from a workorder
      * @param salesOrderLineId sales-order line the demand is for, when demand is from a sales order
      * @param stockItemId stock item requested
-     * @param requiredQuantity quantity requested
+     * @param requiredQuantity quantity requested; decimal-capable per the product's catalog
+     *     divisibility declaration (ADR-0055, #1414)
      * @param locationId site the demand must be covered at
      */
     void handle(
             @Nullable UUID workorderLineId,
             @Nullable UUID salesOrderLineId,
             @NonNull UUID stockItemId,
-            int requiredQuantity,
+            @NonNull BigDecimal requiredQuantity,
             @NonNull UUID locationId);
 }

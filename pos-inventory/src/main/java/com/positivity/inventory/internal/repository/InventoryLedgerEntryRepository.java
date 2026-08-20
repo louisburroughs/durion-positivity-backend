@@ -82,7 +82,7 @@ public interface InventoryLedgerEntryRepository
                           AND e.eventType IN :eventTypes
                           AND e.timestamp > :after
                         """)
-    Integer sumChangeForStockItemSince(
+    BigDecimal sumChangeForStockItemSince(
             @Param("stockItemId") String stockItemId,
             @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
             @Param("after") java.time.Instant after);
@@ -96,13 +96,13 @@ public interface InventoryLedgerEntryRepository
                           AND e.eventType IN :eventTypes
                           AND e.timestamp > :after
                         """)
-    Integer sumChangeForStockItemAtLocationSince(
+    BigDecimal sumChangeForStockItemAtLocationSince(
             @Param("stockItemId") String stockItemId,
             @Param("locationId") UUID locationId,
             @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
             @Param("after") java.time.Instant after);
 
-    default Integer calculateOnHandQuantity(UUID stockItemId) {
+    default BigDecimal calculateOnHandQuantity(UUID stockItemId) {
         return calculateOnHandQuantityForEventTypes(
                 stockItemId.toString(), InventoryLedgerEventType.onHandAffectingTypes());
     }
@@ -113,26 +113,26 @@ public interface InventoryLedgerEntryRepository
                         WHERE e.stockItemId = :stockItemId
                           AND e.eventType IN :eventTypes
                         """)
-    Integer calculateOnHandQuantityForEventTypes(
+    BigDecimal calculateOnHandQuantityForEventTypes(
             @Param("stockItemId") String stockItemId,
             @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
 
-    default Integer calculateOnHandQuantityAtLocation(UUID stockItemId, UUID locationId) {
+    default BigDecimal calculateOnHandQuantityAtLocation(UUID stockItemId, UUID locationId) {
         return calculateOnHandQuantityAtLocationForEventTypes(
                 stockItemId.toString(), locationId, InventoryLedgerEventType.onHandAffectingTypes());
     }
 
-    default Integer calculateOnHandQuantityAtLocation(
+    default BigDecimal calculateOnHandQuantityAtLocation(
             UUID stockItemId, UUID locationId, Collection<InventoryLedgerEventType> eventTypes) {
         return calculateOnHandQuantityAtLocationForEventTypes(stockItemId.toString(), locationId, eventTypes);
     }
 
-    default Integer calculateOnHandQuantityAtLocation(String stockItemId, UUID locationId) {
+    default BigDecimal calculateOnHandQuantityAtLocation(String stockItemId, UUID locationId) {
         return calculateOnHandQuantityAtLocationForEventTypes(
                 stockItemId, locationId, InventoryLedgerEventType.onHandAffectingTypes());
     }
 
-    default Integer calculateOnHandQuantityAtLocation(
+    default BigDecimal calculateOnHandQuantityAtLocation(
             String stockItemId, UUID locationId, Collection<InventoryLedgerEventType> eventTypes) {
         return calculateOnHandQuantityAtLocationForEventTypes(stockItemId, locationId, eventTypes);
     }
@@ -144,7 +144,7 @@ public interface InventoryLedgerEntryRepository
                           AND e.locationId = :locationId
                           AND e.eventType IN :eventTypes
                         """)
-    Integer calculateOnHandQuantityAtLocationForEventTypes(
+    BigDecimal calculateOnHandQuantityAtLocationForEventTypes(
             @Param("stockItemId") String stockItemId,
             @Param("locationId") UUID locationId,
             @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
@@ -155,7 +155,7 @@ public interface InventoryLedgerEntryRepository
                         WHERE e.locationId = :locationId
                           AND e.eventType IN :eventTypes
                         """)
-    Integer calculateOnHandQuantityAtLocation(
+    BigDecimal calculateOnHandQuantityAtLocation(
             @Param("locationId") UUID locationId, @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes);
 
     @Query("""
@@ -172,7 +172,7 @@ public interface InventoryLedgerEntryRepository
     interface LocationOnHand {
         String getStockItemId();
 
-        Long getOnHandQuantity();
+        BigDecimal getOnHandQuantity();
     }
 
     // ─── Point-in-time (as-of) aggregations (odoo-parity A3, issue #1029) ─────
@@ -202,7 +202,7 @@ public interface InventoryLedgerEntryRepository
                           AND e.eventType IN :eventTypes
                           AND e.timestamp <= :asOf
                         """)
-    Integer calculateOnHandAtLocationAsOf(
+    BigDecimal calculateOnHandAtLocationAsOf(
             @Param("locationId") UUID locationId,
             @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
             @Param("asOf") java.time.Instant asOf);
@@ -216,7 +216,7 @@ public interface InventoryLedgerEntryRepository
                           AND e.eventType IN :eventTypes
                           AND e.timestamp <= :asOf
                         """)
-    Integer calculateOnHandForStockItemAtLocationAsOf(
+    BigDecimal calculateOnHandForStockItemAtLocationAsOf(
             @Param("stockItemId") String stockItemId,
             @Param("locationId") UUID locationId,
             @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
@@ -287,7 +287,7 @@ public interface InventoryLedgerEntryRepository
                         WHERE e.sourceTransactionId = :sourceTransactionId
                           AND e.eventType = :eventType
                         """)
-    int sumChangeBySourceTransactionIdAndEventType(
+    BigDecimal sumChangeBySourceTransactionIdAndEventType(
             @Param("sourceTransactionId") String sourceTransactionId,
             @Param("eventType") InventoryLedgerEventType eventType);
 
@@ -353,7 +353,7 @@ public interface InventoryLedgerEntryRepository
      * <p>Locations without matching ledger entries are absent from the result (treat as 0).
      * An empty {@code locationIds} collection short-circuits to an empty map without executing SQL.
      */
-    default Map<UUID, Long> sumQuantityByLocationChunked(
+    default Map<UUID, BigDecimal> sumQuantityByLocationChunked(
             Collection<UUID> locationIds, Collection<InventoryLedgerEventType> eventTypes) {
         if (eventTypes == null || eventTypes.isEmpty()) {
             return Map.of();
@@ -366,7 +366,7 @@ public interface InventoryLedgerEntryRepository
      *
      * <p>Same semantics as {@link #sumQuantityByLocationChunked(Collection, Collection)}.
      */
-    default Map<UUID, Long> sumQuantityByLocationForSkuChunked(
+    default Map<UUID, BigDecimal> sumQuantityByLocationForSkuChunked(
             String stockItemId, Collection<UUID> locationIds, Collection<InventoryLedgerEventType> eventTypes) {
         if (eventTypes == null || eventTypes.isEmpty()) {
             return Map.of();
@@ -381,29 +381,29 @@ public interface InventoryLedgerEntryRepository
      * {@code LocationInventoryInquiryServiceImpl#calculateOutstandingAllocations}. Locations without
      * allocation entries are absent from the result (treat as 0).
      */
-    default Map<UUID, Long> calculateOutstandingAllocationsByLocation(Collection<UUID> locationIds) {
-        Map<UUID, Long> created =
+    default Map<UUID, BigDecimal> calculateOutstandingAllocationsByLocation(Collection<UUID> locationIds) {
+        Map<UUID, BigDecimal> created =
                 sumQuantityByLocationChunked(locationIds, List.of(InventoryLedgerEventType.ALLOCATION_CREATED));
-        Map<UUID, Long> released =
+        Map<UUID, BigDecimal> released =
                 sumQuantityByLocationChunked(locationIds, List.of(InventoryLedgerEventType.ALLOCATION_RELEASED));
 
-        Map<UUID, Long> outstanding = new HashMap<>(created);
-        released.forEach((locationId, quantity) -> outstanding.merge(locationId, -quantity, Long::sum));
+        Map<UUID, BigDecimal> outstanding = new HashMap<>(created);
+        released.forEach((locationId, quantity) -> outstanding.merge(locationId, quantity.negate(), BigDecimal::add));
         return Map.copyOf(outstanding);
     }
 
-    private Map<UUID, Long> sumChunked(
+    private Map<UUID, BigDecimal> sumChunked(
             Collection<UUID> locationIds, Function<List<UUID>, List<LocationQuantity>> query) {
         if (locationIds == null || locationIds.isEmpty()) {
             return Map.of();
         }
 
         List<UUID> distinctIds = locationIds.stream().distinct().toList();
-        Map<UUID, Long> totals = new HashMap<>();
+        Map<UUID, BigDecimal> totals = new HashMap<>();
         for (int start = 0; start < distinctIds.size(); start += LOCATION_ID_CHUNK_SIZE) {
             List<UUID> chunk = distinctIds.subList(start, Math.min(start + LOCATION_ID_CHUNK_SIZE, distinctIds.size()));
             for (LocationQuantity row : query.apply(chunk)) {
-                totals.merge(row.getLocationId(), row.getQuantity(), Long::sum);
+                totals.merge(row.getLocationId(), row.getQuantity(), BigDecimal::add);
             }
         }
         return Map.copyOf(totals);
@@ -412,7 +412,7 @@ public interface InventoryLedgerEntryRepository
     interface LocationQuantity {
         UUID getLocationId();
 
-        long getQuantity();
+        BigDecimal getQuantity();
     }
 
     /**
@@ -449,11 +449,11 @@ public interface InventoryLedgerEntryRepository
 
         UUID getLocationId();
 
-        long getOnHand();
+        BigDecimal getOnHand();
 
-        long getAllocated();
+        BigDecimal getAllocated();
 
-        long getReserved();
+        BigDecimal getReserved();
 
         /**
          * In-transit contribution of arrivals grouped at this key: {@code Σ -change} of
@@ -461,7 +461,7 @@ public interface InventoryLedgerEntryRepository
          * (positive) side keys on {@code toLocationId} and comes from
          * {@link #aggregateOutboundInTransit} (odoo-parity C2, #1036).
          */
-        long getInTransitArrived();
+        BigDecimal getInTransitArrived();
     }
 
     /**
@@ -486,7 +486,7 @@ public interface InventoryLedgerEntryRepository
 
         UUID getLocationId();
 
-        long getInTransit();
+        BigDecimal getInTransit();
     }
 
     /**

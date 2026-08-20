@@ -61,7 +61,7 @@ class BatchReplenishmentScanTest {
         return "SKU-F1-" + UUID.randomUUID();
     }
 
-    private void receive(String sku, UUID locationId, int quantity) {
+    private void receive(String sku, UUID locationId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(locationId)
@@ -95,7 +95,7 @@ class BatchReplenishmentScanTest {
         String sku = uniqueSku();
         UUID location = UUID.randomUUID();
         seedPolicy(sku, location, 5, 20);
-        receive(sku, location, 3); // on-hand 3 < min 5
+        receive(sku, location, new BigDecimal("3")); // on-hand 3 < min 5
 
         replenishmentService.runBatchReplenishmentScan();
         replenishmentService.runBatchReplenishmentScan();
@@ -116,7 +116,7 @@ class BatchReplenishmentScanTest {
         String sku = uniqueSku();
         UUID location = UUID.randomUUID();
         seedPolicy(sku, location, 5, 20);
-        receive(sku, location, 5); // exactly at minimum
+        receive(sku, location, new BigDecimal("5")); // exactly at minimum
 
         ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
 
@@ -130,7 +130,7 @@ class BatchReplenishmentScanTest {
         String sku = uniqueSku();
         UUID location = UUID.randomUUID();
         seedPolicy(sku, location, 5, 20);
-        receive(sku, location, 4); // on-hand 4 < min 5 → need 16
+        receive(sku, location, new BigDecimal("4")); // on-hand 4 < min 5 → need 16
 
         replenishmentService.runBatchReplenishmentScan();
         assertThat(openTasksFor(sku).getFirst().getQuantity()).isEqualTo(16);
@@ -140,8 +140,8 @@ class BatchReplenishmentScanTest {
                 .stockItemId(sku)
                 .locationId(location)
                 .eventType(InventoryLedgerEventType.GOODS_ISSUE)
-                .changeInQuantity(-2)
-                .quantityAfter(2)
+                .changeInQuantity(new BigDecimal("-2"))
+                .quantityAfter(new BigDecimal("2"))
                 .transactionUserId("f1-test")
                 .build());
 
@@ -183,7 +183,7 @@ class BatchReplenishmentScanTest {
         String sku = skuId.toString();
         UUID location = UUID.randomUUID(); // not in the replica → treated as a site id
         seedPolicy(sku, location, 5, 20);
-        receive(sku, location, 3); // on-hand 3 < min 5 — pre-F2 math would trigger
+        receive(sku, location, new BigDecimal("3")); // on-hand 3 < min 5 — pre-F2 math would trigger
         // Open APPROVED PO for 7 units expected TODAY (== horizon date, boundary inclusive):
         // projected 3 + 7 = 10 >= min 5.
         savePo("APPROVED", location, LocalDate.now(ZoneOffset.UTC), skuId, "7");
@@ -200,7 +200,7 @@ class BatchReplenishmentScanTest {
         String sku = skuId.toString();
         UUID location = UUID.randomUUID();
         seedPolicy(sku, location, 5, 20);
-        receive(sku, location, 3);
+        receive(sku, location, new BigDecimal("3"));
         // Same PO but expected TOMORROW — outside the 0-day horizon, excluded from the
         // projection: projected stays 3 < min 5.
         savePo("APPROVED", location, LocalDate.now(ZoneOffset.UTC).plusDays(1), skuId, "7");
@@ -225,7 +225,7 @@ class BatchReplenishmentScanTest {
                 .name("F2 pick face")
                 .build());
         seedPolicy(sku, bin, 5, 20);
-        receive(sku, bin, 3); // on-hand at the BIN the policy governs
+        receive(sku, bin, new BigDecimal("3")); // on-hand at the BIN the policy governs
         // PO ships to the SITE (POs are never keyed by bin) — bin→site resolution must
         // credit it to the policy's projection: 3 + 7 = 10 >= 5 → no trigger.
         savePo("APPROVED", site, LocalDate.now(ZoneOffset.UTC), skuId, "7");
@@ -242,7 +242,7 @@ class BatchReplenishmentScanTest {
         String sku = skuId.toString();
         UUID location = UUID.randomUUID();
         seedPolicy(sku, location, 5, 20);
-        receive(sku, location, 3);
+        receive(sku, location, new BigDecimal("3"));
 
         replenishmentService.runBatchReplenishmentScan();
         var eventResponse = replenishmentService.evaluatePickFaceForReplenishment(sku, location);

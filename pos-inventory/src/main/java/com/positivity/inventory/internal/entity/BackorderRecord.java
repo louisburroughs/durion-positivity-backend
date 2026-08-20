@@ -12,6 +12,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -83,9 +84,13 @@ public class BackorderRecord {
     @Column(name = "location_id")
     private UUID locationId;
 
-    /** Quantity that could not be fulfilled; always positive. */
-    @Column(name = "quantity_short", nullable = false)
-    private Integer quantityShort;
+    /**
+     * Quantity that could not be fulfilled; always positive (DB CHECK). Decimal-capable
+     * (ADR-0055, #1414): a shortfall on a divisible product is itself divisible, and rounding it
+     * to a whole unit would either invent demand or lose it. Compare with {@code compareTo}.
+     */
+    @Column(name = "quantity_short", nullable = false, precision = 19, scale = 4)
+    private BigDecimal quantityShort;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)

@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.enums.ReservationStatus;
 import com.positivity.inventory.internal.repository.AsnLineRepository;
 import com.positivity.inventory.internal.repository.ExtPurchaseOrderLineRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -68,21 +69,22 @@ public class StockoutDeadlineCalculator {
     public @Nullable LocalDate stockoutDeadline(
             @NonNull String stockItemId,
             @Nullable UUID forecastSiteId,
-            long onHand,
+            @NonNull BigDecimal onHand,
             @NonNull Instant now,
             @NonNull Instant leadHorizon) {
-        if (projectedAt(stockItemId, forecastSiteId, onHand, now) < 0) {
+        if (Quantities.isNegative(projectedAt(stockItemId, forecastSiteId, onHand, now))) {
             return LocalDate.ofInstant(now, ZoneOffset.UTC);
         }
         for (Instant cutoff : candidateCutoffs(stockItemId, forecastSiteId, now, leadHorizon)) {
-            if (projectedAt(stockItemId, forecastSiteId, onHand, cutoff) < 0) {
+            if (Quantities.isNegative(projectedAt(stockItemId, forecastSiteId, onHand, cutoff))) {
                 return LocalDate.ofInstant(cutoff, ZoneOffset.UTC);
             }
         }
         return null;
     }
 
-    private long projectedAt(String stockItemId, @Nullable UUID forecastSiteId, long onHand, Instant horizon) {
+    private BigDecimal projectedAt(
+            String stockItemId, @Nullable UUID forecastSiteId, BigDecimal onHand, Instant horizon) {
         return forecastQuantityService
                 .forecast(stockItemId, forecastSiteId, horizon, onHand)
                 .projectedAvailable();

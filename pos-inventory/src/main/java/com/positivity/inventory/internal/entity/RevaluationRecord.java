@@ -76,8 +76,8 @@ public class RevaluationRecord {
     private BigDecimal newUnitCost;
 
     /** On-hand quantity the engine had costed at revaluation time (delta basis). */
-    @Column(name = "on_hand_quantity", nullable = false)
-    private long onHandQuantity;
+    @Column(name = "on_hand_quantity", nullable = false, precision = 19, scale = 4)
+    private BigDecimal onHandQuantity;
 
     /** Signed inventory value change: (newUnitCost − previousUnitCost) × onHandQuantity. */
     @Column(name = "value_delta", nullable = false, precision = 19, scale = 4)

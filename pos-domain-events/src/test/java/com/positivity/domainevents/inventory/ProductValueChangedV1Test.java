@@ -28,7 +28,7 @@ class ProductValueChangedV1Test {
                 "AVERAGE",
                 new BigDecimal("4.0000"),
                 new BigDecimal("5.0000"),
-                10L,
+                new BigDecimal("10"),
                 new BigDecimal("10.0000"),
                 "Q3 physical recount correction",
                 "cost-admin",
@@ -36,7 +36,7 @@ class ProductValueChangedV1Test {
 
         assertThat(fact.previousUnitCost()).isEqualByComparingTo("4.00");
         assertThat(fact.newUnitCost()).isEqualByComparingTo("5.00");
-        assertThat(fact.onHandQuantity()).isEqualTo(10L);
+        assertThat(fact.onHandQuantity()).isEqualByComparingTo("10");
         assertThat(fact.totalValueDelta()).isEqualByComparingTo("10.00");
         assertThat(fact.costingMethod()).isEqualTo("AVERAGE");
     }
@@ -49,7 +49,7 @@ class ProductValueChangedV1Test {
                 "STANDARD",
                 null,
                 new BigDecimal("6.0000"),
-                0L,
+                BigDecimal.ZERO,
                 BigDecimal.ZERO,
                 "Initial standard price",
                 "cost-admin",
@@ -67,7 +67,7 @@ class ProductValueChangedV1Test {
                         "AVERAGE",
                         null,
                         BigDecimal.ONE,
-                        0L,
+                        BigDecimal.ZERO,
                         BigDecimal.ZERO,
                         "r",
                         "a",
@@ -75,7 +75,16 @@ class ProductValueChangedV1Test {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("sku");
         assertThatThrownBy(() -> new ProductValueChangedV1(
-                        REVALUATION_ID, "SKU-1", " ", null, BigDecimal.ONE, 0L, BigDecimal.ZERO, "r", "a", OCCURRED_AT))
+                        REVALUATION_ID,
+                        "SKU-1",
+                        " ",
+                        null,
+                        BigDecimal.ONE,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        "r",
+                        "a",
+                        OCCURRED_AT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("costingMethod");
         assertThatThrownBy(() -> new ProductValueChangedV1(
@@ -84,7 +93,7 @@ class ProductValueChangedV1Test {
                         "AVERAGE",
                         null,
                         BigDecimal.ONE,
-                        0L,
+                        BigDecimal.ZERO,
                         BigDecimal.ZERO,
                         " ",
                         "a",
@@ -97,7 +106,7 @@ class ProductValueChangedV1Test {
                         "AVERAGE",
                         null,
                         BigDecimal.ONE,
-                        0L,
+                        BigDecimal.ZERO,
                         BigDecimal.ZERO,
                         "r",
                         " ",
@@ -109,11 +118,29 @@ class ProductValueChangedV1Test {
     @Test
     void rejectsNullNewCostAndDelta() {
         assertThatThrownBy(() -> new ProductValueChangedV1(
-                        REVALUATION_ID, "SKU-1", "AVERAGE", null, null, 0L, BigDecimal.ZERO, "r", "a", OCCURRED_AT))
+                        REVALUATION_ID,
+                        "SKU-1",
+                        "AVERAGE",
+                        null,
+                        null,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        "r",
+                        "a",
+                        OCCURRED_AT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("newUnitCost");
         assertThatThrownBy(() -> new ProductValueChangedV1(
-                        REVALUATION_ID, "SKU-1", "AVERAGE", null, BigDecimal.ONE, 0L, null, "r", "a", OCCURRED_AT))
+                        REVALUATION_ID,
+                        "SKU-1",
+                        "AVERAGE",
+                        null,
+                        BigDecimal.ONE,
+                        BigDecimal.ZERO,
+                        null,
+                        "r",
+                        "a",
+                        OCCURRED_AT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("totalValueDelta");
     }

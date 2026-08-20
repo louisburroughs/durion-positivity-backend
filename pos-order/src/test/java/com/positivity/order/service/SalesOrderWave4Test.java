@@ -164,7 +164,8 @@ class SalesOrderWave4Test {
         when(salesOrderRepository.findByCheckoutIdempotencyKey(anyString())).thenReturn(Optional.empty());
         when(orderPaymentRecordRepository.findByOrderId(any())).thenReturn(List.of());
         when(orderPaymentRecordRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(inventoryPort.checkAvailability(anyString(), anyInt(), any())).thenReturn(new InventoryResult(true, 999));
+        when(inventoryPort.checkAvailability(anyString(), any(), any()))
+                .thenReturn(new InventoryResult(true, BigDecimal.valueOf(999)));
         when(extProductRepository.findFirstBySkuIgnoreCaseAndActiveTrue(anyString()))
                 .thenReturn(Optional.empty());
         when(pricingPort.quoteForSku(anyString(), anyInt(), any(), any()))

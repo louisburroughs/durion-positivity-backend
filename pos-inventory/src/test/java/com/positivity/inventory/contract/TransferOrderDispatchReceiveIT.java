@@ -123,7 +123,7 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
             + " across dispatch, partial receive, and final receive")
     void conservationInvariant_holdsAcrossDispatchPartialAndFinalReceive() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 10);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("10"));
         String orderId = createOrder(sku, 6);
         UUID lineId = singleLineId(orderId);
 
@@ -195,7 +195,7 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
                 .receivedAt(Instant.parse("2026-01-01T00:00:00Z"))
                 .status(InventoryLotStatus.ACTIVE)
                 .build());
-        seedLotOnHand(sku, SOURCE_SITE, lot.getLotId(), 10);
+        seedLotOnHand(sku, SOURCE_SITE, lot.getLotId(), new BigDecimal("10"));
         String orderId = createOrder(sku, 6);
         UUID lineId = singleLineId(orderId);
 
@@ -257,7 +257,7 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
     @DisplayName("dispatch that would drive source on-hand below zero is blocked with 422 and rolls back")
     void dispatch_belowZero_blocked() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 3);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("3"));
         String orderId = createOrder(sku, 6);
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/transfer-orders/{id}/dispatch", orderId)))
@@ -280,7 +280,7 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
     @DisplayName("dispatch quantity above requested returns 422 TRANSFER_DISPATCH_EXCEEDS_REQUESTED")
     void dispatch_overRequested_returns422() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 20);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("20"));
         String orderId = createOrder(sku, 6);
         UUID lineId = singleLineId(orderId);
 
@@ -295,7 +295,7 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
     @DisplayName("receive quantity above the dispatched remainder returns 422 TRANSFER_RECEIVE_EXCEEDS_DISPATCHED")
     void receive_overDispatched_returns422() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 10);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("10"));
         String orderId = createOrder(sku, 6);
         UUID lineId = singleLineId(orderId);
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/transfer-orders/{id}/dispatch", orderId))
@@ -317,7 +317,7 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
     @DisplayName("partial dispatch keeps in-transit at the dispatched (not requested) quantity")
     void partialDispatch_transitsOnlyDispatched() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 10);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("10"));
         String orderId = createOrder(sku, 6);
         UUID lineId = singleLineId(orderId);
 
@@ -336,7 +336,7 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
     @DisplayName("receive on a cancelled order returns 409")
     void receive_onCancelled_returns409() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 10);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("10"));
         String orderId = createOrder(sku, 6);
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/transfer-orders/{id}/cancel", orderId)))
                 .andExpect(status().isOk());
@@ -350,7 +350,7 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
     @DisplayName("dispatch on an already dispatched order returns 409")
     void dispatch_twice_returns409() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 10);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("10"));
         String orderId = createOrder(sku, 4);
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/transfer-orders/{id}/dispatch", orderId)))
                 .andExpect(status().isOk());
@@ -366,7 +366,7 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
     @DisplayName("dispatch without inventory:transfer:dispatch is rejected with 403")
     void dispatchWithoutPermission_returns403() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 10);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("10"));
         String orderId = createOrder(sku, 4);
 
         mockMvc.perform(withViewOnly(post("/v1/inventory/transfer-orders/{id}/dispatch", orderId)))
@@ -394,7 +394,7 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
                 .build());
     }
 
-    private void seedOnHand(String sku, UUID locationId, int quantity) {
+    private void seedOnHand(String sku, UUID locationId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(locationId)
@@ -441,7 +441,7 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
     }
 
     /** Lot-tagged variant of {@link #seedOnHand} (odoo-parity E2, #1042). */
-    private void seedLotOnHand(String sku, UUID locationId, UUID lotId, int quantity) {
+    private void seedLotOnHand(String sku, UUID locationId, UUID lotId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(locationId)
@@ -464,15 +464,15 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
             String sku, UUID lotId, long sourceOnHand, long destinationInTransit, long destinationOnHand) {
         assertThat(perLotRow(sku, SOURCE_SITE, lotId)
                         .map(row -> row.getOnHand())
-                        .orElse(0L))
+                        .orElse(BigDecimal.ZERO))
                 .isEqualTo(sourceOnHand);
         assertThat(perLotRow(sku, DESTINATION_SITE, lotId)
                         .map(row -> row.getInTransitQty())
-                        .orElse(0L))
+                        .orElse(BigDecimal.ZERO))
                 .isEqualTo(destinationInTransit);
         assertThat(perLotRow(sku, DESTINATION_SITE, lotId)
                         .map(row -> row.getOnHand())
-                        .orElse(0L))
+                        .orElse(BigDecimal.ZERO))
                 .isEqualTo(destinationOnHand);
     }
 
@@ -496,24 +496,24 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
                 .isEqualTo(sourceOnHand + destinationInTransit + destinationOnHand);
     }
 
-    private long totalAcrossAllKeys(String sku) {
+    private BigDecimal totalAcrossAllKeys(String sku) {
         return summaryRepository.findByStockItemId(sku).stream()
-                .mapToLong(row -> row.getOnHand() + row.getInTransitQty())
-                .sum();
+                .map(row -> row.getOnHand().add(row.getInTransitQty()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private long onHand(String sku, UUID locationId) {
+    private BigDecimal onHand(String sku, UUID locationId) {
         return summaryRepository
                 .findByStockItemIdAndLocationId(sku, locationId)
                 .map(row -> row.getOnHand())
-                .orElse(0L);
+                .orElse(BigDecimal.ZERO);
     }
 
-    private long inTransit(String sku, UUID locationId) {
+    private BigDecimal inTransit(String sku, UUID locationId) {
         return summaryRepository
                 .findByStockItemIdAndLocationId(sku, locationId)
                 .map(row -> row.getInTransitQty())
-                .orElse(0L);
+                .orElse(BigDecimal.ZERO);
     }
 
     private long expectedIncoming(String sku) {

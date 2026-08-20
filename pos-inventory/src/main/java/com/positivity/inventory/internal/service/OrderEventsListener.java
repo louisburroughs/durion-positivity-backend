@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
@@ -128,8 +129,11 @@ public class OrderEventsListener {
                 counterSaleIssuePoster.post(InventoryLedgerEntry.builder()
                         .stockItemId(sku)
                         .eventType(InventoryLedgerEventType.GOODS_ISSUE)
-                        .changeInQuantity(-quantity)
-                        .quantityAfter(0)
+                        // Sales-order demand stays integral by decision (ADR-0055 leaves
+                        // SalesOrderLine.quantity an int), so this widens at the boundary rather
+                        // than narrowing anything.
+                        .changeInQuantity(BigDecimal.valueOf(quantity).negate())
+                        .quantityAfter(BigDecimal.ZERO)
                         .locationId(locationId)
                         .reasonCode(COUNTER_SALE_REASON)
                         .sourceTransactionId(orderLineId.toString())
@@ -171,8 +175,8 @@ public class OrderEventsListener {
                 counterSaleIssuePoster.post(InventoryLedgerEntry.builder()
                         .stockItemId(sku)
                         .eventType(InventoryLedgerEventType.RETURN_TO_STOCK)
-                        .changeInQuantity(quantity)
-                        .quantityAfter(0)
+                        .changeInQuantity(BigDecimal.valueOf(quantity))
+                        .quantityAfter(BigDecimal.ZERO)
                         .locationId(locationId)
                         .reasonCode(COUNTER_RETURN_REASON)
                         .sourceTransactionId(sourceTransactionId)

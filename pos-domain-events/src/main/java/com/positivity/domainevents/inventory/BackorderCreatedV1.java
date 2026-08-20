@@ -1,5 +1,6 @@
 package com.positivity.domainevents.inventory;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -26,7 +27,8 @@ import org.jspecify.annotations.Nullable;
  * @param salesOrderLineId sales-order line whose demand was short, when demand was from a sales
  *     order (additive, schema v2)
  * @param sku stock-item identifier that was short (ledger stock-item string)
- * @param quantityShort quantity that could not be fulfilled (positive)
+ * @param quantityShort quantity that could not be fulfilled (positive); decimal-capable per the
+ *     product's catalog divisibility declaration (ADR-0055, #1414)
  * @param occurredAt when the backorder was opened
  */
 public record BackorderCreatedV1(
@@ -34,7 +36,7 @@ public record BackorderCreatedV1(
         @Nullable UUID workorderLineId,
         @Nullable UUID salesOrderLineId,
         @NonNull String sku,
-        int quantityShort,
+        @NonNull BigDecimal quantityShort,
         @Nullable UUID locationId,
         @NonNull Instant occurredAt) {
 
@@ -51,7 +53,7 @@ public record BackorderCreatedV1(
         if (sku == null || sku.isBlank()) {
             throw new IllegalArgumentException("sku must not be blank");
         }
-        if (quantityShort <= 0) {
+        if (quantityShort == null || quantityShort.signum() <= 0) {
             throw new IllegalArgumentException("quantityShort must be positive");
         }
         if (occurredAt == null) {

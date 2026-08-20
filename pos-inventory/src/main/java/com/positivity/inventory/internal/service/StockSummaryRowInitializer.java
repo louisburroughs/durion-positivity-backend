@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import java.math.BigDecimal;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -48,11 +49,11 @@ public class StockSummaryRowInitializer {
                 .stockItemId(stockItemId)
                 .locationId(locationId)
                 .lotId(lotId)
-                .onHand(0L)
-                .allocated(0L)
-                .reserved(0L)
-                .atp(0L)
-                .inTransitQty(0L)
+                .onHand(BigDecimal.ZERO)
+                .allocated(BigDecimal.ZERO)
+                .reserved(BigDecimal.ZERO)
+                .atp(BigDecimal.ZERO)
+                .inTransitQty(BigDecimal.ZERO)
                 .build());
     }
 }

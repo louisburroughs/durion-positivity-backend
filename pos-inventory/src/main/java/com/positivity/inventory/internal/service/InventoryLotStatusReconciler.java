@@ -4,6 +4,7 @@ import com.positivity.inventory.internal.entity.InventoryLot;
 import com.positivity.inventory.internal.enums.InventoryLotStatus;
 import com.positivity.inventory.internal.repository.InventoryLotRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -46,12 +47,12 @@ public class InventoryLotStatusReconciler {
             if (lot == null) {
                 continue;
             }
-            long totalStock = summaryRepository.sumLotStockAcrossLocations(lotId);
-            if (totalStock == 0 && lot.getStatus() == InventoryLotStatus.ACTIVE) {
+            BigDecimal totalStock = Quantities.nz(summaryRepository.sumLotStockAcrossLocations(lotId));
+            if (Quantities.isZero(totalStock) && lot.getStatus() == InventoryLotStatus.ACTIVE) {
                 lot.setStatus(InventoryLotStatus.CONSUMED);
                 lotRepository.save(lot);
                 log.info("Lot {} ({}) fully consumed; status ACTIVE -> CONSUMED", lotId, lot.getLotNumber());
-            } else if (totalStock > 0 && lot.getStatus() == InventoryLotStatus.CONSUMED) {
+            } else if (Quantities.isPositive(totalStock) && lot.getStatus() == InventoryLotStatus.CONSUMED) {
                 lot.setStatus(InventoryLotStatus.ACTIVE);
                 lotRepository.save(lot);
                 log.info(

@@ -119,7 +119,8 @@ class ShortageResolutionServiceImplTest {
     @Test
     @DisplayName("options always include BACKORDER, EMERGENCY_PURCHASE and CANCEL_LINE with expected dates")
     void options_alwaysIncludeCoreOptions() {
-        List<ShortageOptionDto> options = service.computeShortageOptions(ALLOCATION, WORKORDER_LINE, SKU, 3, SITE);
+        List<ShortageOptionDto> options =
+                service.computeShortageOptions(ALLOCATION, WORKORDER_LINE, SKU, new BigDecimal("3"), SITE);
 
         assertThat(options)
                 .extracting(ShortageOptionDto::getOptionType)
@@ -142,7 +143,8 @@ class ShortageResolutionServiceImplTest {
                 .thenReturn(Optional.of(
                         ReplenishmentPolicy.builder().leadTimeDaysOverride(2).build()));
 
-        List<ShortageOptionDto> options = service.computeShortageOptions(ALLOCATION, WORKORDER_LINE, SKU, 3, SITE);
+        List<ShortageOptionDto> options =
+                service.computeShortageOptions(ALLOCATION, WORKORDER_LINE, SKU, new BigDecimal("3"), SITE);
 
         assertThat(optionOf(options, ShortageResolutionOption.BACKORDER).getExpectedResolutionDate())
                 .isEqualTo(TODAY.plusDays(2));
@@ -166,7 +168,8 @@ class ShortageResolutionServiceImplTest {
         when(skuCostStateRepository.findByStockItemId(SKU)).thenReturn(Optional.of(costState("20.00")));
         when(skuCostStateRepository.findByStockItemId(SUBSTITUTE)).thenReturn(Optional.of(costState("24.00")));
 
-        List<ShortageOptionDto> options = service.computeShortageOptions(ALLOCATION, WORKORDER_LINE, SKU, 3, SITE);
+        List<ShortageOptionDto> options =
+                service.computeShortageOptions(ALLOCATION, WORKORDER_LINE, SKU, new BigDecimal("3"), SITE);
 
         List<ShortageOptionDto> substitutes = options.stream()
                 .filter(o -> o.getOptionType() == ShortageResolutionOption.SUBSTITUTE)
@@ -174,7 +177,7 @@ class ShortageResolutionServiceImplTest {
         assertThat(substitutes).hasSize(1);
         ShortageOptionDto sub = substitutes.getFirst();
         assertThat(sub.getSubstituteSku()).isEqualTo(SUBSTITUTE);
-        assertThat(sub.getAvailableQuantity()).isEqualTo(10L);
+        assertThat(sub.getAvailableQuantity()).isEqualByComparingTo("10");
         assertThat(sub.getExpectedResolutionDate()).isEqualTo(TODAY);
         assertThat(sub.getCostDelta()).isEqualByComparingTo("4.00");
     }
@@ -190,7 +193,8 @@ class ShortageResolutionServiceImplTest {
         when(stockSummaryRepository.findByStockItemIdAndLocationId(SUBSTITUTE, SITE))
                 .thenReturn(Optional.of(summary(SUBSTITUTE, SITE, 0, 0)));
 
-        List<ShortageOptionDto> options = service.computeShortageOptions(ALLOCATION, WORKORDER_LINE, SKU, 3, SITE);
+        List<ShortageOptionDto> options =
+                service.computeShortageOptions(ALLOCATION, WORKORDER_LINE, SKU, new BigDecimal("3"), SITE);
 
         assertThat(options)
                 .extracting(ShortageOptionDto::getOptionType)
@@ -205,11 +209,12 @@ class ShortageResolutionServiceImplTest {
         when(stockSummaryRepository.findByStockItemId(SKU))
                 .thenReturn(List.of(summary(SKU, SIBLING_LOCATION, 8, 3))); // surplus 5 >= 3
 
-        List<ShortageOptionDto> options = service.computeShortageOptions(ALLOCATION, WORKORDER_LINE, SKU, 3, SITE);
+        List<ShortageOptionDto> options =
+                service.computeShortageOptions(ALLOCATION, WORKORDER_LINE, SKU, new BigDecimal("3"), SITE);
 
         ShortageOptionDto transfer = optionOf(options, ShortageResolutionOption.TRANSFER_IN);
         assertThat(transfer.getSourceLocationId()).isEqualTo(SIBLING_SITE);
-        assertThat(transfer.getAvailableQuantity()).isEqualTo(5L);
+        assertThat(transfer.getAvailableQuantity()).isEqualByComparingTo("5");
         assertThat(transfer.getExpectedResolutionDate()).isEqualTo(TODAY.plusDays(3));
     }
 
@@ -221,7 +226,8 @@ class ShortageResolutionServiceImplTest {
         when(stockSummaryRepository.findByStockItemId(SKU))
                 .thenReturn(List.of(summary(SKU, SIBLING_LOCATION, 4, 3))); // surplus 1 < 3
 
-        List<ShortageOptionDto> options = service.computeShortageOptions(ALLOCATION, WORKORDER_LINE, SKU, 3, SITE);
+        List<ShortageOptionDto> options =
+                service.computeShortageOptions(ALLOCATION, WORKORDER_LINE, SKU, new BigDecimal("3"), SITE);
 
         assertThat(options)
                 .extracting(ShortageOptionDto::getOptionType)
@@ -244,7 +250,8 @@ class ShortageResolutionServiceImplTest {
         when(vendorSelectionService.selectVendor(eq(SKU_ID), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(new VendorSelectionService.VendorSelection(vendor, "chosen"));
 
-        List<ShortageOptionDto> options = service.computeShortageOptions(ALLOCATION, WORKORDER_LINE, SKU, 3, SITE);
+        List<ShortageOptionDto> options =
+                service.computeShortageOptions(ALLOCATION, WORKORDER_LINE, SKU, new BigDecimal("3"), SITE);
 
         ShortageOptionDto emergency = optionOf(options, ShortageResolutionOption.EMERGENCY_PURCHASE);
         assertThat(emergency.getExpectedResolutionDate()).isEqualTo(TODAY.plusDays(5));
@@ -255,7 +262,7 @@ class ShortageResolutionServiceImplTest {
     @DisplayName("resolve BACKORDER creates a backorder and records the artifact reference")
     void resolveBackorder_createsBackorderAndRecords() {
         UUID backorderId = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
-        when(backorderService.createBackorder(WORKORDER_LINE, SKU, 3, SITE))
+        when(backorderService.createBackorder(WORKORDER_LINE, SKU, new BigDecimal("3"), SITE))
                 .thenReturn(BackorderResponse.builder().backorderId(backorderId).build());
 
         ShortageResolutionResultDto result = service.resolveShortage(
@@ -266,7 +273,7 @@ class ShortageResolutionServiceImplTest {
         assertThat(result.getArtifactId()).isEqualTo(backorderId);
         assertThat(result.getStatus()).isEqualTo("RESOLVED");
         assertThat(result.getResolvedAt()).isEqualTo(Instant.parse("2026-07-24T00:00:00Z"));
-        verify(backorderService).createBackorder(WORKORDER_LINE, SKU, 3, SITE);
+        verify(backorderService).createBackorder(WORKORDER_LINE, SKU, new BigDecimal("3"), SITE);
     }
 
     @Test
@@ -288,7 +295,7 @@ class ShortageResolutionServiceImplTest {
 
         assertThat(result.getArtifactId()).isEqualTo(stored.getArtifactId());
         assertThat(result.getResolvedAt()).isEqualTo(Instant.parse("2026-07-01T00:00:00Z"));
-        verify(backorderService, never()).createBackorder(any(), any(), org.mockito.ArgumentMatchers.anyInt(), any());
+        verify(backorderService, never()).createBackorder(any(), any(), any(), any());
         verify(resolutionRecordRepository, never()).save(any());
     }
 
@@ -386,7 +393,7 @@ class ShortageResolutionServiceImplTest {
                 .allocationId(ALLOCATION)
                 .optionType(option)
                 .sku(SKU)
-                .shortQuantity(3)
+                .shortQuantity(new BigDecimal("3"))
                 .locationId(SITE)
                 .workorderLineId(WORKORDER_LINE);
     }
@@ -395,9 +402,9 @@ class ShortageResolutionServiceImplTest {
         InventoryStockSummary s = new InventoryStockSummary();
         s.setStockItemId(sku);
         s.setLocationId(locationId);
-        s.setOnHand(onHand);
-        s.setAllocated(allocated);
-        s.setAtp(onHand - allocated);
+        s.setOnHand(BigDecimal.valueOf(onHand));
+        s.setAllocated(BigDecimal.valueOf(allocated));
+        s.setAtp(BigDecimal.valueOf(onHand - allocated));
         return s;
     }
 

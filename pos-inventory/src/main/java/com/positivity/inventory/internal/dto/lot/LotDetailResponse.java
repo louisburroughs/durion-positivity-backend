@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -44,12 +45,12 @@ public class LotDetailResponse {
         private UUID locationId;
 
         @Schema(description = "On-hand quantity of the lot at the location", example = "12", requiredMode = REQUIRED)
-        private long onHand;
+        private BigDecimal onHand;
 
         @Schema(
                 description = "Quantity of the lot in transit toward the location",
                 example = "0",
                 requiredMode = REQUIRED)
-        private long inTransitQty;
+        private BigDecimal inTransitQty;
     }
 }

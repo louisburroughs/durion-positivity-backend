@@ -1,5 +1,6 @@
 package com.positivity.catalog.internal.client;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -38,7 +39,10 @@ public interface InventoryClient {
      * fields.
      */
     record AvailabilityClientResponse(
-            int onHandQuantity, int allocatedQuantity, int availableToPromiseQuantity, String unitOfMeasure) {}
+            BigDecimal onHandQuantity,
+            BigDecimal allocatedQuantity,
+            BigDecimal availableToPromiseQuantity,
+            String unitOfMeasure) {}
 
     /**
      * Local response record mirroring the lead-time fields returned by

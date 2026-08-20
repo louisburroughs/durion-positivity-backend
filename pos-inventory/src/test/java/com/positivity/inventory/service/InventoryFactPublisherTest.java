@@ -17,6 +17,7 @@ import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.LocationInventoryInquiryResponse;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.service.InventoryFactPublisher;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -95,19 +96,19 @@ class InventoryFactPublisherTest {
                 .thenReturn(AvailabilityView.builder()
                         .productSku("SKU-1")
                         .locationId(locationId)
-                        .onHandQuantity(7)
-                        .allocatedQuantity(2)
-                        .availableToPromiseQuantity(5)
+                        .onHandQuantity(new BigDecimal("7"))
+                        .allocatedQuantity(new BigDecimal("2"))
+                        .availableToPromiseQuantity(new BigDecimal("5"))
                         .unitOfMeasure("EACH")
-                        .incomingQty(4L)
-                        .outgoingQty(1L)
-                        .projectedAvailable(10L)
+                        .incomingQty(new BigDecimal("4"))
+                        .outgoingQty(new BigDecimal("1"))
+                        .projectedAvailable(new BigDecimal("10"))
                         .build());
         when(inquiryService.getLocationInventory(locationId, null))
                 .thenReturn(LocationInventoryInquiryResponse.builder()
                         .locationId(locationId)
-                        .onHandQuantity(7)
-                        .availableToPromiseQuantity(5L)
+                        .onHandQuantity(new BigDecimal("7"))
+                        .availableToPromiseQuantity(new BigDecimal("5"))
                         .build());
 
         publisher.markEntry(entry);
@@ -122,15 +123,15 @@ class InventoryFactPublisherTest {
         assertThat(envelopes.get(0).schemaVersion()).isEqualTo(InventoryAvailabilityUpdatedV1.SCHEMA_VERSION);
         InventoryAvailabilityUpdatedV1 availability =
                 (InventoryAvailabilityUpdatedV1) envelopes.get(0).payload();
-        assertThat(availability.onHandQuantity()).isEqualTo(7);
-        assertThat(availability.availableToPromiseQuantity()).isEqualTo(5);
+        assertThat(availability.onHandQuantity()).isEqualByComparingTo("7");
+        assertThat(availability.availableToPromiseQuantity()).isEqualByComparingTo("5");
         // Schema v2 forecast fields (odoo-parity A2, #1028) carry the unbounded view values.
-        assertThat(availability.incomingQuantity()).isEqualTo(4L);
-        assertThat(availability.outgoingQuantity()).isEqualTo(1L);
-        assertThat(availability.projectedAvailableQuantity()).isEqualTo(10L);
+        assertThat(availability.incomingQuantity()).isEqualByComparingTo("4");
+        assertThat(availability.outgoingQuantity()).isEqualByComparingTo("1");
+        assertThat(availability.projectedAvailableQuantity()).isEqualByComparingTo("10");
         assertThat(envelopes.get(1).eventType()).isEqualTo(StorageLocationOnHandUpdatedV1.EVENT_TYPE);
         assertThat(((StorageLocationOnHandUpdatedV1) envelopes.get(1).payload()).onHandQuantity())
-                .isEqualTo(7);
+                .isEqualByComparingTo("7");
     }
 
     @Test
