@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.enums.SourcingStrategy;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -40,7 +41,7 @@ public interface SourcingStrategyService {
      * when no candidate has enough available stock.
      */
     @NonNull
-    Optional<SourceSelection> selectSource(@NonNull SourcingSelection selection, long neededQuantity);
+    Optional<SourceSelection> selectSource(@NonNull SourcingSelection selection, @NonNull BigDecimal neededQuantity);
 
     /**
      * One sourcing question: order these candidate locations for this SKU.
@@ -62,7 +63,7 @@ public interface SourcingStrategyService {
 
     /** One candidate location, with its available quantity when the caller already knows it. */
     record SourcingCandidate(
-            @NonNull UUID locationId, @Nullable Long availableQuantity) {}
+            @NonNull UUID locationId, @Nullable BigDecimal availableQuantity) {}
 
     /**
      * Ordering decision: the configured strategy, the effective strategy that

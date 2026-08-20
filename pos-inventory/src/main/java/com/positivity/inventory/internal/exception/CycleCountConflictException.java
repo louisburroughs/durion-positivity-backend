@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.exception;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
@@ -12,8 +13,9 @@ import java.util.UUID;
  */
 public class CycleCountConflictException extends RuntimeException {
 
-    public CycleCountConflictException(UUID taskId, int movementDelta) {
-        super("Cycle count task " + taskId + " has interfering stock movements (net on-hand delta " + movementDelta
+    public CycleCountConflictException(UUID taskId, BigDecimal movementDelta) {
+        super("Cycle count task " + taskId + " has interfering stock movements (net on-hand delta "
+                + movementDelta.toPlainString()
                 + ") since the count snapshot; task flagged CONFLICT. Request a recount, or approve again to accept"
                 + " the variance recomputed against current on-hand.");
     }

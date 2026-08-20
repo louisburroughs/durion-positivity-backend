@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -44,14 +45,14 @@ public class ReplenishmentNeedResponse {
     private UUID locationId;
 
     @Schema(description = "Current on-hand quantity at the policy's location", example = "3", requiredMode = REQUIRED)
-    private long onHand;
+    private BigDecimal onHand;
 
     @Schema(
             description = "Projected available quantity at the lead-time horizon"
                     + " (on-hand + expected supply - open demand)",
             example = "3",
             requiredMode = REQUIRED)
-    private long projectedAvailable;
+    private BigDecimal projectedAvailable;
 
     @Schema(
             description = "UTC date of the lead-time horizon the projection was evaluated at",

@@ -9,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -73,20 +74,24 @@ public class InventoryStockSummary {
     private UUID lotId;
 
     /** Net physical stock: sum of on-hand-affecting ledger deltas. */
-    @Column(name = "on_hand", nullable = false)
-    private long onHand;
+    @Column(name = "on_hand", nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal onHand = BigDecimal.ZERO;
 
     /** Outstanding hard allocations: ALLOCATION_CREATED - ALLOCATION_RELEASED. */
-    @Column(name = "allocated", nullable = false)
-    private long allocated;
+    @Column(name = "allocated", nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal allocated = BigDecimal.ZERO;
 
     /** Outstanding soft reservations: RESERVATION_CREATED - RESERVATION_RELEASED. */
-    @Column(name = "reserved", nullable = false)
-    private long reserved;
+    @Column(name = "reserved", nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal reserved = BigDecimal.ZERO;
 
     /** Available to promise: onHand - allocated (ADR-0001). */
-    @Column(name = "atp", nullable = false)
-    private long atp;
+    @Column(name = "atp", nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal atp = BigDecimal.ZERO;
 
     /**
      * Stock in transit TOWARD this key (odoo-parity C2, issue #1036): dispatched transfer
@@ -96,8 +101,9 @@ public class InventoryStockSummary {
      * adds to {@code onHand}). Conserved invariant: source on-hand + destination in-transit +
      * destination on-hand is constant across dispatch → partial receive → final receive.
      */
-    @Column(name = "in_transit_qty", nullable = false)
-    private long inTransitQty;
+    @Column(name = "in_transit_qty", nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    private BigDecimal inTransitQty = BigDecimal.ZERO;
 
     /** Ledger entry that last touched this row. */
     @Column(name = "last_ledger_entry_id")

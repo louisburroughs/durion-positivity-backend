@@ -270,9 +270,9 @@ class PartQuantityStrandingRegressionTest {
                             .aggregateId(UUID.randomUUID())
                             .stockItemId(PRODUCT_ID.toString())
                             .locationId(SHOP_ID)
-                            .onHandQuantity(10)
-                            .allocatedQuantity(0)
-                            .availableToPromiseQuantity(10)
+                            .onHandQuantity(BigDecimal.valueOf(10))
+                            .allocatedQuantity(BigDecimal.ZERO)
+                            .availableToPromiseQuantity(BigDecimal.valueOf(10))
                             .aggregateVersion(1L)
                             .updatedAt(NOW)
                             .build()));

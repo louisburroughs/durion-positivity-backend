@@ -10,6 +10,7 @@ import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRep
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.SourcingStrategyConfigRepository;
 import com.positivity.inventory.service.SourcingStrategyConfigService;
+import java.math.BigDecimal;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -83,10 +84,11 @@ public class SourcingStrategyServiceImpl implements SourcingStrategyService, Sou
 
     @Override
     @Transactional(readOnly = true)
-    public @NonNull Optional<SourceSelection> selectSource(@NonNull SourcingSelection selection, long neededQuantity) {
+    public @NonNull Optional<SourceSelection> selectSource(
+            @NonNull SourcingSelection selection, @NonNull BigDecimal neededQuantity) {
         SourcingDecision decision = orderCandidates(selection);
         return decision.orderedCandidates().stream()
-                .filter(candidate -> availableOf(selection.stockItemId(), candidate) >= neededQuantity)
+                .filter(candidate -> Quantities.gte(availableOf(selection.stockItemId(), candidate), neededQuantity))
                 .findFirst()
                 .map(candidate -> new SourceSelection(candidate, decision));
     }
@@ -147,14 +149,14 @@ public class SourcingStrategyServiceImpl implements SourcingStrategyService, Sou
         return null;
     }
 
-    private long availableOf(String stockItemId, SourcingCandidate candidate) {
+    private BigDecimal availableOf(String stockItemId, SourcingCandidate candidate) {
         if (candidate.availableQuantity() != null) {
             return candidate.availableQuantity();
         }
         return stockSummaryRepository
                 .findByStockItemIdAndLocationId(stockItemId, candidate.locationId())
-                .map(summary -> summary.getOnHand() - summary.getAllocated())
-                .orElse(0L);
+                .map(summary -> Quantities.nz(summary.getOnHand()).subtract(Quantities.nz(summary.getAllocated())))
+                .orElse(BigDecimal.ZERO);
     }
 
     // ─── Admin (SourcingStrategyConfigService) ───────────────────────────────

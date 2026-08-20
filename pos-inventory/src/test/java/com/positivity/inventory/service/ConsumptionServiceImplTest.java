@@ -19,6 +19,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.PickTaskRepository;
 import com.positivity.inventory.internal.service.ConsumptionServiceImpl;
 import com.positivity.inventory.internal.service.LedgerPostingService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
@@ -237,11 +238,11 @@ class ConsumptionServiceImplTest {
         InventoryLedgerEntry secondEntry = entriesCaptor.getValue().get(1);
         assertThat(firstEntry.getStockItemId()).isEqualTo("");
         assertThat(firstEntry.getEventType()).isEqualTo(InventoryLedgerEventType.WORKORDER_CONSUMPTION);
-        assertThat(firstEntry.getChangeInQuantity()).isEqualTo(-2);
+        assertThat(firstEntry.getChangeInQuantity()).isEqualByComparingTo("-2");
         assertThat(firstEntry.getQuantityAfter()).isZero();
         assertThat(firstEntry.getNotes()).contains(workorderId.toString());
         assertThat(secondEntry.getStockItemId()).isEqualTo(skuId2.toString());
-        assertThat(secondEntry.getChangeInQuantity()).isEqualTo(-3);
+        assertThat(secondEntry.getChangeInQuantity()).isEqualByComparingTo("-3");
 
         assertThat(response.getWorkorderId()).isEqualTo(workorderId);
         assertThat(response.getTotalItemsConsumed()).isEqualTo(5);
@@ -326,8 +327,8 @@ class ConsumptionServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderLineId(WO_LINE_ID)
                 .stockItemId(STOCK_ITEM_ID)
-                .requiredQuantity(5)
-                .allocatedQuantity(5)
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("5"))
                 .status(com.positivity.inventory.internal.enums.ReservationStatus.FULFILLED)
                 .build();
     }
@@ -338,7 +339,7 @@ class ConsumptionServiceImplTest {
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
                 .reservation(reservation)
                 .locationId(LOCATION_ID)
-                .allocatedQuantity(quantity)
+                .allocatedQuantity(BigDecimal.valueOf(quantity))
                 .allocationState(com.positivity.inventory.internal.enums.AllocationState.HARD)
                 .status(com.positivity.inventory.internal.enums.AllocationStatus.ALLOCATED)
                 .build();
@@ -365,10 +366,10 @@ class ConsumptionServiceImplTest {
         when(reservationRepository.findByWorkorderLineId(WO_LINE_ID)).thenReturn(Optional.of(reservation));
         when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(allocation));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantity(STOCK_ITEM_ID))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
         when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
                         allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED))
-                .thenReturn(0);
+                .thenReturn(new BigDecimal("0"));
         when(ledgerPostingService.postAll(any())).thenAnswer(i -> i.getArgument(0));
         when(allocationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -384,7 +385,7 @@ class ConsumptionServiceImplTest {
         assertThat(entries).hasSize(2);
         InventoryLedgerEntry released = entries.get(1);
         assertThat(released.getEventType()).isEqualTo(InventoryLedgerEventType.ALLOCATION_RELEASED);
-        assertThat(released.getChangeInQuantity()).isEqualTo(5);
+        assertThat(released.getChangeInQuantity()).isEqualByComparingTo("5");
         assertThat(released.getLocationId()).isEqualTo(LOCATION_ID);
         assertThat(released.getStockItemId()).isEqualTo(STOCK_ITEM_ID.toString());
         assertThat(released.getSourceTransactionId())
@@ -404,10 +405,10 @@ class ConsumptionServiceImplTest {
         when(reservationRepository.findByWorkorderLineId(WO_LINE_ID)).thenReturn(Optional.of(reservation));
         when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(allocation));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantity(STOCK_ITEM_ID))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
         when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
                         allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED))
-                .thenReturn(0);
+                .thenReturn(new BigDecimal("0"));
         when(ledgerPostingService.postAll(any())).thenAnswer(i -> i.getArgument(0));
 
         ConsumeItemsRequest request = new ConsumeItemsRequest(
@@ -419,7 +420,7 @@ class ConsumptionServiceImplTest {
 
         verify(ledgerPostingService).postAll(entriesCaptor.capture());
         InventoryLedgerEntry released = entriesCaptor.getValue().get(1);
-        assertThat(released.getChangeInQuantity()).isEqualTo(2);
+        assertThat(released.getChangeInQuantity()).isEqualByComparingTo("2");
         assertThat(allocation.getStatus())
                 .isEqualTo(com.positivity.inventory.internal.enums.AllocationStatus.ALLOCATED);
         verify(allocationRepository, org.mockito.Mockito.never()).save(any());
@@ -460,10 +461,10 @@ class ConsumptionServiceImplTest {
         when(reservationRepository.findByWorkorderLineId(WO_LINE_ID)).thenReturn(Optional.of(reservation));
         when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(allocation));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantity(STOCK_ITEM_ID))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
         when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
                         allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED))
-                .thenReturn(3);
+                .thenReturn(new BigDecimal("3"));
         when(ledgerPostingService.postAll(any())).thenAnswer(i -> i.getArgument(0));
         when(allocationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -477,7 +478,7 @@ class ConsumptionServiceImplTest {
         verify(ledgerPostingService).postAll(entriesCaptor.capture());
         InventoryLedgerEntry released = entriesCaptor.getValue().get(1);
         // invariant: total RELEASED never exceeds allocatedQuantity (3 + 2 = 5)
-        assertThat(released.getChangeInQuantity()).isEqualTo(2);
+        assertThat(released.getChangeInQuantity()).isEqualByComparingTo("2");
         assertThat(allocation.getStatus()).isEqualTo(com.positivity.inventory.internal.enums.AllocationStatus.RELEASED);
     }
 
@@ -491,7 +492,7 @@ class ConsumptionServiceImplTest {
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
                 .reservation(reservation)
                 .locationId(LOCATION_ID)
-                .allocatedQuantity(3)
+                .allocatedQuantity(new BigDecimal("3"))
                 .allocationState(com.positivity.inventory.internal.enums.AllocationState.HARD)
                 .status(com.positivity.inventory.internal.enums.AllocationStatus.ALLOCATED)
                 .createdAt(java.time.Instant.parse("2024-01-01T00:00:00Z"))
@@ -501,7 +502,7 @@ class ConsumptionServiceImplTest {
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000004"))
                 .reservation(reservation)
                 .locationId(otherLocation)
-                .allocatedQuantity(3)
+                .allocatedQuantity(new BigDecimal("3"))
                 .allocationState(com.positivity.inventory.internal.enums.AllocationState.HARD)
                 .status(com.positivity.inventory.internal.enums.AllocationStatus.ALLOCATED)
                 .createdAt(java.time.Instant.parse("2024-02-01T00:00:00Z"))
@@ -512,11 +513,11 @@ class ConsumptionServiceImplTest {
         // returned newest-first to prove the service sorts oldest-first itself
         when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(newer, older));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantity(STOCK_ITEM_ID))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
         when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
                         any(String.class),
                         org.mockito.ArgumentMatchers.eq(InventoryLedgerEventType.ALLOCATION_RELEASED)))
-                .thenReturn(0);
+                .thenReturn(new BigDecimal("0"));
         when(ledgerPostingService.postAll(any())).thenAnswer(i -> i.getArgument(0));
         when(allocationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -535,16 +536,16 @@ class ConsumptionServiceImplTest {
         InventoryLedgerEntry second = entries.get(2);
         assertThat(first.getSourceTransactionId())
                 .isEqualTo(older.getAllocationId().toString());
-        assertThat(first.getChangeInQuantity()).isEqualTo(3); // older exhausted
+        assertThat(first.getChangeInQuantity()).isEqualByComparingTo("3"); // older exhausted
         assertThat(first.getLocationId()).isEqualTo(LOCATION_ID);
         assertThat(second.getSourceTransactionId())
                 .isEqualTo(newer.getAllocationId().toString());
-        assertThat(second.getChangeInQuantity()).isEqualTo(1); // spill
+        assertThat(second.getChangeInQuantity()).isEqualByComparingTo("1"); // spill
         assertThat(second.getLocationId()).isEqualTo(otherLocation);
         assertThat(older.getStatus()).isEqualTo(com.positivity.inventory.internal.enums.AllocationStatus.RELEASED);
         assertThat(newer.getStatus()).isEqualTo(com.positivity.inventory.internal.enums.AllocationStatus.ALLOCATED);
         // reservation pool shrinks by total released (PR #661 re-review finding 2)
-        assertThat(reservation.getAllocatedQuantity()).isEqualTo(1);
+        assertThat(reservation.getAllocatedQuantity()).isEqualByComparingTo("1");
     }
 
     @Test
@@ -561,10 +562,10 @@ class ConsumptionServiceImplTest {
         when(reservationRepository.findByWorkorderLineId(WO_LINE_ID)).thenReturn(Optional.of(reservation));
         when(allocationRepository.findByReservation(reservation)).thenReturn(List.of(allocation));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantity(STOCK_ITEM_ID))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
         when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
                         allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED))
-                .thenReturn(0);
+                .thenReturn(new BigDecimal("0"));
         when(ledgerPostingService.postAll(any())).thenAnswer(i -> i.getArgument(0));
         when(allocationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -579,11 +580,11 @@ class ConsumptionServiceImplTest {
         service.consumePickedItems(request);
 
         verify(ledgerPostingService).postAll(entriesCaptor.capture());
-        int totalReleased = entriesCaptor.getValue().stream()
+        BigDecimal totalReleased = entriesCaptor.getValue().stream()
                 .filter(e -> e.getEventType() == InventoryLedgerEventType.ALLOCATION_RELEASED)
-                .mapToInt(InventoryLedgerEntry::getChangeInQuantity)
-                .sum();
-        assertThat(totalReleased).isEqualTo(5); // capped at allocatedQuantity, not 8
+                .map(InventoryLedgerEntry::getChangeInQuantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(totalReleased).isEqualByComparingTo("5"); // capped at allocatedQuantity, not 8
         // second item exhausts the remainder and closes the allocation
         assertThat(allocation.getStatus()).isEqualTo(com.positivity.inventory.internal.enums.AllocationStatus.RELEASED);
     }
@@ -620,7 +621,7 @@ class ConsumptionServiceImplTest {
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
                 .reservation(reservation)
                 .locationId(null)
-                .allocatedQuantity(5)
+                .allocatedQuantity(new BigDecimal("5"))
                 .allocationState(com.positivity.inventory.internal.enums.AllocationState.SOFT)
                 .status(com.positivity.inventory.internal.enums.AllocationStatus.ALLOCATED)
                 .build();

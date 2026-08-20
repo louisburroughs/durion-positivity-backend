@@ -71,8 +71,8 @@ public class SkuCostState {
     private BigDecimal avgCost;
 
     /** Quantity the engine has costed so far (AVCO denominator + negative-branch input). */
-    @Column(name = "on_hand_qty", nullable = false)
-    private long onHandQty;
+    @Column(name = "on_hand_qty", nullable = false, precision = 19, scale = 4)
+    private BigDecimal onHandQty;
 
     /** Configured standard price (STANDARD method); null until set via revaluation (J4). */
     @Column(name = "standard_cost", precision = 19, scale = 6)

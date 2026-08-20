@@ -74,8 +74,8 @@ class InventoryTraceabilityTest {
         return ledgerRepository.save(InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .eventType(type)
-                .changeInQuantity(change)
-                .quantityAfter(0)
+                .changeInQuantity(BigDecimal.valueOf(change))
+                .quantityAfter(new BigDecimal("0"))
                 .lotId(lotId)
                 .locationId(to != null ? to : from)
                 .fromLocationId(from)
@@ -171,7 +171,7 @@ class InventoryTraceabilityTest {
                         InventoryLedgerEventType.RETURN_TO_STOCK,
                         InventoryLedgerEventType.SCRAP_OUT);
         assertThat(trace.getDownstream().get(0).getSourceTransactionId()).isEqualTo("GR");
-        assertThat(trace.getDownstream().get(0).getChangeInQuantity()).isEqualTo(10);
+        assertThat(trace.getDownstream().get(0).getChangeInQuantity()).isEqualByComparingTo("10");
     }
 
     // ─── lot: partial history (receipt only, no documents) ───────────────────────

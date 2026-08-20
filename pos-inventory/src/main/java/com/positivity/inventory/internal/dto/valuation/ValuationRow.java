@@ -31,7 +31,7 @@ public class ValuationRow {
             description = "On-hand quantity contributing to the value (site-scoped when a location filter is applied)",
             example = "20",
             requiredMode = Schema.RequiredMode.REQUIRED)
-    private long onHand;
+    private BigDecimal onHand;
 
     @Schema(
             description = "Resolved costing method for the SKU (AVERAGE or STANDARD)",

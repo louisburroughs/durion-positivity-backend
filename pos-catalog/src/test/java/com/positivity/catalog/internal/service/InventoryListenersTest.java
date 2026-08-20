@@ -21,6 +21,7 @@ import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
 import com.positivity.domainevents.inventory.LeadTimeUpdatedV1;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -146,11 +147,55 @@ class InventoryListenersTest {
             assertThat(saved.getAggregateId()).isEqualTo(AGGREGATE_ID);
             assertThat(saved.getStockItemId()).isEqualTo("BRK-100");
             assertThat(saved.getLocationId()).isEqualTo(LOCATION_ID);
-            assertThat(saved.getOnHandQuantity()).isEqualTo(10);
-            assertThat(saved.getAvailableToPromiseQuantity()).isEqualTo(8);
+            assertThat(saved.getOnHandQuantity()).isEqualByComparingTo("10");
+            assertThat(saved.getAvailableToPromiseQuantity()).isEqualByComparingTo("8");
             assertThat(saved.getUnitOfMeasure()).isEqualTo("EA");
             assertThat(saved.getAggregateVersion()).isEqualTo(3);
             assertThat(saved.getUpdatedAt()).isEqualTo(NOW);
+        }
+
+        @Test
+        @DisplayName("lands a divisible product's fractional quantities from the real contract type")
+        void carriesDecimalQuantitiesFromTheContract() {
+            // ADR-0055 stage 2 (#1414) AC: pos-catalog consumes InventoryAvailabilityUpdatedV1 and
+            // is the module easiest to forget when that contract changes — it sits outside the
+            // #1315 gate work and its other test here hand-writes the payload JSON, which would
+            // keep passing through a type change on the record. This one serialises the actual
+            // contract type, so a narrowing of these fields breaks here rather than silently
+            // truncating a bulk product's on-hand on a product-detail page.
+            InventoryAvailabilityUpdatedV1 payload = new InventoryAvailabilityUpdatedV1(
+                    "BULK-OIL-DRUM",
+                    LOCATION_ID,
+                    new BigDecimal("120.5000"),
+                    new BigDecimal("0.2500"),
+                    new BigDecimal("120.2500"),
+                    "LB",
+                    new BigDecimal("2.5000"),
+                    new BigDecimal("1.2500"),
+                    new BigDecimal("121.7500"));
+
+            listener.onInventoryEvent(objectMapper.writeValueAsString(java.util.Map.of(
+                    "eventId",
+                    "evt-decimal",
+                    "eventType",
+                    InventoryAvailabilityUpdatedV1.EVENT_TYPE,
+                    "aggregateVersion",
+                    7L,
+                    "aggregateId",
+                    AGGREGATE_ID.toString(),
+                    "payload",
+                    payload)));
+
+            ArgumentCaptor<ExtInventoryAvailabilityReplica> captor =
+                    ArgumentCaptor.forClass(ExtInventoryAvailabilityReplica.class);
+            verify(availabilityRepository).save(captor.capture());
+            ExtInventoryAvailabilityReplica saved = captor.getValue();
+            assertThat(saved.getStockItemId()).isEqualTo("BULK-OIL-DRUM");
+            // compareTo, not equals: scale is how the number was spelled, not what it means.
+            assertThat(saved.getOnHandQuantity()).isEqualByComparingTo("120.5");
+            assertThat(saved.getAllocatedQuantity()).isEqualByComparingTo("0.25");
+            assertThat(saved.getAvailableToPromiseQuantity()).isEqualByComparingTo("120.25");
+            assertThat(saved.getUnitOfMeasure()).isEqualTo("LB");
         }
 
         @Test

@@ -10,6 +10,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,8 +43,9 @@ public class InventoryReturnEntity {
     @Column(nullable = false)
     private String returnReason;
 
-    @Column(nullable = false)
-    private int totalItemsReturned;
+    /** Sum of the lines' base-UoM quantities; decimal-capable (ADR-0055). */
+    @Column(nullable = false, precision = 19, scale = 4)
+    private BigDecimal totalItemsReturned;
 
     /**
      * Timestamp when the task was created.

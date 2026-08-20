@@ -17,6 +17,7 @@ import com.positivity.inventory.internal.service.SiteInventoryQuantityLoader;
 import com.positivity.inventory.internal.service.SiteInventoryRollupServiceImpl;
 import com.positivity.inventory.internal.service.StorageLocationTopologyService;
 import com.positivity.inventory.internal.service.StorageLocationTopologyService.StorageLocationNode;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -72,28 +73,29 @@ class SiteInventoryRollupServiceImplTest {
         when(topologyService.fetchSiteTopology(SITE_ID)).thenReturn(threeLevelTopology());
         when(stockSummaryRepository.sumByLocationChunked(any(), isNull()))
                 .thenReturn(new LocationQuantityMaps(
-                        Map.of(SHELF_ID, 120L, BIN_ID, 360L), Map.of(SHELF_ID, 10L, BIN_ID, 20L)));
+                        Map.of(SHELF_ID, new BigDecimal("120"), BIN_ID, new BigDecimal("360")),
+                        Map.of(SHELF_ID, new BigDecimal("10"), BIN_ID, new BigDecimal("20"))));
 
         SiteInventoryRollupResponse response = service.getSiteInventoryRollup(SITE_ID, null, null, true);
 
         assertThat(response.siteId()).isEqualTo(SITE_ID);
-        assertThat(response.totals().onHand()).isEqualTo(480);
-        assertThat(response.totals().allocated()).isEqualTo(30);
-        assertThat(response.totals().available()).isEqualTo(450);
+        assertThat(response.totals().onHand()).isEqualByComparingTo("480");
+        assertThat(response.totals().allocated()).isEqualByComparingTo("30");
+        assertThat(response.totals().available()).isEqualByComparingTo("450");
 
         StorageLocationRollupNode floor = response.nodes().getFirst();
         assertThat(floor.storageLocationId()).isEqualTo(FLOOR_ID);
         assertThat(floor.own().onHand()).isZero();
-        assertThat(floor.rolledUp().onHand()).isEqualTo(480);
-        assertThat(floor.rolledUp().available()).isEqualTo(450);
+        assertThat(floor.rolledUp().onHand()).isEqualByComparingTo("480");
+        assertThat(floor.rolledUp().available()).isEqualByComparingTo("450");
 
         StorageLocationRollupNode shelf = floor.children().getFirst();
-        assertThat(shelf.own().onHand()).isEqualTo(120);
-        assertThat(shelf.rolledUp().onHand()).isEqualTo(480);
+        assertThat(shelf.own().onHand()).isEqualByComparingTo("120");
+        assertThat(shelf.rolledUp().onHand()).isEqualByComparingTo("480");
 
         StorageLocationRollupNode bin = shelf.children().getFirst();
-        assertThat(bin.own().onHand()).isEqualTo(360);
-        assertThat(bin.rolledUp().onHand()).isEqualTo(360);
+        assertThat(bin.own().onHand()).isEqualByComparingTo("360");
+        assertThat(bin.rolledUp().onHand()).isEqualByComparingTo("360");
         assertThat(bin.children()).isEmpty();
     }
 
@@ -103,13 +105,14 @@ class SiteInventoryRollupServiceImplTest {
         // Issue #658: when sku given, all quantities are for that SKU only
         when(topologyService.fetchSiteTopology(SITE_ID)).thenReturn(threeLevelTopology());
         when(stockSummaryRepository.sumByLocationChunked(any(), eq("SKU-1")))
-                .thenReturn(new LocationQuantityMaps(Map.of(BIN_ID, 50L), Map.of(BIN_ID, 5L)));
+                .thenReturn(new LocationQuantityMaps(
+                        Map.of(BIN_ID, new BigDecimal("50")), Map.of(BIN_ID, new BigDecimal("5"))));
 
         SiteInventoryRollupResponse response = service.getSiteInventoryRollup(SITE_ID, "SKU-1", null, true);
 
-        assertThat(response.totals().onHand()).isEqualTo(50);
-        assertThat(response.totals().allocated()).isEqualTo(5);
-        assertThat(response.totals().available()).isEqualTo(45);
+        assertThat(response.totals().onHand()).isEqualByComparingTo("50");
+        assertThat(response.totals().allocated()).isEqualByComparingTo("5");
+        assertThat(response.totals().available()).isEqualByComparingTo("45");
     }
 
     @Test
@@ -122,12 +125,12 @@ class SiteInventoryRollupServiceImplTest {
                         new StorageLocationNode(FLOOR_ID, "Floor A", "FLOOR", "ACTIVE", null),
                         new StorageLocationNode(SHELF_ID, "Orphan Shelf", "SHELF", "ACTIVE", ghostParent)));
         when(stockSummaryRepository.sumByLocationChunked(any(), isNull()))
-                .thenReturn(new LocationQuantityMaps(Map.of(SHELF_ID, 5L), Map.of()));
+                .thenReturn(new LocationQuantityMaps(Map.of(SHELF_ID, new BigDecimal("5")), Map.of()));
 
         SiteInventoryRollupResponse response = service.getSiteInventoryRollup(SITE_ID, null, null, true);
 
         assertThat(response.nodes()).hasSize(2);
-        assertThat(response.totals().onHand()).isEqualTo(5);
+        assertThat(response.totals().onHand()).isEqualByComparingTo("5");
     }
 
     @Test
@@ -137,11 +140,12 @@ class SiteInventoryRollupServiceImplTest {
         when(topologyService.fetchSiteTopology(SITE_ID))
                 .thenReturn(List.of(new StorageLocationNode(BIN_ID, "Bin", "BIN", "ACTIVE", null)));
         when(stockSummaryRepository.sumByLocationChunked(any(), isNull()))
-                .thenReturn(new LocationQuantityMaps(Map.of(BIN_ID, 3L), Map.of(BIN_ID, 8L)));
+                .thenReturn(new LocationQuantityMaps(
+                        Map.of(BIN_ID, new BigDecimal("3")), Map.of(BIN_ID, new BigDecimal("8"))));
 
         SiteInventoryRollupResponse response = service.getSiteInventoryRollup(SITE_ID, null, null, true);
 
-        assertThat(response.totals().available()).isEqualTo(-5);
+        assertThat(response.totals().available()).isEqualByComparingTo("-5");
     }
 
     @Test
@@ -155,7 +159,7 @@ class SiteInventoryRollupServiceImplTest {
                         new StorageLocationNode(SHELF_ID, "Shelf A-1", "SHELF", "ACTIVE", FLOOR_ID),
                         new StorageLocationNode(emptyBin, "Empty Bin", "BIN", "ACTIVE", FLOOR_ID)));
         when(stockSummaryRepository.sumByLocationChunked(any(), isNull()))
-                .thenReturn(new LocationQuantityMaps(Map.of(SHELF_ID, 9L), Map.of()));
+                .thenReturn(new LocationQuantityMaps(Map.of(SHELF_ID, new BigDecimal("9")), Map.of()));
 
         SiteInventoryRollupResponse response = service.getSiteInventoryRollup(SITE_ID, null, null, false);
 
@@ -171,14 +175,14 @@ class SiteInventoryRollupServiceImplTest {
         // Issue #658: depth truncates the returned tree, not the math
         when(topologyService.fetchSiteTopology(SITE_ID)).thenReturn(threeLevelTopology());
         when(stockSummaryRepository.sumByLocationChunked(any(), isNull()))
-                .thenReturn(new LocationQuantityMaps(Map.of(BIN_ID, 360L), Map.of()));
+                .thenReturn(new LocationQuantityMaps(Map.of(BIN_ID, new BigDecimal("360")), Map.of()));
 
         SiteInventoryRollupResponse response = service.getSiteInventoryRollup(SITE_ID, null, 1, true);
 
         StorageLocationRollupNode floor = response.nodes().getFirst();
         assertThat(floor.children()).isEmpty();
-        assertThat(floor.rolledUp().onHand()).isEqualTo(360);
-        assertThat(response.totals().onHand()).isEqualTo(360);
+        assertThat(floor.rolledUp().onHand()).isEqualByComparingTo("360");
+        assertThat(response.totals().onHand()).isEqualByComparingTo("360");
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.ReservationStatus;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -49,7 +50,7 @@ public interface ReservationRepository extends JpaRepository<ReservationEntity, 
                           AND (:boundByDueDate = FALSE
                                OR (r.dueDateTime IS NOT NULL AND r.dueDateTime <= :horizon))
                         """)
-    Long sumOpenRemainderForSku(
+    BigDecimal sumOpenRemainderForSku(
             @Param("stockItemId") UUID stockItemId,
             @Param("statuses") Collection<ReservationStatus> statuses,
             @Param("boundByDueDate") boolean boundByDueDate,

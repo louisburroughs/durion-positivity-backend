@@ -17,6 +17,7 @@ import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.CountEntryRepository;
 import com.positivity.inventory.internal.repository.CycleCountTaskRepository;
 import com.positivity.inventory.service.CycleCountService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -257,8 +258,8 @@ public class CycleCountServiceImpl implements CycleCountService {
      * COUNTED_PENDING_REVIEW otherwise. Returns whether a conflict was found.
      */
     private boolean applyConflictStatus(CycleCountTask task) {
-        int movementDelta = conflictDetector.movementDeltaSinceSnapshot(task);
-        if (movementDelta != 0) {
+        BigDecimal movementDelta = conflictDetector.movementDeltaSinceSnapshot(task);
+        if (!Quantities.isZero(movementDelta)) {
             if (log.isWarnEnabled()) {
                 log.warn(
                         "Cycle count conflict detected at submission for task {}: in-window movement delta {}",

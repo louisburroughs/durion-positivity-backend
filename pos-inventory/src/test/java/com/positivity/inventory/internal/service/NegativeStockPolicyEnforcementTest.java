@@ -10,6 +10,7 @@ import com.positivity.inventory.internal.exception.InsufficientStockException;
 import com.positivity.inventory.internal.exception.NegativeStockPolicyViolationException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -53,22 +54,22 @@ class NegativeStockPolicyEnforcementTest {
         return "SKU-K1-" + UUID.randomUUID();
     }
 
-    private InventoryLedgerEntry entry(String sku, UUID locationId, InventoryLedgerEventType type, int change) {
+    private InventoryLedgerEntry entry(String sku, UUID locationId, InventoryLedgerEventType type, BigDecimal change) {
         return InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(locationId)
                 .eventType(type)
                 .changeInQuantity(change)
-                .quantityAfter(0)
+                .quantityAfter(new BigDecimal("0"))
                 .transactionUserId("k1-policy-test")
                 .build();
     }
 
-    private void seed(String sku, UUID location, int quantity) {
+    private void seed(String sku, UUID location, BigDecimal quantity) {
         ledgerPostingService.post(entry(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, quantity));
     }
 
-    private long onHand(String sku, UUID location) {
+    private BigDecimal onHand(String sku, UUID location) {
         return summaryRepository
                 .findByStockItemIdAndLocationId(sku, location)
                 .orElseThrow()
@@ -81,13 +82,13 @@ class NegativeStockPolicyEnforcementTest {
     void goodsIssue_belowZero_isBlockedWithInsufficientStock() {
         String sku = uniqueSku();
         UUID location = UUID.randomUUID();
-        seed(sku, location, 5);
+        seed(sku, location, new BigDecimal("5"));
 
         assertThatExceptionOfType(InsufficientStockException.class)
-                .isThrownBy(() ->
-                        ledgerPostingService.post(entry(sku, location, InventoryLedgerEventType.GOODS_ISSUE, -8)));
+                .isThrownBy(() -> ledgerPostingService.post(
+                        entry(sku, location, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-8"))));
 
-        assertThat(onHand(sku, location)).isEqualTo(5);
+        assertThat(onHand(sku, location)).isEqualByComparingTo("5");
         assertThat(ledgerRepository.findByStockItemIdOrderByTimestampAsc(sku)).hasSize(1);
     }
 
@@ -95,35 +96,35 @@ class NegativeStockPolicyEnforcementTest {
     void workorderConsumption_belowZero_isBlockedWithInsufficientStock() {
         String sku = uniqueSku();
         UUID location = UUID.randomUUID();
-        seed(sku, location, 2);
+        seed(sku, location, new BigDecimal("2"));
 
         assertThatExceptionOfType(InsufficientStockException.class)
                 .isThrownBy(() -> ledgerPostingService.post(
-                        entry(sku, location, InventoryLedgerEventType.WORKORDER_CONSUMPTION, -3)));
+                        entry(sku, location, InventoryLedgerEventType.WORKORDER_CONSUMPTION, new BigDecimal("-3"))));
 
-        assertThat(onHand(sku, location)).isEqualTo(2);
+        assertThat(onHand(sku, location)).isEqualByComparingTo("2");
     }
 
     @Test
     void transferOut_belowZero_isBlockedWithInsufficientStock() {
         String sku = uniqueSku();
         UUID location = UUID.randomUUID();
-        seed(sku, location, 1);
+        seed(sku, location, new BigDecimal("1"));
 
         assertThatExceptionOfType(InsufficientStockException.class)
-                .isThrownBy(() ->
-                        ledgerPostingService.post(entry(sku, location, InventoryLedgerEventType.TRANSFER_OUT, -2)));
+                .isThrownBy(() -> ledgerPostingService.post(
+                        entry(sku, location, InventoryLedgerEventType.TRANSFER_OUT, new BigDecimal("-2"))));
 
-        assertThat(onHand(sku, location)).isEqualTo(1);
+        assertThat(onHand(sku, location)).isEqualByComparingTo("1");
     }
 
     @Test
     void goodsIssue_exactlyToZero_isAllowed() {
         String sku = uniqueSku();
         UUID location = UUID.randomUUID();
-        seed(sku, location, 5);
+        seed(sku, location, new BigDecimal("5"));
 
-        ledgerPostingService.post(entry(sku, location, InventoryLedgerEventType.GOODS_ISSUE, -5));
+        ledgerPostingService.post(entry(sku, location, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-5")));
 
         assertThat(onHand(sku, location)).isZero();
     }
@@ -134,37 +135,38 @@ class NegativeStockPolicyEnforcementTest {
     void scrapOut_belowZero_withoutOverride_isRejectedWithOverrideRequiredCode() {
         String sku = uniqueSku();
         UUID location = UUID.randomUUID();
-        seed(sku, location, 3);
+        seed(sku, location, new BigDecimal("3"));
 
         assertThatExceptionOfType(NegativeStockPolicyViolationException.class)
-                .isThrownBy(
-                        () -> ledgerPostingService.post(entry(sku, location, InventoryLedgerEventType.SCRAP_OUT, -4)))
+                .isThrownBy(() -> ledgerPostingService.post(
+                        entry(sku, location, InventoryLedgerEventType.SCRAP_OUT, new BigDecimal("-4"))))
                 .satisfies(ex -> assertThat(ex.getErrorCode())
                         .isEqualTo(NegativeStockPolicyViolationException.OVERRIDE_REQUIRED));
 
-        assertThat(onHand(sku, location)).isEqualTo(3);
+        assertThat(onHand(sku, location)).isEqualByComparingTo("3");
     }
 
     @Test
     void scrapOut_belowZero_withOverride_isAllowed() {
         String sku = uniqueSku();
         UUID location = UUID.randomUUID();
-        seed(sku, location, 3);
+        seed(sku, location, new BigDecimal("3"));
 
         // Caller has already verified inventory:adjustment:override and passes
         // the explicit flag — the funnel never reads the security context.
-        ledgerPostingService.post(entry(sku, location, InventoryLedgerEventType.SCRAP_OUT, -5), true);
+        ledgerPostingService.post(entry(sku, location, InventoryLedgerEventType.SCRAP_OUT, new BigDecimal("-5")), true);
 
-        assertThat(onHand(sku, location)).isEqualTo(-2);
+        assertThat(onHand(sku, location)).isEqualByComparingTo("-2");
     }
 
     @Test
     void scrapOut_exactlyToZero_withoutOverride_isAllowed() {
         String sku = uniqueSku();
         UUID location = UUID.randomUUID();
-        seed(sku, location, 3);
+        seed(sku, location, new BigDecimal("3"));
 
-        assertThatCode(() -> ledgerPostingService.post(entry(sku, location, InventoryLedgerEventType.SCRAP_OUT, -3)))
+        assertThatCode(() -> ledgerPostingService.post(
+                        entry(sku, location, InventoryLedgerEventType.SCRAP_OUT, new BigDecimal("-3"))))
                 .doesNotThrowAnyException();
 
         assertThat(onHand(sku, location)).isZero();
@@ -176,24 +178,24 @@ class NegativeStockPolicyEnforcementTest {
     void adjustmentOut_belowZero_isRejectedEvenWithOverride() {
         String sku = uniqueSku();
         UUID location = UUID.randomUUID();
-        seed(sku, location, 2);
+        seed(sku, location, new BigDecimal("2"));
 
         assertThatExceptionOfType(NegativeStockPolicyViolationException.class)
                 .isThrownBy(() -> ledgerPostingService.post(
-                        entry(sku, location, InventoryLedgerEventType.ADJUSTMENT_OUT, -3), true))
+                        entry(sku, location, InventoryLedgerEventType.ADJUSTMENT_OUT, new BigDecimal("-3")), true))
                 .satisfies(ex ->
                         assertThat(ex.getErrorCode()).isEqualTo(NegativeStockPolicyViolationException.FLOOR_VIOLATION));
 
-        assertThat(onHand(sku, location)).isEqualTo(2);
+        assertThat(onHand(sku, location)).isEqualByComparingTo("2");
     }
 
     @Test
     void adjustmentOut_exactlyToZero_isAllowed() {
         String sku = uniqueSku();
         UUID location = UUID.randomUUID();
-        seed(sku, location, 2);
+        seed(sku, location, new BigDecimal("2"));
 
-        ledgerPostingService.post(entry(sku, location, InventoryLedgerEventType.ADJUSTMENT_OUT, -2));
+        ledgerPostingService.post(entry(sku, location, InventoryLedgerEventType.ADJUSTMENT_OUT, new BigDecimal("-2")));
 
         assertThat(onHand(sku, location)).isZero();
     }
@@ -202,16 +204,17 @@ class NegativeStockPolicyEnforcementTest {
     void countVarianceOut_belowZero_isRejected_andExactlyToZeroAllowed() {
         String sku = uniqueSku();
         UUID location = UUID.randomUUID();
-        seed(sku, location, 4);
+        seed(sku, location, new BigDecimal("4"));
 
         assertThatExceptionOfType(NegativeStockPolicyViolationException.class)
                 .isThrownBy(() -> ledgerPostingService.post(
-                        entry(sku, location, InventoryLedgerEventType.COUNT_VARIANCE_OUT, -5)))
+                        entry(sku, location, InventoryLedgerEventType.COUNT_VARIANCE_OUT, new BigDecimal("-5"))))
                 .satisfies(ex ->
                         assertThat(ex.getErrorCode()).isEqualTo(NegativeStockPolicyViolationException.FLOOR_VIOLATION));
 
         // Counts set reality: zeroing the balance is legitimate.
-        ledgerPostingService.post(entry(sku, location, InventoryLedgerEventType.COUNT_VARIANCE_OUT, -4));
+        ledgerPostingService.post(
+                entry(sku, location, InventoryLedgerEventType.COUNT_VARIANCE_OUT, new BigDecimal("-4")));
 
         assertThat(onHand(sku, location)).isZero();
     }
@@ -226,9 +229,9 @@ class NegativeStockPolicyEnforcementTest {
         // Paired putaway moves decrement the source location with the same
         // PUTAWAY event type; the matrix leaves them unconstrained (the putaway
         // services validate source on-hand themselves).
-        ledgerPostingService.post(entry(sku, stagingLocation, InventoryLedgerEventType.PUTAWAY, -4));
+        ledgerPostingService.post(entry(sku, stagingLocation, InventoryLedgerEventType.PUTAWAY, new BigDecimal("-4")));
 
-        assertThat(onHand(sku, stagingLocation)).isEqualTo(-4);
+        assertThat(onHand(sku, stagingLocation)).isEqualByComparingTo("-4");
     }
 
     @Test
@@ -237,14 +240,14 @@ class NegativeStockPolicyEnforcementTest {
         UUID location = UUID.randomUUID();
 
         assertThatCode(() -> ledgerPostingService.postAll(List.of(
-                        entry(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 1),
-                        entry(sku, location, InventoryLedgerEventType.TRANSFER_IN, 1),
-                        entry(sku, location, InventoryLedgerEventType.RETURN_TO_STOCK, 1),
-                        entry(sku, location, InventoryLedgerEventType.ADJUSTMENT_IN, 1),
-                        entry(sku, location, InventoryLedgerEventType.COUNT_VARIANCE_IN, 1))))
+                        entry(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("1")),
+                        entry(sku, location, InventoryLedgerEventType.TRANSFER_IN, new BigDecimal("1")),
+                        entry(sku, location, InventoryLedgerEventType.RETURN_TO_STOCK, new BigDecimal("1")),
+                        entry(sku, location, InventoryLedgerEventType.ADJUSTMENT_IN, new BigDecimal("1")),
+                        entry(sku, location, InventoryLedgerEventType.COUNT_VARIANCE_IN, new BigDecimal("1")))))
                 .doesNotThrowAnyException();
 
-        assertThat(onHand(sku, location)).isEqualTo(5);
+        assertThat(onHand(sku, location)).isEqualByComparingTo("5");
     }
 
     // ─── Neutral/ATP-only types: untouched by the matrix ─────────────────────
@@ -253,18 +256,18 @@ class NegativeStockPolicyEnforcementTest {
     void neutralAtpOnlyTypes_areUntouchedByTheMatrix() {
         String sku = uniqueSku();
         UUID location = UUID.randomUUID();
-        seed(sku, location, 1);
+        seed(sku, location, new BigDecimal("1"));
 
         // Reservations/allocations far beyond on-hand are an ATP concern
         // (InsufficientAtpException at the caller), never a negative-stock one.
         assertThatCode(() -> ledgerPostingService.postAll(List.of(
-                        entry(sku, location, InventoryLedgerEventType.RESERVATION_CREATED, 100),
-                        entry(sku, location, InventoryLedgerEventType.ALLOCATION_CREATED, 100),
-                        entry(sku, location, InventoryLedgerEventType.BACKORDER_CREATED, 100),
-                        entry(sku, location, InventoryLedgerEventType.PICK_TASK_CREATED, 100))))
+                        entry(sku, location, InventoryLedgerEventType.RESERVATION_CREATED, new BigDecimal("100")),
+                        entry(sku, location, InventoryLedgerEventType.ALLOCATION_CREATED, new BigDecimal("100")),
+                        entry(sku, location, InventoryLedgerEventType.BACKORDER_CREATED, new BigDecimal("100")),
+                        entry(sku, location, InventoryLedgerEventType.PICK_TASK_CREATED, new BigDecimal("100")))))
                 .doesNotThrowAnyException();
 
-        assertThat(onHand(sku, location)).isEqualTo(1);
+        assertThat(onHand(sku, location)).isEqualByComparingTo("1");
     }
 
     // ─── Batch semantics ─────────────────────────────────────────────────────
@@ -276,8 +279,8 @@ class NegativeStockPolicyEnforcementTest {
 
         assertThatExceptionOfType(InsufficientStockException.class)
                 .isThrownBy(() -> ledgerPostingService.postAll(List.of(
-                        entry(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 5),
-                        entry(sku, location, InventoryLedgerEventType.GOODS_ISSUE, -8))));
+                        entry(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("5")),
+                        entry(sku, location, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-8")))));
 
         // Single enforcement point inside the posting transaction: the valid
         // receipt rolls back together with the rejected issue. (The summary row
@@ -287,7 +290,7 @@ class NegativeStockPolicyEnforcementTest {
         assertThat(summaryRepository
                         .findByStockItemIdAndLocationId(sku, location)
                         .map(row -> row.getOnHand())
-                        .orElse(0L))
+                        .orElse(BigDecimal.ZERO))
                 .isZero();
     }
 
@@ -297,8 +300,8 @@ class NegativeStockPolicyEnforcementTest {
         UUID location = UUID.randomUUID();
 
         ledgerPostingService.postAll(List.of(
-                entry(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 5),
-                entry(sku, location, InventoryLedgerEventType.GOODS_ISSUE, -5)));
+                entry(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("5")),
+                entry(sku, location, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-5"))));
 
         assertThat(onHand(sku, location)).isZero();
     }

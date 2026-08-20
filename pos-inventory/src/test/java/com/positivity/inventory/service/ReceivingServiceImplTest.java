@@ -3,6 +3,7 @@ package com.positivity.inventory.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -16,22 +17,30 @@ import com.positivity.inventory.internal.dto.receiving.ReceiveItemsRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceiveItemsResponse;
 import com.positivity.inventory.internal.dto.receiving.ReceiveLineRequest;
 import com.positivity.inventory.internal.dto.receiving.ReceivingSessionResponse;
+import com.positivity.inventory.internal.entity.ExtProductReplica;
+import com.positivity.inventory.internal.entity.ExtProductUomReplica;
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.ReceivingLine;
 import com.positivity.inventory.internal.entity.ReceivingSession;
+import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.ReceivingLineStatus;
 import com.positivity.inventory.internal.enums.ReceivingSessionStatus;
+import com.positivity.inventory.internal.exception.FractionalQuantityNotAllowedException;
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.ReceivingSessionNotFoundException;
 import com.positivity.inventory.internal.exception.SourceDocumentAlreadyReceivedException;
 import com.positivity.inventory.internal.exception.SourceDocumentNotFoundException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
+import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
+import com.positivity.inventory.internal.repository.ExtProductUomReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryVarianceRepository;
 import com.positivity.inventory.internal.repository.ReceivingSessionRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.ReceivingServiceImpl;
 import com.positivity.inventory.internal.service.SiteDefaultsService;
+import com.positivity.inventory.internal.service.UomConversionService;
+import com.positivity.inventory.internal.service.UomConversionServiceImpl;
 import com.positivity.inventory.internal.service.WorkorderValidationService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import java.math.BigDecimal;
@@ -100,6 +109,19 @@ class ReceivingServiceImplTest {
     // resolveReceiptLot returns null by default.
     @Mock
     private com.positivity.inventory.internal.service.InventoryLotCaptureService lotCaptureService;
+
+    /**
+     * The real divisibility guard over a stubbable conversion service (ADR-0055, #1414). A mocked
+     * guard would answer null and NPE; a real one over a mocked conversion service answers "scale
+     * 0" for every product by default, which is the whole-units behaviour every SKU has today —
+     * so the existing vectors are unchanged and a divisible product can be stubbed in explicitly.
+     */
+    private final com.positivity.inventory.internal.service.UomConversionService uomConversionService =
+            org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class);
+
+    @Spy
+    private com.positivity.inventory.internal.service.QuantityScaleGuard quantityScaleGuard =
+            new com.positivity.inventory.internal.service.QuantityScaleGuard(uomConversionService);
 
     @InjectMocks
     private ReceivingServiceImpl receivingService;
@@ -587,7 +609,7 @@ class ReceivingServiceImplTest {
         when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", STAGING_LOCATION_ID))
-                .thenReturn(7);
+                .thenReturn(new BigDecimal("7"));
 
         ReceiveItemsRequest request = new ReceiveItemsRequest(
                 List.of(new ReceiveLineRequest(lineId, new BigDecimal("10"), null, null, null)));
@@ -600,8 +622,8 @@ class ReceivingServiceImplTest {
 
         assertThat(savedLedgerEntry.getLocationId()).isEqualTo(STAGING_LOCATION_ID);
         assertThat(savedLedgerEntry.getToLocationId()).isEqualTo(STAGING_LOCATION_ID);
-        assertThat(savedLedgerEntry.getQuantityAfter()).isEqualTo(17);
-        assertThat(savedLedgerEntry.getChangeInQuantity()).isEqualTo(10);
+        assertThat(savedLedgerEntry.getQuantityAfter()).isEqualByComparingTo("17");
+        assertThat(savedLedgerEntry.getChangeInQuantity()).isEqualByComparingTo("10");
     }
 
     @Test
@@ -633,7 +655,7 @@ class ReceivingServiceImplTest {
                 .thenReturn(Optional.of(siteDefaultStagingLocationId));
         when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", siteDefaultStagingLocationId))
-                .thenReturn(7);
+                .thenReturn(new BigDecimal("7"));
 
         ReceiveItemsRequest request = new ReceiveItemsRequest(
                 List.of(new ReceiveLineRequest(lineId, new BigDecimal("10"), null, null, null)));
@@ -646,7 +668,7 @@ class ReceivingServiceImplTest {
 
         assertThat(savedLedgerEntry.getLocationId()).isEqualTo(siteDefaultStagingLocationId);
         assertThat(savedLedgerEntry.getToLocationId()).isEqualTo(siteDefaultStagingLocationId);
-        assertThat(savedLedgerEntry.getQuantityAfter()).isEqualTo(17);
+        assertThat(savedLedgerEntry.getQuantityAfter()).isEqualByComparingTo("17");
     }
 
     @Test
@@ -990,7 +1012,7 @@ class ReceivingServiceImplTest {
     }
 
     @Test
-    void crossDockLineToWorkorder_fractionalQuantity_throwsIllegalArgumentException() {
+    void crossDockLineToWorkorder_fractionalQuantityForAWholeUnitsProduct_isRefused() {
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -1017,11 +1039,16 @@ class ReceivingServiceImplTest {
         CrossDockRequest request =
                 new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("1.5"), null);
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
+        // ADR-0055 (#1414): the refusal survives the widening, but it is now read from the
+        // product's catalog declaration rather than hardcoded — this product declares nothing,
+        // so it is stocked in whole units and 1.5 is refused with the same code the demand side
+        // raises (#1413).
+        FractionalQuantityNotAllowedException exception = assertThrows(
+                FractionalQuantityNotAllowedException.class,
                 () -> receivingService.crossDockLineToWorkorder(sessionId, lineId, request, "actor-user"));
 
-        assertThat(exception.getMessage()).contains("whole number");
+        assertThat(exception.getMessage()).contains(FractionalQuantityNotAllowedException.ERROR_CODE);
+        assertThat(exception.getMessage()).contains("whole units");
     }
 
     @Test
@@ -1129,7 +1156,7 @@ class ReceivingServiceImplTest {
         when(workorderValidationService.getWorkorderLineValidation("WO-001", workorderLineId.toString()))
                 .thenReturn(new WorkorderValidationService.WorkorderLineValidation("WORK_IN_PROGRESS", "PROD-001"));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", CROSS_DOCK_LOCATION_ID))
-                .thenReturn(4, 14);
+                .thenReturn(new BigDecimal("4"), new BigDecimal("14"));
 
         CrossDockRequest request =
                 new CrossDockRequest("WO-001", workorderLineId.toString(), new BigDecimal("10"), null);
@@ -1143,14 +1170,14 @@ class ReceivingServiceImplTest {
         InventoryLedgerEntry receiptEntry = savedEntries.get(0);
         assertThat(receiptEntry.getLocationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
         assertThat(receiptEntry.getToLocationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
-        assertThat(receiptEntry.getQuantityAfter()).isEqualTo(14);
-        assertThat(receiptEntry.getChangeInQuantity()).isEqualTo(10);
+        assertThat(receiptEntry.getQuantityAfter()).isEqualByComparingTo("14");
+        assertThat(receiptEntry.getChangeInQuantity()).isEqualByComparingTo("10");
 
         InventoryLedgerEntry issueEntry = savedEntries.get(1);
         assertThat(issueEntry.getLocationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
         assertThat(issueEntry.getFromLocationId()).isEqualTo(CROSS_DOCK_LOCATION_ID);
-        assertThat(issueEntry.getQuantityAfter()).isEqualTo(4);
-        assertThat(issueEntry.getChangeInQuantity()).isEqualTo(-10);
+        assertThat(issueEntry.getQuantityAfter()).isEqualByComparingTo("4");
+        assertThat(issueEntry.getChangeInQuantity()).isEqualByComparingTo("-10");
     }
 
     @Test
@@ -1188,7 +1215,7 @@ class ReceivingServiceImplTest {
     }
 
     @Test
-    void receiveItemsIntoStaging_fractionalQuantity_throwsIllegalArgumentException() {
+    void receiveItemsIntoStaging_fractionalQuantityForAWholeUnitsProduct_isRefused() {
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
@@ -1210,11 +1237,87 @@ class ReceivingServiceImplTest {
         ReceiveItemsRequest request = new ReceiveItemsRequest(
                 List.of(new ReceiveLineRequest(lineId, new BigDecimal("2.75"), null, null, null)));
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
+        FractionalQuantityNotAllowedException exception = assertThrows(
+                FractionalQuantityNotAllowedException.class,
                 () -> receivingService.receiveItemsIntoStaging(sessionId, request, "test-user"));
 
-        assertThat(exception.getMessage()).contains("whole number");
+        assertThat(exception.getMessage()).contains(FractionalQuantityNotAllowedException.ERROR_CODE);
+        assertThat(exception.getMessage()).contains("whole units");
+    }
+
+    /**
+     * The ADR-0055 sentinel (#1414 AC). {@code UomConversionServiceImplTest} carries a product
+     * whose base UoM is {@code LB} at {@code precision_scale = 2}, and asserts that {@code 1 BAG}
+     * converts to {@code 1.01 LB}. Feed that same quantity through receiving before this stage and
+     * {@code toWholeLedgerQuantity}'s {@code intValueExact()} threw: the conversion subsystem and
+     * the ledger could not both be right about the same product. This is the single clearest proof
+     * that the contradiction is resolved — the posting round-trips into the ledger at its real
+     * quantity, and the guard is still there, just reading the declaration.
+     */
+    @Test
+    void receiveItemsIntoStaging_scaleTwoProduct_postsItsFractionalQuantityToTheLedger() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID productId = UUID.fromString("018f0000-0000-7000-8000-000000000d02");
+
+        // Not a stubbed scale: the real conversion service reading the real fixture. This is the
+        // same product UomConversionServiceImplTest seeds — base LB at precision_scale 2, BAG at
+        // factor 1.005 — the one whose 1 BAG -> 1.01 LB vector receiving used to reject. Deriving
+        // the declaration here rather than stubbing it is what makes the two sides provably agree
+        // instead of coincidentally agreeing.
+        ExtProductReplicaRepository products = mock(ExtProductReplicaRepository.class);
+        ExtProductUomReplicaRepository productUoms = mock(ExtProductUomReplicaRepository.class);
+        when(products.findById(productId))
+                .thenReturn(Optional.of(ExtProductReplica.builder()
+                        .productId(productId)
+                        .baseUom("LB")
+                        .trackingLevel("NONE")
+                        .aggregateVersion(1L)
+                        .updatedAt(Instant.parse("2026-07-20T00:00:00Z"))
+                        .build()));
+        when(products.existsById(productId)).thenReturn(true);
+        when(productUoms.findByProductIdAndUomCode(productId, "LB"))
+                .thenReturn(Optional.of(ExtProductUomReplica.builder()
+                        .productId(productId)
+                        .uomCode("LB")
+                        .uomType("BASE")
+                        .factorToBase(BigDecimal.ONE)
+                        .precisionScale(2)
+                        .build()));
+        UomConversionService realConversion = new UomConversionServiceImpl(products, productUoms);
+        int declaredScale = realConversion.declaredBaseScale(productId);
+        assertThat(declaredScale).isEqualTo(2);
+        // Resolved before stubbing, not inside the when(...) argument: a real call that itself
+        // touches mocks would leave Mockito mid-stubbing.
+        when(uomConversionService.declaredBaseScale(productId)).thenReturn(declaredScale);
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId(productId.toString())
+                .expectedQuantity(new BigDecimal("1.01"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .sourceDocumentId("PO-BULK")
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .status(ReceivingSessionStatus.OPEN)
+                .build();
+        line.setSession(session);
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any(ReceivingSession.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        ReceiveItemsRequest request = new ReceiveItemsRequest(
+                List.of(new ReceiveLineRequest(lineId, new BigDecimal("1.01"), null, null, null)));
+
+        receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
+
+        ArgumentCaptor<InventoryLedgerEntry> posted = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(ledgerPostingService).post(posted.capture());
+        assertThat(posted.getValue().getChangeInQuantity()).isEqualByComparingTo("1.01");
+        assertThat(posted.getValue().getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_RECEIPT);
     }
 
     private void stubSourceDocumentLines() {

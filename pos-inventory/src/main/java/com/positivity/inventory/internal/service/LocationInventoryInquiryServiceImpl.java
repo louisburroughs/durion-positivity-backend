@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.service.LocationInventoryInquiryService;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -42,23 +43,23 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
     @Transactional(readOnly = true)
     @NonNull
     public LocationInventoryInquiryResponse getLocationInventory(@NonNull UUID locationId, @Nullable String sku) {
-        long onHandQuantity;
-        long outstandingAllocations;
+        BigDecimal onHandQuantity;
+        BigDecimal outstandingAllocations;
         if (sku == null || sku.isBlank()) {
-            onHandQuantity = stockSummaryRepository.sumOnHandAtLocation(locationId);
-            outstandingAllocations = stockSummaryRepository.sumAllocatedAtLocation(locationId);
+            onHandQuantity = Quantities.nz(stockSummaryRepository.sumOnHandAtLocation(locationId));
+            outstandingAllocations = Quantities.nz(stockSummaryRepository.sumAllocatedAtLocation(locationId));
         } else {
             InventoryStockSummary row = stockSummaryRepository
                     .findByStockItemIdAndLocationId(sku, locationId)
                     .orElse(null);
-            onHandQuantity = row == null ? 0L : row.getOnHand();
-            outstandingAllocations = row == null ? 0L : row.getAllocated();
+            onHandQuantity = row == null ? BigDecimal.ZERO : Quantities.nz(row.getOnHand());
+            outstandingAllocations = row == null ? BigDecimal.ZERO : Quantities.nz(row.getAllocated());
         }
 
         return LocationInventoryInquiryResponse.builder()
                 .locationId(locationId)
                 .onHandQuantity(onHandQuantity)
-                .availableToPromiseQuantity(onHandQuantity - outstandingAllocations)
+                .availableToPromiseQuantity(onHandQuantity.subtract(outstandingAllocations))
                 .build();
     }
 
@@ -67,7 +68,7 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
     @NonNull
     public LocationInventoryItemsResponse listLocationInventoryItems(@NonNull UUID locationId) {
         List<LocationInventoryItemsResponse.Item> items =
-                stockSummaryRepository.findByLocationIdAndOnHandGreaterThan(locationId, 0L).stream()
+                stockSummaryRepository.findByLocationIdAndOnHandGreaterThan(locationId, BigDecimal.ZERO).stream()
                         .map(row -> LocationInventoryItemsResponse.Item.builder()
                                 .stockItemId(row.getStockItemId())
                                 .onHandQuantity(row.getOnHand())
@@ -87,7 +88,7 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
             @NonNull UUID locationId, @Nullable String sku, @NonNull Instant asOf) {
         asOfQueryGuard.check(asOf);
 
-        Integer onHand = (sku == null || sku.isBlank())
+        BigDecimal onHand = (sku == null || sku.isBlank())
                 ? inventoryLedgerEntryRepository.calculateOnHandAtLocationAsOf(
                         locationId, InventoryLedgerEventType.onHandAffectingTypes(), asOf)
                 : inventoryLedgerEntryRepository.calculateOnHandForStockItemAtLocationAsOf(
@@ -97,7 +98,7 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
         // is not reliably reconstructable from ATP-neutral ledger events (A3, #1029).
         return LocationInventoryInquiryResponse.builder()
                 .locationId(locationId)
-                .onHandQuantity(onHand == null ? 0L : onHand.longValue())
+                .onHandQuantity(Quantities.nz(onHand))
                 .build();
     }
 

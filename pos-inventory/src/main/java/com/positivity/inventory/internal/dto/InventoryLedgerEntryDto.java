@@ -50,11 +50,11 @@ public class InventoryLedgerEntryDto {
             example = "12",
             requiredMode = REQUIRED)
     @NotNull
-    private Integer changeInQuantity;
+    private BigDecimal changeInQuantity;
 
     @Schema(description = "Running quantity after this entry was applied", example = "120", requiredMode = REQUIRED)
     @NotNull
-    private Integer quantityAfter;
+    private BigDecimal quantityAfter;
 
     @Schema(
             description = "Unit cost associated with this movement, if recorded",

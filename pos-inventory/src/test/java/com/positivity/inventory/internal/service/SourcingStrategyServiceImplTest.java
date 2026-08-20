@@ -19,6 +19,7 @@ import com.positivity.inventory.internal.service.SourcingStrategyService.SourceS
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingCandidate;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingDecision;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingSelection;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -294,9 +295,14 @@ class SourcingStrategyServiceImplTest {
     void selectSource_picksFirstCandidateWithSurplus() {
         // Default FIFO order is [LOC_A, LOC_B]; LOC_A has too little.
         SourcingSelection selection = new SourcingSelection(
-                SKU, SITE_ID, null, List.of(new SourcingCandidate(LOC_A, 3L), new SourcingCandidate(LOC_B, 10L)));
+                SKU,
+                SITE_ID,
+                null,
+                List.of(
+                        new SourcingCandidate(LOC_A, new BigDecimal("3")),
+                        new SourcingCandidate(LOC_B, new BigDecimal("10"))));
 
-        Optional<SourceSelection> picked = service.selectSource(selection, 5);
+        Optional<SourceSelection> picked = service.selectSource(selection, new BigDecimal("5"));
 
         assertThat(picked).isPresent();
         assertThat(picked.orElseThrow().candidate().locationId()).isEqualTo(LOC_B);
@@ -307,9 +313,14 @@ class SourcingStrategyServiceImplTest {
     @DisplayName("selectSource is empty when no candidate covers the needed quantity")
     void selectSource_emptyWithoutSurplus() {
         SourcingSelection selection = new SourcingSelection(
-                SKU, SITE_ID, null, List.of(new SourcingCandidate(LOC_A, 3L), new SourcingCandidate(LOC_B, 4L)));
+                SKU,
+                SITE_ID,
+                null,
+                List.of(
+                        new SourcingCandidate(LOC_A, new BigDecimal("3")),
+                        new SourcingCandidate(LOC_B, new BigDecimal("4"))));
 
-        assertThat(service.selectSource(selection, 5)).isEmpty();
+        assertThat(service.selectSource(selection, new BigDecimal("5"))).isEmpty();
     }
 
     // ─── Admin operations ────────────────────────────────────────────────────

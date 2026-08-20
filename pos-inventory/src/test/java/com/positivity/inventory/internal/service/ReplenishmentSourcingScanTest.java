@@ -78,7 +78,7 @@ class ReplenishmentSourcingScanTest {
         return "SKU-F5-" + UUID.randomUUID();
     }
 
-    private void receive(String sku, UUID locationId, int quantity) {
+    private void receive(String sku, UUID locationId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(locationId)
@@ -144,8 +144,8 @@ class ReplenishmentSourcingScanTest {
         UUID destSite = seedActiveSite();
         UUID srcSite = seedActiveSite();
         seedPolicy(sku, destSite, 5, 20, ReplenishmentSourceType.INTERNAL_TRANSFER);
-        receive(sku, destSite, 3); // pick-face on-hand 3 < min 5 → need 17
-        receive(sku, srcSite, 30); // sibling surplus 30 covers 17
+        receive(sku, destSite, new BigDecimal("3")); // pick-face on-hand 3 < min 5 → need 17
+        receive(sku, srcSite, new BigDecimal("30")); // sibling surplus 30 covers 17
 
         replenishmentService.runBatchReplenishmentScan();
 
@@ -179,8 +179,8 @@ class ReplenishmentSourcingScanTest {
         UUID destSite = seedActiveSite();
         UUID srcSite = seedActiveSite();
         seedPolicy(sku, destSite, 5, 20, ReplenishmentSourceType.INTERNAL_TRANSFER);
-        receive(sku, destSite, 3);
-        receive(sku, srcSite, 20); // 20 on-hand, but the source keeps all 20 as its own floor
+        receive(sku, destSite, new BigDecimal("3"));
+        receive(sku, srcSite, new BigDecimal("20")); // 20 on-hand, but the source keeps all 20 as its own floor
         // Source's own policy min = 20 → offerable surplus = 20 - 0 - 20 = 0 → not a candidate.
         // (min == on-hand so the source policy itself does not trigger: projected 20 !< 20.)
         seedPolicy(sku, srcSite, 20, 40, ReplenishmentSourceType.INTERNAL_TRANSFER);
@@ -201,7 +201,7 @@ class ReplenishmentSourcingScanTest {
         String sku = productId.toString();
         UUID destSite = seedActiveSite();
         ReplenishmentPolicy policy = seedPolicy(sku, destSite, 5, 20, ReplenishmentSourceType.EITHER);
-        receive(sku, destSite, 3); // below min, no sibling surplus anywhere
+        receive(sku, destSite, new BigDecimal("3")); // below min, no sibling surplus anywhere
         seedManufacturerFeed(productId, 50);
 
         replenishmentService.runBatchReplenishmentScan();
@@ -224,8 +224,8 @@ class ReplenishmentSourcingScanTest {
         UUID destSite = seedActiveSite();
         UUID srcSite = seedActiveSite();
         ReplenishmentPolicy policy = seedPolicy(sku, destSite, 5, 20, ReplenishmentSourceType.EITHER);
-        receive(sku, destSite, 3);
-        receive(sku, srcSite, 30);
+        receive(sku, destSite, new BigDecimal("3"));
+        receive(sku, srcSite, new BigDecimal("30"));
         seedManufacturerFeed(productId, 50); // a vendor exists, but internal surplus wins
 
         replenishmentService.runBatchReplenishmentScan();
@@ -247,8 +247,8 @@ class ReplenishmentSourcingScanTest {
         UUID pickFace = seedBin(destSite);
         UUID backstock = seedBin(destSite);
         seedPolicy(sku, pickFace, 5, 20, ReplenishmentSourceType.INTERNAL_TRANSFER);
-        receive(sku, pickFace, 3); // pick face below min → need 17
-        receive(sku, backstock, 30); // same-site backstock surplus
+        receive(sku, pickFace, new BigDecimal("3")); // pick face below min → need 17
+        receive(sku, backstock, new BigDecimal("30")); // same-site backstock surplus
 
         replenishmentService.runBatchReplenishmentScan();
 
@@ -270,8 +270,8 @@ class ReplenishmentSourcingScanTest {
         UUID destSite = seedActiveSite();
         UUID srcSite = seedActiveSite();
         seedPolicy(sku, destSite, 5, 20, ReplenishmentSourceType.INTERNAL_TRANSFER);
-        receive(sku, destSite, 3);
-        receive(sku, srcSite, 30);
+        receive(sku, destSite, new BigDecimal("3"));
+        receive(sku, srcSite, new BigDecimal("30"));
 
         replenishmentService.runBatchReplenishmentScan();
         assertThat(transfersFor(sku)).hasSize(1);
@@ -297,7 +297,7 @@ class ReplenishmentSourcingScanTest {
         String sku = uniqueSku();
         UUID destSite = seedActiveSite();
         seedPolicy(sku, destSite, 5, 20, ReplenishmentSourceType.INTERNAL_TRANSFER);
-        receive(sku, destSite, 3); // below min, no surplus anywhere
+        receive(sku, destSite, new BigDecimal("3")); // below min, no surplus anywhere
 
         replenishmentService.runBatchReplenishmentScan();
 

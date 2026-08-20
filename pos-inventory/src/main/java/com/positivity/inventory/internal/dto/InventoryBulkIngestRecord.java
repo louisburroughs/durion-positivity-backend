@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.Data;
 
@@ -30,7 +31,7 @@ public class InventoryBulkIngestRecord {
     @Schema(description = "Quantity to ingest for the product (non-negative)", example = "120", requiredMode = REQUIRED)
     @NotNull
     @Min(0)
-    private Integer quantity;
+    private BigDecimal quantity;
 
     @Schema(
             description = "Optional reason code explaining the ingest",

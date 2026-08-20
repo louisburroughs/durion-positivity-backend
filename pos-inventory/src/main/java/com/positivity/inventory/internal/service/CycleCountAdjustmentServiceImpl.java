@@ -70,8 +70,8 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                 request.getStockItemId(),
                 request.getCreatedByUserId());
 
-        int quantityChange = request.getCountedQuantity() - request.getQuantityOnHandBefore();
-        if (quantityChange == 0) {
+        BigDecimal quantityChange = request.getCountedQuantity().subtract(request.getQuantityOnHandBefore());
+        if (quantityChange.signum() == 0) {
             log.info("No variance detected for SKU {}. Count matches system quantity.", request.getStockItemId());
             throw new IllegalArgumentException("No adjustment needed - counted quantity matches system quantity");
         }
@@ -237,8 +237,8 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
             return;
         }
 
-        int movementDelta = conflictDetector.movementDeltaSinceSnapshot(task);
-        if (movementDelta != 0) {
+        BigDecimal movementDelta = conflictDetector.movementDeltaSinceSnapshot(task);
+        if (!Quantities.isZero(movementDelta)) {
             conflictDetector.flagConflict(task.getTaskId());
             throw new CycleCountConflictException(task.getTaskId(), movementDelta);
         }
@@ -251,8 +251,8 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
      * floor-at-zero matrix still applies when the recomputed variance posts.
      */
     private void recomputeVarianceAgainstCurrentOnHand(CycleCountAdjustment adjustment) {
-        Integer currentOnHand = ledgerRepository.calculateOnHandQuantity(adjustment.getStockItemId());
-        int recomputedChange = adjustment.getCountedQuantity() - currentOnHand;
+        BigDecimal currentOnHand = Quantities.nz(ledgerRepository.calculateOnHandQuantity(adjustment.getStockItemId()));
+        BigDecimal recomputedChange = adjustment.getCountedQuantity().subtract(currentOnHand);
         log.info(
                 "Adjustment {} approved on CONFLICT task {}: variance recomputed against current on-hand"
                         + " {} (stale snapshot {}): quantityChange {} -> {}",
@@ -273,7 +273,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
      * without a ledger entry.
      */
     private void postApprovedAdjustment(CycleCountAdjustment adjustment) {
-        if (adjustment.getQuantityChange() != 0) {
+        if (!Quantities.isZero(adjustment.getQuantityChange())) {
             postAdjustmentToLedger(adjustment);
         } else {
             log.info(
@@ -297,10 +297,11 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
         log.info("Posting adjustment {} to inventory ledger", adjustment.getAdjustmentId());
 
         try {
-            Integer currentOnHand = ledgerRepository.calculateOnHandQuantity(adjustment.getStockItemId());
-            Integer quantityAfter = currentOnHand + adjustment.getQuantityChange();
+            BigDecimal currentOnHand =
+                    Quantities.nz(ledgerRepository.calculateOnHandQuantity(adjustment.getStockItemId()));
+            BigDecimal quantityAfter = currentOnHand.add(adjustment.getQuantityChange());
 
-            InventoryLedgerEventType eventType = adjustment.getQuantityChange() > 0
+            InventoryLedgerEventType eventType = Quantities.isPositive(adjustment.getQuantityChange())
                     ? InventoryLedgerEventType.COUNT_VARIANCE_IN
                     : InventoryLedgerEventType.COUNT_VARIANCE_OUT;
 

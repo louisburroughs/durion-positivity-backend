@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.exception;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -20,9 +21,9 @@ public class LotInsufficientStockException extends RuntimeException {
     private final UUID lotId;
 
     public LotInsufficientStockException(
-            String stockItemId, UUID lotId, @Nullable UUID locationId, long projectedOnHand) {
+            String stockItemId, UUID lotId, @Nullable UUID locationId, BigDecimal projectedOnHand) {
         super("LOT_INSUFFICIENT_STOCK: posting would take lot " + lotId + " of stock item " + stockItemId
-                + " at location " + locationId + " to " + projectedOnHand
+                + " at location " + locationId + " to " + projectedOnHand.toPlainString()
                 + "; a lot cannot be drawn below its per-lot on-hand");
         this.stockItemId = stockItemId;
         this.lotId = lotId;

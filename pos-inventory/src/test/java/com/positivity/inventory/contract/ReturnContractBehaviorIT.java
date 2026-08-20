@@ -11,6 +11,7 @@ import com.positivity.inventory.internal.dto.returns.ReturnSubmissionResultDto;
 import com.positivity.inventory.internal.dto.returns.ReturnSubmitRequest;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
 import com.positivity.inventory.service.ReturnService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -119,7 +120,7 @@ class ReturnContractBehaviorIT extends BaseContractIntegrationTest {
     void RC4_submitToStock_quantityExceeded_returns422() throws Exception {
         UUID skuId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(returnService.submitToStock(any(ReturnSubmitRequest.class)))
-                .thenThrow(new ReturnQuantityExceededException(skuId, 99, 2));
+                .thenThrow(new ReturnQuantityExceededException(skuId, new BigDecimal("99"), new BigDecimal("2")));
 
         ReturnSubmitRequest requestBody = ReturnSubmitRequest.builder()
                 .workorderId(UUID.fromString("00000000-0000-0000-0000-000000000001"))

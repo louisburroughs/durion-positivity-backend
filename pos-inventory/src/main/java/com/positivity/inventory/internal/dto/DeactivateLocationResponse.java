@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -74,7 +75,7 @@ public class DeactivateLocationResponse {
         private String itemId;
 
         @Schema(description = "Quantity of the item moved", example = "4.5", requiredMode = REQUIRED)
-        private double quantity;
+        private BigDecimal quantity;
 
         public String getItemId() {
             return itemId;
@@ -84,11 +85,11 @@ public class DeactivateLocationResponse {
             this.itemId = itemId;
         }
 
-        public double getQuantity() {
+        public BigDecimal getQuantity() {
             return quantity;
         }
 
-        public void setQuantity(double quantity) {
+        public void setQuantity(BigDecimal quantity) {
             this.quantity = quantity;
         }
     }

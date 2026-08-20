@@ -24,6 +24,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.PutawayExecuteServiceImpl;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -90,9 +91,9 @@ class PutawayExecuteServiceImplTest {
         when(putawayTaskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(task));
         when(putawayValidationService.validatePutawayExecution(request)).thenReturn(ValidationResult.success());
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("sku-abc", sourceLocationId))
-                .thenReturn(50);
+                .thenReturn(new BigDecimal("50"));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("sku-abc", destinationLocationId))
-                .thenReturn(5);
+                .thenReturn(new BigDecimal("5"));
         when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(invocation -> {
             InventoryLedgerEntry entry = invocation.getArgument(0);
             entry.setLedgerEntryId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
@@ -106,22 +107,22 @@ class PutawayExecuteServiceImplTest {
         List<InventoryLedgerEntry> allCaptured = ledgerCaptor.getAllValues();
 
         InventoryLedgerEntry sourceEntry = allCaptured.stream()
-                .filter(e -> e.getChangeInQuantity() == -10)
+                .filter(e -> e.getChangeInQuantity().compareTo(new BigDecimal("-10")) == 0)
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("No source decrement entry found"));
         assertThat(sourceEntry.getStockItemId()).isEqualTo("sku-abc");
         assertThat(sourceEntry.getLocationId()).isEqualTo(sourceLocationId);
         assertThat(sourceEntry.getTransactionUserId()).isEqualTo(DEFAULT_ACTOR);
-        assertThat(sourceEntry.getQuantityAfter()).isEqualTo(40);
+        assertThat(sourceEntry.getQuantityAfter()).isEqualByComparingTo("40");
 
         InventoryLedgerEntry destinationEntry = allCaptured.stream()
-                .filter(e -> e.getChangeInQuantity() == 10)
+                .filter(e -> e.getChangeInQuantity().compareTo(new BigDecimal("10")) == 0)
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("No destination credit entry found"));
         assertThat(destinationEntry.getStockItemId()).isEqualTo("sku-abc");
         assertThat(destinationEntry.getLocationId()).isEqualTo(destinationLocationId);
         assertThat(destinationEntry.getTransactionUserId()).isEqualTo(DEFAULT_ACTOR);
-        assertThat(destinationEntry.getQuantityAfter()).isEqualTo(15);
+        assertThat(destinationEntry.getQuantityAfter()).isEqualByComparingTo("15");
 
         ArgumentCaptor<PutawayTask> taskCaptor = ArgumentCaptor.forClass(PutawayTask.class);
         verify(putawayTaskRepository).save(taskCaptor.capture());
@@ -161,7 +162,7 @@ class PutawayExecuteServiceImplTest {
     @Test
     void executePutaway_throwsLocationAtCapacityException() {
         when(putawayTaskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(task));
-        doThrow(new LocationAtCapacityException(destinationLocationId, 100, 100))
+        doThrow(new LocationAtCapacityException(destinationLocationId, new BigDecimal("100"), new BigDecimal("100")))
                 .when(putawayValidationService)
                 .validatePutawayExecution(request);
 

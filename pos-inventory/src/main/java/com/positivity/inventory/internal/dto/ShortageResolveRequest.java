@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -54,7 +55,7 @@ public class ShortageResolveRequest {
 
     @Schema(description = "Quantity that is short and to be resolved", example = "3", requiredMode = REQUIRED)
     @Positive
-    private int shortQuantity;
+    private BigDecimal shortQuantity;
 
     @Schema(
             description = "Site the demand is short at (required for BACKORDER / TRANSFER_IN)",

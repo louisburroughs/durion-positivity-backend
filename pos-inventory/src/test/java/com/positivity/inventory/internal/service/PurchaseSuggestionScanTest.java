@@ -77,13 +77,13 @@ class PurchaseSuggestionScanTest {
         jdbcTemplate.execute("CREATE SEQUENCE IF NOT EXISTS purchase_order_number_seq START WITH 1 INCREMENT BY 1");
     }
 
-    private void post(String sku, UUID locationId, InventoryLedgerEventType eventType, int change, int after) {
+    private void post(String sku, UUID locationId, InventoryLedgerEventType eventType, BigDecimal change, int after) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(locationId)
                 .eventType(eventType)
                 .changeInQuantity(change)
-                .quantityAfter(after)
+                .quantityAfter(BigDecimal.valueOf(after))
                 .transactionUserId(ACTOR)
                 .build());
     }
@@ -150,7 +150,7 @@ class PurchaseSuggestionScanTest {
         UUID location = UUID.randomUUID();
         seedPurchasePolicy(sku, location, 5, 20, null, 0);
         seedManufacturerFeed(productId, manufacturerId, 100, 5, new BigDecimal("4.99"), null, 1);
-        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 3, 3); // on-hand 3 < min 5
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("3"), 3); // on-hand 3 < min 5
 
         ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
 
@@ -178,7 +178,7 @@ class PurchaseSuggestionScanTest {
         UUID location = UUID.randomUUID();
         seedPurchasePolicy(sku, location, 5, 20, null, 0);
         seedManufacturerFeed(productId, UUID.randomUUID(), 100, 5, new BigDecimal("4.99"), null, 1);
-        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 4, 4); // need 16
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("4"), 4); // need 16
 
         replenishmentService.runBatchReplenishmentScan();
         replenishmentService.runBatchReplenishmentScan();
@@ -189,7 +189,7 @@ class PurchaseSuggestionScanTest {
         assertThat(suggestions.getFirst().getSuggestedQuantity()).isEqualTo(16);
 
         // Stock drops between scans → the open suggestion's quantity is refreshed, not duplicated.
-        post(sku, location, InventoryLedgerEventType.GOODS_ISSUE, -2, 2);
+        post(sku, location, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-2"), 2);
         ReplenishmentScanResultResponse second = replenishmentService.runBatchReplenishmentScan();
 
         suggestions = suggestionsFor(sku);
@@ -207,7 +207,7 @@ class PurchaseSuggestionScanTest {
         UUID location = UUID.randomUUID();
         seedPurchasePolicy(sku, location, 5, 20, 4, 0); // orderMultiple 4
         seedManufacturerFeed(productId, UUID.randomUUID(), 100, 5, new BigDecimal("4.99"), 24, 6); // MOQ 24, pack 6
-        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 3, 3); // raw need 17
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("3"), 3); // raw need 17
 
         replenishmentService.runBatchReplenishmentScan();
 
@@ -226,7 +226,7 @@ class PurchaseSuggestionScanTest {
         UUID location = UUID.randomUUID();
         seedPurchasePolicy(sku, location, 5, 20, null, 0);
         seedManufacturerFeed(productId, UUID.randomUUID(), 100, 5, new BigDecimal("4.99"), null, 1);
-        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 3, 3);
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("3"), 3);
 
         replenishmentService.runBatchReplenishmentScan();
         var eventResponse = replenishmentService.evaluatePickFaceForReplenishment(sku, location);
@@ -298,8 +298,8 @@ class PurchaseSuggestionScanTest {
         // state. What lands here is that state.
         projection.restate(converted.getPurchaseOrderId(), "PARTIALLY_RECEIVED");
         projection.setOpenQuantity(converted.getPurchaseOrderId(), "5");
-        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 15, 15);
-        post(sku, location, InventoryLedgerEventType.GOODS_ISSUE, -12, 3);
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("15"), 15);
+        post(sku, location, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-12"), 3);
 
         var eventResponse = replenishmentService.evaluatePickFaceForReplenishment(sku, location);
 
@@ -323,7 +323,7 @@ class PurchaseSuggestionScanTest {
         UUID location = UUID.randomUUID();
         seedPurchasePolicy(sku, location, 5, 20, null, 0);
         seedManufacturerFeed(productId, manufacturerId, 100, 5, new BigDecimal("4.99"), null, 1);
-        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, 3, 3);
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("3"), 3);
 
         replenishmentService.runBatchReplenishmentScan();
         PurchaseSuggestion suggestion = suggestionsFor(sku).getFirst();

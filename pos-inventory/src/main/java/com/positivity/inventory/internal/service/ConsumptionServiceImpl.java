@@ -169,7 +169,7 @@ public class ConsumptionServiceImpl implements ConsumptionService {
         // Releases accumulated in this request are not yet visible to the
         // ledger-derived "already released" lookup; track them per allocation
         // so multi-item requests cannot over-release (PR #661 re-review finding 1).
-        Map<UUID, Integer> releasedInBatch = new HashMap<>();
+        Map<UUID, BigDecimal> releasedInBatch = new HashMap<>();
         for (ConsumeItemLine item : items) {
             PickTaskEntity task = pickTaskRepository
                     .findById(item.getPickTaskId())
@@ -251,7 +251,7 @@ public class ConsumptionServiceImpl implements ConsumptionService {
             ConsumeItemsRequest request,
             ConsumeItemLine item,
             PickTaskEntity task,
-            Map<UUID, Integer> releasedInBatch) {
+            Map<UUID, BigDecimal> releasedInBatch) {
         if (task.getWorkorderLineId() == null) {
             return List.of();
         }
@@ -273,25 +273,31 @@ public class ConsumptionServiceImpl implements ConsumptionService {
                 orderAllocationsForClose(unordered, reservation.get().getStockItemId(), task);
 
         UUID stockItemId = reservation.get().getStockItemId();
-        int netOnHand = Optional.ofNullable(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId))
-                .orElse(0);
+        BigDecimal netOnHand = Quantities.nz(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId));
 
         List<InventoryLedgerEntry> releases = new ArrayList<>();
-        int remainingToClose = item.getQuantity();
-        int totalReleasedForReservation = 0;
+        // The pick chain is still integral (pick-task quantities widen with the UOM work in
+        // ADR-0055 stage 3/4), so this widens at the boundary rather than narrowing: an int
+        // consumed quantity is exactly representable as a BigDecimal, and the allocation math it
+        // feeds is decimal because allocations are.
+        BigDecimal remainingToClose = BigDecimal.valueOf(item.getQuantity());
+        BigDecimal totalReleasedForReservation = BigDecimal.ZERO;
         for (AllocationEntity allocation : locatedHard) {
-            if (remainingToClose <= 0) {
+            if (!Quantities.isPositive(remainingToClose)) {
                 break;
             }
-            int alreadyReleased = inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
-                            allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED)
-                    + releasedInBatch.getOrDefault(allocation.getAllocationId(), 0);
-            int allocationRemaining = allocation.getAllocatedQuantity() - alreadyReleased;
-            if (allocationRemaining <= 0) {
+            BigDecimal alreadyReleased = Quantities.nz(
+                            inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
+                                    allocation.getAllocationId().toString(),
+                                    InventoryLedgerEventType.ALLOCATION_RELEASED))
+                    .add(releasedInBatch.getOrDefault(allocation.getAllocationId(), BigDecimal.ZERO));
+            BigDecimal allocationRemaining =
+                    Quantities.nz(allocation.getAllocatedQuantity()).subtract(alreadyReleased);
+            if (!Quantities.isPositive(allocationRemaining)) {
                 continue;
             }
 
-            int release = Math.min(remainingToClose, allocationRemaining);
+            BigDecimal release = Quantities.min(remainingToClose, allocationRemaining);
             releases.add(InventoryLedgerEntry.builder()
                     .stockItemId(stockItemId.toString())
                     .eventType(InventoryLedgerEventType.ALLOCATION_RELEASED)
@@ -305,20 +311,21 @@ public class ConsumptionServiceImpl implements ConsumptionService {
                     .timestamp(Instant.now(clock))
                     .build());
 
-            releasedInBatch.merge(allocation.getAllocationId(), release, Integer::sum);
+            releasedInBatch.merge(allocation.getAllocationId(), release, BigDecimal::add);
             if (release == allocationRemaining) {
                 allocation.setStatus(AllocationStatus.RELEASED);
                 allocationRepository.save(allocation);
             }
-            remainingToClose -= release;
-            totalReleasedForReservation += release;
+            remainingToClose = remainingToClose.subtract(release);
+            totalReleasedForReservation = totalReleasedForReservation.add(release);
         }
-        if (totalReleasedForReservation > 0) {
+        if (Quantities.isPositive(totalReleasedForReservation)) {
             // PR #661 re-review finding 2: AllocationReallocationServiceImpl pools
             // reservation.allocatedQuantity as reallocatable stock; consumed stock
             // is physically gone and must leave that pool.
             ReservationEntity owning = reservation.get();
-            owning.setAllocatedQuantity(Math.max(0, owning.getAllocatedQuantity() - totalReleasedForReservation));
+            owning.setAllocatedQuantity(Quantities.atLeastZero(
+                    Quantities.nz(owning.getAllocatedQuantity()).subtract(totalReleasedForReservation)));
             reservationRepository.save(owning);
         }
         return releases;
@@ -402,8 +409,8 @@ public class ConsumptionServiceImpl implements ConsumptionService {
         return InventoryLedgerEntry.builder()
                 .stockItemId(item.getSkuId() == null ? "" : item.getSkuId().toString())
                 .eventType(InventoryLedgerEventType.WORKORDER_CONSUMPTION)
-                .changeInQuantity(-Math.abs(item.getQuantity()))
-                .quantityAfter(0)
+                .changeInQuantity(BigDecimal.valueOf(item.getQuantity()).abs().negate())
+                .quantityAfter(BigDecimal.ZERO)
                 .lotId(lotId)
                 .transactionUserId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
                 .notes("Consumed from pick task " + item.getPickTaskId() + " for workorder " + request.getWorkorderId())

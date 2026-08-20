@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.inventory.internal.dto.reallocation.ReallocateRequest;
 import com.positivity.inventory.internal.dto.reallocation.ReallocateResponse;
 import com.positivity.inventory.service.AllocationReallocationService;
+import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -97,7 +98,7 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
                 .stockItemId(stockItemId)
                 .totalReallocated(3)
                 .auditRecordsCreated(2)
-                .atpAfterReallocation(7)
+                .atpAfterReallocation(new BigDecimal("7"))
                 .build();
 
         when(allocationReallocationService.reallocate(any(ReallocateRequest.class)))
@@ -141,7 +142,7 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
                 .stockItemId(stockItemId)
                 .totalReallocated(5)
                 .auditRecordsCreated(2)
-                .atpAfterReallocation(0)
+                .atpAfterReallocation(new BigDecimal("0"))
                 .build();
 
         when(allocationReallocationService.reallocate(any(ReallocateRequest.class)))
@@ -186,7 +187,7 @@ class ReallocationContractBehaviorIT extends BaseContractIntegrationTest {
                 .stockItemId(stockItemId)
                 .totalReallocated(10)
                 .auditRecordsCreated(1)
-                .atpAfterReallocation(0)
+                .atpAfterReallocation(new BigDecimal("0"))
                 .build();
 
         when(allocationReallocationService.reallocate(any(ReallocateRequest.class)))

@@ -174,9 +174,11 @@ public class PickListGenerationServiceImpl implements PickListGenerationService 
     private SourcingDecision suggestLocation(String sku) {
         List<SourcingCandidate> candidates = stockSummaryRepository.findByStockItemId(sku).stream()
                 .filter(summary -> summary.getLocationId() != null)
-                .filter(summary -> summary.getOnHand() - summary.getAllocated() > 0)
-                .map(summary ->
-                        new SourcingCandidate(summary.getLocationId(), summary.getOnHand() - summary.getAllocated()))
+                .filter(summary -> Quantities.isPositive(
+                        Quantities.nz(summary.getOnHand()).subtract(Quantities.nz(summary.getAllocated()))))
+                .map(summary -> new SourcingCandidate(
+                        summary.getLocationId(),
+                        Quantities.nz(summary.getOnHand()).subtract(Quantities.nz(summary.getAllocated()))))
                 .toList();
         return sourcingStrategyService.orderCandidates(new SourcingSelection(sku, null, null, candidates));
     }

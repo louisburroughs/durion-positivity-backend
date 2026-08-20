@@ -112,7 +112,7 @@ class ScrapServiceImplTest {
         });
         lenient()
                 .when(ledgerRepository.calculateOnHandQuantityAtLocation(SKU, LOCATION_ID))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
     }
 
     @AfterEach
@@ -181,7 +181,7 @@ class ScrapServiceImplTest {
         stubBelowThreshold();
         UUID ledgerEntryId = stubPostingSuccess();
         when(ledgerRepository.calculateOnHandQuantityAtLocation(SKU, LOCATION_ID))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
 
         ScrapResponse response = service.createScrap(createRequest(ScrapReasonCode.DAMAGED, null));
 
@@ -193,8 +193,8 @@ class ScrapServiceImplTest {
         verify(ledgerPostingService).post(entryCaptor.capture(), eq(false));
         InventoryLedgerEntry entry = entryCaptor.getValue();
         assertThat(entry.getEventType()).isEqualTo(InventoryLedgerEventType.SCRAP_OUT);
-        assertThat(entry.getChangeInQuantity()).isEqualTo(-3);
-        assertThat(entry.getQuantityAfter()).isEqualTo(7);
+        assertThat(entry.getChangeInQuantity()).isEqualByComparingTo("-3");
+        assertThat(entry.getQuantityAfter()).isEqualByComparingTo("7");
         assertThat(entry.getReasonCode()).isEqualTo("DAMAGED");
         assertThat(entry.getSourceTransactionId())
                 .isEqualTo(response.getScrapId().toString());
@@ -217,7 +217,7 @@ class ScrapServiceImplTest {
         stubBelowThreshold();
         stubPostingWithEngineCost(new BigDecimal("2.5000"));
         when(ledgerRepository.calculateOnHandQuantityAtLocation(SKU, LOCATION_ID))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
 
         service.createScrap(createRequest(ScrapReasonCode.DAMAGED, null));
 
@@ -235,7 +235,7 @@ class ScrapServiceImplTest {
         stubPostingWithEngineCost(new BigDecimal("6.0000"));
         when(methodResolver.resolve(SKU)).thenReturn(CostingMethod.STANDARD);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(SKU, LOCATION_ID))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
 
         service.createScrap(createRequest(ScrapReasonCode.DAMAGED, null));
 
@@ -254,7 +254,7 @@ class ScrapServiceImplTest {
         stubBelowThreshold();
         stubPostingWithEngineCost(null);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(SKU, LOCATION_ID))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
 
         service.createScrap(createRequest(ScrapReasonCode.DAMAGED, null));
 
@@ -284,7 +284,7 @@ class ScrapServiceImplTest {
         ScrapRecord pending = pendingScrap();
         when(scrapRepository.findById(pending.getScrapId())).thenReturn(Optional.of(pending));
         when(ledgerRepository.calculateOnHandQuantityAtLocation(SKU, LOCATION_ID))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
         stubPostingSuccess();
 
         ScrapResponse response = service.approveScrap(pending.getScrapId(), new ApproveScrapRequest());
@@ -328,7 +328,7 @@ class ScrapServiceImplTest {
         ScrapRecord pending = pendingScrap();
         when(scrapRepository.findById(pending.getScrapId())).thenReturn(Optional.of(pending));
         when(ledgerRepository.calculateOnHandQuantityAtLocation(SKU, LOCATION_ID))
-                .thenReturn(1);
+                .thenReturn(new BigDecimal("1"));
         when(ledgerPostingService.post(any(InventoryLedgerEntry.class), anyBoolean()))
                 .thenThrow(new NegativeStockPolicyViolationException(
                         NegativeStockPolicyViolationException.OVERRIDE_REQUIRED, "below zero"));
@@ -361,7 +361,7 @@ class ScrapServiceImplTest {
         ScrapRecord pending = pendingScrap();
         when(scrapRepository.findById(pending.getScrapId())).thenReturn(Optional.of(pending));
         when(ledgerRepository.calculateOnHandQuantityAtLocation(SKU, LOCATION_ID))
-                .thenReturn(1);
+                .thenReturn(new BigDecimal("1"));
         stubPostingSuccess();
 
         ApproveScrapRequest request =

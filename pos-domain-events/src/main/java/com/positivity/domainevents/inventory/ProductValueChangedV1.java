@@ -29,7 +29,8 @@ import org.jspecify.annotations.Nullable;
  *     {@code "AVERAGE"})
  * @param previousUnitCost unit cost before the revaluation, {@code null} when the SKU was uncosted
  * @param newUnitCost corrected unit cost after the revaluation
- * @param onHandQuantity on-hand quantity the engine had costed at revaluation time (delta basis)
+ * @param onHandQuantity on-hand quantity the engine had costed at revaluation time (delta basis);
+ *     decimal since ADR-0055 (#1414) — it is the ledger quantity the value delta multiplies
  * @param totalValueDelta signed inventory value change {@code (newUnitCost − previousUnitCost) ×
  *     onHandQuantity}
  * @param reason operator-supplied justification for the correction
@@ -42,7 +43,7 @@ public record ProductValueChangedV1(
         @NonNull String costingMethod,
         @Nullable BigDecimal previousUnitCost,
         @NonNull BigDecimal newUnitCost,
-        long onHandQuantity,
+        @NonNull BigDecimal onHandQuantity,
         @NonNull BigDecimal totalValueDelta,
         @NonNull String reason,
         @NonNull String actor,

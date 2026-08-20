@@ -75,13 +75,10 @@ public class RevaluationServiceImpl implements RevaluationService {
 
         BigDecimal previousUnitCost = currentCost(state, method);
         BigDecimal newUnitCost = resolveNewUnitCost(request, previousUnitCost);
-        long onHand = state.getOnHandQty();
+        BigDecimal onHand = Quantities.nz(state.getOnHandQty());
 
         BigDecimal base = previousUnitCost != null ? previousUnitCost : BigDecimal.ZERO;
-        BigDecimal valueDelta = newUnitCost
-                .subtract(base)
-                .multiply(BigDecimal.valueOf(onHand))
-                .setScale(VALUE_SCALE, RoundingMode.HALF_UP);
+        BigDecimal valueDelta = newUnitCost.subtract(base).multiply(onHand).setScale(VALUE_SCALE, RoundingMode.HALF_UP);
 
         RevaluationRecord record = RevaluationRecord.builder()
                 .stockItemId(stockItemId)

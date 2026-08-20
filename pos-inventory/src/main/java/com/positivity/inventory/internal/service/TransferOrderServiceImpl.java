@@ -258,7 +258,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
         String actor = currentActor();
 
         List<InventoryLedgerEntry> entries = new ArrayList<>();
-        Map<String, Integer> runningDelta = new HashMap<>();
+        Map<String, BigDecimal> runningDelta = new HashMap<>();
         for (TransferOrderLine line : order.getLines()) {
             TransferQuantityLineRequest explicitLine = explicit.get(line.getLineId());
             int quantity = explicitLine != null ? explicitLine.getQuantity() : line.getRequestedQty();
@@ -326,7 +326,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
         String actor = currentActor();
 
         List<InventoryLedgerEntry> entries = new ArrayList<>();
-        Map<String, Integer> runningDelta = new HashMap<>();
+        Map<String, BigDecimal> runningDelta = new HashMap<>();
         for (TransferOrderLine line : order.getLines()) {
             int remaining = line.getDispatchedQty() - line.getReceivedQty();
             TransferQuantityLineRequest explicitLine = explicit.get(line.getLineId());
@@ -401,7 +401,7 @@ public class TransferOrderServiceImpl implements TransferOrderService {
         String actor = currentActor();
 
         List<InventoryLedgerEntry> entries = new ArrayList<>();
-        Map<String, Integer> runningDelta = new HashMap<>();
+        Map<String, BigDecimal> runningDelta = new HashMap<>();
         for (TransferOrderLine line : order.getLines()) {
             int remainder = line.getDispatchedQty() - line.getReceivedQty();
             if (remainder == 0) {
@@ -490,19 +490,23 @@ public class TransferOrderServiceImpl implements TransferOrderService {
             int remainder,
             UUID destinationPosting,
             ShortCloseTransferOrderRequest request,
-            Map<String, Integer> runningDelta,
+            Map<String, BigDecimal> runningDelta,
             String actor) {
         String sku = line.getSku();
-        Integer currentOnHand = ledgerRepository.calculateOnHandQuantityAtLocation(sku, destinationPosting);
+        // Transfer-order line quantities are still ints (the transfer document widens with the
+        // UOM work); the running ledger totals they are added to are decimal.
+        BigDecimal lostQuantity = BigDecimal.valueOf(remainder);
+        BigDecimal currentOnHand =
+                Quantities.nz(ledgerRepository.calculateOnHandQuantityAtLocation(sku, destinationPosting));
         String deltaKey = runningDeltaKey(sku, destinationPosting);
-        int before = (currentOnHand != null ? currentOnHand : 0) + runningDelta.getOrDefault(deltaKey, 0);
-        runningDelta.merge(deltaKey, -remainder, Integer::sum);
+        BigDecimal before = currentOnHand.add(runningDelta.getOrDefault(deltaKey, BigDecimal.ZERO));
+        runningDelta.merge(deltaKey, lostQuantity.negate(), BigDecimal::add);
         return InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(destinationPosting)
                 .eventType(InventoryLedgerEventType.SCRAP_OUT)
-                .changeInQuantity(-remainder)
-                .quantityAfter(before - remainder)
+                .changeInQuantity(lostQuantity.negate())
+                .quantityAfter(before.subtract(lostQuantity))
                 .unitCost(latestUnitCost(sku))
                 .reasonCode(ScrapReasonCode.LOST.name())
                 .lotId(line.getLotId())
@@ -578,20 +582,22 @@ public class TransferOrderServiceImpl implements TransferOrderService {
             UUID fromLocationId,
             UUID toLocationId,
             @Nullable UUID lotId,
-            Map<String, Integer> runningDelta,
+            Map<String, BigDecimal> runningDelta,
             String actor) {
-        Integer currentOnHand = ledgerRepository.calculateOnHandQuantityAtLocation(sku, postingLocationId);
+        BigDecimal change = BigDecimal.valueOf(changeInQuantity);
+        BigDecimal currentOnHand =
+                Quantities.nz(ledgerRepository.calculateOnHandQuantityAtLocation(sku, postingLocationId));
         String deltaKey = runningDeltaKey(sku, postingLocationId);
-        int before = (currentOnHand != null ? currentOnHand : 0) + runningDelta.getOrDefault(deltaKey, 0);
-        runningDelta.merge(deltaKey, changeInQuantity, Integer::sum);
+        BigDecimal before = currentOnHand.add(runningDelta.getOrDefault(deltaKey, BigDecimal.ZERO));
+        runningDelta.merge(deltaKey, change, BigDecimal::add);
         return InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(postingLocationId)
                 .fromLocationId(fromLocationId)
                 .toLocationId(toLocationId)
                 .eventType(eventType)
-                .changeInQuantity(changeInQuantity)
-                .quantityAfter(before + changeInQuantity)
+                .changeInQuantity(change)
+                .quantityAfter(before.add(change))
                 .lotId(lotId)
                 .sourceTransactionId(order.getTransferOrderId().toString())
                 .transactionUserId(actor)

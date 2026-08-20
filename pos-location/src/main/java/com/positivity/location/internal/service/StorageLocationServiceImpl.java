@@ -17,6 +17,7 @@ import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.StorageLocationRepository;
 import com.positivity.location.service.StorageLocationInventoryTransferService;
 import com.positivity.location.service.StorageLocationService;
+import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -263,7 +264,7 @@ public class StorageLocationServiceImpl implements StorageLocationService {
                 .findByIdAndSiteId(storageLocationId, siteId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, STORAGE_LOCATION_NOT_FOUND));
 
-        if (replicaOnHandQuantity(storageLocationId) > 0) {
+        if (replicaOnHandQuantity(storageLocationId).signum() > 0) {
             transferInventory(siteId, existing, destinationStorageLocationId);
         }
 
@@ -278,11 +279,11 @@ public class StorageLocationServiceImpl implements StorageLocationService {
      * #899; replaces the retired LocationInventoryInquiryClient). A location the feed has never
      * reported carries no known stock, matching the owner ledger's empty state.
      */
-    private int replicaOnHandQuantity(UUID storageLocationId) {
+    private BigDecimal replicaOnHandQuantity(UUID storageLocationId) {
         return extStorageLocationOnHandReplicaRepository
                 .findById(storageLocationId)
                 .map(ExtStorageLocationOnHandReplica::getOnHandQuantity)
-                .orElse(0);
+                .orElse(BigDecimal.ZERO);
     }
 
     private String normalizeRequired(String value, String fieldName) {
@@ -398,7 +399,8 @@ public class StorageLocationServiceImpl implements StorageLocationService {
         if (requested == null) {
             return;
         }
-        if (requested == StorageLocationStatus.INACTIVE && replicaOnHandQuantity(storageLocationId) > 0) {
+        if (requested == StorageLocationStatus.INACTIVE
+                && replicaOnHandQuantity(storageLocationId).signum() > 0) {
             UUID destinationStorageLocationId = patch.getDestinationStorageLocationId();
             if (destinationStorageLocationId != null && destinationStorageLocationId.equals(storageLocationId)) {
                 throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, INVALID_DESTINATION);

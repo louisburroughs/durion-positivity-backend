@@ -18,6 +18,7 @@ import com.positivity.inventory.internal.repository.InventoryReturnRepository;
 import com.positivity.inventory.service.ReturnService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -41,6 +42,7 @@ public class ReturnServiceImpl implements ReturnService {
     private final DocumentQuantityConverter documentQuantityConverter;
     private final Clock clock;
     private final @Nullable InventoryLotOutboundService lotOutboundService;
+    private final QuantityScaleGuard quantityScaleGuard;
 
     @Autowired
     public ReturnServiceImpl(
@@ -50,7 +52,8 @@ public class ReturnServiceImpl implements ReturnService {
             InventoryFactPublisher inventoryFactPublisher,
             DocumentQuantityConverter documentQuantityConverter,
             Clock clock,
-            InventoryLotOutboundService lotOutboundService) {
+            InventoryLotOutboundService lotOutboundService,
+            QuantityScaleGuard quantityScaleGuard) {
         this.inventoryReturnRepository = inventoryReturnRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
         this.ledgerPostingService = ledgerPostingService;
@@ -58,6 +61,7 @@ public class ReturnServiceImpl implements ReturnService {
         this.documentQuantityConverter = documentQuantityConverter;
         this.clock = clock;
         this.lotOutboundService = lotOutboundService;
+        this.quantityScaleGuard = quantityScaleGuard;
     }
 
     /**
@@ -72,7 +76,8 @@ public class ReturnServiceImpl implements ReturnService {
             LedgerPostingService ledgerPostingService,
             InventoryFactPublisher inventoryFactPublisher,
             DocumentQuantityConverter documentQuantityConverter,
-            Clock clock) {
+            Clock clock,
+            QuantityScaleGuard quantityScaleGuard) {
         this(
                 inventoryReturnRepository,
                 inventoryLedgerEntryRepository,
@@ -80,7 +85,8 @@ public class ReturnServiceImpl implements ReturnService {
                 inventoryFactPublisher,
                 documentQuantityConverter,
                 clock,
-                null);
+                null,
+                quantityScaleGuard);
     }
 
     @Override
@@ -194,7 +200,7 @@ public class ReturnServiceImpl implements ReturnService {
     private record ReturnLineComputation(
             ReturnItemLine item,
             DocumentQuantityConverter.DocumentConversion conversion,
-            int baseQuantity,
+            BigDecimal baseQuantity,
             @Nullable UUID lotId) {}
 
     private ReturnLineComputation computeReturnLine(ReturnItemLine item) {
@@ -205,28 +211,25 @@ public class ReturnServiceImpl implements ReturnService {
                         item.getDocumentUom(),
                         item.getDocumentQuantity())
                 .orElse(null);
-        int baseQuantity;
-        if (conversion == null) {
-            baseQuantity = item.getQuantityReturned();
-        } else {
-            try {
-                baseQuantity = conversion.baseQuantity().intValueExact();
-            } catch (ArithmeticException ex) {
-                throw new IllegalArgumentException(
-                        "converted base quantity must be a whole number within 32-bit integer range", ex);
-            }
-        }
-        if (baseQuantity <= 0) {
+        // ADR-0055 (#1414): the base quantity may carry decimals only to the scale the product
+        // declares. This replaces an intValueExact() that refused every fraction for every
+        // product — still fail-closed, but reading the catalog's declaration instead of assuming
+        // one, so a product declaring precision_scale > 0 can be returned at its real quantity
+        // and one declaring nothing is refused a fraction exactly as before.
+        BigDecimal rawBaseQuantity = conversion == null ? item.getQuantityReturned() : conversion.baseQuantity();
+        if (rawBaseQuantity == null || rawBaseQuantity.signum() <= 0) {
             throw new IllegalArgumentException("quantityReturned must be positive");
         }
+        BigDecimal baseQuantity = quantityScaleGuard.requirePostable(
+                item.getSkuId(), String.valueOf(item.getSkuId()), "quantityReturned", rawBaseQuantity);
         UUID lotId = lotOutboundService == null
                 ? null
                 : lotOutboundService.resolveReturnLot(item.getSkuId().toString(), item.getLotNumber());
         return new ReturnLineComputation(item, conversion, baseQuantity, lotId);
     }
 
-    private int calculateTotalItemsReturned(List<ReturnLineComputation> items) {
-        return items.stream().mapToInt(ReturnLineComputation::baseQuantity).sum();
+    private BigDecimal calculateTotalItemsReturned(List<ReturnLineComputation> items) {
+        return items.stream().map(ReturnLineComputation::baseQuantity).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private InventoryReturnEntity buildReturnEntity(ReturnItemsRequest request, List<ReturnLineComputation> items) {
@@ -257,8 +260,8 @@ public class ReturnServiceImpl implements ReturnService {
         return InventoryLedgerEntry.builder()
                 .stockItemId(computed.item().getSkuId().toString())
                 .eventType(InventoryLedgerEventType.RETURN_TO_STOCK)
-                .changeInQuantity(Math.abs(computed.baseQuantity()))
-                .quantityAfter(0)
+                .changeInQuantity(computed.baseQuantity().abs())
+                .quantityAfter(BigDecimal.ZERO)
                 .lotId(computed.lotId())
                 .transactionUserId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
                 .notes("Returned to stock from workorder "
@@ -275,13 +278,13 @@ public class ReturnServiceImpl implements ReturnService {
                         InventoryLedgerEventType.WORKORDER_CONSUMPTION,
                         workorderId.toString());
 
-        int totalConsumed = consumptionEntries.stream()
+        BigDecimal totalConsumed = consumptionEntries.stream()
                 .map(InventoryLedgerEntry::getChangeInQuantity)
                 .filter(Objects::nonNull)
-                .mapToInt(value -> Math.abs(value.intValue()))
-                .sum();
+                .map(BigDecimal::abs)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        if (totalConsumed < computed.baseQuantity()) {
+        if (Quantities.lt(totalConsumed, computed.baseQuantity())) {
             throw new ReturnQuantityExceededException(
                     computed.item().getSkuId(), computed.baseQuantity(), totalConsumed);
         }

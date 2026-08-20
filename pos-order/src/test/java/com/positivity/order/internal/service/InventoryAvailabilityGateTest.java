@@ -19,6 +19,7 @@ import com.positivity.order.internal.repository.ExtProductRepository;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -100,17 +101,25 @@ class InventoryAvailabilityGateTest {
                 .aggregateId(AGGREGATE_ID)
                 .stockItemId(stockItemId)
                 .locationId(LOCATION_ID)
-                .onHandQuantity(atp)
-                .allocatedQuantity(0)
-                .availableToPromiseQuantity(atp)
+                .onHandQuantity(BigDecimal.valueOf(atp))
+                .allocatedQuantity(BigDecimal.ZERO)
+                .availableToPromiseQuantity(BigDecimal.valueOf(atp))
                 .aggregateVersion(1L)
                 .updatedAt(NOW)
                 .build();
     }
 
     private String availabilityEnvelope(String eventId, long aggregateVersion, int atp) {
-        InventoryAvailabilityUpdatedV1 payload =
-                new InventoryAvailabilityUpdatedV1(PRODUCT_ID.toString(), LOCATION_ID, atp, 0, atp, "EA", 0L, 0L, atp);
+        InventoryAvailabilityUpdatedV1 payload = new InventoryAvailabilityUpdatedV1(
+                PRODUCT_ID.toString(),
+                LOCATION_ID,
+                BigDecimal.valueOf(atp),
+                BigDecimal.ZERO,
+                BigDecimal.valueOf(atp),
+                "EA",
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.valueOf(atp));
         return objectMapper.writeValueAsString(java.util.Map.of(
                 "eventId", eventId,
                 "eventType", InventoryAvailabilityUpdatedV1.EVENT_TYPE,
@@ -125,7 +134,7 @@ class InventoryAvailabilityGateTest {
                 null,
                 salesOrderLineId,
                 PRODUCT_ID.toString(),
-                2,
+                BigDecimal.valueOf(2),
                 covered,
                 covered ? null : BACKORDER_ID,
                 NOW);
@@ -158,10 +167,10 @@ class InventoryAvailabilityGateTest {
             when(extInventoryAvailabilityRepository.findByStockItemIdAndLocationId(PRODUCT_ID.toString(), LOCATION_ID))
                     .thenReturn(Optional.of(replicaRow(PRODUCT_ID.toString(), 5)));
 
-            InventoryResult result = adapter().checkAvailability(SKU, 2, LOCATION_ID);
+            InventoryResult result = adapter().checkAvailability(SKU, BigDecimal.valueOf(2), LOCATION_ID);
 
             assertThat(result.sufficient()).isTrue();
-            assertThat(result.availableQuantity()).isEqualTo(5);
+            assertThat(result.availableQuantity()).isEqualByComparingTo("5");
         }
 
         @Test
@@ -176,7 +185,9 @@ class InventoryAvailabilityGateTest {
             when(extInventoryAvailabilityRepository.findByStockItemIdAndLocationId(PRODUCT_ID.toString(), LOCATION_ID))
                     .thenReturn(Optional.of(replicaRow(PRODUCT_ID.toString(), 1)));
 
-            assertThat(adapter().checkAvailability(SKU, 2, LOCATION_ID).sufficient())
+            assertThat(adapter()
+                            .checkAvailability(SKU, BigDecimal.valueOf(2), LOCATION_ID)
+                            .sufficient())
                     .isFalse();
         }
 
@@ -190,10 +201,10 @@ class InventoryAvailabilityGateTest {
 
             // Absence is not evidence of stock. Answering "sufficient" here would rebuild the
             // always-passing advisory stub this replaced, and would do it invisibly.
-            InventoryResult result = adapter().checkAvailability(SKU, 1, LOCATION_ID);
+            InventoryResult result = adapter().checkAvailability(SKU, BigDecimal.valueOf(1), LOCATION_ID);
 
             assertThat(result.sufficient()).isFalse();
-            assertThat(result.availableQuantity()).isZero();
+            assertThat(result.availableQuantity()).isEqualByComparingTo(BigDecimal.ZERO);
         }
 
         @Test
@@ -212,14 +223,19 @@ class InventoryAvailabilityGateTest {
 
             // The owner's ledger disagrees with itself about what goes in stockItemId, so a gate
             // that checked only one key would be silently wrong for every item stocked the other way.
-            assertThat(adapter().checkAvailability(SKU, 3, LOCATION_ID).sufficient())
+            assertThat(adapter()
+                            .checkAvailability(SKU, BigDecimal.valueOf(3), LOCATION_ID)
+                            .sufficient())
                     .isTrue();
         }
 
         @Test
         @DisplayName("reports short when the order has no selling location")
         void noLocationIsShort() {
-            assertThat(adapter().checkAvailability(SKU, 1, null).sufficient()).isFalse();
+            assertThat(adapter()
+                            .checkAvailability(SKU, BigDecimal.valueOf(1), null)
+                            .sufficient())
+                    .isFalse();
         }
     }
 
@@ -237,7 +253,7 @@ class InventoryAvailabilityGateTest {
 
             ArgumentCaptor<ExtInventoryAvailability> saved = ArgumentCaptor.forClass(ExtInventoryAvailability.class);
             verify(extInventoryAvailabilityRepository).save(saved.capture());
-            assertThat(saved.getValue().getAvailableToPromiseQuantity()).isEqualTo(7);
+            assertThat(saved.getValue().getAvailableToPromiseQuantity()).isEqualByComparingTo("7");
             assertThat(saved.getValue().getAggregateVersion()).isEqualTo(5L);
             verify(processedEventRepository).save(any());
         }

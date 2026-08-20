@@ -10,6 +10,7 @@ import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.service.InventoryAvailabilityService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -45,6 +46,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
     private final ForecastQuantityService forecastQuantityService;
     private final AsOfQueryGuard asOfQueryGuard;
     private final ForecastSiteResolver forecastSiteResolver;
+    private final QuantityScaleGuard quantityScaleGuard;
     private final Clock clock;
 
     public InventoryAvailabilityServiceImpl(
@@ -53,12 +55,14 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
             ForecastQuantityService forecastQuantityService,
             AsOfQueryGuard asOfQueryGuard,
             ForecastSiteResolver forecastSiteResolver,
+            QuantityScaleGuard quantityScaleGuard,
             Clock clock) {
         this.stockSummaryRepository = stockSummaryRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
         this.forecastQuantityService = forecastQuantityService;
         this.asOfQueryGuard = asOfQueryGuard;
         this.forecastSiteResolver = forecastSiteResolver;
+        this.quantityScaleGuard = quantityScaleGuard;
         this.clock = clock;
     }
 
@@ -67,8 +71,24 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
      * (odoo-parity E3, issue #1047; decision D-7 on-read guard). Expired lots stay counted in
      * on-hand but drop out of what can be promised. A null scope sums across every location.
      */
-    private long expiredLotDeduction(@NonNull String stockItemId, @Nullable UUID scopeLocationId) {
-        return stockSummaryRepository.sumExpiredActiveLotOnHand(stockItemId, scopeLocationId, LocalDate.now(clock));
+    private BigDecimal expiredLotDeduction(@NonNull String stockItemId, @Nullable UUID scopeLocationId) {
+        return Quantities.nz(
+                stockSummaryRepository.sumExpiredActiveLotOnHand(stockItemId, scopeLocationId, LocalDate.now(clock)));
+    }
+
+    /**
+     * Fail-loud narrowing replacement (ADR-0055, #1414).
+     *
+     * <p>Every quantity leaving this service used to pass through {@code Math.toIntExact}, which
+     * threw rather than wrapping. That throw is the property worth keeping; the bound it checked
+     * is not, because a decimal read model has no 32-bit edge. So each of those calls became this:
+     * the value is checked against the scale the product's catalog declaration permits, and a
+     * quantity carrying more precision than any declaration supports still stops the computation
+     * loudly instead of being reported as though it were fine.
+     */
+    private BigDecimal reportable(@NonNull String stockItemId, @NonNull String fieldName, BigDecimal quantity) {
+        return quantityScaleGuard.requireReportable(
+                QuantityScaleGuard.productIdOf(stockItemId), stockItemId, fieldName, Quantities.nz(quantity));
     }
 
     /** Bin → parent-site resolution shared with the replenishment orderpoint math (F2). */
@@ -124,7 +144,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
                 .map(row -> LocationAvailabilityDto.builder()
                         .locationId(row.getLocationId())
                         .locationName(row.getLocationId().toString())
-                        .onHandQuantity(Math.toIntExact(row.getQuantity()))
+                        .onHandQuantity(reportable(productId.toString(), "onHandQuantity", row.getQuantity()))
                         .build())
                 .toList();
     }
@@ -153,22 +173,24 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
         }
 
         UUID scopeLocationId = storageLocationId != null ? storageLocationId : locationId;
-        long onHand;
-        long allocated;
+        BigDecimal onHand;
+        BigDecimal allocated;
         if (scopeLocationId == null) {
             onHand = productRows.stream()
-                    .mapToLong(InventoryStockSummary::getOnHand)
-                    .sum();
+                    .map(InventoryStockSummary::getOnHand)
+                    .map(Quantities::nz)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
             allocated = productRows.stream()
-                    .mapToLong(InventoryStockSummary::getAllocated)
-                    .sum();
+                    .map(InventoryStockSummary::getAllocated)
+                    .map(Quantities::nz)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
         } else {
             InventoryStockSummary scoped = productRows.stream()
                     .filter(row -> scopeLocationId.equals(row.getLocationId()))
                     .findFirst()
                     .orElse(null);
-            onHand = scoped == null ? 0L : scoped.getOnHand();
-            allocated = scoped == null ? 0L : scoped.getAllocated();
+            onHand = scoped == null ? BigDecimal.ZERO : Quantities.nz(scoped.getOnHand());
+            allocated = scoped == null ? BigDecimal.ZERO : Quantities.nz(scoped.getAllocated());
         }
 
         // Forecast site scope (odoo-parity A2, #1028): the site parameter when present,
@@ -180,15 +202,18 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
 
         // odoo-parity E3 (#1047, decision D-7): expired lots stay in on-hand but drop from ATP.
         // ATP = lot-agnostic (onHand − allocated) − Σ(expired ACTIVE lots' per-lot on-hand at scope).
-        long expiredDeduction = expiredLotDeduction(productSku, scopeLocationId);
+        BigDecimal expiredDeduction = expiredLotDeduction(productSku, scopeLocationId);
 
         return AvailabilityView.builder()
                 .productSku(productSku)
                 .locationId(locationId)
                 .storageLocationId(storageLocationId)
-                .onHandQuantity(Math.toIntExact(onHand))
-                .allocatedQuantity(Math.toIntExact(allocated))
-                .availableToPromiseQuantity(Math.toIntExact(onHand - allocated - expiredDeduction))
+                .onHandQuantity(reportable(productSku, "onHandQuantity", onHand))
+                .allocatedQuantity(reportable(productSku, "allocatedQuantity", allocated))
+                .availableToPromiseQuantity(reportable(
+                        productSku,
+                        "availableToPromiseQuantity",
+                        onHand.subtract(allocated).subtract(expiredDeduction)))
                 .unitOfMeasure(deriveUnitOfMeasure(productSku, scopeLocationId))
                 .incomingQty(forecast.incomingQty())
                 .outgoingQty(forecast.outgoingQty())
@@ -209,15 +234,22 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
         // allocations and soft reservations from ATP (unlike queryAvailability,
         // which per ADR-0001 subtracts allocations only). odoo-parity E3 (#1047,
         // decision D-7): also subtract the location's expired ACTIVE lot on-hand.
-        long expiredDeduction = expiredLotDeduction(row.getStockItemId(), row.getLocationId());
-        long atpWithReservations = row.getOnHand() - row.getAllocated() - row.getReserved() - expiredDeduction;
+        BigDecimal expiredDeduction = expiredLotDeduction(row.getStockItemId(), row.getLocationId());
+        BigDecimal atpWithReservations = Quantities.nz(row.getOnHand())
+                .subtract(Quantities.nz(row.getAllocated()))
+                .subtract(Quantities.nz(row.getReserved()))
+                .subtract(expiredDeduction);
         ForecastQuantityService.ForecastQuantities forecast = forecastQuantityService.forecast(
-                row.getStockItemId(), resolveForecastSite(row.getLocationId()), horizon, row.getOnHand());
+                row.getStockItemId(),
+                resolveForecastSite(row.getLocationId()),
+                horizon,
+                Quantities.nz(row.getOnHand()));
         return LocationAvailabilityDto.builder()
                 .locationId(row.getLocationId())
                 .locationName(row.getLocationId().toString())
-                .onHandQuantity(Math.toIntExact(row.getOnHand()))
-                .availableToPromiseQuantity(Math.toIntExact(atpWithReservations))
+                .onHandQuantity(reportable(row.getStockItemId(), "onHandQuantity", row.getOnHand()))
+                .availableToPromiseQuantity(
+                        reportable(row.getStockItemId(), "availableToPromiseQuantity", atpWithReservations))
                 .incomingQty(forecast.incomingQty())
                 .outgoingQty(forecast.outgoingQty())
                 .projectedAvailable(forecast.projectedAvailable())

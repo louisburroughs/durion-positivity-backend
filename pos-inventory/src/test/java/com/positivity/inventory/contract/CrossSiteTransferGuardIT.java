@@ -14,6 +14,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,7 +72,7 @@ class CrossSiteTransferGuardIT extends BaseContractIntegrationTest {
     @DisplayName("TRANSFER between bins of different sites returns 422 CROSS_SITE_TRANSFER_REQUIRES_ORDER")
     void transfer_binsAcrossSites_returns422() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, BIN_A1, 10);
+        seedOnHand(sku, BIN_A1, new BigDecimal("10"));
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/stock-movements"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -90,7 +91,7 @@ class CrossSiteTransferGuardIT extends BaseContractIntegrationTest {
     @DisplayName("TRANSFER between site keys of different sites returns 422")
     void transfer_siteToSite_returns422() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SITE_A, 10);
+        seedOnHand(sku, SITE_A, new BigDecimal("10"));
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/stock-movements"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -103,7 +104,7 @@ class CrossSiteTransferGuardIT extends BaseContractIntegrationTest {
     @DisplayName("TRANSFER between bins of the same site still posts the paired OUT/IN with zero net in-transit")
     void transfer_binsSameSite_allowed() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, BIN_A1, 10);
+        seedOnHand(sku, BIN_A1, new BigDecimal("10"));
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/stock-movements"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -113,7 +114,8 @@ class CrossSiteTransferGuardIT extends BaseContractIntegrationTest {
         assertThat(onHand(sku, BIN_A1)).isEqualTo(6);
         assertThat(onHand(sku, BIN_A2)).isEqualTo(4);
         // The paired OUT/IN posts in one transaction: in-transit cancels to zero everywhere.
-        assertThat(summaryRepository.findByStockItemId(sku)).allMatch(row -> row.getInTransitQty() == 0);
+        assertThat(summaryRepository.findByStockItemId(sku))
+                .allMatch(row -> row.getInTransitQty().signum() == 0);
     }
 
     @Test
@@ -122,7 +124,7 @@ class CrossSiteTransferGuardIT extends BaseContractIntegrationTest {
         String sku = uniqueSku();
         UUID freeFrom = UUID.randomUUID();
         UUID freeTo = UUID.randomUUID();
-        seedOnHand(sku, freeFrom, 10);
+        seedOnHand(sku, freeFrom, new BigDecimal("10"));
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/stock-movements"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -164,7 +166,7 @@ class CrossSiteTransferGuardIT extends BaseContractIntegrationTest {
                 .build());
     }
 
-    private void seedOnHand(String sku, UUID locationId, int quantity) {
+    private void seedOnHand(String sku, UUID locationId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(locationId)
@@ -176,10 +178,10 @@ class CrossSiteTransferGuardIT extends BaseContractIntegrationTest {
                 .build());
     }
 
-    private long onHand(String sku, UUID locationId) {
+    private BigDecimal onHand(String sku, UUID locationId) {
         return summaryRepository
                 .findByStockItemIdAndLocationId(sku, locationId)
                 .map(row -> row.getOnHand())
-                .orElse(0L);
+                .orElse(BigDecimal.ZERO);
     }
 }

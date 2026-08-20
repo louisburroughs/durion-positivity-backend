@@ -13,6 +13,7 @@ import com.positivity.inventory.internal.exception.LocationAtCapacityException;
 import com.positivity.inventory.internal.exception.LocationNotValidForSkuException;
 import com.positivity.inventory.internal.exception.NoOnHandAtSourceLocationException;
 import com.positivity.inventory.service.PutawayExecuteService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -161,7 +162,8 @@ class PutawayExecutionContractBehaviorIT extends BaseContractIntegrationTest {
         UUID destinationLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         when(putawayExecuteService.executePutaway(eq(taskId), any(PutawayExecutionRequest.class)))
-                .thenThrow(new LocationAtCapacityException(destinationLocationId, 100, 100));
+                .thenThrow(new LocationAtCapacityException(
+                        destinationLocationId, new BigDecimal("100"), new BigDecimal("100")));
 
         String requestBody =
                 buildExecutionRequestBody(skuId, sourceLocationId.toString(), destinationLocationId.toString(), 4);

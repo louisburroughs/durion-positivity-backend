@@ -148,7 +148,8 @@ class SalesOrderCheckoutTest {
                 .thenReturn(java.util.Optional.empty());
         when(orderPaymentRecordRepository.findByOrderId(any())).thenReturn(java.util.List.of());
         when(salesOrderRepository.findByCheckoutIdempotencyKey(anyString())).thenReturn(Optional.empty());
-        when(inventoryPort.checkAvailability(anyString(), anyInt(), any())).thenReturn(new InventoryResult(true, 999));
+        when(inventoryPort.checkAvailability(anyString(), any(), any()))
+                .thenReturn(new InventoryResult(true, BigDecimal.valueOf(999)));
         when(pricingPort.quoteForSku(anyString(), anyInt(), any(), any()))
                 .thenReturn(new PricingQuote(
                         PricingQuote.Status.PRICED, money("50.00"), UUID.randomUUID(), "Widget", null, null));
@@ -271,7 +272,8 @@ class SalesOrderCheckoutTest {
     void checkout_insufficientAvailability_admittedAsBackorder() {
         SalesOrder order = draftOrderWithLine();
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(inventoryPort.checkAvailability(anyString(), anyInt(), any())).thenReturn(new InventoryResult(false, 0));
+        when(inventoryPort.checkAvailability(anyString(), any(), any()))
+                .thenReturn(new InventoryResult(false, BigDecimal.valueOf(0)));
 
         salesOrderService.checkout(ORDER_ID, "chk-key-1");
 

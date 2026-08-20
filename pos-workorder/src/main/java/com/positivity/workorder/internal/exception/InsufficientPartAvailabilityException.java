@@ -24,9 +24,10 @@ public class InsufficientPartAvailabilityException extends RuntimeException {
     private final transient UUID partLineId;
 
     public InsufficientPartAvailabilityException(
-            UUID partLineId, String itemLabel, BigDecimal requested, int available) {
-        super("Part " + itemLabel + " on line " + partLineId + " cannot be issued: requested " + requested
-                + " but only " + available + " available at the servicing site");
+            UUID partLineId, String itemLabel, BigDecimal requested, BigDecimal available) {
+        super("Part " + itemLabel + " on line " + partLineId + " cannot be issued: requested "
+                + requested.toPlainString()
+                + " but only " + available.toPlainString() + " available at the servicing site");
         this.partLineId = partLineId;
     }
 

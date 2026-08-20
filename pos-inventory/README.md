@@ -150,6 +150,74 @@ per vendor and never aggregated.
 Not in this module: publishing hints onward as an `inventory.supplier-availability.updated` fact
 for estimates. That waits on resolution being settled — see #1312.
 
+## Decimal quantities, gated by the product's declaration (ADR-0055, #1414)
+
+The ledger and everything derived from it carry `numeric(19,4)` / `BigDecimal` quantities:
+`inventory_ledger_entry.change_in_quantity` and `quantity_after`, the reservation / allocation /
+backorder chain, the `inventory_stock_summary` read model, the costing state, cycle-count
+variances, returns, manual adjustments and shortage records.
+
+**Widening the columns did not make stock divisible.** A product's divisibility is declared by the
+catalog as the `precision_scale` of its `BASE` row in `product_uom`, replicated here as
+`ext_product_uom`. Scale `0` — and equally a product with no unit-of-measure rows, which is every
+product until seeding lands — means whole units and is still refused a fraction. A non-zero scale
+permits that many decimal places and no more. `UomConversionService.declaredBaseScale` answers the
+question; `QuantityScaleGuard` enforces it.
+
+Enforcement is symmetric. pos-workorder gates the demand side at estimate-item entry and part issue
+(#1413); this module gates the supply side and both raise HTTP 422
+`FRACTIONAL_QUANTITY_NOT_ALLOWED` from the same declaration. The guard took over the three
+`intValueExact()` calls in receiving, ASN and returns — keeping their fail-closed character,
+losing their hardcoding — and manual stock movements, which post to the ledger just as directly,
+gained the same gate.
+
+On the read side, the `Math.toIntExact` calls that used to narrow the availability math are
+replaced by the same scale check (`QuantityScaleGuard.requireReportable`). Those calls threw rather
+than wrapping, and that fail-loud property is preserved: a stored quantity carrying more precision
+than the product declared stops the computation instead of being reported as though it were fine.
+The check only runs when the ledger's `stockItemId` names a catalog product. The ledger's posting
+paths disagree about whether that column holds a product UUID or a human SKU, and a reference that
+names no product declares nothing — which cannot be evidence that a value already in the ledger is
+wrong. Such a row is reported as stored rather than refused; refusing would turn an availability
+read into a 500 and stall the replicas behind it.
+
+**Still integral, deliberately:** pick-task quantities, putaway and transfer-order line quantities,
+and the cycle-count capture DTOs (`SubmitCountRequest.actualQuantity`, `CountEntryResponse`). These
+widen with the unit-of-measure work in ADR-0055 stages 3 and 4. Where they meet the ledger they
+widen at the boundary (`BigDecimal.valueOf`), never narrow it. Sales-order line quantities stay
+`int` by decision — see ADR-0055.
+
+Compare these quantities with `compareTo`, never `equals`: PostgreSQL returns `numeric(19,4)` at
+scale 4, so a stored `4.0000` and a computed `4` are the same quantity and are not equal.
+
+### Rollout: breaking on the wire, deployed in lockstep
+
+`InventoryAvailabilityUpdatedV1`, `ReservationOutcomeV1`, `BackorderCreatedV1`,
+`BackorderResolvedV1`, `ProductValueChangedV1` and `StorageLocationOnHandUpdatedV1` changed their
+quantity fields from `int`/`long` to `BigDecimal`. That is a **breaking payload change** for every
+consumer: the `ext_inventory_availability` replicas in pos-order, pos-workorder and pos-catalog, and
+the `ext_storage_location_on_hand` replica in pos-location.
+
+**No dual-read shim was added, deliberately.** The platform is pre-production with no live data, and
+every producer and consumer of these topics ships from this one Maven reactor, so there is no
+version skew to bridge — only a deployment ordering to respect. The repository's pre-production
+policy is explicit that clean code beats compatibility scaffolding, and a versioned-claim or
+dual-read path here would be scaffolding for a skew that cannot occur.
+
+What that costs is a constraint on the rollout, and it is stated rather than mitigated:
+
+- **Deploy the fleet together.** pos-inventory, pos-order, pos-workorder, pos-catalog and
+  pos-location must go out in the same release. A consumer running the old code against a new
+  payload rejects it as a databind failure (counted on `replica.payload.rejected`) rather than
+  landing a wrong number — loud, not silent — but the replica stops advancing until it is upgraded.
+- **Run the migrations first.** Each module's widening migration (`V39` here; `V21`, `V18`, `V13`,
+  `V5` in pos-order, pos-workorder, pos-catalog and pos-location) is a pure `ALTER … TYPE`
+  widening. `numeric(19,4)` holds every value the integer columns could, so the implicit cast
+  preserves existing rows exactly and needs no data-preservation logic.
+- **Drain or accept a stalled topic.** In-flight events published under the old shape deserialize
+  with the three core availability quantities missing, which the record constructor rejects. The
+  forecast triple defaults to zero as it always did for schema-v1 payloads.
+
 ## Configuration
 
 | Property                                             | Default  | Description                                            |

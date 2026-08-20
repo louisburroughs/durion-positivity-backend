@@ -28,6 +28,7 @@ import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.ReservationServiceImpl;
 import com.positivity.inventory.internal.service.StorageLocationValidationService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -122,21 +123,21 @@ class ReservationServiceImplTest {
                     .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                     .workorderLineId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                     .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                    .requiredQuantity(5)
-                    .allocatedQuantity(5)
+                    .requiredQuantity(new BigDecimal("5"))
+                    .allocatedQuantity(new BigDecimal("5"))
                     .status(ReservationStatus.PENDING)
                     .build();
             return Optional.of(AllocationEntity.builder()
                     .allocationId(id)
                     .reservation(res)
-                    .allocatedQuantity(5)
+                    .allocatedQuantity(new BigDecimal("5"))
                     .allocationState(AllocationState.SOFT)
                     .status(AllocationStatus.ALLOCATED)
                     .build());
         });
         lenient()
                 .when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class)))
-                .thenReturn(100);
+                .thenReturn(new BigDecimal("100"));
         lenient()
                 .when(storageLocationValidationService.getStorageLocationValidation(any(String.class)))
                 .thenReturn(validation(true, true));
@@ -164,7 +165,8 @@ class ReservationServiceImplTest {
         // Arrange
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        CreateReservationRequest request = new CreateReservationRequest(workorderLineId, stockItemId, 5);
+        CreateReservationRequest request =
+                new CreateReservationRequest(workorderLineId, stockItemId, new BigDecimal("5"));
 
         // Act — RED: impl throws UnsupportedOperationException; assertions are never
         // reached
@@ -172,7 +174,7 @@ class ReservationServiceImplTest {
 
         // Assert
         assertThat(result.getStatus()).isEqualTo(ReservationStatus.PENDING.name());
-        assertThat(result.getAllocatedQuantity()).isEqualTo(5);
+        assertThat(result.getAllocatedQuantity()).isEqualByComparingTo("5");
         assertThat(result.getWorkorderLineId()).isEqualTo(workorderLineId);
         assertThat(result.getStockItemId()).isEqualTo(stockItemId);
     }
@@ -194,9 +196,9 @@ class ReservationServiceImplTest {
         // Arrange
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CreateReservationRequest first = new CreateReservationRequest(
-                workorderLineId, UUID.fromString("00000000-0000-0000-0000-000000000001"), 5);
+                workorderLineId, UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("5"));
         CreateReservationRequest second = new CreateReservationRequest(
-                workorderLineId, UUID.fromString("00000000-0000-0000-0000-000000000001"), 10);
+                workorderLineId, UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("10"));
 
         // Act — RED: first call already throws UnsupportedOperationException
         service.createOrUpdateReservation(first);
@@ -204,7 +206,7 @@ class ReservationServiceImplTest {
 
         // Assert — only one reservation; quantity reflects second call
         assertThat(result.getWorkorderLineId()).isEqualTo(workorderLineId);
-        assertThat(result.getRequiredQuantity()).isEqualTo(10);
+        assertThat(result.getRequiredQuantity()).isEqualByComparingTo("10");
     }
 
     // ─── SC3: Promote SOFT → HARD ───────────────────────────────────────────────
@@ -259,7 +261,7 @@ class ReservationServiceImplTest {
         PromoteAllocationRequest request = new PromoteAllocationRequest(STORAGE_LOCATION_ID, "urgent");
         // Force insufficient ATP so the exception is thrown
         when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class)))
-                .thenReturn(1);
+                .thenReturn(new BigDecimal("1"));
 
         // Act + Assert
         assertThatThrownBy(() -> service.promoteToHard(allocationId, request))
@@ -286,8 +288,8 @@ class ReservationServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderLineId(workorderLineId)
                 .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .requiredQuantity(3)
-                .allocatedQuantity(3)
+                .requiredQuantity(new BigDecimal("3"))
+                .allocatedQuantity(new BigDecimal("3"))
                 .status(ReservationStatus.PENDING)
                 .build();
         when(reservationRepository.findByWorkorderLineId(workorderLineId)).thenReturn(Optional.of(reservation));
@@ -321,14 +323,14 @@ class ReservationServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderLineId(workorderLineId)
                 .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .requiredQuantity(5)
-                .allocatedQuantity(5)
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("5"))
                 .status(ReservationStatus.PENDING)
                 .build();
         AllocationEntity hardAlloc = AllocationEntity.builder()
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .reservation(reservation)
-                .allocatedQuantity(5)
+                .allocatedQuantity(new BigDecimal("5"))
                 .allocationState(AllocationState.HARD)
                 .status(AllocationStatus.ALLOCATED)
                 .build();
@@ -362,16 +364,16 @@ class ReservationServiceImplTest {
         // Arrange
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CreateReservationRequest original = new CreateReservationRequest(
-                workorderLineId, UUID.fromString("00000000-0000-0000-0000-000000000001"), 3);
+                workorderLineId, UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("3"));
         CreateReservationRequest update = new CreateReservationRequest(
-                workorderLineId, UUID.fromString("00000000-0000-0000-0000-000000000001"), 7);
+                workorderLineId, UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("7"));
 
         // Act — RED: first call throws UnsupportedOperationException
         service.createOrUpdateReservation(original);
         ReservationResponse result = service.createOrUpdateReservation(update);
 
         // Assert
-        assertThat(result.getRequiredQuantity()).isEqualTo(7);
+        assertThat(result.getRequiredQuantity()).isEqualByComparingTo("7");
         assertThat(result.getStatus()).isEqualTo(ReservationStatus.PENDING.name());
     }
 
@@ -392,8 +394,8 @@ class ReservationServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderLineId(workorderLineId)
                 .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .requiredQuantity(2)
-                .allocatedQuantity(2)
+                .requiredQuantity(new BigDecimal("2"))
+                .allocatedQuantity(new BigDecimal("2"))
                 .status(ReservationStatus.PENDING)
                 .build();
 
@@ -401,10 +403,10 @@ class ReservationServiceImplTest {
         when(reservationRepository.save(existing)).thenReturn(existing);
 
         ReservationResponse response = repositoryService.createOrUpdateReservation(new CreateReservationRequest(
-                workorderLineId, UUID.fromString("00000000-0000-0000-0000-000000000001"), 9));
+                workorderLineId, UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("9")));
 
-        assertThat(existing.getRequiredQuantity()).isEqualTo(9);
-        assertThat(response.getRequiredQuantity()).isEqualTo(9);
+        assertThat(existing.getRequiredQuantity()).isEqualByComparingTo("9");
+        assertThat(response.getRequiredQuantity()).isEqualByComparingTo("9");
         verify(allocationRepository, never()).save(any(AllocationEntity.class));
     }
 
@@ -438,11 +440,11 @@ class ReservationServiceImplTest {
         });
 
         ReservationResponse response = repositoryService.createOrUpdateReservation(new CreateReservationRequest(
-                workorderLineId, UUID.fromString("00000000-0000-0000-0000-000000000001"), 4));
+                workorderLineId, UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("4")));
 
         assertThat(response.getWorkorderLineId()).isEqualTo(workorderLineId);
         assertThat(response.getStatus()).isEqualTo(ReservationStatus.PENDING.name());
-        assertThat(response.getAllocatedQuantity()).isEqualTo(4);
+        assertThat(response.getAllocatedQuantity()).isEqualByComparingTo("4");
         verify(reservationRepository, times(2)).save(any(ReservationEntity.class));
         verify(allocationRepository).save(any(AllocationEntity.class));
     }
@@ -484,22 +486,22 @@ class ReservationServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderLineId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .requiredQuantity(5)
-                .allocatedQuantity(5)
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("5"))
                 .status(ReservationStatus.PENDING)
                 .build();
         AllocationEntity allocation = AllocationEntity.builder()
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .reservation(reservation)
                 .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .allocatedQuantity(5)
+                .allocatedQuantity(new BigDecimal("5"))
                 .allocationState(AllocationState.SOFT)
                 .status(AllocationStatus.ALLOCATED)
                 .build();
 
         when(allocationRepository.findById(allocation.getAllocationId())).thenReturn(Optional.of(allocation));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class)))
-                .thenReturn(2);
+                .thenReturn(new BigDecimal("2"));
         when(allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD))
                 .thenReturn(List.of());
         when(reservationRepository.save(any(ReservationEntity.class)))
@@ -532,22 +534,22 @@ class ReservationServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderLineId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .requiredQuantity(5)
-                .allocatedQuantity(0)
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("0"))
                 .status(ReservationStatus.PENDING)
                 .build();
         AllocationEntity allocation = AllocationEntity.builder()
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .reservation(reservation)
                 .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .allocatedQuantity(5)
+                .allocatedQuantity(new BigDecimal("5"))
                 .allocationState(AllocationState.SOFT)
                 .status(AllocationStatus.ALLOCATED)
                 .build();
 
         when(allocationRepository.findById(allocation.getAllocationId())).thenReturn(Optional.of(allocation));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class)))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
         when(allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD))
                 .thenReturn(List.of());
         when(allocationRepository.save(any(AllocationEntity.class)))
@@ -563,7 +565,7 @@ class ReservationServiceImplTest {
         assertThat(allocation.getHardenedAt()).isNotNull();
         assertThat(allocation.getHardenedBy()).isNotBlank();
         assertThat(response.getStatus()).isEqualTo(ReservationStatus.FULFILLED.name());
-        assertThat(response.getAllocatedQuantity()).isEqualTo(5);
+        assertThat(response.getAllocatedQuantity()).isEqualByComparingTo("5");
         verify(allocationRepository).save(allocation);
     }
 
@@ -583,15 +585,15 @@ class ReservationServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderLineId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .requiredQuantity(5)
-                .allocatedQuantity(5)
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("5"))
                 .status(ReservationStatus.PENDING)
                 .build();
         AllocationEntity current = AllocationEntity.builder()
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .reservation(reservation)
                 .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .allocatedQuantity(5)
+                .allocatedQuantity(new BigDecimal("5"))
                 .allocationState(AllocationState.HARD)
                 .status(AllocationStatus.ALLOCATED)
                 .build();
@@ -599,14 +601,14 @@ class ReservationServiceImplTest {
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .reservation(reservation)
                 .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .allocatedQuantity(3)
+                .allocatedQuantity(new BigDecimal("3"))
                 .allocationState(AllocationState.HARD)
                 .status(AllocationStatus.ALLOCATED)
                 .build();
 
         when(allocationRepository.findById(current.getAllocationId())).thenReturn(Optional.of(current));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class)))
-                .thenReturn(6);
+                .thenReturn(new BigDecimal("6"));
         when(allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD))
                 .thenReturn(List.of(current, otherHard));
         when(reservationRepository.save(any(ReservationEntity.class)))
@@ -658,8 +660,8 @@ class ReservationServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderLineId(workorderLineId)
                 .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .requiredQuantity(5)
-                .allocatedQuantity(5)
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("5"))
                 .status(ReservationStatus.PENDING)
                 .build();
 
@@ -693,15 +695,15 @@ class ReservationServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderLineId(workorderLineId)
                 .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .requiredQuantity(9)
-                .allocatedQuantity(9)
+                .requiredQuantity(new BigDecimal("9"))
+                .allocatedQuantity(new BigDecimal("9"))
                 .status(ReservationStatus.PARTIALLY_FULFILLED)
                 .build();
         AllocationEntity softAllocation = AllocationEntity.builder()
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .reservation(reservation)
                 .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .allocatedQuantity(4)
+                .allocatedQuantity(new BigDecimal("4"))
                 .allocationState(AllocationState.SOFT)
                 .status(AllocationStatus.ALLOCATED)
                 .build();
@@ -709,7 +711,7 @@ class ReservationServiceImplTest {
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .reservation(reservation)
                 .locationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .allocatedQuantity(5)
+                .allocatedQuantity(new BigDecimal("5"))
                 .allocationState(AllocationState.HARD)
                 .status(AllocationStatus.ALLOCATED)
                 .build();
@@ -739,22 +741,22 @@ class ReservationServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderLineId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .requiredQuantity(5)
-                .allocatedQuantity(0)
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("0"))
                 .status(ReservationStatus.PENDING)
                 .build();
         AllocationEntity allocation = AllocationEntity.builder()
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
                 .reservation(reservation)
                 .locationId(null)
-                .allocatedQuantity(5)
+                .allocatedQuantity(new BigDecimal("5"))
                 .allocationState(AllocationState.SOFT)
                 .status(AllocationStatus.ALLOCATED)
                 .build();
 
         when(allocationRepository.findById(allocation.getAllocationId())).thenReturn(Optional.of(allocation));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class)))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
         when(allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD))
                 .thenReturn(List.of());
         when(allocationRepository.save(any(AllocationEntity.class))).thenAnswer(i -> i.getArgument(0));
@@ -771,7 +773,7 @@ class ReservationServiceImplTest {
         InventoryLedgerEntry entry = ledgerCaptor.getValue();
         assertThat(entry.getEventType()).isEqualTo(InventoryLedgerEventType.ALLOCATION_CREATED);
         assertThat(entry.getLocationId()).isEqualTo(STORAGE_LOCATION_ID);
-        assertThat(entry.getChangeInQuantity()).isEqualTo(5);
+        assertThat(entry.getChangeInQuantity()).isEqualByComparingTo("5");
         assertThat(entry.getStockItemId())
                 .isEqualTo(reservation.getStockItemId().toString());
         assertThat(entry.getSourceTransactionId())
@@ -786,22 +788,22 @@ class ReservationServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderLineId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .requiredQuantity(5)
-                .allocatedQuantity(5)
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("5"))
                 .status(ReservationStatus.FULFILLED)
                 .build();
         AllocationEntity allocation = AllocationEntity.builder()
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
                 .reservation(reservation)
                 .locationId(STORAGE_LOCATION_ID)
-                .allocatedQuantity(5)
+                .allocatedQuantity(new BigDecimal("5"))
                 .allocationState(AllocationState.HARD)
                 .status(AllocationStatus.ALLOCATED)
                 .build();
 
         when(allocationRepository.findById(allocation.getAllocationId())).thenReturn(Optional.of(allocation));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class)))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
         when(allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD))
                 .thenReturn(List.of(allocation));
         when(allocationRepository.save(any(AllocationEntity.class))).thenAnswer(i -> i.getArgument(0));
@@ -825,22 +827,22 @@ class ReservationServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderLineId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .requiredQuantity(5)
-                .allocatedQuantity(5)
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("5"))
                 .status(ReservationStatus.FULFILLED)
                 .build();
         AllocationEntity allocation = AllocationEntity.builder()
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
                 .reservation(reservation)
                 .locationId(originalLocation)
-                .allocatedQuantity(5)
+                .allocatedQuantity(new BigDecimal("5"))
                 .allocationState(AllocationState.HARD)
                 .status(AllocationStatus.ALLOCATED)
                 .build();
 
         when(allocationRepository.findById(allocation.getAllocationId())).thenReturn(Optional.of(allocation));
         when(inventoryLedgerEntryRepository.calculateOnHandQuantity(any(UUID.class)))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
         when(allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD))
                 .thenReturn(List.of(allocation));
 
@@ -865,15 +867,15 @@ class ReservationServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderLineId(workorderLineId)
                 .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .requiredQuantity(5)
-                .allocatedQuantity(5)
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("5"))
                 .status(ReservationStatus.FULFILLED)
                 .build();
         AllocationEntity locatedHard = AllocationEntity.builder()
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
                 .reservation(existing)
                 .locationId(STORAGE_LOCATION_ID)
-                .allocatedQuantity(5)
+                .allocatedQuantity(new BigDecimal("5"))
                 .allocationState(AllocationState.HARD)
                 .status(AllocationStatus.ALLOCATED)
                 .build();
@@ -882,7 +884,7 @@ class ReservationServiceImplTest {
         when(allocationRepository.findByReservation(existing)).thenReturn(List.of(locatedHard));
 
         CreateReservationRequest skuChange = new CreateReservationRequest(
-                workorderLineId, UUID.fromString("00000000-0000-0000-0000-000000000099"), 5);
+                workorderLineId, UUID.fromString("00000000-0000-0000-0000-000000000099"), new BigDecimal("5"));
 
         assertThatThrownBy(() -> service.createOrUpdateReservation(skuChange))
                 .isInstanceOf(IllegalStateException.class)
@@ -932,15 +934,15 @@ class ReservationServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderLineId(workorderLineId)
                 .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .requiredQuantity(5)
-                .allocatedQuantity(5)
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("5"))
                 .status(ReservationStatus.FULFILLED)
                 .build();
         AllocationEntity locatedHard = AllocationEntity.builder()
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
                 .reservation(reservation)
                 .locationId(STORAGE_LOCATION_ID)
-                .allocatedQuantity(5)
+                .allocatedQuantity(new BigDecimal("5"))
                 .allocationState(AllocationState.HARD)
                 .status(AllocationStatus.ALLOCATED)
                 .build();
@@ -951,13 +953,13 @@ class ReservationServiceImplTest {
         when(reservationRepository.save(any(ReservationEntity.class))).thenAnswer(i -> i.getArgument(0));
         when(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
                         locatedHard.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED))
-                .thenReturn(3);
+                .thenReturn(new BigDecimal("3"));
 
         service.cancelReservation(workorderLineId);
 
         ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
         verify(ledgerPostingService).post(ledgerCaptor.capture());
-        assertThat(ledgerCaptor.getValue().getChangeInQuantity()).isEqualTo(2);
+        assertThat(ledgerCaptor.getValue().getChangeInQuantity()).isEqualByComparingTo("2");
     }
 
     @Test
@@ -970,15 +972,15 @@ class ReservationServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .workorderLineId(workorderLineId)
                 .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .requiredQuantity(12)
-                .allocatedQuantity(12)
+                .requiredQuantity(new BigDecimal("12"))
+                .allocatedQuantity(new BigDecimal("12"))
                 .status(ReservationStatus.PARTIALLY_FULFILLED)
                 .build();
         AllocationEntity softAllocation = AllocationEntity.builder()
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
                 .reservation(reservation)
                 .locationId(null)
-                .allocatedQuantity(4)
+                .allocatedQuantity(new BigDecimal("4"))
                 .allocationState(AllocationState.SOFT)
                 .status(AllocationStatus.ALLOCATED)
                 .build();
@@ -986,7 +988,7 @@ class ReservationServiceImplTest {
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000003"))
                 .reservation(reservation)
                 .locationId(null)
-                .allocatedQuantity(3)
+                .allocatedQuantity(new BigDecimal("3"))
                 .allocationState(AllocationState.HARD)
                 .status(AllocationStatus.ALLOCATED)
                 .build();
@@ -994,7 +996,7 @@ class ReservationServiceImplTest {
                 .allocationId(UUID.fromString("00000000-0000-0000-0000-000000000004"))
                 .reservation(reservation)
                 .locationId(STORAGE_LOCATION_ID)
-                .allocatedQuantity(5)
+                .allocatedQuantity(new BigDecimal("5"))
                 .allocationState(AllocationState.HARD)
                 .status(AllocationStatus.ALLOCATED)
                 .build();
@@ -1012,7 +1014,7 @@ class ReservationServiceImplTest {
         InventoryLedgerEntry entry = ledgerCaptor.getValue();
         assertThat(entry.getEventType()).isEqualTo(InventoryLedgerEventType.ALLOCATION_RELEASED);
         assertThat(entry.getLocationId()).isEqualTo(STORAGE_LOCATION_ID);
-        assertThat(entry.getChangeInQuantity()).isEqualTo(5);
+        assertThat(entry.getChangeInQuantity()).isEqualByComparingTo("5");
         assertThat(entry.getSourceTransactionId())
                 .isEqualTo(locatedHard.getAllocationId().toString());
     }
@@ -1027,8 +1029,8 @@ class ReservationServiceImplTest {
                 .reservationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .salesOrderLineId(salesOrderLineId)
                 .stockItemId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .requiredQuantity(3)
-                .allocatedQuantity(3)
+                .requiredQuantity(new BigDecimal("3"))
+                .allocatedQuantity(new BigDecimal("3"))
                 .status(ReservationStatus.PENDING)
                 .build();
         when(reservationRepository.findBySalesOrderLineId(salesOrderLineId)).thenReturn(Optional.of(reservation));

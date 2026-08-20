@@ -4,6 +4,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -40,5 +41,5 @@ public class ReallocateResponse {
             description = "Available-to-promise quantity for the stock item after reallocation",
             example = "20",
             requiredMode = REQUIRED)
-    private int atpAfterReallocation;
+    private BigDecimal atpAfterReallocation;
 }

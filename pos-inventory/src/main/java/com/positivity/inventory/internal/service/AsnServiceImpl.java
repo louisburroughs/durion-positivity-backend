@@ -61,6 +61,7 @@ public class AsnServiceImpl implements AsnService {
     private final ApplicationEventPublisher eventPublisher;
     private final DocumentQuantityConverter documentQuantityConverter;
     private final InventoryLotCaptureService lotCaptureService;
+    private final QuantityScaleGuard quantityScaleGuard;
 
     @Override
     @Transactional
@@ -272,7 +273,7 @@ public class AsnServiceImpl implements AsnService {
                     .locationId(request.getLocationId())
                     .toLocationId(request.getLocationId())
                     .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
-                    .changeInQuantity(toWholeQuantity(computed.baseQuantity()))
+                    .changeInQuantity(computed.baseQuantity())
                     .quantityAfter(calculateQuantityAfter(
                             computed.request().getSku(), request.getLocationId(), computed.baseQuantity()))
                     .lotId(computed.lotId())
@@ -397,6 +398,12 @@ public class AsnServiceImpl implements AsnService {
                 throw new IllegalArgumentException(
                         "quantityReceived is required when documentUom/documentQuantity are absent");
             }
+            // ADR-0055 (#1414): the base quantity may carry decimals only to the scale the
+            // product declares. Checked here, where the product id is already resolved, rather
+            // than at the ledger builder — a receipt that cannot post must be refused before any
+            // accrual or lot is computed against it.
+            baseQuantity = quantityScaleGuard.requirePostable(
+                    resolveProductId(poLine, line.getSku()), line.getSku(), "quantityReceived", baseQuantity);
             // unitCostMinor refers to one document-UoM unit when a document UoM is keyed, so the
             // money math is documentQuantity × unitCostMinor either way.
             BigDecimal costedQuantity = conversion != null ? conversion.documentQuantity() : baseQuantity;
@@ -431,19 +438,10 @@ public class AsnServiceImpl implements AsnService {
         }
     }
 
-    private int toWholeQuantity(@NonNull BigDecimal quantity) {
-        try {
-            return quantity.intValueExact();
-        } catch (ArithmeticException ex) {
-            throw new IllegalArgumentException("quantity must be a whole number", ex);
-        }
-    }
-
-    private int calculateQuantityAfter(
+    private BigDecimal calculateQuantityAfter(
             @NonNull String stockItemId, @NonNull UUID locationId, @NonNull BigDecimal quantityDelta) {
-        Integer onHand = inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(stockItemId, locationId);
-        int current = onHand == null ? 0 : onHand;
-        return current + toWholeQuantity(quantityDelta);
+        BigDecimal onHand = inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(stockItemId, locationId);
+        return Quantities.nz(onHand).add(quantityDelta);
     }
 
     private long safeLong(Long value) {

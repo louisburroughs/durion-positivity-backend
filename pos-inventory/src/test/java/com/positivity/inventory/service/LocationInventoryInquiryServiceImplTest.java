@@ -10,6 +10,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.service.AsOfQueryGuard;
 import com.positivity.inventory.internal.service.LocationInventoryInquiryServiceImpl;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -45,16 +46,16 @@ class LocationInventoryInquiryServiceImplTest {
         return InventoryStockSummary.builder()
                 .stockItemId(sku)
                 .locationId(LOCATION_ID)
-                .onHand(onHand)
-                .allocated(allocated)
-                .atp(onHand - allocated)
+                .onHand(BigDecimal.valueOf(onHand))
+                .allocated(BigDecimal.valueOf(allocated))
+                .atp(BigDecimal.valueOf(onHand - allocated))
                 .build();
     }
 
     @Test
     void listLocationInventoryItems_mapsPositiveOnHandRowsToItems() {
         var service = newService();
-        when(stockSummaryRepository.findByLocationIdAndOnHandGreaterThan(LOCATION_ID, 0L))
+        when(stockSummaryRepository.findByLocationIdAndOnHandGreaterThan(LOCATION_ID, new BigDecimal("0")))
                 .thenReturn(List.of(summary("MICH-XC2-0001", 24L, 0L), summary("MICH-DEF-0002", 8L, 0L)));
 
         LocationInventoryItemsResponse response = service.listLocationInventoryItems(LOCATION_ID);
@@ -65,13 +66,13 @@ class LocationInventoryInquiryServiceImplTest {
                 .containsExactly("MICH-XC2-0001", "MICH-DEF-0002");
         assertThat(response.getItems())
                 .extracting(LocationInventoryItemsResponse.Item::getOnHandQuantity)
-                .containsExactly(24L, 8L);
+                .containsExactly(new BigDecimal("24"), new BigDecimal("8"));
     }
 
     @Test
     void listLocationInventoryItems_returnsEmptyListForLocationWithoutStock() {
         var service = newService();
-        when(stockSummaryRepository.findByLocationIdAndOnHandGreaterThan(LOCATION_ID, 0L))
+        when(stockSummaryRepository.findByLocationIdAndOnHandGreaterThan(LOCATION_ID, new BigDecimal("0")))
                 .thenReturn(List.of());
 
         LocationInventoryItemsResponse response = service.listLocationInventoryItems(LOCATION_ID);
@@ -83,14 +84,14 @@ class LocationInventoryInquiryServiceImplTest {
     @Test
     void getLocationInventory_withoutSku_sumsAcrossStockItems() {
         var service = newService();
-        when(stockSummaryRepository.sumOnHandAtLocation(LOCATION_ID)).thenReturn(32L);
-        when(stockSummaryRepository.sumAllocatedAtLocation(LOCATION_ID)).thenReturn(5L);
+        when(stockSummaryRepository.sumOnHandAtLocation(LOCATION_ID)).thenReturn(new BigDecimal("32"));
+        when(stockSummaryRepository.sumAllocatedAtLocation(LOCATION_ID)).thenReturn(new BigDecimal("5"));
 
         LocationInventoryInquiryResponse response = service.getLocationInventory(LOCATION_ID, null);
 
         assertThat(response.getLocationId()).isEqualTo(LOCATION_ID);
-        assertThat(response.getOnHandQuantity()).isEqualTo(32);
-        assertThat(response.getAvailableToPromiseQuantity()).isEqualTo(27);
+        assertThat(response.getOnHandQuantity()).isEqualByComparingTo("32");
+        assertThat(response.getAvailableToPromiseQuantity()).isEqualByComparingTo("27");
     }
 
     @Test
@@ -101,8 +102,8 @@ class LocationInventoryInquiryServiceImplTest {
 
         LocationInventoryInquiryResponse response = service.getLocationInventory(LOCATION_ID, "MICH-XC2-0001");
 
-        assertThat(response.getOnHandQuantity()).isEqualTo(24);
-        assertThat(response.getAvailableToPromiseQuantity()).isEqualTo(20);
+        assertThat(response.getOnHandQuantity()).isEqualByComparingTo("24");
+        assertThat(response.getAvailableToPromiseQuantity()).isEqualByComparingTo("20");
     }
 
     @Test

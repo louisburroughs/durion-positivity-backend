@@ -54,11 +54,22 @@ public class InventoryLedgerEntry {
     @Column(nullable = false)
     private InventoryLedgerEventType eventType;
 
-    @Column(nullable = false)
-    private Integer changeInQuantity;
+    /**
+     * Signed quantity delta this entry posts. Decimal-capable (ADR-0055, #1414): a product whose
+     * catalog {@code product_uom} BASE row declares {@code precision_scale > 0} posts fractions
+     * to that scale, while a product declaring 0 — every product until one is seeded otherwise —
+     * is still refused a fraction on both the demand and the supply side. The column width is
+     * what a divisible product needs; the declaration is what decides who may use it.
+     *
+     * <p>Compare with {@code compareTo}, never {@code equals}: {@code 1} and {@code 1.0} are the
+     * same quantity and are not equal.
+     */
+    @Column(nullable = false, precision = 19, scale = 4)
+    private BigDecimal changeInQuantity;
 
-    @Column(nullable = false)
-    private Integer quantityAfter;
+    /** Running on-hand after this entry, on the same decimal basis as {@link #changeInQuantity}. */
+    @Column(nullable = false, precision = 19, scale = 4)
+    private BigDecimal quantityAfter;
 
     @Column(precision = 19, scale = 4)
     private BigDecimal unitCost;

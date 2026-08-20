@@ -88,7 +88,7 @@ class ValuationServiceImplTest {
                 .stockItemId(sku)
                 .avgCost(avg)
                 .standardCost(std)
-                .onHandQty(qty)
+                .onHandQty(BigDecimal.valueOf(qty))
                 .build();
     }
 
@@ -100,8 +100,8 @@ class ValuationServiceImplTest {
             }
 
             @Override
-            public long getOnHand() {
-                return qty;
+            public BigDecimal getOnHand() {
+                return BigDecimal.valueOf(qty);
             }
         };
     }
@@ -114,8 +114,8 @@ class ValuationServiceImplTest {
             }
 
             @Override
-            public Long getOnHandQuantity() {
-                return qty;
+            public BigDecimal getOnHandQuantity() {
+                return BigDecimal.valueOf(qty);
             }
         };
     }
@@ -125,7 +125,7 @@ class ValuationServiceImplTest {
         return InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .eventType(type)
-                .changeInQuantity(change)
+                .changeInQuantity(BigDecimal.valueOf(change))
                 .unitCost(unitCost)
                 .build();
     }
@@ -144,7 +144,7 @@ class ValuationServiceImplTest {
         assertThat(report.getRows()).hasSize(1);
         ValuationRow row = report.getRows().get(0);
         assertThat(row.getStockItemId()).isEqualTo(SKU_A);
-        assertThat(row.getOnHand()).isEqualTo(20L);
+        assertThat(row.getOnHand()).isEqualByComparingTo("20");
         assertThat(row.getCostingMethod()).isEqualTo("AVERAGE");
         assertThat(row.getUnitCostCurrent()).isEqualByComparingTo("6.0000");
         assertThat(row.getOnHandValue()).isEqualByComparingTo("120.0000");
@@ -239,7 +239,7 @@ class ValuationServiceImplTest {
         InventoryStockSummary row = InventoryStockSummary.builder()
                 .stockItemId(SKU_A)
                 .locationId(LOC_1)
-                .onHand(4L)
+                .onHand(new BigDecimal("4"))
                 .build();
         when(stockSummaryRepository.findByStockItemIdAndLocationId(SKU_A, LOC_1))
                 .thenReturn(Optional.of(row));

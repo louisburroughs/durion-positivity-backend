@@ -4,6 +4,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -108,10 +109,10 @@ public class ProductDetailView {
     @Schema(description = "Availability information with status indicator")
     public static class AvailabilityInfo {
         @Schema(description = "On-hand quantity at location", example = "15", requiredMode = NOT_REQUIRED)
-        private Integer onHandQuantity;
+        private BigDecimal onHandQuantity;
 
         @Schema(description = "Available to promise quantity", example = "12", requiredMode = NOT_REQUIRED)
-        private Integer availableToPromiseQuantity;
+        private BigDecimal availableToPromiseQuantity;
 
         @Schema(description = "Lead time information", requiredMode = NOT_REQUIRED)
         private LeadTimeInfo leadTime;

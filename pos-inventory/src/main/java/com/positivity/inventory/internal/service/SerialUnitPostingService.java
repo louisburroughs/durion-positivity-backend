@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.exception.SerialAlreadyInStockException
 import com.positivity.inventory.internal.exception.SerialCountMismatchException;
 import com.positivity.inventory.internal.exception.SerialNotAvailableException;
 import com.positivity.inventory.internal.repository.InventorySerialUnitRepository;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -80,16 +81,20 @@ public class SerialUnitPostingService {
     }
 
     private void apply(InventoryLedgerEntry entry) {
-        int change = entry.getChangeInQuantity() == null ? 0 : entry.getChangeInQuantity();
+        // A serialised unit is discrete by definition — you cannot receive half a serial number
+        // — so this is one place the whole-quantity rule is a property of the tracking mode
+        // rather than of the type, and it survives the ADR-0055 widening unchanged. A fractional
+        // change on a SERIAL-tracked item is a contradiction, and intValueExact says so loudly.
+        BigDecimal change = Quantities.nz(entry.getChangeInQuantity());
         List<String> serials = normalize(entry.getSerialNumbers());
-        int required = Math.abs(change);
+        int required = change.abs().intValueExact();
         if (serials.size() != required) {
             throw new SerialCountMismatchException(entry.getStockItemId(), required, serials.size());
         }
         if (required == 0) {
             return;
         }
-        if (change > 0) {
+        if (Quantities.isPositive(change)) {
             enumerateInbound(entry, serials);
         } else {
             consumeOutbound(entry, serials);

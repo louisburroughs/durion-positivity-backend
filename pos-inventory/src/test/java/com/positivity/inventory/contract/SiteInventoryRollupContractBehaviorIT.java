@@ -14,6 +14,7 @@ import com.positivity.inventory.internal.dto.rollup.StorageLocationRollupNode;
 import com.positivity.inventory.internal.exception.LocationNotFoundException;
 import com.positivity.inventory.internal.exception.LocationServiceUnavailableException;
 import com.positivity.inventory.service.SiteInventoryRollupService;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -51,8 +52,8 @@ class SiteInventoryRollupContractBehaviorIT extends BaseContractIntegrationTest 
     @DisplayName("GET /v1/inventory/sites/{siteId}/inventory-rollup → 200 with totals and tree")
     void contract_rollup_returns200WithTree() throws Exception {
         // Issue #658: happy path returns siteId, totals, nodes with own/rolledUp
-        RollupQuantities own = RollupQuantities.of(0, 0);
-        RollupQuantities rolledUp = RollupQuantities.of(480, 30);
+        RollupQuantities own = RollupQuantities.of(new BigDecimal("0"), new BigDecimal("0"));
+        RollupQuantities rolledUp = RollupQuantities.of(new BigDecimal("480"), new BigDecimal("30"));
         SiteInventoryRollupResponse response = new SiteInventoryRollupResponse(
                 SITE_ID,
                 rolledUp,

@@ -57,7 +57,7 @@ public class AdjustmentResponse {
             example = "-3",
             requiredMode = REQUIRED)
     @NotNull
-    private Integer quantityChange;
+    private BigDecimal quantityChange;
 
     @Schema(
             description = "Unit cost captured at the moment the adjustment was created",
@@ -71,11 +71,11 @@ public class AdjustmentResponse {
             example = "15",
             requiredMode = REQUIRED)
     @NotNull
-    private Integer quantityOnHandBefore;
+    private BigDecimal quantityOnHandBefore;
 
     @Schema(description = "Quantity physically counted by the auditor", example = "12", requiredMode = REQUIRED)
     @NotNull
-    private Integer countedQuantity;
+    private BigDecimal countedQuantity;
 
     @Schema(
             description = "Current lifecycle status of the adjustment",

@@ -24,6 +24,7 @@ import com.positivity.inventory.internal.repository.BackorderRecordRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -102,7 +103,7 @@ class BackorderServiceImplTest {
                 });
         lenient()
                 .when(ledgerRepository.calculateOnHandQuantityAtLocation(SKU, LOCATION_ID))
-                .thenReturn(0);
+                .thenReturn(new BigDecimal("0"));
     }
 
     @Test
@@ -111,10 +112,10 @@ class BackorderServiceImplTest {
         when(backorderRepository.findByWorkorderLineIdAndSkuAndStatus(WORKORDER_LINE_A, SKU, BackorderStatus.OPEN))
                 .thenReturn(Optional.empty());
 
-        BackorderResponse response = service.createBackorder(WORKORDER_LINE_A, SKU, 5, LOCATION_ID);
+        BackorderResponse response = service.createBackorder(WORKORDER_LINE_A, SKU, new BigDecimal("5"), LOCATION_ID);
 
         assertThat(response.getStatus()).isEqualTo(BackorderStatus.OPEN);
-        assertThat(response.getQuantityShort()).isEqualTo(5);
+        assertThat(response.getQuantityShort()).isEqualByComparingTo("5");
         assertThat(response.getSku()).isEqualTo(SKU);
         assertThat(response.getLocationId()).isEqualTo(LOCATION_ID);
 
@@ -123,7 +124,7 @@ class BackorderServiceImplTest {
         InventoryLedgerEntry entry = entryCaptor.getValue();
         assertThat(entry.getEventType()).isEqualTo(InventoryLedgerEventType.BACKORDER_CREATED);
         assertThat(entry.getEventType().affectsOnHand()).isFalse();
-        assertThat(entry.getChangeInQuantity()).isEqualTo(5);
+        assertThat(entry.getChangeInQuantity()).isEqualByComparingTo("5");
         assertThat(entry.getStockItemId()).isEqualTo(SKU);
         assertThat(entry.getSourceTransactionId())
                 .isEqualTo(response.getBackorderId().toString());
@@ -131,7 +132,7 @@ class BackorderServiceImplTest {
         ArgumentCaptor<BackorderCreatedV1> factCaptor = ArgumentCaptor.forClass(BackorderCreatedV1.class);
         verify(inventoryFactPublisher).recordBackorderCreated(factCaptor.capture());
         assertThat(factCaptor.getValue().backorderId()).isEqualTo(response.getBackorderId());
-        assertThat(factCaptor.getValue().quantityShort()).isEqualTo(5);
+        assertThat(factCaptor.getValue().quantityShort()).isEqualByComparingTo("5");
     }
 
     @Test
@@ -141,7 +142,7 @@ class BackorderServiceImplTest {
         when(backorderRepository.findByWorkorderLineIdAndSkuAndStatus(WORKORDER_LINE_A, SKU, BackorderStatus.OPEN))
                 .thenReturn(Optional.of(existing));
 
-        BackorderResponse response = service.createBackorder(WORKORDER_LINE_A, SKU, 5, LOCATION_ID);
+        BackorderResponse response = service.createBackorder(WORKORDER_LINE_A, SKU, new BigDecimal("5"), LOCATION_ID);
 
         assertThat(response.getBackorderId()).isEqualTo(existing.getBackorderId());
         verify(backorderRepository, never()).save(any());
@@ -156,12 +157,13 @@ class BackorderServiceImplTest {
         when(backorderRepository.findBySalesOrderLineIdAndSkuAndStatus(salesOrderLineId, SKU, BackorderStatus.OPEN))
                 .thenReturn(Optional.empty());
 
-        BackorderResponse response = service.createBackorderForSalesOrderLine(salesOrderLineId, SKU, 4, LOCATION_ID);
+        BackorderResponse response =
+                service.createBackorderForSalesOrderLine(salesOrderLineId, SKU, new BigDecimal("4"), LOCATION_ID);
 
         assertThat(response.getStatus()).isEqualTo(BackorderStatus.OPEN);
         assertThat(response.getSalesOrderLineId()).isEqualTo(salesOrderLineId);
         assertThat(response.getWorkorderLineId()).isNull();
-        assertThat(response.getQuantityShort()).isEqualTo(4);
+        assertThat(response.getQuantityShort()).isEqualByComparingTo("4");
 
         ArgumentCaptor<BackorderCreatedV1> factCaptor = ArgumentCaptor.forClass(BackorderCreatedV1.class);
         verify(inventoryFactPublisher).recordBackorderCreated(factCaptor.capture());
@@ -211,7 +213,7 @@ class BackorderServiceImplTest {
         ReservationEntity reservation = ReservationEntity.builder()
                 .workorderLineId(WORKORDER_LINE_A)
                 .stockItemId(UUID.randomUUID())
-                .requiredQuantity(5)
+                .requiredQuantity(new BigDecimal("5"))
                 .priority(5)
                 .status(ReservationStatus.BACKORDERED)
                 .build();
@@ -289,7 +291,7 @@ class BackorderServiceImplTest {
                 .workorderLineId(workorderLineId)
                 .sku(SKU)
                 .locationId(LOCATION_ID)
-                .quantityShort(quantityShort)
+                .quantityShort(BigDecimal.valueOf(quantityShort))
                 .status(BackorderStatus.OPEN)
                 .createdBy("SYSTEM")
                 .createdAt(createdAt)
@@ -301,9 +303,9 @@ class BackorderServiceImplTest {
         return InventoryStockSummary.builder()
                 .stockItemId(SKU)
                 .locationId(LOCATION_ID)
-                .onHand(atp)
-                .allocated(0)
-                .atp(atp)
+                .onHand(BigDecimal.valueOf(atp))
+                .allocated(new BigDecimal("0"))
+                .atp(BigDecimal.valueOf(atp))
                 .build();
     }
 }

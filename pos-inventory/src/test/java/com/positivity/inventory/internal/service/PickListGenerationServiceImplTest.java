@@ -24,6 +24,7 @@ import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingCandidate;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingDecision;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingSelection;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -121,7 +122,9 @@ class PickListGenerationServiceImplTest {
                 .thenReturn(new SourcingDecision(
                         SourcingStrategy.PROXIMITY,
                         SourcingStrategy.PROXIMITY,
-                        List.of(new SourcingCandidate(LOC_BEST, 5L), new SourcingCandidate(LOC_OTHER, 7L))));
+                        List.of(
+                                new SourcingCandidate(LOC_BEST, new BigDecimal("5")),
+                                new SourcingCandidate(LOC_OTHER, new BigDecimal("7")))));
 
         PickListResponse response = service.generatePickList(requestWithOneLine(PRODUCT_ID.toString()));
 
@@ -206,8 +209,8 @@ class PickListGenerationServiceImplTest {
         return InventoryStockSummary.builder()
                 .stockItemId(PRODUCT_ID.toString())
                 .locationId(locationId)
-                .onHand(onHand)
-                .allocated(allocated)
+                .onHand(BigDecimal.valueOf(onHand))
+                .allocated(BigDecimal.valueOf(allocated))
                 .build();
     }
 }

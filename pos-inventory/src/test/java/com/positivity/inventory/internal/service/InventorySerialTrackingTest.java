@@ -16,6 +16,7 @@ import com.positivity.inventory.internal.repository.ExtProductReplicaRepository;
 import com.positivity.inventory.internal.repository.InventorySerialUnitRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.WarrantyPartReturnHoldRepository;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -71,8 +72,8 @@ class InventorySerialTrackingTest {
                 .locationId(location)
                 .toLocationId(location)
                 .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
-                .changeInQuantity(qty)
-                .quantityAfter(0)
+                .changeInQuantity(BigDecimal.valueOf(qty))
+                .quantityAfter(new BigDecimal("0"))
                 .transactionUserId("serial-test")
                 .serialNumbers(serials)
                 .build();
@@ -90,8 +91,8 @@ class InventorySerialTrackingTest {
                 .locationId(location)
                 .fromLocationId(location)
                 .eventType(type)
-                .changeInQuantity(-qty)
-                .quantityAfter(0)
+                .changeInQuantity(BigDecimal.valueOf(-qty))
+                .quantityAfter(new BigDecimal("0"))
                 .transactionUserId("serial-test")
                 .serialNumbers(serials)
                 .serialWorkorderId(workorderId)
@@ -146,7 +147,7 @@ class InventorySerialTrackingTest {
         assertThat(summaryRepository
                         .findByStockItemIdAndLocationId(product.toString(), location)
                         .map(s -> s.getOnHand())
-                        .orElse(0L))
+                        .orElse(BigDecimal.ZERO))
                 .isZero();
     }
 
@@ -191,7 +192,7 @@ class InventorySerialTrackingTest {
                         .findByStockItemIdAndLocationId(product.toString(), location)
                         .orElseThrow()
                         .getOnHand())
-                .isEqualTo(1);
+                .isEqualByComparingTo("1");
     }
 
     @Test
@@ -265,8 +266,8 @@ class InventorySerialTrackingTest {
                 .locationId(location)
                 .toLocationId(location)
                 .eventType(InventoryLedgerEventType.RETURN_TO_STOCK)
-                .changeInQuantity(1)
-                .quantityAfter(0)
+                .changeInQuantity(new BigDecimal("1"))
+                .quantityAfter(new BigDecimal("0"))
                 .transactionUserId("serial-test")
                 .serialNumbers(List.of("SN-2"))
                 .build();
@@ -342,11 +343,11 @@ class InventorySerialTrackingTest {
     private long countDriftFor(UUID product, UUID location) {
         long serialInStock =
                 serialRepository.countByStockItemIdAndStatus(product.toString(), InventorySerialStatus.IN_STOCK);
-        long summaryOnHand = summaryRepository
+        BigDecimal summaryOnHand = summaryRepository
                 .findByStockItemIdAndLocationId(product.toString(), location)
                 .map(s -> s.getOnHand())
-                .orElse(0L);
-        return serialInStock == summaryOnHand ? 0 : 1;
+                .orElse(BigDecimal.ZERO);
+        return summaryOnHand.compareTo(BigDecimal.valueOf(serialInStock)) == 0 ? 0 : 1;
     }
 
     // ─── LOT / NONE unaffected: zero behavior change ────────────────────────────
@@ -373,11 +374,11 @@ class InventorySerialTrackingTest {
                         .findByStockItemIdAndLocationId(lotProduct.toString(), location)
                         .orElseThrow()
                         .getOnHand())
-                .isEqualTo(5);
+                .isEqualByComparingTo("5");
         assertThat(summaryRepository
                         .findByStockItemIdAndLocationId(noneProduct.toString(), location)
                         .orElseThrow()
                         .getOnHand())
-                .isEqualTo(5);
+                .isEqualByComparingTo("5");
     }
 }

@@ -131,7 +131,7 @@ class UomDocumentBoundaryIT {
         List<InventoryLedgerEntry> entries = ledgerEntriesFor(productId);
         assertThat(entries).hasSize(1);
         assertThat(entries.getFirst().getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_RECEIPT);
-        assertThat(entries.getFirst().getChangeInQuantity()).isEqualTo(12);
+        assertThat(entries.getFirst().getChangeInQuantity()).isEqualByComparingTo("12");
 
         // What the order becomes after this receipt is pos-order's decision, made from the
         // goods-receipt fact and asserted in GoodsReceiptListenerTest (CAP-320 #1334).
@@ -190,9 +190,9 @@ class UomDocumentBoundaryIT {
         GoodsReceiptResponse response = asnService.createGoodsReceipt(exactReceipt, ACTOR);
         assertThat(response.getTotalAccruedAmountMinor()).isEqualTo(24_000L);
 
-        int totalPosted = ledgerEntriesFor(productId).stream()
-                .mapToInt(InventoryLedgerEntry::getChangeInQuantity)
-                .sum();
+        BigDecimal totalPosted = ledgerEntriesFor(productId).stream()
+                .map(InventoryLedgerEntry::getChangeInQuantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(totalPosted).isEqualTo(24);
 
         // What the order becomes after this receipt is pos-order's decision, made from the
@@ -219,7 +219,7 @@ class UomDocumentBoundaryIT {
         assertThat(response.getLines().getFirst().getConversionFactor()).isNull();
         List<InventoryLedgerEntry> entries = ledgerEntriesFor(productId);
         assertThat(entries).hasSize(1);
-        assertThat(entries.getFirst().getChangeInQuantity()).isEqualTo(5);
+        assertThat(entries.getFirst().getChangeInQuantity()).isEqualByComparingTo("5");
     }
 
     // ─── B3: HALF_UP rounding at base precision scale ────────────────────────────
@@ -251,7 +251,7 @@ class UomDocumentBoundaryIT {
 
         List<InventoryLedgerEntry> entries = ledgerEntriesFor(productId);
         assertThat(entries).hasSize(1);
-        assertThat(entries.getFirst().getChangeInQuantity()).isEqualTo(101);
+        assertThat(entries.getFirst().getChangeInQuantity()).isEqualByComparingTo("101");
     }
 
     // ─── ledger funnel unitOfMeasure validation + documented tolerance ───────────
@@ -356,8 +356,8 @@ class UomDocumentBoundaryIT {
                 .stockItemId(stockItemId)
                 .locationId(UUID.randomUUID())
                 .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
-                .changeInQuantity(5)
-                .quantityAfter(5)
+                .changeInQuantity(new BigDecimal("5"))
+                .quantityAfter(new BigDecimal("5"))
                 .transactionUserId(ACTOR)
                 .unitOfMeasure(unitOfMeasure)
                 .notes("B2 funnel validation IT")

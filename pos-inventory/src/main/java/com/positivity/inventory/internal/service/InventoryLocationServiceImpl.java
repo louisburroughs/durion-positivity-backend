@@ -8,6 +8,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.service.InventoryLocationService;
 import com.positivity.security.common.SecurityContextHelper;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -144,14 +145,15 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
         List<DeactivateLocationResponse.MovedItem> movedItems = new ArrayList<>(onHandRows.size());
 
         for (InventoryLedgerEntryRepository.LocationOnHand row : onHandRows) {
-            int quantityToMove = Math.toIntExact(row.getOnHandQuantity());
-            if (quantityToMove <= 0) {
+            BigDecimal quantityToMove = Quantities.nz(row.getOnHandQuantity());
+            if (!Quantities.isPositive(quantityToMove)) {
                 continue;
             }
 
             String stockItemId = row.getStockItemId();
-            int destinationOnHand = safeQuantity(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
-                    stockItemId, destinationLocationId));
+            BigDecimal destinationOnHand =
+                    Quantities.nz(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation(
+                            stockItemId, destinationLocationId));
 
             transferEntries.add(InventoryLedgerEntry.builder()
                     .stockItemId(stockItemId)
@@ -159,8 +161,8 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
                     .fromLocationId(sourceLocationId)
                     .toLocationId(destinationLocationId)
                     .eventType(InventoryLedgerEventType.TRANSFER_OUT)
-                    .changeInQuantity(-quantityToMove)
-                    .quantityAfter(0)
+                    .changeInQuantity(quantityToMove.negate())
+                    .quantityAfter(BigDecimal.ZERO)
                     .transactionUserId(actorUserId)
                     .timestamp(timestamp)
                     .reasonCode(LOCATION_TRANSFER_REASON)
@@ -174,7 +176,7 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
                     .toLocationId(destinationLocationId)
                     .eventType(InventoryLedgerEventType.TRANSFER_IN)
                     .changeInQuantity(quantityToMove)
-                    .quantityAfter(destinationOnHand + quantityToMove)
+                    .quantityAfter(destinationOnHand.add(quantityToMove))
                     .transactionUserId(actorUserId)
                     .timestamp(timestamp)
                     .reasonCode(LOCATION_TRANSFER_REASON)
@@ -217,9 +219,5 @@ public class InventoryLocationServiceImpl implements InventoryLocationService {
                     .counter("inventory.location.deactivate.items_moved.total")
                     .increment(movedItemCount);
         }
-    }
-
-    private int safeQuantity(Integer value) {
-        return value == null ? 0 : value;
     }
 }

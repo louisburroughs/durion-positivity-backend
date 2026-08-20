@@ -3,7 +3,6 @@ package com.positivity.inventory.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -20,6 +19,7 @@ import com.positivity.inventory.internal.repository.InventoryStockSummaryReposit
 import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.inventory.service.BackorderService;
 import com.positivity.inventory.service.ReservationService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -75,7 +75,7 @@ class ReservationRequestHandlerTest {
 
     private static InventoryStockSummary summaryWithAtp(long atp) {
         InventoryStockSummary summary = mock(InventoryStockSummary.class);
-        when(summary.getAtp()).thenReturn(atp);
+        when(summary.getAtp()).thenReturn(BigDecimal.valueOf(atp));
         return summary;
     }
 
@@ -89,7 +89,7 @@ class ReservationRequestHandlerTest {
     @Test
     @DisplayName("rejects when neither demand line is set")
     void handle_neitherDemandLine_throws() {
-        assertThatThrownBy(() -> handler.handle(null, null, STOCK_ITEM_ID, 5, LOCATION_ID))
+        assertThatThrownBy(() -> handler.handle(null, null, STOCK_ITEM_ID, new BigDecimal("5"), LOCATION_ID))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("exactly one");
     }
@@ -97,7 +97,8 @@ class ReservationRequestHandlerTest {
     @Test
     @DisplayName("rejects when both demand lines are set")
     void handle_bothDemandLines_throws() {
-        assertThatThrownBy(() -> handler.handle(WORKORDER_LINE_ID, SALES_ORDER_LINE_ID, STOCK_ITEM_ID, 5, LOCATION_ID))
+        assertThatThrownBy(() -> handler.handle(
+                        WORKORDER_LINE_ID, SALES_ORDER_LINE_ID, STOCK_ITEM_ID, new BigDecimal("5"), LOCATION_ID))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("exactly one");
     }
@@ -110,9 +111,9 @@ class ReservationRequestHandlerTest {
         when(summaryRepository.findByStockItemIdAndLocationId(STOCK_ITEM_ID.toString(), LOCATION_ID))
                 .thenReturn(Optional.of(summary));
 
-        handler.handle(WORKORDER_LINE_ID, null, STOCK_ITEM_ID, 5, LOCATION_ID);
+        handler.handle(WORKORDER_LINE_ID, null, STOCK_ITEM_ID, new BigDecimal("5"), LOCATION_ID);
 
-        verify(backorderService, never()).createBackorder(any(), any(), anyInt(), any());
+        verify(backorderService, never()).createBackorder(any(), any(), any(), any());
         ArgumentCaptor<ReservationOutcomeV1> factCaptor = ArgumentCaptor.forClass(ReservationOutcomeV1.class);
         verify(inventoryFactPublisher).recordReservationOutcome(factCaptor.capture());
         ReservationOutcomeV1 fact = factCaptor.getValue();
@@ -133,23 +134,23 @@ class ReservationRequestHandlerTest {
                 .reservationId(RESERVATION_ID)
                 .salesOrderLineId(SALES_ORDER_LINE_ID)
                 .stockItemId(STOCK_ITEM_ID)
-                .requiredQuantity(5)
+                .requiredQuantity(new BigDecimal("5"))
                 .status(ReservationStatus.PENDING)
                 .build();
         when(reservationRepository.findById(RESERVATION_ID)).thenReturn(Optional.of(reservation));
         when(backorderService.createBackorderForSalesOrderLine(
-                        SALES_ORDER_LINE_ID, STOCK_ITEM_ID.toString(), 3, LOCATION_ID))
+                        SALES_ORDER_LINE_ID, STOCK_ITEM_ID.toString(), new BigDecimal("3"), LOCATION_ID))
                 .thenReturn(BackorderResponse.builder()
                         .backorderId(BACKORDER_ID)
                         .salesOrderLineId(SALES_ORDER_LINE_ID)
                         .status(BackorderStatus.OPEN)
                         .build());
 
-        handler.handle(null, SALES_ORDER_LINE_ID, STOCK_ITEM_ID, 5, LOCATION_ID);
+        handler.handle(null, SALES_ORDER_LINE_ID, STOCK_ITEM_ID, new BigDecimal("5"), LOCATION_ID);
 
         assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.BACKORDERED);
         verify(reservationRepository).save(reservation);
-        verify(backorderService, never()).createBackorder(any(), any(), anyInt(), any());
+        verify(backorderService, never()).createBackorder(any(), any(), any(), any());
 
         ArgumentCaptor<ReservationOutcomeV1> factCaptor = ArgumentCaptor.forClass(ReservationOutcomeV1.class);
         verify(inventoryFactPublisher).recordReservationOutcome(factCaptor.capture());

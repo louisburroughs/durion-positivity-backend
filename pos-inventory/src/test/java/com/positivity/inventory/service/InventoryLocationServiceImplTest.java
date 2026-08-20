@@ -12,6 +12,7 @@ import com.positivity.inventory.internal.service.StorageLocationValidationServic
 import com.positivity.security.common.GatewaySecurityConstants;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.Proxy;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -78,7 +79,8 @@ class InventoryLocationServiceImplTest {
             validations.put(destinationLocationId.toString(), validation(destinationLocationId, siteId, true, true));
             InventoryLocationServiceImpl service = new InventoryLocationServiceImpl(
                     stubLedgerRepository(
-                            List.of(onHand("SKU-001", 5L)), Map.of(stockKey("SKU-001", destinationLocationId), 3)),
+                            List.of(onHand("SKU-001", 5L)),
+                            Map.of(stockKey("SKU-001", destinationLocationId), new BigDecimal("3"))),
                     stubLedgerPostingService(persistedEntries),
                     new StubStorageLocationValidationService(validations),
                     eventPublisher(new ArrayList<>()),
@@ -93,7 +95,7 @@ class InventoryLocationServiceImplTest {
             assertThat(response.getTransfer().getMovedItems().get(0).getItemId())
                     .isEqualTo("SKU-001");
             assertThat(response.getTransfer().getMovedItems().get(0).getQuantity())
-                    .isEqualTo(5);
+                    .isEqualByComparingTo("5");
             assertThat(persistedEntries).hasSize(2);
             assertThat(persistedEntries.get(0).getEventType()).isEqualTo(InventoryLedgerEventType.TRANSFER_OUT);
             assertThat(persistedEntries.get(1).getEventType()).isEqualTo(InventoryLedgerEventType.TRANSFER_IN);
@@ -103,14 +105,14 @@ class InventoryLocationServiceImplTest {
     }
 
     private InventoryLedgerEntryRepository stubLedgerRepository(
-            List<InventoryLedgerEntryRepository.LocationOnHand> sourceRows, Map<String, Integer> destinationOnHand) {
+            List<InventoryLedgerEntryRepository.LocationOnHand> sourceRows, Map<String, BigDecimal> destinationOnHand) {
         return (InventoryLedgerEntryRepository) Proxy.newProxyInstance(
                 InventoryLedgerEntryRepository.class.getClassLoader(),
                 new Class[] {InventoryLedgerEntryRepository.class},
                 (proxy, method, args) -> switch (method.getName()) {
                     case "findPositiveOnHandByLocation" -> sourceRows;
                     case "calculateOnHandQuantityAtLocation" ->
-                        destinationOnHand.getOrDefault(stockKey((String) args[0], (UUID) args[1]), 0);
+                        destinationOnHand.getOrDefault(stockKey((String) args[0], (UUID) args[1]), BigDecimal.ZERO);
                     case "toString" -> "InventoryLedgerEntryRepositoryStub";
                     default -> defaultValue(method.getReturnType());
                 });
@@ -155,8 +157,8 @@ class InventoryLocationServiceImplTest {
             }
 
             @Override
-            public Long getOnHandQuantity() {
-                return onHandQuantity;
+            public BigDecimal getOnHandQuantity() {
+                return BigDecimal.valueOf(onHandQuantity);
             }
         };
     }

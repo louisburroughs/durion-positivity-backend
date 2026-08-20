@@ -47,7 +47,7 @@ public interface CostingStrategy {
     record CostingInput(
             @NonNull String stockItemId,
             @NonNull InventoryLedgerEventType eventType,
-            int changeInQuantity,
+            @NonNull BigDecimal changeInQuantity,
             @Nullable BigDecimal documentUnitCost,
             @NonNull CostState state) {}
 
@@ -71,6 +71,6 @@ public interface CostingStrategy {
      */
     record CostState(
             @Nullable BigDecimal avgCost,
-            long onHandQty,
+            @NonNull BigDecimal onHandQty,
             @Nullable BigDecimal standardCost) {}
 }

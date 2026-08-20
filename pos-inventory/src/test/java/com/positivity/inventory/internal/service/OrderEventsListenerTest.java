@@ -103,7 +103,7 @@ class OrderEventsListenerTest {
         InventoryLedgerEntry entry = posted.getFirst();
         assertThat(entry.getStockItemId()).isEqualTo("SKU-1");
         assertThat(entry.getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_ISSUE);
-        assertThat(entry.getChangeInQuantity()).isEqualTo(-2);
+        assertThat(entry.getChangeInQuantity()).isEqualByComparingTo("-2");
         assertThat(entry.getLocationId()).isEqualTo(LOCATION_ID);
         verify(processedEventRepository).save(any());
     }
@@ -189,7 +189,7 @@ class OrderEventsListenerTest {
         InventoryLedgerEntry entry = posted.getFirst();
         assertThat(entry.getEventType()).isEqualTo(InventoryLedgerEventType.RETURN_TO_STOCK);
         assertThat(entry.getStockItemId()).isEqualTo("SKU-1");
-        assertThat(entry.getChangeInQuantity()).isEqualTo(2);
+        assertThat(entry.getChangeInQuantity()).isEqualByComparingTo("2");
         assertThat(entry.getLocationId()).isEqualTo(LOCATION_ID);
         verify(processedEventRepository).save(any());
     }

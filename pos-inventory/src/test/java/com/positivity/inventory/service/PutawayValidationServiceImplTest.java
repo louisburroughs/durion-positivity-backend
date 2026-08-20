@@ -25,6 +25,7 @@ import com.positivity.inventory.internal.security.PutawayPermissions;
 import com.positivity.inventory.internal.service.PutawayValidationServiceImpl;
 import com.positivity.inventory.internal.service.StorageLocationValidationService;
 import com.positivity.security.common.GatewaySecurityConstants;
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
@@ -136,7 +137,7 @@ class PutawayValidationServiceImplTest {
         PutawayValidationServiceImpl service = Mockito.spy(new PutawayValidationServiceImpl());
         PutawayExecutionRequest request = baseRequest();
 
-        Mockito.doThrow(new LocationAtCapacityException(DEST_1, 100, 100))
+        Mockito.doThrow(new LocationAtCapacityException(DEST_1, new BigDecimal("100"), new BigDecimal("100")))
                 .when(service)
                 .validateLocationCapacity(any(), anyInt());
 
@@ -206,7 +207,7 @@ class PutawayValidationServiceImplTest {
 
         when(locationValidationClient.getStorageLocationValidation(DEST_1.toString()))
                 .thenReturn(validation);
-        when(ledger.calculateOnHandQuantityAtLocation(eq(DEST_1), anyList())).thenReturn(7);
+        when(ledger.calculateOnHandQuantityAtLocation(eq(DEST_1), anyList())).thenReturn(new BigDecimal("7"));
         when(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(DEST_1))
                 .thenReturn(10);
 
@@ -231,7 +232,7 @@ class PutawayValidationServiceImplTest {
 
         when(locationValidationClient.getStorageLocationValidation(DEST_1.toString()))
                 .thenReturn(validation);
-        when(ledger.calculateOnHandQuantityAtLocation(eq(DEST_1), anyList())).thenReturn(10);
+        when(ledger.calculateOnHandQuantityAtLocation(eq(DEST_1), anyList())).thenReturn(new BigDecimal("10"));
         when(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(DEST_1))
                 .thenReturn(12);
 
@@ -261,7 +262,7 @@ class PutawayValidationServiceImplTest {
 
         when(locationValidationClient.getStorageLocationValidation(DEST_1.toString()))
                 .thenReturn(validation);
-        when(ledger.calculateOnHandQuantityAtLocation(eq(DEST_1), anyList())).thenReturn(8);
+        when(ledger.calculateOnHandQuantityAtLocation(eq(DEST_1), anyList())).thenReturn(new BigDecimal("8"));
         when(replenishmentPolicyRepository.sumMaximumQuantityByLocationId(DEST_1))
                 .thenReturn(1000);
 

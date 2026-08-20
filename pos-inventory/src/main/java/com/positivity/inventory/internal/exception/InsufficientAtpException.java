@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.exception;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
@@ -22,13 +23,13 @@ public class InsufficientAtpException extends RuntimeException {
 
     private final String errorCode = "INSUFFICIENT_ATP";
     private final UUID allocationId;
-    private final int requiredQuantity;
-    private final int availableAtp;
+    private final transient BigDecimal requiredQuantity;
+    private final transient BigDecimal availableAtp;
 
-    public InsufficientAtpException(UUID allocationId, int requiredQuantity, int availableAtp) {
+    public InsufficientAtpException(UUID allocationId, BigDecimal requiredQuantity, BigDecimal availableAtp) {
         super(String.format(
-                "INSUFFICIENT_ATP: allocationId=%s requiredQuantity=%d availableAtp=%d",
-                allocationId, requiredQuantity, availableAtp));
+                "INSUFFICIENT_ATP: allocationId=%s requiredQuantity=%s availableAtp=%s",
+                allocationId, requiredQuantity.toPlainString(), availableAtp.toPlainString()));
         this.allocationId = allocationId;
         this.requiredQuantity = requiredQuantity;
         this.availableAtp = availableAtp;
@@ -42,11 +43,11 @@ public class InsufficientAtpException extends RuntimeException {
         return allocationId;
     }
 
-    public int getRequiredQuantity() {
+    public BigDecimal getRequiredQuantity() {
         return requiredQuantity;
     }
 
-    public int getAvailableAtp() {
+    public BigDecimal getAvailableAtp() {
         return availableAtp;
     }
 }

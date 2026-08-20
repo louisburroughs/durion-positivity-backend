@@ -16,6 +16,7 @@ import com.positivity.inventory.internal.repository.TransferOrderRepository;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourceSelection;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingCandidate;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingSelection;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -161,8 +162,10 @@ public class ReplenishmentSourcingService {
             if (loc == null) {
                 continue;
             }
-            long surplus = row.getOnHand() - row.getAllocated() - ownMinimum(sku, loc);
-            if (surplus <= 0) {
+            BigDecimal surplus = Quantities.nz(row.getOnHand())
+                    .subtract(Quantities.nz(row.getAllocated()))
+                    .subtract(BigDecimal.valueOf(ownMinimum(sku, loc)));
+            if (!Quantities.isPositive(surplus)) {
                 continue;
             }
             UUID rowSite = forecastSiteResolver.resolveForecastSite(loc);
@@ -181,7 +184,8 @@ public class ReplenishmentSourcingService {
         Optional<SourceSelection> sameSitePick = sameSite.isEmpty()
                 ? Optional.empty()
                 : sourcingStrategyService.selectSource(
-                        new SourcingSelection(sku, destinationSite, policy.getLocationId(), sameSite), neededQuantity);
+                        new SourcingSelection(sku, destinationSite, policy.getLocationId(), sameSite),
+                        BigDecimal.valueOf(neededQuantity));
         if (sameSitePick.isPresent()) {
             SourceSelection selection = sameSitePick.get();
             log.info(
@@ -203,7 +207,7 @@ public class ReplenishmentSourcingService {
         Optional<SourceSelection> crossSitePick = crossSite.isEmpty()
                 ? Optional.empty()
                 : sourcingStrategyService.selectSource(
-                        new SourcingSelection(sku, null, null, crossSite), neededQuantity);
+                        new SourcingSelection(sku, null, null, crossSite), BigDecimal.valueOf(neededQuantity));
         if (crossSitePick.isPresent()) {
             SourceSelection selection = crossSitePick.get();
             UUID sourceLocation = selection.candidate().locationId();

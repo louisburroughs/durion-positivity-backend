@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -68,8 +69,8 @@ class LedgerPostingConcurrencyTest {
                                 .stockItemId(sku)
                                 .locationId(location)
                                 .eventType(type)
-                                .changeInQuantity(change)
-                                .quantityAfter(0)
+                                .changeInQuantity(BigDecimal.valueOf(change))
+                                .quantityAfter(new BigDecimal("0"))
                                 .transactionUserId("concurrency-test")
                                 .build());
                     }
@@ -94,7 +95,7 @@ class LedgerPostingConcurrencyTest {
 
         assertThat(summary.getOnHand())
                 .as("summary on-hand must equal SUM(ledger) — no lost updates")
-                .isEqualTo(ledgerSum);
+                .isEqualByComparingTo(BigDecimal.valueOf(ledgerSum));
         // Exactly one summary row despite the first-post creation race.
         assertThat(summaryRepository.findByStockItemId(sku)).hasSize(1);
     }

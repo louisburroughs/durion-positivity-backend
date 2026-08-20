@@ -150,7 +150,7 @@ public class AllocationConsistencyVerifier {
                     row.getAllocatedQuantity(),
                     row.getLedgerCreated(),
                     row.getLedgerReleased(),
-                    row.getLedgerCreated() - row.getLedgerReleased());
+                    row.getLedgerCreated().subtract(row.getLedgerReleased()));
         }
         for (InventoryStockSummaryRepository.AllocatedDriftRow row : perLocation) {
             if (logged++ >= MAX_DETAILED_VIOLATION_LOGS) {

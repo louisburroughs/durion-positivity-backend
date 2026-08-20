@@ -10,6 +10,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.inventory.service.AllocationReallocationService;
 import com.positivity.security.common.SecurityContextHelper;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -45,8 +46,7 @@ public class AllocationReallocationServiceImpl implements AllocationReallocation
         }
         Instant now = Instant.now(clock);
 
-        int onHand = Optional.ofNullable(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId))
-                .orElse(0);
+        BigDecimal onHand = Quantities.nz(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId));
 
         List<ReservationEntity> reservations = reservationRepository.findByStockItemId(stockItemId);
 
@@ -64,19 +64,20 @@ public class AllocationReallocationServiceImpl implements AllocationReallocation
                         .thenComparing(ReservationEntity::getCreatedAt))
                 .toList();
 
-        int previousTotalAllocated = reservations.stream()
-                .mapToInt(ReservationEntity::getAllocatedQuantity)
-                .sum();
-        int remainingStock = previousTotalAllocated;
+        BigDecimal previousTotalAllocated = reservations.stream()
+                .map(ReservationEntity::getAllocatedQuantity)
+                .map(Quantities::nz)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal remainingStock = previousTotalAllocated;
         int totalReallocated = 0;
         List<AllocationAuditEntity> audits = new ArrayList<>();
 
         for (ReservationEntity reservation : sorted) {
-            int required = reservation.getRequiredQuantity();
-            int prevAlloc = reservation.getAllocatedQuantity();
-            if (remainingStock >= required) {
+            BigDecimal required = Quantities.nz(reservation.getRequiredQuantity());
+            BigDecimal prevAlloc = Quantities.nz(reservation.getAllocatedQuantity());
+            if (Quantities.gte(remainingStock, required)) {
                 reservation.setAllocatedQuantity(required);
-                remainingStock -= required;
+                remainingStock = remainingStock.subtract(required);
                 totalReallocated++;
                 AllocationAuditReasonCode reasonCode = parseReasonCode(request.getTriggerType());
                 int effective = computeEffectivePriority(reservation, now);
@@ -84,18 +85,20 @@ public class AllocationReallocationServiceImpl implements AllocationReallocation
                         (effective < reservation.getPriority()) ? AllocationAuditReasonCode.PRIORITY_AGED : reasonCode;
                 audits.add(buildAudit(request, auditReason, now, prevAlloc, required));
             } else {
-                reservation.setAllocatedQuantity(0);
-                audits.add(buildAudit(request, AllocationAuditReasonCode.STOCK_SHORTAGE, now, prevAlloc, 0));
+                reservation.setAllocatedQuantity(BigDecimal.ZERO);
+                audits.add(
+                        buildAudit(request, AllocationAuditReasonCode.STOCK_SHORTAGE, now, prevAlloc, BigDecimal.ZERO));
             }
         }
 
         reservationRepository.saveAll(sorted);
         allocationAuditRepository.saveAll(audits);
 
-        int totalAllocated = sorted.stream()
-                .mapToInt(ReservationEntity::getAllocatedQuantity)
-                .sum();
-        int atpAfterReallocation = onHand - totalAllocated;
+        BigDecimal totalAllocated = sorted.stream()
+                .map(ReservationEntity::getAllocatedQuantity)
+                .map(Quantities::nz)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal atpAfterReallocation = onHand.subtract(totalAllocated);
 
         return ReallocateResponse.builder()
                 .stockItemId(request.getStockItemId())
@@ -122,15 +125,15 @@ public class AllocationReallocationServiceImpl implements AllocationReallocation
             ReallocateRequest request,
             AllocationAuditReasonCode reasonCode,
             Instant now,
-            int previousAllocatedQty,
-            int newAllocatedQty) {
+            BigDecimal previousAllocatedQty,
+            BigDecimal newAllocatedQty) {
         return AllocationAuditEntity.builder()
                 .stockItemId(request.getStockItemId())
                 .reasonCode(reasonCode)
                 .triggeredBy(resolveTriggeredBy())
                 .triggerReferenceId(request.getTriggerReferenceId())
-                .previousState("allocatedQuantity=" + previousAllocatedQty)
-                .newState("allocatedQuantity=" + newAllocatedQty)
+                .previousState("allocatedQuantity=" + previousAllocatedQty.toPlainString())
+                .newState("allocatedQuantity=" + newAllocatedQty.toPlainString())
                 .occurredAt(now)
                 .build();
     }

@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -38,8 +39,8 @@ class LedgerPostingServiceImplTest {
                 .stockItemId(sku)
                 .locationId(locationId)
                 .eventType(type)
-                .changeInQuantity(change)
-                .quantityAfter(0)
+                .changeInQuantity(BigDecimal.valueOf(change))
+                .quantityAfter(new BigDecimal("0"))
                 .transactionUserId("posting-test")
                 .build();
     }
@@ -55,9 +56,9 @@ class LedgerPostingServiceImplTest {
 
         InventoryStockSummary summary =
                 summaryRepository.findByStockItemIdAndLocationId(sku, location).orElseThrow();
-        assertThat(summary.getOnHand()).isEqualTo(6);
+        assertThat(summary.getOnHand()).isEqualByComparingTo("6");
         assertThat(summary.getAllocated()).isZero();
-        assertThat(summary.getAtp()).isEqualTo(6);
+        assertThat(summary.getAtp()).isEqualByComparingTo("6");
         assertThat(summary.getLastLedgerEntryId()).isNotNull();
         assertThat(summary.getLastLedgerEntryId()).isNotEqualTo(first.getLedgerEntryId());
         assertThat(summary.getLastEventAt()).isNotNull();
@@ -74,9 +75,9 @@ class LedgerPostingServiceImplTest {
 
         InventoryStockSummary summary =
                 summaryRepository.findByStockItemIdAndLocationId(sku, location).orElseThrow();
-        assertThat(summary.getOnHand()).isEqualTo(100);
-        assertThat(summary.getAllocated()).isEqualTo(20);
-        assertThat(summary.getAtp()).isEqualTo(80);
+        assertThat(summary.getOnHand()).isEqualByComparingTo("100");
+        assertThat(summary.getAllocated()).isEqualByComparingTo("20");
+        assertThat(summary.getAtp()).isEqualByComparingTo("80");
     }
 
     @Test
@@ -90,11 +91,11 @@ class LedgerPostingServiceImplTest {
 
         InventoryStockSummary summary =
                 summaryRepository.findByStockItemIdAndLocationId(sku, location).orElseThrow();
-        assertThat(summary.getOnHand()).isEqualTo(50);
+        assertThat(summary.getOnHand()).isEqualByComparingTo("50");
         assertThat(summary.getAllocated()).isZero();
-        assertThat(summary.getReserved()).isEqualTo(15);
+        assertThat(summary.getReserved()).isEqualByComparingTo("15");
         // ATP per ADR-0001 subtracts allocations only.
-        assertThat(summary.getAtp()).isEqualTo(50);
+        assertThat(summary.getAtp()).isEqualByComparingTo("50");
     }
 
     @Test
@@ -121,7 +122,7 @@ class LedgerPostingServiceImplTest {
 
         InventoryStockSummary summary =
                 summaryRepository.findByStockItemIdAndLocationIdIsNull(sku).orElseThrow();
-        assertThat(summary.getOnHand()).isEqualTo(3);
+        assertThat(summary.getOnHand()).isEqualByComparingTo("3");
     }
 
     @Test
@@ -149,6 +150,6 @@ class LedgerPostingServiceImplTest {
                         .findByStockItemIdAndLocationId(sku, locationB)
                         .orElseThrow()
                         .getOnHand())
-                .isEqualTo(7);
+                .isEqualByComparingTo("7");
     }
 }

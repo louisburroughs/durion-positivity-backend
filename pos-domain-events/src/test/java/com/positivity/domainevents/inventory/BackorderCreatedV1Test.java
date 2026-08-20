@@ -3,6 +3,7 @@ package com.positivity.domainevents.inventory;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -21,8 +22,8 @@ class BackorderCreatedV1Test {
 
     @Test
     void roundTripsForAWorkorderLine() {
-        BackorderCreatedV1 evt =
-                new BackorderCreatedV1(BACKORDER_ID, WORKORDER_LINE_ID, null, "SKU-1", 3, null, OCCURRED_AT);
+        BackorderCreatedV1 evt = new BackorderCreatedV1(
+                BACKORDER_ID, WORKORDER_LINE_ID, null, "SKU-1", new BigDecimal("3"), null, OCCURRED_AT);
 
         String json = MAPPER.writeValueAsString(evt);
         BackorderCreatedV1 back = MAPPER.readValue(json, BackorderCreatedV1.class);
@@ -34,8 +35,8 @@ class BackorderCreatedV1Test {
 
     @Test
     void roundTripsForASalesOrderLine() {
-        BackorderCreatedV1 evt =
-                new BackorderCreatedV1(BACKORDER_ID, null, SALES_ORDER_LINE_ID, "SKU-1", 3, null, OCCURRED_AT);
+        BackorderCreatedV1 evt = new BackorderCreatedV1(
+                BACKORDER_ID, null, SALES_ORDER_LINE_ID, "SKU-1", new BigDecimal("3"), null, OCCURRED_AT);
 
         String json = MAPPER.writeValueAsString(evt);
         BackorderCreatedV1 back = MAPPER.readValue(json, BackorderCreatedV1.class);
@@ -47,7 +48,8 @@ class BackorderCreatedV1Test {
 
     @Test
     void rejectsNeitherDemandLine() {
-        assertThatThrownBy(() -> new BackorderCreatedV1(BACKORDER_ID, null, null, "SKU-1", 3, null, OCCURRED_AT))
+        assertThatThrownBy(() -> new BackorderCreatedV1(
+                        BACKORDER_ID, null, null, "SKU-1", new BigDecimal("3"), null, OCCURRED_AT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("exactly one");
     }
@@ -55,7 +57,13 @@ class BackorderCreatedV1Test {
     @Test
     void rejectsBothDemandLines() {
         assertThatThrownBy(() -> new BackorderCreatedV1(
-                        BACKORDER_ID, WORKORDER_LINE_ID, SALES_ORDER_LINE_ID, "SKU-1", 3, null, OCCURRED_AT))
+                        BACKORDER_ID,
+                        WORKORDER_LINE_ID,
+                        SALES_ORDER_LINE_ID,
+                        "SKU-1",
+                        new BigDecimal("3"),
+                        null,
+                        OCCURRED_AT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("exactly one");
     }

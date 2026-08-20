@@ -1,10 +1,12 @@
 package com.positivity.inventory.internal.service;
 
+import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.enums.InventorySerialStatus;
 import com.positivity.inventory.internal.repository.InventorySerialUnitRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.math.BigDecimal;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -82,11 +84,14 @@ public class SerialUnitOnHandVerifier {
             if (row.getLocationId() == null) {
                 continue;
             }
-            long summaryOnHand = summaryRepository
+            BigDecimal summaryOnHand = summaryRepository
                     .findByStockItemIdAndLocationId(row.getStockItemId(), row.getLocationId())
-                    .map(summary -> summary.getOnHand())
-                    .orElse(0L);
-            if (summaryOnHand != row.getInStockCount()) {
+                    .map(InventoryStockSummary::getOnHand)
+                    .map(Quantities::nz)
+                    .orElse(BigDecimal.ZERO);
+            // compareTo, not equals: a summary of 4.0000 read back from numeric(19,4) is the same
+            // quantity as a serial count of 4, and equals would call that drift.
+            if (summaryOnHand.compareTo(BigDecimal.valueOf(row.getInStockCount())) != 0) {
                 if (driftedKeys < MAX_DETAILED_DRIFT_LOGS) {
                     log.warn(
                             "Serial on-hand drift: stockItemId={} locationId={} serialInStock={} summaryOnHand={}",

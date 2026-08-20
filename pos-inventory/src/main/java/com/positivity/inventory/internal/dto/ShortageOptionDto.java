@@ -63,7 +63,7 @@ public class ShortageOptionDto {
             example = "12",
             requiredMode = NOT_REQUIRED)
     @Nullable
-    private Long availableQuantity;
+    private BigDecimal availableQuantity;
 
     @Schema(
             description = "Estimated date the shortage would be resolved via this option",

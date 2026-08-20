@@ -17,6 +17,7 @@ import com.positivity.inventory.internal.exception.RollupExpansionTooLargeExcept
 import com.positivity.inventory.internal.service.LocationInventoryRollupServiceImpl;
 import com.positivity.inventory.internal.service.StorageLocationTopologyService;
 import com.positivity.inventory.internal.service.StorageLocationTopologyService.LocationDescendant;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.IntStream;
@@ -61,10 +62,11 @@ class LocationInventoryRollupServiceImplTest {
                 "Floor",
                 "FLOOR",
                 "ACTIVE",
-                RollupQuantities.of(onHand, allocated),
-                RollupQuantities.of(onHand, allocated),
+                RollupQuantities.of(BigDecimal.valueOf(onHand), BigDecimal.valueOf(allocated)),
+                RollupQuantities.of(BigDecimal.valueOf(onHand), BigDecimal.valueOf(allocated)),
                 List.of());
-        return new SiteInventoryRollupResponse(siteId, RollupQuantities.of(onHand, allocated), List.of(node));
+        return new SiteInventoryRollupResponse(
+                siteId, RollupQuantities.of(BigDecimal.valueOf(onHand), BigDecimal.valueOf(allocated)), List.of(node));
     }
 
     @Test
@@ -83,9 +85,9 @@ class LocationInventoryRollupServiceImplTest {
 
         assertThat(response.locationId()).isEqualTo(BUILDING_ID);
         assertThat(response.parentType()).isEqualTo("PHYSICAL");
-        assertThat(response.totals().onHand()).isEqualTo(150);
-        assertThat(response.totals().allocated()).isEqualTo(15);
-        assertThat(response.totals().available()).isEqualTo(135);
+        assertThat(response.totals().onHand()).isEqualByComparingTo("150");
+        assertThat(response.totals().allocated()).isEqualByComparingTo("15");
+        assertThat(response.totals().available()).isEqualByComparingTo("135");
         assertThat(response.sites()).hasSize(2);
         assertThat(response.sites().getFirst().siteName()).isEqualTo("Site A");
         assertThat(response.sites().getFirst().nodes()).isNull();
@@ -138,7 +140,7 @@ class LocationInventoryRollupServiceImplTest {
                 service.getLocationInventoryRollup(BUILDING_ID, null, null, false, null, false);
 
         assertThat(response.sites()).hasSize(26);
-        assertThat(response.totals().onHand()).isEqualTo(26);
+        assertThat(response.totals().onHand()).isEqualByComparingTo("26");
     }
 
     @Test

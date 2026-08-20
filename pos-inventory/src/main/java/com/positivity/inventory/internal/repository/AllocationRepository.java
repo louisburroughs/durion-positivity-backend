@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.repository;
 import com.positivity.inventory.internal.entity.AllocationEntity;
 import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.AllocationState;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -89,10 +90,10 @@ public interface AllocationRepository extends JpaRepository<AllocationEntity, UU
         /** {@code ALLOCATED}/{@code PICKED}/{@code RELEASED}, or {@code ORPHAN}. */
         String getStatus();
 
-        int getAllocatedQuantity();
+        BigDecimal getAllocatedQuantity();
 
-        long getLedgerCreated();
+        BigDecimal getLedgerCreated();
 
-        long getLedgerReleased();
+        BigDecimal getLedgerReleased();
     }
 }

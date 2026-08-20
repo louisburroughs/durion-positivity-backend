@@ -23,6 +23,7 @@ import com.positivity.inventory.internal.service.ForecastQuantityService;
 import com.positivity.inventory.internal.service.ForecastSiteResolver;
 import com.positivity.inventory.internal.service.LeadTimeResolver;
 import com.positivity.inventory.internal.service.ReplenishmentServiceImpl;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -116,9 +117,9 @@ class ReplenishmentServiceImplTest {
                 .when(forecastSiteResolver.resolveForecastSite(any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         Mockito.lenient()
-                .when(forecastQuantityService.forecast(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong()))
-                .thenAnswer(invocation ->
-                        new ForecastQuantityService.ForecastQuantities(0L, 0L, invocation.getArgument(3, Long.class)));
+                .when(forecastQuantityService.forecast(any(), any(), any(), any()))
+                .thenAnswer(invocation -> new ForecastQuantityService.ForecastQuantities(
+                        BigDecimal.ZERO, BigDecimal.ZERO, invocation.getArgument(3, BigDecimal.class)));
         Mockito.lenient()
                 .when(replenishmentTaskRepository.findByItemSKUAndDestinationLocationIdAndStatusIn(any(), any(), any()))
                 .thenReturn(Collections.emptyList());
@@ -328,8 +329,9 @@ class ReplenishmentServiceImplTest {
                 .thenReturn(false);
         givenOnHand("PROD123", PICKFACE_01, 3);
         // Inbound supply within the horizon lifts the projection to the minimum.
-        when(forecastQuantityService.forecast(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong()))
-                .thenReturn(new ForecastQuantityService.ForecastQuantities(2L, 0L, 5L));
+        when(forecastQuantityService.forecast(any(), any(), any(), any()))
+                .thenReturn(new ForecastQuantityService.ForecastQuantities(
+                        new BigDecimal("2"), new BigDecimal("0"), new BigDecimal("5")));
 
         ReplenishmentTaskResponse response =
                 replenishmentService.evaluatePickFaceForReplenishment("PROD123", PICKFACE_01);
@@ -385,7 +387,7 @@ class ReplenishmentServiceImplTest {
                 .thenReturn(java.util.Optional.of(InventoryStockSummary.builder()
                         .stockItemId(sku)
                         .locationId(locationId)
-                        .onHand(onHand)
+                        .onHand(BigDecimal.valueOf(onHand))
                         .build()));
     }
 
@@ -529,8 +531,9 @@ class ReplenishmentServiceImplTest {
         when(replenishmentPolicyRepository.findAll()).thenReturn(List.of(policy));
         givenOnHand("SKU-INBOUND", LOC_01, 3);
         // Inbound 7 due within the horizon: projected 10 >= min 5.
-        when(forecastQuantityService.forecast(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong()))
-                .thenReturn(new ForecastQuantityService.ForecastQuantities(7L, 0L, 10L));
+        when(forecastQuantityService.forecast(any(), any(), any(), any()))
+                .thenReturn(new ForecastQuantityService.ForecastQuantities(
+                        new BigDecimal("7"), new BigDecimal("0"), new BigDecimal("10")));
 
         ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
 
@@ -553,8 +556,9 @@ class ReplenishmentServiceImplTest {
         givenOnHand("SKU-LATE-PO", LOC_01, 1);
         // Horizon-bounded forecast: late PO excluded, but 3 units of due supply count →
         // projected 4 < min 5.
-        when(forecastQuantityService.forecast(any(), any(), any(), org.mockito.ArgumentMatchers.anyLong()))
-                .thenReturn(new ForecastQuantityService.ForecastQuantities(3L, 0L, 4L));
+        when(forecastQuantityService.forecast(any(), any(), any(), any()))
+                .thenReturn(new ForecastQuantityService.ForecastQuantities(
+                        new BigDecimal("3"), new BigDecimal("0"), new BigDecimal("4")));
         when(replenishmentTaskRepository.findFirstByItemSKUAndDestinationLocationIdAndStatusInOrderByCreatedAtAsc(
                         any(), any(), any()))
                 .thenReturn(java.util.Optional.empty());
@@ -594,7 +598,7 @@ class ReplenishmentServiceImplTest {
                         org.mockito.ArgumentMatchers.eq("SKU-HORIZON"),
                         org.mockito.ArgumentMatchers.eq(LOC_01),
                         horizonCaptor.capture(),
-                        org.mockito.ArgumentMatchers.eq(9L));
+                        org.mockito.ArgumentMatchers.eq(new BigDecimal("9")));
         assertEquals(Instant.now(TEST_CLOCK).plus(Duration.ofDays(5)), horizonCaptor.getValue());
         assertEquals(Instant.parse("2024-01-06T00:00:00Z"), horizonCaptor.getValue());
     }

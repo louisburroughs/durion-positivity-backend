@@ -295,13 +295,16 @@ public class ScrapServiceImpl implements ScrapService {
         UUID postingLocationId =
                 scrap.getStorageLocationId() != null ? scrap.getStorageLocationId() : scrap.getLocationId();
 
-        Integer currentOnHand =
-                ledgerRepository.calculateOnHandQuantityAtLocation(scrap.getStockItemId(), postingLocationId);
+        BigDecimal currentOnHand = Quantities.nz(
+                ledgerRepository.calculateOnHandQuantityAtLocation(scrap.getStockItemId(), postingLocationId));
+        // A scrap request quantity is still an Integer (the scrap DTOs widen with the UOM work in
+        // ADR-0055 stage 4); this widens at the boundary rather than narrowing the ledger total.
+        BigDecimal scrappedQuantity = BigDecimal.valueOf(scrap.getQuantity());
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
                 .stockItemId(scrap.getStockItemId())
                 .eventType(InventoryLedgerEventType.SCRAP_OUT)
-                .changeInQuantity(-scrap.getQuantity())
-                .quantityAfter(currentOnHand - scrap.getQuantity())
+                .changeInQuantity(scrappedQuantity.negate())
+                .quantityAfter(currentOnHand.subtract(scrappedQuantity))
                 .unitCost(scrap.getUnitCostSnapshot())
                 .locationId(postingLocationId)
                 .lotId(scrap.getLotId())

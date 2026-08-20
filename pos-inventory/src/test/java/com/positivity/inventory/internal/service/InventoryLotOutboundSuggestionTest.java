@@ -11,6 +11,7 @@ import com.positivity.inventory.internal.enums.InventoryLotStatus;
 import com.positivity.inventory.internal.enums.ProductTrackingLevel;
 import com.positivity.inventory.internal.repository.InventoryLotRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -63,7 +64,7 @@ class InventoryLotOutboundSuggestionTest {
         row.setStockItemId(SKU);
         row.setLocationId(LOCATION);
         row.setLotId(lotId);
-        row.setOnHand(5);
+        row.setOnHand(new BigDecimal("5"));
         return row;
     }
 

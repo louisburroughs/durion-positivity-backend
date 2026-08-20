@@ -42,8 +42,8 @@ class LedgerCostingIntegrationTest {
                 .stockItemId(sku)
                 .locationId(location)
                 .eventType(type)
-                .changeInQuantity(change)
-                .quantityAfter(0)
+                .changeInQuantity(BigDecimal.valueOf(change))
+                .quantityAfter(new BigDecimal("0"))
                 .unitCost(unitCost)
                 .transactionUserId("costing-test")
                 .build();
@@ -67,7 +67,7 @@ class LedgerCostingIntegrationTest {
 
         SkuCostState state = costStateRepository.findByStockItemId(sku).orElseThrow();
         assertThat(state.getAvgCost()).isEqualByComparingTo("6");
-        assertThat(state.getOnHandQty()).isEqualTo(15);
+        assertThat(state.getOnHandQty()).isEqualByComparingTo("15");
     }
 
     @Test
@@ -99,7 +99,7 @@ class LedgerCostingIntegrationTest {
         assertThat(allocation.getUnitCost()).isNull();
         // the running cost state reflects only the receipt
         SkuCostState state = costStateRepository.findByStockItemId(sku).orElseThrow();
-        assertThat(state.getOnHandQty()).isEqualTo(100);
+        assertThat(state.getOnHandQty()).isEqualByComparingTo("100");
         assertThat(state.getAvgCost()).isEqualByComparingTo("3");
     }
 }

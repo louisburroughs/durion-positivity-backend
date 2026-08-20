@@ -4,6 +4,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Data;
@@ -43,13 +44,13 @@ public class ReservationResponse {
             description = "Quantity of the stock item required by the reservation",
             example = "4",
             requiredMode = REQUIRED)
-    private int requiredQuantity;
+    private BigDecimal requiredQuantity;
 
     @Schema(
             description = "Quantity currently allocated against the reservation",
             example = "4",
             requiredMode = REQUIRED)
-    private int allocatedQuantity;
+    private BigDecimal allocatedQuantity;
 
     @Schema(
             description = "Status of the reservation, such as PENDING, ALLOCATED, or HARDENED",

@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,7 +25,7 @@ public class LocationInventoryInquiryResponse {
             description = "Current on-hand quantity across all stock items at the location",
             example = "12",
             requiredMode = Schema.RequiredMode.REQUIRED)
-    private long onHandQuantity;
+    private BigDecimal onHandQuantity;
 
     @Schema(
             description =
@@ -33,5 +34,5 @@ public class LocationInventoryInquiryResponse {
                             + "reconstructable from ATP-neutral ledger events, so as-of responses carry on-hand only.",
             example = "8",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-    private Long availableToPromiseQuantity;
+    private BigDecimal availableToPromiseQuantity;
 }

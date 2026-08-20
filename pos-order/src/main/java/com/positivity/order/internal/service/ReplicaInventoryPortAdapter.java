@@ -6,6 +6,7 @@ import com.positivity.order.internal.entity.ExtInventoryAvailability;
 import com.positivity.order.internal.entity.ExtProduct;
 import com.positivity.order.internal.repository.ExtInventoryAvailabilityRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -51,10 +52,10 @@ public class ReplicaInventoryPortAdapter implements InventoryPort {
 
     @Override
     public @NonNull InventoryResult checkAvailability(
-            @NonNull String itemSku, int quantity, @Nullable UUID locationId) {
+            @NonNull String itemSku, @NonNull BigDecimal quantity, @Nullable UUID locationId) {
         if (locationId == null) {
             log.debug("No selling location for sku {}; reporting insufficient", itemSku);
-            return new InventoryResult(false, 0);
+            return new InventoryResult(false, BigDecimal.ZERO);
         }
         Optional<ExtInventoryAvailability> replica = productIdFor(itemSku)
                 .flatMap(productId -> extInventoryAvailabilityRepository.findByStockItemIdAndLocationId(
@@ -66,10 +67,12 @@ public class ReplicaInventoryPortAdapter implements InventoryPort {
                     "No availability replica row for sku {} at location {}; reporting insufficient",
                     itemSku,
                     locationId);
-            return new InventoryResult(false, 0);
+            return new InventoryResult(false, BigDecimal.ZERO);
         }
-        int atp = replica.get().getAvailableToPromiseQuantity();
-        return new InventoryResult(atp >= quantity, Math.max(atp, 0));
+        BigDecimal atp = replica.get().getAvailableToPromiseQuantity();
+        // compareTo, not equals or a primitive comparison: the replica column is numeric(19,4),
+        // so an ATP of 2.0000 must read as covering a demand of 2 (ADR-0055, #1414).
+        return new InventoryResult(atp.compareTo(quantity) >= 0, atp.max(BigDecimal.ZERO));
     }
 
     private Optional<UUID> productIdFor(String itemSku) {

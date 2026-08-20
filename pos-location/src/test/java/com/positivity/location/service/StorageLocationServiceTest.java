@@ -17,6 +17,7 @@ import com.positivity.location.internal.repository.ExtStorageLocationOnHandRepli
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.StorageLocationRepository;
 import com.positivity.location.internal.service.StorageLocationServiceImpl;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -441,7 +442,7 @@ class StorageLocationServiceTest {
                 .thenReturn(java.util.Optional.of(
                         com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica.builder()
                                 .storageLocationId(id)
-                                .onHandQuantity(5)
+                                .onHandQuantity(BigDecimal.valueOf(5))
                                 .build()));
 
         assertThatThrownBy(() -> storageLocationService.deactivateStorageLocation(siteId, id, null))
@@ -480,7 +481,7 @@ class StorageLocationServiceTest {
                 .thenReturn(java.util.Optional.of(
                         com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica.builder()
                                 .storageLocationId(sourceId)
-                                .onHandQuantity(5)
+                                .onHandQuantity(BigDecimal.valueOf(5))
                                 .build()));
         when(storageLocationRepository.saveAndFlush(any(StorageLocationEntity.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -511,7 +512,7 @@ class StorageLocationServiceTest {
                 .thenReturn(java.util.Optional.of(
                         com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica.builder()
                                 .storageLocationId(sourceId)
-                                .onHandQuantity(2)
+                                .onHandQuantity(BigDecimal.valueOf(2))
                                 .build()));
         when(storageLocationRepository.findByIdAndSiteId(destinationId, siteId)).thenReturn(Optional.empty());
 
@@ -550,7 +551,7 @@ class StorageLocationServiceTest {
                 .thenReturn(java.util.Optional.of(
                         com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica.builder()
                                 .storageLocationId(sourceId)
-                                .onHandQuantity(2)
+                                .onHandQuantity(BigDecimal.valueOf(2))
                                 .build()));
         when(storageLocationRepository.findByIdAndSiteId(destinationId, siteId)).thenReturn(Optional.of(destination));
 
@@ -998,7 +999,7 @@ class StorageLocationServiceTest {
                 .thenReturn(java.util.Optional.of(
                         com.positivity.location.internal.entity.ExtStorageLocationOnHandReplica.builder()
                                 .storageLocationId(storageLocationId)
-                                .onHandQuantity(2)
+                                .onHandQuantity(BigDecimal.valueOf(2))
                                 .build()));
 
         assertThatThrownBy(() -> storageLocationService.patchStorageLocation(siteId, storageLocationId, patch))

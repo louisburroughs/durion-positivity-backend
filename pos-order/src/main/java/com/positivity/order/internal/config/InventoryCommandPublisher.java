@@ -1,6 +1,7 @@
 package com.positivity.order.internal.config;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -46,13 +47,18 @@ public class InventoryCommandPublisher {
      *
      * @param salesOrderLineId demand line the reservation is for
      * @param stockItemId stock item requested
-     * @param requiredQuantity quantity requested
+     * @param requiredQuantity quantity requested; decimal-capable per the product's catalog
+     *     divisibility declaration (ADR-0055, #1414)
      * @param locationId selling location the demand must be covered at
      */
     public void requestReservation(
-            @NonNull UUID salesOrderLineId, @NonNull UUID stockItemId, int requiredQuantity, @NonNull UUID locationId) {
+            @NonNull UUID salesOrderLineId,
+            @NonNull UUID stockItemId,
+            @NonNull BigDecimal requiredQuantity,
+            @NonNull UUID locationId) {
         UUID commandId = deterministicCommandId(
-                RESERVATION_REQUEST_COMMAND_TYPE, salesOrderLineId + ":" + stockItemId + ":" + requiredQuantity);
+                RESERVATION_REQUEST_COMMAND_TYPE,
+                salesOrderLineId + ":" + stockItemId + ":" + normalizedQuantityKey(requiredQuantity));
         ReservationRequestPayload payload =
                 new ReservationRequestPayload(salesOrderLineId, stockItemId, requiredQuantity, locationId);
         send(RESERVATION_REQUEST_COMMAND_TYPE, commandId, salesOrderLineId.toString(), payload);
@@ -69,6 +75,18 @@ public class InventoryCommandPublisher {
         } catch (Exception e) {
             throw new IllegalStateException("Unable to publish " + commandType + " command " + commandId, e);
         }
+    }
+
+    /**
+     * The quantity as it appears in the idempotency key.
+     *
+     * <p>{@code stripTrailingZeros} first: since ADR-0055 (#1414) the quantity is a
+     * {@link BigDecimal}, and {@code 2} and {@code 2.00} are the same demand spelled two ways. A
+     * client retry that serialises the number differently must still collapse to the same command
+     * under pos-inventory's dedupe, which keying on the raw {@code toString} would not do.
+     */
+    private static String normalizedQuantityKey(@NonNull BigDecimal quantity) {
+        return quantity.stripTrailingZeros().toPlainString();
     }
 
     private static UUID deterministicCommandId(@NonNull String commandType, @NonNull String idempotencyKey) {
@@ -88,6 +106,6 @@ public class InventoryCommandPublisher {
     record ReservationRequestPayload(
             @NonNull UUID salesOrderLineId,
             @NonNull UUID stockItemId,
-            int requiredQuantity,
+            @NonNull BigDecimal requiredQuantity,
             @NonNull UUID locationId) {}
 }

@@ -24,6 +24,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.LocationRefRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.StockMovementServiceImpl;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -71,6 +72,8 @@ class StockMovementServiceImplTest {
                 ledgerPostingService,
                 locationRefRepository,
                 storageLocationRepository,
+                new com.positivity.inventory.internal.service.QuantityScaleGuard(
+                        org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
                 clock);
     }
 
@@ -84,12 +87,12 @@ class StockMovementServiceImplTest {
         stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.RECEIVE, 5);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
 
         InventoryLedgerEntryResponse result = service.recordMovement(request, "actor-1");
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_RECEIPT);
-        assertThat(result.getChangeInQuantity()).isEqualTo(5);
+        assertThat(result.getChangeInQuantity()).isEqualByComparingTo("5");
         verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
     }
 
@@ -99,12 +102,12 @@ class StockMovementServiceImplTest {
         stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.PICK, 4);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
 
         InventoryLedgerEntryResponse result = service.recordMovement(request, "actor-1");
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_ISSUE);
-        assertThat(result.getChangeInQuantity()).isEqualTo(-4);
+        assertThat(result.getChangeInQuantity()).isEqualByComparingTo("-4");
         verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
     }
 
@@ -112,7 +115,7 @@ class StockMovementServiceImplTest {
     void recordMovement_pick_withInsufficientStock_throwsInsufficientStockException() {
         RecordMovementRequest request = baseMovementRequest(MovementType.PICK, 5);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
-                .thenReturn(3);
+                .thenReturn(new BigDecimal("3"));
 
         Throwable exception = catchThrowable(() -> service.recordMovement(request, "actor-1"));
 
@@ -124,7 +127,7 @@ class StockMovementServiceImplTest {
     void recordMovement_issue_withInsufficientStock_throwsInsufficientStockException() {
         RecordMovementRequest request = baseMovementRequest(MovementType.ISSUE, 7);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
-                .thenReturn(2);
+                .thenReturn(new BigDecimal("2"));
 
         Throwable exception = catchThrowable(() -> service.recordMovement(request, "actor-1"));
 
@@ -151,12 +154,12 @@ class StockMovementServiceImplTest {
         RecordMovementRequest request = baseMovementRequest(MovementType.PICK, 5);
         request.setFromLocationId(LOC_2);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_2))
-                .thenReturn(8);
+                .thenReturn(new BigDecimal("8"));
 
         InventoryLedgerEntryResponse result = service.recordMovement(request, "actor-1");
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.GOODS_ISSUE);
-        assertThat(result.getChangeInQuantity()).isEqualTo(-5);
+        assertThat(result.getChangeInQuantity()).isEqualByComparingTo("-5");
         verify(ledgerRepository, times(2)).calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_2);
         verify(ledgerRepository, never()).calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_1);
         verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
@@ -169,9 +172,9 @@ class StockMovementServiceImplTest {
         RecordMovementRequest request = baseMovementRequest(MovementType.TRANSFER, 6);
         request.setToLocationId(LOC_2);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_2))
-                .thenReturn(20);
+                .thenReturn(new BigDecimal("20"));
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_1))
-                .thenReturn(20);
+                .thenReturn(new BigDecimal("20"));
 
         service.recordMovement(request, "actor-1");
 
@@ -184,14 +187,14 @@ class StockMovementServiceImplTest {
         assertThat(transferIn.getLocationId()).isEqualTo(LOC_2);
         assertThat(transferIn.getFromLocationId()).isEqualTo(LOC_1);
         assertThat(transferIn.getToLocationId()).isEqualTo(LOC_2);
-        assertThat(transferIn.getChangeInQuantity()).isEqualTo(6);
+        assertThat(transferIn.getChangeInQuantity()).isEqualByComparingTo("6");
 
         InventoryLedgerEntry transferOut = savedEntries.get(1);
         assertThat(transferOut.getEventType()).isEqualTo(InventoryLedgerEventType.TRANSFER_OUT);
         assertThat(transferOut.getLocationId()).isEqualTo(LOC_1);
         assertThat(transferOut.getFromLocationId()).isEqualTo(LOC_1);
         assertThat(transferOut.getToLocationId()).isEqualTo(LOC_2);
-        assertThat(transferOut.getChangeInQuantity()).isEqualTo(-6);
+        assertThat(transferOut.getChangeInQuantity()).isEqualByComparingTo("-6");
         verify(ledgerRepository).calculateOnHandQuantityAtLocation("SKU-123", LOC_2);
         verify(ledgerRepository).calculateOnHandQuantityAtLocation("SKU-123", LOC_1);
     }
@@ -215,12 +218,12 @@ class StockMovementServiceImplTest {
         stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.PUT_AWAY, 3);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
-                .thenReturn(8);
+                .thenReturn(new BigDecimal("8"));
 
         InventoryLedgerEntryResponse result = service.recordMovement(request, "actor-1");
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.PUTAWAY);
-        assertThat(result.getChangeInQuantity()).isEqualTo(3);
+        assertThat(result.getChangeInQuantity()).isEqualByComparingTo("3");
         verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
     }
 
@@ -230,12 +233,12 @@ class StockMovementServiceImplTest {
         stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.RETURN, 2);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
-                .thenReturn(5);
+                .thenReturn(new BigDecimal("5"));
 
         InventoryLedgerEntryResponse result = service.recordMovement(request, "actor-1");
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.RETURN_TO_STOCK);
-        assertThat(result.getChangeInQuantity()).isEqualTo(2);
+        assertThat(result.getChangeInQuantity()).isEqualByComparingTo("2");
         verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
     }
 
@@ -245,7 +248,7 @@ class StockMovementServiceImplTest {
         stubLedgerSaveReturnsEntry();
         RecordMovementRequest request = baseMovementRequest(MovementType.RECEIVE, 1);
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getFromLocationId()))
-                .thenReturn(0);
+                .thenReturn(new BigDecimal("0"));
 
         service.recordMovement(request, "actor-xyz");
 
@@ -280,7 +283,7 @@ class StockMovementServiceImplTest {
 
         assertThat(result.getProductSku()).isEqualTo("SKU-123");
         assertThat(result.getLocationId()).isEqualTo(LOC_1);
-        assertThat(result.getQuantity()).isEqualTo(11);
+        assertThat(result.getQuantity()).isEqualByComparingTo("11");
         assertThat(result.getReasonCode()).isEqualTo("CYCLE_COUNT");
     }
 
@@ -292,12 +295,12 @@ class StockMovementServiceImplTest {
         InventoryAdjustmentRequest request = pendingAdjustmentRequest(4);
         when(adjustmentRepository.findById(request.getAdjustmentRequestId())).thenReturn(Optional.of(request));
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getLocationId()))
-                .thenReturn(15);
+                .thenReturn(new BigDecimal("15"));
 
         InventoryLedgerEntry result = service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-1");
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.ADJUSTMENT_IN);
-        assertThat(result.getChangeInQuantity()).isEqualTo(4);
+        assertThat(result.getChangeInQuantity()).isEqualByComparingTo("4");
         verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
     }
 
@@ -309,12 +312,12 @@ class StockMovementServiceImplTest {
         InventoryAdjustmentRequest request = pendingAdjustmentRequest(-3);
         when(adjustmentRepository.findById(request.getAdjustmentRequestId())).thenReturn(Optional.of(request));
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getLocationId()))
-                .thenReturn(10);
+                .thenReturn(new BigDecimal("10"));
 
         InventoryLedgerEntry result = service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-1");
 
         assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.ADJUSTMENT_OUT);
-        assertThat(result.getChangeInQuantity()).isEqualTo(-3);
+        assertThat(result.getChangeInQuantity()).isEqualByComparingTo("-3");
         verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
     }
 
@@ -350,7 +353,7 @@ class StockMovementServiceImplTest {
         InventoryAdjustmentRequest request = pendingAdjustmentRequest(5);
         when(adjustmentRepository.findById(request.getAdjustmentRequestId())).thenReturn(Optional.of(request));
         when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getLocationId()))
-                .thenReturn(20);
+                .thenReturn(new BigDecimal("20"));
 
         service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-xyz");
 
@@ -369,7 +372,7 @@ class StockMovementServiceImplTest {
                 .fromLocationId(LOC_1)
                 .toLocationId(LOC_9)
                 .movementType(movementType)
-                .quantity(quantity)
+                .quantity(BigDecimal.valueOf(quantity))
                 .unitOfMeasure("EACH")
                 .sourceTransactionId("TX-1")
                 .build();
@@ -379,7 +382,7 @@ class StockMovementServiceImplTest {
         return CreateAdjustmentRequestDto.builder()
                 .productSku("SKU-123")
                 .locationId(LOC_1)
-                .quantity(quantity)
+                .quantity(BigDecimal.valueOf(quantity))
                 .reasonCode("CYCLE_COUNT")
                 .unitOfMeasure("EACH")
                 .build();
@@ -390,7 +393,7 @@ class StockMovementServiceImplTest {
                 .adjustmentRequestId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .productSku("SKU-123")
                 .locationId(LOC_1)
-                .quantity(quantity)
+                .quantity(BigDecimal.valueOf(quantity))
                 .reasonCode("CYCLE_COUNT")
                 .unitOfMeasure("EACH")
                 .status(AdjustmentRequestStatus.PENDING)

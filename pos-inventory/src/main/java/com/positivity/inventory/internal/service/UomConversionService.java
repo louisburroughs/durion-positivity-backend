@@ -4,6 +4,7 @@ import com.positivity.inventory.internal.exception.UomConversionUndefinedExcepti
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Converts document-UoM quantities into a product's base (stocking) UoM using the catalog-fed
@@ -51,4 +52,19 @@ public interface UomConversionService {
      *     row for the UoM
      */
     int precisionScale(@NonNull UUID productId, @NonNull String uomCode);
+
+    /**
+     * The product's declared stock divisibility (ADR-0055, #1414): the {@code precision_scale} of
+     * its base UoM's own conversion row, or {@code 0} when the product declares none.
+     *
+     * <p>Unlike {@link #precisionScale}, this never throws. Undeclared means integral, and that
+     * default is load-bearing rather than a fallback: {@code product_uom} is unpopulated
+     * platform-wide, so the absent-row path is the common path and it must answer "whole units"
+     * rather than refuse to answer. It is also what preserves today's behaviour exactly for every
+     * product while the declaration is installed ahead of any seeding.
+     *
+     * @param productId the catalog product; {@code null} for a stock reference that resolves to no
+     *     catalog product, which likewise declares nothing and so is integral
+     */
+    int declaredBaseScale(@Nullable UUID productId);
 }

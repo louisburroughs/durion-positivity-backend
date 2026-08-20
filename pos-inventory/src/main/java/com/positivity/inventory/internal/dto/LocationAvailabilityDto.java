@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -35,7 +36,7 @@ public class LocationAvailabilityDto {
     private String locationName;
 
     @Schema(description = "On-hand quantity at the location", example = "120", requiredMode = REQUIRED)
-    private int onHandQuantity;
+    private BigDecimal onHandQuantity;
 
     @Schema(
             description = "Available-to-promise quantity at the location. Null for as-of (historical) requests: "
@@ -43,7 +44,7 @@ public class LocationAvailabilityDto {
                     + "so as-of responses carry on-hand only.",
             example = "90",
             requiredMode = NOT_REQUIRED)
-    private Integer availableToPromiseQuantity;
+    private BigDecimal availableToPromiseQuantity;
 
     @Schema(
             description =
@@ -52,7 +53,7 @@ public class LocationAvailabilityDto {
                             + "an expected date are excluded from horizon-bounded results). Omitted for as-of requests.",
             example = "25",
             requiredMode = NOT_REQUIRED)
-    private Long incomingQty;
+    private BigDecimal incomingQty;
 
     @Schema(
             description =
@@ -61,12 +62,12 @@ public class LocationAvailabilityDto {
                             + "included in every site row. Omitted for as-of requests.",
             example = "10",
             requiredMode = NOT_REQUIRED)
-    private Long outgoingQty;
+    private BigDecimal outgoingQty;
 
     @Schema(
             description = "Projected availability: onHandQuantity + incomingQty - outgoingQty "
                     + "(Odoo virtual_available). Omitted for as-of requests.",
             example = "135",
             requiredMode = NOT_REQUIRED)
-    private Long projectedAvailable;
+    private BigDecimal projectedAvailable;
 }

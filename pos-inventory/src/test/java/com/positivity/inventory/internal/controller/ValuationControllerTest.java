@@ -50,7 +50,7 @@ class ValuationControllerTest {
         return ValuationReportResponse.builder()
                 .rows(List.of(ValuationRow.builder()
                         .stockItemId("PART-A")
-                        .onHand(20L)
+                        .onHand(new BigDecimal("20"))
                         .costingMethod("AVERAGE")
                         .unitCostCurrent(new BigDecimal("6.0000"))
                         .onHandValue(new BigDecimal("120.0000"))

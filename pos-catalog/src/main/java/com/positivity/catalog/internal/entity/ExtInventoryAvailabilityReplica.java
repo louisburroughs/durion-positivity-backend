@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -44,14 +45,14 @@ public class ExtInventoryAvailabilityReplica {
     @Column(name = "location_id")
     private UUID locationId;
 
-    @Column(name = "on_hand_quantity", nullable = false)
-    private int onHandQuantity;
+    @Column(name = "on_hand_quantity", nullable = false, precision = 19, scale = 4)
+    private BigDecimal onHandQuantity;
 
-    @Column(name = "allocated_quantity", nullable = false)
-    private int allocatedQuantity;
+    @Column(name = "allocated_quantity", nullable = false, precision = 19, scale = 4)
+    private BigDecimal allocatedQuantity;
 
-    @Column(name = "available_to_promise_quantity", nullable = false)
-    private int availableToPromiseQuantity;
+    @Column(name = "available_to_promise_quantity", nullable = false, precision = 19, scale = 4)
+    private BigDecimal availableToPromiseQuantity;
 
     @Column(name = "unit_of_measure")
     private String unitOfMeasure;

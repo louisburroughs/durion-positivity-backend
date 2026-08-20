@@ -10,6 +10,7 @@ import com.positivity.inventory.config.TestSecurityConfig;
 import com.positivity.inventory.internal.dto.backorder.BackorderResponse;
 import com.positivity.inventory.internal.enums.BackorderStatus;
 import com.positivity.inventory.service.BackorderService;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -54,7 +55,7 @@ class BackorderControllerTest {
                 .workorderLineId(UUID.fromString("00000000-0000-0000-0000-0000000000b1"))
                 .sku("PART-BRAKE-PAD-01")
                 .locationId(UUID.fromString("00000000-0000-0000-0000-0000000000c1"))
-                .quantityShort(5)
+                .quantityShort(new BigDecimal("5"))
                 .status(BackorderStatus.OPEN)
                 .build();
     }

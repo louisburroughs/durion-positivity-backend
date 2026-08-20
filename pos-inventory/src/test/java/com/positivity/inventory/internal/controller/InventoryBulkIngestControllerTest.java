@@ -11,6 +11,7 @@ import com.positivity.inventory.config.TestSecurityConfig;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.dto.InventoryBulkIngestRecord;
 import com.positivity.inventory.service.StockMovementService;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -51,7 +52,7 @@ class InventoryBulkIngestControllerTest {
     void bulkIngest_validRequest_returns200WithResults() throws Exception {
         InventoryBulkIngestRecord invRecord = new InventoryBulkIngestRecord();
         invRecord.setSku("PART-001");
-        invRecord.setQuantity(10);
+        invRecord.setQuantity(new BigDecimal("10"));
         invRecord.setLocationId(LOCATION_ID);
 
         BulkIngestRequest<InventoryBulkIngestRecord> request = new BulkIngestRequest<>();
@@ -78,7 +79,7 @@ class InventoryBulkIngestControllerTest {
     void bulkIngest_whenServiceThrows_recordsAsFailure() throws Exception {
         InventoryBulkIngestRecord invRecord = new InventoryBulkIngestRecord();
         invRecord.setSku("BAD-001");
-        invRecord.setQuantity(5);
+        invRecord.setQuantity(new BigDecimal("5"));
 
         BulkIngestRequest<InventoryBulkIngestRecord> request = new BulkIngestRequest<>();
         request.setJobId(JOB_ID);

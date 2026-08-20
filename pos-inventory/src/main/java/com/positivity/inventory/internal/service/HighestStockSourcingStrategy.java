@@ -4,6 +4,7 @@ import com.positivity.inventory.internal.enums.SourcingStrategy;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingCandidate;
 import com.positivity.inventory.internal.service.SourcingStrategyService.SourcingSelection;
+import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -38,19 +39,20 @@ public class HighestStockSourcingStrategy implements SourcingOrderingStrategy {
             return List.copyOf(selection.candidates());
         }
         return selection.candidates().stream()
-                .sorted(Comparator.comparingLong(
-                                (SourcingCandidate candidate) -> -availableOf(selection.stockItemId(), candidate))
+                .sorted(Comparator.comparing(
+                                (SourcingCandidate candidate) -> availableOf(selection.stockItemId(), candidate),
+                                Comparator.reverseOrder())
                         .thenComparing(SourcingCandidate::locationId))
                 .toList();
     }
 
-    private long availableOf(String stockItemId, SourcingCandidate candidate) {
+    private BigDecimal availableOf(String stockItemId, SourcingCandidate candidate) {
         if (candidate.availableQuantity() != null) {
             return candidate.availableQuantity();
         }
         return stockSummaryRepository
                 .findByStockItemIdAndLocationId(stockItemId, candidate.locationId())
-                .map(summary -> summary.getOnHand() - summary.getAllocated())
-                .orElse(0L);
+                .map(summary -> Quantities.nz(summary.getOnHand()).subtract(Quantities.nz(summary.getAllocated())))
+                .orElse(BigDecimal.ZERO);
     }
 }

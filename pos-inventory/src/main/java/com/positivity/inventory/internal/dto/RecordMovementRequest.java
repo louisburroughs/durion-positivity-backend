@@ -9,6 +9,7 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -67,7 +68,7 @@ public class RecordMovementRequest {
     @Schema(description = "Quantity of units being moved", example = "12", requiredMode = REQUIRED)
     @NotNull
     @Positive
-    Integer quantity;
+    BigDecimal quantity;
 
     @Schema(description = "Unit of measure for the quantity", example = "EACH", requiredMode = NOT_REQUIRED)
     String unitOfMeasure;

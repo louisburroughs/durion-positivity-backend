@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -34,10 +35,10 @@ public class TraceabilityMovement {
     private Instant timestamp;
 
     @Schema(description = "Signed quantity change (positive inbound, negative outbound)", requiredMode = REQUIRED)
-    private Integer changeInQuantity;
+    private BigDecimal changeInQuantity;
 
     @Schema(description = "On-hand quantity after this movement at its location", requiredMode = NOT_REQUIRED)
-    private Integer quantityAfter;
+    private BigDecimal quantityAfter;
 
     @Schema(description = "Location the movement affected", requiredMode = NOT_REQUIRED)
     private UUID locationId;

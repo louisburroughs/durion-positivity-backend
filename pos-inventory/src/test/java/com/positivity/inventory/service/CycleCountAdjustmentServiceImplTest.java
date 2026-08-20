@@ -135,7 +135,7 @@ class CycleCountAdjustmentServiceImplTest {
             }
             return adj;
         });
-        when(ledgerRepository.calculateOnHandQuantity(STOCK_ITEM_ID)).thenReturn(10);
+        when(ledgerRepository.calculateOnHandQuantity(STOCK_ITEM_ID)).thenReturn(new BigDecimal("10"));
         when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(inv -> {
             InventoryLedgerEntry entry = inv.getArgument(0);
             entry.setLedgerEntryId(ledgerId);
@@ -186,7 +186,7 @@ class CycleCountAdjustmentServiceImplTest {
 
         when(adjustmentRepository.findById(adjustmentId)).thenReturn(Optional.of(adjustment));
         when(adjustmentRepository.save(any(CycleCountAdjustment.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(ledgerRepository.calculateOnHandQuantity(STOCK_ITEM_ID)).thenReturn(10);
+        when(ledgerRepository.calculateOnHandQuantity(STOCK_ITEM_ID)).thenReturn(new BigDecimal("10"));
         when(ledgerPostingService.post(any(InventoryLedgerEntry.class))).thenAnswer(inv -> {
             InventoryLedgerEntry entry = inv.getArgument(0);
             entry.setLedgerEntryId(ledgerId);
@@ -303,8 +303,8 @@ class CycleCountAdjustmentServiceImplTest {
         return CreateAdjustmentRequest.builder()
                 .stockItemId(STOCK_ITEM_ID)
                 .reasonCode("CYCLE_COUNT_SHRINK")
-                .countedQuantity(counted)
-                .quantityOnHandBefore(onHand)
+                .countedQuantity(BigDecimal.valueOf(counted))
+                .quantityOnHandBefore(BigDecimal.valueOf(onHand))
                 .costAtTimeOfAdjustment(BigDecimal.valueOf(50.00))
                 .createdByUserId("counter-user-1")
                 .build();
@@ -319,10 +319,10 @@ class CycleCountAdjustmentServiceImplTest {
                 .adjustmentId(id)
                 .stockItemId(STOCK_ITEM_ID)
                 .reasonCode("CYCLE_COUNT_SHRINK")
-                .quantityChange(-2)
+                .quantityChange(new BigDecimal("-2"))
                 .costAtTimeOfAdjustment(BigDecimal.valueOf(50.00))
-                .quantityOnHandBefore(10)
-                .countedQuantity(8)
+                .quantityOnHandBefore(new BigDecimal("10"))
+                .countedQuantity(new BigDecimal("8"))
                 .createdByUserId("counter-user-1")
                 .status(AdjustmentStatus.PENDING_APPROVAL)
                 .build();

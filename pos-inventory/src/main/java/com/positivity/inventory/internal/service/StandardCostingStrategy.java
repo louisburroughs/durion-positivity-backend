@@ -35,13 +35,13 @@ public class StandardCostingStrategy implements CostingStrategy {
     @Override
     public @NonNull CostingResult cost(@NonNull CostingInput input) {
         BigDecimal standardCost = input.state().standardCost();
-        int change = input.changeInQuantity();
+        BigDecimal change = Quantities.nz(input.changeInQuantity());
         BigDecimal docCost = input.documentUnitCost();
-        long newQty = input.state().onHandQty() + change;
+        BigDecimal newQty = Quantities.nz(input.state().onHandQty()).add(change);
 
         // avgCost doubles as the latest-receipt-cost memo under STANDARD.
         BigDecimal latestReceiptCost = input.state().avgCost();
-        if (change > 0 && docCost != null) {
+        if (Quantities.isPositive(change) && docCost != null) {
             latestReceiptCost = docCost; // remember most recent receipt cost; standard price untouched
         }
 

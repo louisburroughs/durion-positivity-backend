@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.dto.replenishment.ReplenishmentPolicyRe
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentScanResultResponse;
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentTaskResponse;
 import com.positivity.inventory.internal.dto.replenishment.UpdateReplenishmentPolicyRequest;
+import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.entity.PurchaseSuggestion;
 import com.positivity.inventory.internal.entity.ReplenishmentPolicy;
 import com.positivity.inventory.internal.entity.ReplenishmentTask;
@@ -20,6 +21,8 @@ import com.positivity.inventory.internal.repository.NormalizedAvailabilityReposi
 import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentTaskRepository;
 import com.positivity.inventory.service.ReplenishmentService;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -563,12 +566,15 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
         LeadTimeResolver.ResolvedLeadTime leadTime = leadTimeResolver.resolve(policy);
         Instant evaluatedAt = Instant.now(clock);
         Instant leadHorizon = evaluatedAt.plus(Duration.ofDays(leadTime.days()));
-        long onHand = currentOnHand(policy.getItemSKU(), policy.getLocationId());
+        BigDecimal onHand = currentOnHand(policy.getItemSKU(), policy.getLocationId());
         UUID forecastSiteId = forecastSiteResolver.resolveForecastSite(policy.getLocationId());
-        long projectedAvailable = forecastQuantityService
+        BigDecimal projectedAvailable = forecastQuantityService
                 .forecast(policy.getItemSKU(), forecastSiteId, leadHorizon, onHand)
                 .projectedAvailable();
-        boolean triggered = projectedAvailable < policy.getMinimumQuantity();
+        // Replenishment policy min/max stay integral (they are order-planning parameters, not
+        // stock measurements), so the comparison widens the parameter rather than narrowing the
+        // measurement — a projected 0.5 correctly reads as below a minimum of 1.
+        boolean triggered = Quantities.lt(projectedAvailable, BigDecimal.valueOf(policy.getMinimumQuantity()));
         return new Projection(
                 policy.getItemSKU(),
                 forecastSiteId,
@@ -614,7 +620,14 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
             @Nullable UUID excludeSuggestionId) {
         long inProgress =
                 inProgressQuantity(policy.getItemSKU(), policy.getLocationId(), excludeTaskId, excludeSuggestionId);
-        return Math.max(0L, policy.getMaximumQuantity() - projection.projectedAvailable() - inProgress);
+        // The replenishment need is a whole number of units to order — a purchase order for
+        // 3.5 units of a divisible product still buys 4 containers unless the supplier sells it
+        // by measure, which the F4 MOQ/pack rounding decides. Rounding the need UP is the safe
+        // direction: it never orders less than the shortfall.
+        BigDecimal need = BigDecimal.valueOf(policy.getMaximumQuantity())
+                .subtract(projection.projectedAvailable())
+                .subtract(BigDecimal.valueOf(inProgress));
+        return Math.max(0L, need.setScale(0, RoundingMode.CEILING).longValue());
     }
 
     /** Rounds a positive quantity UP to the nearest multiple; zero and no-multiple pass through. */
@@ -756,8 +769,8 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
     private record Projection(
             String stockItemId,
             @Nullable UUID forecastSiteId,
-            long onHand,
-            long projectedAvailable,
+            BigDecimal onHand,
+            BigDecimal projectedAvailable,
             Instant evaluatedAt,
             Instant leadHorizon,
             LeadTimeResolver.ResolvedLeadTime leadTime,
@@ -774,11 +787,12 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
      * (single sanctioned read path since issue #1024); absent row means no
      * postings yet, i.e. zero on-hand.
      */
-    private long currentOnHand(String itemSKU, UUID locationId) {
+    private BigDecimal currentOnHand(String itemSKU, UUID locationId) {
         return stockSummaryRepository
                 .findByStockItemIdAndLocationId(itemSKU, locationId)
-                .map(summary -> summary.getOnHand())
-                .orElse(0L);
+                .map(InventoryStockSummary::getOnHand)
+                .map(Quantities::nz)
+                .orElse(BigDecimal.ZERO);
     }
 
     /** Refreshes a still-open PENDING task's quantity (and stock-out deadline) to the currently computed need. */

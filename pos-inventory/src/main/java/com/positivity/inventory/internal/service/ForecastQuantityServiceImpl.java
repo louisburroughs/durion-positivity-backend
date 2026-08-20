@@ -6,7 +6,6 @@ import com.positivity.inventory.internal.enums.ReservationStatus;
 import com.positivity.inventory.internal.repository.PickTaskRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -39,30 +38,32 @@ public class ForecastQuantityServiceImpl implements ForecastQuantityService {
     @Override
     @Transactional(readOnly = true)
     public @NonNull ForecastQuantities forecast(
-            @NonNull String stockItemId, @Nullable UUID siteId, @Nullable Instant horizon, long onHand) {
-        BigDecimal incoming = expectedSupplyService.expectedIncomingQuantity(stockItemId, siteId, horizon);
-        // Floor fractional supply DOWN: never project more than is certain to arrive.
-        long incomingQty = incoming.setScale(0, RoundingMode.DOWN).longValueExact();
+            @NonNull String stockItemId, @Nullable UUID siteId, @Nullable Instant horizon, @NonNull BigDecimal onHand) {
+        // No rounding here since ADR-0055 (#1414): the forecast fields are decimal, so expected
+        // supply is carried at the precision the supplying documents state it in rather than
+        // floored to squeeze it into an integer.
+        BigDecimal incomingQty = expectedSupplyService.expectedIncomingQuantity(stockItemId, siteId, horizon);
 
-        long outgoingQty = reservationRemainder(stockItemId, horizon) + pickTaskRemainder(stockItemId, siteId);
+        BigDecimal outgoingQty = reservationRemainder(stockItemId, horizon).add(pickTaskRemainder(stockItemId, siteId));
 
-        return new ForecastQuantities(incomingQty, outgoingQty, onHand + incomingQty - outgoingQty);
+        return new ForecastQuantities(
+                incomingQty, outgoingQty, onHand.add(incomingQty).subtract(outgoingQty));
     }
 
-    private long reservationRemainder(String stockItemId, @Nullable Instant horizon) {
+    private BigDecimal reservationRemainder(String stockItemId, @Nullable Instant horizon) {
         UUID skuUuid = parseUuid(stockItemId);
         if (skuUuid == null) {
-            return 0L;
+            return BigDecimal.ZERO;
         }
-        Long remainder = reservationRepository.sumOpenRemainderForSku(
+        BigDecimal remainder = reservationRepository.sumOpenRemainderForSku(
                 skuUuid, OPEN_RESERVATION_STATUSES, horizon != null, horizon);
-        return remainder == null ? 0L : remainder;
+        return remainder == null ? BigDecimal.ZERO : remainder;
     }
 
-    private long pickTaskRemainder(String stockItemId, @Nullable UUID siteId) {
+    private BigDecimal pickTaskRemainder(String stockItemId, @Nullable UUID siteId) {
         Long remainder = pickTaskRepository.sumReleasedUnpickedRemainderForSku(
                 stockItemId, parseUuid(stockItemId), PickTaskStatus.PENDING, RELEASED_PICK_LIST_STATUSES, siteId);
-        return remainder == null ? 0L : remainder;
+        return remainder == null ? BigDecimal.ZERO : BigDecimal.valueOf(remainder);
     }
 
     private static @Nullable UUID parseUuid(String value) {

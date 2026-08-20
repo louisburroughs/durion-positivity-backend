@@ -31,10 +31,11 @@ public class ReturnItemLine {
     @Schema(
             description = "Quantity of the SKU being returned, in the product's base UoM. Required unless"
                     + " documentUom/documentQuantity are supplied, in which case the base quantity is derived and"
-                    + " this field is ignored",
+                    + " this field is ignored. May carry decimals only to the precision_scale the product's"
+                    + " catalog declaration allows (422 FRACTIONAL_QUANTITY_NOT_ALLOWED otherwise)",
             example = "2",
             requiredMode = NOT_REQUIRED)
-    private int quantityReturned;
+    private BigDecimal quantityReturned;
 
     @Schema(
             description = "Optional UoM the return line is keyed in (e.g. CASE). When present, documentQuantity"
@@ -61,14 +62,16 @@ public class ReturnItemLine {
     private String lotNumber;
 
     /** Pre-E2 arity kept for existing callers/tests: no lot number keyed. */
-    public ReturnItemLine(UUID skuId, int quantityReturned, String documentUom, BigDecimal documentQuantity) {
+    public ReturnItemLine(UUID skuId, BigDecimal quantityReturned, String documentUom, BigDecimal documentQuantity) {
         this(skuId, quantityReturned, documentUom, documentQuantity, null);
     }
 
     @JsonIgnore
     @AssertTrue(message = "quantityReturned must be positive when documentUom/documentQuantity are absent")
     public boolean isQuantitySourcePresent() {
-        return quantityReturned > 0 || documentUom != null || documentQuantity != null;
+        return (quantityReturned != null && quantityReturned.signum() > 0)
+                || documentUom != null
+                || documentQuantity != null;
     }
 
     @JsonIgnore

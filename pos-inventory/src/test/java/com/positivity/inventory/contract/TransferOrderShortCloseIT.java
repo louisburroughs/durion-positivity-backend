@@ -119,11 +119,11 @@ class TransferOrderShortCloseIT extends BaseContractIntegrationTest {
             + " and ledger truth reproduces the balances (drift clean, rebuild identical)")
     void shortClose_lost_zeroesTransitAndDropsGlobalOnHand() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 10);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("10"));
         String orderId = createOrder(sku, 6);
         UUID lineId = singleLineId(orderId);
         dispatch(orderId);
-        receive(orderId, lineId, 2); // remainder 4 stays in transit
+        receive(orderId, lineId, new BigDecimal("2")); // remainder 4 stays in transit
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/transfer-orders/{id}/short-close", orderId))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -146,7 +146,7 @@ class TransferOrderShortCloseIT extends BaseContractIntegrationTest {
         List<InventoryLedgerEntry> scrapEntries = entriesOf(sku, InventoryLedgerEventType.SCRAP_OUT);
         assertThat(scrapEntries).hasSize(1);
         InventoryLedgerEntry scrap = scrapEntries.getFirst();
-        assertThat(scrap.getChangeInQuantity()).isEqualTo(-4);
+        assertThat(scrap.getChangeInQuantity()).isEqualByComparingTo("-4");
         assertThat(scrap.getReasonCode()).isEqualTo("LOST");
         assertThat(scrap.getSourceTransactionId()).isEqualTo(orderId);
         assertThat(scrap.getLocationId()).isEqualTo(DESTINATION_SITE);
@@ -176,11 +176,11 @@ class TransferOrderShortCloseIT extends BaseContractIntegrationTest {
             + " with drift clean and rebuild identical")
     void shortClose_returned_zeroesTransitAndRestoresSource() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 10);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("10"));
         String orderId = createOrder(sku, 6);
         UUID lineId = singleLineId(orderId);
         dispatch(orderId);
-        receive(orderId, lineId, 2); // remainder 4 stays in transit
+        receive(orderId, lineId, new BigDecimal("2")); // remainder 4 stays in transit
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/transfer-orders/{id}/short-close", orderId))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -205,7 +205,7 @@ class TransferOrderShortCloseIT extends BaseContractIntegrationTest {
                         .filter(entry -> SOURCE_SITE.equals(entry.getLocationId()))
                         .map(InventoryLedgerEntry::getQuantityAfter)
                         .toList())
-                .containsExactly(8);
+                .containsExactly(new BigDecimal("8.0000"));
         assertThat(entriesOf(sku, InventoryLedgerEventType.SCRAP_OUT)).isEmpty();
 
         assertThat(driftVerifier.verify()).isZero();
@@ -223,7 +223,7 @@ class TransferOrderShortCloseIT extends BaseContractIntegrationTest {
     @DisplayName("short-close straight from DISPATCHED (no receipt at all) resolves the full dispatched quantity")
     void shortClose_fromDispatched_resolvesFullQuantity() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 10);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("10"));
         String orderId = createOrder(sku, 6);
         dispatch(orderId);
 
@@ -246,7 +246,7 @@ class TransferOrderShortCloseIT extends BaseContractIntegrationTest {
     @DisplayName("receive and dispatch on a SHORT_CLOSED order return 409")
     void receiveAndDispatch_onShortClosed_return409() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 10);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("10"));
         String orderId = createOrder(sku, 6);
         dispatch(orderId);
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/transfer-orders/{id}/short-close", orderId))
@@ -269,7 +269,7 @@ class TransferOrderShortCloseIT extends BaseContractIntegrationTest {
     @DisplayName("short-close before dispatch returns 409")
     void shortClose_beforeDispatch_returns409() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 10);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("10"));
         String orderId = createOrder(sku, 6);
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/transfer-orders/{id}/short-close", orderId))
@@ -283,7 +283,7 @@ class TransferOrderShortCloseIT extends BaseContractIntegrationTest {
     @DisplayName("short-close on a fully RECEIVED order returns 409 (terminal, no remainder)")
     void shortClose_onFullyReceived_returns409() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 10);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("10"));
         String orderId = createOrder(sku, 6);
         dispatch(orderId);
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/transfer-orders/{id}/receive", orderId)))
@@ -300,7 +300,7 @@ class TransferOrderShortCloseIT extends BaseContractIntegrationTest {
     @DisplayName("missing disposition, reason, or notes each return 400")
     void shortClose_missingMandatoryFields_returns400() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 10);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("10"));
         String orderId = createOrder(sku, 6);
         dispatch(orderId);
 
@@ -325,7 +325,7 @@ class TransferOrderShortCloseIT extends BaseContractIntegrationTest {
     @DisplayName("RETURNED_TO_SOURCE against a no-longer-eligible source returns 422 and rolls back")
     void shortClose_returnedToIneligibleSource_returns422() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 10);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("10"));
         String orderId = createOrder(sku, 6);
         dispatch(orderId);
         LocationRefEntity source =
@@ -352,7 +352,7 @@ class TransferOrderShortCloseIT extends BaseContractIntegrationTest {
     @DisplayName("short-close without inventory:transfer:short_close is rejected with 403")
     void shortCloseWithoutPermission_returns403() throws Exception {
         String sku = uniqueSku();
-        seedOnHand(sku, SOURCE_SITE, 10);
+        seedOnHand(sku, SOURCE_SITE, new BigDecimal("10"));
         String orderId = createOrder(sku, 6);
         dispatch(orderId);
 
@@ -383,7 +383,7 @@ class TransferOrderShortCloseIT extends BaseContractIntegrationTest {
                 .build());
     }
 
-    private void seedOnHand(String sku, UUID locationId, int quantity) {
+    private void seedOnHand(String sku, UUID locationId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .locationId(locationId)
@@ -415,7 +415,7 @@ class TransferOrderShortCloseIT extends BaseContractIntegrationTest {
                 .andExpect(status().isOk());
     }
 
-    private void receive(String orderId, UUID lineId, int quantity) throws Exception {
+    private void receive(String orderId, UUID lineId, BigDecimal quantity) throws Exception {
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/transfer-orders/{id}/receive", orderId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"lines\":[{\"lineId\":\"" + lineId + "\",\"quantity\":" + quantity + "}]}"))
@@ -455,24 +455,24 @@ class TransferOrderShortCloseIT extends BaseContractIntegrationTest {
                 .isEqualTo(sourceOnHand + destinationInTransit + destinationOnHand);
     }
 
-    private long totalAcrossAllKeys(String sku) {
+    private BigDecimal totalAcrossAllKeys(String sku) {
         return summaryRepository.findByStockItemId(sku).stream()
-                .mapToLong(row -> row.getOnHand() + row.getInTransitQty())
-                .sum();
+                .map(row -> row.getOnHand().add(row.getInTransitQty()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private long onHand(String sku, UUID locationId) {
+    private BigDecimal onHand(String sku, UUID locationId) {
         return summaryRepository
                 .findByStockItemIdAndLocationId(sku, locationId)
                 .map(row -> row.getOnHand())
-                .orElse(0L);
+                .orElse(BigDecimal.ZERO);
     }
 
-    private long inTransit(String sku, UUID locationId) {
+    private BigDecimal inTransit(String sku, UUID locationId) {
         return summaryRepository
                 .findByStockItemIdAndLocationId(sku, locationId)
                 .map(row -> row.getInTransitQty())
-                .orElse(0L);
+                .orElse(BigDecimal.ZERO);
     }
 
     private long expectedIncoming(String sku) {

@@ -227,8 +227,8 @@ class LotOutboundFlowsIT extends BaseContractIntegrationTest {
         InventoryLot lotB = seedLot(productId, "LOT-CONS-B", Instant.parse("2026-02-02T00:00:00Z"));
         // Consumption posts at the NULL-location key (pre-E2 shape, unchanged) — seed the lot
         // stock there so the walk exercises the exact rows consumption touches.
-        seedLotStock(productId, null, lotA.getLotId(), 5);
-        seedLotStock(productId, null, lotB.getLotId(), 5);
+        seedLotStock(productId, null, lotA.getLotId(), new BigDecimal("5"));
+        seedLotStock(productId, null, lotB.getLotId(), new BigDecimal("5"));
 
         UUID workorderId = UUID.randomUUID();
         PickTaskEntity task = seedPickedTask(productId, 5, lotA.getLotId());
@@ -277,8 +277,8 @@ class LotOutboundFlowsIT extends BaseContractIntegrationTest {
         UUID productId = seedProduct("LOT");
         InventoryLot lotA = seedLot(productId, "LOT-SRC-A", Instant.parse("2026-02-01T00:00:00Z"));
         InventoryLot lotB = seedLot(productId, "LOT-SRC-B", Instant.parse("2026-02-02T00:00:00Z"));
-        seedLotStock(productId, null, lotA.getLotId(), 4);
-        seedLotStock(productId, null, lotB.getLotId(), 4);
+        seedLotStock(productId, null, lotA.getLotId(), new BigDecimal("4"));
+        seedLotStock(productId, null, lotB.getLotId(), new BigDecimal("4"));
 
         UUID workorderId = UUID.randomUUID();
         // Pre-E2 task shape: PICKED but no pickedLotId (e.g. confirmed before E2).
@@ -305,7 +305,7 @@ class LotOutboundFlowsIT extends BaseContractIntegrationTest {
     void returns_reincrementAndReactivate() {
         UUID productId = seedProduct("LOT");
         InventoryLot lot = seedLot(productId, "LOT-RET-A", Instant.parse("2026-03-01T00:00:00Z"));
-        seedLotStock(productId, null, lot.getLotId(), 3);
+        seedLotStock(productId, null, lot.getLotId(), new BigDecimal("3"));
 
         UUID workorderId = UUID.randomUUID();
         PickTaskEntity task = seedPickedTask(productId, 3, lot.getLotId());
@@ -315,19 +315,23 @@ class LotOutboundFlowsIT extends BaseContractIntegrationTest {
                 .isEqualTo(InventoryLotStatus.CONSUMED);
 
         // Tracked return without a lot number → 422 LOT_NUMBER_REQUIRED.
-        ReturnItemsRequest noLot =
-                new ReturnItemsRequest(workorderId, "DAMAGED", List.of(new ReturnItemLine(productId, 2, null, null)));
+        ReturnItemsRequest noLot = new ReturnItemsRequest(
+                workorderId, "DAMAGED", List.of(new ReturnItemLine(productId, new BigDecimal("2"), null, null)));
         assertThatThrownBy(() -> returnService.returnItemsToStock(noLot))
                 .isInstanceOf(LotNumberRequiredException.class);
 
         // Unknown lot → 422 LOT_UNKNOWN (returns never create lots).
         ReturnItemsRequest unknownLot = new ReturnItemsRequest(
-                workorderId, "DAMAGED", List.of(new ReturnItemLine(productId, 2, null, null, "LOT-NOPE")));
+                workorderId,
+                "DAMAGED",
+                List.of(new ReturnItemLine(productId, new BigDecimal("2"), null, null, "LOT-NOPE")));
         assertThatThrownBy(() -> returnService.returnItemsToStock(unknownLot)).isInstanceOf(LotUnknownException.class);
 
         // Valid return against the CONSUMED lot: per-lot row re-increments, lot reactivates.
         returnService.returnItemsToStock(new ReturnItemsRequest(
-                workorderId, "DAMAGED", List.of(new ReturnItemLine(productId, 2, null, null, "LOT-RET-A"))));
+                workorderId,
+                "DAMAGED",
+                List.of(new ReturnItemLine(productId, new BigDecimal("2"), null, null, "LOT-RET-A"))));
         assertThat(perLotOnHand(productId, null, lot.getLotId())).isEqualTo(2);
         assertThat(lotRepository.findById(lot.getLotId()).orElseThrow().getStatus())
                 .isEqualTo(InventoryLotStatus.ACTIVE);
@@ -345,7 +349,7 @@ class LotOutboundFlowsIT extends BaseContractIntegrationTest {
         UUID productId = seedProduct("LOT");
         UUID locationId = UUID.randomUUID();
         InventoryLot lot = seedLot(productId, "LOT-SCRAP-A", Instant.parse("2026-04-01T00:00:00Z"));
-        seedLotStock(productId, locationId, lot.getLotId(), 6);
+        seedLotStock(productId, locationId, lot.getLotId(), new BigDecimal("6"));
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/scraps"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -407,7 +411,8 @@ class LotOutboundFlowsIT extends BaseContractIntegrationTest {
         // No phantom per-lot on-hand: the paired entries net the per-lot row to zero, and the
         // reconciler marks the lot CONSUMED (its stock went straight to the workorder).
         assertThat(summaryRepository.findByLotId(lot.getLotId()))
-                .allMatch(row -> row.getOnHand() == 0 && row.getInTransitQty() == 0);
+                .allMatch(row ->
+                        row.getOnHand().signum() == 0 && row.getInTransitQty().signum() == 0);
         assertThat(lotRepository.findById(lot.getLotId()).orElseThrow().getStatus())
                 .isEqualTo(InventoryLotStatus.CONSUMED);
     }
@@ -423,9 +428,9 @@ class LotOutboundFlowsIT extends BaseContractIntegrationTest {
         InventoryLot oldest = seedLot(productId, "LOT-FIFO-1", Instant.parse("2026-01-01T00:00:00Z"));
         InventoryLot middle = seedLot(productId, "LOT-FIFO-2", Instant.parse("2026-02-01T00:00:00Z"));
         InventoryLot newest = seedLot(productId, "LOT-FIFO-3", Instant.parse("2026-03-01T00:00:00Z"));
-        seedLotStock(productId, locationId, oldest.getLotId(), 4);
-        seedLotStock(productId, locationId, middle.getLotId(), 4);
-        seedLotStock(productId, locationId, newest.getLotId(), 4);
+        seedLotStock(productId, locationId, oldest.getLotId(), new BigDecimal("4"));
+        seedLotStock(productId, locationId, middle.getLotId(), new BigDecimal("4"));
+        seedLotStock(productId, locationId, newest.getLotId(), new BigDecimal("4"));
 
         assertThat(taskFor(generate(productId)).getSuggestedLotNumber()).isEqualTo("LOT-FIFO-1");
 
@@ -436,7 +441,7 @@ class LotOutboundFlowsIT extends BaseContractIntegrationTest {
 
         // Untracked SKUs get no suggestion.
         UUID untracked = seedProduct("NONE");
-        seedLotStock(untracked, locationId, null, 4);
+        seedLotStock(untracked, locationId, null, new BigDecimal("4"));
         assertThat(taskFor(generate(untracked)).getSuggestedLotNumber()).isNull();
     }
 
@@ -465,7 +470,7 @@ class LotOutboundFlowsIT extends BaseContractIntegrationTest {
     }
 
     /** Posts a lot-tagged GOODS_RECEIPT through the funnel so both summary rows exist. */
-    private void seedLotStock(UUID productId, UUID locationId, UUID lotId, int quantity) {
+    private void seedLotStock(UUID productId, UUID locationId, UUID lotId, BigDecimal quantity) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(productId.toString())
                 .locationId(locationId)
@@ -569,11 +574,11 @@ class LotOutboundFlowsIT extends BaseContractIntegrationTest {
                 + "\",\"reasonCode\":\"" + ScrapReasonCode.DAMAGED.name() + "\"" + lotPart + "}";
     }
 
-    private long perLotOnHand(UUID productId, UUID locationId, UUID lotId) {
+    private BigDecimal perLotOnHand(UUID productId, UUID locationId, UUID lotId) {
         return summaryRepository
                 .findByKey(productId.toString(), locationId, lotId)
                 .map(row -> row.getOnHand())
-                .orElse(0L);
+                .orElse(BigDecimal.ZERO);
     }
 
     private List<InventoryLedgerEntry> entriesOf(UUID productId, InventoryLedgerEventType eventType) {

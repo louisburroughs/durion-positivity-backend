@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Value;
@@ -53,21 +54,21 @@ public class AvailabilityView {
             description = "Net on-hand quantity (sum of affectsOnHand ledger entries)",
             example = "120",
             requiredMode = REQUIRED)
-    int onHandQuantity;
+    BigDecimal onHandQuantity;
 
     /** Net allocated quantity (ALLOCATION_CREATED minus ALLOCATION_RELEASED). */
     @Schema(
             description = "Net allocated quantity (ALLOCATION_CREATED minus ALLOCATION_RELEASED)",
             example = "30",
             requiredMode = REQUIRED)
-    int allocatedQuantity;
+    BigDecimal allocatedQuantity;
 
     /** ATP = onHandQuantity - allocatedQuantity. */
     @Schema(
             description = "Available-to-promise quantity, equal to onHandQuantity minus allocatedQuantity",
             example = "90",
             requiredMode = REQUIRED)
-    int availableToPromiseQuantity;
+    BigDecimal availableToPromiseQuantity;
 
     /** Unit of measure code (e.g. EACH, KG). */
     @Schema(
@@ -89,7 +90,7 @@ public class AvailabilityView {
                             + "Omitted for as-of (historical) requests.",
             example = "25",
             requiredMode = NOT_REQUIRED)
-    Long incomingQty;
+    BigDecimal incomingQty;
 
     /**
      * Open expected demand not yet decremented from on-hand (unallocated reservation remainders +
@@ -102,7 +103,7 @@ public class AvailabilityView {
                             + "in every scope. Omitted for as-of (historical) requests.",
             example = "10",
             requiredMode = NOT_REQUIRED)
-    Long outgoingQty;
+    BigDecimal outgoingQty;
 
     /** Projected availability: onHandQuantity + incomingQty - outgoingQty (Odoo virtual_available). */
     @Schema(
@@ -110,5 +111,5 @@ public class AvailabilityView {
                     + "Omitted for as-of (historical) requests.",
             example = "135",
             requiredMode = NOT_REQUIRED)
-    Long projectedAvailable;
+    BigDecimal projectedAvailable;
 }

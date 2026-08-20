@@ -18,6 +18,7 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.inventory.service.ReservationService;
 import com.positivity.security.common.SecurityContextHelper;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -70,19 +71,20 @@ public class ReservationServiceImpl implements ReservationService {
 
         ReservationEntity reservation = allocation.getReservation();
         UUID stockItemId = reservation.getStockItemId();
-        int netOnHand = calculateNetOnHand(stockItemId);
+        BigDecimal netOnHand = calculateNetOnHand(stockItemId);
 
-        int existingHard =
+        BigDecimal existingHard =
                 allocationRepository.findByReservationAndAllocationState(reservation, AllocationState.HARD).stream()
-                        .mapToInt(AllocationEntity::getAllocatedQuantity)
-                        .sum();
+                        .map(AllocationEntity::getAllocatedQuantity)
+                        .map(Quantities::nz)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         if (allocation.getAllocationState() == AllocationState.HARD) {
-            existingHard -= allocation.getAllocatedQuantity();
+            existingHard = existingHard.subtract(Quantities.nz(allocation.getAllocatedQuantity()));
         }
 
-        int availableAtp = netOnHand - existingHard;
-        if (availableAtp < allocation.getAllocatedQuantity()) {
+        BigDecimal availableAtp = netOnHand.subtract(existingHard);
+        if (Quantities.lt(availableAtp, allocation.getAllocatedQuantity())) {
             reservation.setStatus(ReservationStatus.BACKORDERED);
             reservationRepository.save(reservation);
             throw new InsufficientAtpException(allocationId, allocation.getAllocatedQuantity(), availableAtp);
@@ -120,12 +122,13 @@ public class ReservationServiceImpl implements ReservationService {
         }
 
         List<AllocationEntity> allocations = allocationRepository.findByReservation(reservation);
-        int totalAllocated = allocations.stream()
-                .mapToInt(AllocationEntity::getAllocatedQuantity)
-                .sum();
+        BigDecimal totalAllocated = allocations.stream()
+                .map(AllocationEntity::getAllocatedQuantity)
+                .map(Quantities::nz)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         reservation.setAllocatedQuantity(totalAllocated);
         reservation.setStatus(
-                totalAllocated >= reservation.getRequiredQuantity()
+                Quantities.gte(totalAllocated, reservation.getRequiredQuantity())
                         ? ReservationStatus.FULFILLED
                         : ReservationStatus.PARTIALLY_FULFILLED);
         reservationRepository.save(reservation);
@@ -165,15 +168,17 @@ public class ReservationServiceImpl implements ReservationService {
         allocationRepository.saveAll(allocations);
 
         if (!ledgerReleasable.isEmpty()) {
-            int netOnHand = calculateNetOnHand(reservation.getStockItemId());
+            BigDecimal netOnHand = calculateNetOnHand(reservation.getStockItemId());
             for (AllocationEntity allocation : ledgerReleasable) {
                 // CAP-218 #662: partial consumption may already have released
                 // part of this allocation; release only the remainder so the
                 // per-allocation CREATED - RELEASED invariant holds.
-                int alreadyReleased = inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
-                        allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED);
-                int remaining = allocation.getAllocatedQuantity() - alreadyReleased;
-                if (remaining > 0) {
+                BigDecimal alreadyReleased =
+                        Quantities.nz(inventoryLedgerEntryRepository.sumChangeBySourceTransactionIdAndEventType(
+                                allocation.getAllocationId().toString(), InventoryLedgerEventType.ALLOCATION_RELEASED));
+                BigDecimal remaining =
+                        Quantities.nz(allocation.getAllocatedQuantity()).subtract(alreadyReleased);
+                if (Quantities.isPositive(remaining)) {
                     writeAllocationLedgerEntry(
                             InventoryLedgerEventType.ALLOCATION_RELEASED,
                             allocation,
@@ -184,7 +189,7 @@ public class ReservationServiceImpl implements ReservationService {
             }
         }
 
-        reservation.setAllocatedQuantity(0);
+        reservation.setAllocatedQuantity(BigDecimal.ZERO);
         reservation.setStatus(ReservationStatus.CANCELLED);
         reservationRepository.save(reservation);
     }
@@ -210,8 +215,8 @@ public class ReservationServiceImpl implements ReservationService {
             InventoryLedgerEventType eventType,
             AllocationEntity allocation,
             UUID stockItemId,
-            int netOnHand,
-            int quantity) {
+            BigDecimal netOnHand,
+            BigDecimal quantity) {
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
                 .stockItemId(stockItemId.toString())
                 .eventType(eventType)
@@ -272,9 +277,8 @@ public class ReservationServiceImpl implements ReservationService {
         return reservationRepository.save(reservation);
     }
 
-    private int calculateNetOnHand(UUID stockItemId) {
-        Integer onHand = inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId);
-        return onHand == null ? 0 : onHand;
+    private BigDecimal calculateNetOnHand(UUID stockItemId) {
+        return Quantities.nz(inventoryLedgerEntryRepository.calculateOnHandQuantity(stockItemId));
     }
 
     private ReservationResponse toResponse(ReservationEntity reservation) {

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,8 +39,8 @@ class InventoryLedgerEntryRepositoryTest {
                 .stockItemId(stockItemId)
                 .locationId(locationId)
                 .eventType(eventType)
-                .changeInQuantity(changeInQuantity)
-                .quantityAfter(0)
+                .changeInQuantity(BigDecimal.valueOf(changeInQuantity))
+                .quantityAfter(new BigDecimal("0"))
                 .transactionUserId("test-user")
                 .timestamp(now)
                 .createdAt(now)
@@ -61,17 +62,19 @@ class InventoryLedgerEntryRepositoryTest {
         seed(SKU_B, locationB, InventoryLedgerEventType.ADJUSTMENT_OUT, -2);
 
         Set<InventoryLedgerEventType> onHandTypes = InventoryLedgerEventType.onHandAffectingTypes();
-        Map<UUID, Long> result =
+        Map<UUID, BigDecimal> result =
                 repository.sumQuantityByLocationChunked(List.of(locationA, locationB, locationC), onHandTypes);
 
-        assertThat(result).containsOnly(Map.entry(locationA, 6L), Map.entry(locationB, 5L));
+        assertThat(result).hasSize(2);
+        assertThat(result.get(locationA)).isEqualByComparingTo("6");
+        assertThat(result.get(locationB)).isEqualByComparingTo("5");
         assertThat(result).doesNotContainKey(locationC);
 
         // grouped result matches the existing single-location aggregate for the same data
-        assertThat(result.get(locationA).intValue())
-                .isEqualTo(repository.calculateOnHandQuantityAtLocation(locationA, onHandTypes));
-        assertThat(result.get(locationB).intValue())
-                .isEqualTo(repository.calculateOnHandQuantityAtLocation(locationB, onHandTypes));
+        assertThat(result.get(locationA))
+                .isEqualByComparingTo(repository.calculateOnHandQuantityAtLocation(locationA, onHandTypes));
+        assertThat(result.get(locationB))
+                .isEqualByComparingTo(repository.calculateOnHandQuantityAtLocation(locationB, onHandTypes));
     }
 
     @Test
@@ -85,10 +88,12 @@ class InventoryLedgerEntryRepositoryTest {
         seed(SKU_B, locationA, InventoryLedgerEventType.GOODS_RECEIPT, 50);
         seed(SKU_A, locationB, InventoryLedgerEventType.GOODS_RECEIPT, 2);
 
-        Map<UUID, Long> result = repository.sumQuantityByLocationForSkuChunked(
+        Map<UUID, BigDecimal> result = repository.sumQuantityByLocationForSkuChunked(
                 SKU_A, List.of(locationA, locationB), InventoryLedgerEventType.onHandAffectingTypes());
 
-        assertThat(result).containsOnly(Map.entry(locationA, 7L), Map.entry(locationB, 2L));
+        assertThat(result).hasSize(2);
+        assertThat(result.get(locationA)).isEqualByComparingTo("7");
+        assertThat(result.get(locationB)).isEqualByComparingTo("2");
     }
 
     @Test
@@ -127,10 +132,12 @@ class InventoryLedgerEntryRepositoryTest {
         locationIds.add(lastLocation); // id #1001, lands in the second chunk
         assertThat(locationIds).hasSize(1001);
 
-        Map<UUID, Long> result =
+        Map<UUID, BigDecimal> result =
                 repository.sumQuantityByLocationChunked(locationIds, InventoryLedgerEventType.onHandAffectingTypes());
 
-        assertThat(result).containsOnly(Map.entry(firstLocation, 11L), Map.entry(lastLocation, 20L));
+        assertThat(result).hasSize(2);
+        assertThat(result.get(firstLocation)).isEqualByComparingTo("11");
+        assertThat(result.get(lastLocation)).isEqualByComparingTo("20");
     }
 
     @Test
@@ -146,25 +153,27 @@ class InventoryLedgerEntryRepositoryTest {
         seed(SKU_A, locationB, InventoryLedgerEventType.ALLOCATION_CREATED, 4);
         seed(SKU_A, locationC, InventoryLedgerEventType.GOODS_RECEIPT, 9); // no allocations
 
-        Map<UUID, Long> result =
+        Map<UUID, BigDecimal> result =
                 repository.calculateOutstandingAllocationsByLocation(List.of(locationA, locationB, locationC));
 
         // single-location semantics: sum(ALLOCATION_CREATED) - sum(ALLOCATION_RELEASED)
-        assertThat(result).containsOnly(Map.entry(locationA, 6L), Map.entry(locationB, 4L));
+        assertThat(result).hasSize(2);
+        assertThat(result.get(locationA)).isEqualByComparingTo("6");
+        assertThat(result.get(locationB)).isEqualByComparingTo("4");
         assertThat(result).doesNotContainKey(locationC);
 
         // cross-check against the same ledger entries the single-location path reads
         List<InventoryLedgerEntry> locationAEntries = repository.findByLocationIdAndEventTypeIn(
                 locationA,
                 List.of(InventoryLedgerEventType.ALLOCATION_CREATED, InventoryLedgerEventType.ALLOCATION_RELEASED));
-        long created = locationAEntries.stream()
+        BigDecimal created = locationAEntries.stream()
                 .filter(entry -> entry.getEventType() == InventoryLedgerEventType.ALLOCATION_CREATED)
-                .mapToLong(InventoryLedgerEntry::getChangeInQuantity)
-                .sum();
-        long released = locationAEntries.stream()
+                .map(InventoryLedgerEntry::getChangeInQuantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal released = locationAEntries.stream()
                 .filter(entry -> entry.getEventType() == InventoryLedgerEventType.ALLOCATION_RELEASED)
-                .mapToLong(InventoryLedgerEntry::getChangeInQuantity)
-                .sum();
-        assertThat(result.get(locationA)).isEqualTo(created - released);
+                .map(InventoryLedgerEntry::getChangeInQuantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(result.get(locationA)).isEqualByComparingTo(created.subtract(released));
     }
 }

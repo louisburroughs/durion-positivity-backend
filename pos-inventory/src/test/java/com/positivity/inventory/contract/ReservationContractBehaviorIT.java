@@ -15,6 +15,7 @@ import com.positivity.inventory.internal.dto.reservation.ReservationResponse;
 import com.positivity.inventory.internal.enums.ReservationStatus;
 import com.positivity.inventory.internal.exception.InsufficientAtpException;
 import com.positivity.inventory.service.ReservationService;
+import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -81,16 +82,16 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
                 .reservationId(reservationId)
                 .workorderLineId(workorderLineId)
                 .stockItemId(stockItemId)
-                .requiredQuantity(5)
-                .allocatedQuantity(5)
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("5"))
                 .status(ReservationStatus.PENDING.name())
                 .build();
 
         when(reservationService.createOrUpdateReservation(any(CreateReservationRequest.class)))
                 .thenReturn(mockResponse);
 
-        String requestBody =
-                objectMapper.writeValueAsString(new CreateReservationRequest(workorderLineId, stockItemId, 5));
+        String requestBody = objectMapper.writeValueAsString(
+                new CreateReservationRequest(workorderLineId, stockItemId, new BigDecimal("5")));
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/reservations"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -125,8 +126,8 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
                 .reservationId(reservationId)
                 .workorderLineId(workorderLineId)
                 .stockItemId(stockItemId)
-                .requiredQuantity(5)
-                .allocatedQuantity(5)
+                .requiredQuantity(new BigDecimal("5"))
+                .allocatedQuantity(new BigDecimal("5"))
                 .status(ReservationStatus.FULFILLED.name())
                 .build();
 
@@ -215,7 +216,7 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
         UUID allocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         when(reservationService.promoteToHard(eq(allocationId), any(PromoteAllocationRequest.class)))
-                .thenThrow(new InsufficientAtpException(allocationId, 10, 3));
+                .thenThrow(new InsufficientAtpException(allocationId, new BigDecimal("10"), new BigDecimal("3")));
 
         String requestBody = objectMapper.writeValueAsString(new PromoteAllocationRequest(
                 UUID.fromString("00000000-0000-0000-0000-0000000000aa"), "urgent hardening"));
@@ -242,8 +243,8 @@ class ReservationContractBehaviorIT extends BaseContractIntegrationTest {
         // Issue #29: authenticated user + unrelated authority must yield 403
         UUID workorderLineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID stockItemId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        String requestBody =
-                objectMapper.writeValueAsString(new CreateReservationRequest(workorderLineId, stockItemId, 5));
+        String requestBody = objectMapper.writeValueAsString(
+                new CreateReservationRequest(workorderLineId, stockItemId, new BigDecimal("5")));
 
         mockMvc.perform(post("/v1/inventory/reservations")
                         .header("X-User", "test-user")

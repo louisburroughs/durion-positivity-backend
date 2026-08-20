@@ -7,6 +7,7 @@ import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -35,8 +36,9 @@ public class ExtStorageLocationOnHandReplica {
     @Column(name = "storage_location_id", nullable = false)
     private UUID storageLocationId;
 
-    @Column(name = "on_hand_quantity", nullable = false)
-    private int onHandQuantity;
+    /** Decimal since ADR-0055 (#1414); compare with {@code compareTo}, never {@code equals}. */
+    @Column(name = "on_hand_quantity", nullable = false, precision = 19, scale = 4)
+    private BigDecimal onHandQuantity;
 
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;

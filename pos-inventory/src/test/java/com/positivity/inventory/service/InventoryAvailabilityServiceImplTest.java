@@ -17,6 +17,7 @@ import com.positivity.inventory.internal.repository.InventoryStockSummaryReposit
 import com.positivity.inventory.internal.service.AsOfQueryGuard;
 import com.positivity.inventory.internal.service.ForecastQuantityService;
 import com.positivity.inventory.internal.service.InventoryAvailabilityServiceImpl;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,9 +58,9 @@ class InventoryAvailabilityServiceImplTest {
         // Default forecast: projected = onHand (no open supply/demand). Individual tests
         // override where forecast behavior is asserted.
         Mockito.lenient()
-                .when(forecastQuantityService.forecast(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.anyLong()))
-                .thenAnswer(invocation ->
-                        new ForecastQuantityService.ForecastQuantities(0L, 0L, invocation.getArgument(3, Long.class)));
+                .when(forecastQuantityService.forecast(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenAnswer(invocation -> new ForecastQuantityService.ForecastQuantities(
+                        BigDecimal.ZERO, BigDecimal.ZERO, invocation.getArgument(3, BigDecimal.class)));
         Mockito.lenient()
                 .when(storageLocationReplicaRepository.findById(Mockito.any()))
                 .thenReturn(java.util.Optional.empty());
@@ -69,6 +70,8 @@ class InventoryAvailabilityServiceImplTest {
                 forecastQuantityService,
                 asOfQueryGuard,
                 new com.positivity.inventory.internal.service.ForecastSiteResolver(storageLocationReplicaRepository),
+                new com.positivity.inventory.internal.service.QuantityScaleGuard(
+                        org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
                 java.time.Clock.systemUTC());
     }
 
@@ -104,8 +107,8 @@ class InventoryAvailabilityServiceImplTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().getLocationId()).isEqualTo(LOC_1);
-        assertThat(result.getFirst().getOnHandQuantity()).isEqualTo(2);
-        assertThat(result.getFirst().getAvailableToPromiseQuantity()).isEqualTo(-3);
+        assertThat(result.getFirst().getOnHandQuantity()).isEqualByComparingTo("2");
+        assertThat(result.getFirst().getAvailableToPromiseQuantity()).isEqualByComparingTo("-3");
     }
 
     @Test
@@ -120,9 +123,9 @@ class InventoryAvailabilityServiceImplTest {
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getLocationId()).isEqualTo(LOC_1);
-        assertThat(result.get(0).getOnHandQuantity()).isEqualTo(40);
+        assertThat(result.get(0).getOnHandQuantity()).isEqualByComparingTo("40");
         assertThat(result.get(1).getLocationId()).isEqualTo(LOC_2);
-        assertThat(result.get(1).getOnHandQuantity()).isEqualTo(60);
+        assertThat(result.get(1).getOnHandQuantity()).isEqualByComparingTo("60");
     }
 
     @Test
@@ -151,8 +154,8 @@ class InventoryAvailabilityServiceImplTest {
         List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
 
         assertThat(result).hasSize(1);
-        assertThat(result.getFirst().getOnHandQuantity()).isEqualTo(100);
-        assertThat(result.getFirst().getAvailableToPromiseQuantity()).isEqualTo(50);
+        assertThat(result.getFirst().getOnHandQuantity()).isEqualByComparingTo("100");
+        assertThat(result.getFirst().getAvailableToPromiseQuantity()).isEqualByComparingTo("50");
     }
 
     @Test
@@ -175,9 +178,9 @@ class InventoryAvailabilityServiceImplTest {
 
         AvailabilityView result = service.queryAvailability(productSku, LOC_1, SLOC_A, null);
 
-        assertThat(result.getOnHandQuantity()).isEqualTo(5);
-        assertThat(result.getAllocatedQuantity()).isEqualTo(2);
-        assertThat(result.getAvailableToPromiseQuantity()).isEqualTo(3);
+        assertThat(result.getOnHandQuantity()).isEqualByComparingTo("5");
+        assertThat(result.getAllocatedQuantity()).isEqualByComparingTo("2");
+        assertThat(result.getAvailableToPromiseQuantity()).isEqualByComparingTo("3");
         assertThat(result.getStorageLocationId()).isEqualTo(SLOC_A);
         assertThat(result.getUnitOfMeasure()).isEqualTo("EACH");
     }
@@ -193,10 +196,10 @@ class InventoryAvailabilityServiceImplTest {
 
         AvailabilityView result = service.queryAvailability(productSku, LOC_1, null, null);
 
-        assertThat(result.getOnHandQuantity()).isEqualTo(10);
+        assertThat(result.getOnHandQuantity()).isEqualByComparingTo("10");
         // Per ADR-0001, allocatedQuantity counts hard allocations only, never reservations.
-        assertThat(result.getAllocatedQuantity()).isEqualTo(2);
-        assertThat(result.getAvailableToPromiseQuantity()).isEqualTo(8);
+        assertThat(result.getAllocatedQuantity()).isEqualByComparingTo("2");
+        assertThat(result.getAvailableToPromiseQuantity()).isEqualByComparingTo("8");
         assertThat(result.getStorageLocationId()).isNull();
         assertThat(result.getUnitOfMeasure()).isEqualTo("EA");
     }
@@ -210,17 +213,17 @@ class InventoryAvailabilityServiceImplTest {
                 .thenReturn(List.of(summary(productSku, LOC_1, 10, 2, 0)));
         when(stockSummaryRepository.sumExpiredActiveLotOnHand(
                         eq(productSku), eq(LOC_1), any(java.time.LocalDate.class)))
-                .thenReturn(4L);
+                .thenReturn(new BigDecimal("4"));
         when(inventoryLedgerEntryRepository.findUnitsOfMeasureByStockItemAtLocation(
                         eq(productSku), eq(LOC_1), any(Pageable.class)))
                 .thenReturn(List.of("EA"));
 
         AvailabilityView result = service.queryAvailability(productSku, LOC_1, null, null);
 
-        assertThat(result.getOnHandQuantity()).isEqualTo(10);
-        assertThat(result.getAllocatedQuantity()).isEqualTo(2);
+        assertThat(result.getOnHandQuantity()).isEqualByComparingTo("10");
+        assertThat(result.getAllocatedQuantity()).isEqualByComparingTo("2");
         // 10 onHand − 2 allocated − 4 expired = 4
-        assertThat(result.getAvailableToPromiseQuantity()).isEqualTo(4);
+        assertThat(result.getAvailableToPromiseQuantity()).isEqualByComparingTo("4");
     }
 
     @Test
@@ -236,9 +239,9 @@ class InventoryAvailabilityServiceImplTest {
 
         AvailabilityView result = service.queryAvailability(productSku, null, null, null);
 
-        assertThat(result.getOnHandQuantity()).isEqualTo(12);
-        assertThat(result.getAllocatedQuantity()).isEqualTo(3);
-        assertThat(result.getAvailableToPromiseQuantity()).isEqualTo(9);
+        assertThat(result.getOnHandQuantity()).isEqualByComparingTo("12");
+        assertThat(result.getAllocatedQuantity()).isEqualByComparingTo("3");
+        assertThat(result.getAvailableToPromiseQuantity()).isEqualByComparingTo("9");
     }
 
     @Test
@@ -262,18 +265,19 @@ class InventoryAvailabilityServiceImplTest {
         UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(stockSummaryRepository.findByStockItemId(productId.toString()))
                 .thenReturn(List.of(summary(productId.toString(), LOC_1, 100, 20, 0)));
-        when(forecastQuantityService.forecast(productId.toString(), LOC_1, null, 100L))
-                .thenReturn(new ForecastQuantityService.ForecastQuantities(25L, 10L, 115L));
+        when(forecastQuantityService.forecast(productId.toString(), LOC_1, null, new BigDecimal("100")))
+                .thenReturn(new ForecastQuantityService.ForecastQuantities(
+                        new BigDecimal("25"), new BigDecimal("10"), new BigDecimal("115")));
 
         List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId);
 
         assertThat(result).hasSize(1);
-        assertThat(result.getFirst().getIncomingQty()).isEqualTo(25L);
-        assertThat(result.getFirst().getOutgoingQty()).isEqualTo(10L);
-        assertThat(result.getFirst().getProjectedAvailable()).isEqualTo(115L);
+        assertThat(result.getFirst().getIncomingQty()).isEqualByComparingTo("25");
+        assertThat(result.getFirst().getOutgoingQty()).isEqualByComparingTo("10");
+        assertThat(result.getFirst().getProjectedAvailable()).isEqualByComparingTo("115");
         // Existing field semantics unchanged.
-        assertThat(result.getFirst().getOnHandQuantity()).isEqualTo(100);
-        assertThat(result.getFirst().getAvailableToPromiseQuantity()).isEqualTo(80);
+        assertThat(result.getFirst().getOnHandQuantity()).isEqualByComparingTo("100");
+        assertThat(result.getFirst().getAvailableToPromiseQuantity()).isEqualByComparingTo("80");
     }
 
     @Test
@@ -282,14 +286,15 @@ class InventoryAvailabilityServiceImplTest {
         java.time.Instant horizon = java.time.Instant.parse("2026-08-01T00:00:00Z");
         when(stockSummaryRepository.findByStockItemId(productId.toString()))
                 .thenReturn(List.of(summary(productId.toString(), LOC_1, 40, 0, 0)));
-        when(forecastQuantityService.forecast(productId.toString(), LOC_1, horizon, 40L))
-                .thenReturn(new ForecastQuantityService.ForecastQuantities(5L, 0L, 45L));
+        when(forecastQuantityService.forecast(productId.toString(), LOC_1, horizon, new BigDecimal("40")))
+                .thenReturn(new ForecastQuantityService.ForecastQuantities(
+                        new BigDecimal("5"), new BigDecimal("0"), new BigDecimal("45")));
 
         List<LocationAvailabilityDto> result = service.getAvailabilityByProduct(productId, horizon);
 
-        assertThat(result.getFirst().getIncomingQty()).isEqualTo(5L);
-        assertThat(result.getFirst().getProjectedAvailable()).isEqualTo(45L);
-        verify(forecastQuantityService).forecast(productId.toString(), LOC_1, horizon, 40L);
+        assertThat(result.getFirst().getIncomingQty()).isEqualByComparingTo("5");
+        assertThat(result.getFirst().getProjectedAvailable()).isEqualByComparingTo("45");
+        verify(forecastQuantityService).forecast(productId.toString(), LOC_1, horizon, new BigDecimal("40"));
     }
 
     @Test
@@ -300,17 +305,18 @@ class InventoryAvailabilityServiceImplTest {
         when(inventoryLedgerEntryRepository.findUnitsOfMeasureByStockItemAtLocation(
                         eq(productSku), eq(LOC_1), any(Pageable.class)))
                 .thenReturn(List.of());
-        when(forecastQuantityService.forecast(productSku, LOC_1, null, 10L))
-                .thenReturn(new ForecastQuantityService.ForecastQuantities(7L, 3L, 14L));
+        when(forecastQuantityService.forecast(productSku, LOC_1, null, new BigDecimal("10")))
+                .thenReturn(new ForecastQuantityService.ForecastQuantities(
+                        new BigDecimal("7"), new BigDecimal("3"), new BigDecimal("14")));
 
         AvailabilityView result = service.queryAvailability(productSku, LOC_1, null, null);
 
-        assertThat(result.getIncomingQty()).isEqualTo(7L);
-        assertThat(result.getOutgoingQty()).isEqualTo(3L);
-        assertThat(result.getProjectedAvailable()).isEqualTo(14L);
+        assertThat(result.getIncomingQty()).isEqualByComparingTo("7");
+        assertThat(result.getOutgoingQty()).isEqualByComparingTo("3");
+        assertThat(result.getProjectedAvailable()).isEqualByComparingTo("14");
         // Existing field semantics unchanged.
-        assertThat(result.getOnHandQuantity()).isEqualTo(10);
-        assertThat(result.getAvailableToPromiseQuantity()).isEqualTo(8);
+        assertThat(result.getOnHandQuantity()).isEqualByComparingTo("10");
+        assertThat(result.getAvailableToPromiseQuantity()).isEqualByComparingTo("8");
     }
 
     private InventoryStockSummary summary(
@@ -318,10 +324,10 @@ class InventoryAvailabilityServiceImplTest {
         return InventoryStockSummary.builder()
                 .stockItemId(stockItemId)
                 .locationId(locationId)
-                .onHand(onHand)
-                .allocated(allocated)
-                .reserved(reserved)
-                .atp(onHand - allocated)
+                .onHand(BigDecimal.valueOf(onHand))
+                .allocated(BigDecimal.valueOf(allocated))
+                .reserved(BigDecimal.valueOf(reserved))
+                .atp(BigDecimal.valueOf(onHand - allocated))
                 .build();
     }
 
@@ -343,7 +349,6 @@ class InventoryAvailabilityServiceImplTest {
 
         service.queryAvailability(sku, null, binId, null);
 
-        verify(forecastQuantityService)
-                .forecast(Mockito.eq(sku), Mockito.eq(siteId), Mockito.isNull(), Mockito.anyLong());
+        verify(forecastQuantityService).forecast(Mockito.eq(sku), Mockito.eq(siteId), Mockito.isNull(), Mockito.any());
     }
 }

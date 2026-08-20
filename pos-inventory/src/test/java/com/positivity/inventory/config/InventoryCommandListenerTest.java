@@ -25,6 +25,7 @@ import com.positivity.inventory.service.ConsumptionService;
 import com.positivity.inventory.service.OutboxReplayService;
 import com.positivity.inventory.service.PickListService;
 import com.positivity.inventory.service.ReservationRequestService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -191,6 +192,37 @@ class InventoryCommandListenerTest {
         verify(pickListService, never()).confirmPickTask(any(), any(), any(), any(), anyInt());
         verify(replayService, never()).replaySince(any());
         verify(consumptionService, never()).consumePickedItems(any());
+    }
+
+    @Test
+    @DisplayName("a reservation-request command carries its quantity's decimals through to the handler")
+    void reservationRequestCarriesDecimalQuantity() {
+        // ADR-0055 stage 2 (#1414): the seam between the demand modules and the ledger. The
+        // command payload is JSON, so a listener that read this field as an int would truncate a
+        // divisible product's demand here — after the demand-side gate has already approved it and
+        // before the ledger that can now hold it. Neither side would report anything wrong.
+        listener.onCommand("""
+                {"commandType":"inventory.reservation.request-requested","commandId":"%s",
+                 "payload":{"workorderLineId":"%s","stockItemId":"%s","locationId":"%s",
+                            "requiredQuantity":1.01}}
+                """.formatted(UUID.randomUUID(), WORKORDER_ID, SKU_ID, LOCATION_ID));
+
+        ArgumentCaptor<BigDecimal> quantity = ArgumentCaptor.forClass(BigDecimal.class);
+        verify(reservationRequestHandler)
+                .handle(eq(WORKORDER_ID), eq(null), eq(SKU_ID), quantity.capture(), eq(LOCATION_ID));
+        assertThat(quantity.getValue()).isEqualByComparingTo("1.01");
+    }
+
+    @Test
+    @DisplayName("a reservation-request command for no quantity is ignored, at any scale")
+    void reservationRequestWithZeroQuantityIsIgnored() {
+        listener.onCommand("""
+                {"commandType":"inventory.reservation.request-requested","commandId":"%s",
+                 "payload":{"workorderLineId":"%s","stockItemId":"%s","locationId":"%s",
+                            "requiredQuantity":0.0000}}
+                """.formatted(UUID.randomUUID(), WORKORDER_ID, SKU_ID, LOCATION_ID));
+
+        verify(reservationRequestHandler, never()).handle(any(), any(), any(), any(), any());
     }
 
     @Test

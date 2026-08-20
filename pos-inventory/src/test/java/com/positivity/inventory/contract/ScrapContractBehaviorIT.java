@@ -101,7 +101,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("below-threshold scrap auto-posts SCRAP_OUT, decrements the summary, and queues the fact")
     void belowThresholdScrap_autoPostsAndDecrements() throws Exception {
         String sku = uniqueSku();
-        seedReceipt(sku, 10, new BigDecimal("2.0000"));
+        seedReceipt(sku, new BigDecimal("10"), new BigDecimal("2.0000"));
 
         MvcResult result = mockMvc.perform(withGatewayAuth(post("/v1/inventory/scraps"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -121,7 +121,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
                         .filter(entry -> entry.getEventType() == InventoryLedgerEventType.SCRAP_OUT)
                         .toList();
         assertThat(scrapEntries).hasSize(1);
-        assertThat(scrapEntries.getFirst().getChangeInQuantity()).isEqualTo(-3);
+        assertThat(scrapEntries.getFirst().getChangeInQuantity()).isEqualByComparingTo("-3");
         assertThat(scrapEntries.getFirst().getReasonCode()).isEqualTo("DAMAGED");
         assertThat(scrapEntries.getFirst().getSourceTransactionId()).isEqualTo(scrapId);
 
@@ -141,7 +141,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("above-threshold scrap requires approval, then approve posts SCRAP_OUT")
     void aboveThresholdScrap_requiresApprovalThenPosts() throws Exception {
         String sku = uniqueSku();
-        seedReceipt(sku, 10, new BigDecimal("200.0000"));
+        seedReceipt(sku, new BigDecimal("10"), new BigDecimal("200.0000"));
 
         MvcResult created = mockMvc.perform(withGatewayAuth(post("/v1/inventory/scraps"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -176,7 +176,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("reject leaves stock untouched")
     void rejectScrap_leavesStockUntouched() throws Exception {
         String sku = uniqueSku();
-        seedReceipt(sku, 10, new BigDecimal("200.0000"));
+        seedReceipt(sku, new BigDecimal("10"), new BigDecimal("200.0000"));
 
         MvcResult created = mockMvc.perform(withGatewayAuth(post("/v1/inventory/scraps"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -209,7 +209,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("insufficient on-hand yields the deterministic SCRAP_INSUFFICIENT_STOCK 422 and rolls back")
     void insufficientStock_yieldsGuided422() throws Exception {
         String sku = uniqueSku();
-        seedReceipt(sku, 2, new BigDecimal("2.0000"));
+        seedReceipt(sku, new BigDecimal("2"), new BigDecimal("2.0000"));
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/scraps"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -229,7 +229,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("authorized negative-stock override posts and drives on-hand below zero")
     void authorizedOverride_postsNegative() throws Exception {
         String sku = uniqueSku();
-        seedReceipt(sku, 2, new BigDecimal("2.0000"));
+        seedReceipt(sku, new BigDecimal("2"), new BigDecimal("2.0000"));
 
         mockMvc.perform(withScrapOverrideAuth(post("/v1/inventory/scraps"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -246,7 +246,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("override flag without inventory:adjustment:override is rejected with 403")
     void overrideWithoutPermission_returns403() throws Exception {
         String sku = uniqueSku();
-        seedReceipt(sku, 2, new BigDecimal("2.0000"));
+        seedReceipt(sku, new BigDecimal("2"), new BigDecimal("2.0000"));
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/scraps"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -262,7 +262,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("OTHER reason without notes returns 400")
     void otherWithoutNotes_returns400() throws Exception {
         String sku = uniqueSku();
-        seedReceipt(sku, 10, new BigDecimal("2.0000"));
+        seedReceipt(sku, new BigDecimal("10"), new BigDecimal("2.0000"));
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/scraps"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -284,7 +284,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("list filters by status and returns the scrap document")
     void listScraps_filtersByStatus() throws Exception {
         String sku = uniqueSku();
-        seedReceipt(sku, 10, new BigDecimal("200.0000"));
+        seedReceipt(sku, new BigDecimal("10"), new BigDecimal("200.0000"));
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/scraps"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createBody(sku, 3, "CONTAMINATED", null, false)))
@@ -334,7 +334,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
                 .build());
     }
 
-    private void seedReceipt(String sku, int quantity, BigDecimal unitCost) {
+    private void seedReceipt(String sku, BigDecimal quantity, BigDecimal unitCost) {
         ledgerPostingService.post(InventoryLedgerEntry.builder()
                 .stockItemId(sku)
                 .eventType(InventoryLedgerEventType.GOODS_RECEIPT)
@@ -346,11 +346,11 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
                 .build());
     }
 
-    private long onHand(String sku) {
+    private BigDecimal onHand(String sku) {
         return stockSummaryRepository.findAll().stream()
                 .filter(row -> sku.equals(row.getStockItemId()))
-                .mapToLong(InventoryStockSummary::getOnHand)
-                .sum();
+                .map(InventoryStockSummary::getOnHand)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private String createBody(String sku, int quantity, String reasonCode, String notes, boolean override)

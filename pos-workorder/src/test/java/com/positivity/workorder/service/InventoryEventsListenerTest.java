@@ -224,7 +224,7 @@ class InventoryEventsListenerTest {
         ArgumentCaptor<com.positivity.workorder.internal.entity.ExtInventoryAvailabilityReplica> saved =
                 ArgumentCaptor.forClass(com.positivity.workorder.internal.entity.ExtInventoryAvailabilityReplica.class);
         verify(availability).save(saved.capture());
-        assertThat(saved.getValue().getAvailableToPromiseQuantity()).isEqualTo(7);
+        assertThat(saved.getValue().getAvailableToPromiseQuantity()).isEqualByComparingTo("7");
         assertThat(saved.getValue().getAggregateVersion()).isEqualTo(3L);
     }
 

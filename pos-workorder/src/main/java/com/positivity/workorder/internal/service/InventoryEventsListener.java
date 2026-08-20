@@ -225,7 +225,7 @@ public class InventoryEventsListener {
         }
 
         BigDecimal issued = part.getQuantityIssued() == null ? BigDecimal.ZERO : part.getQuantityIssued();
-        BigDecimal reversed = issued.subtract(BigDecimal.valueOf(outcome.requiredQuantity()));
+        BigDecimal reversed = issued.subtract(outcome.requiredQuantity());
         part.setQuantityIssued(reversed.signum() < 0 ? BigDecimal.ZERO : reversed);
         part.setBackorderId(outcome.backorderId());
         workorderPartRepository.save(part);

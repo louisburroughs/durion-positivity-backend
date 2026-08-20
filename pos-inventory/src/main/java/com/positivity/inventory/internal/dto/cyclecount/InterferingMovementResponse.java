@@ -6,6 +6,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Builder;
@@ -37,10 +38,10 @@ public class InterferingMovementResponse {
             example = "-3",
             requiredMode = REQUIRED)
     @NotNull
-    Integer changeInQuantity;
+    BigDecimal changeInQuantity;
 
     @Schema(description = "Running quantity after this entry was applied", example = "7", requiredMode = NOT_REQUIRED)
-    Integer quantityAfter;
+    BigDecimal quantityAfter;
 
     @Schema(
             description = "Location the entry applies to",
