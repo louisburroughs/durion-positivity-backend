@@ -1,464 +1,24 @@
 openapi: 3.1.0
 info:
-  title: Marketing API
-  description: API for marketing campaigns, message templates, audience binding, send orchestration, and campaign analytics in the POS system
   contact:
-    name: Durion Support Services
     email: platform@durionpos.org
+    name: Durion Support Services
+  description: API for marketing campaigns, message templates, audience binding, send orchestration, and campaign analytics in the POS system
+  title: Marketing API
   version: '1.0'
 servers:
-- url: http://localhost:8098
-  description: Generated server url
+- description: Generated server url
+  url: http://localhost:8098
 tags:
-- name: Marketing Analytics
-  description: Campaign reach, delivery, and attribution analytics
-- name: Marketing Templates
-  description: Channel-specific message templates with token substitution
-- name: Marketing Campaigns
-  description: Campaign definition, lifecycle, audience preview, and dispatch
+- description: Campaign reach, delivery, and attribution analytics
+  name: Marketing Analytics
+- description: Channel-specific message templates with token substitution
+  name: Marketing Templates
+- description: Campaign definition, lifecycle, audience preview, and dispatch
+  name: Marketing Campaigns
 paths:
-  /v1/marketing/templates/{templateId}:
-    get:
-      tags:
-      - Marketing Templates
-      summary: Get Message Template By Id
-      description: 'Returns one message template with its name, channel, audience type, subject, body, and the substitution tokens available to its audience.
-
-        Use this tool when the template id is already known; use listMessageTemplates instead when searching by channel or audience.
-
-        Preconditions: the template must exist.
-
-        Required inputs: templateId (UUID) as a path parameter; there is no request body.
-
-        Emits a MARKETING_TEMPLATE_GET audit event; no marketing state is changed and this is a read-only projection.
-
-        Returns 404 when no template exists for the supplied id.
-
-        '
-      operationId: getMessageTemplateById
-      parameters:
-      - name: templateId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Template returned
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageTemplateResponse'
-        '404':
-          description: Template not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '403':
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-      security:
-      - bearerAuth:
-        - marketing:template:view
-      x-required-permissions:
-      - marketing:template:view
-    put:
-      tags:
-      - Marketing Templates
-      summary: Update Message Template
-      description: 'Updates a template''s name, subject and body, re-validating every {{token}} against the audience''s vocabulary.
-
-        Use this tool to revise wording; do not use createMessageTemplate for a different channel or audience, because channel and audienceType are immutable and changing either requires a new template.
-
-        Preconditions: the template must exist, the channel and audienceType in the body must equal the stored values, and no other template may hold the new name.
-
-        Required inputs: templateId (UUID) path parameter plus the full body (name, channel, audienceType, body); subject is required for EMAIL and discarded for SMS.
-
-        Emits a MARKETING_TEMPLATE_UPDATE event; campaigns already bound to the template pick up the new wording at their next dispatch.
-
-        Returns 404 when the template does not exist, 409 when the name belongs to another template, and 422 when channel or audienceType is changed or the token, subject or SMS length rules fail.
-
-        '
-      operationId: updateMessageTemplate
-      parameters:
-      - name: templateId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        description: Full replacement template; channel and audienceType must match the stored values because both are immutable.
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpsertMessageTemplateRequest'
-            examples:
-              Commercial email template:
-                description: Commercial email template
-                value:
-                  name: Spring fleet email
-                  channel: EMAIL
-                  audienceType: COMMERCIAL
-                  subject: '{{accountName}}, your spring fleet alignment offer'
-                  body: 'Hi {{contactFirstName}}, {{accountName}} qualifies for our spring alignment offer. Use code {{offerCode}} at {{shopName}}. Unsubscribe: {{unsubscribeUrl}}'
-        required: true
-      responses:
-        '200':
-          description: Template updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageTemplateResponse'
-        '404':
-          description: Template not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '409':
-          description: Template name already exists
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '422':
-          description: Invalid token, or an immutable field was changed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '403':
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-      security:
-      - bearerAuth:
-        - marketing:template:manage
-      x-required-permissions:
-      - marketing:template:manage
-    delete:
-      tags:
-      - Marketing Templates
-      summary: Delete Unused Message Template
-      description: 'Permanently deletes a message template that no campaign references.
-
-        Use this tool to retire an unused template; detach it from every campaign first via updateCampaign rather than expecting the delete to cascade.
-
-        Preconditions: the template must exist and must not be referenced as the email or SMS template of any campaign, because a campaign whose template vanished would fail at dispatch across its whole audience.
-
-        Required inputs: templateId (UUID) as a path parameter; there is no request body and no confirmation flag.
-
-        Emits a MARKETING_TEMPLATE_DELETE event; the deletion is irreversible.
-
-        Returns 404 when the template does not exist, and 422 when it is still attached to at least one campaign.
-
-        '
-      operationId: deleteMessageTemplate
-      parameters:
-      - name: templateId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '204':
-          description: Template deleted
-        '404':
-          description: Template not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '422':
-          description: Template is attached to a campaign
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '403':
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-      security:
-      - bearerAuth:
-        - marketing:template:manage
-      x-required-permissions:
-      - marketing:template:manage
-  /v1/marketing/campaigns/{campaignId}:
-    get:
-      tags:
-      - Marketing Campaigns
-      summary: Get Campaign By Id
-      description: 'Returns one campaign''s full definition, including status, channels, bound segment, templates, schedule and delivery window.
-
-        Use this tool when the campaign id is already known; use listCampaigns instead when searching by status or program.
-
-        Preconditions: the campaign must exist.
-
-        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
-
-        Emits a MARKETING_CAMPAIGN_GET audit event; no marketing state is changed and this is a read-only projection.
-
-        Returns 404 when no campaign exists for the supplied id.
-
-        '
-      operationId: getCampaignById
-      parameters:
-      - name: campaignId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Campaign returned
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CampaignResponse'
-        '404':
-          description: Campaign not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '403':
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-      security:
-      - bearerAuth:
-        - marketing:campaign:view
-      x-required-permissions:
-      - marketing:campaign:view
-    put:
-      tags:
-      - Marketing Campaigns
-      summary: Update Draft Campaign
-      description: 'Replaces the definition of a DRAFT campaign, including its code, channels, segment, templates, schedule and delivery window.
-
-        Use this tool to revise a campaign before it is scheduled; do not use createCampaign, which makes a new campaign, and use the lifecycle tools (scheduleCampaign, pauseCampaign, cancelCampaign) rather than this one to change status.
-
-        Preconditions: the campaign must exist and still be in DRAFT, since once dispatch may have begun the definition is frozen; audienceType must equal the stored value because it is immutable.
-
-        Required inputs: campaignId (UUID) path parameter plus the full replacement body (code, name, audienceType, channels); scheduleType defaults to IMMEDIATE when omitted, and omitted optional fields are cleared rather than preserved.
-
-        Emits a MARKETING_CAMPAIGN_UPDATE event; no recipients are contacted.
-
-        Returns 404 when the campaign does not exist, 409 when the code belongs to another campaign, and 422 when the campaign is no longer editable, audienceType is changed, or the schedule and window fields are inconsistent.
-
-        '
-      operationId: updateCampaign
-      parameters:
-      - name: campaignId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        description: Full replacement campaign definition; audienceType must match the stored value, and omitted optional fields are cleared.
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpsertCampaignRequest'
-            examples:
-              Scheduled commercial campaign:
-                description: Scheduled commercial campaign
-                value:
-                  code: SPRING-FLEET-2026
-                  name: Spring fleet alignment push
-                  description: Alignment offer for commercial fleet accounts
-                  audienceType: COMMERCIAL
-                  campaignProgramId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
-                  channels:
-                  - EMAIL
-                  - SMS
-                  segmentId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
-                  promotionOfferId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
-                  catalogFocusRef: service:alignment
-                  windowStart: 2026-03-01 00:00:00+00:00
-                  windowEnd: 2026-03-31 23:59:59+00:00
-                  scheduleType: SCHEDULED
-                  scheduledAt: 2026-03-02 14:00:00+00:00
-                  emailTemplateId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
-                  smsTemplateId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a05
-        required: true
-      responses:
-        '200':
-          description: Campaign updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CampaignResponse'
-        '404':
-          description: Campaign not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '409':
-          description: Campaign code already exists
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '422':
-          description: Campaign is no longer editable, or an immutable field was changed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '403':
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-      security:
-      - bearerAuth:
-        - marketing:campaign:edit
-      x-required-permissions:
-      - marketing:campaign:edit
-  /v1/marketing/templates:
-    get:
-      tags:
-      - Marketing Templates
-      summary: List Message Templates
-      description: 'Lists message templates ordered by name, optionally filtered by delivery channel and audience type.
-
-        Use this tool when browsing templates or finding one to attach to a campaign; do not use getMessageTemplateById, which requires a known template id and returns exactly one template.
-
-        Preconditions: none; an empty result simply means no template matches the filters.
-
-        Required inputs: none; channel (EMAIL or SMS) and audienceType (COMMERCIAL or INDIVIDUAL) are optional query filters that combine when both are supplied.
-
-        Emits a MARKETING_TEMPLATE_LIST audit event; no marketing state is changed.
-
-        Returns 200 with an empty array when nothing matches, so an empty result is not an error condition.
-
-        '
-      operationId: listMessageTemplates
-      parameters:
-      - name: channel
-        in: query
-        required: false
-        schema:
-          type: string
-          enum:
-          - EMAIL
-          - SMS
-      - name: audienceType
-        in: query
-        required: false
-        schema:
-          type: string
-          enum:
-          - COMMERCIAL
-          - INDIVIDUAL
-      responses:
-        '200':
-          description: Templates returned
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/MessageTemplateResponse'
-        '403':
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-      security:
-      - bearerAuth:
-        - marketing:template:view
-      x-required-permissions:
-      - marketing:template:view
-    post:
-      tags:
-      - Marketing Templates
-      summary: Create Message Template
-      description: 'Creates a channel-specific message template whose {{token}} placeholders are validated against the closed vocabulary for its audience at save time, so a typo costs a validation error rather than a batch of broken messages.
-
-        Use this tool when authoring a new template; do not use updateMessageTemplate, which revises an existing template and cannot change its channel or audienceType.
-
-        Preconditions: no template may already use the same name (compared case-insensitively); commercial-only tokens such as accountName are rejected for INDIVIDUAL audiences and vehicle tokens for COMMERCIAL ones.
-
-        Required inputs: name, channel (EMAIL or SMS), audienceType (COMMERCIAL or INDIVIDUAL) and body; subject is required for EMAIL, and for SMS it must be absent and any supplied value is discarded.
-
-        Emits a MARKETING_TEMPLATE_CREATE event; no campaign is affected until the template is attached to one.
-
-        Returns 409 when the name is already in use, and 422 when a token is unknown or outside the audience''s vocabulary, an email template lacks a subject, an SMS template has one, or an SMS body exceeds 320 characters.
-
-        '
-      operationId: createMessageTemplate
-      requestBody:
-        description: 'Template to create: name, channel, audience, subject (EMAIL only) and a body whose {{token}} placeholders must belong to the audience''s vocabulary.'
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpsertMessageTemplateRequest'
-            examples:
-              Commercial email template:
-                description: Commercial email template
-                value:
-                  name: Spring fleet email
-                  channel: EMAIL
-                  audienceType: COMMERCIAL
-                  subject: '{{accountName}}, your spring fleet alignment offer'
-                  body: 'Hi {{contactFirstName}}, {{accountName}} qualifies for our spring alignment offer. Use code {{offerCode}} at {{shopName}}. Unsubscribe: {{unsubscribeUrl}}'
-        required: true
-      responses:
-        '201':
-          description: Template created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageTemplateResponse'
-        '409':
-          description: Template name already exists
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '422':
-          description: Invalid token, missing subject, or SMS body over the segment limit
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '403':
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-      security:
-      - bearerAuth:
-        - marketing:template:manage
-      x-required-permissions:
-      - marketing:template:manage
   /v1/marketing/campaigns:
     get:
-      tags:
-      - Marketing Campaigns
-      summary: List Campaigns
       description: 'Lists marketing campaigns ordered by newest first, optionally filtered by lifecycle status and campaign program.
 
         Use this tool when browsing or searching campaigns; do not use getCampaignById, which requires a known campaign id and returns exactly one campaign.
@@ -474,11 +34,10 @@ paths:
         '
       operationId: listCampaigns
       parameters:
-      - name: status
-        in: query
+      - in: query
+        name: status
         required: false
         schema:
-          type: string
           enum:
           - DRAFT
           - SCHEDULED
@@ -487,36 +46,37 @@ paths:
           - PAUSED
           - CANCELLED
           - CLOSED
-      - name: campaignProgramId
-        in: query
+          type: string
+      - in: query
+        name: campaignProgramId
         required: false
         schema:
-          type: string
           format: uuid
+          type: string
       responses:
         '200':
-          description: Campaigns returned
           content:
             application/json:
               schema:
-                type: array
                 items:
                   $ref: '#/components/schemas/CampaignResponse'
+                type: array
+          description: Campaigns returned
         '403':
-          description: Forbidden - insufficient permissions
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
         - marketing:campaign:view
+      summary: List Campaigns
+      tags:
+      - Marketing Campaigns
       x-required-permissions:
       - marketing:campaign:view
     post:
-      tags:
-      - Marketing Campaigns
-      summary: Create Campaign
       description: 'Creates a marketing campaign in DRAFT status; nothing is targeted or sent until it is scheduled and dispatched.
 
         Use this tool when defining a new campaign; do not use updateCampaign, which edits an existing DRAFT campaign.
@@ -532,350 +92,207 @@ paths:
         '
       operationId: createCampaign
       requestBody:
-        description: 'Campaign definition: code, name, audience, channels, and the optional segment, templates, offer and schedule to attach.'
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/UpsertCampaignRequest'
             examples:
               Scheduled commercial campaign:
                 description: Scheduled commercial campaign
                 value:
-                  code: SPRING-FLEET-2026
-                  name: Spring fleet alignment push
-                  description: Alignment offer for commercial fleet accounts
                   audienceType: COMMERCIAL
                   campaignProgramId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                  catalogFocusRef: service:alignment
                   channels:
                   - EMAIL
                   - SMS
-                  segmentId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                  code: SPRING-FLEET-2026
+                  description: Alignment offer for commercial fleet accounts
+                  emailTemplateId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
+                  name: Spring fleet alignment push
                   promotionOfferId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
-                  catalogFocusRef: service:alignment
-                  windowStart: 2026-03-01 00:00:00+00:00
-                  windowEnd: 2026-03-31 23:59:59+00:00
                   scheduleType: SCHEDULED
                   scheduledAt: 2026-03-02 14:00:00+00:00
-                  emailTemplateId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
+                  segmentId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
                   smsTemplateId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a05
+                  windowEnd: 2026-03-31 23:59:59+00:00
+                  windowStart: 2026-03-01 00:00:00+00:00
+            schema:
+              $ref: '#/components/schemas/UpsertCampaignRequest'
+        description: 'Campaign definition: code, name, audience, channels, and the optional segment, templates, offer and schedule to attach.'
         required: true
       responses:
         '201':
-          description: Campaign created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CampaignResponse'
-        '409':
-          description: Campaign code already exists
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '422':
-          description: Campaign definition is inconsistent
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: Campaign created
         '403':
-          description: Forbidden - insufficient permissions
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Campaign code already exists
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Campaign definition is inconsistent
       security:
       - bearerAuth:
         - marketing:campaign:create
+      summary: Create Campaign
+      tags:
+      - Marketing Campaigns
       x-required-permissions:
       - marketing:campaign:create
-  /v1/marketing/campaigns/{campaignId}/send:
-    post:
-      tags:
-      - Marketing Campaigns
-      summary: Dispatch Campaign To Audience
-      description: 'Materializes the campaign''s resolved audience into one PENDING send row per recipient and channel, moves a SCHEDULED campaign to SENDING, and returns 202 with the queued count while the send worker delivers asynchronously.
+  /v1/marketing/campaigns/{campaignId}:
+    get:
+      description: 'Returns one campaign''s full definition, including status, channels, bound segment, templates, schedule and delivery window.
 
-        Use this tool to start or retry delivery; do not use scheduleCampaign, which only validates readiness, and do not use previewCampaignAudience, which reports reach without queueing anything.
+        Use this tool when the campaign id is already known; use listCampaigns instead when searching by status or program.
 
-        Preconditions: the campaign must exist, be SCHEDULED or SENDING, and have a segment bound; the audience is the last snapshot replicated from pos-customer.
+        Preconditions: the campaign must exist.
 
         Required inputs: campaignId (UUID) as a path parameter; there is no request body.
 
-        Emits a MARKETING_CAMPAIGN_SEND event; the call is idempotent because each recipient-channel pair is unique per campaign, so re-invoking never double-sends, and when no audience snapshot has arrived yet it queues nothing, asynchronously requests resolution from pos-customer, and reports queued 0 for a later retry.
+        Emits a MARKETING_CAMPAIGN_GET audit event; no marketing state is changed and this is a read-only projection.
 
-        Returns 404 when the campaign does not exist, and 422 when it is not SCHEDULED or SENDING or has no segment bound.
-
-        '
-      operationId: dispatchCampaign
-      parameters:
-      - name: campaignId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '202':
-          description: Dispatch accepted
-          content:
-            application/json:
-              schema:
-                type: object
-        '404':
-          description: Campaign not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '422':
-          description: Campaign is not in a dispatchable state
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '503':
-          description: pos-customer unavailable
-        '403':
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-      security:
-      - bearerAuth:
-        - marketing:campaign:send
-      x-required-permissions:
-      - marketing:campaign:send
-  /v1/marketing/campaigns/{campaignId}/schedule:
-    post:
-      tags:
-      - Marketing Campaigns
-      summary: Schedule Campaign For Dispatch
-      description: 'Validates a campaign''s readiness and moves it to SCHEDULED, the state from which dispatch is allowed.
-
-        Use this tool when a DRAFT campaign is complete; do not use dispatchCampaign, which queues the actual sends and only accepts a campaign that is already SCHEDULED or SENDING.
-
-        Preconditions: the campaign must exist and be in DRAFT or PAUSED; it must have at least one channel, a bound segment that is known to this module, active, and matching the campaign''s audienceType, and an existing template attached for every selected channel; any promotionOfferId must resolve in pos-price to an ACTIVE offer whose date window includes today, and any catalogFocusRef must be written as kind:value using one of product, sku, service or category.
-
-        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
-
-        Emits a MARKETING_CAMPAIGN_SCHEDULE event and publishes a campaign-scheduled fact through the transactional outbox.
-
-        Returns 404 when the campaign does not exist, and 422 listing every readiness problem at once when the campaign is not ready or the transition is not legal from its current status.
+        Returns 404 when no campaign exists for the supplied id.
 
         '
-      operationId: scheduleCampaign
+      operationId: getCampaignById
       parameters:
-      - name: campaignId
-        in: path
+      - in: path
+        name: campaignId
         required: true
         schema:
-          type: string
           format: uuid
+          type: string
       responses:
         '200':
-          description: Campaign scheduled
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CampaignResponse'
-        '404':
-          description: Campaign not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '422':
-          description: Campaign is not ready to schedule
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: Campaign returned
         '403':
-          description: Forbidden - insufficient permissions
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Campaign not found
       security:
       - bearerAuth:
-        - marketing:campaign:schedule
-      x-required-permissions:
-      - marketing:campaign:schedule
-  /v1/marketing/campaigns/{campaignId}/resume:
-    post:
+        - marketing:campaign:view
+      summary: Get Campaign By Id
       tags:
       - Marketing Campaigns
-      summary: Resume Paused Campaign
-      description: 'Returns a PAUSED campaign to SCHEDULED so it re-enters the dispatch queue; the send worker decides when delivery actually restarts rather than jumping straight back into SENDING.
+      x-required-permissions:
+      - marketing:campaign:view
+    put:
+      description: 'Replaces the definition of a DRAFT campaign, including its code, channels, segment, templates, schedule and delivery window.
 
-        Use this tool to continue a campaign that pauseCampaign halted; do not use scheduleCampaign, which re-runs readiness validation on a DRAFT or PAUSED campaign.
+        Use this tool to revise a campaign before it is scheduled; do not use createCampaign, which makes a new campaign, and use the lifecycle tools (scheduleCampaign, pauseCampaign, cancelCampaign) rather than this one to change status.
 
-        Preconditions: the campaign must exist and be PAUSED.
+        Preconditions: the campaign must exist and still be in DRAFT, since once dispatch may have begun the definition is frozen; audienceType must equal the stored value because it is immutable.
 
-        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
+        Required inputs: campaignId (UUID) path parameter plus the full replacement body (code, name, audienceType, channels); scheduleType defaults to IMMEDIATE when omitted, and omitted optional fields are cleared rather than preserved.
 
-        Emits a MARKETING_CAMPAIGN_RESUME event; recipients already recorded as sent are never re-queued, because each recipient-channel pair is unique per campaign.
+        Emits a MARKETING_CAMPAIGN_UPDATE event; no recipients are contacted.
 
-        Returns 404 when the campaign does not exist, and 422 when its current status does not allow resuming.
+        Returns 404 when the campaign does not exist, 409 when the code belongs to another campaign, and 422 when the campaign is no longer editable, audienceType is changed, or the schedule and window fields are inconsistent.
 
         '
-      operationId: resumeCampaign
+      operationId: updateCampaign
       parameters:
-      - name: campaignId
-        in: path
+      - in: path
+        name: campaignId
         required: true
         schema:
-          type: string
           format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Scheduled commercial campaign:
+                description: Scheduled commercial campaign
+                value:
+                  audienceType: COMMERCIAL
+                  campaignProgramId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                  catalogFocusRef: service:alignment
+                  channels:
+                  - EMAIL
+                  - SMS
+                  code: SPRING-FLEET-2026
+                  description: Alignment offer for commercial fleet accounts
+                  emailTemplateId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
+                  name: Spring fleet alignment push
+                  promotionOfferId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
+                  scheduleType: SCHEDULED
+                  scheduledAt: 2026-03-02 14:00:00+00:00
+                  segmentId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                  smsTemplateId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a05
+                  windowEnd: 2026-03-31 23:59:59+00:00
+                  windowStart: 2026-03-01 00:00:00+00:00
+            schema:
+              $ref: '#/components/schemas/UpsertCampaignRequest'
+        description: Full replacement campaign definition; audienceType must match the stored value, and omitted optional fields are cleared.
+        required: true
       responses:
         '200':
-          description: Campaign resumed
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CampaignResponse'
-        '404':
-          description: Campaign not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '422':
-          description: Illegal lifecycle transition
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+          description: Campaign updated
         '403':
-          description: Forbidden - insufficient permissions
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Campaign not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Campaign code already exists
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Campaign is no longer editable, or an immutable field was changed
       security:
       - bearerAuth:
-        - marketing:campaign:manage
-      x-required-permissions:
-      - marketing:campaign:manage
-  /v1/marketing/campaigns/{campaignId}/pause:
-    post:
+        - marketing:campaign:edit
+      summary: Update Draft Campaign
       tags:
       - Marketing Campaigns
-      summary: Pause Campaign Dispatch
-      description: 'Moves a campaign to PAUSED so the send worker stops draining its queued recipients.
-
-        Use this tool to halt an in-flight or scheduled campaign without losing it; do not use cancelCampaign, which is terminal and cannot be undone.
-
-        Preconditions: the campaign must exist and be in SCHEDULED or SENDING, the only statuses that permit the PAUSED transition.
-
-        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
-
-        Emits a MARKETING_CAMPAIGN_PAUSE event; already-delivered messages are unaffected and queued send rows remain PENDING for a later resume.
-
-        Returns 404 when the campaign does not exist, and 422 when its current status does not allow pausing.
-
-        '
-      operationId: pauseCampaign
-      parameters:
-      - name: campaignId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Campaign paused
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CampaignResponse'
-        '404':
-          description: Campaign not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '422':
-          description: Illegal lifecycle transition
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '403':
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-      security:
-      - bearerAuth:
-        - marketing:campaign:manage
       x-required-permissions:
-      - marketing:campaign:manage
-  /v1/marketing/campaigns/{campaignId}/cancel:
-    post:
-      tags:
-      - Marketing Campaigns
-      summary: Cancel Campaign Permanently
-      description: 'Moves a campaign to CANCELLED, a terminal state from which no further transition exists.
-
-        Use this tool to abandon a campaign for good; do not use pauseCampaign, which halts dispatch reversibly and keeps the queue intact.
-
-        Preconditions: the campaign must exist and be in DRAFT, SCHEDULED, SENDING or PAUSED; a SENT campaign can only be CLOSED, and CANCELLED and CLOSED campaigns cannot transition at all.
-
-        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
-
-        Emits a MARKETING_CAMPAIGN_CANCEL event; messages already delivered are not recalled.
-
-        Returns 404 when the campaign does not exist, and 422 when its current status does not allow cancellation.
-
-        '
-      operationId: cancelCampaign
-      parameters:
-      - name: campaignId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Campaign cancelled
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CampaignResponse'
-        '404':
-          description: Campaign not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '422':
-          description: Illegal lifecycle transition
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '403':
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-      security:
-      - bearerAuth:
-        - marketing:campaign:manage
-      x-required-permissions:
-      - marketing:campaign:manage
+      - marketing:campaign:edit
   /v1/marketing/campaigns/{campaignId}/audience-preview:
     post:
-      tags:
-      - Marketing Campaigns
-      summary: Preview Campaign Audience
       description: 'Reports the campaign''s last resolved audience snapshot: total segment members, whether that snapshot was truncated by the CRM''s candidate ceiling, per-channel eligible counts after consent, staleness and suppression checks, a bounded per-channel sample of the individual decisions behind those counts, whether each channel has a template, and the readiness problems that would block scheduling.
 
         Use this tool to gauge reach before scheduling or dispatch; do not use dispatchCampaign, which actually queues messages for delivery.
@@ -895,149 +312,331 @@ paths:
         '
       operationId: previewCampaignAudience
       parameters:
-      - name: campaignId
-        in: path
+      - in: path
+        name: campaignId
         required: true
         schema:
-          type: string
           format: uuid
+          type: string
       responses:
         '200':
-          description: Preview returned
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AudiencePreviewResponse'
+          description: Preview returned
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Campaign not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
         '422':
-          description: Campaign has no segment bound
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: Campaign has no segment bound
         '503':
           description: pos-customer unavailable
-        '403':
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
       security:
       - bearerAuth:
         - marketing:campaign:view
+      summary: Preview Campaign Audience
+      tags:
+      - Marketing Campaigns
       x-required-permissions:
       - marketing:campaign:view
-  /v1/marketing/programs/{campaignProgramId}/stats:
-    get:
-      tags:
-      - Marketing Analytics
-      summary: Get Campaign Program Stats
-      description: 'Returns the full stats block for every campaign sharing one campaignProgramId, so the commercial and individual arms of an initiative can be compared side by side.
+  /v1/marketing/campaigns/{campaignId}/cancel:
+    post:
+      description: 'Moves a campaign to CANCELLED, a terminal state from which no further transition exists.
 
-        Use this tool when comparing the arms of a program; use getCampaignStats instead for a single campaign.
+        Use this tool to abandon a campaign for good; do not use pauseCampaign, which halts dispatch reversibly and keeps the queue intact.
 
-        Preconditions: at least one campaign must reference the campaignProgramId, since the program has no record of its own in this module.
-
-        Required inputs: campaignProgramId (UUID) as a path parameter; there is no request body.
-
-        Emits a MARKETING_PROGRAM_STATS_GET audit event; no marketing state is changed and this is a read-only projection.
-
-        Returns 404 when no campaign references the supplied campaignProgramId.
-
-        '
-      operationId: getProgramStats
-      parameters:
-      - name: campaignProgramId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Program stats returned
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProgramStatsResponse'
-        '404':
-          description: Campaign program not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-        '403':
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-      security:
-      - bearerAuth:
-        - marketing:stats:view
-      x-required-permissions:
-      - marketing:stats:view
-  /v1/marketing/campaigns/{campaignId}/stats:
-    get:
-      tags:
-      - Marketing Analytics
-      summary: Get Campaign Stats
-      description: 'Returns one campaign''s per-channel delivery funnel (targeted, suppressed, sent, delivered, bounced, complained, failed) plus the redemption count and discount value attributed to its campaign code; the sent figure is cumulative, counting delivered, bounced and complained messages as sent.
-
-        Use this tool for aggregate campaign performance; use listCampaignSends instead to inspect individual recipient send rows, and use getProgramStats to compare the arms of a program.
-
-        Preconditions: the campaign must exist; a campaign that has never dispatched reports zeroed funnels rather than an error.
+        Preconditions: the campaign must exist and be in DRAFT, SCHEDULED, SENDING or PAUSED; a SENT campaign can only be CLOSED, and CANCELLED and CLOSED campaigns cannot transition at all.
 
         Required inputs: campaignId (UUID) as a path parameter; there is no request body.
 
-        Emits a MARKETING_CAMPAIGN_STATS_GET audit event; no marketing state is changed and this is a read-only projection.
+        Emits a MARKETING_CAMPAIGN_CANCEL event; messages already delivered are not recalled.
 
-        Returns 404 when no campaign exists for the supplied id.
+        Returns 404 when the campaign does not exist, and 422 when its current status does not allow cancellation.
 
         '
-      operationId: getCampaignStats
+      operationId: cancelCampaign
       parameters:
-      - name: campaignId
-        in: path
+      - in: path
+        name: campaignId
         required: true
         schema:
-          type: string
           format: uuid
+          type: string
       responses:
         '200':
-          description: Stats returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CampaignStatsResponse'
-        '404':
-          description: Campaign not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
+                $ref: '#/components/schemas/CampaignResponse'
+          description: Campaign cancelled
         '403':
-          description: Forbidden - insufficient permissions
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Campaign not found
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Illegal lifecycle transition
       security:
       - bearerAuth:
-        - marketing:stats:view
-      x-required-permissions:
-      - marketing:stats:view
-  /v1/marketing/campaigns/{campaignId}/sends:
-    get:
+        - marketing:campaign:manage
+      summary: Cancel Campaign Permanently
       tags:
       - Marketing Campaigns
-      summary: List Campaign Send Records
+      x-required-permissions:
+      - marketing:campaign:manage
+  /v1/marketing/campaigns/{campaignId}/pause:
+    post:
+      description: 'Moves a campaign to PAUSED so the send worker stops draining its queued recipients.
+
+        Use this tool to halt an in-flight or scheduled campaign without losing it; do not use cancelCampaign, which is terminal and cannot be undone.
+
+        Preconditions: the campaign must exist and be in SCHEDULED or SENDING, the only statuses that permit the PAUSED transition.
+
+        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_CAMPAIGN_PAUSE event; already-delivered messages are unaffected and queued send rows remain PENDING for a later resume.
+
+        Returns 404 when the campaign does not exist, and 422 when its current status does not allow pausing.
+
+        '
+      operationId: pauseCampaign
+      parameters:
+      - in: path
+        name: campaignId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+          description: Campaign paused
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Campaign not found
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Illegal lifecycle transition
+      security:
+      - bearerAuth:
+        - marketing:campaign:manage
+      summary: Pause Campaign Dispatch
+      tags:
+      - Marketing Campaigns
+      x-required-permissions:
+      - marketing:campaign:manage
+  /v1/marketing/campaigns/{campaignId}/resume:
+    post:
+      description: 'Returns a PAUSED campaign to SCHEDULED so it re-enters the dispatch queue; the send worker decides when delivery actually restarts rather than jumping straight back into SENDING.
+
+        Use this tool to continue a campaign that pauseCampaign halted; do not use scheduleCampaign, which re-runs readiness validation on a DRAFT or PAUSED campaign.
+
+        Preconditions: the campaign must exist and be PAUSED.
+
+        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_CAMPAIGN_RESUME event; recipients already recorded as sent are never re-queued, because each recipient-channel pair is unique per campaign.
+
+        Returns 404 when the campaign does not exist, and 422 when its current status does not allow resuming.
+
+        '
+      operationId: resumeCampaign
+      parameters:
+      - in: path
+        name: campaignId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+          description: Campaign resumed
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Campaign not found
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Illegal lifecycle transition
+      security:
+      - bearerAuth:
+        - marketing:campaign:manage
+      summary: Resume Paused Campaign
+      tags:
+      - Marketing Campaigns
+      x-required-permissions:
+      - marketing:campaign:manage
+  /v1/marketing/campaigns/{campaignId}/schedule:
+    post:
+      description: 'Validates a campaign''s readiness and moves it to SCHEDULED, the state from which dispatch is allowed.
+
+        Use this tool when a DRAFT campaign is complete; do not use dispatchCampaign, which queues the actual sends and only accepts a campaign that is already SCHEDULED or SENDING.
+
+        Preconditions: the campaign must exist and be in DRAFT or PAUSED; it must have at least one channel, a bound segment that is known to this module, active, and matching the campaign''s audienceType, and an existing template attached for every selected channel; any promotionOfferId must resolve in pos-price to an ACTIVE offer whose date window includes today, and any catalogFocusRef must be written as kind:value using one of product, sku, service or category.
+
+        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_CAMPAIGN_SCHEDULE event and publishes a campaign-scheduled fact through the transactional outbox.
+
+        Returns 404 when the campaign does not exist, and 422 listing every readiness problem at once when the campaign is not ready or the transition is not legal from its current status.
+
+        '
+      operationId: scheduleCampaign
+      parameters:
+      - in: path
+        name: campaignId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+          description: Campaign scheduled
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Campaign not found
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Campaign is not ready to schedule
+      security:
+      - bearerAuth:
+        - marketing:campaign:schedule
+      summary: Schedule Campaign For Dispatch
+      tags:
+      - Marketing Campaigns
+      x-required-permissions:
+      - marketing:campaign:schedule
+  /v1/marketing/campaigns/{campaignId}/send:
+    post:
+      description: 'Materializes the campaign''s resolved audience into one PENDING send row per recipient and channel, moves a SCHEDULED campaign to SENDING, and returns 202 with the queued count while the send worker delivers asynchronously.
+
+        Use this tool to start or retry delivery; do not use scheduleCampaign, which only validates readiness, and do not use previewCampaignAudience, which reports reach without queueing anything.
+
+        Preconditions: the campaign must exist, be SCHEDULED or SENDING, and have a segment bound; the audience is the last snapshot replicated from pos-customer.
+
+        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_CAMPAIGN_SEND event; the call is idempotent because each recipient-channel pair is unique per campaign, so re-invoking never double-sends, and when no audience snapshot has arrived yet it queues nothing, asynchronously requests resolution from pos-customer, and reports queued 0 for a later retry.
+
+        Returns 404 when the campaign does not exist, and 422 when it is not SCHEDULED or SENDING or has no segment bound.
+
+        '
+      operationId: dispatchCampaign
+      parameters:
+      - in: path
+        name: campaignId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                type: object
+          description: Dispatch accepted
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Campaign not found
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Campaign is not in a dispatchable state
+        '503':
+          description: pos-customer unavailable
+      security:
+      - bearerAuth:
+        - marketing:campaign:send
+      summary: Dispatch Campaign To Audience
+      tags:
+      - Marketing Campaigns
+      x-required-permissions:
+      - marketing:campaign:send
+  /v1/marketing/campaigns/{campaignId}/sends:
+    get:
       description: 'Lists the per-recipient, per-channel send rows a campaign dispatch queued, including status, failure reason, provider message id, attempts and timestamps.
 
         Use this tool to inspect individual delivery outcomes; use getCampaignStats instead for aggregate funnel and attribution numbers.
@@ -1053,312 +652,608 @@ paths:
         '
       operationId: listCampaignSends
       parameters:
-      - name: campaignId
-        in: path
+      - in: path
+        name: campaignId
         required: true
         schema:
-          type: string
           format: uuid
-      - name: page
-        in: query
+          type: string
+      - in: query
+        name: page
         required: false
         schema:
-          type: integer
-          format: int32
           default: 0
-      - name: size
-        in: query
+          format: int32
+          type: integer
+      - in: query
+        name: size
         required: false
         schema:
-          type: integer
-          format: int32
           default: 50
+          format: int32
+          type: integer
       responses:
         '200':
-          description: Send records returned
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PagedResponse'
+          description: Send records returned
         '403':
-          description: Forbidden - insufficient permissions
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
       security:
       - bearerAuth:
         - marketing:campaign:view
+      summary: List Campaign Send Records
+      tags:
+      - Marketing Campaigns
       x-required-permissions:
       - marketing:campaign:view
+  /v1/marketing/campaigns/{campaignId}/stats:
+    get:
+      description: 'Returns one campaign''s per-channel delivery funnel (targeted, suppressed, sent, delivered, bounced, complained, failed) plus the redemption count and discount value attributed to its campaign code; the sent figure is cumulative, counting delivered, bounced and complained messages as sent.
+
+        Use this tool for aggregate campaign performance; use listCampaignSends instead to inspect individual recipient send rows, and use getProgramStats to compare the arms of a program.
+
+        Preconditions: the campaign must exist; a campaign that has never dispatched reports zeroed funnels rather than an error.
+
+        Required inputs: campaignId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_CAMPAIGN_STATS_GET audit event; no marketing state is changed and this is a read-only projection.
+
+        Returns 404 when no campaign exists for the supplied id.
+
+        '
+      operationId: getCampaignStats
+      parameters:
+      - in: path
+        name: campaignId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignStatsResponse'
+          description: Stats returned
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Campaign not found
+      security:
+      - bearerAuth:
+        - marketing:stats:view
+      summary: Get Campaign Stats
+      tags:
+      - Marketing Analytics
+      x-required-permissions:
+      - marketing:stats:view
+  /v1/marketing/programs/{campaignProgramId}/stats:
+    get:
+      description: 'Returns the full stats block for every campaign sharing one campaignProgramId, so the commercial and individual arms of an initiative can be compared side by side.
+
+        Use this tool when comparing the arms of a program; use getCampaignStats instead for a single campaign.
+
+        Preconditions: at least one campaign must reference the campaignProgramId, since the program has no record of its own in this module.
+
+        Required inputs: campaignProgramId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_PROGRAM_STATS_GET audit event; no marketing state is changed and this is a read-only projection.
+
+        Returns 404 when no campaign references the supplied campaignProgramId.
+
+        '
+      operationId: getProgramStats
+      parameters:
+      - in: path
+        name: campaignProgramId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramStatsResponse'
+          description: Program stats returned
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Campaign program not found
+      security:
+      - bearerAuth:
+        - marketing:stats:view
+      summary: Get Campaign Program Stats
+      tags:
+      - Marketing Analytics
+      x-required-permissions:
+      - marketing:stats:view
+  /v1/marketing/templates:
+    get:
+      description: 'Lists message templates ordered by name, optionally filtered by delivery channel and audience type.
+
+        Use this tool when browsing templates or finding one to attach to a campaign; do not use getMessageTemplateById, which requires a known template id and returns exactly one template.
+
+        Preconditions: none; an empty result simply means no template matches the filters.
+
+        Required inputs: none; channel (EMAIL or SMS) and audienceType (COMMERCIAL or INDIVIDUAL) are optional query filters that combine when both are supplied.
+
+        Emits a MARKETING_TEMPLATE_LIST audit event; no marketing state is changed.
+
+        Returns 200 with an empty array when nothing matches, so an empty result is not an error condition.
+
+        '
+      operationId: listMessageTemplates
+      parameters:
+      - in: query
+        name: channel
+        required: false
+        schema:
+          enum:
+          - EMAIL
+          - SMS
+          type: string
+      - in: query
+        name: audienceType
+        required: false
+        schema:
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/MessageTemplateResponse'
+                type: array
+          description: Templates returned
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
+      security:
+      - bearerAuth:
+        - marketing:template:view
+      summary: List Message Templates
+      tags:
+      - Marketing Templates
+      x-required-permissions:
+      - marketing:template:view
+    post:
+      description: 'Creates a channel-specific message template whose {{token}} placeholders are validated against the closed vocabulary for its audience at save time, so a typo costs a validation error rather than a batch of broken messages.
+
+        Use this tool when authoring a new template; do not use updateMessageTemplate, which revises an existing template and cannot change its channel or audienceType.
+
+        Preconditions: no template may already use the same name (compared case-insensitively); commercial-only tokens such as accountName are rejected for INDIVIDUAL audiences and vehicle tokens for COMMERCIAL ones.
+
+        Required inputs: name, channel (EMAIL or SMS), audienceType (COMMERCIAL or INDIVIDUAL) and body; subject is required for EMAIL, and for SMS it must be absent and any supplied value is discarded.
+
+        Emits a MARKETING_TEMPLATE_CREATE event; no campaign is affected until the template is attached to one.
+
+        Returns 409 when the name is already in use, and 422 when a token is unknown or outside the audience''s vocabulary, an email template lacks a subject, an SMS template has one, or an SMS body exceeds 320 characters.
+
+        '
+      operationId: createMessageTemplate
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Commercial email template:
+                description: Commercial email template
+                value:
+                  audienceType: COMMERCIAL
+                  body: 'Hi {{contactFirstName}}, {{accountName}} qualifies for our spring alignment offer. Use code {{offerCode}} at {{shopName}}. Unsubscribe: {{unsubscribeUrl}}'
+                  channel: EMAIL
+                  name: Spring fleet email
+                  subject: '{{accountName}}, your spring fleet alignment offer'
+            schema:
+              $ref: '#/components/schemas/UpsertMessageTemplateRequest'
+        description: 'Template to create: name, channel, audience, subject (EMAIL only) and a body whose {{token}} placeholders must belong to the audience''s vocabulary.'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageTemplateResponse'
+          description: Template created
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Template name already exists
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid token, missing subject, or SMS body over the segment limit
+      security:
+      - bearerAuth:
+        - marketing:template:manage
+      summary: Create Message Template
+      tags:
+      - Marketing Templates
+      x-required-permissions:
+      - marketing:template:manage
+  /v1/marketing/templates/{templateId}:
+    delete:
+      description: 'Permanently deletes a message template that no campaign references.
+
+        Use this tool to retire an unused template; detach it from every campaign first via updateCampaign rather than expecting the delete to cascade.
+
+        Preconditions: the template must exist and must not be referenced as the email or SMS template of any campaign, because a campaign whose template vanished would fail at dispatch across its whole audience.
+
+        Required inputs: templateId (UUID) as a path parameter; there is no request body and no confirmation flag.
+
+        Emits a MARKETING_TEMPLATE_DELETE event; the deletion is irreversible.
+
+        Returns 404 when the template does not exist, and 422 when it is still attached to at least one campaign.
+
+        '
+      operationId: deleteMessageTemplate
+      parameters:
+      - in: path
+        name: templateId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: Template deleted
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Template not found
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Template is attached to a campaign
+      security:
+      - bearerAuth:
+        - marketing:template:manage
+      summary: Delete Unused Message Template
+      tags:
+      - Marketing Templates
+      x-required-permissions:
+      - marketing:template:manage
+    get:
+      description: 'Returns one message template with its name, channel, audience type, subject, body, and the substitution tokens available to its audience.
+
+        Use this tool when the template id is already known; use listMessageTemplates instead when searching by channel or audience.
+
+        Preconditions: the template must exist.
+
+        Required inputs: templateId (UUID) as a path parameter; there is no request body.
+
+        Emits a MARKETING_TEMPLATE_GET audit event; no marketing state is changed and this is a read-only projection.
+
+        Returns 404 when no template exists for the supplied id.
+
+        '
+      operationId: getMessageTemplateById
+      parameters:
+      - in: path
+        name: templateId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageTemplateResponse'
+          description: Template returned
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Template not found
+      security:
+      - bearerAuth:
+        - marketing:template:view
+      summary: Get Message Template By Id
+      tags:
+      - Marketing Templates
+      x-required-permissions:
+      - marketing:template:view
+    put:
+      description: 'Updates a template''s name, subject and body, re-validating every {{token}} against the audience''s vocabulary.
+
+        Use this tool to revise wording; do not use createMessageTemplate for a different channel or audience, because channel and audienceType are immutable and changing either requires a new template.
+
+        Preconditions: the template must exist, the channel and audienceType in the body must equal the stored values, and no other template may hold the new name.
+
+        Required inputs: templateId (UUID) path parameter plus the full body (name, channel, audienceType, body); subject is required for EMAIL and discarded for SMS.
+
+        Emits a MARKETING_TEMPLATE_UPDATE event; campaigns already bound to the template pick up the new wording at their next dispatch.
+
+        Returns 404 when the template does not exist, 409 when the name belongs to another template, and 422 when channel or audienceType is changed or the token, subject or SMS length rules fail.
+
+        '
+      operationId: updateMessageTemplate
+      parameters:
+      - in: path
+        name: templateId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Commercial email template:
+                description: Commercial email template
+                value:
+                  audienceType: COMMERCIAL
+                  body: 'Hi {{contactFirstName}}, {{accountName}} qualifies for our spring alignment offer. Use code {{offerCode}} at {{shopName}}. Unsubscribe: {{unsubscribeUrl}}'
+                  channel: EMAIL
+                  name: Spring fleet email
+                  subject: '{{accountName}}, your spring fleet alignment offer'
+            schema:
+              $ref: '#/components/schemas/UpsertMessageTemplateRequest'
+        description: Full replacement template; channel and audienceType must match the stored values because both are immutable.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageTemplateResponse'
+          description: Template updated
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden - insufficient permissions
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Template not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Template name already exists
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid token, or an immutable field was changed
+      security:
+      - bearerAuth:
+        - marketing:template:manage
+      summary: Update Message Template
+      tags:
+      - Marketing Templates
+      x-required-permissions:
+      - marketing:template:manage
 components:
   schemas:
-    UpsertMessageTemplateRequest:
-      type: object
-      description: Request to create or update a message template
-      properties:
-        name:
-          type: string
-          description: Unique template name
-          example: Spring fleet — email
-          maxLength: 150
-          minLength: 0
-        channel:
-          type: string
-          description: Delivery channel
-          enum:
-          - EMAIL
-          - SMS
-        audienceType:
-          type: string
-          description: Audience whose token vocabulary applies
-          enum:
-          - COMMERCIAL
-          - INDIVIDUAL
-        subject:
-          type: string
-          description: Subject line; required for EMAIL, rejected for SMS
-          maxLength: 255
-          minLength: 0
-        body:
-          type: string
-          description: Message body with {{token}} placeholders from the audience's token catalog
-          example: Hi {{contactFirstName}}, your {{vehicleMake}} is due for service. Use {{offerCode}}.
-          maxLength: 20000
-          minLength: 0
-      required:
-      - audienceType
-      - body
-      - channel
-      - name
-    MessageTemplateResponse:
-      type: object
-      description: A channel-specific message template
-      properties:
-        templateId:
-          type: string
-          format: uuid
-          description: Template identifier
-        name:
-          type: string
-          description: Template name
-        channel:
-          type: string
-          description: Delivery channel
-          enum:
-          - EMAIL
-          - SMS
-        audienceType:
-          type: string
-          description: Audience whose token vocabulary applies
-          enum:
-          - COMMERCIAL
-          - INDIVIDUAL
-        subject:
-          type: string
-          description: Subject line; null for SMS
-        body:
-          type: string
-          description: Message body with token placeholders
-        availableTokens:
-          type: array
-          description: Tokens available to this template's audience
-          items:
-            type: string
-          uniqueItems: true
-        createdAt:
-          type: string
-          format: date-time
-          description: Creation timestamp
-        updatedAt:
-          type: string
-          format: date-time
-          description: Last update timestamp
-      required:
-      - audienceType
-      - availableTokens
-      - body
-      - channel
-      - name
-      - templateId
     ApiError:
-      type: object
       description: Standard error response envelope returned by all Durion backend APIs
       properties:
         code:
-          type: string
           description: Machine-readable error code
           example: ORDER_NOT_FOUND
-        message:
           type: string
-          description: Human-readable error message
-          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
-        status:
-          type: integer
-          format: int32
-          description: HTTP status code
-          example: 404
-        timestamp:
-          type: string
-          description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
         correlationId:
-          type: string
           description: Unique correlation ID for distributed request tracing
           example: 550e8400-e29b-41d4-a716-446655440000
+          type: string
         fieldErrors:
-          type: array
           description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
           items:
             $ref: '#/components/schemas/FieldError'
-        referenceId:
+          type: array
+        message:
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
           type: string
-          description: Workflow or review-case reference identifier, when applicable
-          example: REVIEW-2026-000123
         nextAction:
-          type: string
           description: Recommended next step for the caller, when applicable
           example: Retry the request with a valid quantity
-        supportAction:
           type: string
+        referenceId:
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+          type: string
+        status:
+          description: HTTP status code
+          example: 404
+          format: int32
+          type: integer
+        supportAction:
           description: Support or admin investigation guidance, when applicable
           example: Contact support with the correlation ID for assistance
+          type: string
+        timestamp:
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+          type: string
       required:
       - code
       - correlationId
       - message
       - status
       - timestamp
-    FieldError:
       type: object
-      description: Validation error for a specific request field
+    AudiencePreviewResponse:
+      description: Per-channel audience preview after consent and suppression filtering
       properties:
-        field:
-          type: string
-          description: Field name
-          example: quantity
-        message:
-          type: string
-          description: Validation failure message
-          example: must be greater than 0
-      required:
-      - field
-      - message
-    UpsertCampaignRequest:
-      type: object
-      description: Request to create or update a marketing campaign
-      properties:
-        code:
-          type: string
-          description: Stable campaign code; stamped onto redemptions for attribution
-          example: SPRING-FLEET-2026
-          maxLength: 100
-          minLength: 0
-        name:
-          type: string
-          description: Campaign name
-          example: Spring fleet alignment push
-          maxLength: 200
-          minLength: 0
-        description:
-          type: string
-          description: What the campaign is for
-          maxLength: 1000
-          minLength: 0
         audienceType:
-          type: string
-          description: Targeted party kind; immutable after creation
-          enum:
-          - COMMERCIAL
-          - INDIVIDUAL
-        campaignProgramId:
-          type: string
-          format: uuid
-          description: Groups the commercial and individual arms of one initiative for comparison
-        channels:
-          type: array
-          description: Delivery channels
-          items:
-            type: string
-            enum:
-            - EMAIL
-            - SMS
-          minItems: 1
-          uniqueItems: true
-        segmentId:
-          type: string
-          format: uuid
-          description: pos-customer segment to target
-        promotionOfferId:
-          type: string
-          format: uuid
-          description: pos-price offer promoted by the campaign
-        catalogFocusRef:
-          type: string
-          description: pos-catalog reference the message points at
-          maxLength: 200
-          minLength: 0
-        windowStart:
-          type: string
-          format: date-time
-          description: Start of the campaign's active window
-        windowEnd:
-          type: string
-          format: date-time
-          description: End of the campaign's active window
-        scheduleType:
-          type: string
-          description: IMMEDIATE or SCHEDULED; defaults to IMMEDIATE
-          enum:
-          - IMMEDIATE
-          - SCHEDULED
-        scheduledAt:
-          type: string
-          format: date-time
-          description: When to dispatch; required for SCHEDULED
-        emailTemplateId:
-          type: string
-          format: uuid
-          description: Email template to render
-        smsTemplateId:
-          type: string
-          format: uuid
-          description: SMS template to render
-      required:
-      - audienceType
-      - channels
-      - code
-      - name
-    CampaignResponse:
-      type: object
-      description: A marketing campaign
-      properties:
-        campaignId:
-          type: string
-          format: uuid
-          description: Campaign identifier
-        code:
-          type: string
-          description: Stable campaign code
-          example: SPRING-FLEET-2026
-        name:
-          type: string
-          description: Campaign name
-        description:
-          type: string
-          description: What the campaign is for
-        audienceType:
-          type: string
           description: Targeted party kind
           enum:
           - COMMERCIAL
           - INDIVIDUAL
-        campaignProgramId:
           type: string
+        campaignId:
+          description: Campaign previewed
           format: uuid
-          description: Program grouping the commercial and individual arms
-        status:
           type: string
+        channels:
+          description: Per-channel reach after consent, account gate, and suppression
+          items:
+            $ref: '#/components/schemas/ChannelPreview'
+          type: array
+        resolvedAt:
+          description: When the CRM resolved this snapshot; null if none has arrived yet. Membership replicates asynchronously, so these counts are as of this moment, not live.
+          format: date-time
+          type: string
+        segmentId:
+          description: Bound segment
+          format: uuid
+          type: string
+        segmentMatched:
+          description: Parties in the current audience snapshot, before consent filtering
+          format: int64
+          type: integer
+        truncated:
+          description: Whether the segment resolution hit its candidate ceiling and is partial; when true the real audience is larger than segmentMatched
+          type: boolean
+        warnings:
+          description: Validation warnings that would block scheduling, e.g. an expired offer
+          items:
+            type: string
+          type: array
+      required:
+      - audienceType
+      - campaignId
+      - channels
+      - segmentMatched
+      - truncated
+      - warnings
+      type: object
+    CampaignResponse:
+      description: A marketing campaign
+      properties:
+        audienceType:
+          description: Targeted party kind
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+          type: string
+        campaignId:
+          description: Campaign identifier
+          format: uuid
+          type: string
+        campaignProgramId:
+          description: Program grouping the commercial and individual arms
+          format: uuid
+          type: string
+        catalogFocusRef:
+          description: pos-catalog focus reference
+          type: string
+        channels:
+          description: Delivery channels
+          items:
+            type: string
+          type: array
+          uniqueItems: true
+        code:
+          description: Stable campaign code
+          example: SPRING-FLEET-2026
+          type: string
+        createdAt:
+          description: Creation timestamp
+          format: date-time
+          type: string
+        description:
+          description: What the campaign is for
+          type: string
+        emailTemplateId:
+          description: Email template
+          format: uuid
+          type: string
+        name:
+          description: Campaign name
+          type: string
+        promotionOfferId:
+          description: Promoted pos-price offer
+          format: uuid
+          type: string
+        scheduleType:
+          description: Dispatch timing
+          enum:
+          - IMMEDIATE
+          - SCHEDULED
+          type: string
+        scheduledAt:
+          description: When dispatch begins
+          format: date-time
+          type: string
+        segmentId:
+          description: Bound pos-customer segment
+          format: uuid
+          type: string
+        smsTemplateId:
+          description: SMS template
+          format: uuid
+          type: string
+        status:
           description: Lifecycle status
           enum:
           - DRAFT
@@ -1368,57 +1263,19 @@ components:
           - PAUSED
           - CANCELLED
           - CLOSED
-        channels:
-          type: array
-          description: Delivery channels
-          items:
-            type: string
-          uniqueItems: true
-        segmentId:
           type: string
-          format: uuid
-          description: Bound pos-customer segment
-        promotionOfferId:
-          type: string
-          format: uuid
-          description: Promoted pos-price offer
-        catalogFocusRef:
-          type: string
-          description: pos-catalog focus reference
-        windowStart:
-          type: string
-          format: date-time
-          description: Start of the active window
-        windowEnd:
-          type: string
-          format: date-time
-          description: End of the active window
-        scheduleType:
-          type: string
-          description: Dispatch timing
-          enum:
-          - IMMEDIATE
-          - SCHEDULED
-        scheduledAt:
-          type: string
-          format: date-time
-          description: When dispatch begins
-        emailTemplateId:
-          type: string
-          format: uuid
-          description: Email template
-        smsTemplateId:
-          type: string
-          format: uuid
-          description: SMS template
-        createdAt:
-          type: string
-          format: date-time
-          description: Creation timestamp
         updatedAt:
-          type: string
-          format: date-time
           description: Last update timestamp
+          format: date-time
+          type: string
+        windowEnd:
+          description: End of the active window
+          format: date-time
+          type: string
+        windowStart:
+          description: Start of the active window
+          format: date-time
+          type: string
       required:
       - audienceType
       - campaignId
@@ -1427,143 +1284,40 @@ components:
       - name
       - scheduleType
       - status
-    AudiencePreviewResponse:
       type: object
-      description: Per-channel audience preview after consent and suppression filtering
-      properties:
-        campaignId:
-          type: string
-          format: uuid
-          description: Campaign previewed
-        segmentId:
-          type: string
-          format: uuid
-          description: Bound segment
-        audienceType:
-          type: string
-          description: Targeted party kind
-          enum:
-          - COMMERCIAL
-          - INDIVIDUAL
-        segmentMatched:
-          type: integer
-          format: int64
-          description: Parties in the current audience snapshot, before consent filtering
-        resolvedAt:
-          type: string
-          format: date-time
-          description: When the CRM resolved this snapshot; null if none has arrived yet. Membership replicates asynchronously, so these counts are as of this moment, not live.
-        truncated:
-          type: boolean
-          description: Whether the segment resolution hit its candidate ceiling and is partial; when true the real audience is larger than segmentMatched
-        channels:
-          type: array
-          description: Per-channel reach after consent, account gate, and suppression
-          items:
-            $ref: '#/components/schemas/ChannelPreview'
-        warnings:
-          type: array
-          description: Validation warnings that would block scheduling, e.g. an expired offer
-          items:
-            type: string
-      required:
-      - audienceType
-      - campaignId
-      - channels
-      - segmentMatched
-      - truncated
-      - warnings
-    ChannelPreview:
-      type: object
-      description: Reach on one channel
-      properties:
-        channel:
-          type: string
-          description: Channel
-          enum:
-          - EMAIL
-          - SMS
-        targeted:
-          type: integer
-          format: int64
-          description: Parties targeted on this channel
-          example: 412
-        eligible:
-          type: integer
-          format: int64
-          description: Of those, how many may actually be sent to
-          example: 287
-        templateAttached:
-          type: boolean
-          description: Whether a template is attached for this channel
-        sample:
-          type: array
-          description: A bounded sample of the snapshot with the per-party decision behind the eligible count; identifiers and reason codes only, never contact details
-          items:
-            $ref: '#/components/schemas/SampleRecipient'
-      required:
-      - channel
-      - eligible
-      - sample
-      - targeted
-      - templateAttached
-    SampleRecipient:
-      type: object
-      description: One sampled audience member and why it was or was not counted as reachable
-      properties:
-        partyId:
-          type: string
-          format: uuid
-          description: Party in the audience snapshot
-        contactPartyId:
-          type: string
-          format: uuid
-          description: 'Party whose consent governed the decision and who would be addressed: the CRM''s designated contact for a commercial account, the person themselves for an individual. Null when the CRM has reported no decision for this party.'
-        eligible:
-          type: boolean
-          description: Whether this party would be sent to on this channel
-        reason:
-          type: string
-          description: Machine-readable decision code
-          example: CONSENT_OPT_OUT
-      required:
-      - eligible
-      - partyId
-      - reason
     CampaignStatsResponse:
-      type: object
       description: Campaign reach funnel and attribution
       properties:
-        campaignId:
-          type: string
-          format: uuid
-          description: Campaign
-        code:
-          type: string
-          description: Campaign code
+        attributedDiscount:
+          description: Total discount value across attributed redemptions
+          type: number
         audienceType:
-          type: string
           description: Targeted party kind
           enum:
           - COMMERCIAL
           - INDIVIDUAL
-        campaignProgramId:
           type: string
+        campaignId:
+          description: Campaign
           format: uuid
+          type: string
+        campaignProgramId:
           description: Program grouping this campaign's arm
+          format: uuid
+          type: string
         channels:
-          type: array
           description: Per-channel funnel
           items:
             $ref: '#/components/schemas/ChannelFunnel'
+          type: array
+        code:
+          description: Campaign code
+          type: string
         redeemed:
-          type: integer
-          format: int64
           description: Redemptions credited to this campaign
           example: 37
-        attributedDiscount:
-          type: number
-          description: Total discount value across attributed redemptions
+          format: int64
+          type: integer
       required:
       - attributedDiscount
       - audienceType
@@ -1571,47 +1325,47 @@ components:
       - channels
       - code
       - redeemed
-    ChannelFunnel:
       type: object
+    ChannelFunnel:
       description: Reach funnel for one channel
       properties:
+        bounced:
+          description: Hard bounces
+          format: int64
+          type: integer
         channel:
-          type: string
           description: Channel
           enum:
           - EMAIL
           - SMS
-        targeted:
-          type: integer
+          type: string
+        complained:
+          description: Spam complaints
           format: int64
-          description: Recipients queued
-          example: 412
-        suppressed:
           type: integer
+        delivered:
+          description: Messages the provider confirmed delivered
           format: int64
-          description: Recipients blocked at dispatch by consent, account gate, or suppression
-          example: 125
+          type: integer
+        failed:
+          description: Permanent send failures
+          format: int64
+          type: integer
         sent:
-          type: integer
-          format: int64
           description: Messages dispatched to the provider
           example: 287
-        delivered:
-          type: integer
           format: int64
-          description: Messages the provider confirmed delivered
-        bounced:
           type: integer
+        suppressed:
+          description: Recipients blocked at dispatch by consent, account gate, or suppression
+          example: 125
           format: int64
-          description: Hard bounces
-        complained:
           type: integer
+        targeted:
+          description: Recipients queued
+          example: 412
           format: int64
-          description: Spam complaints
-        failed:
           type: integer
-          format: int64
-          description: Permanent send failures
       required:
       - bounced
       - channel
@@ -1621,57 +1375,303 @@ components:
       - sent
       - suppressed
       - targeted
-    ProgramStatsResponse:
       type: object
-      description: Campaign program rollup comparing commercial and individual arms
+    ChannelPreview:
+      description: Reach on one channel
       properties:
-        campaignProgramId:
+        channel:
+          description: Channel
+          enum:
+          - EMAIL
+          - SMS
           type: string
-          format: uuid
-          description: Program identifier
-        arms:
-          type: array
-          description: One entry per campaign in the program
+        eligible:
+          description: Of those, how many may actually be sent to
+          example: 287
+          format: int64
+          type: integer
+        sample:
+          description: A bounded sample of the snapshot with the per-party decision behind the eligible count; identifiers and reason codes only, never contact details
           items:
-            $ref: '#/components/schemas/CampaignStatsResponse'
+            $ref: '#/components/schemas/SampleRecipient'
+          type: array
+        targeted:
+          description: Parties targeted on this channel
+          example: 412
+          format: int64
+          type: integer
+        templateAttached:
+          description: Whether a template is attached for this channel
+          type: boolean
       required:
-      - arms
-      - campaignProgramId
-    PagedResponse:
+      - channel
+      - eligible
+      - sample
+      - targeted
+      - templateAttached
       type: object
+    FieldError:
+      description: Validation error for a specific request field
+      properties:
+        field:
+          description: Field name
+          example: quantity
+          type: string
+        message:
+          description: Validation failure message
+          example: must be greater than 0
+          type: string
+      required:
+      - field
+      - message
+      type: object
+    MessageTemplateResponse:
+      description: A channel-specific message template
+      properties:
+        audienceType:
+          description: Audience whose token vocabulary applies
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+          type: string
+        availableTokens:
+          description: Tokens available to this template's audience
+          items:
+            type: string
+          type: array
+          uniqueItems: true
+        body:
+          description: Message body with token placeholders
+          type: string
+        channel:
+          description: Delivery channel
+          enum:
+          - EMAIL
+          - SMS
+          type: string
+        createdAt:
+          description: Creation timestamp
+          format: date-time
+          type: string
+        name:
+          description: Template name
+          type: string
+        subject:
+          description: Subject line; null for SMS
+          type: string
+        templateId:
+          description: Template identifier
+          format: uuid
+          type: string
+        updatedAt:
+          description: Last update timestamp
+          format: date-time
+          type: string
+      required:
+      - audienceType
+      - availableTokens
+      - body
+      - channel
+      - name
+      - templateId
+      type: object
+    PagedResponse:
       description: A page of results
       properties:
         items:
-          type: array
           description: Items on this page
+          type: array
         page:
-          type: integer
-          format: int32
           description: Zero-based page index
           example: 0
-        size:
-          type: integer
           format: int32
+          type: integer
+        size:
           description: Requested page size
           example: 50
-        totalElements:
+          format: int32
           type: integer
-          format: int64
+        totalElements:
           description: Total matching items across all pages
           example: 412
-        totalPages:
+          format: int64
           type: integer
-          format: int32
+        totalPages:
           description: Total number of pages
           example: 9
+          format: int32
+          type: integer
       required:
       - items
       - page
       - size
       - totalElements
       - totalPages
+      type: object
+    ProgramStatsResponse:
+      description: Campaign program rollup comparing commercial and individual arms
+      properties:
+        arms:
+          description: One entry per campaign in the program
+          items:
+            $ref: '#/components/schemas/CampaignStatsResponse'
+          type: array
+        campaignProgramId:
+          description: Program identifier
+          format: uuid
+          type: string
+      required:
+      - arms
+      - campaignProgramId
+      type: object
+    SampleRecipient:
+      description: One sampled audience member and why it was or was not counted as reachable
+      properties:
+        contactPartyId:
+          description: 'Party whose consent governed the decision and who would be addressed: the CRM''s designated contact for a commercial account, the person themselves for an individual. Null when the CRM has reported no decision for this party.'
+          format: uuid
+          type: string
+        eligible:
+          description: Whether this party would be sent to on this channel
+          type: boolean
+        partyId:
+          description: Party in the audience snapshot
+          format: uuid
+          type: string
+        reason:
+          description: Machine-readable decision code
+          example: CONSENT_OPT_OUT
+          type: string
+      required:
+      - eligible
+      - partyId
+      - reason
+      type: object
+    UpsertCampaignRequest:
+      description: Request to create or update a marketing campaign
+      properties:
+        audienceType:
+          description: Targeted party kind; immutable after creation
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+          type: string
+        campaignProgramId:
+          description: Groups the commercial and individual arms of one initiative for comparison
+          format: uuid
+          type: string
+        catalogFocusRef:
+          description: pos-catalog reference the message points at
+          maxLength: 200
+          minLength: 0
+          type: string
+        channels:
+          description: Delivery channels
+          items:
+            enum:
+            - EMAIL
+            - SMS
+            type: string
+          minItems: 1
+          type: array
+          uniqueItems: true
+        code:
+          description: Stable campaign code; stamped onto redemptions for attribution
+          example: SPRING-FLEET-2026
+          maxLength: 100
+          minLength: 0
+          type: string
+        description:
+          description: What the campaign is for
+          maxLength: 1000
+          minLength: 0
+          type: string
+        emailTemplateId:
+          description: Email template to render
+          format: uuid
+          type: string
+        name:
+          description: Campaign name
+          example: Spring fleet alignment push
+          maxLength: 200
+          minLength: 0
+          type: string
+        promotionOfferId:
+          description: pos-price offer promoted by the campaign
+          format: uuid
+          type: string
+        scheduleType:
+          description: IMMEDIATE or SCHEDULED; defaults to IMMEDIATE
+          enum:
+          - IMMEDIATE
+          - SCHEDULED
+          type: string
+        scheduledAt:
+          description: When to dispatch; required for SCHEDULED
+          format: date-time
+          type: string
+        segmentId:
+          description: pos-customer segment to target
+          format: uuid
+          type: string
+        smsTemplateId:
+          description: SMS template to render
+          format: uuid
+          type: string
+        windowEnd:
+          description: End of the campaign's active window
+          format: date-time
+          type: string
+        windowStart:
+          description: Start of the campaign's active window
+          format: date-time
+          type: string
+      required:
+      - audienceType
+      - channels
+      - code
+      - name
+      type: object
+    UpsertMessageTemplateRequest:
+      description: Request to create or update a message template
+      properties:
+        audienceType:
+          description: Audience whose token vocabulary applies
+          enum:
+          - COMMERCIAL
+          - INDIVIDUAL
+          type: string
+        body:
+          description: Message body with {{token}} placeholders from the audience's token catalog
+          example: Hi {{contactFirstName}}, your {{vehicleMake}} is due for service. Use {{offerCode}}.
+          maxLength: 20000
+          minLength: 0
+          type: string
+        channel:
+          description: Delivery channel
+          enum:
+          - EMAIL
+          - SMS
+          type: string
+        name:
+          description: Unique template name
+          example: Spring fleet — email
+          maxLength: 150
+          minLength: 0
+          type: string
+        subject:
+          description: Subject line; required for EMAIL, rejected for SMS
+          maxLength: 255
+          minLength: 0
+          type: string
+      required:
+      - audienceType
+      - body
+      - channel
+      - name
+      type: object
   securitySchemes:
     bearerAuth:
-      type: http
-      scheme: bearer
       bearerFormat: JWT
+      scheme: bearer
+      type: http

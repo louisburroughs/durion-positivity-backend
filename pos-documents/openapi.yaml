@@ -1,23 +1,20 @@
 openapi: 3.1.0
 info:
-  title: Positivity Documents API
-  description: API documentation for document rendering and format conversion
   contact:
-    name: Durion Support Services
     email: louis.burroughs@gmail.com
+    name: Durion Support Services
+  description: API documentation for document rendering and format conversion
+  title: Positivity Documents API
   version: v1
 servers:
-- url: http://localhost:8086
-  description: Generated server url
+- description: Generated server url
+  url: http://localhost:8086
 tags:
-- name: Document Render API
-  description: Render source content into PDF output
+- description: Render source content into PDF output
+  name: Document Render API
 paths:
   /v1/documents/render:
     post:
-      tags:
-      - Document Render API
-      summary: Render document to PDF
       description: 'Renders the supplied source content into a PDF document and returns the PDF bytes inline.
 
         Use this tool when a printable document is needed from structured content; do not use it to
@@ -47,54 +44,62 @@ paths:
         '
       operationId: renderDocument
       requestBody:
-        description: Source content and target format to render into a PDF.
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/RenderRequest'
             examples:
               Invoice content with a template:
                 description: Invoice content with a template
                 value:
+                  content: '{"title":"Invoice","total":125.00}'
                   format: JSON
                   templateId: invoice-default
-                  content: '{"title":"Invoice","total":125.00}'
+            schema:
+              $ref: '#/components/schemas/RenderRequest'
+        description: Source content and target format to render into a PDF.
         required: true
       responses:
         '200':
-          description: PDF rendered successfully
           content:
             application/pdf:
               schema:
-                type: string
                 format: binary
+                type: string
+          description: PDF rendered successfully
         '400':
+          content:
+            application/pdf:
+              schema:
+                format: byte
+                type: string
           description: Invalid render request
-          content:
-            application/pdf:
-              schema:
-                type: string
-                format: byte
         '403':
-          description: Forbidden
           content:
             application/pdf:
               schema:
-                type: string
                 format: byte
+                type: string
+          description: Forbidden
       security:
       - bearerAuth:
         - documents:render
+      summary: Render document to PDF
+      tags:
+      - Document Render API
       x-required-permissions:
       - documents:render
 components:
   schemas:
     RenderRequest:
-      type: object
       description: Request to render document content into a target output format
       properties:
-        format:
+        content:
+          description: Raw content to be rendered into the target format
+          example:
+            title: Invoice
+            total: 125.0
+          minLength: 1
           type: string
+        format:
           description: Target output format for the rendered document
           enum:
           - JSON
@@ -103,22 +108,17 @@ components:
           - TEXT
           - CSV
           example: JSON
-        templateId:
           type: string
+        templateId:
           description: Optional identifier of the template to apply when rendering
           example: invoice-default
-        content:
           type: string
-          description: Raw content to be rendered into the target format
-          example:
-            title: Invoice
-            total: 125.0
-          minLength: 1
       required:
       - content
       - format
+      type: object
   securitySchemes:
     bearerAuth:
-      type: http
-      scheme: bearer
       bearerFormat: JWT
+      scheme: bearer
+      type: http
