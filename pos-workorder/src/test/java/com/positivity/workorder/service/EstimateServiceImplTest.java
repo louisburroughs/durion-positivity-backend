@@ -320,6 +320,7 @@ class EstimateServiceImplTest {
                 BigDecimal.TEN,
                 "taxCode",
                 LOCAL_VEHICLE_ID,
+                null,
                 null);
 
         EstimateItemResponse result = estimateService.addEstimateItem(estimate.getId(), request, "testuser");
@@ -335,7 +336,7 @@ class EstimateServiceImplTest {
         when(estimateItemRepository.findByIdAndEstimate_IdAndDeletedFalse(any(UUID.class), any(UUID.class)))
                 .thenReturn(Optional.of(item));
         when(estimateItemRepository.save(any(EstimateItem.class))).thenAnswer(i -> i.getArgument(0));
-        UpdateEstimateItemRequest request = new UpdateEstimateItemRequest("new description", null, null, null);
+        UpdateEstimateItemRequest request = new UpdateEstimateItemRequest("new description", null, null, null, null);
 
         EstimateItemResponse result = estimateService.updateEstimateItem(estimate.getId(), item.getId(), request);
 

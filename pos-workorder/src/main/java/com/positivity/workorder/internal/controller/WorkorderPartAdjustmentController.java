@@ -195,11 +195,14 @@ public class WorkorderPartAdjustmentController {
                     which record real physical movement of stock.
                     Preconditions: the workorder and part must exist and the part must belong to the workorder.
                     Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID), a \
-                    positive newQuantity, and a reason in the body; notes are optional and an Idempotency-Key \
-                    header deduplicates retries.
+                    positive newQuantity, and a reason in the body; notes and uomCode are optional (uomCode is \
+                    the unit newQuantity is expressed in; omit to leave the part's existing unit unchanged) and \
+                    an Idempotency-Key header deduplicates retries.
                     Emits a WORKORDER_PART_CORRECT event.
-                    Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, and \
-                    400 when newQuantity is not positive or the part does not belong to the workorder.
+                    Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, 400 \
+                    when newQuantity is not positive or the part does not belong to the workorder, and 422 when \
+                    uomCode has no conversion row for the product or the converted quantity exceeds its \
+                    declared decimal scale.
                     """)
     @ApiResponse(
             responseCode = "201",
@@ -207,6 +210,11 @@ public class WorkorderPartAdjustmentController {
             content = @Content(schema = @Schema(implementation = WorkorderPartAdjustmentEventResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request")
     @ApiResponse(responseCode = "404", description = "Workorder or part not found")
+    @ApiResponse(
+            responseCode = "422",
+            description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the "
+                    + "converted quantity exceeds the product's declared decimal scale "
+                    + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Part line, corrected quantity, and the reason for the administrative fix.",
             required = true,
@@ -228,6 +236,7 @@ public class WorkorderPartAdjustmentController {
                     workorderId,
                     request.getWorkorderPartId(),
                     request.getNewQuantity(),
+                    request.getUomCode(),
                     request.getReason(),
                     idempotencyKey,
                     request.getNotes());

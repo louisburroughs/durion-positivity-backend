@@ -41,4 +41,13 @@ public class IssuePartRequest {
     @Nullable
     @Schema(description = "Optional issue notes", example = "Issued from bin A-14", requiredMode = NOT_REQUIRED)
     private String notes;
+
+    @Nullable
+    @Schema(
+            description = "Unit quantity is expressed in. Omit for the product's base unit -- today's implicit "
+                    + "behavior. Converted to base and validated against the product's catalog divisibility "
+                    + "before the part is issued and before the reservation request is sent.",
+            example = "QT",
+            requiredMode = NOT_REQUIRED)
+    private String uomCode;
 }

@@ -315,6 +315,8 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
      * @param workorderId    workorder ID
      * @param partId         part line item ID
      * @param newQuantity    new authorized quantity (must be positive)
+     * @param uomCode        unit {@code newQuantity} is expressed in; {@code null} leaves the
+     *                       part's existing unit unchanged
      * @param reason         reason for correction (required for audit)
      * @param idempotencyKey optional idempotency key
      * @param notes          optional additional notes
@@ -328,6 +330,7 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
             @NonNull UUID workorderId,
             @NonNull UUID partId,
             @NonNull BigDecimal newQuantity,
+            @Nullable String uomCode,
             @NonNull String reason,
             @Nullable String idempotencyKey,
             @Nullable String notes) {
@@ -367,9 +370,13 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
         }
 
         // A correction rewrites the authorized quantity outright, so it is the one path that can
-        // reintroduce a fraction onto a line that was promoted clean (ADR-0055, #1413).
+        // reintroduce a fraction onto a line that was promoted clean (ADR-0055, #1413). The
+        // effective uomCode is whichever this request supplies, falling back to the part's
+        // existing one -- a correction that only fixes the number must still be checked against
+        // the unit the line is already in (ADR-0055 stage 3, #1415).
+        String effectiveUomCode = uomCode != null ? uomCode : part.getUomCode();
         partQuantityDivisibilityService.requirePermittedScale(
-                part.getProductEntityId(), part.getDescription(), newQuantity);
+                part.getProductEntityId(), part.getDescription(), newQuantity, effectiveUomCode);
 
         // Calculate adjustment
         BigDecimal oldQuantity = part.getQuantity();
@@ -377,6 +384,9 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
 
         // Update part.quantity (authorized quantity)
         part.setQuantity(newQuantity);
+        if (uomCode != null) {
+            part.setUomCode(uomCode);
+        }
         // Also update lineTotal if unitPrice exists
         if (part.getUnitPrice() != null) {
             part.setLineTotal(newQuantity.multiply(part.getUnitPrice()));

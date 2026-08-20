@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -50,17 +51,23 @@ public class InventoryCommandPublisher {
      * @param requiredQuantity quantity requested; decimal-capable per the product's catalog
      *     divisibility declaration (ADR-0055, #1414)
      * @param locationId selling location the demand must be covered at
+     * @param uomCode unit {@code requiredQuantity} is expressed in (ADR-0055 stage 3, #1415);
+     *     {@code null} means the product's base unit. Sales-order lines stay integral by decision
+     *     (ADR-0055 leaves {@code SalesOrderLine.quantity} an {@code int}), so every caller sends
+     *     {@code null} today; the parameter exists so the command shape matches pos-workorder's
+     *     and pos-inventory's single {@code handleReservationRequestRequested} reads one contract.
      */
     public void requestReservation(
             @NonNull UUID salesOrderLineId,
             @NonNull UUID stockItemId,
             @NonNull BigDecimal requiredQuantity,
-            @NonNull UUID locationId) {
+            @NonNull UUID locationId,
+            @Nullable String uomCode) {
         UUID commandId = deterministicCommandId(
                 RESERVATION_REQUEST_COMMAND_TYPE,
-                salesOrderLineId + ":" + stockItemId + ":" + normalizedQuantityKey(requiredQuantity));
+                salesOrderLineId + ":" + stockItemId + ":" + normalizedQuantityKey(requiredQuantity) + ":" + uomCode);
         ReservationRequestPayload payload =
-                new ReservationRequestPayload(salesOrderLineId, stockItemId, requiredQuantity, locationId);
+                new ReservationRequestPayload(salesOrderLineId, stockItemId, requiredQuantity, locationId, uomCode);
         send(RESERVATION_REQUEST_COMMAND_TYPE, commandId, salesOrderLineId.toString(), payload);
         log.info("Queued reservation request command {} for sales-order line {}", commandId, salesOrderLineId);
     }
@@ -102,10 +109,14 @@ public class InventoryCommandPublisher {
             @NonNull String commandType,
             @NonNull Object payload) {}
 
-    /** Matches the fields pos-inventory's {@code handleReservationRequestRequested} reads. */
+    /**
+     * Matches the fields pos-inventory's {@code handleReservationRequestRequested} reads.
+     * {@code uomCode} is {@code null} for the product's base unit (ADR-0055 stage 3, #1415).
+     */
     record ReservationRequestPayload(
             @NonNull UUID salesOrderLineId,
             @NonNull UUID stockItemId,
             @NonNull BigDecimal requiredQuantity,
-            @NonNull UUID locationId) {}
+            @NonNull UUID locationId,
+            @Nullable String uomCode) {}
 }

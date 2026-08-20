@@ -39,4 +39,13 @@ public class UpdateEstimateItemRequest {
     @Nullable
     @Schema(description = "Updated tax code", example = "TX-GENERAL", requiredMode = NOT_REQUIRED)
     private String taxCode;
+
+    @Nullable
+    @Schema(
+            description = "Updated unit quantity is expressed in, for PART items only. Omit to leave the item's "
+                    + "unit unchanged, like every other field on this partial-update request. Rejected on a LABOR "
+                    + "item.",
+            example = "QT",
+            requiredMode = NOT_REQUIRED)
+    private String uomCode;
 }

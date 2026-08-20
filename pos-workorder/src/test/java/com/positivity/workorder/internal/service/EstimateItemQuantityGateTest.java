@@ -221,7 +221,7 @@ class EstimateItemQuantityGateTest {
             assertThatThrownBy(() -> service.updateEstimateItem(
                             ESTIMATE_ID,
                             ITEM_ID,
-                            new UpdateEstimateItemRequest(null, new BigDecimal("0.5"), null, null)))
+                            new UpdateEstimateItemRequest(null, new BigDecimal("0.5"), null, null, null)))
                     .isInstanceOf(FractionalQuantityNotAllowedException.class);
         }
 
@@ -231,7 +231,7 @@ class EstimateItemQuantityGateTest {
             EstimateItem item = givenExistingItem(EstimateItemType.PART, PRODUCT_ID);
 
             service.updateEstimateItem(
-                    ESTIMATE_ID, ITEM_ID, new UpdateEstimateItemRequest("Front pads", null, null, null));
+                    ESTIMATE_ID, ITEM_ID, new UpdateEstimateItemRequest("Front pads", null, null, null, null));
 
             assertThat(item.getDescription()).isEqualTo("Front pads");
         }
@@ -244,8 +244,127 @@ class EstimateItemQuantityGateTest {
             assertThatCode(() -> service.updateEstimateItem(
                             ESTIMATE_ID,
                             ITEM_ID,
-                            new UpdateEstimateItemRequest(null, new BigDecimal("1.5"), null, null)))
+                            new UpdateEstimateItemRequest(null, new BigDecimal("1.5"), null, null, null)))
                     .doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("re-pointing an unchanged quantity at a new uomCode still clears the gate")
+        void rejectsUomCodeOnlyRevisionThatMakesTheExistingQuantityFractional() {
+            // The existing item carries quantity=1 (base EA, scale 0). Re-pointing it at a unit
+            // whose factor turns 1 into a fraction must be caught even though the quantity number
+            // itself never changes on this request (ADR-0055 stage 3, #1415).
+            givenExistingItem(EstimateItemType.PART, PRODUCT_ID);
+            when(productUomRepository.findByProductIdAndUomCode(PRODUCT_ID, "PAIR"))
+                    .thenReturn(Optional.of(com.positivity.workorder.internal.entity.ExtProductUomReplica.builder()
+                            .productId(PRODUCT_ID)
+                            .uomCode("PAIR")
+                            .uomType("PACK")
+                            .factorToBase(new BigDecimal("0.5"))
+                            .precisionScale(0)
+                            .aggregateVersion(1L)
+                            .build()));
+
+            assertThatThrownBy(() -> service.updateEstimateItem(
+                            ESTIMATE_ID, ITEM_ID, new UpdateEstimateItemRequest(null, null, null, null, "PAIR")))
+                    .isInstanceOf(FractionalQuantityNotAllowedException.class)
+                    .hasMessageContaining("0.5");
+        }
+    }
+
+    @Nested
+    @DisplayName("uomCode on LABOR (ADR-0055 stage 3, #1415)")
+    class LaborUomRejection {
+
+        @Test
+        @DisplayName("rejects a non-null uomCode on a LABOR item at add time")
+        void rejectsUomCodeOnLaborAdd() {
+            AddEstimateItemRequest request = AddEstimateItemRequest.builder()
+                    .itemType(EstimateItemType.LABOR)
+                    .description("Diagnostic")
+                    .quantity(new BigDecimal("1.5"))
+                    .unitPrice(new BigDecimal("120.00"))
+                    .serviceId(SERVICE_ID)
+                    .uomCode("HR")
+                    .build();
+
+            assertThatThrownBy(() -> service.addEstimateItem(ESTIMATE_ID, request, "jane.smith"))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("LABOR");
+
+            verify(estimateItemRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("rejects revising a LABOR item to carry a uomCode")
+        void rejectsUomCodeOnLaborUpdate() {
+            givenExistingItem(EstimateItemType.LABOR, null);
+
+            assertThatThrownBy(() -> service.updateEstimateItem(
+                            ESTIMATE_ID, ITEM_ID, new UpdateEstimateItemRequest(null, null, null, null, "HR")))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("LABOR");
+        }
+    }
+
+    @Nested
+    @DisplayName("uomCode conversion at the gate (ADR-0055 stage 3, #1415)")
+    class UomConversionGate {
+
+        @Test
+        @DisplayName("omitting uomCode behaves exactly as today (base unit assumed)")
+        void absentUomCodeIsBaseUnit() {
+            assertThatCode(() -> service.addEstimateItem(ESTIMATE_ID, partRequest("2"), "jane.smith"))
+                    .doesNotThrowAnyException();
+
+            verify(productUomRepository, never()).findByProductIdAndUomCode(any(), any());
+        }
+
+        @Test
+        @DisplayName(
+                "gate composition: 4.5 QT at factor 0.25 (BASE=EA, scale 0) converts to 1.125 EA and is " + "rejected")
+        void rejectsConvertedFractionAtWholeUnitScale() {
+            when(productUomRepository.findByProductIdAndUomCode(PRODUCT_ID, "QT"))
+                    .thenReturn(Optional.of(com.positivity.workorder.internal.entity.ExtProductUomReplica.builder()
+                            .productId(PRODUCT_ID)
+                            .uomCode("QT")
+                            .uomType("PACK")
+                            .factorToBase(new BigDecimal("0.25"))
+                            .precisionScale(0)
+                            .aggregateVersion(1L)
+                            .build()));
+
+            AddEstimateItemRequest request = partRequest("4.5");
+            request.setUomCode("QT");
+
+            assertThatThrownBy(() -> service.addEstimateItem(ESTIMATE_ID, request, "jane.smith"))
+                    .isInstanceOf(FractionalQuantityNotAllowedException.class)
+                    .hasMessageContaining("1.125");
+
+            verify(estimateItemRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("gate composition: a scale-2 product accepts the converted value")
+        void acceptsConvertedValueWithinDeclaredScale() {
+            when(productUomRepository.findByProductIdAndUomCode(PRODUCT_ID, "BAG"))
+                    .thenReturn(Optional.of(com.positivity.workorder.internal.entity.ExtProductUomReplica.builder()
+                            .productId(PRODUCT_ID)
+                            .uomCode("BAG")
+                            .uomType("PACK")
+                            .factorToBase(new BigDecimal("1.01"))
+                            .precisionScale(2)
+                            .aggregateVersion(1L)
+                            .build()));
+            when(productUomRepository.findBasePrecisionScales(PRODUCT_ID)).thenReturn(List.of(2));
+
+            AddEstimateItemRequest request = partRequest("1");
+            request.setUomCode("BAG");
+
+            assertThatCode(() -> service.addEstimateItem(ESTIMATE_ID, request, "jane.smith"))
+                    .doesNotThrowAnyException();
+
+            verify(estimateItemRepository).save(any());
         }
     }
 

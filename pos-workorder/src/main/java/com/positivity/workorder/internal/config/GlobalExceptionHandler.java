@@ -12,6 +12,7 @@ import com.positivity.workorder.internal.exception.TimeEntryNotFoundException;
 import com.positivity.workorder.internal.exception.TimeEntryStateException;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
 import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
+import com.positivity.workorder.internal.exception.UomConversionUndefinedException;
 import com.positivity.workorder.internal.exception.WorkSessionLockedException;
 import com.positivity.workorder.internal.exception.WorkSessionNotFoundException;
 import com.positivity.workorder.internal.exception.WorkSessionOverlapException;
@@ -96,6 +97,18 @@ public class GlobalExceptionHandler {
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
         return new ResponseEntity<>(body, headers, HttpStatus.UNPROCESSABLE_ENTITY);
+    }
+
+    /**
+     * A part line's {@code uomCode} names no conversion row for the referenced product (ADR-0055
+     * stage 3, #1415). 422, matching pos-inventory's own {@code UOM_CONVERSION_UNDEFINED} — never
+     * a silent 1:1 assumption.
+     */
+    @ExceptionHandler(UomConversionUndefinedException.class)
+    public ResponseEntity<ApiError> handleUomConversionUndefined(
+            UomConversionUndefinedException ex, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY, UomConversionUndefinedException.ERROR_CODE, ex.getMessage(), request);
     }
 
     @ExceptionHandler(IllegalStateException.class)

@@ -190,6 +190,22 @@ widen at the boundary (`BigDecimal.valueOf`), never narrow it. Sales-order line 
 Compare these quantities with `compareTo`, never `equals`: PostgreSQL returns `numeric(19,4)` at
 scale 4, so a stored `4.0000` and a computed `4` are the same quantity and are not equal.
 
+### Unit of measure on the reservation command (ADR-0055 stage 3, #1415)
+
+`inventory.reservation.request-requested` carries an optional `uomCode` alongside
+`requiredQuantity`. `uomCode` absent (or `null`) means `requiredQuantity` is already in the
+product's base unit — the pre-#1415 shape, unchanged. When present, `ReservationRequestHandler`
+converts to base via `UomConversionService.toBaseQuantityForReservation` (`DOWN` rounding — a
+reservation must never promise more than exists) before registering demand, evaluating ATP, or
+opening a backorder; the converted quantity is what the resulting `ReservationOutcomeV1` fact
+reports. The converted value is also re-checked with `QuantityScaleGuard.requirePostable`, mirroring
+how PO/ASN/receiving/return lines validate after `DocumentQuantityConverter` — a no-op when the
+conversion already rounded cleanly, and the real guard for a `requiredQuantity` sent with no
+`uomCode` at all. A `uomCode` with no conversion row for the product raises
+`UomConversionUndefinedException` (422 `UOM_CONVERSION_UNDEFINED`); on the command's async path this
+surfaces as a logged, permanently-failed command with no outcome fact emitted, same as any other
+business validation failure here.
+
 ### Rollout: breaking on the wire, deployed in lockstep
 
 `InventoryAvailabilityUpdatedV1`, `ReservationOutcomeV1`, `BackorderCreatedV1`,

@@ -41,4 +41,12 @@ public class ConsumePartRequest {
     @Nullable
     @Schema(description = "Optional usage notes", example = "Installed on front axle", requiredMode = NOT_REQUIRED)
     private String notes;
+
+    @Nullable
+    @Schema(
+            description = "Unit quantity is expressed in. Omit for the product's base unit -- today's implicit "
+                    + "behavior. Converted to base and validated against the product's catalog divisibility.",
+            example = "QT",
+            requiredMode = NOT_REQUIRED)
+    private String uomCode;
 }

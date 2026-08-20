@@ -887,10 +887,13 @@ public class EstimateServiceImpl implements EstimateService {
 
         // The quantity column is shared between PART and LABOR rows, and only the PART side names a
         // catalog product whose divisibility can be read. Labour stays fractional: 1.5 hours is a
-        // real thing to sell (ADR-0055, #1413).
+        // real thing to sell (ADR-0055, #1413). LABOR rows never carry a uomCode (ADR-0055 stage
+        // 3, #1415) -- bean validation on the request already rejects one, this is the belt.
         if (request.getItemType() == EstimateItemType.PART) {
             partQuantityDivisibilityService.requirePermittedScale(
-                    request.getProductId(), request.getDescription(), request.getQuantity());
+                    request.getProductId(), request.getDescription(), request.getQuantity(), request.getUomCode());
+        } else if (request.getUomCode() != null) {
+            throw new IllegalArgumentException("uomCode is not valid for LABOR items");
         }
 
         // Build and validate item
@@ -899,6 +902,7 @@ public class EstimateServiceImpl implements EstimateService {
                 .itemType(request.getItemType())
                 .description(request.getDescription())
                 .quantity(request.getQuantity())
+                .uomCode(request.getUomCode())
                 .unitPrice(request.getUnitPrice())
                 .taxCode(request.getTaxCode())
                 .productId(request.getProductId())
@@ -949,13 +953,27 @@ public class EstimateServiceImpl implements EstimateService {
                 .orElseThrow(() ->
                         new EntityNotFoundException("Item not found: " + itemId + " for estimate: " + estimateId));
 
+        // LABOR rows never carry a uomCode (ADR-0055 stage 3, #1415): revising one onto a LABOR
+        // row has to be rejected the same way entering one would be.
+        if (request.getUomCode() != null && item.getItemType() == EstimateItemType.LABOR) {
+            throw new IllegalArgumentException("uomCode is not valid for LABOR items");
+        }
+
         // Revising the quantity has to clear the same gate as entering it, or the rule would be
-        // one PATCH away from being bypassed (#1413).
-        if (request.getQuantity() != null && item.getItemType() == EstimateItemType.PART) {
+        // one PATCH away from being bypassed (#1413). Runs whenever either the quantity or the
+        // unit changes -- not only quantity -- because re-pointing an unchanged quantity at a new
+        // uomCode can make it fractional in the new unit just as surely as editing the number
+        // would (ADR-0055 stage 3, #1415); the effective value/unit fall back to the item's
+        // existing ones when this request leaves them alone.
+        if ((request.getQuantity() != null || request.getUomCode() != null)
+                && item.getItemType() == EstimateItemType.PART) {
+            BigDecimal effectiveQuantity = request.getQuantity() != null ? request.getQuantity() : item.getQuantity();
+            String effectiveUomCode = request.getUomCode() != null ? request.getUomCode() : item.getUomCode();
             partQuantityDivisibilityService.requirePermittedScale(
                     item.getProductId(),
                     request.getDescription() != null ? request.getDescription() : item.getDescription(),
-                    request.getQuantity());
+                    effectiveQuantity,
+                    effectiveUomCode);
         }
 
         // Update only provided fields
@@ -964,6 +982,9 @@ public class EstimateServiceImpl implements EstimateService {
         }
         if (request.getQuantity() != null) {
             item.setQuantity(request.getQuantity());
+        }
+        if (request.getUomCode() != null) {
+            item.setUomCode(request.getUomCode());
         }
         if (request.getUnitPrice() != null) {
             item.setUnitPrice(request.getUnitPrice());

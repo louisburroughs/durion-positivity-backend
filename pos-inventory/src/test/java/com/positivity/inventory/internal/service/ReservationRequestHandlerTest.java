@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -58,18 +59,33 @@ class ReservationRequestHandlerTest {
     @Mock
     private InventoryFactPublisher inventoryFactPublisher;
 
+    @Mock
+    private UomConversionService uomConversionService;
+
+    @Mock
+    private QuantityScaleGuard quantityScaleGuard;
+
     private final Clock fixedClock = Clock.fixed(Instant.parse("2026-08-18T00:00:00Z"), ZoneOffset.UTC);
 
     private ReservationRequestHandler handler;
 
     @BeforeEach
     void setUp() {
+        // Every call that reaches the conversion step runs the quantity through the guard
+        // (ADR-0055 stage 3, #1415); a passthrough default keeps the pre-existing tests exercising
+        // base-unit demand unchanged. lenient() because the two "rejects when ..." tests throw
+        // before reaching it.
+        lenient()
+                .when(quantityScaleGuard.requirePostable(any(), any(), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(3));
         handler = new ReservationRequestHandler(
                 reservationService,
                 backorderService,
                 reservationRepository,
                 summaryRepository,
                 inventoryFactPublisher,
+                uomConversionService,
+                quantityScaleGuard,
                 fixedClock);
     }
 
@@ -89,7 +105,7 @@ class ReservationRequestHandlerTest {
     @Test
     @DisplayName("rejects when neither demand line is set")
     void handle_neitherDemandLine_throws() {
-        assertThatThrownBy(() -> handler.handle(null, null, STOCK_ITEM_ID, new BigDecimal("5"), LOCATION_ID))
+        assertThatThrownBy(() -> handler.handle(null, null, STOCK_ITEM_ID, new BigDecimal("5"), LOCATION_ID, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("exactly one");
     }
@@ -98,7 +114,7 @@ class ReservationRequestHandlerTest {
     @DisplayName("rejects when both demand lines are set")
     void handle_bothDemandLines_throws() {
         assertThatThrownBy(() -> handler.handle(
-                        WORKORDER_LINE_ID, SALES_ORDER_LINE_ID, STOCK_ITEM_ID, new BigDecimal("5"), LOCATION_ID))
+                        WORKORDER_LINE_ID, SALES_ORDER_LINE_ID, STOCK_ITEM_ID, new BigDecimal("5"), LOCATION_ID, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("exactly one");
     }
@@ -111,7 +127,7 @@ class ReservationRequestHandlerTest {
         when(summaryRepository.findByStockItemIdAndLocationId(STOCK_ITEM_ID.toString(), LOCATION_ID))
                 .thenReturn(Optional.of(summary));
 
-        handler.handle(WORKORDER_LINE_ID, null, STOCK_ITEM_ID, new BigDecimal("5"), LOCATION_ID);
+        handler.handle(WORKORDER_LINE_ID, null, STOCK_ITEM_ID, new BigDecimal("5"), LOCATION_ID, null);
 
         verify(backorderService, never()).createBackorder(any(), any(), any(), any());
         ArgumentCaptor<ReservationOutcomeV1> factCaptor = ArgumentCaptor.forClass(ReservationOutcomeV1.class);
@@ -146,7 +162,7 @@ class ReservationRequestHandlerTest {
                         .status(BackorderStatus.OPEN)
                         .build());
 
-        handler.handle(null, SALES_ORDER_LINE_ID, STOCK_ITEM_ID, new BigDecimal("5"), LOCATION_ID);
+        handler.handle(null, SALES_ORDER_LINE_ID, STOCK_ITEM_ID, new BigDecimal("5"), LOCATION_ID, null);
 
         assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.BACKORDERED);
         verify(reservationRepository).save(reservation);
@@ -159,5 +175,69 @@ class ReservationRequestHandlerTest {
         assertThat(fact.backorderId()).isEqualTo(BACKORDER_ID);
         assertThat(fact.salesOrderLineId()).isEqualTo(SALES_ORDER_LINE_ID);
         assertThat(fact.workorderLineId()).isNull();
+    }
+
+    @org.junit.jupiter.api.Nested
+    @DisplayName("Document-to-base conversion at the reservation boundary (ADR-0055 stage 3, #1415)")
+    class UomConversion {
+
+        @Test
+        @DisplayName("a uomCode converts via the DOWN-rounding reservation variant before anything else runs")
+        void convertsWithDownRoundingBeforeReserving() {
+            when(uomConversionService.toBaseQuantityForReservation(STOCK_ITEM_ID, "QT", new BigDecimal("4.5")))
+                    .thenReturn(new BigDecimal("4"));
+            when(quantityScaleGuard.requirePostable(
+                            STOCK_ITEM_ID, STOCK_ITEM_ID.toString(), "requiredQuantity", new BigDecimal("4")))
+                    .thenReturn(new BigDecimal("4"));
+            when(reservationService.createOrUpdateReservation(any())).thenReturn(reservationResponse());
+            InventoryStockSummary summary = summaryWithAtp(10);
+            when(summaryRepository.findByStockItemIdAndLocationId(STOCK_ITEM_ID.toString(), LOCATION_ID))
+                    .thenReturn(Optional.of(summary));
+
+            handler.handle(WORKORDER_LINE_ID, null, STOCK_ITEM_ID, new BigDecimal("4.5"), LOCATION_ID, "QT");
+
+            org.mockito.ArgumentCaptor<com.positivity.inventory.internal.dto.reservation.CreateReservationRequest>
+                    requestCaptor = org.mockito.ArgumentCaptor.forClass(
+                            com.positivity.inventory.internal.dto.reservation.CreateReservationRequest.class);
+            verify(reservationService).createOrUpdateReservation(requestCaptor.capture());
+            assertThat(requestCaptor.getValue().getRequiredQuantity()).isEqualByComparingTo("4");
+
+            ArgumentCaptor<ReservationOutcomeV1> factCaptor = ArgumentCaptor.forClass(ReservationOutcomeV1.class);
+            verify(inventoryFactPublisher).recordReservationOutcome(factCaptor.capture());
+            assertThat(factCaptor.getValue().requiredQuantity()).isEqualByComparingTo("4");
+        }
+
+        @Test
+        @DisplayName("a null uomCode skips conversion entirely, matching pre-#1415 behavior")
+        void nullUomCodeSkipsConversion() {
+            when(quantityScaleGuard.requirePostable(
+                            STOCK_ITEM_ID, STOCK_ITEM_ID.toString(), "requiredQuantity", new BigDecimal("5")))
+                    .thenReturn(new BigDecimal("5"));
+            when(reservationService.createOrUpdateReservation(any())).thenReturn(reservationResponse());
+            InventoryStockSummary summary = summaryWithAtp(10);
+            when(summaryRepository.findByStockItemIdAndLocationId(STOCK_ITEM_ID.toString(), LOCATION_ID))
+                    .thenReturn(Optional.of(summary));
+
+            handler.handle(WORKORDER_LINE_ID, null, STOCK_ITEM_ID, new BigDecimal("5"), LOCATION_ID, null);
+
+            verify(uomConversionService, never()).toBaseQuantityForReservation(any(), any(), any());
+            verify(uomConversionService, never()).toBaseQuantity(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName(
+                "a uomCode with no conversion path surfaces UomConversionUndefinedException and reserves " + "nothing")
+        void undefinedConversionSurfacesAndReservesNothing() {
+            when(uomConversionService.toBaseQuantityForReservation(STOCK_ITEM_ID, "QT", new BigDecimal("4.5")))
+                    .thenThrow(com.positivity.inventory.internal.exception.UomConversionUndefinedException.unknownUom(
+                            STOCK_ITEM_ID, "QT"));
+
+            assertThatThrownBy(() -> handler.handle(
+                            WORKORDER_LINE_ID, null, STOCK_ITEM_ID, new BigDecimal("4.5"), LOCATION_ID, "QT"))
+                    .isInstanceOf(com.positivity.inventory.internal.exception.UomConversionUndefinedException.class);
+
+            verify(reservationService, never()).createOrUpdateReservation(any());
+            verify(inventoryFactPublisher, never()).recordReservationOutcome(any());
+        }
     }
 }

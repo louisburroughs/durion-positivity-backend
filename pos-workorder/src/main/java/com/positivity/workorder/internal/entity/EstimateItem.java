@@ -66,6 +66,20 @@ public class EstimateItem {
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal quantity;
 
+    /**
+     * The unit {@code quantity} is expressed in (ADR-0055 stage 3, #1415). {@code null} means the
+     * product's base unit — today's implicit assumption, unchanged; every row that predates this
+     * column reads as {@code null} with no behavior change.
+     *
+     * <p><b>LABOR rows always carry {@code null}.</b> {@code quantity} is shared between PART and
+     * LABOR, but hours are not a product unit of measure and have no catalog conversion row to
+     * convert from — {@code uomCode} names a {@code product_uom} entry, and a LABOR row names no
+     * product. A non-null {@code uomCode} on a LABOR row is rejected at entry (400).
+     */
+    @Column(name = "uom_code", length = 32)
+    @Nullable
+    private String uomCode;
+
     // For PART items: unit price; For LABOR items: labor rate (hourly)
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal unitPrice;

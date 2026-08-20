@@ -96,17 +96,22 @@ public class InventoryCommandPublisher {
      * <p>The command id is derived from (part, item, quantity), so re-issuing the same part
      * collapses to one command under pos-inventory's dedupe while a different quantity is a new
      * command against the same reservation.
+     *
+     * @param uomCode the unit {@code requiredQuantity} is expressed in (ADR-0055 stage 3, #1415);
+     *     {@code null} means the product's base unit. pos-inventory converts to base itself, using
+     *     {@code DOWN} rounding so the reservation never promises more than exists.
      */
     public void requestReservation(
             @NonNull UUID workorderLineId,
             @NonNull UUID stockItemId,
             @NonNull BigDecimal requiredQuantity,
-            @NonNull UUID locationId) {
+            @NonNull UUID locationId,
+            @Nullable String uomCode) {
         UUID commandId = deterministicCommandId(
                 RESERVATION_REQUEST_COMMAND_TYPE,
-                workorderLineId + ":" + stockItemId + ":" + normalizedQuantityKey(requiredQuantity));
+                workorderLineId + ":" + stockItemId + ":" + normalizedQuantityKey(requiredQuantity) + ":" + uomCode);
         ReservationRequestPayload payload =
-                new ReservationRequestPayload(workorderLineId, stockItemId, requiredQuantity, locationId);
+                new ReservationRequestPayload(workorderLineId, stockItemId, requiredQuantity, locationId, uomCode);
         send(RESERVATION_REQUEST_COMMAND_TYPE, commandId, workorderLineId.toString(), payload);
         log.info("Queued reservation request command {} for workorder line {}", commandId, workorderLineId);
     }
@@ -159,12 +164,16 @@ public class InventoryCommandPublisher {
     public record ConsumeLine(
             @NonNull UUID pickTaskId, @Nullable UUID skuId, int quantity) {}
 
-    /** Matches the fields pos-inventory's {@code handleReservationRequestRequested} reads. */
+    /**
+     * Matches the fields pos-inventory's {@code handleReservationRequestRequested} reads.
+     * {@code uomCode} is {@code null} for the product's base unit (ADR-0055 stage 3, #1415).
+     */
     record ReservationRequestPayload(
             @NonNull UUID workorderLineId,
             @NonNull UUID stockItemId,
             @NonNull BigDecimal requiredQuantity,
-            @NonNull UUID locationId) {}
+            @NonNull UUID locationId,
+            @Nullable String uomCode) {}
 
     record ConsumePayload(
             @NonNull UUID workorderId,

@@ -453,7 +453,7 @@ class WorkorderPartAdjustmentServiceImplTest {
             givenPart(part);
 
             WorkorderPartAdjustmentEventResponse response = service.correctPartQuantity(
-                    WORKORDER_ID, PART_ID, new BigDecimal("5"), "DATA_ENTRY_ERROR", null, "counted again");
+                    WORKORDER_ID, PART_ID, new BigDecimal("5"), null, "DATA_ENTRY_ERROR", null, "counted again");
 
             assertThat(part.getQuantity()).isEqualByComparingTo("5");
             assertThat(part.getLineTotal()).isEqualByComparingTo("249.95");
@@ -470,7 +470,7 @@ class WorkorderPartAdjustmentServiceImplTest {
             givenPart(part);
 
             WorkorderPartAdjustmentEventResponse response =
-                    service.correctPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "reason", null, null);
+                    service.correctPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "reason", null, null);
 
             assertThat(response.getQuantityAdjustment()).isEqualByComparingTo("-1");
             assertThat(part.getLineTotal()).isEqualByComparingTo("49.99");
@@ -484,7 +484,7 @@ class WorkorderPartAdjustmentServiceImplTest {
             part.setLineTotal(new BigDecimal("99.98"));
             givenPart(part);
 
-            service.correctPartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("4"), "reason", null, null);
+            service.correctPartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("4"), null, "reason", null, null);
 
             assertThat(part.getQuantity()).isEqualByComparingTo("4");
             assertThat(part.getLineTotal()).isEqualByComparingTo("99.98");
@@ -493,12 +493,12 @@ class WorkorderPartAdjustmentServiceImplTest {
         @Test
         @DisplayName("rejects a non-positive new quantity")
         void rejectsNonPositiveQuantity() {
-            assertThatThrownBy(
-                            () -> service.correctPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ZERO, "r", null, null))
+            assertThatThrownBy(() ->
+                            service.correctPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ZERO, null, "r", null, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("New quantity must be positive");
-            assertThatThrownBy(() ->
-                            service.correctPartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("-3"), "r", null, null))
+            assertThatThrownBy(() -> service.correctPartQuantity(
+                            WORKORDER_ID, PART_ID, new BigDecimal("-3"), null, "r", null, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("New quantity must be positive");
         }
@@ -508,7 +508,7 @@ class WorkorderPartAdjustmentServiceImplTest {
         void registersIdempotencyKey() {
             givenPart(part("0", "0", "0"));
 
-            service.correctPartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("3"), "reason", "corr-key", null);
+            service.correctPartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("3"), null, "reason", "corr-key", null);
 
             verify(idempotencyService).markKeyProcessedForPartAdjustment(CORRECTION_OPERATION, "corr-key", EVENT_ID);
         }
@@ -521,7 +521,7 @@ class WorkorderPartAdjustmentServiceImplTest {
             when(adjustmentEventRepository.findById(EVENT_ID)).thenReturn(Optional.of(existingEvent("CORRECTION")));
 
             assertThat(service.correctPartQuantity(
-                                    WORKORDER_ID, PART_ID, new BigDecimal("3"), "reason", "corr-key", null)
+                                    WORKORDER_ID, PART_ID, new BigDecimal("3"), null, "reason", "corr-key", null)
                             .getAdjustmentType())
                     .isEqualTo("CORRECTION");
             verify(workorderPartRepository, never()).save(any());
@@ -535,7 +535,7 @@ class WorkorderPartAdjustmentServiceImplTest {
             when(adjustmentEventRepository.findById(EVENT_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.correctPartQuantity(
-                            WORKORDER_ID, PART_ID, new BigDecimal("3"), "reason", "corr-key", null))
+                            WORKORDER_ID, PART_ID, new BigDecimal("3"), null, "reason", "corr-key", null))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("Adjustment event not found");
         }
@@ -544,16 +544,16 @@ class WorkorderPartAdjustmentServiceImplTest {
         @DisplayName("rejects an unknown part and a foreign part")
         void rejectsUnresolvableTargets() {
             when(workorderPartRepository.findById(PART_ID)).thenReturn(Optional.empty());
-            assertThatThrownBy(
-                            () -> service.correctPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "r", null, null))
+            assertThatThrownBy(() ->
+                            service.correctPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "r", null, null))
                     .isInstanceOf(NoSuchElementException.class)
                     .hasMessageContaining("Part not found");
 
             WorkorderPart foreign = part("0", "0", "0");
             foreign.setWorkorder(workorder(OTHER_WORKORDER_ID));
             givenPart(foreign);
-            assertThatThrownBy(
-                            () -> service.correctPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "r", null, null))
+            assertThatThrownBy(() ->
+                            service.correctPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "r", null, null))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("does not belong to workorder");
         }
@@ -563,8 +563,8 @@ class WorkorderPartAdjustmentServiceImplTest {
         void failsWithoutAuthenticatedUser() {
             SecurityContextHolder.clearContext();
 
-            assertThatThrownBy(
-                            () -> service.correctPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "r", null, null))
+            assertThatThrownBy(() ->
+                            service.correctPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "r", null, null))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessage("Security context has no Authentication");
         }

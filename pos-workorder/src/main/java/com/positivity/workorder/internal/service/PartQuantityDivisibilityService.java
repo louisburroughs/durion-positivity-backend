@@ -1,6 +1,8 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.workorder.internal.entity.ExtProductUomReplica;
 import com.positivity.workorder.internal.exception.FractionalQuantityNotAllowedException;
+import com.positivity.workorder.internal.exception.UomConversionUndefinedException;
 import com.positivity.workorder.internal.repository.ExtProductUomReplicaRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -55,30 +57,88 @@ public class PartQuantityDivisibilityService {
     /**
      * Rejects a quantity the referenced product's declared scale does not permit.
      *
+     * <p>Equivalent to {@link #requirePermittedScale(UUID, String, BigDecimal, String)} with a
+     * {@code null} {@code uomCode} — the quantity is already in the product's base unit.
+     *
      * @param productEntityId the catalog product the part line references; {@code null} for a
      *     non-catalog line, which is exempt
      * @param partLabel the part's description, used to name it in the error
-     * @param quantity the requested quantity
+     * @param quantity the requested quantity, in the product's base unit
      * @throws FractionalQuantityNotAllowedException when the quantity carries more decimal places
      *     than the product declares
      */
     public void requirePermittedScale(
             @Nullable UUID productEntityId, @Nullable String partLabel, @NonNull BigDecimal quantity) {
+        requirePermittedScale(productEntityId, partLabel, quantity, null);
+    }
+
+    /**
+     * Rejects a quantity the referenced product's declared scale does not permit, converting from
+     * {@code uomCode} to the product's base unit first when one is given (ADR-0055 stage 3,
+     * #1415).
+     *
+     * <p>Conversion happens before the check, never after: rounding the quantity to fit and then
+     * checking the rounded value would silently accept exactly the fraction ADR-0055 exists to
+     * reject. The unrounded product of {@code quantity} and the replica's {@code factorToBase} is
+     * what gets tested against the declared scale, and — on rejection — what names the offending
+     * value in the error, so the counter sees the base-unit number the ledger would actually have
+     * to hold.
+     *
+     * @param productEntityId the catalog product the part line references; {@code null} for a
+     *     non-catalog line, which is exempt regardless of {@code uomCode}
+     * @param partLabel the part's description, used to name it in the error
+     * @param quantity the requested quantity, in {@code uomCode} when given, otherwise already in
+     *     the product's base unit
+     * @param uomCode the unit {@code quantity} is expressed in; {@code null} means the product's
+     *     base unit — today's implicit behavior, unchanged
+     * @throws FractionalQuantityNotAllowedException when the (converted) quantity carries more
+     *     decimal places than the product declares
+     * @throws UomConversionUndefinedException when {@code uomCode} is given and the product has no
+     *     conversion row for it
+     */
+    public void requirePermittedScale(
+            @Nullable UUID productEntityId,
+            @Nullable String partLabel,
+            @NonNull BigDecimal quantity,
+            @Nullable String uomCode) {
         if (productEntityId == null) {
             return;
         }
+        BigDecimal baseQuantity = uomCode == null || uomCode.isBlank()
+                ? quantity
+                : convertToBaseUnrounded(productEntityId, uomCode, quantity);
+
         int declaredScale = declaredScaleFor(productEntityId);
-        if (fitsScale(quantity, declaredScale)) {
+        if (fitsScale(baseQuantity, declaredScale)) {
             return;
         }
 
         String label = partLabel == null || partLabel.isBlank() ? UNNAMED_PART : partLabel;
         // Rounding up, not to nearest: an opened container is spent whether half of it was used or
         // all of it, so the whole one is what gets issued and billed (ADR-0055).
-        BigDecimal suggestion = quantity.setScale(declaredScale, RoundingMode.CEILING);
+        BigDecimal suggestion = baseQuantity.setScale(declaredScale, RoundingMode.CEILING);
         throw declaredScale == 0
-                ? FractionalQuantityNotAllowedException.wholeUnitsOnly(label, quantity, suggestion)
-                : FractionalQuantityNotAllowedException.scaleExceeded(label, quantity, declaredScale, suggestion);
+                ? FractionalQuantityNotAllowedException.wholeUnitsOnly(label, baseQuantity, suggestion)
+                : FractionalQuantityNotAllowedException.scaleExceeded(label, baseQuantity, declaredScale, suggestion);
+    }
+
+    /**
+     * {@code quantity} converted from {@code uomCode} to the product's base unit, exact and
+     * unrounded — {@code BigDecimal.multiply} never loses precision, so this is safe to feed
+     * straight into the scale check without pre-empting it.
+     *
+     * <p>Deliberately not the two-rounding-mode ({@code HALF_UP}/{@code DOWN}) conversion
+     * pos-inventory's {@code UomConversionServiceImpl} performs at actual posting time — this
+     * module never posts a ledger entry or promotes a reservation itself, so there is no rounded
+     * value for it to own. What it owns is the pre-check: whether the exact converted quantity is
+     * one the product's declaration would accept at all, mirrored from pos-inventory's semantics
+     * because the module wall (ArchUnit) forbids importing its conversion service directly.
+     */
+    private BigDecimal convertToBaseUnrounded(UUID productEntityId, String uomCode, BigDecimal quantity) {
+        ExtProductUomReplica row = productUomReplicaRepository
+                .findByProductIdAndUomCode(productEntityId, uomCode)
+                .orElseThrow(() -> UomConversionUndefinedException.noConversionRow(productEntityId, uomCode));
+        return quantity.multiply(row.getFactorToBase());
     }
 
     /**

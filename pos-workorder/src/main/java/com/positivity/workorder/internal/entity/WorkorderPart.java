@@ -73,6 +73,16 @@ public class WorkorderPart {
     @Nullable
     private BigDecimal quantity; // Snapshotted quantity from estimate
 
+    /**
+     * The unit {@code quantity} (and every usage-event quantity against this part) is expressed
+     * in, snapshotted from {@code EstimateItem.uomCode} at promotion the same way {@code quantity}
+     * itself is snapshotted (ADR-0055 stage 3, #1415). {@code null} means the product's base
+     * unit — today's implicit assumption, unchanged.
+     */
+    @Column(name = "uom_code", length = 32)
+    @Nullable
+    private String uomCode;
+
     @Column(precision = 19, scale = 2)
     @Nullable
     private BigDecimal unitPrice; // Snapshotted unit price from estimate

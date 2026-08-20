@@ -18,14 +18,20 @@ public interface ReservationRequestService {
      * @param workorderLineId workorder line the demand is for, when demand is from a workorder
      * @param salesOrderLineId sales-order line the demand is for, when demand is from a sales order
      * @param stockItemId stock item requested
-     * @param requiredQuantity quantity requested; decimal-capable per the product's catalog
-     *     divisibility declaration (ADR-0055, #1414)
+     * @param requiredQuantity quantity requested, in {@code uomCode} when given, otherwise already
+     *     in the product's base unit; decimal-capable per the product's catalog divisibility
+     *     declaration (ADR-0055, #1414)
      * @param locationId site the demand must be covered at
+     * @param uomCode unit {@code requiredQuantity} is expressed in (ADR-0055 stage 3, #1415);
+     *     {@code null} means the product's base unit. When given, converted to base with {@code
+     *     DOWN} rounding before anything else runs — a reservation must never promise more than
+     *     exists.
      */
     void handle(
             @Nullable UUID workorderLineId,
             @Nullable UUID salesOrderLineId,
             @NonNull UUID stockItemId,
             @NonNull BigDecimal requiredQuantity,
-            @NonNull UUID locationId);
+            @NonNull UUID locationId,
+            @Nullable String uomCode);
 }

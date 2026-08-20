@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -180,7 +181,7 @@ class PartIssueAvailabilityGateTest {
             givenWorkorderAndPart(workorder(WorkorderStatus.WORK_IN_PROGRESS), part);
             givenAtp(PRODUCT_ID, 10);
 
-            service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null);
+            service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null, null);
 
             assertThat(part.getQuantityIssued()).isEqualByComparingTo("2");
             verify(inventoryCommandPublisher)
@@ -188,7 +189,8 @@ class PartIssueAvailabilityGateTest {
                             eq(PART_ID),
                             eq(PRODUCT_ID),
                             argThat(q -> q.compareTo(new BigDecimal("2")) == 0),
-                            eq(SHOP_ID));
+                            eq(SHOP_ID),
+                            isNull());
         }
 
         @Test
@@ -200,7 +202,8 @@ class PartIssueAvailabilityGateTest {
 
             // This used to be rounded up into a reservation of 1, holding half a unit against
             // demand nobody asked for (#1363). The quantity is now refused at the door instead.
-            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("0.5"), null))
+            assertThatThrownBy(
+                            () -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("0.5"), null, null))
                     .isInstanceOf(FractionalQuantityNotAllowedException.class)
                     .hasMessageContaining("Brake pad")
                     .hasMessageContaining("whole units")
@@ -208,7 +211,7 @@ class PartIssueAvailabilityGateTest {
 
             assertThat(part.getQuantityIssued()).isEqualByComparingTo("0");
             verify(usageEventRepository, never()).save(any());
-            verify(inventoryCommandPublisher, never()).requestReservation(any(), any(), any(), any());
+            verify(inventoryCommandPublisher, never()).requestReservation(any(), any(), any(), any(), any());
         }
 
         @Test
@@ -218,14 +221,14 @@ class PartIssueAvailabilityGateTest {
             givenWorkorderAndPart(workorder(WorkorderStatus.WORK_IN_PROGRESS), part);
             givenAtp(PRODUCT_ID, 1);
 
-            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null))
+            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null, null))
                     .isInstanceOf(InsufficientPartAvailabilityException.class)
                     .hasMessageContaining("cannot be issued");
 
             // Nothing is recorded and no demand registered: the part did not leave the shelf.
             assertThat(part.getQuantityIssued()).isEqualByComparingTo("0");
             verify(usageEventRepository, never()).save(any());
-            verify(inventoryCommandPublisher, never()).requestReservation(any(), any(), any(), any());
+            verify(inventoryCommandPublisher, never()).requestReservation(any(), any(), any(), any(), any());
         }
 
         @Test
@@ -237,7 +240,7 @@ class PartIssueAvailabilityGateTest {
                     .thenReturn(Optional.empty());
 
             // Absence is not evidence of stock; the pessimistic direction is the recoverable one.
-            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("1"), null))
+            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("1"), null, null))
                     .isInstanceOf(InsufficientPartAvailabilityException.class);
         }
 
@@ -251,10 +254,10 @@ class PartIssueAvailabilityGateTest {
             // measure and no catalog declaration to read, so neither gate applies and a fractional
             // quantity stays legitimate. Blocking them would stop jobs on items inventory never
             // tracked.
-            service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("0.25"), null);
+            service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("0.25"), null, null);
 
             assertThat(part.getQuantityIssued()).isEqualByComparingTo("0.25");
-            verify(inventoryCommandPublisher, never()).requestReservation(any(), any(), any(), any());
+            verify(inventoryCommandPublisher, never()).requestReservation(any(), any(), any(), any(), any());
         }
 
         @Test
@@ -268,7 +271,7 @@ class PartIssueAvailabilityGateTest {
             // ADR-0055 stage 2 (#1414): the reservation contract is decimal, so a product the
             // catalog declares divisible to two places reserves exactly what left the shelf.
             // Stage 1 could only fail loudly here; the seam it was guarding is gone.
-            service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("1.01"), null);
+            service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("1.01"), null, null);
 
             assertThat(part.getQuantityIssued()).isEqualByComparingTo("1.01");
             verify(inventoryCommandPublisher)
@@ -276,7 +279,8 @@ class PartIssueAvailabilityGateTest {
                             eq(PART_ID),
                             eq(PRODUCT_ID),
                             argThat(q -> q.compareTo(new BigDecimal("1.01")) == 0),
-                            eq(SHOP_ID));
+                            eq(SHOP_ID),
+                            isNull());
         }
     }
 
@@ -292,7 +296,7 @@ class PartIssueAvailabilityGateTest {
             givenAtp(PRODUCT_ID, 0);
             when(workorderPartRepository.findByWorkorderId(WORKORDER_ID)).thenReturn(List.of(part));
 
-            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null))
+            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null, null))
                     .isInstanceOf(InsufficientPartAvailabilityException.class);
 
             verify(workorderStateMachine)
@@ -309,7 +313,7 @@ class PartIssueAvailabilityGateTest {
             givenAtp(OTHER_PRODUCT_ID, 9);
             when(workorderPartRepository.findByWorkorderId(WORKORDER_ID)).thenReturn(List.of(shortPart, stockedPart));
 
-            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null))
+            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null, null))
                     .isInstanceOf(InsufficientPartAvailabilityException.class);
 
             // One item is blocked, the job is not. The technician can start another part.
@@ -323,7 +327,7 @@ class PartIssueAvailabilityGateTest {
             givenWorkorderAndPart(workorder(WorkorderStatus.APPROVED), part);
             givenAtp(PRODUCT_ID, 0);
 
-            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null))
+            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null, null))
                     .isInstanceOf(InsufficientPartAvailabilityException.class);
 
             // WORK_IN_PROGRESS is the only source the transition table allows into AWAITING_PARTS.

@@ -1369,11 +1369,11 @@ paths:
 
         Preconditions: the part must belong to the workorder, and the return cannot exceed the available quantity — issued minus consumed minus already returned.
 
-        Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID) and a positive quantity in the body; an Idempotency-Key header makes retries return the original usage event.
+        Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID) and a positive quantity in the body; uomCode is the optional unit quantity is expressed in (omit for the product''s base unit); an Idempotency-Key header makes retries return the original usage event.
 
         Emits a WORKORDER_PART_RETURN event and marks the workorder fact changed.
 
-        Returns 201 with the RETURN event, 400 when the quantity is not positive, exceeds the available quantity, or the part cannot be found, 404 when the workorder does not exist, and 409 when the part belongs to a different workorder.
+        Returns 201 with the RETURN event, 400 when the quantity is not positive, exceeds the available quantity, or the part cannot be found, 404 when the workorder does not exist, 422 when uomCode has no conversion row for the product or the converted quantity exceeds its declared decimal scale, and 409 when the part belongs to a different workorder.
 
         '
       operationId: returnParts
@@ -1417,6 +1417,12 @@ paths:
                 $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
         '404':
           description: Workorder or part not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+        '422':
+          description: uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the converted quantity exceeds the product's declared decimal scale (FRACTIONAL_QUANTITY_NOT_ALLOWED)
           content:
             application/json:
               schema:
@@ -1507,11 +1513,11 @@ paths:
 
         Preconditions: the workorder and part line must exist, the part must belong to the workorder, and the caller must have an authenticated username.
 
-        Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID) and a positive quantity in the body; an Idempotency-Key header makes retries return the original usage event.
+        Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID) and a positive quantity in the body; uomCode is the optional unit quantity is expressed in (omit for the product''s base unit) and travels with the reservation request; an Idempotency-Key header makes retries return the original usage event.
 
         Emits a WORKORDER_PART_ISSUE event and marks the workorder fact changed for downstream replication.
 
-        Returns 201 with the ISSUE event, 400 when the quantity is not positive or the part cannot be found, 404 when the workorder does not exist, and 409 when the part belongs to a different workorder.
+        Returns 201 with the ISSUE event, 400 when the quantity is not positive or the part cannot be found, 404 when the workorder does not exist, 422 when uomCode has no conversion row for the product or the converted quantity exceeds its declared decimal scale, and 409 when the part belongs to a different workorder.
 
         '
       operationId: issueParts
@@ -1565,6 +1571,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+        '422':
+          description: uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the converted quantity exceeds the product's declared decimal scale (FRACTIONAL_QUANTITY_NOT_ALLOWED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
       security:
       - bearerAuth:
         - workorder:parts:add
@@ -1581,11 +1593,11 @@ paths:
 
         Preconditions: the workorder and part must exist and the part must belong to the workorder.
 
-        Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID), a positive newQuantity, and a reason in the body; notes are optional and an Idempotency-Key header deduplicates retries.
+        Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID), a positive newQuantity, and a reason in the body; notes and uomCode are optional (uomCode is the unit newQuantity is expressed in; omit to leave the part''s existing unit unchanged) and an Idempotency-Key header deduplicates retries.
 
         Emits a WORKORDER_PART_CORRECT event.
 
-        Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, and 400 when newQuantity is not positive or the part does not belong to the workorder.
+        Returns 201 with the adjustment event, 404 when the workorder or part cannot be found, 400 when newQuantity is not positive or the part does not belong to the workorder, and 422 when uomCode has no conversion row for the product or the converted quantity exceeds its declared decimal scale.
 
         '
       operationId: correctPartQuantity
@@ -1635,6 +1647,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
+        '422':
+          description: uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the converted quantity exceeds the product's declared decimal scale (FRACTIONAL_QUANTITY_NOT_ALLOWED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderPartAdjustmentEventResponse'
       security:
       - bearerAuth:
         - workorder:parts:add
@@ -1651,11 +1669,11 @@ paths:
 
         Preconditions: the part must belong to the workorder and cumulative consumption must not exceed the quantity already issued.
 
-        Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID) and a positive quantity in the body; an Idempotency-Key header makes retries return the original usage event.
+        Required inputs: workorderId (UUID) as a path parameter, plus workorderPartId (UUID) and a positive quantity in the body; uomCode is the optional unit quantity is expressed in (omit for the product''s base unit); an Idempotency-Key header makes retries return the original usage event.
 
         Emits a WORKORDER_PART_CONSUME event and marks the workorder fact changed.
 
-        Returns 201 with the CONSUME event, 400 when the quantity is not positive, exceeds the issued quantity, or the part cannot be found, 404 when the workorder does not exist, and 409 when the part belongs to a different workorder.
+        Returns 201 with the CONSUME event, 400 when the quantity is not positive, exceeds the issued quantity, or the part cannot be found, 404 when the workorder does not exist, 422 when uomCode has no conversion row for the product or the converted quantity exceeds its declared decimal scale, and 409 when the part belongs to a different workorder.
 
         '
       operationId: consumeParts
@@ -1699,6 +1717,12 @@ paths:
                 $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
         '404':
           description: Workorder or part not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkorderPartUsageEventResponse'
+        '422':
+          description: uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the converted quantity exceeds the product's declared decimal scale (FRACTIONAL_QUANTITY_NOT_ALLOWED)
           content:
             application/json:
               schema:
@@ -3203,11 +3227,11 @@ paths:
 
         Preconditions: the estimate must be in DRAFT status; PART items need a productId or description, and LABOR items need a serviceId or description.
 
-        Required inputs: estimateId (UUID) as a path parameter, plus itemType (PART or LABOR), quantity, and unitPrice in the body; description, taxCode, productId, and serviceId are conditional or optional.
+        Required inputs: estimateId (UUID) as a path parameter, plus itemType (PART or LABOR), quantity, and unitPrice in the body; description, taxCode, productId, serviceId, and uomCode are conditional or optional. uomCode is the unit quantity is expressed in for PART items (omit for the product''s base unit); it must be omitted on LABOR items.
 
         Emits an ESTIMATE_ITEM_ADD event.
 
-        Returns 404 when the estimate does not exist, 400 on validation failures, and 409 when the estimate is not in DRAFT status.
+        Returns 404 when the estimate does not exist, 400 on validation failures (including a uomCode on a LABOR item), 422 when the referenced product has no conversion row for uomCode or the converted quantity exceeds the product''s declared decimal scale, and 409 when the estimate is not in DRAFT status.
 
         '
       operationId: addEstimateItem
@@ -3257,6 +3281,12 @@ paths:
                 $ref: '#/components/schemas/EstimateItemResponse'
         '409':
           description: Estimate not in DRAFT status (INVALID_STATE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstimateItemResponse'
+        '422':
+          description: uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the converted quantity exceeds the product's declared decimal scale (FRACTIONAL_QUANTITY_NOT_ALLOWED)
           content:
             application/json:
               schema:
@@ -4225,11 +4255,11 @@ paths:
 
         Preconditions: the estimate must be in DRAFT status and the item must exist on that estimate.
 
-        Required inputs: estimateId and itemId (UUIDs) as path parameters; description, quantity, unitPrice, and taxCode are all optional body fields.
+        Required inputs: estimateId and itemId (UUIDs) as path parameters; description, quantity, unitPrice, taxCode, and uomCode are all optional body fields. uomCode is rejected on a LABOR item.
 
         Emits an ESTIMATE_ITEM_UPDATE event; totals are not recalculated until calculateEstimateTotals runs.
 
-        Returns 404 when the estimate or item does not exist, 400 on validation failures, and 409 when the estimate is not in DRAFT status.
+        Returns 404 when the estimate or item does not exist, 400 on validation failures (including a uomCode on a LABOR item), 422 when the effective uomCode has no conversion row for the product or the converted quantity exceeds its declared decimal scale, and 409 when the estimate is not in DRAFT status.
 
         '
       operationId: updateEstimateItem
@@ -4286,6 +4316,12 @@ paths:
                 $ref: '#/components/schemas/EstimateItemResponse'
         '409':
           description: Estimate not in DRAFT status (INVALID_STATE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstimateItemResponse'
+        '422':
+          description: uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), or the converted quantity exceeds the product's declared decimal scale (FRACTIONAL_QUANTITY_NOT_ALLOWED)
           content:
             application/json:
               schema:
@@ -6777,6 +6813,10 @@ components:
           type: string
           description: Optional return notes
           example: Returned to stock after over-issue
+        uomCode:
+          type: string
+          description: Unit quantity is expressed in. Omit for the product's base unit -- today's implicit behavior. Converted to base and validated against the product's catalog divisibility.
+          example: QT
       required:
       - quantity
       - workorderPartId
@@ -6876,6 +6916,10 @@ components:
           type: string
           description: Optional issue notes
           example: Issued from bin A-14
+        uomCode:
+          type: string
+          description: Unit quantity is expressed in. Omit for the product's base unit -- today's implicit behavior. Converted to base and validated against the product's catalog divisibility before the part is issued and before the reservation request is sent.
+          example: QT
       required:
       - quantity
       - workorderPartId
@@ -6902,6 +6946,10 @@ components:
           type: string
           description: Optional correction notes
           example: Adjusted after parts counter verification
+        uomCode:
+          type: string
+          description: Unit newQuantity is expressed in. Omit to leave the part's existing unit unchanged. Converted to base and validated against the product's catalog divisibility.
+          example: QT
       required:
       - newQuantity
       - reason
@@ -6924,6 +6972,10 @@ components:
           type: string
           description: Optional usage notes
           example: Installed on front axle
+        uomCode:
+          type: string
+          description: Unit quantity is expressed in. Omit for the product's base unit -- today's implicit behavior. Converted to base and validated against the product's catalog divisibility.
+          example: QT
       required:
       - quantity
       - workorderPartId
@@ -8205,6 +8257,10 @@ components:
           format: uuid
           description: Referenced service identifier for LABOR items
           example: 550e8400-e29b-41d4-a716-446655440021
+        uomCode:
+          type: string
+          description: Unit quantity is expressed in, for PART items only (e.g. "QT", "CASE"). Omit for the product's base unit -- today's implicit behavior. LABOR items must omit this field; hours carry no catalog unit-of-measure conversion.
+          example: QT
       required:
       - itemType
       - quantity
@@ -8625,6 +8681,10 @@ components:
           type: string
           description: Updated tax code
           example: TX-GENERAL
+        uomCode:
+          type: string
+          description: Updated unit quantity is expressed in, for PART items only. Omit to leave the item's unit unchanged, like every other field on this partial-update request. Rejected on a LABOR item.
+          example: QT
     WorkorderStateTransitionResponse:
       type: object
       description: Work order state transition history entry

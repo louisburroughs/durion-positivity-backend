@@ -76,4 +76,18 @@ public class AddEstimateItemRequest {
             example = "550e8400-e29b-41d4-a716-446655440021",
             requiredMode = NOT_REQUIRED)
     private UUID serviceId; // For LABOR items
+
+    @Nullable
+    @Schema(
+            description = "Unit quantity is expressed in, for PART items only (e.g. \"QT\", \"CASE\"). Omit for the "
+                    + "product's base unit -- today's implicit behavior. LABOR items must omit this field; hours "
+                    + "carry no catalog unit-of-measure conversion.",
+            example = "QT",
+            requiredMode = NOT_REQUIRED)
+    private String uomCode;
+
+    @jakarta.validation.constraints.AssertTrue(message = "uomCode is not valid for LABOR items")
+    private boolean isUomCodeValidForItemType() {
+        return itemType != EstimateItemType.LABOR || uomCode == null;
+    }
 }

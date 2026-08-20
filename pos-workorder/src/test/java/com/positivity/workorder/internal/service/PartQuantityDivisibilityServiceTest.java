@@ -8,10 +8,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.workorder.internal.entity.ExtProductUomReplica;
 import com.positivity.workorder.internal.exception.FractionalQuantityNotAllowedException;
+import com.positivity.workorder.internal.exception.UomConversionUndefinedException;
 import com.positivity.workorder.internal.repository.ExtProductUomReplicaRepository;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -145,6 +148,98 @@ class PartQuantityDivisibilityServiceTest {
                     .doesNotThrowAnyException();
 
             verify(productUomRepository, never()).findBasePrecisionScales(any());
+        }
+
+        @Test
+        @DisplayName("exempts a part with no productEntityId even when a uomCode is given")
+        void exemptsNonCatalogPartWithUomCode() {
+            assertThatCode(() -> service.requirePermittedScale(null, "Shop supplies", new BigDecimal("0.25"), "QT"))
+                    .doesNotThrowAnyException();
+
+            verify(productUomRepository, never()).findByProductIdAndUomCode(any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("UOM conversion at the gate (ADR-0055 stage 3, #1415)")
+    class UomConversion {
+
+        @Test
+        @DisplayName("a null uomCode behaves exactly like the base-unit overload")
+        void nullUomCodeIsBaseUnit() {
+            when(productUomRepository.findBasePrecisionScales(PRODUCT_ID)).thenReturn(List.of());
+
+            assertThatThrownBy(() -> service.requirePermittedScale(PRODUCT_ID, PART_LABEL, new BigDecimal("0.5"), null))
+                    .isInstanceOf(FractionalQuantityNotAllowedException.class)
+                    .hasMessageContaining("whole units");
+
+            verify(productUomRepository, never()).findByProductIdAndUomCode(any(), any());
+        }
+
+        @Test
+        @DisplayName("a uomCode with no conversion row raises UomConversionUndefinedException, naming the product "
+                + "and the code")
+        void undefinedConversionIsRejected() {
+            when(productUomRepository.findByProductIdAndUomCode(PRODUCT_ID, "QT"))
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.requirePermittedScale(PRODUCT_ID, PART_LABEL, new BigDecimal("4.5"), "QT"))
+                    .isInstanceOf(UomConversionUndefinedException.class)
+                    .hasMessageContaining(PRODUCT_ID.toString())
+                    .hasMessageContaining("QT");
+
+            // Never even asks for the declared scale: there is nothing to convert to it with.
+            verify(productUomRepository, never()).findBasePrecisionScales(any());
+        }
+
+        @Test
+        @DisplayName("converts to base before the divisibility check: 4.5 QT at factor 0.25 -> 1.125 EA, rejected "
+                + "at scale 0")
+        void convertsThenRejectsAtWholeUnitScale() {
+            when(productUomRepository.findByProductIdAndUomCode(PRODUCT_ID, "QT"))
+                    .thenReturn(Optional.of(uomRow("QT", "PACK", "0.25", 0)));
+            when(productUomRepository.findBasePrecisionScales(PRODUCT_ID)).thenReturn(List.of(0));
+
+            assertThatThrownBy(() -> service.requirePermittedScale(
+                            PRODUCT_ID, "Parker Hydraulic Hose", new BigDecimal("4.5"), "QT"))
+                    .isInstanceOf(FractionalQuantityNotAllowedException.class)
+                    .hasMessage("Quantity 1.125 is not valid for 'Parker Hydraulic Hose' — this part is issued and"
+                            + " billed in whole units. Enter 2 to issue and bill the full container.");
+        }
+
+        @Test
+        @DisplayName(
+                "converts to base before the divisibility check: a scale-2 product accepts the converted " + "value")
+        void convertsThenAcceptsWithinDeclaredScale() {
+            // 1 BAG at factor 1.01 -> 1.01 LB, matching the odoo-parity fixture ADR-0055 cites.
+            when(productUomRepository.findByProductIdAndUomCode(PRODUCT_ID, "BAG"))
+                    .thenReturn(Optional.of(uomRow("BAG", "PACK", "1.01", 2)));
+            when(productUomRepository.findBasePrecisionScales(PRODUCT_ID)).thenReturn(List.of(2));
+
+            assertThatCode(() -> service.requirePermittedScale(PRODUCT_ID, "Rock salt", BigDecimal.ONE, "BAG"))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("the base UoM's own row converts by its factor of 1 (identity)")
+        void baseUomCodeConvertsByIdentity() {
+            when(productUomRepository.findByProductIdAndUomCode(PRODUCT_ID, "EA"))
+                    .thenReturn(Optional.of(uomRow("EA", "BASE", "1", 0)));
+            when(productUomRepository.findBasePrecisionScales(PRODUCT_ID)).thenReturn(List.of(0));
+
+            assertThatCode(() -> service.requirePermittedScale(PRODUCT_ID, PART_LABEL, new BigDecimal("3"), "EA"))
+                    .doesNotThrowAnyException();
+        }
+
+        private ExtProductUomReplica uomRow(String uomCode, String uomType, String factorToBase, int precisionScale) {
+            return ExtProductUomReplica.builder()
+                    .productId(PRODUCT_ID)
+                    .uomCode(uomCode)
+                    .uomType(uomType)
+                    .factorToBase(new BigDecimal(factorToBase))
+                    .precisionScale(precisionScale)
+                    .aggregateVersion(1L)
+                    .build();
         }
     }
 }
