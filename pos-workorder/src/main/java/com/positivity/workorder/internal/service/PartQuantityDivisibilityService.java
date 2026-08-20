@@ -104,9 +104,10 @@ public class PartQuantityDivisibilityService {
         if (productEntityId == null) {
             return;
         }
-        BigDecimal baseQuantity = uomCode == null || uomCode.isBlank()
+        String normalizedUomCode = normalizeUomCode(uomCode);
+        BigDecimal baseQuantity = normalizedUomCode == null
                 ? quantity
-                : convertToBaseUnrounded(productEntityId, uomCode, quantity);
+                : convertToBaseUnrounded(productEntityId, normalizedUomCode, quantity);
 
         int declaredScale = declaredScaleFor(productEntityId);
         if (fitsScale(baseQuantity, declaredScale)) {
@@ -168,5 +169,21 @@ public class PartQuantityDivisibilityService {
      */
     private static boolean fitsScale(BigDecimal quantity, int scale) {
         return quantity.stripTrailingZeros().scale() <= scale;
+    }
+
+    /**
+     * Trims {@code uomCode} and collapses blank to {@code null}, so a whitespace-only value is
+     * treated exactly like an absent one everywhere the null-means-base-unit contract applies
+     * (ADR-0055 stage 3, #1415) — the divisibility gate above, the entity column it ends up
+     * persisted in, and the command payload published to pos-inventory all read the same
+     * normalized value rather than each re-deriving their own idea of "blank".
+     */
+    @Nullable
+    public static String normalizeUomCode(@Nullable String uomCode) {
+        if (uomCode == null) {
+            return null;
+        }
+        String trimmed = uomCode.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

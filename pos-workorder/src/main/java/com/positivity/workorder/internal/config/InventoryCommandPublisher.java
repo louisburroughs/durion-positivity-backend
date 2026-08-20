@@ -107,11 +107,12 @@ public class InventoryCommandPublisher {
             @NonNull BigDecimal requiredQuantity,
             @NonNull UUID locationId,
             @Nullable String uomCode) {
-        UUID commandId = deterministicCommandId(
-                RESERVATION_REQUEST_COMMAND_TYPE,
-                workorderLineId + ":" + stockItemId + ":" + normalizedQuantityKey(requiredQuantity) + ":" + uomCode);
-        ReservationRequestPayload payload =
-                new ReservationRequestPayload(workorderLineId, stockItemId, requiredQuantity, locationId, uomCode);
+        String normalizedUomCode = normalizeUomCode(uomCode);
+        String key = workorderLineId + ":" + stockItemId + ":" + normalizedQuantityKey(requiredQuantity)
+                + (normalizedUomCode != null ? ":" + normalizedUomCode : "");
+        UUID commandId = deterministicCommandId(RESERVATION_REQUEST_COMMAND_TYPE, key);
+        ReservationRequestPayload payload = new ReservationRequestPayload(
+                workorderLineId, stockItemId, requiredQuantity, locationId, normalizedUomCode);
         send(RESERVATION_REQUEST_COMMAND_TYPE, commandId, workorderLineId.toString(), payload);
         log.info("Queued reservation request command {} for workorder line {}", commandId, workorderLineId);
     }
@@ -138,6 +139,23 @@ public class InventoryCommandPublisher {
      */
     private static String normalizedQuantityKey(@NonNull BigDecimal quantity) {
         return quantity.stripTrailingZeros().toPlainString();
+    }
+
+    /**
+     * Trims {@code uomCode} and collapses blank to {@code null} before it reaches either the
+     * idempotency key or the payload. Appending it to the key unconditionally — including when
+     * null, which string concatenation renders as the literal {@code "null"} — would change the
+     * deterministic command id for every base-unit command that existed before uomCode was added
+     * to this payload (ADR-0055 stage 3, #1415), breaking retry dedupe across the change. Only a
+     * real code gets suffixed onto the key; null or blank keeps the pre-#1415 id shape.
+     */
+    @Nullable
+    private static String normalizeUomCode(@Nullable String uomCode) {
+        if (uomCode == null) {
+            return null;
+        }
+        String trimmed = uomCode.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private static UUID deterministicCommandId(@NonNull String commandType, @NonNull String idempotencyKey) {

@@ -193,7 +193,7 @@ class UomDocumentBoundaryIT {
         BigDecimal totalPosted = ledgerEntriesFor(productId).stream()
                 .map(InventoryLedgerEntry::getChangeInQuantity)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        assertThat(totalPosted).isEqualTo(24);
+        assertThat(totalPosted).isEqualByComparingTo("24");
 
         // What the order becomes after this receipt is pos-order's decision, made from the
         // goods-receipt fact and asserted in GoodsReceiptListenerTest (CAP-320 #1334).

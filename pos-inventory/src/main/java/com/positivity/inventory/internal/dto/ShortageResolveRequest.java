@@ -54,6 +54,7 @@ public class ShortageResolveRequest {
     private String sku;
 
     @Schema(description = "Quantity that is short and to be resolved", example = "3", requiredMode = REQUIRED)
+    @NotNull
     @Positive
     private BigDecimal shortQuantity;
 

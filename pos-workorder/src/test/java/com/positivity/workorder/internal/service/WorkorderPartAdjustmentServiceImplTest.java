@@ -74,6 +74,9 @@ class WorkorderPartAdjustmentServiceImplTest {
     @Mock
     private WorkorderFactPublisher workorderFactPublisher;
 
+    @Mock
+    private PartQuantityDivisibilityService partQuantityDivisibilityService;
+
     private WorkorderPartAdjustmentServiceImpl service;
 
     @BeforeEach
@@ -83,7 +86,7 @@ class WorkorderPartAdjustmentServiceImplTest {
                 adjustmentEventRepository,
                 idempotencyService,
                 workorderFactPublisher,
-                org.mockito.Mockito.mock(PartQuantityDivisibilityService.class),
+                partQuantityDivisibilityService,
                 Clock.fixed(NOW, ZoneOffset.UTC));
 
         UsernamePasswordAuthenticationToken token =
@@ -567,6 +570,20 @@ class WorkorderPartAdjustmentServiceImplTest {
                             service.correctPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "r", null, null))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessage("Security context has no Authentication");
+        }
+
+        @Test
+        @DisplayName("a whitespace-only uomCode behaves identically to an absent one and clears to base unit")
+        void blankUomCode_clearsToBaseUnit() {
+            WorkorderPart part = part("0", "0", "0");
+            part.setUomCode("QT");
+            givenPart(part);
+
+            service.correctPartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("5"), "   ", "reason", null, null);
+
+            assertThat(part.getUomCode()).isNull();
+            verify(partQuantityDivisibilityService)
+                    .requirePermittedScale(any(), any(), any(), org.mockito.ArgumentMatchers.isNull());
         }
     }
 
