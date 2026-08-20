@@ -125,7 +125,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
         assertThat(scrapEntries.getFirst().getReasonCode()).isEqualTo("DAMAGED");
         assertThat(scrapEntries.getFirst().getSourceTransactionId()).isEqualTo(scrapId);
 
-        assertThat(onHand(sku)).isEqualTo(7);
+        assertThat(onHand(sku)).isEqualByComparingTo("7");
 
         List<OutboxEvent> factRows = outboxEventRepository.findAll().stream()
                 .filter(row -> row.getPayload().contains(ScrapPostedV1.EVENT_TYPE))
@@ -156,7 +156,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
                 .asString();
 
         // Nothing posted while pending.
-        assertThat(onHand(sku)).isEqualTo(10);
+        assertThat(onHand(sku)).isEqualByComparingTo("10");
 
         mockMvc.perform(withGatewayAuth(post("/v1/inventory/scraps/{id}/approve", scrapId))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -165,7 +165,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.status").value("POSTED"))
                 .andExpect(jsonPath("$.approvedBy").value("contract-test-user"));
 
-        assertThat(onHand(sku)).isEqualTo(7);
+        assertThat(onHand(sku)).isEqualByComparingTo("7");
         assertThat(outboxEventRepository.findAll())
                 .anyMatch(row -> row.getPayload().contains(ScrapPostedV1.EVENT_TYPE));
     }
@@ -196,7 +196,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.status").value("REJECTED"))
                 .andExpect(jsonPath("$.rejectedBy").value("contract-test-user"));
 
-        assertThat(onHand(sku)).isEqualTo(10);
+        assertThat(onHand(sku)).isEqualByComparingTo("10");
         assertThat(ledgerEntryRepository.findByStockItemIdOrderByTimestampDesc(sku))
                 .noneMatch(entry -> entry.getEventType() == InventoryLedgerEventType.SCRAP_OUT);
         assertThat(outboxEventRepository.findAll())
@@ -220,7 +220,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
 
         // The whole create transaction rolled back: no scrap document, stock untouched.
         assertThat(scrapRepository.findAll()).isEmpty();
-        assertThat(onHand(sku)).isEqualTo(2);
+        assertThat(onHand(sku)).isEqualByComparingTo("2");
     }
 
     // ─── Override path: authorized override drives on-hand negative ───────────
@@ -239,7 +239,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
 
         // SCRAP_OUT is BLOCKED_OVERRIDABLE: the explicit authorized override
         // permits the negative balance (NegativeStockPolicy matrix, K1).
-        assertThat(onHand(sku)).isEqualTo(-3);
+        assertThat(onHand(sku)).isEqualByComparingTo("-3");
     }
 
     @Test
@@ -253,7 +253,7 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
                         .content(createBody(sku, 5, "DAMAGED", null, true)))
                 .andExpect(status().isForbidden());
 
-        assertThat(onHand(sku)).isEqualTo(2);
+        assertThat(onHand(sku)).isEqualByComparingTo("2");
     }
 
     // ─── Validation and permission gating ─────────────────────────────────────

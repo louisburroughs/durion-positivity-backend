@@ -194,12 +194,12 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
                         .findByKey(productId.toString(), locationId, lot.getLotId())
                         .orElseThrow()
                         .getOnHand())
-                .isEqualTo(12);
+                .isEqualByComparingTo("12");
         assertThat(summaryRepository
                         .findByStockItemIdAndLocationId(productId.toString(), locationId)
                         .orElseThrow()
                         .getOnHand())
-                .isEqualTo(12);
+                .isEqualByComparingTo("12");
     }
 
     // ─── receive-into-staging path ──────────────────────────────────────────────
@@ -233,7 +233,7 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
                         .findByKey(productId.toString(), stagingLocation, lot.getLotId())
                         .orElseThrow()
                         .getOnHand())
-                .isEqualTo(4);
+                .isEqualByComparingTo("4");
 
         // The keyed lot number is persisted on the receiving line for audit.
         String persistedLotNumber = jdbcTemplate.queryForObject(
@@ -273,7 +273,7 @@ class LotInboundCaptureIT extends BaseContractIntegrationTest {
                             .findByStockItemIdAndLocationId(sku, locationId)
                             .orElseThrow()
                             .getOnHand())
-                    .isEqualTo(9);
+                    .isEqualByComparingTo("9");
         }
     }
 

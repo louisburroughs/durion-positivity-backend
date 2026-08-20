@@ -444,15 +444,15 @@ class TransferOrderShortCloseIT extends BaseContractIntegrationTest {
      * short-close under either disposition leaks nothing to any other key.
      */
     private void assertBalances(String sku, long sourceOnHand, long destinationInTransit, long destinationOnHand) {
-        assertThat(onHand(sku, SOURCE_SITE)).isEqualTo(sourceOnHand);
-        assertThat(inTransit(sku, DESTINATION_SITE)).isEqualTo(destinationInTransit);
-        assertThat(onHand(sku, DESTINATION_SITE)).isEqualTo(destinationOnHand);
+        assertThat(onHand(sku, SOURCE_SITE)).isEqualByComparingTo(BigDecimal.valueOf(sourceOnHand));
+        assertThat(inTransit(sku, DESTINATION_SITE)).isEqualByComparingTo(BigDecimal.valueOf(destinationInTransit));
+        assertThat(onHand(sku, DESTINATION_SITE)).isEqualByComparingTo(BigDecimal.valueOf(destinationOnHand));
         assertThat(inTransit(sku, SOURCE_SITE))
                 .as("source key must carry no residual in-transit after any short-close shape")
                 .isZero();
         assertThat(totalAcrossAllKeys(sku))
                 .as("conservation: no stock outside source on-hand + destination in-transit + destination on-hand")
-                .isEqualTo(sourceOnHand + destinationInTransit + destinationOnHand);
+                .isEqualByComparingTo(BigDecimal.valueOf(sourceOnHand + destinationInTransit + destinationOnHand));
     }
 
     private BigDecimal totalAcrossAllKeys(String sku) {

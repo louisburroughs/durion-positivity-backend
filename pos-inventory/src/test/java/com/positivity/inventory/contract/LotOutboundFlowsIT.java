@@ -237,13 +237,13 @@ class LotOutboundFlowsIT extends BaseContractIntegrationTest {
                 workorderId, null, List.of(new ConsumeItemLine(task.getPickTaskId(), productId, 3))));
 
         // Exact per-lot decrement: lot A 5 -> 2, lot B untouched, agnostic row 10 -> 7.
-        assertThat(perLotOnHand(productId, null, lotA.getLotId())).isEqualTo(2);
-        assertThat(perLotOnHand(productId, null, lotB.getLotId())).isEqualTo(5);
+        assertThat(perLotOnHand(productId, null, lotA.getLotId())).isEqualByComparingTo("2");
+        assertThat(perLotOnHand(productId, null, lotB.getLotId())).isEqualByComparingTo("5");
         assertThat(summaryRepository
                         .findByStockItemIdAndLocationIdIsNull(productId.toString())
                         .orElseThrow()
                         .getOnHand())
-                .isEqualTo(7);
+                .isEqualByComparingTo("7");
         List<InventoryLedgerEntry> consumptionEntries =
                 entriesOf(productId, InventoryLedgerEventType.WORKORDER_CONSUMPTION);
         assertThat(consumptionEntries).hasSize(1);
@@ -256,7 +256,7 @@ class LotOutboundFlowsIT extends BaseContractIntegrationTest {
         assertThatThrownBy(() -> consumptionService.consumePickedItems(overRequest))
                 .isInstanceOf(LotInsufficientStockException.class)
                 .hasMessageContaining("LOT_INSUFFICIENT_STOCK");
-        assertThat(perLotOnHand(productId, null, lotA.getLotId())).isEqualTo(2);
+        assertThat(perLotOnHand(productId, null, lotA.getLotId())).isEqualByComparingTo("2");
         assertThat(lotRepository.findById(lotA.getLotId()).orElseThrow().getStatus())
                 .isEqualTo(InventoryLotStatus.ACTIVE);
 
@@ -293,8 +293,8 @@ class LotOutboundFlowsIT extends BaseContractIntegrationTest {
                 workorderId,
                 null,
                 List.of(new ConsumeItemLine(legacyTask.getPickTaskId(), productId, 2, "LOT-SRC-B"))));
-        assertThat(perLotOnHand(productId, null, lotB.getLotId())).isEqualTo(2);
-        assertThat(perLotOnHand(productId, null, lotA.getLotId())).isEqualTo(4);
+        assertThat(perLotOnHand(productId, null, lotB.getLotId())).isEqualByComparingTo("2");
+        assertThat(perLotOnHand(productId, null, lotA.getLotId())).isEqualByComparingTo("4");
     }
 
     // ─── Returns: re-increment + CONSUMED → ACTIVE ──────────────────────────────
@@ -332,7 +332,7 @@ class LotOutboundFlowsIT extends BaseContractIntegrationTest {
                 workorderId,
                 "DAMAGED",
                 List.of(new ReturnItemLine(productId, new BigDecimal("2"), null, null, "LOT-RET-A"))));
-        assertThat(perLotOnHand(productId, null, lot.getLotId())).isEqualTo(2);
+        assertThat(perLotOnHand(productId, null, lot.getLotId())).isEqualByComparingTo("2");
         assertThat(lotRepository.findById(lot.getLotId()).orElseThrow().getStatus())
                 .isEqualTo(InventoryLotStatus.ACTIVE);
         List<InventoryLedgerEntry> returnEntries = entriesOf(productId, InventoryLedgerEventType.RETURN_TO_STOCK);
@@ -367,7 +367,7 @@ class LotOutboundFlowsIT extends BaseContractIntegrationTest {
         List<InventoryLedgerEntry> scrapEntries = entriesOf(productId, InventoryLedgerEventType.SCRAP_OUT);
         assertThat(scrapEntries).hasSize(1);
         assertThat(scrapEntries.getFirst().getLotId()).isEqualTo(lot.getLotId());
-        assertThat(perLotOnHand(productId, locationId, lot.getLotId())).isEqualTo(4);
+        assertThat(perLotOnHand(productId, locationId, lot.getLotId())).isEqualByComparingTo("4");
     }
 
     // ─── Cross-dock ─────────────────────────────────────────────────────────────

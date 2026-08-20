@@ -111,8 +111,8 @@ class CrossSiteTransferGuardIT extends BaseContractIntegrationTest {
                         .content(transferBody(sku, BIN_A1, BIN_A2, 4)))
                 .andExpect(status().isCreated());
 
-        assertThat(onHand(sku, BIN_A1)).isEqualTo(6);
-        assertThat(onHand(sku, BIN_A2)).isEqualTo(4);
+        assertThat(onHand(sku, BIN_A1)).isEqualByComparingTo("6");
+        assertThat(onHand(sku, BIN_A2)).isEqualByComparingTo("4");
         // The paired OUT/IN posts in one transaction: in-transit cancels to zero everywhere.
         assertThat(summaryRepository.findByStockItemId(sku))
                 .allMatch(row -> row.getInTransitQty().signum() == 0);
@@ -131,8 +131,8 @@ class CrossSiteTransferGuardIT extends BaseContractIntegrationTest {
                         .content(transferBody(sku, freeFrom, freeTo, 3)))
                 .andExpect(status().isCreated());
 
-        assertThat(onHand(sku, freeFrom)).isEqualTo(7);
-        assertThat(onHand(sku, freeTo)).isEqualTo(3);
+        assertThat(onHand(sku, freeFrom)).isEqualByComparingTo("7");
+        assertThat(onHand(sku, freeTo)).isEqualByComparingTo("3");
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
