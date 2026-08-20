@@ -40,6 +40,18 @@ public class CycleCountScheduleServiceImpl implements CycleCountScheduleService 
     /** Actor recorded on plans created by the scheduled runner (no user context). */
     static final String SCHEDULER_ACTOR = "system";
 
+    /**
+     * Ceiling on how many missed boundaries one pass clears for a single schedule.
+     *
+     * <p>One pass drains every boundary a schedule has crossed, because the pass rate is real time
+     * while the due dates are clock time: under the accelerated profile a year of weekly boundaries
+     * elapses in hours, and advancing one due date per pass would silently skip nearly all of them.
+     * The ceiling keeps a pathologically overdue schedule (say a daily one untouched for years) from
+     * creating unbounded work in a single transaction; whatever is left stays due and is picked up
+     * by the next pass.
+     */
+    static final int MAX_CATCH_UP_BOUNDARIES_PER_PASS = 366;
+
     private final CycleCountScheduleRepository scheduleRepository;
     private final CycleCountPlanRepository planRepository;
     private final CycleCountPlanService planService;
@@ -147,22 +159,47 @@ public class CycleCountScheduleServiceImpl implements CycleCountScheduleService 
                 continue;
             }
 
-            LocalDate dueDate = schedule.getNextDueDate();
-            if (planRepository.existsByScheduleIdAndDueDate(schedule.getScheduleId(), dueDate)) {
-                plansSkippedExisting++;
-            } else {
-                planService.createScheduledPlan(
+            int frequencyDays = schedule.getFrequencyDays();
+            if (frequencyDays < 1) {
+                // Corrupt row: advancing by a non-positive frequency would never terminate.
+                log.error(
+                        "Cycle count schedule {} has a non-positive frequencyDays={}; skipping it",
                         schedule.getScheduleId(),
-                        schedule.getLocationId(),
-                        schedule.getZoneId() == null ? List.of() : List.of(schedule.getZoneId()),
-                        dueDate,
-                        SCHEDULER_ACTOR);
-                plansCreated++;
+                        frequencyDays);
+                continue;
             }
-            // Advance in the same transaction as the plan creation; an overdue
-            // schedule catches up one due date per pass.
-            schedule.setNextDueDate(dueDate.plusDays(schedule.getFrequencyDays()));
+
+            LocalDate dueDate = schedule.getNextDueDate();
+            int boundariesCleared = 0;
+            while (!dueDate.isAfter(today) && boundariesCleared < MAX_CATCH_UP_BOUNDARIES_PER_PASS) {
+                if (planRepository.existsByScheduleIdAndDueDate(schedule.getScheduleId(), dueDate)) {
+                    plansSkippedExisting++;
+                } else {
+                    planService.createScheduledPlan(
+                            schedule.getScheduleId(),
+                            schedule.getLocationId(),
+                            schedule.getZoneId() == null ? List.of() : List.of(schedule.getZoneId()),
+                            dueDate,
+                            SCHEDULER_ACTOR);
+                    plansCreated++;
+                }
+                dueDate = dueDate.plusDays(frequencyDays);
+                boundariesCleared++;
+            }
+
+            // Advance in the same transaction as the plan creation, past every boundary this pass
+            // cleared, so a completed pass leaves the schedule not-due for the dates it handled.
+            schedule.setNextDueDate(dueDate);
             scheduleRepository.save(schedule);
+
+            if (!dueDate.isAfter(today)) {
+                log.warn(
+                        "Cycle count schedule {} hit the per-pass catch-up ceiling of {}; next due date is {}"
+                                + " and the remaining boundaries are left for the next pass",
+                        schedule.getScheduleId(),
+                        MAX_CATCH_UP_BOUNDARIES_PER_PASS,
+                        dueDate);
+            }
         }
 
         if (!due.isEmpty()) {

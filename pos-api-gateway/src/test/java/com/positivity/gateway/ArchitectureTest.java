@@ -122,6 +122,14 @@ public class ArchitectureTest {
             .orShould()
             .beDeclaredInClassesThat()
             .areAnnotatedWith("org.springframework.security.access.prepost.PreAuthorize")
+            // Documented exemption: the accelerated-clock startup probe is deliberately
+            // unauthenticated — it is polled before any token exists — and read-only. The
+            // gateway has no spring-security on its classpath, so it cannot carry a
+            // @PreAuthorize guard at all; its access decision lives in
+            // SecurityGatewayConfig#isPublicPath, which permits the exact path only.
+            .orShould()
+            .beDeclaredInClassesThat()
+            .haveFullyQualifiedName("com.positivity.gateway.internal.controller.SystemTimeController")
             .allowEmptyShould(true)
             .because("all HTTP endpoints must declare authorization guards");
 

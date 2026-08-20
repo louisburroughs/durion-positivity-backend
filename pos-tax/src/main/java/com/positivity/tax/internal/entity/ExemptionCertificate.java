@@ -3,6 +3,7 @@ package com.positivity.tax.internal.entity;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tax.common.enums.ExemptionReasonCode;
 import com.positivity.tax.internal.enums.ExemptionCertificateStatus;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -11,7 +12,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -99,7 +99,7 @@ public class ExemptionCertificate {
 
     @PrePersist
     void onCreate() {
-        Instant now = Instant.now(Clock.systemUTC());
+        Instant now = TimeSource.instant();
         if (createdAt == null) {
             createdAt = now;
         }
@@ -108,6 +108,6 @@ public class ExemptionCertificate {
 
     @PreUpdate
     void onUpdate() {
-        updatedAt = Instant.now(Clock.systemUTC());
+        updatedAt = TimeSource.instant();
     }
 }

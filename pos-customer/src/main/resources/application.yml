@@ -85,7 +85,9 @@ pos:
       # Idempotent via a deterministic source_event_id, so reruns and concurrent instances
       # cannot duplicate a task.
       service-due-reminders-enabled: ${POS_CUSTOMER_SERVICE_DUE_REMINDERS_ENABLED:true}
-      service-due-reminder-cron: ${POS_CUSTOMER_SERVICE_DUE_REMINDER_CRON:0 0 5 * * *}
+      # Interval poll, not a cron: the due cutoff comes from the application Clock, which the
+      # accelerated profile advances far faster than the scheduler's own real clock.
+      service-due-reminder-interval-ms: ${POS_CUSTOMER_SERVICE_DUE_REMINDER_INTERVAL_MS:86400000}
       service-due-reminder-batch-size: ${POS_CUSTOMER_SERVICE_DUE_REMINDER_BATCH_SIZE:500}
     inquiry:
       public:

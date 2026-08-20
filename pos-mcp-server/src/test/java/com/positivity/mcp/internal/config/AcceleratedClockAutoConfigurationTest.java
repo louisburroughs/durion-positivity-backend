@@ -18,10 +18,18 @@ class AcceleratedClockAutoConfigurationTest {
 
     @Test
     void acceleratedProfileInjectsScaledClockIntoConsumerModule() {
-        contextRunner.withPropertyValues("spring.profiles.active=accelerated").run(context -> {
-            assertThat(context).hasSingleBean(Clock.class);
-            assertThat(context.getBean(ClockConsumer.class).clock()).isInstanceOf(ScaledClock.class);
-        });
+        contextRunner
+                .withPropertyValues(
+                        "spring.profiles.active=accelerated",
+                        // Anchors are deployment-wide inputs: every accelerated JVM is handed the
+                        // same real-start/virtual-start pair, so a consumer module never derives
+                        // its own.
+                        "pos.time.accelerated.real-start=2026-08-20T12:00:00Z",
+                        "pos.time.accelerated.virtual-start=2025-08-20T12:00:00Z")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(Clock.class);
+                    assertThat(context.getBean(ClockConsumer.class).clock()).isInstanceOf(ScaledClock.class);
+                });
     }
 
     record ClockConsumer(Clock clock) {}

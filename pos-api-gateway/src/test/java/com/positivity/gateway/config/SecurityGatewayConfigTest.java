@@ -1652,4 +1652,49 @@ class SecurityGatewayConfigTest {
                     .isNotEqualTo("spoofed-user-id-injected-by-caller");
         }
     }
+
+    // ── Accelerated-clock startup probe ───────────────────────────────────────
+
+    /**
+     * The accelerated-run startup probe must answer before any token exists, so
+     * GET /system/time is unauthenticated.
+     */
+    @Test
+    void systemTimePath_passesThrough_withoutAuthorizationHeader() {
+        GlobalFilter filter = new SecurityGatewayConfig(
+                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                .authFilter();
+        AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
+        GatewayFilterChain chain = ex -> {
+            downstreamHeaders.set(ex.getRequest().getHeaders());
+            return Mono.empty();
+        };
+
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/system/time").build());
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isNull();
+        assertThat(downstreamHeaders.get()).isNotNull();
+    }
+
+    /**
+     * Only the exact probe path is public. Permitting /system/** would open every
+     * future system endpoint by default.
+     */
+    @Test
+    void otherSystemPaths_withoutToken_returns401() {
+        GlobalFilter filter = new SecurityGatewayConfig(
+                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                .authFilter();
+        GatewayFilterChain chain = ex -> Mono.empty();
+
+        var exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/system/time/reset").build());
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
 }

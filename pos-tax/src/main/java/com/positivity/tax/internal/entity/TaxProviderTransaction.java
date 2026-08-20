@@ -2,6 +2,7 @@ package com.positivity.tax.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tax.common.enums.TaxProviderTransactionStatus;
+import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -10,7 +11,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -85,7 +85,7 @@ public class TaxProviderTransaction {
 
     @PrePersist
     void onCreate() {
-        Instant now = Instant.now(Clock.systemUTC());
+        Instant now = TimeSource.instant();
         if (createdAt == null) {
             createdAt = now;
         }
@@ -94,6 +94,6 @@ public class TaxProviderTransaction {
 
     @PreUpdate
     void onUpdate() {
-        updatedAt = Instant.now(Clock.systemUTC());
+        updatedAt = TimeSource.instant();
     }
 }

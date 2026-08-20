@@ -232,4 +232,23 @@ class ServiceDueReminderJobTest {
         verify(followUps, times(2)).save(saved.capture());
         assertThat(saved.getAllValues().get(1).getPartyId()).isEqualTo(otherParty);
     }
+
+    /**
+     * The reminder sweep must poll on an interval, not on a calendar cron.
+     *
+     * <p>A cron trigger fires against the scheduler's real clock. Under the accelerated clock a
+     * daily cron would fire roughly never during a catch-up window that spans a year of virtual
+     * time, so no service-due reminder would ever be generated. The sweep is cutoff-based and
+     * idempotent, so polling it on an interval simply picks up whatever has come due.
+     */
+    @Test
+    void generateReminders_pollsOnAnIntervalRatherThanACalendarCron() throws NoSuchMethodException {
+        org.springframework.scheduling.annotation.Scheduled scheduled = ServiceDueReminderJob.class
+                .getMethod("generateReminders")
+                .getAnnotation(org.springframework.scheduling.annotation.Scheduled.class);
+
+        assertThat(scheduled).isNotNull();
+        assertThat(scheduled.cron()).isEmpty();
+        assertThat(scheduled.fixedDelayString()).isNotEmpty();
+    }
 }

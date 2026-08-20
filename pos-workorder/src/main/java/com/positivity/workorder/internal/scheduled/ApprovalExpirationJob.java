@@ -25,9 +25,17 @@ public class ApprovalExpirationJob {
 
     /**
      * Check for expired pending approvals and mark them as expired.
-     * Runs every hour at the top of the hour.
+     *
+     * <p>Polls on an interval rather than an hourly cron. The expiry comparison is made against the
+     * injected application {@code Clock}, while a cron trigger fires against the scheduler's real
+     * clock; under the accelerated profile one real hour spans weeks of application time, so a cron
+     * would leave estimates pending long past their own expiry. This sweep is idempotent — it
+     * selects whatever is PENDING_APPROVAL and already past {@code expiresAt} — so a pass that spans
+     * many due boundaries is handled in one go.
      */
-    @Scheduled(cron = "0 0 * * * *") // Every hour at :00
+    @Scheduled(
+            fixedDelayString = "${workorder.approval-expiration.interval-ms:3600000}",
+            initialDelayString = "${workorder.approval-expiration.initial-delay-ms:60000}")
     public void expirePendingApprovals() {
         log.debug("Running approval expiration job");
         int expiredCount = estimateService.expirePendingApprovals();
