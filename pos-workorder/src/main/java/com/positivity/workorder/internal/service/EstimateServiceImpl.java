@@ -79,6 +79,7 @@ public class EstimateServiceImpl implements EstimateService {
     private final CustomerReferenceService customerReferenceService;
     private final VehicleReferenceService vehicleReferenceService;
     private final EstimateFactPublisher estimateFactPublisher;
+    private final PartQuantityDivisibilityService partQuantityDivisibilityService;
 
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
@@ -884,6 +885,14 @@ public class EstimateServiceImpl implements EstimateService {
                     + ". Estimate must be in DRAFT status.");
         }
 
+        // The quantity column is shared between PART and LABOR rows, and only the PART side names a
+        // catalog product whose divisibility can be read. Labour stays fractional: 1.5 hours is a
+        // real thing to sell (ADR-0055, #1413).
+        if (request.getItemType() == EstimateItemType.PART) {
+            partQuantityDivisibilityService.requirePermittedScale(
+                    request.getProductId(), request.getDescription(), request.getQuantity());
+        }
+
         // Build and validate item
         EstimateItem item = EstimateItem.builder()
                 .estimate(estimate)
@@ -939,6 +948,15 @@ public class EstimateServiceImpl implements EstimateService {
                 .findByIdAndEstimate_IdAndDeletedFalse(itemId, estimateId)
                 .orElseThrow(() ->
                         new EntityNotFoundException("Item not found: " + itemId + " for estimate: " + estimateId));
+
+        // Revising the quantity has to clear the same gate as entering it, or the rule would be
+        // one PATCH away from being bypassed (#1413).
+        if (request.getQuantity() != null && item.getItemType() == EstimateItemType.PART) {
+            partQuantityDivisibilityService.requirePermittedScale(
+                    item.getProductId(),
+                    request.getDescription() != null ? request.getDescription() : item.getDescription(),
+                    request.getQuantity());
+        }
 
         // Update only provided fields
         if (request.getDescription() != null) {

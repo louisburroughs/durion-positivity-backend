@@ -178,7 +178,9 @@ class WorkorderCompletionTest {
                 idempotencyService,
                 promotionValidationService,
                 peopleAvailabilityLocalService,
-                org.mockito.Mockito.mock(com.positivity.workorder.internal.service.FleetAuthorizationService.class));
+                org.mockito.Mockito.mock(com.positivity.workorder.internal.service.FleetAuthorizationService.class),
+                org.mockito.Mockito.mock(
+                        com.positivity.workorder.internal.service.PartQuantityDivisibilityService.class));
     }
 
     @AfterEach

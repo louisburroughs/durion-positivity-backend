@@ -89,6 +89,9 @@ class EstimateServiceImplTest {
     @Mock
     private com.positivity.workorder.internal.service.EstimateFactPublisher estimateFactPublisher;
 
+    @Mock
+    private com.positivity.workorder.internal.service.PartQuantityDivisibilityService partQuantityDivisibilityService;
+
     @InjectMocks
     private EstimateServiceImpl estimateService;
 

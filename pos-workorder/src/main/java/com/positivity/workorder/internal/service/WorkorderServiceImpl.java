@@ -82,6 +82,7 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final PromotionValidationService promotionValidationService;
     private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
     private final FleetAuthorizationService fleetAuthorizationService;
+    private final PartQuantityDivisibilityService partQuantityDivisibilityService;
 
     @Override
     public List<Workorder> getAllWorkorders() {
@@ -398,6 +399,15 @@ public class WorkorderServiceImpl implements WorkorderService {
                 laborItems.add(workorderService);
 
             } else if (estimateItem.getItemType() == EstimateItemType.PART) {
+                // Promotion is the second gate, not a formality (ADR-0055, #1413). An approved
+                // estimate item may predate the product's declaration, or have been approved while
+                // the replica was silent, and a quantity that reaches workorder_part is what the
+                // issue path then has to satisfy exactly. A line the technician can never issue to
+                // zero would hold the job in AWAITING_PARTS with nothing anyone can do about it, so
+                // the fractional line is stopped here rather than promoted into a dead end.
+                partQuantityDivisibilityService.requirePermittedScale(
+                        estimateItem.getProductId(), estimateItem.getDescription(), estimateItem.getQuantity());
+
                 // Create WorkorderPart for PART items
                 // CAP:004 Story #27: Parts can be standalone (not tied to a service)
                 WorkorderPart workorderPart = WorkorderPart.builder()
