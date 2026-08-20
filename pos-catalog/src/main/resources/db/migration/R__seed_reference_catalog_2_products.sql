@@ -1,6 +1,19 @@
 -- =============================================================
 -- R__seed_reference_catalog_2_products.sql
 -- 500 real mechanical auto parts products
+--
+-- unit_of_measure convention (issue #1417 / ADR-0055):
+--   * A packaged SKU (bottle, jug, box, kit, set) carries the unit the shop
+--     counts on the shelf. A sealed multi-unit package is ONE stocked thing:
+--     a 5-quart jug is 'EA', never 'QT' — otherwise on-hand is ambiguous
+--     between containers and contents (they differ by the package factor).
+--   * A single-unit container may carry its content unit ('QT' for a 1-quart
+--     bottle, 'GA' for a 1-gallon jug) because container-count and
+--     content-count coincide at factor 1.
+--   * Only genuinely divisible, bulk-dispensed stock carries a content unit
+--     with a non-unit factor (e.g. PARK-387TC-4-FT hydraulic hose in 'FT').
+--     Such products must also declare their base precision via product_uom
+--     (BASE row, precision_scale > 0) once product_uom is seeded.
 -- =============================================================
 SET TIME ZONE 'UTC';
 
@@ -128,11 +141,11 @@ VALUES
     (gen_random_uuid(), 'DORM-300-002', 'Dorman Power Steering Pump 300-002', 'ACTIVE', '01960034-0000-7000-8000-000000000023', 'Dorman', 'Dorman', '300-002', 'US', 'PART', 'EA', '01960030-0000-7000-8000-000000000006', '01960031-0000-7000-8000-000000000018', NOW(), NOW()),
     (gen_random_uuid(), 'ACDL-36-365556', 'ACDelco Power Steering Hose 36-365556', 'ACTIVE', '01960034-0000-7000-8000-00000000000e', 'ACDelco', 'ACDelco', '36-365556', 'US', 'PART', 'EA', '01960030-0000-7000-8000-000000000006', '01960031-0000-7000-8000-000000000018', NOW(), NOW()),
     (gen_random_uuid(), 'MOBI-104561', 'Mobil 1 Full Synthetic 5W-30 Motor Oil 1qt', 'ACTIVE', '01960034-0000-7000-8000-00000000001e', 'Mobil', 'Mobil', '104561', 'US', 'PART', 'QT', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-000000000019', NOW(), NOW()),
-    (gen_random_uuid(), 'MOBI-120764', 'Mobil 1 Full Synthetic 5W-30 Motor Oil 5qt', 'ACTIVE', '01960034-0000-7000-8000-00000000001e', 'Mobil', 'Mobil', '120764', 'US', 'PART', 'QT', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-000000000019', NOW(), NOW()),
-    (gen_random_uuid(), 'MOBI-14977', 'Mobil 1 Extended Performance 5W-30 5qt', 'ACTIVE', '01960034-0000-7000-8000-00000000001e', 'Mobil', 'Mobil', '14977', 'US', 'PART', 'QT', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-000000000019', NOW(), NOW()),
-    (gen_random_uuid(), 'MOBI-72206', 'Mobil 1 High Mileage 10W-40 5qt', 'ACTIVE', '01960034-0000-7000-8000-00000000001e', 'Mobil', 'Mobil', '72206', 'US', 'PART', 'QT', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-000000000019', NOW(), NOW()),
-    (gen_random_uuid(), 'VALV-787987', 'Valvoline Advanced Full Synthetic 5W-20 5qt', 'ACTIVE', '01960034-0000-7000-8000-00000000001c', 'Valvoline', 'Valvoline', '787987', 'US', 'PART', 'QT', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-000000000019', NOW(), NOW()),
-    (gen_random_uuid(), 'VALV-782253', 'Valvoline High Mileage MaxLife 5W-30 5qt', 'ACTIVE', '01960034-0000-7000-8000-00000000001c', 'Valvoline', 'Valvoline', '782253', 'US', 'PART', 'QT', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-000000000019', NOW(), NOW()),
+    (gen_random_uuid(), 'MOBI-120764', 'Mobil 1 Full Synthetic 5W-30 Motor Oil 5qt', 'ACTIVE', '01960034-0000-7000-8000-00000000001e', 'Mobil', 'Mobil', '120764', 'US', 'PART', 'EA', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-000000000019', NOW(), NOW()),
+    (gen_random_uuid(), 'MOBI-14977', 'Mobil 1 Extended Performance 5W-30 5qt', 'ACTIVE', '01960034-0000-7000-8000-00000000001e', 'Mobil', 'Mobil', '14977', 'US', 'PART', 'EA', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-000000000019', NOW(), NOW()),
+    (gen_random_uuid(), 'MOBI-72206', 'Mobil 1 High Mileage 10W-40 5qt', 'ACTIVE', '01960034-0000-7000-8000-00000000001e', 'Mobil', 'Mobil', '72206', 'US', 'PART', 'EA', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-000000000019', NOW(), NOW()),
+    (gen_random_uuid(), 'VALV-787987', 'Valvoline Advanced Full Synthetic 5W-20 5qt', 'ACTIVE', '01960034-0000-7000-8000-00000000001c', 'Valvoline', 'Valvoline', '787987', 'US', 'PART', 'EA', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-000000000019', NOW(), NOW()),
+    (gen_random_uuid(), 'VALV-782253', 'Valvoline High Mileage MaxLife 5W-30 5qt', 'ACTIVE', '01960034-0000-7000-8000-00000000001c', 'Valvoline', 'Valvoline', '782253', 'US', 'PART', 'EA', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-000000000019', NOW(), NOW()),
     (gen_random_uuid(), 'VALV-882', 'Valvoline Daily Protection 10W-40 1qt', 'ACTIVE', '01960034-0000-7000-8000-00000000001c', 'Valvoline', 'Valvoline', '882', 'US', 'PART', 'QT', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-000000000019', NOW(), NOW()),
     (gen_random_uuid(), 'PRES-AF2100', 'Prestone Extended Life 50/50 Antifreeze 1gal', 'ACTIVE', '01960034-0000-7000-8000-00000000001d', 'Prestone', 'Prestone', 'AF2100', 'US', 'PART', 'GA', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-00000000001a', NOW(), NOW())
 ON CONFLICT (sku) DO UPDATE SET
