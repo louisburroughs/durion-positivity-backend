@@ -44,11 +44,11 @@ ON CONFLICT (config_id) DO NOTHING;
 -- Shelf A — Motor Oils & Fluids (Bins A-01..A-10)
 INSERT INTO inventory_ledger_entry (ledger_entry_id, stock_item_id, location_id, event_type, change_in_quantity, quantity_after, unit_cost, unit_of_measure, "timestamp", created_at, updated_at, transaction_user_id, notes)
 VALUES
-  (md5('inv_seed:MOBI-120764')::uuid,  'MOBI-120764', '01960004-0001-7000-8000-000000000009'::uuid, 'GOODS_RECEIPT', 24, 24, 9.99,  'QT',  NOW(), NOW(), NOW(), 'system-seed', 'Initial stock: Mobil 1 5W-30 Full Synthetic Quart'),
-  (md5('inv_seed:MOBI-14977')::uuid,   'MOBI-14977',  '01960004-0001-7000-8000-00000000000a'::uuid, 'GOODS_RECEIPT', 12, 12, 26.99, 'GAL', NOW(), NOW(), NOW(), 'system-seed', 'Initial stock: Mobil 1 5W-30 Full Synthetic 5-Qt Jug'),
-  (md5('inv_seed:VALV-787987')::uuid,  'VALV-787987', '01960004-0001-7000-8000-00000000000b'::uuid, 'GOODS_RECEIPT', 24, 24, 8.49,  'QT',  NOW(), NOW(), NOW(), 'system-seed', 'Initial stock: Valvoline Advanced Full Synthetic 5W-30'),
-  (md5('inv_seed:VALV-782253')::uuid,  'VALV-782253', '01960004-0001-7000-8000-00000000000c'::uuid, 'GOODS_RECEIPT', 12, 12, 24.99, 'GAL', NOW(), NOW(), NOW(), 'system-seed', 'Initial stock: Valvoline Advanced Full Synthetic 5W-30 5-Qt'),
-  (md5('inv_seed:MOBI-72206')::uuid,   'MOBI-72206',  '01960004-0001-7000-8000-00000000000d'::uuid, 'GOODS_RECEIPT', 24, 24, 8.99,  'QT',  NOW(), NOW(), NOW(), 'system-seed', 'Initial stock: Mobil Super 5000 10W-30'),
+  (md5('inv_seed:MOBI-120764')::uuid,  'MOBI-120764', '01960004-0001-7000-8000-000000000009'::uuid, 'GOODS_RECEIPT', 24, 24, 17.75, 'EA',  NOW(), NOW(), NOW(), 'system-seed', 'Initial stock: Mobil 1 Full Synthetic 5W-30 Motor Oil 5qt'),
+  (md5('inv_seed:MOBI-14977')::uuid,   'MOBI-14977',  '01960004-0001-7000-8000-00000000000a'::uuid, 'GOODS_RECEIPT', 12, 12, 17.94, 'EA',  NOW(), NOW(), NOW(), 'system-seed', 'Initial stock: Mobil 1 Extended Performance 5W-30 5qt'),
+  (md5('inv_seed:VALV-787987')::uuid,  'VALV-787987', '01960004-0001-7000-8000-00000000000b'::uuid, 'GOODS_RECEIPT', 24, 24, 10.69, 'EA',  NOW(), NOW(), NOW(), 'system-seed', 'Initial stock: Valvoline Advanced Full Synthetic 5W-20 5qt'),
+  (md5('inv_seed:VALV-782253')::uuid,  'VALV-782253', '01960004-0001-7000-8000-00000000000c'::uuid, 'GOODS_RECEIPT', 12, 12, 10.47, 'EA',  NOW(), NOW(), NOW(), 'system-seed', 'Initial stock: Valvoline High Mileage MaxLife 5W-30 5qt'),
+  (md5('inv_seed:MOBI-72206')::uuid,   'MOBI-72206',  '01960004-0001-7000-8000-00000000000d'::uuid, 'GOODS_RECEIPT', 24, 24, 15.94, 'EA',  NOW(), NOW(), NOW(), 'system-seed', 'Initial stock: Mobil 1 High Mileage 10W-40 5qt'),
   (md5('inv_seed:PRES-AF2100')::uuid,  'PRES-AF2100', '01960004-0001-7000-8000-00000000000e'::uuid, 'GOODS_RECEIPT', 12, 12, 11.49, 'GAL', NOW(), NOW(), NOW(), 'system-seed', 'Initial stock: Prestone 50/50 Antifreeze/Coolant 1-Gal'),
   (md5('inv_seed:PRES-AF6100')::uuid,  'PRES-AF6100', '01960004-0001-7000-8000-00000000000f'::uuid, 'GOODS_RECEIPT', 6,  6,  18.99, 'GAL', NOW(), NOW(), NOW(), 'system-seed', 'Initial stock: Prestone Extended Life Antifreeze 1-Gal'),
   (md5('inv_seed:VALV-ATF-ML-QT')::uuid, 'VALV-ATF-ML-QT', '01960004-0001-7000-8000-000000000010'::uuid, 'GOODS_RECEIPT', 12, 12, 7.99, 'QT', NOW(), NOW(), NOW(), 'system-seed', 'Initial stock: Valvoline MaxLife ATF Quart'),
