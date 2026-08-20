@@ -7,6 +7,7 @@ import com.positivity.mcp.internal.domain.DiscoveredOperation;
 import com.positivity.mcp.internal.exception.WritePlanExecutionException;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
@@ -52,11 +53,11 @@ public class OpenApiWritePlanExecutor implements WritePlanExecutor {
             throw new WritePlanExecutionException(
                     "Discovered operation is missing execution coordinates: " + targetTool);
         }
-        long startMs = System.currentTimeMillis();
+        long startNanos = System.nanoTime();
         String result = new OpenApiOperationExecutor(
                         proxyFactory, operation, objectMapper, executionTimeout, authHeader)
                 .execute(argsJson);
-        int elapsedMs = (int) (System.currentTimeMillis() - startMs);
+        int elapsedMs = (int) TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
         // #1422: the Gate 3 executor renders failures as an Error: prefix instead of throwing, so
         // success for the invocation log is "non-null and not an error rendering".
         boolean success = result != null && !result.startsWith(ERROR_PREFIX);

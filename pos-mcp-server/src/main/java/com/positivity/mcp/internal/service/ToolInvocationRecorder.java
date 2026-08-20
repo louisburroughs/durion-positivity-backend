@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -123,19 +124,23 @@ public class ToolInvocationRecorder {
 
         @Override
         public String call(String toolInput) {
-            long startMs = System.currentTimeMillis();
+            long startNanos = System.nanoTime();
             try {
                 String result = delegate.call(toolInput);
-                record(toolLookupName, true, (int) (System.currentTimeMillis() - startMs), null);
+                record(toolLookupName, true, elapsedMs(startNanos), null);
                 return result;
             } catch (RuntimeException exception) {
                 record(
                         toolLookupName,
                         false,
-                        (int) (System.currentTimeMillis() - startMs),
+                        elapsedMs(startNanos),
                         exception.getClass().getSimpleName());
                 throw exception;
             }
+        }
+
+        private int elapsedMs(long startNanos) {
+            return (int) TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
         }
     }
 }
