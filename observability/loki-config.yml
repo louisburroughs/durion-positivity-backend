@@ -51,5 +51,27 @@ compactor:
   retention_enabled: true
   delete_request_store: filesystem
 
+# Ruler (#1424): evaluates the NLTI Gate 7 LogQL alert rules. Rule files live in
+# observability/loki/rules/ and are bind-mounted by docker-compose at
+# /loki/rules/fake — "fake" is the tenant id Loki uses while auth_enabled is
+# false, and the local rule store expects one <tenant> directory per tenant
+# under its root. enable_api serves GET /loki/api/v1/rules (the verification
+# endpoint) and lets Grafana's Alerting UI list the rules and their firing
+# state via the Loki datasource.
+#
+# No Alertmanager runs in this stack, and Grafana's embedded Alertmanager only
+# accepts Grafana-managed alerts — so, like the Grafana-provisioned
+# domain-events alerts, delivery is dashboard/UI-only for now. When an
+# Alertmanager is added, point alertmanager_url at it here.
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/ruler          # scratch dir for evaluated copies; must be writable
+  evaluation_interval: 1m
+  poll_interval: 1m
+  enable_api: true
+
 analytics:
   reporting_enabled: false

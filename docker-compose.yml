@@ -109,6 +109,9 @@ services:
       - "127.0.0.1:3100:3100"
     volumes:
       - ./observability/loki-config.yml:/etc/loki/loki-config.yml:ro
+      # NLTI LogQL alert rules for the ruler (#1424); "fake" is the tenant id
+      # Loki uses while auth_enabled is false.
+      - ./observability/loki/rules:/loki/rules/fake:ro
       - loki-data:/loki
     command: [ "-config.file=/etc/loki/loki-config.yml" ]
     healthcheck:

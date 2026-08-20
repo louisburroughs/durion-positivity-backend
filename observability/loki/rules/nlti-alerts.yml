@@ -1,0 +1,342 @@
+# Loki ruler rules for the NLTI Gate 7 LogQL alerts (#1424).
+#
+# Source of truth for intent and thresholds: pos-mcp-server/docs/alerts/nlti-alerts.md.
+# This file materializes the Loki-evaluable half of that document (doc rules 2, 5-8, 10
+# and the Loki supplements of 9 and 11); the Prometheus half stays where the document
+# says it lives. docker-compose mounts this directory at /loki/rules/fake ("fake" is
+# the tenant id Loki uses while auth_enabled is false), where the ruler configured in
+# observability/loki-config.yml picks it up.
+#
+# Validate after editing (parses every expression with the LogQL parser — but note it
+# rewrites the file in place, so run it on a copy):
+#   lokitool rules lint <copy-of-this-file>
+#
+# Conventions, per the document's Implementation Notes:
+# - Every stream selector filters service="pos-mcp-server" (Promtail label from the
+#   compose service name; identical locally and on alpha).
+# - The telemetry prefix (abbreviated TELEMETRY in the document) is spelled out in
+#   every expression — rule files have no macros. Parameterized `| json` extracts only
+#   the field a rule needs, both to keep series cardinality down and because
+#   `rag.promptLayers` is a JSON array a bare `| json` would silently skip.
+# - LogQL has no clamp_min(); ratio rules guard division and flapping with an
+#   `and on () <total> > N` minimum-volume clause instead.
+# - A doc rule that lists several trigger signals appears here as several rules
+#   sharing one alertname, one expression each, so a single group keeps loading if a
+#   signal needs tuning.
+#
+# When an emitter gap closes (fallbackUsed, rag.retrieved scores — see the gap table
+# in pos-mcp-server/docs/dashboards/nlti-overview.md), switch the affected rule to the
+# telemetry form named in the document and delete the substitute here.
+
+groups:
+  - name: nlti-request-health
+    interval: 1m
+    rules:
+      # Doc rule 2. p99 over latency.totalMs (milliseconds); max() collapses the
+      # per-stream quantiles into one series.
+      - alert: HighNLTIRequestLatency
+        expr: |
+          max(
+            quantile_over_time(0.99,
+              {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+                | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+                | line_format "{{.telemetry}}"
+                | json latency_totalMs="latency.totalMs"
+                | __error__=""
+                | unwrap latency_totalMs [5m]
+            )
+          ) > 2000
+        for: 5m
+        labels:
+          severity: P2
+        annotations:
+          summary: NLTI p99 request latency above 2s over 5m (latency.totalMs telemetry field).
+          runbook: pos-mcp-server/docs/runbooks/downstream-timeout.md
+
+  - name: nlti-gate7-routing
+    interval: 1m
+    rules:
+      # Doc rule 5. Share of one intent type rose >30pp vs the same hour yesterday.
+      # An intent type absent yesterday produces no pair and cannot fire; the
+      # unclassified-dominance rule below is the backstop for that case.
+      - alert: NltiRoutingMixShift
+        expr: |
+          (
+              (
+                sum by (routing_intentType) (
+                  count_over_time(
+                    {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+                      | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+                      | line_format "{{.telemetry}}"
+                      | json routing_intentType="routing.intentType"
+                      | __error__="" [1h]
+                  )
+                )
+              / on () group_left ()
+                sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [1h]))
+              )
+            -
+              (
+                sum by (routing_intentType) (
+                  count_over_time(
+                    {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+                      | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+                      | line_format "{{.telemetry}}"
+                      | json routing_intentType="routing.intentType"
+                      | __error__="" [1h] offset 24h
+                  )
+                )
+              / on () group_left ()
+                sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [1h] offset 24h))
+              )
+          ) > 0.3
+          and on ()
+          sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [1h])) > 100
+        labels:
+          severity: P3
+        annotations:
+          summary: Share of intent type {{ $labels.routing_intentType }} rose more than 30pp vs the same window yesterday.
+          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+      # Doc rule 5, falling side of the same comparison.
+      - alert: NltiRoutingMixShift
+        expr: |
+          (
+              (
+                sum by (routing_intentType) (
+                  count_over_time(
+                    {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+                      | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+                      | line_format "{{.telemetry}}"
+                      | json routing_intentType="routing.intentType"
+                      | __error__="" [1h]
+                  )
+                )
+              / on () group_left ()
+                sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [1h]))
+              )
+            -
+              (
+                sum by (routing_intentType) (
+                  count_over_time(
+                    {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+                      | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+                      | line_format "{{.telemetry}}"
+                      | json routing_intentType="routing.intentType"
+                      | __error__="" [1h] offset 24h
+                  )
+                )
+              / on () group_left ()
+                sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [1h] offset 24h))
+              )
+          ) < -0.3
+          and on ()
+          sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [1h])) > 100
+        labels:
+          severity: P3
+        annotations:
+          summary: Share of intent type {{ $labels.routing_intentType }} fell more than 30pp vs the same window yesterday.
+          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+      # Doc rule 5, unclassified dominance — the Gate 4 router attached no
+      # classification at all (empty/missing routing.intentType majority).
+      - alert: NltiRoutingMixShift
+        expr: |
+          (
+            sum(count_over_time(
+              {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+                | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+                | line_format "{{.telemetry}}"
+                | json routing_intentType="routing.intentType"
+                | __error__=""
+                | routing_intentType = "" [1h]
+            ))
+            /
+            sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [1h]))
+          ) > 0.5
+          and on ()
+          sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [1h])) > 100
+        labels:
+          severity: P3
+        annotations:
+          summary: Majority of NLTI requests carry no routing.intentType — the Gate 4 router is not classifying.
+          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+      # Doc rule 6. Only meaningful with MCP_MODEL_TIERING_ENABLED=true — the flag is
+      # not visible to LogQL, so silence this alert when tiering is deliberately off.
+      - alert: NltiModelTierStarved
+        expr: |
+          sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [1h])) > 100
+          unless
+          sum(count_over_time(
+            {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+              | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+              | line_format "{{.telemetry}}"
+              | json routing_tier="routing.tier"
+              | __error__=""
+              | routing_tier = "T2_COMPLEX" [1h]
+          )) > 0
+        labels:
+          severity: P2
+        annotations:
+          summary: No T2_COMPLEX traffic in 1h despite >100 NLTI requests — the tiered router is not routing.
+          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+      # Doc rule 6, second signal — no-tier share above 20%.
+      - alert: NltiModelTierStarved
+        expr: |
+          (
+            sum(count_over_time(
+              {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+                | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+                | line_format "{{.telemetry}}"
+                | json routing_tier="routing.tier"
+                | __error__=""
+                | routing_tier = "" [1h]
+            ))
+            /
+            sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [1h]))
+          ) > 0.2
+          and on ()
+          sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [1h])) > 100
+        labels:
+          severity: P2
+        annotations:
+          summary: More than 20% of NLTI requests carry no routing.tier — tier-quality comparisons in this window are void.
+          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+      # Doc rule 7, substitute signal. The telemetry form (model.fallbackUsed) cannot
+      # fire yet — the factory hardcodes fallbackUsed=false; switch when instrumented.
+      - alert: NltiModelFallbackRateHigh
+        expr: |
+          sum(count_over_time({job="docker", service="pos-mcp-server", level="WARN"} |= "MCP tiered model resolver" [10m])) > 0
+        labels:
+          severity: P2
+        annotations:
+          summary: Tier resolver warned in the last 10m — a tier silently served the default model.
+          runbook: pos-mcp-server/docs/runbooks/downstream-timeout.md
+
+  - name: nlti-gate7-prompt-rag
+    interval: 1m
+    rules:
+      # Doc rule 8. rag.promptLayers is a JSON array, hence the parameterized | json;
+      # the regex matches only a missing field ("") or an empty array ("[]") — LogQL
+      # label-filter regexes are fully anchored, but the ^$ anchors make that explicit.
+      - alert: NltiPromptLayerMissing
+        expr: |
+          sum(count_over_time(
+            {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+              | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+              | line_format "{{.telemetry}}"
+              | json prompt_layers="rag.promptLayers"
+              | __error__=""
+              | prompt_layers =~ `^(\[\])?$` [15m]
+          )) > 0
+        labels:
+          severity: P2
+        annotations:
+          summary: NLTI requests composed with no prompt layers in the last 15m — answers degrade to the built-in BASE layer.
+          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+      # Doc rule 8, seeding WARN stream.
+      - alert: NltiPromptLayerMissing
+        expr: |
+          sum(count_over_time({job="docker", service="pos-mcp-server", level="WARN"} |~ "MCP no master prompt seeded|MCP no role persona seeded" [15m])) > 0
+        labels:
+          severity: P2
+        annotations:
+          summary: Prompt seeding warned in the last 15m — master prompt or role persona missing.
+          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+      # Doc rule 8, ROLE-layer share below 90% of composed prompts.
+      - alert: NltiPromptLayerMissing
+        expr: |
+          (
+            sum(count_over_time(
+              {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+                | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+                | line_format "{{.telemetry}}"
+                | json prompt_layers="rag.promptLayers"
+                | __error__=""
+                | prompt_layers =~ `.*"ROLE".*` [15m]
+            ))
+            /
+            sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [15m]))
+          ) < 0.9
+          and on ()
+          sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [15m])) > 100
+        labels:
+          severity: P2
+        annotations:
+          summary: ROLE prompt-layer share below 90% — responses are losing the permission-appropriate persona.
+          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+      # Doc rule 10, substitute signal: DOMAIN prompt-layer share as the grounding
+      # proxy. Switch to the rag.retrieved[0].score form once retrieval scores are
+      # emitted (the factory currently always passes null for Rag.retrieved).
+      - alert: NltiRagRecallDegraded
+        expr: |
+          (
+            sum(count_over_time(
+              {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+                | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+                | line_format "{{.telemetry}}"
+                | json prompt_layers="rag.promptLayers"
+                | __error__=""
+                | prompt_layers =~ `.*"DOMAIN".*` [1h]
+            ))
+            /
+            sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [1h]))
+          ) < 0.5
+          and on ()
+          sum(count_over_time({job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry" [1h])) > 100
+        labels:
+          severity: P2
+        annotations:
+          summary: DOMAIN prompt-layer share below 50% — RAG grounding is degraded.
+          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+      # Doc rule 10, static-corpus preload failure.
+      - alert: NltiRagRecallDegraded
+        expr: |
+          sum(count_over_time({job="docker", service="pos-mcp-server", level="WARN"} |= "Preload failed for document_id=" [1h])) > 0
+        labels:
+          severity: P2
+        annotations:
+          summary: Static-corpus preload failed in the last hour — part of the RAG corpus is missing.
+          runbook: pos-mcp-server/docs/runbooks/planning-failure.md
+
+  - name: nlti-gate7-authz-write
+    interval: 1m
+    rules:
+      # Doc rule 9, Loki supplement (the 403-ratio half is Prometheus). p05 of
+      # actor.permissionCodeCount at zero means >=5% of requests decoded an empty
+      # permission bitset — catches a broken gateway decode before it surfaces as 403s.
+      - alert: NltiPermissionRejectSpike
+        expr: |
+          min(
+            quantile_over_time(0.05,
+              {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+                | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+                | line_format "{{.telemetry}}"
+                | json actor_permissionCodeCount="actor.permissionCodeCount"
+                | __error__=""
+                | unwrap actor_permissionCodeCount [10m]
+            )
+          ) == 0
+        for: 10m
+        labels:
+          severity: P1
+        annotations:
+          summary: At least 5% of NLTI requests resolved zero permission codes — likely a broken gateway bitset decode, will present as mass user error.
+          runbook: pos-mcp-server/docs/runbooks/authz-outage.md
+      # Doc rule 11, Loki complement (the confirmation-outcome half is Prometheus):
+      # write intents detected but no write plan created in the same window.
+      - alert: NltiWriteIntentWithoutPlan
+        expr: |
+          sum(count_over_time(
+            {job="docker", service="pos-mcp-server"} |= "nlti.request.telemetry"
+              | regexp `(?P<telemetry>[{]"schemaVersion".+[}])`
+              | line_format "{{.telemetry}}"
+              | json write_isWrite="write.isWrite"
+              | __error__=""
+              | write_isWrite = "true" [15m]
+          )) > 0
+          unless
+          sum(count_over_time({job="docker", service="pos-mcp-server"} |= "NLTI write plan created" [15m])) > 0
+        labels:
+          severity: P2
+        annotations:
+          summary: Write intents detected in the last 15m but no write plan was created — the confirmation gate is not engaging.
+          runbook: pos-mcp-server/docs/runbooks/confirmation-gate-mismatch.md
