@@ -166,6 +166,13 @@ public class InventoryPermissionRegistry {
      */
     public static final String CYCLE_COUNT_COMPLETE = "inventory:cycle_count:complete";
 
+    /**
+     * Manage cycle-count tolerance configuration: create, update, and delete the
+     * product/location-scoped absolute and percentage tolerance bounds that decide whether a
+     * counted variance is auto-reconciled or flagged for investigation (ADR-0055 stage 4, #1416).
+     */
+    public static final String CYCLE_COUNT_TOLERANCE_MANAGE = "inventory:cycle_count_tolerance:manage";
+
     // ==================== REPLENISHMENT PERMISSIONS ====================
 
     /**

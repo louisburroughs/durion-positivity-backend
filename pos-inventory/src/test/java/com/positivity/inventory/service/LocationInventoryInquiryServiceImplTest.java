@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.service.AsOfQueryGuard;
+import com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver;
 import com.positivity.inventory.internal.service.LocationInventoryInquiryServiceImpl;
 import java.math.BigDecimal;
 import java.util.List;
@@ -37,9 +38,12 @@ class LocationInventoryInquiryServiceImplTest {
     @Mock
     private AsOfQueryGuard asOfQueryGuard;
 
+    @Mock
+    private BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
+
     private LocationInventoryInquiryServiceImpl newService() {
         return new LocationInventoryInquiryServiceImpl(
-                stockSummaryRepository, inventoryLedgerEntryRepository, asOfQueryGuard);
+                stockSummaryRepository, inventoryLedgerEntryRepository, asOfQueryGuard, baseUnitOfMeasureResolver);
     }
 
     private InventoryStockSummary summary(String sku, long onHand, long allocated) {

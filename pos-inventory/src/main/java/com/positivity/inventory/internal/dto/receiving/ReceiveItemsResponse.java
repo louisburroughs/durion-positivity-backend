@@ -85,5 +85,12 @@ public class ReceiveItemsResponse {
         @Schema(description = "Quantity actually received on the line", example = "8", requiredMode = REQUIRED)
         @NotNull
         private BigDecimal receivedQuantity;
+
+        @Schema(
+                description = "UoM the line was keyed in when it differed from the product's base UoM; null means"
+                        + " the product's base UoM",
+                example = "CASE",
+                requiredMode = NOT_REQUIRED)
+        private String unitOfMeasure;
     }
 }

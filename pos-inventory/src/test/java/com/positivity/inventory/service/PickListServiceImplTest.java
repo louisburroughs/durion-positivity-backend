@@ -65,11 +65,15 @@ class PickListServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.InventoryFactPublisher inventoryFactPublisher;
 
+    @Mock
+    private com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
+
     private PickListServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new PickListServiceImpl(pickListRepository, pickTaskRepository, inventoryFactPublisher);
+        service = new PickListServiceImpl(
+                pickListRepository, pickTaskRepository, inventoryFactPublisher, baseUnitOfMeasureResolver);
     }
 
     // ─── SC1: createPickList — valid request → DRAFT status ─────────────────────

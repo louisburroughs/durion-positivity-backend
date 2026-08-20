@@ -1,10 +1,13 @@
 package com.positivity.inventory.internal.dto.cyclecount;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.positivity.inventory.internal.enums.MeasurementMethod;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -35,8 +38,32 @@ public class SubmitCountRequest {
     @NotNull(message = "Auditor ID is required")
     private String auditorId;
 
-    @Schema(description = "Quantity physically counted by the auditor", example = "12", requiredMode = REQUIRED)
+    @Schema(
+            description = "Quantity physically measured, in unitOfMeasure (or the product's base UoM when"
+                    + " unitOfMeasure is omitted). Converted to base UoM before variance is computed.",
+            example = "12",
+            requiredMode = REQUIRED)
     @NotNull(message = "Actual quantity is required")
-    @Min(value = 0, message = "Quantity must be zero or positive")
-    private Integer actualQuantity;
+    @DecimalMin(value = "0", message = "Quantity must be zero or positive")
+    private BigDecimal actualQuantity;
+
+    @Schema(
+            description = "Unit the quantity was physically measured in. Omit for the product's base UoM.",
+            example = "GAL",
+            requiredMode = NOT_REQUIRED)
+    private String unitOfMeasure;
+
+    @Schema(
+            description = "How the quantity was obtained. Defaults to MANUAL_COUNT.",
+            example = "MANUAL_COUNT",
+            requiredMode = NOT_REQUIRED)
+    private MeasurementMethod measurementMethod;
+
+    @Schema(
+            description = "Reason for the variance, if already known at submission time. Optional: a count and"
+                    + " its eventual adjustment are separate transactions, and the adjustment's own reason code"
+                    + " is what ultimately gates posting an out-of-tolerance variance.",
+            example = "Evaporation since last count",
+            requiredMode = NOT_REQUIRED)
+    private String varianceReason;
 }

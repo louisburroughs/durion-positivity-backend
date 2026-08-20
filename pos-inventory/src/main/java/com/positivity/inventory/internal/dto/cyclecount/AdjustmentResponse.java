@@ -78,6 +78,13 @@ public class AdjustmentResponse {
     private BigDecimal countedQuantity;
 
     @Schema(
+            description = "The stock item's base unit of measure, when stockItemId resolves to a catalog product"
+                    + " with a declared UoM; null otherwise",
+            example = "GAL",
+            requiredMode = NOT_REQUIRED)
+    private String unitOfMeasure;
+
+    @Schema(
             description = "Current lifecycle status of the adjustment",
             example = "PENDING_APPROVAL",
             requiredMode = REQUIRED)

@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 57")
+    @DisplayName("CATALOG_VERSION is 58")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(57);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(58);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 468")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 469")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1337,8 +1337,11 @@ class SecurityGatewayConfigTest {
         // could not travel in a JWT and the override path was unreachable for every user,
         // ADMIN included. Cataloguing it here is what makes the check answerable.
         assertThat(GatewayPermissionCatalog.authorityForBit(468)).isEqualTo("PERM_inventory:adjustment:override");
+        // Cycle-count tolerance admin CRUD (ADR-0055 stage 4, #1416).
+        assertThat(GatewayPermissionCatalog.authorityForBit(469))
+                .isEqualTo("PERM_inventory:cycle_count_tolerance:manage");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(469)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(470)).isNull();
     }
 
     @Test

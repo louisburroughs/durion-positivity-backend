@@ -30,17 +30,20 @@ public class PickListServiceImpl implements PickListService {
     private final PickTaskRepository pickTaskRepository;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final @Nullable InventoryLotOutboundService lotOutboundService;
+    private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
 
     @Autowired
     public PickListServiceImpl(
             PickListRepository pickListRepository,
             PickTaskRepository pickTaskRepository,
             InventoryFactPublisher inventoryFactPublisher,
-            InventoryLotOutboundService lotOutboundService) {
+            InventoryLotOutboundService lotOutboundService,
+            BaseUnitOfMeasureResolver baseUnitOfMeasureResolver) {
         this.pickListRepository = pickListRepository;
         this.pickTaskRepository = pickTaskRepository;
         this.inventoryFactPublisher = inventoryFactPublisher;
         this.lotOutboundService = lotOutboundService;
+        this.baseUnitOfMeasureResolver = baseUnitOfMeasureResolver;
     }
 
     /**
@@ -52,8 +55,9 @@ public class PickListServiceImpl implements PickListService {
     public PickListServiceImpl(
             PickListRepository pickListRepository,
             PickTaskRepository pickTaskRepository,
-            InventoryFactPublisher inventoryFactPublisher) {
-        this(pickListRepository, pickTaskRepository, inventoryFactPublisher, null);
+            InventoryFactPublisher inventoryFactPublisher,
+            BaseUnitOfMeasureResolver baseUnitOfMeasureResolver) {
+        this(pickListRepository, pickTaskRepository, inventoryFactPublisher, null, baseUnitOfMeasureResolver);
     }
 
     @Override
@@ -222,6 +226,7 @@ public class PickListServiceImpl implements PickListService {
                 entity.getStatus(),
                 entity.getSortOrder(),
                 entity.getSuggestedLotNumber(),
-                entity.getPickedLotId());
+                entity.getPickedLotId(),
+                baseUnitOfMeasureResolver.resolve(entity.getProductId()));
     }
 }

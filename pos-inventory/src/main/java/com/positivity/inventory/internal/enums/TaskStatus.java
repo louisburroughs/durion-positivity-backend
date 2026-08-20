@@ -11,6 +11,8 @@ package com.positivity.inventory.internal.enums;
  * <li>COUNTED_PENDING_REVIEW → Count submitted, awaiting manager review</li>
  * <li>CONFLICT → Stock moved between task creation and count/approval; reviewer must choose</li>
  * <li>REQUIRES_INVESTIGATION → Max recounts exceeded or threshold breach</li>
+ * <li>ACCEPTED_WITHIN_TOLERANCE → Variance within the resolved tolerance; reconciled, no
+ * adjustment, no review</li>
  * <li>APPROVED → Variance accepted, ready for inventory adjustment</li>
  * <li>REJECTED → Count rejected, may require new task assignment</li>
  * </ul>
@@ -22,7 +24,8 @@ public enum TaskStatus {
     ASSIGNED,
 
     /**
-     * Count has been submitted and is awaiting manager review.
+     * Count has been submitted, its variance exceeds the resolved tolerance (ADR-0055 stage 4,
+     * #1416), and it is awaiting manager review before an adjustment may be created.
      */
     COUNTED_PENDING_REVIEW,
 
@@ -40,6 +43,17 @@ public enum TaskStatus {
      * Requires manager sign-off and root-cause documentation.
      */
     REQUIRES_INVESTIGATION,
+
+    /**
+     * Terminal, non-review outcome (ADR-0055 stage 4, #1416): the count's variance from book
+     * quantity fell within the tolerance resolved for the product/location (absolute, percentage,
+     * or both — see {@code CycleCountToleranceResolver}). The count is recorded as-is; no
+     * {@code CycleCountAdjustment} is created and on-hand is left untouched, per the owner's rule
+     * that a physical count and an inventory adjustment are separate transactions. Reachable only
+     * when no in-window movement conflict was detected — a {@code CONFLICT} task is never
+     * auto-accepted, since its snapshot is already known stale.
+     */
+    ACCEPTED_WITHIN_TOLERANCE,
 
     /**
      * Count has been approved by manager. Ready for inventory adjustment.

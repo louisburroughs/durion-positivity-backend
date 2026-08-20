@@ -71,6 +71,9 @@ class CycleCountAdjustmentServiceImplTest {
     @Mock
     private CostingMethodResolver methodResolver;
 
+    @Mock
+    private BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
+
     private CycleCountAdjustmentServiceImpl service;
     private Clock fixedClock = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
@@ -86,7 +89,8 @@ class CycleCountAdjustmentServiceImplTest {
                 taskRepository,
                 conflictDetector,
                 costStateRepository,
-                methodResolver);
+                methodResolver,
+                baseUnitOfMeasureResolver);
     }
 
     @AfterEach

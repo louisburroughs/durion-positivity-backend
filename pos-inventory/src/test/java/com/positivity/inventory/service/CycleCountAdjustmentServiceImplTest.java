@@ -76,6 +76,9 @@ class CycleCountAdjustmentServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.CostingMethodResolver methodResolver;
 
+    @Mock
+    private com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
+
     private CycleCountAdjustmentServiceImpl service;
 
     private static final String ACTOR_USER_ID = "actor-person-id-001";
@@ -95,7 +98,8 @@ class CycleCountAdjustmentServiceImplTest {
                 taskRepository,
                 conflictDetector,
                 costStateRepository,
-                methodResolver);
+                methodResolver,
+                baseUnitOfMeasureResolver);
     }
 
     @AfterEach

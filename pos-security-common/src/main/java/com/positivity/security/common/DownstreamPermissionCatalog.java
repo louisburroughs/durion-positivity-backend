@@ -23,7 +23,7 @@ public final class DownstreamPermissionCatalog {
      * {@code PermissionCode.CATALOG_VERSION}.
      * Updated automatically by {@code scripts/generate-permissions.py --sync}.
      */
-    public static final int CATALOG_VERSION = 56;
+    public static final int CATALOG_VERSION = 58;
 
     /**
      * Index-to-authority mapping. Entry at position N is the {@code PERM_*}-prefixed
@@ -591,7 +591,16 @@ public final class DownstreamPermissionCatalog {
 
         // ── New batch (bits 466–467) ──────────────────────────────────────────
         "PERM_workorder:fleet_auth:request", // 466
-        "PERM_workorder:fleet_auth:resolve" // 467
+        "PERM_workorder:fleet_auth:resolve", // 467
+
+        // ── New batch (bits 468–468) ──────────────────────────────────────────
+        // Backfilled: present in GatewayPermissionCatalog since CATALOG_VERSION 57 but missing
+        // here — this file had fallen out of sync, silently misaligning every bit from 468
+        // onward. Fixed alongside the ADR-0055 stage 4 (#1416) addition below.
+        "PERM_inventory:adjustment:override", // 468
+
+        // ── New batch (bits 469–469) ──────────────────────────────────────────
+        "PERM_inventory:cycle_count_tolerance:manage" // 469
     };
 
     public static String authorityForBit(int bitIndex) {

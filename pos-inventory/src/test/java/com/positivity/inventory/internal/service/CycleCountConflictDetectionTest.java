@@ -100,7 +100,7 @@ class CycleCountConflictDetectionTest {
                 .binLocation(binLocation)
                 .itemSku(sku)
                 .itemDescription("I2 test item")
-                .expectedQuantity(expectedQuantity)
+                .expectedQuantity(BigDecimal.valueOf(expectedQuantity))
                 .auditorId(AUDITOR)
                 .status(TaskStatus.ASSIGNED)
                 .countEntriesCount(0)
@@ -144,7 +144,7 @@ class CycleCountConflictDetectionTest {
         CountResponse response = cycleCountService.submitCount(SubmitCountRequest.builder()
                 .taskId(task.getTaskId())
                 .auditorId(AUDITOR)
-                .actualQuantity(7)
+                .actualQuantity(BigDecimal.valueOf(7))
                 .build());
 
         assertThat(response.getTaskStatus()).isEqualTo(TaskStatus.CONFLICT);
@@ -163,11 +163,11 @@ class CycleCountConflictDetectionTest {
         CountResponse response = cycleCountService.submitCount(SubmitCountRequest.builder()
                 .taskId(task.getTaskId())
                 .auditorId(AUDITOR)
-                .actualQuantity(8)
+                .actualQuantity(BigDecimal.valueOf(8))
                 .build());
 
         assertThat(response.getTaskStatus()).isEqualTo(TaskStatus.COUNTED_PENDING_REVIEW);
-        assertThat(response.getVariance()).isEqualTo(-2);
+        assertThat(response.getVariance()).isEqualByComparingTo("-2");
     }
 
     @Test
@@ -183,7 +183,7 @@ class CycleCountConflictDetectionTest {
         cycleCountService.submitCount(SubmitCountRequest.builder()
                 .taskId(task.getTaskId())
                 .auditorId(AUDITOR)
-                .actualQuantity(7)
+                .actualQuantity(BigDecimal.valueOf(7))
                 .build());
         assertThat(taskRepository.findById(task.getTaskId()).orElseThrow().getStatus())
                 .isEqualTo(TaskStatus.CONFLICT);
@@ -191,7 +191,7 @@ class CycleCountConflictDetectionTest {
         CountResponse recount = cycleCountService.submitRecount(SubmitRecountRequest.builder()
                 .taskId(task.getTaskId())
                 .auditorId(AUDITOR)
-                .actualQuantity(7)
+                .actualQuantity(BigDecimal.valueOf(7))
                 .permission("TRIGGER_RECOUNT_SELF")
                 .build());
 
@@ -217,7 +217,7 @@ class CycleCountConflictDetectionTest {
         CountResponse count = cycleCountService.submitCount(SubmitCountRequest.builder()
                 .taskId(task.getTaskId())
                 .auditorId(AUDITOR)
-                .actualQuantity(5)
+                .actualQuantity(BigDecimal.valueOf(5))
                 .build());
         assertThat(count.getTaskStatus()).isEqualTo(TaskStatus.CONFLICT);
 
@@ -263,7 +263,7 @@ class CycleCountConflictDetectionTest {
         CountResponse count = cycleCountService.submitCount(SubmitCountRequest.builder()
                 .taskId(task.getTaskId())
                 .auditorId(AUDITOR)
-                .actualQuantity(8)
+                .actualQuantity(BigDecimal.valueOf(8))
                 .build());
         assertThat(count.getTaskStatus()).isEqualTo(TaskStatus.COUNTED_PENDING_REVIEW);
 

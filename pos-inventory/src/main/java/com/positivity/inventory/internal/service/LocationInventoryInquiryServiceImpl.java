@@ -29,14 +29,17 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
     private final InventoryStockSummaryRepository stockSummaryRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final AsOfQueryGuard asOfQueryGuard;
+    private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
 
     public LocationInventoryInquiryServiceImpl(
             InventoryStockSummaryRepository stockSummaryRepository,
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
-            AsOfQueryGuard asOfQueryGuard) {
+            AsOfQueryGuard asOfQueryGuard,
+            BaseUnitOfMeasureResolver baseUnitOfMeasureResolver) {
         this.stockSummaryRepository = stockSummaryRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
         this.asOfQueryGuard = asOfQueryGuard;
+        this.baseUnitOfMeasureResolver = baseUnitOfMeasureResolver;
     }
 
     @Override
@@ -72,6 +75,7 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
                         .map(row -> LocationInventoryItemsResponse.Item.builder()
                                 .stockItemId(row.getStockItemId())
                                 .onHandQuantity(row.getOnHand())
+                                .unitOfMeasure(baseUnitOfMeasureResolver.resolve(row.getStockItemId()))
                                 .build())
                         .toList();
 
@@ -115,6 +119,7 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
                 .map(row -> LocationInventoryItemsResponse.Item.builder()
                         .stockItemId(row.getStockItemId())
                         .onHandQuantity(row.getOnHandQuantity())
+                        .unitOfMeasure(baseUnitOfMeasureResolver.resolve(row.getStockItemId()))
                         .build())
                 .toList();
 

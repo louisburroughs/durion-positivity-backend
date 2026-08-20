@@ -6,6 +6,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import com.positivity.inventory.internal.enums.TaskStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -44,9 +45,19 @@ public class CycleCountTaskResponse {
             requiredMode = NOT_REQUIRED)
     private String itemDescription;
 
-    @Schema(description = "Quantity expected on hand for the item", example = "15", requiredMode = REQUIRED)
+    @Schema(
+            description = "Quantity expected on hand for the item, in base UoM",
+            example = "15",
+            requiredMode = REQUIRED)
     @NotNull
-    private Integer expectedQuantity;
+    private BigDecimal expectedQuantity;
+
+    @Schema(
+            description = "The item's base unit of measure, when itemSku resolves to a catalog product with a"
+                    + " declared UoM; null otherwise",
+            example = "GAL",
+            requiredMode = NOT_REQUIRED)
+    private String unitOfMeasure;
 
     @Schema(
             description = "Identifier of the auditor assigned to the task, if assigned",

@@ -93,6 +93,10 @@ Kafka command; pos-inventory owns the actual document-to-base conversion for the
 `DOWN` rounding so it never promises more than exists — the same pattern purchase-order, ASN,
 receiving and return lines already use via `DocumentQuantityConverter`.
 
+**Read-side display (ADR-0055 stage 4, #1416):** `WorkorderPartResponse.unitOfMeasure` echoes the
+line's own `uomCode` verbatim (null means the product's base unit) — no conversion, no catalog
+lookup, just the same value the line was keyed in.
+
 ## Configuration
 
 | Property                       | Default                    | Description                      |

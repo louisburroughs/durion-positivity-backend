@@ -6,6 +6,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import com.positivity.inventory.internal.enums.TaskStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -37,20 +38,33 @@ public class CountResponse {
     @NotNull
     private UUID taskId;
 
-    @Schema(description = "Quantity physically counted by the auditor", example = "12", requiredMode = REQUIRED)
+    @Schema(
+            description = "Quantity counted, converted to the product's base UoM",
+            example = "12",
+            requiredMode = REQUIRED)
     @NotNull
-    private Integer actualQuantity;
-
-    @Schema(description = "Quantity expected on hand at the time of the count", example = "15", requiredMode = REQUIRED)
-    @NotNull
-    private Integer expectedQuantity;
+    private BigDecimal actualQuantity;
 
     @Schema(
-            description = "Difference between counted and expected quantity (actual minus expected)",
+            description = "Book (expected) quantity at the time of the count, in base UoM",
+            example = "15",
+            requiredMode = REQUIRED)
+    @NotNull
+    private BigDecimal expectedQuantity;
+
+    @Schema(
+            description = "Difference between counted and expected quantity, in base UoM (actual minus expected)",
             example = "-3",
             requiredMode = REQUIRED)
     @NotNull
-    private Integer variance;
+    private BigDecimal variance;
+
+    @Schema(
+            description = "Whether the variance fell within the resolved tolerance; true means the count was"
+                    + " reconciled with no adjustment created",
+            example = "true",
+            requiredMode = REQUIRED)
+    private boolean withinTolerance;
 
     @Schema(
             description = "Sequence number of this count within the recount chain; 0 for the initial count",

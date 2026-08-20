@@ -181,9 +181,9 @@ names no product declares nothing — which cannot be evidence that a value alre
 wrong. Such a row is reported as stored rather than refused; refusing would turn an availability
 read into a 500 and stall the replicas behind it.
 
-**Still integral, deliberately:** pick-task quantities, putaway and transfer-order line quantities,
-and the cycle-count capture DTOs (`SubmitCountRequest.actualQuantity`, `CountEntryResponse`). These
-widen with the unit-of-measure work in ADR-0055 stages 3 and 4. Where they meet the ledger they
+**Still integral, deliberately:** pick-task and putaway/transfer-order-line quantities. The
+cycle-count capture DTOs (`SubmitCountRequest.actualQuantity`, `CountEntryResponse`) widened to
+`BigDecimal` in stage 4 (#1416, see below) — where the still-integral surfaces meet the ledger they
 widen at the boundary (`BigDecimal.valueOf`), never narrow it. Sales-order line quantities stay
 `int` by decision — see ADR-0055.
 
@@ -205,6 +205,69 @@ conversion already rounded cleanly, and the real guard for a `requiredQuantity` 
 `UomConversionUndefinedException` (422 `UOM_CONVERSION_UNDEFINED`); on the command's async path this
 surfaces as a logged, permanently-failed command with no outcome fact emitted, same as any other
 business validation failure here.
+
+### Tolerance-based cycle-count reconciliation (ADR-0055 stage 4, #1416)
+
+Bulk stock (tanks, drums, bins of loose material) never counts exactly to book — evaporation,
+meter variance, and measurement precision all contribute a small honest gap. Requiring an exact
+match, as the platform did before this stage, turns every bulk count into a manual-adjustment
+review. Tolerance-based reconciliation fixes that: a count within the configured tolerance is
+accepted with no adjustment and no review; a count outside it is flagged and follows the existing
+adjustment/approval path unchanged.
+
+**Configuring a tolerance.** `POST /v1/inventory/cycleCountTolerances` (permission
+`inventory:cycle_count_tolerance:manage`) creates a row scoped by `productId`, `storageLocation`
+(matching `cycle_count_task.binLocation` — free text, may hold a location UUID's string form),
+both, or neither (the global default), with an `absoluteTolerance`, a `percentageTolerance`, or
+both. `PUT .../{toleranceId}` replaces the bounds and active flag; `GET`/`GET .../{id}`
+(`inventory:cycle_count:view`) list and read; `DELETE` removes a row outright. **Resolution is
+most-specific-first:** product+location, then product alone, then location alone, then the global
+default, then — if nothing matches — zero tolerance (today's pre-#1416 behavior, unchanged). When
+both an absolute and a percentage bound are configured, a count is within tolerance if it fits
+under *either* — the effective allowance is the larger of the two, the conventional "±50 gal or
+±1%, whichever is greater" shape of real tank-tolerance policy. See
+`CycleCountToleranceResolver`'s class javadoc for the full reasoning.
+
+**Reconciliation flow.** `POST /v1/inventory/cycleCount/submit` and `.../recount` now also accept
+`unitOfMeasure` (the unit physically measured in — converted to base UoM via
+`UomConversionService.toBaseQuantity`, `HALF_UP`, before variance is computed; a count is a
+measurement, not a reservation promise) and `measurementMethod` (`MANUAL_COUNT`, `GAUGE`, `DIP`,
+`SCALE`, `METER`, or `SENSOR`; defaults `MANUAL_COUNT`). Every submission resolves the applicable
+tolerance and compares `|measured − book|` against it:
+
+- **Within tolerance:** the task closes `ACCEPTED_WITHIN_TOLERANCE` — reconciled, no
+  `CycleCountAdjustment` is ever created, on-hand is untouched. The count and an adjustment remain
+  separate transactions, per the owner's spec, so there is nothing to "not post."
+- **Exceeding tolerance:** unchanged pre-#1416 behavior — `COUNTED_PENDING_REVIEW` (or `CONFLICT`
+  if in-window stock movements were detected), same as an unconfigured zero-tolerance variance
+  always has. A reviewer investigates and explicitly calls the existing
+  `POST /v1/inventory/cycleCountAdjustments` to create an adjustment, which goes through
+  `ApprovalThresholdEvaluator` and posts as its own, separate transaction on approval.
+- A **movement conflict always takes precedence**: a task whose expected-quantity snapshot is
+  already known stale (odoo-parity I2) is never auto-accepted, regardless of how the variance
+  compares to tolerance — that comparison would be against a number already known to be wrong.
+
+`CountEntryResponse` carries the owner spec's full "Required Data" list per count: book quantity
+(`expectedQuantity`), measured quantity (`measuredQuantity` + `unitOfMeasure`), measurement method,
+measurement timestamp (`countedAt`), variance quantity and percentage, the resolved tolerance
+snapshot (`allowedToleranceAbsolute`/`allowedTolerancePercentage`), `withinTolerance`, and an
+optional `varianceReason`. Adjustment quantity and approval status are deliberately *not*
+duplicated onto the count — they live on the linked `CycleCountAdjustment`, queryable by
+`cycleCountTaskId`, since a count and its adjustment are separate records for separate
+transactions.
+
+**The `FLOOR_AT_ZERO` decision.** `NegativeStockPolicy.forEventType` maps `COUNT_VARIANCE_OUT` and
+`ADJUST_CYCLE_COUNT` to `FLOOR_AT_ZERO`. Read literally, that name suggested a risk: silently
+clamping a bulk product's downward variance to zero rather than surfacing it. Reading the
+mechanism (`LedgerPostingServiceImpl.rejectNegativeProjection`) shows it does the opposite —
+it **throws** `NegativeStockPolicyViolationException` rather than clamping, and does so on a
+`quantityAfter` that is algebraically guaranteed non-negative for this path: an adjustment posts a
+*to-measured* change (`quantityAfter = currentOnHand + quantityChange`, recomputed against current
+on-hand immediately before posting), and the measured quantity behind that change is validated
+`>= 0` at every entry point. The floor is kept as-is — structurally unreachable defense-in-depth
+for this path, not dead weight — documented and pinned by test rather than silently inherited. See
+the enum javadoc on `NegativeStockPolicy.FLOOR_AT_ZERO` for the full argument, and
+`NegativeStockPolicyEnforcementTest`'s ADR-0055-stage-4 tests for the pin.
 
 ### Rollout: breaking on the wire, deployed in lockstep
 

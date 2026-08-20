@@ -61,6 +61,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
     private final CycleCountConflictDetector conflictDetector;
     private final SkuCostStateRepository costStateRepository;
     private final CostingMethodResolver methodResolver;
+    private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
 
     @Override
     @Transactional
@@ -398,6 +399,7 @@ public class CycleCountAdjustmentServiceImpl implements CycleCountAdjustmentServ
                 .costAtTimeOfAdjustment(adjustment.getCostAtTimeOfAdjustment())
                 .quantityOnHandBefore(adjustment.getQuantityOnHandBefore())
                 .countedQuantity(adjustment.getCountedQuantity())
+                .unitOfMeasure(baseUnitOfMeasureResolver.resolve(adjustment.getStockItemId()))
                 .status(adjustment.getStatus())
                 .requiredApprovalTier(adjustment.getRequiredApprovalTier())
                 .createdByUserId(adjustment.getCreatedByUserId())

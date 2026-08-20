@@ -619,13 +619,15 @@ public enum PermissionCode {
     WORKORDER__FLEET_AUTH__REQUEST(466, "workorder:fleet_auth:request"),
     WORKORDER__FLEET_AUTH__RESOLVE(467, "workorder:fleet_auth:resolve"),
     // ── Inventory (new) ────────────────────────────────────────────────────────
-    INVENTORY__ADJUSTMENT__OVERRIDE(468, "inventory:adjustment:override");
+    INVENTORY__ADJUSTMENT__OVERRIDE(468, "inventory:adjustment:override"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__CYCLE_COUNT_TOLERANCE__MANAGE(469, "inventory:cycle_count_tolerance:manage");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 57;
+    public static final int CATALOG_VERSION = 58;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

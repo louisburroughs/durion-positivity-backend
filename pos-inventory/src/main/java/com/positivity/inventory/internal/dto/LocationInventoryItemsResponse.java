@@ -43,5 +43,12 @@ public class LocationInventoryItemsResponse {
                 example = "24",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         private BigDecimal onHandQuantity;
+
+        @Schema(
+                description = "The stock item's base unit of measure, when stockItemId resolves to a catalog"
+                        + " product with a declared UoM; null otherwise",
+                example = "EA",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        private String unitOfMeasure;
     }
 }

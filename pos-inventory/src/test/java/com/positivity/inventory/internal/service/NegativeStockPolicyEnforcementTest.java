@@ -219,6 +219,47 @@ class NegativeStockPolicyEnforcementTest {
         assertThat(onHand(sku, location)).isZero();
     }
 
+    // ─── ADR-0055 stage 4 (#1416): FLOOR_AT_ZERO decision, pinned explicitly ─
+
+    /**
+     * Decision: {@code COUNT_VARIANCE_OUT} and {@code ADJUST_CYCLE_COUNT} stay
+     * {@code FLOOR_AT_ZERO} (see the extensive javadoc on the enum constant for the full
+     * reasoning). This pins the mapping so a future change to either can't silently drift without
+     * a test noticing — the decision must be explicit, not inherited by accident.
+     */
+    @Test
+    @DisplayName("ADR-0055 stage 4: COUNT_VARIANCE_OUT and ADJUST_CYCLE_COUNT remain FLOOR_AT_ZERO, not BLOCKED")
+    void floorAtZeroDecision_countVarianceOutAndAdjustCycleCount_pinnedExplicitly() {
+        assertThat(com.positivity.inventory.internal.enums.NegativeStockPolicy.forEventType(
+                        InventoryLedgerEventType.COUNT_VARIANCE_OUT))
+                .isEqualTo(com.positivity.inventory.internal.enums.NegativeStockPolicy.FLOOR_AT_ZERO);
+        assertThat(com.positivity.inventory.internal.enums.NegativeStockPolicy.forEventType(
+                        InventoryLedgerEventType.ADJUST_CYCLE_COUNT))
+                .isEqualTo(com.positivity.inventory.internal.enums.NegativeStockPolicy.FLOOR_AT_ZERO);
+    }
+
+    /**
+     * Demonstrates the mechanism is fail-loud, not a silent truncation: a posting that would
+     * project on-hand below zero is rejected outright ({@link NegativeStockPolicyViolationException}),
+     * never clamped to zero and allowed through. This is the property the ADR-0055 stage-4
+     * decision (see the enum javadoc) relies on: the floor can only ever reject, never quietly
+     * rewrite a variance the count actually measured.
+     */
+    @Test
+    @DisplayName("ADR-0055 stage 4: FLOOR_AT_ZERO rejects outright — the posted change is never truncated to fit")
+    void floorAtZero_rejectsOutright_neverTruncatesThePostedChange() {
+        String sku = uniqueSku();
+        UUID location = UUID.randomUUID();
+        seed(sku, location, new BigDecimal("4"));
+
+        assertThatExceptionOfType(NegativeStockPolicyViolationException.class)
+                .isThrownBy(() -> ledgerPostingService.post(
+                        entry(sku, location, InventoryLedgerEventType.COUNT_VARIANCE_OUT, new BigDecimal("-10"))));
+
+        // Rejected, not truncated to -4: on-hand is exactly what it was before the attempt.
+        assertThat(onHand(sku, location)).isEqualByComparingTo("4");
+    }
+
     // ─── UNCONSTRAINED: inbound + paired-move types ──────────────────────────
 
     @Test

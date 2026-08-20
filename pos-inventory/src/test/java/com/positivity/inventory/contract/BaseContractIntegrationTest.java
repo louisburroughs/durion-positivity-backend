@@ -35,6 +35,7 @@ public abstract class BaseContractIntegrationTest {
                                 "inventory:cycle_count:initiate",
                                 "inventory:cycle_count:view",
                                 "inventory:cycle_count:complete",
+                                "inventory:cycle_count_tolerance:manage",
                                 "inventory:receiving:create",
                                 "inventory:receiving:view",
                                 "inventory:receiving:complete",
