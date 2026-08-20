@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -50,17 +51,24 @@ public class InventoryCommandPublisher {
      * @param requiredQuantity quantity requested; decimal-capable per the product's catalog
      *     divisibility declaration (ADR-0055, #1414)
      * @param locationId selling location the demand must be covered at
+     * @param uomCode unit {@code requiredQuantity} is expressed in (ADR-0055 stage 3, #1415);
+     *     {@code null} means the product's base unit. Sales-order lines stay integral by decision
+     *     (ADR-0055 leaves {@code SalesOrderLine.quantity} an {@code int}), so every caller sends
+     *     {@code null} today; the parameter exists so the command shape matches pos-workorder's
+     *     and pos-inventory's single {@code handleReservationRequestRequested} reads one contract.
      */
     public void requestReservation(
             @NonNull UUID salesOrderLineId,
             @NonNull UUID stockItemId,
             @NonNull BigDecimal requiredQuantity,
-            @NonNull UUID locationId) {
-        UUID commandId = deterministicCommandId(
-                RESERVATION_REQUEST_COMMAND_TYPE,
-                salesOrderLineId + ":" + stockItemId + ":" + normalizedQuantityKey(requiredQuantity));
-        ReservationRequestPayload payload =
-                new ReservationRequestPayload(salesOrderLineId, stockItemId, requiredQuantity, locationId);
+            @NonNull UUID locationId,
+            @Nullable String uomCode) {
+        String normalizedUomCode = normalizeUomCode(uomCode);
+        String key = salesOrderLineId + ":" + stockItemId + ":" + normalizedQuantityKey(requiredQuantity)
+                + (normalizedUomCode != null ? ":" + normalizedUomCode : "");
+        UUID commandId = deterministicCommandId(RESERVATION_REQUEST_COMMAND_TYPE, key);
+        ReservationRequestPayload payload = new ReservationRequestPayload(
+                salesOrderLineId, stockItemId, requiredQuantity, locationId, normalizedUomCode);
         send(RESERVATION_REQUEST_COMMAND_TYPE, commandId, salesOrderLineId.toString(), payload);
         log.info("Queued reservation request command {} for sales-order line {}", commandId, salesOrderLineId);
     }
@@ -89,6 +97,23 @@ public class InventoryCommandPublisher {
         return quantity.stripTrailingZeros().toPlainString();
     }
 
+    /**
+     * Trims {@code uomCode} and collapses blank to {@code null} before it reaches either the
+     * idempotency key or the payload. Appending it to the key unconditionally — including when
+     * null, which string concatenation renders as the literal {@code "null"} — would change the
+     * deterministic command id for every base-unit command that existed before uomCode was added
+     * to this payload (ADR-0055 stage 3, #1415), breaking retry dedupe across the change. Only a
+     * real code gets suffixed onto the key; null or blank keeps the pre-#1415 id shape.
+     */
+    @Nullable
+    private static String normalizeUomCode(@Nullable String uomCode) {
+        if (uomCode == null) {
+            return null;
+        }
+        String trimmed = uomCode.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     private static UUID deterministicCommandId(@NonNull String commandType, @NonNull String idempotencyKey) {
         if (idempotencyKey.isBlank()) {
             return UUIDv7Generator.generate();
@@ -102,10 +127,14 @@ public class InventoryCommandPublisher {
             @NonNull String commandType,
             @NonNull Object payload) {}
 
-    /** Matches the fields pos-inventory's {@code handleReservationRequestRequested} reads. */
+    /**
+     * Matches the fields pos-inventory's {@code handleReservationRequestRequested} reads.
+     * {@code uomCode} is {@code null} for the product's base unit (ADR-0055 stage 3, #1415).
+     */
     record ReservationRequestPayload(
             @NonNull UUID salesOrderLineId,
             @NonNull UUID stockItemId,
             @NonNull BigDecimal requiredQuantity,
-            @NonNull UUID locationId) {}
+            @NonNull UUID locationId,
+            @Nullable String uomCode) {}
 }

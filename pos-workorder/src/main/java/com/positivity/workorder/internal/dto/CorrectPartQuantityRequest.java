@@ -62,4 +62,17 @@ public class CorrectPartQuantityRequest {
             example = "Adjusted after parts counter verification",
             requiredMode = NOT_REQUIRED)
     private String notes;
+
+    /**
+     * Unit {@code newQuantity} is expressed in. {@code null} leaves the part's existing unit
+     * unchanged (a correction that only fixes the number, not the unit); the product's base unit
+     * still applies when the part carries no unit of its own.
+     */
+    @Nullable
+    @Schema(
+            description = "Unit newQuantity is expressed in. Omit to leave the part's existing unit unchanged. "
+                    + "Converted to base and validated against the product's catalog divisibility.",
+            example = "QT",
+            requiredMode = NOT_REQUIRED)
+    private String uomCode;
 }

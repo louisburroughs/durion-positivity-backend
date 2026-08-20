@@ -27,11 +27,16 @@ public interface WorkorderPartAdjustmentService {
             @Nullable String idempotencyKey,
             @Nullable String notes);
 
+    /**
+     * @param uomCode the unit {@code newQuantity} is expressed in; {@code null} leaves the part's
+     *     existing unit unchanged (ADR-0055 stage 3, #1415)
+     */
     @NonNull
     WorkorderPartAdjustmentEventResponse correctPartQuantity(
             @NonNull UUID workorderId,
             @NonNull UUID partId,
             @NonNull BigDecimal newQuantity,
+            @Nullable String uomCode,
             @NonNull String reason,
             @Nullable String idempotencyKey,
             @Nullable String notes);

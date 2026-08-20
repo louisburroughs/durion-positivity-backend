@@ -406,15 +406,20 @@ public class WorkorderServiceImpl implements WorkorderService {
                 // zero would hold the job in AWAITING_PARTS with nothing anyone can do about it, so
                 // the fractional line is stopped here rather than promoted into a dead end.
                 partQuantityDivisibilityService.requirePermittedScale(
-                        estimateItem.getProductId(), estimateItem.getDescription(), estimateItem.getQuantity());
+                        estimateItem.getProductId(),
+                        estimateItem.getDescription(),
+                        estimateItem.getQuantity(),
+                        estimateItem.getUomCode());
 
                 // Create WorkorderPart for PART items
                 // CAP:004 Story #27: Parts can be standalone (not tied to a service)
+                // uomCode is snapshotted the same way quantity is (ADR-0055 stage 3, #1415).
                 WorkorderPart workorderPart = WorkorderPart.builder()
                         .workOrderService(null) // Standalone part not tied to a service
                         .workorder(workorder) // Direct reference to workorder for standalone parts
                         .description(estimateItem.getDescription())
                         .quantity(estimateItem.getQuantity())
+                        .uomCode(estimateItem.getUomCode())
                         .unitPrice(estimateItem.getUnitPrice())
                         .lineTotal(estimateItem.getLineTotal())
                         .taxCode(estimateItem.getTaxCode())

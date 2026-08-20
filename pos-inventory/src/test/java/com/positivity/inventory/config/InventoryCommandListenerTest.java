@@ -209,8 +209,34 @@ class InventoryCommandListenerTest {
 
         ArgumentCaptor<BigDecimal> quantity = ArgumentCaptor.forClass(BigDecimal.class);
         verify(reservationRequestHandler)
-                .handle(eq(WORKORDER_ID), eq(null), eq(SKU_ID), quantity.capture(), eq(LOCATION_ID));
+                .handle(eq(WORKORDER_ID), eq(null), eq(SKU_ID), quantity.capture(), eq(LOCATION_ID), eq(null));
         assertThat(quantity.getValue()).isEqualByComparingTo("1.01");
+    }
+
+    @Test
+    @DisplayName("a reservation-request command carries its uomCode through to the handler (#1415)")
+    void reservationRequestCarriesUomCode() {
+        listener.onCommand("""
+                {"commandType":"inventory.reservation.request-requested","commandId":"%s",
+                 "payload":{"workorderLineId":"%s","stockItemId":"%s","locationId":"%s",
+                            "requiredQuantity":4.5,"uomCode":"QT"}}
+                """.formatted(UUID.randomUUID(), WORKORDER_ID, SKU_ID, LOCATION_ID));
+
+        verify(reservationRequestHandler)
+                .handle(eq(WORKORDER_ID), eq(null), eq(SKU_ID), any(), eq(LOCATION_ID), eq("QT"));
+    }
+
+    @Test
+    @DisplayName("a reservation-request command with no uomCode passes null through, unchanged from pre-#1415")
+    void reservationRequestWithoutUomCodePassesNull() {
+        listener.onCommand("""
+                {"commandType":"inventory.reservation.request-requested","commandId":"%s",
+                 "payload":{"workorderLineId":"%s","stockItemId":"%s","locationId":"%s",
+                            "requiredQuantity":1}}
+                """.formatted(UUID.randomUUID(), WORKORDER_ID, SKU_ID, LOCATION_ID));
+
+        verify(reservationRequestHandler)
+                .handle(eq(WORKORDER_ID), eq(null), eq(SKU_ID), any(), eq(LOCATION_ID), eq(null));
     }
 
     @Test
@@ -222,7 +248,7 @@ class InventoryCommandListenerTest {
                             "requiredQuantity":0.0000}}
                 """.formatted(UUID.randomUUID(), WORKORDER_ID, SKU_ID, LOCATION_ID));
 
-        verify(reservationRequestHandler, never()).handle(any(), any(), any(), any(), any());
+        verify(reservationRequestHandler, never()).handle(any(), any(), any(), any(), any(), any());
     }
 
     @Test

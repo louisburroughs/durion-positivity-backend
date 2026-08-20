@@ -102,6 +102,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      * @param workorderId    workorder ID
      * @param partLineId     part line item ID
      * @param quantity       quantity to issue (must be positive)
+     * @param uomCode        unit {@code quantity} is expressed in; {@code null} means the
+     *                       product's base unit
      * @param idempotencyKey optional idempotency key
      * @return the created usage event
      * @throws WorkorderNotFoundException if the workorder does not exist; IllegalArgumentException if the part is not found
@@ -114,6 +116,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             @NonNull UUID workorderId,
             @NonNull UUID partLineId,
             @NonNull BigDecimal quantity,
+            @Nullable String uomCode,
             @Nullable String idempotencyKey) {
         String actorId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(MISSING_AUTHENTICATED_USERNAME));
@@ -149,7 +152,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             throw new IllegalStateException("Part " + partLineId + " does not belong to workorder " + workorderId);
         }
 
-        requirePermittedScale(part, quantity);
+        requirePermittedScale(part, quantity, uomCode);
         requireOwnedStock(workorder, part, quantity);
 
         // Create usage event
@@ -176,7 +179,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
                     IDEMPOTENCY_OPERATION_PART_ISSUE, idempotencyKey, event.getId());
         }
 
-        registerDemand(workorder, part, quantity);
+        registerDemand(workorder, part, quantity, uomCode);
 
         log.info("Issued part quantity for workorder {}", workorderId);
         return event;
@@ -257,13 +260,19 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      * convert across. What guarantees the quantity is legitimate is the divisibility gate at
      * estimate-item entry and part issue (#1413), not a conversion here — the product's declared
      * {@code precision_scale} has already decided whether these decimals are allowed at all.
+     *
+     * <p>{@code uomCode} travels alongside it unconverted (ADR-0055 stage 3, #1415): pos-inventory
+     * owns the actual document-to-base conversion for the reservation, using {@code DOWN}
+     * rounding so it never promises more than exists. This module's own gate has already checked
+     * the converted quantity fits the product's declared scale; it does not repeat the conversion
+     * here for anything to be posted.
      */
-    private void registerDemand(Workorder workorder, WorkorderPart part, BigDecimal quantity) {
+    private void registerDemand(Workorder workorder, WorkorderPart part, BigDecimal quantity, String uomCode) {
         InventoryCommandPublisher publisher = inventoryCommandPublisher.getIfAvailable();
         if (publisher == null || workorder.getShopId() == null || part.getProductEntityId() == null) {
             return;
         }
-        publisher.requestReservation(part.getId(), part.getProductEntityId(), quantity, workorder.getShopId());
+        publisher.requestReservation(part.getId(), part.getProductEntityId(), quantity, workorder.getShopId(), uomCode);
     }
 
     /**
@@ -273,9 +282,9 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      * AWAITING_PARTS forever. This catches a quantity keyed directly at the counter, and a line
      * that predates the product's declaration.
      */
-    private void requirePermittedScale(WorkorderPart part, BigDecimal quantity) {
+    private void requirePermittedScale(WorkorderPart part, BigDecimal quantity, String uomCode) {
         partQuantityDivisibilityService.requirePermittedScale(
-                part.getProductEntityId(), part.getDescription(), quantity);
+                part.getProductEntityId(), part.getDescription(), quantity, uomCode);
     }
 
     /**
@@ -284,6 +293,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      * @param workorderId    workorder ID
      * @param partLineId     part line item ID
      * @param quantity       quantity to consume (must be positive)
+     * @param uomCode        unit {@code quantity} is expressed in; {@code null} means the
+     *                       product's base unit
      * @param idempotencyKey optional idempotency key
      * @return the created usage event
      * @throws WorkorderNotFoundException if the workorder does not exist; IllegalArgumentException if the part is not found
@@ -295,6 +306,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             @NonNull UUID workorderId,
             @NonNull UUID partLineId,
             @NonNull BigDecimal quantity,
+            @Nullable String uomCode,
             @Nullable String idempotencyKey) {
         String actorId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(MISSING_AUTHENTICATED_USERNAME));
@@ -328,7 +340,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             throw new IllegalStateException("Part " + partLineId + " does not belong to workorder " + workorderId);
         }
 
-        requirePermittedScale(part, quantity);
+        requirePermittedScale(part, quantity, uomCode);
 
         // Validate consumption does not exceed issued
         BigDecimal newConsumed = part.getQuantityConsumed().add(quantity);
@@ -372,6 +384,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
      * @param workorderId    workorder ID
      * @param partLineId     part line item ID
      * @param quantity       quantity to return (must be positive)
+     * @param uomCode        unit {@code quantity} is expressed in; {@code null} means the
+     *                       product's base unit
      * @param idempotencyKey optional idempotency key
      * @return the created usage event
      * @throws WorkorderNotFoundException if the workorder does not exist; IllegalArgumentException if the part is not found
@@ -384,6 +398,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             @NonNull UUID workorderId,
             @NonNull UUID partLineId,
             @NonNull BigDecimal quantity,
+            @Nullable String uomCode,
             @Nullable String idempotencyKey) {
         String actorId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(MISSING_AUTHENTICATED_USERNAME));
@@ -417,7 +432,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             throw new IllegalStateException("Part " + partLineId + " does not belong to workorder " + workorderId);
         }
 
-        requirePermittedScale(part, quantity);
+        requirePermittedScale(part, quantity, uomCode);
 
         // Validate return does not exceed available (issued - consumed - already
         // returned)

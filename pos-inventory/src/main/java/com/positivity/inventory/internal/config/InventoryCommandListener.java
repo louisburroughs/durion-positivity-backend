@@ -268,6 +268,9 @@ public class InventoryCommandListener {
         // quantity since ADR-0055 (#1414), and reading it as an int would truncate a divisible
         // product's demand at the very edge the widening exists to open.
         BigDecimal requiredQuantity = payload.path("requiredQuantity").decimalValue(BigDecimal.ZERO);
+        // uomCode is absent (null) for the product's base unit (ADR-0055 stage 3, #1415); every
+        // pre-#1415 payload lacks the field entirely, which decodes the same way.
+        String uomCode = payload.path("uomCode").stringValue(null);
         if ((workorderLineId == null) == (salesOrderLineId == null)) {
             log.warn(
                     "Ignoring reservation-request command: exactly one of workorderLineId/salesOrderLineId must be"
@@ -279,12 +282,14 @@ public class InventoryCommandListener {
             log.warn("Ignoring reservation-request command with missing/invalid fields: {}", payload);
             return;
         }
-        reservationRequestHandler.handle(workorderLineId, salesOrderLineId, stockItemId, requiredQuantity, locationId);
+        reservationRequestHandler.handle(
+                workorderLineId, salesOrderLineId, stockItemId, requiredQuantity, locationId, uomCode);
         log.info(
-                "Reservation request command processed demandLine={} sku={} qty={} locationId={}",
+                "Reservation request command processed demandLine={} sku={} qty={} uomCode={} locationId={}",
                 workorderLineId != null ? workorderLineId : salesOrderLineId,
                 stockItemId,
                 requiredQuantity,
+                uomCode,
                 locationId);
     }
 

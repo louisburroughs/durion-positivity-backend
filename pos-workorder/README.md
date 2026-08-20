@@ -67,6 +67,32 @@ shop supplies, non-stocked consumables) are exempt and stay fractional. A violat
 422 with `code: FRACTIONAL_QUANTITY_NOT_ALLOWED`, a `quantity` field error, and a `nextAction`
 naming the quantity to enter instead.
 
+### Unit of measure on part lines (ADR-0055 stage 3)
+
+`estimate_item` and `workorder_part` carry a nullable `uom_code` column: the unit the line's
+quantity is expressed in. **Null means the product's base unit** — today's implicit assumption,
+and the default for every row that predates this column. `uomCode` is optional on
+`AddEstimateItemRequest`, `UpdateEstimateItemRequest`, `IssuePartRequest`, `ConsumePartRequest`,
+`ReturnPartRequest` and `CorrectPartQuantityRequest`. It is snapshotted from the estimate item onto
+the promoted `workorder_part` the same way `quantity` itself is snapshotted.
+
+**LABOR rows always carry a null `uomCode`.** `estimate_item.quantity` is shared between PART and
+LABOR, but hours are not a catalog unit of measure and have no `product_uom` conversion row to
+convert from. A non-null `uomCode` on a LABOR row is rejected with HTTP 400 at both add and update
+time — checked in the service layer and enforced by a database check constraint
+(`ck_estimate_item_labor_uom_null`) so it cannot be bypassed by a write that skips it.
+
+When a line's `uomCode` differs from the product's base unit, the quantity is converted to base
+via the `ext_product_uom` replica's `factor_to_base` — unrounded, so the divisibility check above
+sees the true converted value rather than one silently rounded to fit — before the existing
+`precision_scale` gate runs. A `uomCode` with no conversion row for the product returns HTTP 422
+with `code: UOM_CONVERSION_UNDEFINED`, never a silent 1:1 assumption.
+
+Issuing a part sends `uomCode` through unconverted on the `inventory.reservation.request-requested`
+Kafka command; pos-inventory owns the actual document-to-base conversion for the reservation, using
+`DOWN` rounding so it never promises more than exists — the same pattern purchase-order, ASN,
+receiving and return lines already use via `DocumentQuantityConverter`.
+
 ## Configuration
 
 | Property                       | Default                    | Description                      |

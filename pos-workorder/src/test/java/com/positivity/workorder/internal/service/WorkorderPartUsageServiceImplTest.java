@@ -174,7 +174,8 @@ class WorkorderPartUsageServiceImplTest {
             WorkorderPart part = part("0", "0", "0");
             givenPart(part);
 
-            WorkorderPartUsageEvent event = service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null);
+            WorkorderPartUsageEvent event =
+                    service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null, null);
 
             assertThat(event.getEventType()).isEqualTo("ISSUE");
             assertThat(event.getQuantity()).isEqualByComparingTo("2");
@@ -192,7 +193,7 @@ class WorkorderPartUsageServiceImplTest {
             WorkorderPart part = part("3", "1", "0");
             givenPart(part);
 
-            service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("1.5"), null);
+            service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("1.5"), null, null);
 
             assertThat(part.getQuantityIssued()).isEqualByComparingTo("4.5");
         }
@@ -202,7 +203,7 @@ class WorkorderPartUsageServiceImplTest {
         void registersIdempotencyKey() {
             givenPart(part("0", "0", "0"));
 
-            service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "issue-key-1");
+            service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "issue-key-1");
 
             verify(idempotencyService).markKeyProcessedForPartUsage(ISSUE_OPERATION, "issue-key-1", EVENT_ID);
         }
@@ -224,7 +225,7 @@ class WorkorderPartUsageServiceImplTest {
             when(usageEventRepository.findById(EVENT_ID)).thenReturn(Optional.of(existing));
 
             WorkorderPartUsageEvent event =
-                    service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "issue-key-1");
+                    service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "issue-key-1");
 
             assertThat(event).isSameAs(existing);
             verify(usageEventRepository, never()).save(any());
@@ -238,7 +239,8 @@ class WorkorderPartUsageServiceImplTest {
                     .thenReturn(Optional.of(EVENT_ID));
             when(usageEventRepository.findById(EVENT_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "issue-key-1"))
+            assertThatThrownBy(
+                            () -> service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "issue-key-1"))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("Event not found");
         }
@@ -248,7 +250,7 @@ class WorkorderPartUsageServiceImplTest {
         void blankKeyIsNotIdempotent() {
             givenPart(part("0", "0", "0"));
 
-            service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "   ");
+            service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "   ");
 
             verify(idempotencyService, never()).getExistingPartUsageEventId(anyString(), anyString());
             verify(idempotencyService, never()).markKeyProcessedForPartUsage(anyString(), anyString(), any());
@@ -258,10 +260,10 @@ class WorkorderPartUsageServiceImplTest {
         @Test
         @DisplayName("rejects a zero or negative quantity")
         void rejectsNonPositiveQuantity() {
-            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ZERO, null))
+            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ZERO, null, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("Quantity must be positive");
-            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("-1"), null))
+            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("-1"), null, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("Quantity must be positive");
         }
@@ -271,7 +273,7 @@ class WorkorderPartUsageServiceImplTest {
         void rejectsUnknownWorkorder() {
             when(workorderRepository.findById(OTHER_WORKORDER_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.issuePartQuantity(OTHER_WORKORDER_ID, PART_ID, BigDecimal.ONE, null))
+            assertThatThrownBy(() -> service.issuePartQuantity(OTHER_WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
                     .isInstanceOf(WorkorderNotFoundException.class);
         }
 
@@ -280,7 +282,7 @@ class WorkorderPartUsageServiceImplTest {
         void rejectsUnknownPart() {
             when(workorderPartRepository.findById(PART_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null))
+            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Part not found");
         }
@@ -292,7 +294,7 @@ class WorkorderPartUsageServiceImplTest {
             foreign.setWorkorder(workorder(OTHER_WORKORDER_ID));
             givenPart(foreign);
 
-            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null))
+            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("does not belong to workorder");
         }
@@ -305,7 +307,7 @@ class WorkorderPartUsageServiceImplTest {
             orphan.setWorkOrderService(null);
             givenPart(orphan);
 
-            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null))
+            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessage("Part has no associated workorder");
         }
@@ -315,7 +317,7 @@ class WorkorderPartUsageServiceImplTest {
         void failsWithoutAuthenticatedUser() {
             SecurityContextHolder.clearContext();
 
-            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null))
+            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessage("Security context has no Authentication");
         }
@@ -332,7 +334,7 @@ class WorkorderPartUsageServiceImplTest {
             givenPart(part);
 
             WorkorderPartUsageEvent event =
-                    service.consumePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null);
+                    service.consumePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null, null);
 
             assertThat(event.getEventType()).isEqualTo("CONSUME");
             assertThat(part.getQuantityConsumed()).isEqualByComparingTo("3");
@@ -345,7 +347,7 @@ class WorkorderPartUsageServiceImplTest {
             WorkorderPart part = part("4", "1", "0");
             givenPart(part);
 
-            service.consumePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("3"), null);
+            service.consumePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("3"), null, null);
 
             assertThat(part.getQuantityConsumed()).isEqualByComparingTo("4");
         }
@@ -355,7 +357,8 @@ class WorkorderPartUsageServiceImplTest {
         void rejectsOverConsumption() {
             givenPart(part("4", "1", "0"));
 
-            assertThatThrownBy(() -> service.consumePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("3.5"), null))
+            assertThatThrownBy(
+                            () -> service.consumePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("3.5"), null, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Consumption exceeds issued quantity");
             verify(usageEventRepository, never()).save(any());
@@ -364,7 +367,7 @@ class WorkorderPartUsageServiceImplTest {
         @Test
         @DisplayName("rejects a non-positive quantity")
         void rejectsNonPositiveQuantity() {
-            assertThatThrownBy(() -> service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ZERO, null))
+            assertThatThrownBy(() -> service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ZERO, null, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("Quantity must be positive");
         }
@@ -374,7 +377,7 @@ class WorkorderPartUsageServiceImplTest {
         void registersIdempotencyKey() {
             givenPart(part("4", "0", "0"));
 
-            service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "consume-key-1");
+            service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "consume-key-1");
 
             verify(idempotencyService).markKeyProcessedForPartUsage(CONSUME_OPERATION, "consume-key-1", EVENT_ID);
         }
@@ -395,7 +398,7 @@ class WorkorderPartUsageServiceImplTest {
                     .thenReturn(Optional.of(EVENT_ID));
             when(usageEventRepository.findById(EVENT_ID)).thenReturn(Optional.of(existing));
 
-            assertThat(service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "consume-key-1"))
+            assertThat(service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "consume-key-1"))
                     .isSameAs(existing);
         }
 
@@ -406,8 +409,8 @@ class WorkorderPartUsageServiceImplTest {
                     .thenReturn(Optional.of(EVENT_ID));
             when(usageEventRepository.findById(EVENT_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(
-                            () -> service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "consume-key-1"))
+            assertThatThrownBy(() ->
+                            service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "consume-key-1"))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("Event not found");
         }
@@ -416,18 +419,19 @@ class WorkorderPartUsageServiceImplTest {
         @DisplayName("rejects an unknown workorder, unknown part, and a foreign part")
         void rejectsUnresolvableTargets() {
             when(workorderRepository.findById(OTHER_WORKORDER_ID)).thenReturn(Optional.empty());
-            assertThatThrownBy(() -> service.consumePartQuantity(OTHER_WORKORDER_ID, PART_ID, BigDecimal.ONE, null))
+            assertThatThrownBy(
+                            () -> service.consumePartQuantity(OTHER_WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
                     .isInstanceOf(WorkorderNotFoundException.class);
 
             when(workorderPartRepository.findById(PART_ID)).thenReturn(Optional.empty());
-            assertThatThrownBy(() -> service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null))
+            assertThatThrownBy(() -> service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Part not found");
 
             WorkorderPart foreign = part("4", "0", "0");
             foreign.setWorkorder(workorder(OTHER_WORKORDER_ID));
             givenPart(foreign);
-            assertThatThrownBy(() -> service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null))
+            assertThatThrownBy(() -> service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("does not belong to workorder");
         }
@@ -437,7 +441,7 @@ class WorkorderPartUsageServiceImplTest {
         void failsWithoutAuthenticatedUser() {
             SecurityContextHolder.clearContext();
 
-            assertThatThrownBy(() -> service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null))
+            assertThatThrownBy(() -> service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessage("Security context has no Authentication");
         }
@@ -454,7 +458,7 @@ class WorkorderPartUsageServiceImplTest {
             givenPart(part);
 
             WorkorderPartUsageEvent event =
-                    service.returnPartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null);
+                    service.returnPartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2"), null, null);
 
             assertThat(event.getEventType()).isEqualTo("RETURN");
             assertThat(part.getQuantityReturned()).isEqualByComparingTo("3");
@@ -466,7 +470,8 @@ class WorkorderPartUsageServiceImplTest {
         void rejectsOverReturn() {
             givenPart(part("5", "2", "1"));
 
-            assertThatThrownBy(() -> service.returnPartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2.5"), null))
+            assertThatThrownBy(
+                            () -> service.returnPartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2.5"), null, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Return quantity exceeds available");
             verify(usageEventRepository, never()).save(any());
@@ -475,7 +480,8 @@ class WorkorderPartUsageServiceImplTest {
         @Test
         @DisplayName("rejects a non-positive quantity")
         void rejectsNonPositiveQuantity() {
-            assertThatThrownBy(() -> service.returnPartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("-2"), null))
+            assertThatThrownBy(
+                            () -> service.returnPartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("-2"), null, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("Quantity must be positive");
         }
@@ -485,7 +491,7 @@ class WorkorderPartUsageServiceImplTest {
         void registersIdempotencyKey() {
             givenPart(part("5", "0", "0"));
 
-            service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "return-key-1");
+            service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "return-key-1");
 
             verify(idempotencyService).markKeyProcessedForPartUsage(RETURN_OPERATION, "return-key-1", EVENT_ID);
         }
@@ -506,7 +512,7 @@ class WorkorderPartUsageServiceImplTest {
                     .thenReturn(Optional.of(EVENT_ID));
             when(usageEventRepository.findById(EVENT_ID)).thenReturn(Optional.of(existing));
 
-            assertThat(service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "return-key-1"))
+            assertThat(service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "return-key-1"))
                     .isSameAs(existing);
         }
 
@@ -517,7 +523,8 @@ class WorkorderPartUsageServiceImplTest {
                     .thenReturn(Optional.of(EVENT_ID));
             when(usageEventRepository.findById(EVENT_ID)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "return-key-1"))
+            assertThatThrownBy(() ->
+                            service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "return-key-1"))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("Event not found");
         }
@@ -526,18 +533,19 @@ class WorkorderPartUsageServiceImplTest {
         @DisplayName("rejects an unknown workorder, unknown part, and a foreign part")
         void rejectsUnresolvableTargets() {
             when(workorderRepository.findById(OTHER_WORKORDER_ID)).thenReturn(Optional.empty());
-            assertThatThrownBy(() -> service.returnPartQuantity(OTHER_WORKORDER_ID, PART_ID, BigDecimal.ONE, null))
+            assertThatThrownBy(
+                            () -> service.returnPartQuantity(OTHER_WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
                     .isInstanceOf(WorkorderNotFoundException.class);
 
             when(workorderPartRepository.findById(PART_ID)).thenReturn(Optional.empty());
-            assertThatThrownBy(() -> service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null))
+            assertThatThrownBy(() -> service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Part not found");
 
             WorkorderPart foreign = part("5", "0", "0");
             foreign.setWorkorder(workorder(OTHER_WORKORDER_ID));
             givenPart(foreign);
-            assertThatThrownBy(() -> service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null))
+            assertThatThrownBy(() -> service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("does not belong to workorder");
         }
@@ -547,7 +555,7 @@ class WorkorderPartUsageServiceImplTest {
         void failsWithoutAuthenticatedUser() {
             SecurityContextHolder.clearContext();
 
-            assertThatThrownBy(() -> service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null))
+            assertThatThrownBy(() -> service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessage("Security context has no Authentication");
         }
@@ -665,9 +673,9 @@ class WorkorderPartUsageServiceImplTest {
     void operationsUseSeparateIdempotencyNamespaces() {
         givenPart(part("10", "0", "0"));
 
-        service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "shared-key");
-        service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "shared-key");
-        service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, "shared-key");
+        service.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "shared-key");
+        service.consumePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "shared-key");
+        service.returnPartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, "shared-key");
 
         verify(idempotencyService).getExistingPartUsageEventId(eq(ISSUE_OPERATION), eq("shared-key"));
         verify(idempotencyService).getExistingPartUsageEventId(eq(CONSUME_OPERATION), eq("shared-key"));

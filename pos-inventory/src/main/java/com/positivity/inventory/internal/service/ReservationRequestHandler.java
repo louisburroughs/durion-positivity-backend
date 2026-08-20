@@ -56,6 +56,8 @@ public class ReservationRequestHandler implements ReservationRequestService {
     private final ReservationRepository reservationRepository;
     private final InventoryStockSummaryRepository summaryRepository;
     private final InventoryFactPublisher inventoryFactPublisher;
+    private final UomConversionService uomConversionService;
+    private final QuantityScaleGuard quantityScaleGuard;
     private final Clock clock;
 
     /**
@@ -65,8 +67,10 @@ public class ReservationRequestHandler implements ReservationRequestService {
      * @param workorderLineId workorder line the demand is for, when demand is from a workorder
      * @param salesOrderLineId sales-order line the demand is for, when demand is from a sales order
      * @param stockItemId stock item requested
-     * @param requiredQuantity quantity requested
+     * @param requiredQuantity quantity requested, in {@code uomCode} when given
      * @param locationId site the demand must be covered at
+     * @param uomCode unit {@code requiredQuantity} is expressed in (ADR-0055 stage 3, #1415);
+     *     {@code null} means the product's base unit
      */
     @Override
     public void handle(
@@ -74,32 +78,45 @@ public class ReservationRequestHandler implements ReservationRequestService {
             @Nullable UUID salesOrderLineId,
             @NonNull UUID stockItemId,
             @NonNull BigDecimal requiredQuantity,
-            @NonNull UUID locationId) {
+            @NonNull UUID locationId,
+            @Nullable String uomCode) {
         if ((workorderLineId == null) == (salesOrderLineId == null)) {
             throw new IllegalArgumentException(
                     "exactly one of workorderLineId/salesOrderLineId must be set (CAP #1315)");
         }
 
+        // The document-to-base conversion this reservation owns (ADR-0055 stage 3, #1415):
+        // DOWN rounding so it never promises more than exists. Same pattern PO/ASN/receiving
+        // lines follow via DocumentQuantityConverter, mirrored here since a reservation request
+        // has no document line of its own to attach the conversion metadata to. requirePostable
+        // is a no-op for a value the conversion already rounded to the declared scale; it is the
+        // real guard for a requiredQuantity that arrived with no uomCode at all.
+        BigDecimal requiredQuantityBase = uomCode == null || uomCode.isBlank()
+                ? requiredQuantity
+                : uomConversionService.toBaseQuantityForReservation(stockItemId, uomCode, requiredQuantity);
+        requiredQuantityBase = quantityScaleGuard.requirePostable(
+                stockItemId, stockItemId.toString(), "requiredQuantity", requiredQuantityBase);
+
         ReservationResponse reservation = reservationService.createOrUpdateReservation(
-                new CreateReservationRequest(workorderLineId, salesOrderLineId, stockItemId, requiredQuantity));
+                new CreateReservationRequest(workorderLineId, salesOrderLineId, stockItemId, requiredQuantityBase));
 
         BigDecimal atp = availableToPromise(stockItemId, locationId);
         Instant now = Instant.now(clock);
 
-        if (Quantities.gte(atp, requiredQuantity)) {
+        if (Quantities.gte(atp, requiredQuantityBase)) {
             log.info(
                     "Reservation {} covered: demandLine={} sku={} qty={} atp={}",
                     reservation.getReservationId(),
                     workorderLineId != null ? workorderLineId : salesOrderLineId,
                     stockItemId,
-                    requiredQuantity,
+                    requiredQuantityBase,
                     atp);
             inventoryFactPublisher.recordReservationOutcome(new ReservationOutcomeV1(
                     reservation.getReservationId(),
                     workorderLineId,
                     salesOrderLineId,
                     stockItemId.toString(),
-                    requiredQuantity,
+                    requiredQuantityBase,
                     true,
                     null,
                     now));
@@ -111,7 +128,7 @@ public class ReservationRequestHandler implements ReservationRequestService {
         // someone else's deficit. Decimal since ADR-0055 (#1414) — a shortfall on a divisible
         // product is itself divisible, and the old (int) cast would have floored it toward zero,
         // quietly backordering less than is actually missing.
-        BigDecimal quantityShort = Quantities.min(requiredQuantity, requiredQuantity.subtract(atp));
+        BigDecimal quantityShort = Quantities.min(requiredQuantityBase, requiredQuantityBase.subtract(atp));
         markBackordered(reservation.getReservationId());
         BackorderResponse backorder = workorderLineId != null
                 ? backorderService.createBackorder(workorderLineId, stockItemId.toString(), quantityShort, locationId)
@@ -123,7 +140,7 @@ public class ReservationRequestHandler implements ReservationRequestService {
                 reservation.getReservationId(),
                 workorderLineId != null ? workorderLineId : salesOrderLineId,
                 stockItemId,
-                requiredQuantity,
+                requiredQuantityBase,
                 atp,
                 backorder.getBackorderId());
         inventoryFactPublisher.recordReservationOutcome(new ReservationOutcomeV1(
@@ -131,7 +148,7 @@ public class ReservationRequestHandler implements ReservationRequestService {
                 workorderLineId,
                 salesOrderLineId,
                 stockItemId.toString(),
-                requiredQuantity,
+                requiredQuantityBase,
                 false,
                 backorder.getBackorderId(),
                 now));

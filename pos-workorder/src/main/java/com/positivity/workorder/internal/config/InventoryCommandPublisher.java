@@ -96,17 +96,23 @@ public class InventoryCommandPublisher {
      * <p>The command id is derived from (part, item, quantity), so re-issuing the same part
      * collapses to one command under pos-inventory's dedupe while a different quantity is a new
      * command against the same reservation.
+     *
+     * @param uomCode the unit {@code requiredQuantity} is expressed in (ADR-0055 stage 3, #1415);
+     *     {@code null} means the product's base unit. pos-inventory converts to base itself, using
+     *     {@code DOWN} rounding so the reservation never promises more than exists.
      */
     public void requestReservation(
             @NonNull UUID workorderLineId,
             @NonNull UUID stockItemId,
             @NonNull BigDecimal requiredQuantity,
-            @NonNull UUID locationId) {
-        UUID commandId = deterministicCommandId(
-                RESERVATION_REQUEST_COMMAND_TYPE,
-                workorderLineId + ":" + stockItemId + ":" + normalizedQuantityKey(requiredQuantity));
-        ReservationRequestPayload payload =
-                new ReservationRequestPayload(workorderLineId, stockItemId, requiredQuantity, locationId);
+            @NonNull UUID locationId,
+            @Nullable String uomCode) {
+        String normalizedUomCode = normalizeUomCode(uomCode);
+        String key = workorderLineId + ":" + stockItemId + ":" + normalizedQuantityKey(requiredQuantity)
+                + (normalizedUomCode != null ? ":" + normalizedUomCode : "");
+        UUID commandId = deterministicCommandId(RESERVATION_REQUEST_COMMAND_TYPE, key);
+        ReservationRequestPayload payload = new ReservationRequestPayload(
+                workorderLineId, stockItemId, requiredQuantity, locationId, normalizedUomCode);
         send(RESERVATION_REQUEST_COMMAND_TYPE, commandId, workorderLineId.toString(), payload);
         log.info("Queued reservation request command {} for workorder line {}", commandId, workorderLineId);
     }
@@ -135,6 +141,23 @@ public class InventoryCommandPublisher {
         return quantity.stripTrailingZeros().toPlainString();
     }
 
+    /**
+     * Trims {@code uomCode} and collapses blank to {@code null} before it reaches either the
+     * idempotency key or the payload. Appending it to the key unconditionally — including when
+     * null, which string concatenation renders as the literal {@code "null"} — would change the
+     * deterministic command id for every base-unit command that existed before uomCode was added
+     * to this payload (ADR-0055 stage 3, #1415), breaking retry dedupe across the change. Only a
+     * real code gets suffixed onto the key; null or blank keeps the pre-#1415 id shape.
+     */
+    @Nullable
+    private static String normalizeUomCode(@Nullable String uomCode) {
+        if (uomCode == null) {
+            return null;
+        }
+        String trimmed = uomCode.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     private static UUID deterministicCommandId(@NonNull String commandType, @NonNull String idempotencyKey) {
         if (idempotencyKey.isBlank()) {
             return UUIDv7Generator.generate();
@@ -159,12 +182,16 @@ public class InventoryCommandPublisher {
     public record ConsumeLine(
             @NonNull UUID pickTaskId, @Nullable UUID skuId, int quantity) {}
 
-    /** Matches the fields pos-inventory's {@code handleReservationRequestRequested} reads. */
+    /**
+     * Matches the fields pos-inventory's {@code handleReservationRequestRequested} reads.
+     * {@code uomCode} is {@code null} for the product's base unit (ADR-0055 stage 3, #1415).
+     */
     record ReservationRequestPayload(
             @NonNull UUID workorderLineId,
             @NonNull UUID stockItemId,
             @NonNull BigDecimal requiredQuantity,
-            @NonNull UUID locationId) {}
+            @NonNull UUID locationId,
+            @Nullable String uomCode) {}
 
     record ConsumePayload(
             @NonNull UUID workorderId,

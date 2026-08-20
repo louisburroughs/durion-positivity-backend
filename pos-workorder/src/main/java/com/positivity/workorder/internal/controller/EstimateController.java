@@ -751,10 +751,13 @@ public class EstimateController {
                     Preconditions: the estimate must be in DRAFT status; PART items need a productId or \
                     description, and LABOR items need a serviceId or description.
                     Required inputs: estimateId (UUID) as a path parameter, plus itemType (PART or LABOR), \
-                    quantity, and unitPrice in the body; description, taxCode, productId, and serviceId are \
-                    conditional or optional.
+                    quantity, and unitPrice in the body; description, taxCode, productId, serviceId, and uomCode \
+                    are conditional or optional. uomCode is the unit quantity is expressed in for PART items \
+                    (omit for the product's base unit); it must be omitted on LABOR items.
                     Emits an ESTIMATE_ITEM_ADD event.
-                    Returns 404 when the estimate does not exist, 400 on validation failures, and 409 when the \
+                    Returns 404 when the estimate does not exist, 400 on validation failures (including a \
+                    uomCode on a LABOR item), 422 when the referenced product has no conversion row for uomCode \
+                    or the converted quantity exceeds the product's declared decimal scale, and 409 when the \
                     estimate is not in DRAFT status.
                     """)
     @ApiResponses(
@@ -762,6 +765,11 @@ public class EstimateController {
                 @ApiResponse(responseCode = "200", description = "Line item added successfully"),
                 @ApiResponse(responseCode = "400", description = "Validation error or invalid request"),
                 @ApiResponse(responseCode = "404", description = "Estimate not found"),
+                @ApiResponse(
+                        responseCode = "422",
+                        description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), "
+                                + "or the converted quantity exceeds the product's declared decimal scale "
+                                + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)"),
                 @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -821,17 +829,25 @@ public class EstimateController {
                     Preconditions: the estimate must be in DRAFT status and the item must exist on that \
                     estimate.
                     Required inputs: estimateId and itemId (UUIDs) as path parameters; description, quantity, \
-                    unitPrice, and taxCode are all optional body fields.
+                    unitPrice, taxCode, and uomCode are all optional body fields. uomCode is rejected on a \
+                    LABOR item.
                     Emits an ESTIMATE_ITEM_UPDATE event; totals are not recalculated until \
                     calculateEstimateTotals runs.
-                    Returns 404 when the estimate or item does not exist, 400 on validation failures, and 409 \
-                    when the estimate is not in DRAFT status.
+                    Returns 404 when the estimate or item does not exist, 400 on validation failures (including a \
+                    uomCode on a LABOR item), 422 when the effective uomCode has no conversion row for the \
+                    product or the converted quantity exceeds its declared decimal scale, and 409 when the \
+                    estimate is not in DRAFT status.
                     """)
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Line item updated successfully"),
                 @ApiResponse(responseCode = "400", description = "Validation error or invalid request"),
                 @ApiResponse(responseCode = "404", description = "Estimate or item not found"),
+                @ApiResponse(
+                        responseCode = "422",
+                        description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), "
+                                + "or the converted quantity exceeds the product's declared decimal scale "
+                                + "(FRACTIONAL_QUANTITY_NOT_ALLOWED)"),
                 @ApiResponse(responseCode = "409", description = "Estimate not in DRAFT status (INVALID_STATE)")
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(

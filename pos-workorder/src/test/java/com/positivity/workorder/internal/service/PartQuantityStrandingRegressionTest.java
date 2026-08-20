@@ -277,8 +277,8 @@ class PartQuantityStrandingRegressionTest {
                             .updatedAt(NOW)
                             .build()));
 
-            partUsageService.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null);
-            partUsageService.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null);
+            partUsageService.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null);
+            partUsageService.issuePartQuantity(WORKORDER_ID, PART_ID, BigDecimal.ONE, null, null);
 
             // Outstanding reaches exactly zero — the condition that releases the job from
             // AWAITING_PARTS — rather than the 0.5 remainder a fractional line would leave behind.

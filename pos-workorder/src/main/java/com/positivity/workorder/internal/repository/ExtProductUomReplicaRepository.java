@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.repository;
 
 import com.positivity.workorder.internal.entity.ExtProductUomReplica;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -26,6 +27,14 @@ public interface ExtProductUomReplicaRepository extends JpaRepository<ExtProduct
     @Query("SELECT u.precisionScale FROM ExtProductUomReplica u "
             + "WHERE u.productId = :productId AND u.uomType = 'BASE'")
     List<Integer> findBasePrecisionScales(@Param("productId") @NonNull UUID productId);
+
+    /**
+     * The single conversion row for one (product, uomCode) pair — {@code factorToBase} converts
+     * one unit of {@code uomCode} to the product's base UoM, {@code 1} for the {@code BASE} row
+     * itself (#1415). Empty when the product declares no conversion for that code, including when
+     * it declares nothing at all.
+     */
+    Optional<ExtProductUomReplica> findByProductIdAndUomCode(UUID productId, String uomCode);
 
     /** Fact versions currently held for the product, empty when it has no rows. */
     @NonNull

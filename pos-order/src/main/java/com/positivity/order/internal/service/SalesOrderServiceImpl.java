@@ -548,9 +548,10 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 continue;
             }
             // Sales-order demand stays integral by decision (ADR-0055 leaves SalesOrderLine.quantity
-            // an int); the command is decimal, so this widens rather than narrowing.
+            // an int); the command is decimal, so this widens rather than narrowing. uomCode is
+            // null: sales-order lines have no unit of their own to carry (ADR-0055 stage 3, #1415).
             publisher.requestReservation(
-                    line.getOrderLineId(), stockItemId, BigDecimal.valueOf(line.getQuantity()), locationId);
+                    line.getOrderLineId(), stockItemId, BigDecimal.valueOf(line.getQuantity()), locationId, null);
         }
     }
 

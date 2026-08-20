@@ -5,7 +5,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.positivity.workorder.internal.entity.Estimate;
+import com.positivity.workorder.internal.entity.EstimateItem;
+import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderPart;
+import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
@@ -13,9 +17,11 @@ import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepos
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
+import com.positivity.workorder.internal.service.PartQuantityDivisibilityService;
 import com.positivity.workorder.internal.service.PeopleAvailabilityLocalService;
 import com.positivity.workorder.internal.service.WorkorderServiceImpl;
 import com.positivity.workorder.internal.service.WorkorderStateMachine;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -89,6 +95,9 @@ class WorkorderServiceImplCrmPropagationTest {
 
     @Mock
     private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
+
+    @Mock
+    private PartQuantityDivisibilityService partQuantityDivisibilityService;
 
     @org.mockito.Mock
     private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
@@ -266,12 +275,82 @@ class WorkorderServiceImplCrmPropagationTest {
     }
 
     // =====================================================================
+    // uomCode snapshot at promotion (ADR-0055 stage 3, #1415)
+    // =====================================================================
+
+    @Test
+    @DisplayName("createWorkorder(estimateId, ...) — a PART item's uomCode is snapshotted onto the promoted "
+            + "WorkorderPart, the same way quantity is")
+    void createWorkorder_withEstimateId_partItemUomCodeIsSnapshotted() {
+        UUID productId = UUID.fromString("40000000-0000-0000-0000-000000000001");
+        Estimate estimate = buildEstimateWithCrmFields(CRM_PARTY_ID, CRM_VEHICLE_ID, List.of());
+        when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.of(estimate));
+
+        EstimateItem partItem = EstimateItem.builder()
+                .estimate(estimate)
+                .itemType(EstimateItemType.PART)
+                .description("Parker Hydraulic Hose")
+                .quantity(new BigDecimal("3.5"))
+                .uomCode("FT")
+                .unitPrice(BigDecimal.TEN)
+                .productId(productId)
+                .approvalStatus(ApprovalStatus.APPROVED)
+                .createdById("tech")
+                .build();
+        when(estimateItemRepository.findByEstimate_IdAndApprovalStatusAndDeletedFalse(
+                        ESTIMATE_ID, ApprovalStatus.APPROVED))
+                .thenReturn(List.of(partItem));
+
+        ArgumentCaptor<List<WorkorderPart>> partsCaptor = ArgumentCaptor.forClass(List.class);
+        when(workorderPartRepository.saveAll(partsCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        workorderService.createWorkorder(ESTIMATE_ID, CUSTOMER_ID);
+
+        assertThat(partsCaptor.getValue()).hasSize(1);
+        WorkorderPart promoted = partsCaptor.getValue().get(0);
+        assertThat(promoted.getUomCode()).isEqualTo("FT");
+        assertThat(promoted.getQuantity()).isEqualByComparingTo("3.5");
+    }
+
+    @Test
+    @DisplayName("createWorkorder(estimateId, ...) — a PART item with no uomCode promotes a null uomCode "
+            + "(base unit, unchanged from pre-#1415 behavior)")
+    void createWorkorder_withEstimateId_partItemWithoutUomCodePromotesNull() {
+        UUID productId = UUID.fromString("40000000-0000-0000-0000-000000000002");
+        Estimate estimate = buildEstimateWithCrmFields(CRM_PARTY_ID, CRM_VEHICLE_ID, List.of());
+        when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.of(estimate));
+
+        EstimateItem partItem = EstimateItem.builder()
+                .estimate(estimate)
+                .itemType(EstimateItemType.PART)
+                .description("Brake pad")
+                .quantity(BigDecimal.ONE)
+                .unitPrice(BigDecimal.TEN)
+                .productId(productId)
+                .approvalStatus(ApprovalStatus.APPROVED)
+                .createdById("tech")
+                .build();
+        when(estimateItemRepository.findByEstimate_IdAndApprovalStatusAndDeletedFalse(
+                        ESTIMATE_ID, ApprovalStatus.APPROVED))
+                .thenReturn(List.of(partItem));
+
+        ArgumentCaptor<List<WorkorderPart>> partsCaptor = ArgumentCaptor.forClass(List.class);
+        when(workorderPartRepository.saveAll(partsCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        workorderService.createWorkorder(ESTIMATE_ID, CUSTOMER_ID);
+
+        assertThat(partsCaptor.getValue()).hasSize(1);
+        assertThat(partsCaptor.getValue().get(0).getUomCode()).isNull();
+    }
+
+    // =====================================================================
     // Helpers
     // =====================================================================
 
     private static Estimate buildEstimateWithCrmFields(
             String crmPartyId, String crmVehicleId, List<String> crmContactIds) {
         return Estimate.builder()
+                .id(ESTIMATE_ID)
                 .customerId(CUSTOMER_ID)
                 .crmPartyId(crmPartyId)
                 .crmVehicleId(crmVehicleId)
