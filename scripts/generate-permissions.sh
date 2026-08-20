@@ -27,11 +27,11 @@ Usage:
   scripts/generate-permissions.sh [options] [module...]
 
 Options:
-  --sync      Register new @PreAuthorize permissions in PermissionCode.java and
-              GatewayPermissionCatalog.java, then regenerate permissions.yaml
+  --sync      Reconcile PermissionCode.java, GatewayPermissionCatalog.java, and
+              DownstreamPermissionCatalog.java, then regenerate permissions.yaml
   --dry-run   Print changes without writing files
   --check     Exit non-zero if any permissions.yaml would change, or (with
-              --sync) if any @PreAuthorize permissions are unregistered (CI mode)
+              --sync) if permission catalogs differ (CI mode)
   -h, --help  Show this help
 
 Examples:

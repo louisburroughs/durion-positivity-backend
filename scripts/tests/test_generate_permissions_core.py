@@ -1,4 +1,6 @@
 import importlib.util
+import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -111,6 +113,99 @@ class GeneratePermissionsCoreTest(unittest.TestCase):
                 parsed["permissions"][0]["description"],
                 "line1\nline2\ttab\u0001control",
             )
+
+    def test_sync_repairs_stale_downstream_catalog_without_new_permissions(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            downstream_path = self._write_catalog_fixture(root)
+
+            result = subprocess.run(
+                [sys.executable, str(MODULE_PATH), str(root), "--sync"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            downstream = downstream_path.read_text(encoding="utf-8")
+            self.assertIn("public static final int CATALOG_VERSION = 2;", downstream)
+            self.assertIn('"PERM_demo:edit" // 1', downstream)
+            self.assertIn("DownstreamPermissionCatalog.java: repaired", result.stdout)
+
+    def test_sync_check_rejects_stale_downstream_catalog_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            downstream_path = self._write_catalog_fixture(root)
+            original = downstream_path.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, str(MODULE_PATH), str(root), "--sync", "--check"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(downstream_path.read_text(encoding="utf-8"), original)
+            self.assertIn("DownstreamPermissionCatalog.java is out of sync", result.stderr)
+
+    def _write_catalog_fixture(self, root: Path) -> Path:
+        permission_code_path = root / self.generator.PERMISSION_CODE_RELPATH
+        permission_code_path.parent.mkdir(parents=True, exist_ok=True)
+        permission_code_path.write_text(
+            textwrap.dedent(
+                """\
+                public enum PermissionCode {
+                    DEMO__VIEW(0, "demo:view"),
+                    DEMO__EDIT(1, "demo:edit");
+
+                    public static final int CATALOG_VERSION = 2;
+                }
+                """
+            ),
+            encoding="utf-8",
+        )
+
+        gateway_path = root / self.generator.GATEWAY_CATALOG_RELPATH
+        gateway_path.parent.mkdir(parents=True, exist_ok=True)
+        gateway_path.write_text(
+            textwrap.dedent(
+                """\
+                public final class GatewayPermissionCatalog {
+                    public static final int CATALOG_VERSION = 2;
+                    static final String[] AUTHORITY_BY_BIT = {
+                        "PERM_demo:view",
+                        "PERM_demo:edit"
+                    };
+                }
+                """
+            ),
+            encoding="utf-8",
+        )
+
+        downstream_path = root / self.generator.DOWNSTREAM_CATALOG_RELPATH
+        downstream_path.parent.mkdir(parents=True, exist_ok=True)
+        downstream_path.write_text(
+            textwrap.dedent(
+                """\
+                public final class DownstreamPermissionCatalog {
+                    public static final int CATALOG_VERSION = 1;
+                    static final String[] AUTHORITY_BY_BIT = {
+                        "PERM_demo:view"
+                    };
+                }
+                """
+            ),
+            encoding="utf-8",
+        )
+
+        java_path = root / "pos-demo/src/main/java/DemoController.java"
+        java_path.parent.mkdir(parents=True, exist_ok=True)
+        java_path.write_text(
+            """@PreAuthorize("hasAnyAuthority('demo:view', 'demo:edit')")\nclass DemoController {}\n""",
+            encoding="utf-8",
+        )
+        return downstream_path
 
 
 class SanitizeOpenApiTest(unittest.TestCase):
