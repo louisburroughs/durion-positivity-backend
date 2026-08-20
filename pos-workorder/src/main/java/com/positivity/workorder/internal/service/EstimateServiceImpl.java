@@ -885,14 +885,19 @@ public class EstimateServiceImpl implements EstimateService {
                     + ". Estimate must be in DRAFT status.");
         }
 
+        // Blank collapses to null here so a whitespace-only uomCode never reaches the entity: the
+        // column's null-means-base-unit contract (ADR-0055 stage 3, #1415) has to hold for every
+        // write path, not just the ones a client happens to send null on.
+        String normalizedUomCode = PartQuantityDivisibilityService.normalizeUomCode(request.getUomCode());
+
         // The quantity column is shared between PART and LABOR rows, and only the PART side names a
         // catalog product whose divisibility can be read. Labour stays fractional: 1.5 hours is a
         // real thing to sell (ADR-0055, #1413). LABOR rows never carry a uomCode (ADR-0055 stage
         // 3, #1415) -- bean validation on the request already rejects one, this is the belt.
         if (request.getItemType() == EstimateItemType.PART) {
             partQuantityDivisibilityService.requirePermittedScale(
-                    request.getProductId(), request.getDescription(), request.getQuantity(), request.getUomCode());
-        } else if (request.getUomCode() != null) {
+                    request.getProductId(), request.getDescription(), request.getQuantity(), normalizedUomCode);
+        } else if (normalizedUomCode != null) {
             throw new IllegalArgumentException("uomCode is not valid for LABOR items");
         }
 
@@ -902,7 +907,7 @@ public class EstimateServiceImpl implements EstimateService {
                 .itemType(request.getItemType())
                 .description(request.getDescription())
                 .quantity(request.getQuantity())
-                .uomCode(request.getUomCode())
+                .uomCode(normalizedUomCode)
                 .unitPrice(request.getUnitPrice())
                 .taxCode(request.getTaxCode())
                 .productId(request.getProductId())
@@ -953,9 +958,16 @@ public class EstimateServiceImpl implements EstimateService {
                 .orElseThrow(() ->
                         new EntityNotFoundException("Item not found: " + itemId + " for estimate: " + estimateId));
 
+        // PATCH presence is decided on the raw field (null means "leave alone"); the value used
+        // for the gate and the persisted column is always the normalized one, so a client that
+        // explicitly sends a whitespace-only uomCode gets the same null-means-base-unit result as
+        // one that sends null outright (ADR-0055 stage 3, #1415).
+        boolean uomCodeProvided = request.getUomCode() != null;
+        String normalizedRequestUomCode = PartQuantityDivisibilityService.normalizeUomCode(request.getUomCode());
+
         // LABOR rows never carry a uomCode (ADR-0055 stage 3, #1415): revising one onto a LABOR
         // row has to be rejected the same way entering one would be.
-        if (request.getUomCode() != null && item.getItemType() == EstimateItemType.LABOR) {
+        if (uomCodeProvided && item.getItemType() == EstimateItemType.LABOR) {
             throw new IllegalArgumentException("uomCode is not valid for LABOR items");
         }
 
@@ -965,10 +977,9 @@ public class EstimateServiceImpl implements EstimateService {
         // uomCode can make it fractional in the new unit just as surely as editing the number
         // would (ADR-0055 stage 3, #1415); the effective value/unit fall back to the item's
         // existing ones when this request leaves them alone.
-        if ((request.getQuantity() != null || request.getUomCode() != null)
-                && item.getItemType() == EstimateItemType.PART) {
+        if ((request.getQuantity() != null || uomCodeProvided) && item.getItemType() == EstimateItemType.PART) {
             BigDecimal effectiveQuantity = request.getQuantity() != null ? request.getQuantity() : item.getQuantity();
-            String effectiveUomCode = request.getUomCode() != null ? request.getUomCode() : item.getUomCode();
+            String effectiveUomCode = uomCodeProvided ? normalizedRequestUomCode : item.getUomCode();
             partQuantityDivisibilityService.requirePermittedScale(
                     item.getProductId(),
                     request.getDescription() != null ? request.getDescription() : item.getDescription(),
@@ -983,8 +994,8 @@ public class EstimateServiceImpl implements EstimateService {
         if (request.getQuantity() != null) {
             item.setQuantity(request.getQuantity());
         }
-        if (request.getUomCode() != null) {
-            item.setUomCode(request.getUomCode());
+        if (uomCodeProvided) {
+            item.setUomCode(normalizedRequestUomCode);
         }
         if (request.getUnitPrice() != null) {
             item.setUnitPrice(request.getUnitPrice());

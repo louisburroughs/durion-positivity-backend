@@ -193,6 +193,21 @@ class EstimateItemQuantityGateTest {
         }
 
         @Test
+        @DisplayName("a whitespace-only uomCode behaves identically to an absent one and persists null")
+        void blankUomCode_isTreatedAsAbsentAndPersistsNull() {
+            AddEstimateItemRequest request = partRequest("2");
+            request.setUomCode("   ");
+
+            assertThatCode(() -> service.addEstimateItem(ESTIMATE_ID, request, "jane.smith"))
+                    .doesNotThrowAnyException();
+
+            org.mockito.ArgumentCaptor<EstimateItem> captor = org.mockito.ArgumentCaptor.forClass(EstimateItem.class);
+            verify(estimateItemRepository).save(captor.capture());
+            assertThat(captor.getValue().getUomCode()).isNull();
+            verify(productUomRepository, never()).findByProductIdAndUomCode(any(), any());
+        }
+
+        @Test
         @DisplayName("leaves a fractional LABOR line alone")
         void exemptsLaborLine() {
             AddEstimateItemRequest request = AddEstimateItemRequest.builder()
@@ -269,6 +284,20 @@ class EstimateItemQuantityGateTest {
                             ESTIMATE_ID, ITEM_ID, new UpdateEstimateItemRequest(null, null, null, null, "PAIR")))
                     .isInstanceOf(FractionalQuantityNotAllowedException.class)
                     .hasMessageContaining("0.5");
+        }
+
+        @Test
+        @DisplayName("a whitespace-only uomCode revision behaves identically to an absent one and clears to base unit")
+        void blankUomCodeRevision_clearsToBaseUnit() {
+            EstimateItem item = givenExistingItem(EstimateItemType.PART, PRODUCT_ID);
+            item.setUomCode("QT");
+
+            assertThatCode(() -> service.updateEstimateItem(
+                            ESTIMATE_ID, ITEM_ID, new UpdateEstimateItemRequest(null, null, null, null, "   ")))
+                    .doesNotThrowAnyException();
+
+            assertThat(item.getUomCode()).isNull();
+            verify(productUomRepository, never()).findByProductIdAndUomCode(any(), any());
         }
     }
 
