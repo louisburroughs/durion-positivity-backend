@@ -23,7 +23,7 @@
 SET TIME ZONE 'UTC';
 
 INSERT INTO product_uom (id, product_id, uom_code, uom_type, factor_to_base, precision_scale, created_at, updated_at)
-SELECT '01960040-0000-7000-8000-000000000001'::uuid, p.id, 'FT', 'BASE', 1::numeric, 2, NOW(), NOW()
+SELECT md5('uom_seed:PARK-387TC-4-FT:FT')::uuid, p.id, 'FT', 'BASE', 1::numeric, 2, NOW(), NOW()
 FROM product p WHERE p.sku = 'PARK-387TC-4-FT'
 ON CONFLICT (product_id, uom_code) DO UPDATE SET
     uom_type = EXCLUDED.uom_type,
@@ -32,7 +32,7 @@ ON CONFLICT (product_id, uom_code) DO UPDATE SET
     updated_at = NOW();
 
 INSERT INTO product_uom (id, product_id, uom_code, uom_type, factor_to_base, precision_scale, created_at, updated_at)
-SELECT '01960040-0000-7000-8000-000000000002'::uuid, p.id, 'ROLL', 'PURCHASE', 50::numeric, 0, NOW(), NOW()
+SELECT md5('uom_seed:PARK-387TC-4-FT:ROLL')::uuid, p.id, 'ROLL', 'PURCHASE', 50::numeric, 0, NOW(), NOW()
 FROM product p WHERE p.sku = 'PARK-387TC-4-FT'
 ON CONFLICT (product_id, uom_code) DO UPDATE SET
     uom_type = EXCLUDED.uom_type,
