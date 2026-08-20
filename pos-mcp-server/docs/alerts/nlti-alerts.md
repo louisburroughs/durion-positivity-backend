@@ -170,11 +170,15 @@ populated yet, the rule states the substitute signal it fires on today.
 
 ## Implementation Notes
 
-- Rules 1–4 and 9, 11 are Prometheus-evaluable; 5–8, 10 are Loki (LogQL) rules. Loki rule evaluation
-  requires the ruler to be enabled — `observability/loki-config.yml` provisions a
-  `rules_directory` (`/loki/rules`) but no ruler config block, so LogQL alerting must be added there
-  or the rules mirrored as Grafana unified-alerting rules under
-  `observability/grafana/provisioning/alerting/` (see `domain-events-alerts.yml` for the format).
+- Rules 1–4 and 9, 11 are Prometheus-evaluable; 5–8, 10 are Loki (LogQL) rules. The Loki half is
+  materialized (#1424): `observability/loki-config.yml` configures the ruler, and the rule file
+  `observability/loki/rules/nlti-alerts.yml` (compose-mounted at `/loki/rules/fake`) carries rules
+  2, 5–8, 10 and the Loki supplements of 9 and 11. That file is the deployed form; this document
+  stays the source of truth for intent and thresholds — change both together. Verify with
+  `curl loki:3100/loki/api/v1/rules` (loaded rule files) and `curl loki:3100/prometheus/api/v1/rules`
+  (evaluation state). No Alertmanager is deployed and Grafana's embedded Alertmanager only accepts
+  Grafana-managed alerts, so ruler alert state is dashboard/UI-only (Grafana → Alerting → Alert
+  rules, via the Loki datasource) until an Alertmanager is added and `ruler.alertmanager_url` set.
 - Every Loki rule filters `service="pos-mcp-server"`, the label Promtail derives from the Docker
   Compose service name; it is identical on the local stack and on alpha.
 - Volume guards matter: the NLTI traffic floor on alpha is low enough that ratio alerts will flap
