@@ -1,152 +1,28 @@
 openapi: 3.1.0
 info:
-  title: POS Bulk Loader Service API
-  description: Bulk loader service for importing and processing POS data in bulk.
   contact:
-    name: Durion Support Services
     email: louis.burroughs@gmail.com
+    name: Durion Support Services
+  description: Bulk loader service for importing and processing POS data in bulk.
+  title: POS Bulk Loader Service API
   version: v1
 servers:
-- url: http://localhost:8086
-  description: Generated server url
+- description: Generated server url
+  url: http://localhost:8086
 tags:
-- name: TUS Resumable Upload API
-  description: Resumable file uploads following the tus.io 1.0.0 protocol
-- name: Review Queue API
-  description: Review and download bulk import audit records
-- name: Bulk Load File Upload API
-  description: Upload files for bulk import
-- name: Column Mapping API
-  description: Manage column mappings for bulk import jobs
-- name: Bulk Load Jobs API
-  description: Manage bulk data import jobs
+- description: Resumable file uploads following the tus.io 1.0.0 protocol
+  name: TUS Resumable Upload API
+- description: Review and download bulk import audit records
+  name: Review Queue API
+- description: Upload files for bulk import
+  name: Bulk Load File Upload API
+- description: Manage column mappings for bulk import jobs
+  name: Column Mapping API
+- description: Manage bulk data import jobs
+  name: Bulk Load Jobs API
 paths:
-  /v1/bulk-jobs/{jobId}/mappings:
-    get:
-      tags:
-      - Column Mapping API
-      summary: Get Proposed Column Mappings for Job
-      description: 'Returns the column mappings currently stored for a bulk load job, covering both auto-suggested mappings from content detection and operator-approved overrides.
-
-        Use this tool to review detected source-column to target-field mappings, their confidence and origin; use approveColumnMappings instead to finalize the set.
-
-        Preconditions: the job must exist and belong to the authenticated operator; mappings are typically present only after a file upload has triggered content detection.
-
-        Required inputs: jobId (UUID) as a path parameter; there is no request body.
-
-        No events are emitted and no state changes; this is a read-only projection.
-
-        Returns 404 when the job does not exist, and 403 when the job belongs to another operator.
-
-        '
-      operationId: getColumnMappings
-      parameters:
-      - name: jobId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Mappings returned
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ColumnMappingResponse'
-        '403':
-          description: Job does not belong to the authenticated operator
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
-        '404':
-          description: Job not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
-      security:
-      - bearerAuth:
-        - bulkImport:upload:execute
-        - bulkImport:status:read
-      x-required-permissions:
-      - bulkImport:status:read
-    put:
-      tags:
-      - Column Mapping API
-      summary: Approve and Finalize Column Mappings
-      description: 'Replaces all stored column mappings for a bulk load job with the submitted set, marking every mapping operator-approved with confidence 1.0.
-
-        Use this tool after reviewing the suggestions from getColumnMappings; do not use getColumnMappings, which only reads mappings, and note that the submitted list fully replaces prior mappings rather than merging with them.
-
-        Preconditions: the job must exist and belong to the authenticated operator; the job state is not checked, but approved mappings only affect processing started afterwards.
-
-        Required inputs: mappings, a non-empty list where each entry names a sourceColumn from the uploaded file and the targetField it maps to; mappingId is accepted but ignored because the set is replaced wholesale.
-
-        Emits a BULK_LOADER_MAPPING_APPROVE event and deletes previously stored mappings, including auto-suggested ones, before saving the new set.
-
-        Returns 404 when the job does not exist, and 403 when the job belongs to another operator.
-
-        '
-      operationId: approveColumnMappings
-      parameters:
-      - name: jobId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        description: Full replacement set of column mappings, one entry per source column to import.
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ColumnMappingApproveRequest'
-            examples:
-              Two approved mappings:
-                description: Two approved mappings
-                value:
-                  mappings:
-                  - sourceColumn: Product SKU
-                    targetField: sku
-                  - sourceColumn: Retail Price
-                    targetField: price
-        required: true
-      responses:
-        '200':
-          description: Mappings approved
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ColumnMappingResponse'
-        '403':
-          description: Job does not belong to the authenticated operator
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
-        '404':
-          description: Job not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
-      security:
-      - bearerAuth:
-        - bulkImport:upload:execute
-        - bulkImport:status:read
-      x-required-permissions:
-      - bulkImport:upload:execute
   /v1/bulk-jobs:
     get:
-      tags:
-      - Bulk Load Jobs API
-      summary: List Bulk Load Jobs for Operator
       description: 'Returns a paginated list of the authenticated operator''s bulk load jobs with their statuses and progress counters.
 
         Use this tool to find a job id or review import history; use getBulkLoadJob instead when a specific job id is already known.
@@ -162,28 +38,28 @@ paths:
         '
       operationId: listBulkLoadJobs
       parameters:
-      - name: pageable
-        in: query
+      - in: query
+        name: pageable
         required: true
         schema:
           $ref: '#/components/schemas/Pageable'
       responses:
         '200':
-          description: Jobs listed
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PageBulkLoadJobResponse'
+          description: Jobs listed
       security:
       - bearerAuth:
         - bulkImport:upload:execute
         - bulkImport:status:read
+      summary: List Bulk Load Jobs for Operator
+      tags:
+      - Bulk Load Jobs API
       x-required-permissions:
       - bulkImport:status:read
     post:
-      tags:
-      - Bulk Load Jobs API
-      summary: Create a New Bulk Load Job
       description: 'Creates a bulk load import job owned by the authenticated operator, starting in CREATED state with the target domain and expected file name recorded.
 
         Use this tool when starting a new bulk import from a file; do not use uploadJobFile, which attaches the file to a job that already exists, and do not use retryBulkLoadJob, which re-queues a FAILED job.
@@ -199,277 +75,204 @@ paths:
         '
       operationId: createBulkLoadJob
       requestBody:
-        description: Bulk load job to create, naming the source file and the target import domain.
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/BulkLoadJobCreateRequest'
             examples:
               Catalog product import:
                 description: Catalog product import
                 value:
-                  fileName: products-2026-01.csv
                   domainType: CATALOG_PRODUCT
+                  fileName: products-2026-01.csv
                   locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+            schema:
+              $ref: '#/components/schemas/BulkLoadJobCreateRequest'
+        description: Bulk load job to create, naming the source file and the target import domain.
         required: true
       responses:
         '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkLoadJobResponse'
           description: Job created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
         '409':
-          description: Operator already has an active job
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkLoadJobResponse'
+          description: Operator already has an active job
       security:
       - bearerAuth:
         - bulkImport:upload:execute
         - bulkImport:status:read
-      x-required-permissions:
-      - bulkImport:upload:execute
-  /v1/bulk-jobs/{jobId}/upload:
-    post:
-      tags:
-      - Bulk Load File Upload API
-      summary: Upload a File for Bulk Load Job
-      description: 'Uploads the source data file for a bulk load job as a single multipart request, stores it, and runs content detection to propose column mappings.
-
-        Use this tool for files small enough to send in one request; use createTusUpload instead for large files that need resumable, chunked upload.
-
-        Preconditions: the job must exist, belong to the authenticated operator, and not be in a terminal state (COMPLETED, CANCELLED or FAILED); a CREATED job moves to UPLOADING.
-
-        Required inputs: a multipart form part named file; formats understood by content detection are csv, tsv, txt, psv, xlsx, xlsm, xls, json, xml, yaml and yml, with the first row or record treated as the column headers.
-
-        Emits a BULK_LOADER_FILE_UPLOAD event and persists suggested column mappings from detection; when detection fails the upload still succeeds with a null detection field in the response, and re-uploading replaces the file to be processed because only the latest upload is used.
-
-        Returns 404 when the job does not exist for the authenticated operator, and 409 when the job is already in a terminal state.
-
-        '
-      operationId: uploadJobFile
-      parameters:
-      - name: jobId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        description: Multipart form with a single part named file carrying the source data file to import.
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                file:
-                  type: string
-                  format: binary
-            examples:
-              CSV upload:
-                description: CSV upload
-                value: file=@products-2026-01.csv (binary content; first row is the header row)
-        required: true
-      responses:
-        '200':
-          description: File uploaded and content detected
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FileUploadResponse'
-        '404':
-          description: Job not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
-        '409':
-          description: Job is in a terminal state and cannot accept uploads
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
-      security:
-      - bearerAuth:
-        - bulkImport:upload:execute
-      x-required-permissions:
-      - bulkImport:upload:execute
-  /v1/bulk-jobs/{jobId}/tus:
-    post:
-      tags:
-      - TUS Resumable Upload API
-      summary: Create a Resumable Upload
-      description: 'Creates a resumable TUS upload session scoped to a bulk load job and returns its absolute upload URL in the Location header, rebuilt from the gateway''s X-Forwarded headers so it reflects the public address.
-
-        Use this tool to start uploading a large file in chunks; use uploadJobFile instead when the file is small enough for a single multipart request, and do not send file bytes here because chunks go to appendTusUploadChunk.
-
-        Preconditions: the caller must send a Tus-Resumable header of 1.0.0; the job id is recorded but not validated here, so a wrong job id only fails later when the finished file is attached to the job.
-
-        Required inputs: Upload-Length header with the total file size in bytes (server maximum 536870912 by default), and optionally Upload-Metadata with a base64-encoded filename field, without which the file is stored as upload.bin.
-
-        Emits a BULK_LOADER_TUS_UPLOAD_CREATE event and creates an empty temp file; the session expires after 24 hours by default (see the Upload-Expires header) and expired incomplete uploads are cleaned up automatically.
-
-        Returns 201 with Location, Upload-Offset and Upload-Expires headers, 412 when the Tus-Resumable header is missing or not 1.0.0, and 413 when Upload-Length exceeds the server maximum.
-
-        '
-      operationId: createTusUpload
-      parameters:
-      - name: jobId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: Tus-Resumable
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: Upload-Length
-        in: header
-        required: true
-        schema:
-          type: integer
-          format: int64
-      - name: Upload-Metadata
-        in: header
-        required: false
-        schema:
-          type: string
-      responses:
-        '201':
-          description: Upload created
-        '412':
-          description: Unsupported TUS version
-        '413':
-          description: Upload-Length exceeds server maximum
-      security:
-      - bearerAuth:
-        - bulkImport:upload:execute
-        - permitAll
-      x-required-permissions:
-      - bulkImport:upload:execute
-  /v1/bulk-jobs/{jobId}/retry:
-    post:
+      summary: Create a New Bulk Load Job
       tags:
       - Bulk Load Jobs API
-      summary: Retry a Failed Bulk Load Job
-      description: 'Resets a FAILED bulk load job back to CREATED and clears its progress counters so it can be processed again.
+      x-required-permissions:
+      - bulkImport:upload:execute
+  /v1/bulk-jobs/{jobId}:
+    get:
+      description: 'Returns the current state of a single bulk load job, including status, row counts and success and failure totals.
 
-        Use this tool after fixing the cause of a failure, typically via submitCorrections; do not use cancelBulkLoadJob, which terminates a job instead of re-queuing it.
+        Use this tool to poll job progress after startJobProcessing, or whenever the job id is already known; use listBulkLoadJobs instead when the id is unknown.
 
-        Preconditions: the job must belong to the authenticated operator, must be in FAILED state, and the operator must have no other active job.
+        Preconditions: the job must exist and belong to the authenticated operator; jobs owned by other operators are reported as not found rather than forbidden.
 
         Required inputs: jobId (UUID) as a path parameter; there is no request body.
 
-        Emits a BULK_LOADER_JOB_RETRY event and resets startedAt, completedAt, totalRows and all row counters; processing does not start until startJobProcessing is called again.
+        No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 when the job does not exist, 403 when it belongs to another operator, and 409 when the job is not in FAILED state or the operator already has an active job.
+        Returns 404 when no job exists with the supplied id for the authenticated operator.
 
         '
-      operationId: retryBulkLoadJob
+      operationId: getBulkLoadJob
       parameters:
-      - name: jobId
-        in: path
-        description: ID of the failed bulk load job to retry
+      - in: path
+        name: jobId
         required: true
         schema:
-          type: string
           format: uuid
+          type: string
       responses:
         '200':
-          description: Job reset and re-queued for retry
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkLoadJobResponse'
+          description: Job found
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkLoadJobResponse'
           description: Job does not belong to the authenticated operator
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkLoadJobResponse'
           description: Job not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
-        '409':
-          description: Job is not in FAILED state
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
         - bulkImport:status:read
-      x-required-permissions:
-      - bulkImport:upload:execute
-  /v1/bulk-jobs/{jobId}/process:
-    post:
+      summary: Get a Bulk Load Job by ID
       tags:
-      - Bulk Load File Upload API
-      summary: Launch a Bulk Load Job
-      description: 'Starts asynchronous Spring Batch processing for a bulk load job and transitions it to PROCESSING.
+      - Bulk Load Jobs API
+      x-required-permissions:
+      - bulkImport:status:read
+  /v1/bulk-jobs/{jobId}/audit:
+    get:
+      description: 'Returns every row-level audit record captured for a bulk load job, including review status, reason codes and the original source values.
 
-        Use this tool once the uploaded file is persisted and the mappings are acceptable; do not treat the 200 response as import completion, and poll getBulkLoadJob instead because the batch run continues in the background.
+        Use this tool to inspect which rows failed and why after processing; use downloadErrorReport instead when a CSV export of the same records is needed.
 
-        Preconditions: the job must belong to the authenticated operator, be in CREATED, UPLOADING or MAPPING_REVIEW state, and already have both a persisted uploaded file and a locationId assigned.
+        Preconditions: the job must exist and belong to the authenticated operator; audit records exist only after processing has run.
 
-        Required inputs: jobId (UUID) as a path parameter; there is no request body, and the caller''s Authorization bearer token is forwarded to downstream domain services for the row-level writes.
+        Required inputs: jobId (UUID) as a path parameter; there is no request body and no pagination, so the full list is returned in one response.
 
-        Emits a BULK_LOADER_JOB_START event, launches the Spring Batch job, and stamps startedAt; row counters on the job update as chunks are processed.
+        No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 when the job does not exist, 403 when it belongs to another operator, and 409 when the state is not launchable or the uploaded file or locationId is missing.
+        Returns 404 when no job exists with the supplied id for the authenticated operator.
 
         '
-      operationId: startJobProcessing
+      operationId: listAuditRecords
       parameters:
-      - name: jobId
-        in: path
+      - in: path
+        name: jobId
         required: true
         schema:
-          type: string
           format: uuid
+          type: string
       responses:
         '200':
-          description: Job transitioned to PROCESSING
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/AuditRecordResponse'
+                type: array
+          description: Audit records returned
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+          description: Job does not belong to the authenticated operator
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+          description: Job not found
+      security:
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - bulkImport:status:read
+      summary: Get Audit Records for Job
+      tags:
+      - Review Queue API
+      x-required-permissions:
+      - bulkImport:status:read
+  /v1/bulk-jobs/{jobId}/cancel:
+    post:
+      description: 'Cancels an in-flight bulk load job by moving it to the terminal CANCELLED state.
+
+        Use this tool to abandon a job that is no longer wanted; do not use retryBulkLoadJob, which re-queues a FAILED job rather than stopping one.
+
+        Preconditions: the job must belong to the authenticated operator and must not already be in a terminal state (COMPLETED, CANCELLED or FAILED).
+
+        Required inputs: jobId (UUID) as a path parameter; there is no request body.
+
+        Emits a BULK_LOADER_JOB_CANCEL event and sets the job status to CANCELLED; rows already imported are not rolled back.
+
+        Returns 404 when the job does not exist, 403 when it belongs to another operator, and 409 when the job is already COMPLETED, CANCELLED or FAILED.
+
+        '
+      operationId: cancelBulkLoadJob
+      parameters:
+      - in: path
+        name: jobId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkLoadJobResponse'
+          description: Job cancelled
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkLoadJobResponse'
           description: Job does not belong to the authenticated operator
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkLoadJobResponse'
           description: Job not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
         '409':
-          description: Invalid state transition
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/BulkLoadJobResponse'
+          description: Job is already in terminal state
       security:
       - bearerAuth:
         - bulkImport:upload:execute
+        - bulkImport:status:read
+      summary: Cancel a Running Bulk Load Job
+      tags:
+      - Bulk Load Jobs API
       x-required-permissions:
       - bulkImport:upload:execute
   /v1/bulk-jobs/{jobId}/corrections:
     post:
-      tags:
-      - Review Queue API
-      summary: Submit Corrected Records for Job
       description: 'Submits corrected field values for one or more audit records of a FAILED bulk load job, marking each accepted record CORRECTED.
 
         Use this tool to fix several failed rows in one call; use submitSingleCorrection instead when correcting exactly one record and a per-record accept or reject status is wanted.
@@ -487,18 +290,15 @@ paths:
         '
       operationId: submitCorrections
       parameters:
-      - name: jobId
-        in: path
+      - in: path
+        name: jobId
         required: true
         schema:
-          type: string
           format: uuid
+          type: string
       requestBody:
-        description: Batch of corrected values, one item per failed audit record to be marked CORRECTED.
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/BulkCorrectionRequest'
             examples:
               Correct one failed row:
                 description: Correct one failed row
@@ -506,51 +306,54 @@ paths:
                   corrections:
                   - auditRecordId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
                     correctedData:
-                      sku: PROD-001
                       price: '19.99'
+                      sku: PROD-001
+            schema:
+              $ref: '#/components/schemas/BulkCorrectionRequest'
+        description: Batch of corrected values, one item per failed audit record to be marked CORRECTED.
         required: true
       responses:
         '201':
-          description: Corrections submitted successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkCorrectionResponse'
+          description: Corrections submitted successfully
         '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
           description: Invalid correction request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
         '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
           description: Job does not belong to the authenticated operator
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
         '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
           description: Job not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
         '409':
-          description: Job is not in a state that accepts corrections
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+          description: Job is not in a state that accepts corrections
       security:
       - bearerAuth:
         - bulkImport:upload:execute
         - bulkImport:status:read
+      summary: Submit Corrected Records for Job
+      tags:
+      - Review Queue API
       x-required-permissions:
       - bulkImport:upload:execute
   /v1/bulk-jobs/{jobId}/corrections/single:
     post:
-      tags:
-      - Review Queue API
-      summary: Submit a Single Correction Record
       description: 'Submits corrected field values for exactly one audit record of a FAILED bulk load job and reports whether the correction was accepted.
 
         Use this tool for interactive row-by-row fixing; use submitCorrections instead to correct a batch of records in one call.
@@ -566,278 +369,477 @@ paths:
         '
       operationId: submitSingleCorrection
       parameters:
-      - name: jobId
+      - description: ID of the bulk load job
         in: path
-        description: ID of the bulk load job
+        name: jobId
         required: true
         schema:
-          type: string
           format: uuid
+          type: string
       requestBody:
-        description: Single corrected record naming the audit record and the field values that replace the failed ones.
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/BulkCorrectionItem'
             examples:
               Corrected row:
                 description: Corrected row
                 value:
                   auditRecordId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
                   correctedData:
-                    sku: PROD-001
                     price: '19.99'
+                    sku: PROD-001
+            schema:
+              $ref: '#/components/schemas/BulkCorrectionItem'
+        description: Single corrected record naming the audit record and the field values that replace the failed ones.
         required: true
       responses:
         '201':
-          description: Correction processed
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CorrectionResultDto'
+          description: Correction processed
         '400':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
           description: Invalid correction request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
         '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
           description: Job does not belong to the authenticated operator
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
         '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
           description: Job not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
         '409':
-          description: Job is not in a state that accepts corrections
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+          description: Job is not in a state that accepts corrections
       security:
       - bearerAuth:
         - bulkImport:upload:execute
         - bulkImport:status:read
+      summary: Submit a Single Correction Record
+      tags:
+      - Review Queue API
       x-required-permissions:
       - bulkImport:upload:execute
-  /v1/bulk-jobs/{jobId}/cancel:
-    post:
+  /v1/bulk-jobs/{jobId}/error-report:
+    get:
+      description: 'Generates a CSV export of the audit records for a bulk load job and returns it as a text/csv attachment.
+
+        Use this tool to hand failed rows to a spreadsheet for offline correction; use listAuditRecords instead when the records are needed as JSON for programmatic handling.
+
+        Preconditions: the job must exist and belong to the authenticated operator.
+
+        Required inputs: jobId (UUID) as a path parameter; the response is a CSV with header columns row_number, entity_type, review_status, reason_codes and original_values, covering every audit record for the job rather than only errored rows.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no job exists with the supplied id for the authenticated operator.
+
+        '
+      operationId: downloadErrorReport
+      parameters:
+      - in: path
+        name: jobId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                format: binary
+                type: string
+          description: CSV error report downloaded
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+          description: Job does not belong to the authenticated operator
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+          description: Job not found
+      security:
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - bulkImport:status:read
+      summary: Download Error Report as CSV
       tags:
-      - Bulk Load Jobs API
-      summary: Cancel a Running Bulk Load Job
-      description: 'Cancels an in-flight bulk load job by moving it to the terminal CANCELLED state.
+      - Review Queue API
+      x-required-permissions:
+      - bulkImport:status:read
+  /v1/bulk-jobs/{jobId}/mappings:
+    get:
+      description: 'Returns the column mappings currently stored for a bulk load job, covering both auto-suggested mappings from content detection and operator-approved overrides.
 
-        Use this tool to abandon a job that is no longer wanted; do not use retryBulkLoadJob, which re-queues a FAILED job rather than stopping one.
+        Use this tool to review detected source-column to target-field mappings, their confidence and origin; use approveColumnMappings instead to finalize the set.
 
-        Preconditions: the job must belong to the authenticated operator and must not already be in a terminal state (COMPLETED, CANCELLED or FAILED).
+        Preconditions: the job must exist and belong to the authenticated operator; mappings are typically present only after a file upload has triggered content detection.
 
         Required inputs: jobId (UUID) as a path parameter; there is no request body.
 
-        Emits a BULK_LOADER_JOB_CANCEL event and sets the job status to CANCELLED; rows already imported are not rolled back.
+        No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 when the job does not exist, 403 when it belongs to another operator, and 409 when the job is already COMPLETED, CANCELLED or FAILED.
+        Returns 404 when the job does not exist, and 403 when the job belongs to another operator.
 
         '
-      operationId: cancelBulkLoadJob
+      operationId: getColumnMappings
       parameters:
-      - name: jobId
-        in: path
+      - in: path
+        name: jobId
         required: true
         schema:
-          type: string
           format: uuid
+          type: string
       responses:
         '200':
-          description: Job cancelled
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
+                items:
+                  $ref: '#/components/schemas/ColumnMappingResponse'
+                type: array
+          description: Mappings returned
         '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
           description: Job does not belong to the authenticated operator
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
         '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
           description: Job not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
-        '409':
-          description: Job is already in terminal state
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
       security:
       - bearerAuth:
         - bulkImport:upload:execute
         - bulkImport:status:read
-      x-required-permissions:
-      - bulkImport:upload:execute
-  /v1/tus/{uploadId}:
-    delete:
+      summary: Get Proposed Column Mappings for Job
       tags:
-      - TUS Resumable Upload API
-      summary: Cancel a Resumable Upload
-      description: 'Cancels a TUS upload session, permanently deleting both the session record and its temporary chunk file.
+      - Column Mapping API
+      x-required-permissions:
+      - bulkImport:status:read
+    put:
+      description: 'Replaces all stored column mappings for a bulk load job with the submitted set, marking every mapping operator-approved with confidence 1.0.
 
-        Use this tool to abandon a partially transferred upload; do not use cancelBulkLoadJob, which cancels the bulk load job itself rather than an upload session.
+        Use this tool after reviewing the suggestions from getColumnMappings; do not use getColumnMappings, which only reads mappings, and note that the submitted list fully replaces prior mappings rather than merging with them.
 
-        Preconditions: the upload session must exist and the caller must send a Tus-Resumable header of 1.0.0; a completed upload whose file has already been attached to the job is not detached by this call.
+        Preconditions: the job must exist and belong to the authenticated operator; the job state is not checked, but approved mappings only affect processing started afterwards.
 
-        Required inputs: uploadId (UUID) as a path parameter; there is no request body.
+        Required inputs: mappings, a non-empty list where each entry names a sourceColumn from the uploaded file and the targetField it maps to; mappingId is accepted but ignored because the set is replaced wholesale.
 
-        Emits a BULK_LOADER_TUS_UPLOAD_CANCEL event and removes the temporary file; the deletion cannot be undone and the upload URL becomes invalid.
+        Emits a BULK_LOADER_MAPPING_APPROVE event and deletes previously stored mappings, including auto-suggested ones, before saving the new set.
 
-        Returns 204 on success, 404 when the upload does not exist, and 412 when the Tus-Resumable header is missing or not 1.0.0.
+        Returns 404 when the job does not exist, and 403 when the job belongs to another operator.
 
         '
-      operationId: cancelTusUpload
+      operationId: approveColumnMappings
       parameters:
-      - name: uploadId
-        in: path
+      - in: path
+        name: jobId
         required: true
         schema:
-          type: string
           format: uuid
-      - name: Tus-Resumable
-        in: header
-        required: false
-        schema:
           type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Two approved mappings:
+                description: Two approved mappings
+                value:
+                  mappings:
+                  - sourceColumn: Product SKU
+                    targetField: sku
+                  - sourceColumn: Retail Price
+                    targetField: price
+            schema:
+              $ref: '#/components/schemas/ColumnMappingApproveRequest'
+        description: Full replacement set of column mappings, one entry per source column to import.
+        required: true
       responses:
-        '204':
-          description: Upload deleted
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ColumnMappingResponse'
+                type: array
+          description: Mappings approved
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+          description: Job does not belong to the authenticated operator
         '404':
-          description: Upload not found
-        '412':
-          description: Unsupported TUS version
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+          description: Job not found
       security:
       - bearerAuth:
         - bulkImport:upload:execute
-        - permitAll
+        - bulkImport:status:read
+      summary: Approve and Finalize Column Mappings
+      tags:
+      - Column Mapping API
       x-required-permissions:
       - bulkImport:upload:execute
-    head:
-      tags:
-      - TUS Resumable Upload API
-      summary: Get Current Upload Offset
-      description: 'Returns the current byte offset of a TUS upload in the Upload-Offset response header so a client can resume where the last transfer stopped.
+  /v1/bulk-jobs/{jobId}/process:
+    post:
+      description: 'Starts asynchronous Spring Batch processing for a bulk load job and transitions it to PROCESSING.
 
-        Use this tool after an interrupted transfer to learn where to resume; do not use getTusCapabilities, which reports server-wide limits rather than per-upload progress.
+        Use this tool once the uploaded file is persisted and the mappings are acceptable; do not treat the 200 response as import completion, and poll getBulkLoadJob instead because the batch run continues in the background.
 
-        Preconditions: the upload session must exist and the caller must send a Tus-Resumable header of 1.0.0.
+        Preconditions: the job must belong to the authenticated operator, be in CREATED, UPLOADING or MAPPING_REVIEW state, and already have both a persisted uploaded file and a locationId assigned.
 
-        Required inputs: uploadId (UUID) as a path parameter; there is no request body.
+        Required inputs: jobId (UUID) as a path parameter; there is no request body, and the caller''s Authorization bearer token is forwarded to downstream domain services for the row-level writes.
 
-        No events are emitted and no state changes; the response carries Upload-Offset, Upload-Length and Upload-Expires headers with an empty body.
+        Emits a BULK_LOADER_JOB_START event, launches the Spring Batch job, and stamps startedAt; row counters on the job update as chunks are processed.
 
-        Returns 404 when the upload does not exist, and 412 when the Tus-Resumable header is missing or not 1.0.0.
+        Returns 404 when the job does not exist, 403 when it belongs to another operator, and 409 when the state is not launchable or the uploaded file or locationId is missing.
 
         '
-      operationId: getTusUploadOffset
+      operationId: startJobProcessing
       parameters:
-      - name: uploadId
-        in: path
+      - in: path
+        name: jobId
         required: true
         schema:
-          type: string
           format: uuid
-      - name: Tus-Resumable
-        in: header
-        required: false
-        schema:
           type: string
       responses:
         '200':
-          description: Current upload offset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkLoadJobResponse'
+          description: Job transitioned to PROCESSING
+        '403':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+          description: Job does not belong to the authenticated operator
         '404':
-          description: Upload not found
-        '412':
-          description: Unsupported TUS version
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+          description: Job not found
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+          description: Invalid state transition
       security:
       - bearerAuth:
         - bulkImport:upload:execute
-        - permitAll
+      summary: Launch a Bulk Load Job
+      tags:
+      - Bulk Load File Upload API
       x-required-permissions:
       - bulkImport:upload:execute
-    patch:
-      tags:
-      - TUS Resumable Upload API
-      summary: Upload a Chunk
-      description: 'Appends a contiguous byte range to an in-progress TUS upload and, when the final byte arrives, moves the finished file into job storage.
+  /v1/bulk-jobs/{jobId}/retry:
+    post:
+      description: 'Resets a FAILED bulk load job back to CREATED and clears its progress counters so it can be processed again.
 
-        Use this tool repeatedly to stream the file in chunks after createTusUpload; do not guess the offset after a failure, and call getTusUploadOffset instead to learn the server-side offset.
+        Use this tool after fixing the cause of a failure, typically via submitCorrections; do not use cancelBulkLoadJob, which terminates a job instead of re-queuing it.
 
-        Preconditions: the upload must exist, not be complete, and not be expired; the Upload-Offset header must exactly equal the server''s current offset.
+        Preconditions: the job must belong to the authenticated operator, must be in FAILED state, and the operator must have no other active job.
 
-        Required inputs: uploadId (UUID) as a path parameter, a Content-Type of application/offset+octet-stream, Tus-Resumable, Upload-Offset and Content-Length headers, and the raw chunk bytes as the request body.
+        Required inputs: jobId (UUID) as a path parameter; there is no request body.
 
-        Emits a BULK_LOADER_TUS_UPLOAD_CHUNK_APPEND event; when the new offset reaches Upload-Length the file is finalized into the job''s storage and the job records the upload, moving a CREATED job to UPLOADING (finalization fails with 404 when the job is gone or 409 when it is terminal).
+        Emits a BULK_LOADER_JOB_RETRY event and resets startedAt, completedAt, totalRows and all row counters; processing does not start until startJobProcessing is called again.
 
-        Returns 204 with the new Upload-Offset header on success, 409 when the offset does not match or the upload is already complete, 410 when the upload has expired, 415 when the Content-Type is wrong, 412 when the TUS version is unsupported, and 404 when the upload does not exist.
+        Returns 404 when the job does not exist, 403 when it belongs to another operator, and 409 when the job is not in FAILED state or the operator already has an active job.
 
         '
-      operationId: appendTusUploadChunk
+      operationId: retryBulkLoadJob
       parameters:
-      - name: uploadId
+      - description: ID of the failed bulk load job to retry
         in: path
+        name: jobId
         required: true
         schema:
-          type: string
           format: uuid
-      - name: Tus-Resumable
-        in: header
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkLoadJobResponse'
+          description: Job reset and re-queued for retry
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkLoadJobResponse'
+          description: Job does not belong to the authenticated operator
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkLoadJobResponse'
+          description: Job not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkLoadJobResponse'
+          description: Job is not in FAILED state
+      security:
+      - bearerAuth:
+        - bulkImport:upload:execute
+        - bulkImport:status:read
+      summary: Retry a Failed Bulk Load Job
+      tags:
+      - Bulk Load Jobs API
+      x-required-permissions:
+      - bulkImport:upload:execute
+  /v1/bulk-jobs/{jobId}/tus:
+    post:
+      description: 'Creates a resumable TUS upload session scoped to a bulk load job and returns its absolute upload URL in the Location header, rebuilt from the gateway''s X-Forwarded headers so it reflects the public address.
+
+        Use this tool to start uploading a large file in chunks; use uploadJobFile instead when the file is small enough for a single multipart request, and do not send file bytes here because chunks go to appendTusUploadChunk.
+
+        Preconditions: the caller must send a Tus-Resumable header of 1.0.0; the job id is recorded but not validated here, so a wrong job id only fails later when the finished file is attached to the job.
+
+        Required inputs: Upload-Length header with the total file size in bytes (server maximum 536870912 by default), and optionally Upload-Metadata with a base64-encoded filename field, without which the file is stored as upload.bin.
+
+        Emits a BULK_LOADER_TUS_UPLOAD_CREATE event and creates an empty temp file; the session expires after 24 hours by default (see the Upload-Expires header) and expired incomplete uploads are cleaned up automatically.
+
+        Returns 201 with Location, Upload-Offset and Upload-Expires headers, 412 when the Tus-Resumable header is missing or not 1.0.0, and 413 when Upload-Length exceeds the server maximum.
+
+        '
+      operationId: createTusUpload
+      parameters:
+      - in: path
+        name: jobId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: header
+        name: Tus-Resumable
         required: false
         schema:
           type: string
-      - name: Upload-Offset
-        in: header
+      - in: header
+        name: Upload-Length
         required: true
         schema:
-          type: integer
           format: int64
-      - name: Content-Length
-        in: header
-        required: true
-        schema:
           type: integer
-          format: int64
-      - name: Content-Type
-        in: header
+      - in: header
+        name: Upload-Metadata
         required: false
         schema:
           type: string
       responses:
-        '204':
-          description: Chunk accepted, new offset returned
-        '409':
-          description: Upload-Offset conflict
-        '410':
-          description: Upload has expired
+        '201':
+          description: Upload created
         '412':
           description: Unsupported TUS version
-        '415':
-          description: Content-Type must be application/offset+octet-stream
+        '413':
+          description: Upload-Length exceeds server maximum
       security:
       - bearerAuth:
         - bulkImport:upload:execute
         - permitAll
+      summary: Create a Resumable Upload
+      tags:
+      - TUS Resumable Upload API
+      x-required-permissions:
+      - bulkImport:upload:execute
+  /v1/bulk-jobs/{jobId}/upload:
+    post:
+      description: 'Uploads the source data file for a bulk load job as a single multipart request, stores it, and runs content detection to propose column mappings.
+
+        Use this tool for files small enough to send in one request; use createTusUpload instead for large files that need resumable, chunked upload.
+
+        Preconditions: the job must exist, belong to the authenticated operator, and not be in a terminal state (COMPLETED, CANCELLED or FAILED); a CREATED job moves to UPLOADING.
+
+        Required inputs: a multipart form part named file; formats understood by content detection are csv, tsv, txt, psv, xlsx, xlsm, xls, json, xml, yaml and yml, with the first row or record treated as the column headers.
+
+        Emits a BULK_LOADER_FILE_UPLOAD event and persists suggested column mappings from detection; when detection fails the upload still succeeds with a null detection field in the response, and re-uploading replaces the file to be processed because only the latest upload is used.
+
+        Returns 404 when the job does not exist for the authenticated operator, and 409 when the job is already in a terminal state.
+
+        '
+      operationId: uploadJobFile
+      parameters:
+      - in: path
+        name: jobId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            examples:
+              CSV upload:
+                description: CSV upload
+                value: file=@products-2026-01.csv (binary content; first row is the header row)
+            schema:
+              properties:
+                file:
+                  format: binary
+                  type: string
+              type: object
+        description: Multipart form with a single part named file carrying the source data file to import.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadResponse'
+          description: File uploaded and content detected
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+          description: Job not found
+        '409':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+          description: Job is in a terminal state and cannot accept uploads
+      security:
+      - bearerAuth:
+        - bulkImport:upload:execute
+      summary: Upload a File for Bulk Load Job
+      tags:
+      - Bulk Load File Upload API
       x-required-permissions:
       - bulkImport:upload:execute
   /v1/tus:
     options:
-      tags:
-      - TUS Resumable Upload API
-      summary: Get TUS Server Capabilities
       description: 'Advertises the TUS resumable-upload capabilities of this server, namely protocol version 1.0.0, the creation, termination and expiration extensions, and the maximum upload size.
 
         Use this tool during the tus client handshake to discover limits before creating an upload; do not use it to check the progress of an existing upload, which is getTusUploadOffset.
@@ -859,269 +861,291 @@ paths:
       - bearerAuth:
         - bulkImport:upload:execute
         - permitAll
-  /v1/bulk-jobs/{jobId}:
-    get:
+      summary: Get TUS Server Capabilities
       tags:
-      - Bulk Load Jobs API
-      summary: Get a Bulk Load Job by ID
-      description: 'Returns the current state of a single bulk load job, including status, row counts and success and failure totals.
+      - TUS Resumable Upload API
+  /v1/tus/{uploadId}:
+    delete:
+      description: 'Cancels a TUS upload session, permanently deleting both the session record and its temporary chunk file.
 
-        Use this tool to poll job progress after startJobProcessing, or whenever the job id is already known; use listBulkLoadJobs instead when the id is unknown.
+        Use this tool to abandon a partially transferred upload; do not use cancelBulkLoadJob, which cancels the bulk load job itself rather than an upload session.
 
-        Preconditions: the job must exist and belong to the authenticated operator; jobs owned by other operators are reported as not found rather than forbidden.
+        Preconditions: the upload session must exist and the caller must send a Tus-Resumable header of 1.0.0; a completed upload whose file has already been attached to the job is not detached by this call.
 
-        Required inputs: jobId (UUID) as a path parameter; there is no request body.
+        Required inputs: uploadId (UUID) as a path parameter; there is no request body.
 
-        No events are emitted and no state changes; this is a read-only projection.
+        Emits a BULK_LOADER_TUS_UPLOAD_CANCEL event and removes the temporary file; the deletion cannot be undone and the upload URL becomes invalid.
 
-        Returns 404 when no job exists with the supplied id for the authenticated operator.
+        Returns 204 on success, 404 when the upload does not exist, and 412 when the Tus-Resumable header is missing or not 1.0.0.
 
         '
-      operationId: getBulkLoadJob
+      operationId: cancelTusUpload
       parameters:
-      - name: jobId
-        in: path
+      - in: path
+        name: uploadId
         required: true
         schema:
-          type: string
           format: uuid
+          type: string
+      - in: header
+        name: Tus-Resumable
+        required: false
+        schema:
+          type: string
       responses:
-        '200':
-          description: Job found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
-        '403':
-          description: Job does not belong to the authenticated operator
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
+        '204':
+          description: Upload deleted
         '404':
-          description: Job not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
+          description: Upload not found
+        '412':
+          description: Unsupported TUS version
       security:
       - bearerAuth:
         - bulkImport:upload:execute
-        - bulkImport:status:read
-      x-required-permissions:
-      - bulkImport:status:read
-  /v1/bulk-jobs/{jobId}/error-report:
-    get:
+        - permitAll
+      summary: Cancel a Resumable Upload
       tags:
-      - Review Queue API
-      summary: Download Error Report as CSV
-      description: 'Generates a CSV export of the audit records for a bulk load job and returns it as a text/csv attachment.
+      - TUS Resumable Upload API
+      x-required-permissions:
+      - bulkImport:upload:execute
+    head:
+      description: 'Returns the current byte offset of a TUS upload in the Upload-Offset response header so a client can resume where the last transfer stopped.
 
-        Use this tool to hand failed rows to a spreadsheet for offline correction; use listAuditRecords instead when the records are needed as JSON for programmatic handling.
+        Use this tool after an interrupted transfer to learn where to resume; do not use getTusCapabilities, which reports server-wide limits rather than per-upload progress.
 
-        Preconditions: the job must exist and belong to the authenticated operator.
+        Preconditions: the upload session must exist and the caller must send a Tus-Resumable header of 1.0.0.
 
-        Required inputs: jobId (UUID) as a path parameter; the response is a CSV with header columns row_number, entity_type, review_status, reason_codes and original_values, covering every audit record for the job rather than only errored rows.
+        Required inputs: uploadId (UUID) as a path parameter; there is no request body.
 
-        No events are emitted and no state changes; this is a read-only projection.
+        No events are emitted and no state changes; the response carries Upload-Offset, Upload-Length and Upload-Expires headers with an empty body.
 
-        Returns 404 when no job exists with the supplied id for the authenticated operator.
+        Returns 404 when the upload does not exist, and 412 when the Tus-Resumable header is missing or not 1.0.0.
 
         '
-      operationId: downloadErrorReport
+      operationId: getTusUploadOffset
       parameters:
-      - name: jobId
-        in: path
+      - in: path
+        name: uploadId
         required: true
         schema:
-          type: string
           format: uuid
+          type: string
+      - in: header
+        name: Tus-Resumable
+        required: false
+        schema:
+          type: string
       responses:
         '200':
-          description: CSV error report downloaded
-          content:
-            application/json:
-              schema:
-                type: string
-                format: binary
-        '403':
-          description: Job does not belong to the authenticated operator
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
+          description: Current upload offset
         '404':
-          description: Job not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
+          description: Upload not found
+        '412':
+          description: Unsupported TUS version
       security:
       - bearerAuth:
         - bulkImport:upload:execute
-        - bulkImport:status:read
-      x-required-permissions:
-      - bulkImport:status:read
-  /v1/bulk-jobs/{jobId}/audit:
-    get:
+        - permitAll
+      summary: Get Current Upload Offset
       tags:
-      - Review Queue API
-      summary: Get Audit Records for Job
-      description: 'Returns every row-level audit record captured for a bulk load job, including review status, reason codes and the original source values.
+      - TUS Resumable Upload API
+      x-required-permissions:
+      - bulkImport:upload:execute
+    patch:
+      description: 'Appends a contiguous byte range to an in-progress TUS upload and, when the final byte arrives, moves the finished file into job storage.
 
-        Use this tool to inspect which rows failed and why after processing; use downloadErrorReport instead when a CSV export of the same records is needed.
+        Use this tool repeatedly to stream the file in chunks after createTusUpload; do not guess the offset after a failure, and call getTusUploadOffset instead to learn the server-side offset.
 
-        Preconditions: the job must exist and belong to the authenticated operator; audit records exist only after processing has run.
+        Preconditions: the upload must exist, not be complete, and not be expired; the Upload-Offset header must exactly equal the server''s current offset.
 
-        Required inputs: jobId (UUID) as a path parameter; there is no request body and no pagination, so the full list is returned in one response.
+        Required inputs: uploadId (UUID) as a path parameter, a Content-Type of application/offset+octet-stream, Tus-Resumable, Upload-Offset and Content-Length headers, and the raw chunk bytes as the request body.
 
-        No events are emitted and no state changes; this is a read-only projection.
+        Emits a BULK_LOADER_TUS_UPLOAD_CHUNK_APPEND event; when the new offset reaches Upload-Length the file is finalized into the job''s storage and the job records the upload, moving a CREATED job to UPLOADING (finalization fails with 404 when the job is gone or 409 when it is terminal).
 
-        Returns 404 when no job exists with the supplied id for the authenticated operator.
+        Returns 204 with the new Upload-Offset header on success, 409 when the offset does not match or the upload is already complete, 410 when the upload has expired, 415 when the Content-Type is wrong, 412 when the TUS version is unsupported, and 404 when the upload does not exist.
 
         '
-      operationId: listAuditRecords
+      operationId: appendTusUploadChunk
       parameters:
-      - name: jobId
-        in: path
+      - in: path
+        name: uploadId
         required: true
         schema:
-          type: string
           format: uuid
+          type: string
+      - in: header
+        name: Tus-Resumable
+        required: false
+        schema:
+          type: string
+      - in: header
+        name: Upload-Offset
+        required: true
+        schema:
+          format: int64
+          type: integer
+      - in: header
+        name: Content-Length
+        required: true
+        schema:
+          format: int64
+          type: integer
+      - in: header
+        name: Content-Type
+        required: false
+        schema:
+          type: string
       responses:
-        '200':
-          description: Audit records returned
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/AuditRecordResponse'
-        '403':
-          description: Job does not belong to the authenticated operator
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
-        '404':
-          description: Job not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
+        '204':
+          description: Chunk accepted, new offset returned
+        '409':
+          description: Upload-Offset conflict
+        '410':
+          description: Upload has expired
+        '412':
+          description: Unsupported TUS version
+        '415':
+          description: Content-Type must be application/offset+octet-stream
       security:
       - bearerAuth:
         - bulkImport:upload:execute
-        - bulkImport:status:read
+        - permitAll
+      summary: Upload a Chunk
+      tags:
+      - TUS Resumable Upload API
       x-required-permissions:
-      - bulkImport:status:read
+      - bulkImport:upload:execute
 components:
   schemas:
-    ColumnMappingApproveRequest:
-      type: object
-      description: Request to approve the finalized set of column mappings for a bulk load job
+    AuditRecordResponse:
+      description: Audit record for a single row processed during a bulk load job
       properties:
-        mappings:
-          type: array
-          description: Column mappings to approve, one per source column
-          items:
-            $ref: '#/components/schemas/ColumnMappingUpdateRequest'
-          minItems: 1
-      required:
-      - mappings
-    ColumnMappingUpdateRequest:
-      type: object
-      description: A single column mapping to create or update for a bulk load job
-      properties:
-        mappingId:
-          type: string
-          format: uuid
-          description: Identifier of the existing mapping to update; omit to create a new mapping
-          example: 00000000-0000-0000-0000-000000000001
-        sourceColumn:
-          type: string
-          description: Name of the source column in the uploaded file
-          example: Product SKU
-          minLength: 1
-        targetField:
-          type: string
-          description: Name of the target domain field the column maps to
-          example: sku
-          minLength: 1
-      required:
-      - sourceColumn
-      - targetField
-    ProblemDetail:
-      type: object
-      properties:
-        type:
-          type: string
-          format: uri
-        title:
-          type: string
-        status:
-          type: integer
-          format: int32
-        detail:
-          type: string
-        instance:
-          type: string
-          format: uri
-        properties:
-          type: object
-    ColumnMappingResponse:
-      type: object
-      description: Inferred or user-overridden mapping from a source column to a target field
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique identifier of the column mapping
-          example: 00000000-0000-0000-0000-000000000001
-        jobId:
-          type: string
-          format: uuid
-          description: Identifier of the bulk load job this mapping belongs to
-          example: 00000000-0000-0000-0000-000000000002
-        sourceColumn:
-          type: string
-          description: Name of the column in the source file
-          example: Product SKU
-        targetField:
-          type: string
-          description: Name of the target domain field the column maps to
-          example: sku
-        confidence:
-          type: number
-          format: double
-          description: Confidence score of the inferred mapping, between 0 and 1
-          example: 0.95
-        overriddenByUser:
-          type: boolean
-          description: Whether the mapping was overridden by a user
-          example: false
         createdAt:
-          type: string
-          format: date-time
-          description: Timestamp when the mapping was created (ISO 8601)
+          description: Timestamp when the audit record was created (ISO 8601)
           example: 2026-01-15 09:30:00+00:00
+          format: date-time
+          type: string
+        entityId:
+          description: Identifier of the entity created or updated from the row, if any
+          example: 00000000-0000-0000-0000-000000000003
+          format: uuid
+          type: string
+        entityType:
+          description: Type of the target entity for the processed row
+          example: CATALOG_PRODUCT
+          type: string
+        id:
+          description: Unique identifier of the audit record
+          example: 00000000-0000-0000-0000-000000000001
+          format: uuid
+          type: string
+        jobId:
+          description: Identifier of the bulk load job this audit record belongs to
+          example: 00000000-0000-0000-0000-000000000002
+          format: uuid
+          type: string
+        originalValues:
+          description: Serialized original values from the source row
+          example:
+            price: ''
+            sku: PROD-001
+          type: string
+        reasonCodes:
+          description: Machine-readable reason codes describing why the row needs review
+          example: MISSING_REQUIRED_FIELD,INVALID_PRICE
+          type: string
+        reviewStatus:
+          description: Review status of the audit record
+          enum:
+          - PENDING
+          - APPROVED
+          - REJECTED
+          - CORRECTED
+          example: PENDING
+          type: string
+        rowNumber:
+          description: One-based row number within the source file
+          example: 42
+          format: int64
+          type: integer
       required:
       - createdAt
       - id
       - jobId
-      - sourceColumn
-      - targetField
-    BulkLoadJobCreateRequest:
+      - reviewStatus
       type: object
+    BulkCorrectionItem:
+      description: A single corrected data record for a failed audit entry
+      properties:
+        auditRecordId:
+          description: ID of the audit record being corrected
+          example: 00000000-0000-0000-0000-000000000001
+          format: uuid
+          type: string
+        correctedData:
+          additionalProperties:
+            type: string
+          description: Map of field names to their corrected values
+          example:
+            price: '19.99'
+            sku: PROD-001
+          type: object
+      required:
+      - auditRecordId
+      - correctedData
+      type: object
+    BulkCorrectionRequest:
+      description: Request to submit corrected data records for a failed bulk load job
+      properties:
+        corrections:
+          description: List of correction items, one per audit record to correct
+          items:
+            $ref: '#/components/schemas/BulkCorrectionItem'
+          minItems: 1
+          type: array
+      required:
+      - corrections
+      type: object
+    BulkCorrectionResponse:
+      description: Result of a bulk correction submission
+      properties:
+        acceptedCount:
+          description: Number of corrections accepted for processing
+          example: 5
+          format: int32
+          type: integer
+        jobId:
+          description: The bulk load job ID
+          example: 00000000-0000-0000-0000-000000000001
+          format: uuid
+          type: string
+        rejectedCount:
+          description: Number of corrections rejected
+          example: 0
+          format: int32
+          type: integer
+        rejections:
+          description: Rejection detail messages for each rejected correction, if any
+          example:
+          - Audit record does not belong to this job
+          items:
+            type: string
+          type: array
+        submittedCount:
+          description: Total number of corrections submitted
+          example: 5
+          format: int32
+          type: integer
+      required:
+      - acceptedCount
+      - jobId
+      - rejectedCount
+      - submittedCount
+      type: object
+    BulkLoadJobCreateRequest:
       description: Request to create a new bulk load job
       properties:
-        fileName:
-          type: string
-          description: Name of the source file to be uploaded for this job
-          example: products-2026-01.csv
-          minLength: 1
         domainType:
-          type: string
           description: Target domain for the bulk load
           enum:
           - CATALOG_PRODUCT
@@ -1133,38 +1157,35 @@ components:
           - VEHICLE
           - VEHICLE_FITMENT
           example: CATALOG_PRODUCT
-        locationId:
           type: string
-          format: uuid
+        fileName:
+          description: Name of the source file to be uploaded for this job
+          example: products-2026-01.csv
+          minLength: 1
+          type: string
+        locationId:
           description: Identifier of the location to scope the load to, if applicable
           example: 00000000-0000-0000-0000-000000000001
+          format: uuid
+          type: string
       required:
       - domainType
       - fileName
-    BulkLoadJobResponse:
       type: object
+    BulkLoadJobResponse:
       description: Bulk load job state and progress counters
       properties:
-        id:
+        completedAt:
+          description: Timestamp when processing completed (ISO 8601)
+          example: 2026-01-15 09:45:00+00:00
+          format: date-time
           type: string
-          format: uuid
-          description: Unique identifier of the bulk load job
-          example: 00000000-0000-0000-0000-000000000001
-        operatorId:
+        createdAt:
+          description: Timestamp when the job was created (ISO 8601)
+          example: 2026-01-15 09:25:00+00:00
+          format: date-time
           type: string
-          description: Identifier of the operator who created the job
-          example: operator-123
-        locationId:
-          type: string
-          format: uuid
-          description: Identifier of the location the job targets, if scoped to one
-          example: 00000000-0000-0000-0000-000000000002
-        fileName:
-          type: string
-          description: Original name of the uploaded source file
-          example: products-2026-01.csv
         domainType:
-          type: string
           description: Detected or selected target domain for the load
           enum:
           - CATALOG_PRODUCT
@@ -1176,8 +1197,41 @@ components:
           - VEHICLE
           - VEHICLE_FITMENT
           example: CATALOG_PRODUCT
-        status:
           type: string
+        failureCount:
+          description: Number of rows that failed processing
+          example: 10
+          format: int64
+          type: integer
+        fileName:
+          description: Original name of the uploaded source file
+          example: products-2026-01.csv
+          type: string
+        id:
+          description: Unique identifier of the bulk load job
+          example: 00000000-0000-0000-0000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Identifier of the location the job targets, if scoped to one
+          example: 00000000-0000-0000-0000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator who created the job
+          example: operator-123
+          type: string
+        processedRows:
+          description: Number of rows processed so far
+          example: 750
+          format: int64
+          type: integer
+        startedAt:
+          description: Timestamp when processing started (ISO 8601)
+          example: 2026-01-15 09:30:00+00:00
+          format: date-time
+          type: string
+        status:
           description: Current lifecycle status of the job
           enum:
           - CREATED
@@ -1190,58 +1244,114 @@ components:
           - FAILED
           - CANCELLED
           example: PROCESSING
-        totalRows:
-          type: integer
-          format: int64
-          description: Total number of data rows detected in the source file
-          example: 1000
-        processedRows:
-          type: integer
-          format: int64
-          description: Number of rows processed so far
-          example: 750
+          type: string
         successCount:
-          type: integer
-          format: int64
           description: Number of rows successfully loaded
           example: 740
-        failureCount:
-          type: integer
           format: int64
-          description: Number of rows that failed processing
-          example: 10
-        startedAt:
-          type: string
-          format: date-time
-          description: Timestamp when processing started (ISO 8601)
-          example: 2026-01-15 09:30:00+00:00
-        completedAt:
-          type: string
-          format: date-time
-          description: Timestamp when processing completed (ISO 8601)
-          example: 2026-01-15 09:45:00+00:00
-        createdAt:
-          type: string
-          format: date-time
-          description: Timestamp when the job was created (ISO 8601)
-          example: 2026-01-15 09:25:00+00:00
+          type: integer
+        totalRows:
+          description: Total number of data rows detected in the source file
+          example: 1000
+          format: int64
+          type: integer
         updatedAt:
-          type: string
-          format: date-time
           description: Timestamp when the job was last updated (ISO 8601)
           example: 2026-01-15 09:45:00+00:00
+          format: date-time
+          type: string
       required:
       - createdAt
       - domainType
       - fileName
       - id
       - status
-    ContentDetectionResult:
       type: object
+    ColumnMappingApproveRequest:
+      description: Request to approve the finalized set of column mappings for a bulk load job
+      properties:
+        mappings:
+          description: Column mappings to approve, one per source column
+          items:
+            $ref: '#/components/schemas/ColumnMappingUpdateRequest'
+          minItems: 1
+          type: array
+      required:
+      - mappings
+      type: object
+    ColumnMappingResponse:
+      description: Inferred or user-overridden mapping from a source column to a target field
+      properties:
+        confidence:
+          description: Confidence score of the inferred mapping, between 0 and 1
+          example: 0.95
+          format: double
+          type: number
+        createdAt:
+          description: Timestamp when the mapping was created (ISO 8601)
+          example: 2026-01-15 09:30:00+00:00
+          format: date-time
+          type: string
+        id:
+          description: Unique identifier of the column mapping
+          example: 00000000-0000-0000-0000-000000000001
+          format: uuid
+          type: string
+        jobId:
+          description: Identifier of the bulk load job this mapping belongs to
+          example: 00000000-0000-0000-0000-000000000002
+          format: uuid
+          type: string
+        overriddenByUser:
+          description: Whether the mapping was overridden by a user
+          example: false
+          type: boolean
+        sourceColumn:
+          description: Name of the column in the source file
+          example: Product SKU
+          type: string
+        targetField:
+          description: Name of the target domain field the column maps to
+          example: sku
+          type: string
+      required:
+      - createdAt
+      - id
+      - jobId
+      - sourceColumn
+      - targetField
+      type: object
+    ColumnMappingUpdateRequest:
+      description: A single column mapping to create or update for a bulk load job
+      properties:
+        mappingId:
+          description: Identifier of the existing mapping to update; omit to create a new mapping
+          example: 00000000-0000-0000-0000-000000000001
+          format: uuid
+          type: string
+        sourceColumn:
+          description: Name of the source column in the uploaded file
+          example: Product SKU
+          minLength: 1
+          type: string
+        targetField:
+          description: Name of the target domain field the column maps to
+          example: sku
+          minLength: 1
+          type: string
+      required:
+      - sourceColumn
+      - targetField
+      type: object
+    ContentDetectionResult:
       description: Result of content detection over an uploaded file, used to infer the target domain and mappings
       properties:
+        confidence:
+          description: Confidence score of the detection, between 0 and 1
+          example: 0.92
+          format: double
+          type: number
         detectedDomain:
-          type: string
           description: Domain detected from the file content
           enum:
           - CATALOG_PRODUCT
@@ -1253,216 +1363,162 @@ components:
           - VEHICLE
           - VEHICLE_FITMENT
           example: CATALOG_PRODUCT
-        confidence:
-          type: number
-          format: double
-          description: Confidence score of the detection, between 0 and 1
-          example: 0.92
+          type: string
+        llmFallbackUsed:
+          description: Whether an LLM fallback was used to perform the detection
+          example: false
+          type: boolean
         suggestedColumnMappings:
-          type: object
           additionalProperties:
             type: string
           description: Suggested mappings from source column names to target field names
           example:
-            Product SKU: sku
             Price: basePrice
-        llmFallbackUsed:
-          type: boolean
-          description: Whether an LLM fallback was used to perform the detection
-          example: false
+            Product SKU: sku
+          type: object
       required:
       - confidence
       - detectedDomain
       - llmFallbackUsed
-    FileUploadResponse:
       type: object
-      description: Result of uploading a source file for a bulk load job
-      properties:
-        jobId:
-          type: string
-          format: uuid
-          description: Identifier of the bulk load job the file was uploaded for
-          example: 00000000-0000-0000-0000-000000000001
-        storagePath:
-          type: string
-          description: Storage path where the uploaded file is persisted
-          example: bulk-loads/00000000-0000-0000-0000-000000000001/products.csv
-        fileName:
-          type: string
-          description: Original name of the uploaded file
-          example: products-2026-01.csv
-        sizeBytes:
-          type: integer
-          format: int64
-          description: Size of the uploaded file in bytes
-          example: 204800
-        detection:
-          $ref: '#/components/schemas/ContentDetectionResult'
-      required:
-      - fileName
-      - jobId
-      - sizeBytes
-      - storagePath
-    BulkCorrectionItem:
-      type: object
-      description: A single corrected data record for a failed audit entry
-      properties:
-        auditRecordId:
-          type: string
-          format: uuid
-          description: ID of the audit record being corrected
-          example: 00000000-0000-0000-0000-000000000001
-        correctedData:
-          type: object
-          additionalProperties:
-            type: string
-          description: Map of field names to their corrected values
-          example:
-            sku: PROD-001
-            price: '19.99'
-      required:
-      - auditRecordId
-      - correctedData
-    BulkCorrectionRequest:
-      type: object
-      description: Request to submit corrected data records for a failed bulk load job
-      properties:
-        corrections:
-          type: array
-          description: List of correction items, one per audit record to correct
-          items:
-            $ref: '#/components/schemas/BulkCorrectionItem'
-          minItems: 1
-      required:
-      - corrections
-    BulkCorrectionResponse:
-      type: object
-      description: Result of a bulk correction submission
-      properties:
-        jobId:
-          type: string
-          format: uuid
-          description: The bulk load job ID
-          example: 00000000-0000-0000-0000-000000000001
-        submittedCount:
-          type: integer
-          format: int32
-          description: Total number of corrections submitted
-          example: 5
-        acceptedCount:
-          type: integer
-          format: int32
-          description: Number of corrections accepted for processing
-          example: 5
-        rejectedCount:
-          type: integer
-          format: int32
-          description: Number of corrections rejected
-          example: 0
-        rejections:
-          type: array
-          description: Rejection detail messages for each rejected correction, if any
-          example:
-          - Audit record does not belong to this job
-          items:
-            type: string
-      required:
-      - acceptedCount
-      - jobId
-      - rejectedCount
-      - submittedCount
     CorrectionResultDto:
-      type: object
       description: Result of a single correction record submission
       properties:
         auditRecordId:
-          type: string
-          format: uuid
           description: ID of the audit record that was corrected
           example: 00000000-0000-0000-0000-000000000001
-        status:
+          format: uuid
           type: string
+        rejectionReason:
+          description: Reason for rejection if status is REJECTED
+          example: Audit record does not belong to this job
+          type:
+          - string
+          - 'null'
+        status:
           description: Whether the correction was accepted or rejected
           enum:
           - ACCEPTED
           - REJECTED
           example: ACCEPTED
-        rejectionReason:
-          type:
-          - string
-          - 'null'
-          description: Reason for rejection if status is REJECTED
-          example: Audit record does not belong to this job
+          type: string
       required:
       - auditRecordId
       - status
-    Pageable:
       type: object
+    FileUploadResponse:
+      description: Result of uploading a source file for a bulk load job
       properties:
-        page:
-          type: integer
-          format: int32
-          minimum: 0
-        size:
-          type: integer
-          format: int32
-          minimum: 1
-        sort:
-          type: array
-          items:
-            type: string
-    PageBulkLoadJobResponse:
-      type: object
-      properties:
-        totalPages:
-          type: integer
-          format: int32
-        totalElements:
-          type: integer
+        detection:
+          $ref: '#/components/schemas/ContentDetectionResult'
+        fileName:
+          description: Original name of the uploaded file
+          example: products-2026-01.csv
+          type: string
+        jobId:
+          description: Identifier of the bulk load job the file was uploaded for
+          example: 00000000-0000-0000-0000-000000000001
+          format: uuid
+          type: string
+        sizeBytes:
+          description: Size of the uploaded file in bytes
+          example: 204800
           format: int64
-        size:
           type: integer
-          format: int32
+        storagePath:
+          description: Storage path where the uploaded file is persisted
+          example: bulk-loads/00000000-0000-0000-0000-000000000001/products.csv
+          type: string
+      required:
+      - fileName
+      - jobId
+      - sizeBytes
+      - storagePath
+      type: object
+    PageBulkLoadJobResponse:
+      properties:
         content:
-          type: array
           items:
             $ref: '#/components/schemas/BulkLoadJobResponse'
-        number:
-          type: integer
-          format: int32
-        sort:
-          $ref: '#/components/schemas/SortObject'
-        pageable:
-          $ref: '#/components/schemas/PageableObject'
-        numberOfElements:
-          type: integer
-          format: int32
+          type: array
+        empty:
+          type: boolean
         first:
           type: boolean
         last:
           type: boolean
-        empty:
-          type: boolean
-    PageableObject:
+        number:
+          format: int32
+          type: integer
+        numberOfElements:
+          format: int32
+          type: integer
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        size:
+          format: int32
+          type: integer
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        totalElements:
+          format: int64
+          type: integer
+        totalPages:
+          format: int32
+          type: integer
       type: object
+    Pageable:
+      properties:
+        page:
+          format: int32
+          minimum: 0
+          type: integer
+        size:
+          format: int32
+          minimum: 1
+          type: integer
+        sort:
+          items:
+            type: string
+          type: array
+      type: object
+    PageableObject:
       properties:
         offset:
-          type: integer
           format: int64
+          type: integer
+        pageNumber:
+          format: int32
+          type: integer
+        pageSize:
+          format: int32
+          type: integer
         paged:
           type: boolean
-        pageNumber:
-          type: integer
-          format: int32
-        pageSize:
-          type: integer
-          format: int32
         sort:
           $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
-    SortObject:
       type: object
+    ProblemDetail:
+      properties:
+        detail:
+          type: string
+        instance:
+          format: uri
+          type: string
+        properties:
+          type: object
+        status:
+          format: int32
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      type: object
+    SortObject:
       properties:
         empty:
           type: boolean
@@ -1470,65 +1526,9 @@ components:
           type: boolean
         unsorted:
           type: boolean
-    AuditRecordResponse:
       type: object
-      description: Audit record for a single row processed during a bulk load job
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique identifier of the audit record
-          example: 00000000-0000-0000-0000-000000000001
-        jobId:
-          type: string
-          format: uuid
-          description: Identifier of the bulk load job this audit record belongs to
-          example: 00000000-0000-0000-0000-000000000002
-        entityType:
-          type: string
-          description: Type of the target entity for the processed row
-          example: CATALOG_PRODUCT
-        entityId:
-          type: string
-          format: uuid
-          description: Identifier of the entity created or updated from the row, if any
-          example: 00000000-0000-0000-0000-000000000003
-        rowNumber:
-          type: integer
-          format: int64
-          description: One-based row number within the source file
-          example: 42
-        reviewStatus:
-          type: string
-          description: Review status of the audit record
-          enum:
-          - PENDING
-          - APPROVED
-          - REJECTED
-          - CORRECTED
-          example: PENDING
-        reasonCodes:
-          type: string
-          description: Machine-readable reason codes describing why the row needs review
-          example: MISSING_REQUIRED_FIELD,INVALID_PRICE
-        originalValues:
-          type: string
-          description: Serialized original values from the source row
-          example:
-            sku: PROD-001
-            price: ''
-        createdAt:
-          type: string
-          format: date-time
-          description: Timestamp when the audit record was created (ISO 8601)
-          example: 2026-01-15 09:30:00+00:00
-      required:
-      - createdAt
-      - id
-      - jobId
-      - reviewStatus
   securitySchemes:
     bearerAuth:
-      type: http
-      scheme: bearer
       bearerFormat: JWT
+      scheme: bearer
+      type: http

@@ -1,18 +1,18 @@
 openapi: 3.1.0
 info:
-  title: Positivity Inquiry API
-  description: API documentation for the Inquiry service
   contact:
-    name: Durion Support Services
     email: louis.burroughs@gmail.com
+    name: Durion Support Services
+  description: API documentation for the Inquiry service
+  title: Positivity Inquiry API
   version: v1
 servers:
-- url: http://localhost:8086
-  description: Generated server url
+- description: Generated server url
+  url: http://localhost:8086
 paths: {}
 components:
   securitySchemes:
     bearerAuth:
-      type: http
-      scheme: bearer
       bearerFormat: JWT
+      scheme: bearer
+      type: http

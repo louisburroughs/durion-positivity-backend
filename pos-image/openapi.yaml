@@ -1,20 +1,17 @@
 openapi: 3.1.0
 info:
-  title: Image API
   description: API for managing and serving images in the POS system
+  title: Image API
   version: '1.0'
 servers:
-- url: http://localhost:8086
-  description: Generated server url
+- description: Generated server url
+  url: http://localhost:8086
 tags:
-- name: Image API
-  description: Operations related to image retrieval and serving
+- description: Operations related to image retrieval and serving
+  name: Image API
 paths:
   /v1/images:
     post:
-      tags:
-      - Image API
-      summary: Store An Image
       description: 'Stores image bytes and returns a reference to them, or returns the reference already held when the same bytes from the same origin have been stored before.
 
         Use this tool when ingesting artwork that must not depend on a third party to render, such as manufacturer marketing images; do not use it to register an image that already lives somewhere this service can read, because that needs no copy.
@@ -30,95 +27,46 @@ paths:
         '
       operationId: storeImage
       requestBody:
-        description: The image to store, with the origin it was fetched from where there was one.
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/StoreImageRequest'
             examples:
               Manufacturer tread pattern artwork:
                 description: Manufacturer tread pattern artwork
                 value:
-                  filename: primacy-4-tread.jpg
-                  contentType: image/jpeg
                   content: /9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAY=
-                  sourceUri: https://mkcat.example.com/images/9981.jpg
+                  contentType: image/jpeg
                   context:
                   - mkcat
                   - tread-design
+                  filename: primacy-4-tread.jpg
+                  sourceUri: https://mkcat.example.com/images/9981.jpg
+            schema:
+              $ref: '#/components/schemas/StoreImageRequest'
+        description: The image to store, with the origin it was fetched from where there was one.
         required: true
       responses:
         '200':
-          description: The stored image reference.
           content:
             '*/*':
               schema:
                 $ref: '#/components/schemas/StoredImage'
+          description: The stored image reference.
         '400':
-          description: The content was empty, or was not valid base64.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: The content was empty, or was not valid base64.
       security:
       - bearerAuth:
         - image:image:store
+      summary: Store An Image
+      tags:
+      - Image API
       x-required-permissions:
       - image:image:store
-  /v1/images/id/{id}:
-    get:
-      tags:
-      - Image API
-      summary: Get image by ID
-      description: 'Returns the stored image file for a numeric image id as a binary attachment.
-
-        Use this tool when the image''s database id is already known; use getImageByFilename instead when
-
-        only the filename is known.
-
-        Preconditions: the image record must exist and its backing file must still be present on disk.
-
-        Required inputs: id (numeric database id) path parameter; there is no request body and no
-
-        resizing or format options.
-
-        No events are emitted and no state changes; this is a read-only file retrieval.
-
-        Returns 404 when no image record has that id or the backing file is missing from storage.
-
-        '
-      operationId: getImageById
-      parameters:
-      - name: id
-        in: path
-        description: ID of the image to retrieve
-        required: true
-        schema:
-          type: integer
-          format: int64
-        example: 1
-      responses:
-        '200':
-          description: Image file returned successfully.
-          content:
-            '*/*':
-              schema:
-                type: string
-                format: binary
-        '404':
-          description: Image not found.
-          content:
-            '*/*':
-              schema:
-                type: string
-                format: binary
-      x-required-permissions:
-      - AUTHENTICATED
   /v1/images/filename/{filename}:
     get:
-      tags:
-      - Image API
-      summary: Get image by filename
       description: 'Returns the stored image file matching a filename as a binary attachment.
 
         Use this tool when only the filename is known, such as a reference embedded in catalog data; use
@@ -144,140 +92,192 @@ paths:
         '
       operationId: getImageByFilename
       parameters:
-      - name: filename
+      - description: Filename of the image to retrieve
+        example: logo.png
         in: path
-        description: Filename of the image to retrieve
+        name: filename
         required: true
         schema:
           type: string
-        example: logo.png
       responses:
         '200':
+          content:
+            '*/*':
+              schema:
+                format: binary
+                type: string
           description: Image file returned successfully.
-          content:
-            '*/*':
-              schema:
-                type: string
-                format: binary
         '404':
-          description: Image not found.
           content:
             '*/*':
               schema:
-                type: string
                 format: binary
+                type: string
+          description: Image not found.
+      summary: Get image by filename
+      tags:
+      - Image API
+      x-required-permissions:
+      - AUTHENTICATED
+  /v1/images/id/{id}:
+    get:
+      description: 'Returns the stored image file for a numeric image id as a binary attachment.
+
+        Use this tool when the image''s database id is already known; use getImageByFilename instead when
+
+        only the filename is known.
+
+        Preconditions: the image record must exist and its backing file must still be present on disk.
+
+        Required inputs: id (numeric database id) path parameter; there is no request body and no
+
+        resizing or format options.
+
+        No events are emitted and no state changes; this is a read-only file retrieval.
+
+        Returns 404 when no image record has that id or the backing file is missing from storage.
+
+        '
+      operationId: getImageById
+      parameters:
+      - description: ID of the image to retrieve
+        example: 1
+        in: path
+        name: id
+        required: true
+        schema:
+          format: int64
+          type: integer
+      responses:
+        '200':
+          content:
+            '*/*':
+              schema:
+                format: binary
+                type: string
+          description: Image file returned successfully.
+        '404':
+          content:
+            '*/*':
+              schema:
+                format: binary
+                type: string
+          description: Image not found.
+      summary: Get image by ID
+      tags:
+      - Image API
       x-required-permissions:
       - AUTHENTICATED
 components:
   schemas:
-    StoreImageRequest:
-      type: object
-      description: Image bytes to store, base64-encoded, with optional provenance
-      properties:
-        filename:
-          type: string
-          description: Name to store the image under
-          example: primacy-4-tread.jpg
-          minLength: 1
-        contentType:
-          type: string
-          description: MIME type of the bytes
-          example: image/jpeg
-          minLength: 1
-        content:
-          type: string
-          description: The image bytes, base64-encoded
-        sourceUri:
-          type: string
-          description: Where the bytes were fetched from. Kept as provenance for audit and reconciliation, never used as a render source
-        context:
-          type: array
-          description: Tags this image should carry
-          items:
-            type: string
-      required:
-      - content
-      - contentType
-      - filename
     ApiError:
-      type: object
       description: Standard error response envelope returned by all Durion backend APIs
       properties:
         code:
-          type: string
           description: Machine-readable error code
           example: ORDER_NOT_FOUND
-        message:
           type: string
-          description: Human-readable error message
-          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
-        status:
-          type: integer
-          format: int32
-          description: HTTP status code
-          example: 404
-        timestamp:
-          type: string
-          description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
         correlationId:
-          type: string
           description: Unique correlation ID for distributed request tracing
           example: 550e8400-e29b-41d4-a716-446655440000
+          type: string
         fieldErrors:
-          type: array
           description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
           items:
             $ref: '#/components/schemas/FieldError'
-        referenceId:
+          type: array
+        message:
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
           type: string
-          description: Workflow or review-case reference identifier, when applicable
-          example: REVIEW-2026-000123
         nextAction:
-          type: string
           description: Recommended next step for the caller, when applicable
           example: Retry the request with a valid quantity
-        supportAction:
           type: string
+        referenceId:
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+          type: string
+        status:
+          description: HTTP status code
+          example: 404
+          format: int32
+          type: integer
+        supportAction:
           description: Support or admin investigation guidance, when applicable
           example: Contact support with the correlation ID for assistance
+          type: string
+        timestamp:
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+          type: string
       required:
       - code
       - correlationId
       - message
       - status
       - timestamp
-    FieldError:
       type: object
+    FieldError:
       description: Validation error for a specific request field
       properties:
         field:
-          type: string
           description: Field name
           example: quantity
-        message:
           type: string
+        message:
           description: Validation failure message
           example: must be greater than 0
+          type: string
       required:
       - field
       - message
-    StoredImage:
       type: object
+    StoreImageRequest:
+      description: Image bytes to store, base64-encoded, with optional provenance
       properties:
-        imageId:
-          type: integer
-          format: int64
+        content:
+          description: The image bytes, base64-encoded
+          type: string
+        contentType:
+          description: MIME type of the bytes
+          example: image/jpeg
+          minLength: 1
+          type: string
+        context:
+          description: Tags this image should carry
+          items:
+            type: string
+          type: array
         filename:
+          description: Name to store the image under
+          example: primacy-4-tread.jpg
+          minLength: 1
+          type: string
+        sourceUri:
+          description: Where the bytes were fetched from. Kept as provenance for audit and reconciliation, never used as a render source
+          type: string
+      required:
+      - content
+      - contentType
+      - filename
+      type: object
+    StoredImage:
+      properties:
+        byteSize:
+          format: int64
+          type: integer
+        contentHash:
           type: string
         contentType:
           type: string
-        byteSize:
-          type: integer
+        filename:
+          type: string
+        imageId:
           format: int64
-        contentHash:
-          type: string
-        sourceUri:
-          type: string
+          type: integer
         newlyStored:
           type: boolean
+        sourceUri:
+          type: string
+      type: object

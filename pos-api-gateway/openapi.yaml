@@ -1,6 +1,8 @@
 openapi: 3.1.0
 info:
-  title: Positivity API Gateway
+  contact:
+    email: louis.burroughs@gmail.com
+    name: Durion Support Services
   description: 'Unified API Gateway for all POS microservices.
 
 
@@ -45,28 +47,26 @@ info:
 
 
     **Example**: `curl -H "X-API-Version: 1" http://localhost:8080/inventory/items`'
-  contact:
-    name: Durion Support Services
-    email: louis.burroughs@gmail.com
+  title: Positivity API Gateway
   version: 1.0.0
 servers:
-- url: http://localhost:8080
-  description: API Gateway - All services routed through this endpoint
+- description: API Gateway - All services routed through this endpoint
+  url: http://localhost:8080
 paths: {}
 components:
   parameters:
     X-API-Version:
-      name: X-API-Version
-      in: header
       description: API version number (required)
+      in: header
+      name: X-API-Version
       required: true
       schema:
-        type: string
         default: '1'
         example: '1'
+        type: string
       x-purpose: Documented for gateway header routing; no local $ref expected
   securitySchemes:
     bearerAuth:
-      type: http
-      scheme: bearer
       bearerFormat: JWT
+      scheme: bearer
+      type: http
