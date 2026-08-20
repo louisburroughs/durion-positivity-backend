@@ -53,6 +53,20 @@ flag per part line (resolved order-spec Q6 — set at settlement time, never inf
 with approval status) on every estimate mutation, feeding pos-order's source-document import
 replicas. Both are gated by `workorder.kafka.enabled`.
 
+## Part quantity divisibility (ADR-0055)
+
+A part quantity must be a whole number unless the product it references declares otherwise. The
+declaration is `product_uom.precision_scale` on the product's `BASE` row, owned by `pos-catalog`
+and replicated here as `ext_product_uom` from `catalog.product.updated` facts (ADR-0044 §6). Scale
+`0` — and equally, a product with no unit-of-measure rows, which is every product until seeding
+lands — means whole units; a non-zero scale permits that many decimal places.
+
+Enforced at estimate-item creation and update, at estimate-to-workorder promotion, and again on the
+issue, consume, return and quantity-correction paths. Parts carrying no `productEntityId` (labour,
+shop supplies, non-stocked consumables) are exempt and stay fractional. A violation returns HTTP
+422 with `code: FRACTIONAL_QUANTITY_NOT_ALLOWED`, a `quantity` field error, and a `nextAction`
+naming the quantity to enter instead.
+
 ## Configuration
 
 | Property                       | Default                    | Description                      |
@@ -65,6 +79,8 @@ replicas. Both are gated by `workorder.kafka.enabled`.
 | `pos.location.base-url`        | `http://pos-location:8080` | Location service URL             |
 | `workorder.kafka.enabled`      | `false`                    | Enable Kafka event emission      |
 | `workorder.kafka.events-topic` | `workorder.events.v1`      | Kafka topic for workorder events |
+| `workorder.kafka.catalog-events-topic` | `catalog.events.v1` | Catalog fact topic feeding the `ext_product_uom` replica |
+| `workorder.kafka.catalog-events-consumer-group` | `pos-workorder-catalog-events` | Consumer group for the catalog fact topic |
 
 ## Dependencies
 

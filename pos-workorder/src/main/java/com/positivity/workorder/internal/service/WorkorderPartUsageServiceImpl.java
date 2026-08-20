@@ -15,7 +15,6 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.service.IdempotencyService;
 import com.positivity.workorder.service.WorkorderPartUsageService;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -64,6 +63,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
     private final IdempotencyService idempotencyService;
     private final WorkorderFactPublisher workorderFactPublisher;
     private final PartAvailabilityService partAvailabilityService;
+    private final PartQuantityDivisibilityService partQuantityDivisibilityService;
     private final WorkorderStateMachine workorderStateMachine;
 
     /**
@@ -80,6 +80,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             IdempotencyService idempotencyService,
             WorkorderFactPublisher workorderFactPublisher,
             PartAvailabilityService partAvailabilityService,
+            PartQuantityDivisibilityService partQuantityDivisibilityService,
             WorkorderStateMachine workorderStateMachine,
             ObjectProvider<InventoryCommandPublisher> inventoryCommandPublisher,
             Clock clock) {
@@ -90,6 +91,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         this.idempotencyService = idempotencyService;
         this.workorderFactPublisher = workorderFactPublisher;
         this.partAvailabilityService = partAvailabilityService;
+        this.partQuantityDivisibilityService = partQuantityDivisibilityService;
         this.workorderStateMachine = workorderStateMachine;
         this.inventoryCommandPublisher = inventoryCommandPublisher;
     }
@@ -147,6 +149,7 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
             throw new IllegalStateException("Part " + partLineId + " does not belong to workorder " + workorderId);
         }
 
+        requirePermittedScale(part, quantity);
         requireOwnedStock(workorder, part, quantity);
 
         // Create usage event
@@ -259,19 +262,44 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
     }
 
     /**
-     * Part quantities are {@code numeric(19,4)} and the API accepts down to {@code 0.0001}, but the
-     * reservation command and its outcome fact are both integer-only (ADR-0044, CAP #1315 Phase 1).
-     * Something has to give at that boundary, and rounding <em>up</em> is the only safe direction.
+     * The reservation command and its outcome fact are integer-only (ADR-0044, CAP #1315 Phase 1),
+     * and the quantity reaching here is already integral: the divisibility gate above rejects a
+     * fractional quantity for a product declaring scale 0, and no product declares anything else —
+     * {@code product_uom} is unpopulated platform-wide, so nothing can be divisible yet.
      *
-     * <p>Truncating instead would be silently wrong twice over: issuing {@code 0.5} would ask
-     * pos-inventory to reserve {@code 0}, which its outcome fact rejects outright as non-positive,
-     * so the part would be issued and then never reconciled; and issuing {@code 2.7} would reserve
-     * {@code 2}, leaving stock we have already handed out unaccounted for. Reserving the whole unit
-     * holds slightly more than was issued, which is visible and self-correcting — the reservation
-     * is released when the part is consumed or returned.
+     * <p>So this converts exactly and throws if it cannot. It replaces a {@code RoundingMode.CEILING}
+     * that turned an issue of {@code 0.5} into a reservation of {@code 1}, holding half a unit
+     * against demand nobody asked for. That rounding was the safe <em>direction</em> at a seam that
+     * should not have been crossed silently at all; with the quantity constrained at entry the seam
+     * is gone, and a fraction arriving here now means the gate was bypassed rather than that a
+     * rounding decision is needed.
+     *
+     * <p>Genuinely divisible stock gets a decimal reservation contract in #1414. Until then this
+     * throw is unreachable, and that is what makes it the right shape: it fails loudly if the
+     * premise stops holding instead of quietly reserving the wrong amount.
      */
     private static int reservableQuantity(BigDecimal quantity) {
-        return quantity.setScale(0, RoundingMode.CEILING).intValueExact();
+        try {
+            return quantity.intValueExact();
+        } catch (ArithmeticException e) {
+            throw new IllegalStateException(
+                    "Cannot reserve a fractional quantity " + quantity.toPlainString()
+                            + ": the reservation contract is integer-only and the divisibility gate should have"
+                            + " rejected this quantity at entry",
+                    e);
+        }
+    }
+
+    /**
+     * The issue, consume and return paths are the backstop, not the gate (ADR-0055, #1413). The
+     * real gate is at estimate-item entry and promotion, because a fractional quantity that reaches
+     * {@code workorder_part.quantity} can never be issued down to zero and would hold the job in
+     * AWAITING_PARTS forever. This catches a quantity keyed directly at the counter, and a line
+     * that predates the product's declaration.
+     */
+    private void requirePermittedScale(WorkorderPart part, BigDecimal quantity) {
+        partQuantityDivisibilityService.requirePermittedScale(
+                part.getProductEntityId(), part.getDescription(), quantity);
     }
 
     /**
@@ -323,6 +351,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         if (!workorderId.equals(getWorkorderIdForPart(part))) {
             throw new IllegalStateException("Part " + partLineId + " does not belong to workorder " + workorderId);
         }
+
+        requirePermittedScale(part, quantity);
 
         // Validate consumption does not exceed issued
         BigDecimal newConsumed = part.getQuantityConsumed().add(quantity);
@@ -410,6 +440,8 @@ public class WorkorderPartUsageServiceImpl implements WorkorderPartUsageService 
         if (!workorderId.equals(getWorkorderIdForPart(part))) {
             throw new IllegalStateException("Part " + partLineId + " does not belong to workorder " + workorderId);
         }
+
+        requirePermittedScale(part, quantity);
 
         // Validate return does not exceed available (issued - consumed - already
         // returned)

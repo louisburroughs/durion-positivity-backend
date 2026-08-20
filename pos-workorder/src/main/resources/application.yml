@@ -133,6 +133,10 @@ workorder:
     invoice-manifest-topic: ${WORKORDER_INVOICE_MANIFEST_TOPIC:invoice.manifest.v1}
     invoice-manifest-consumer-group: ${WORKORDER_INVOICE_MANIFEST_CONSUMER_GROUP:pos-workorder-invoice-manifests}
     invoice-commands-topic: ${WORKORDER_INVOICE_COMMANDS_TOPIC:invoice.commands.v1}
+    # Catalog product replica feed (ADR-0044 §6, ADR-0055, #1413): the per-product base
+    # unit-of-measure precision scale that decides whether a part quantity may carry decimals.
+    catalog-events-topic: ${WORKORDER_CATALOG_EVENTS_TOPIC:catalog.events.v1}
+    catalog-events-consumer-group: ${WORKORDER_CATALOG_EVENTS_CONSUMER_GROUP:pos-workorder-catalog-events}
     # Order settlement finalize-back feed (odoo-parity E3, #1084): completing a workorder-linked
     # order transitions the workorder to COMPLETED via its own state machine.
     order-events-topic: ${WORKORDER_ORDER_EVENTS_TOPIC:order.events.v1}

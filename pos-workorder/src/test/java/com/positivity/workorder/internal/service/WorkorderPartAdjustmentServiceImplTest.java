@@ -83,6 +83,7 @@ class WorkorderPartAdjustmentServiceImplTest {
                 adjustmentEventRepository,
                 idempotencyService,
                 workorderFactPublisher,
+                org.mockito.Mockito.mock(PartQuantityDivisibilityService.class),
                 Clock.fixed(NOW, ZoneOffset.UTC));
 
         UsernamePasswordAuthenticationToken token =

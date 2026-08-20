@@ -4,6 +4,7 @@ import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException;
 import com.positivity.workorder.internal.exception.DuplicateSubstituteLinkException;
+import com.positivity.workorder.internal.exception.FractionalQuantityNotAllowedException;
 import com.positivity.workorder.internal.exception.InsufficientPartAvailabilityException;
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
 import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
@@ -65,6 +66,36 @@ public class GlobalExceptionHandler {
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
         return new ResponseEntity<>(body, headers, HttpStatus.CONFLICT);
+    }
+
+    /**
+     * A quantity the referenced product's catalog declaration does not permit (ADR-0055, #1413).
+     *
+     * <p>422 rather than 400: the payload is well-formed and the field is within its declared
+     * bounds. What it violates is a rule about the product it names, which nothing but a product
+     * lookup could have known — the same reason the check cannot live in bean validation.
+     *
+     * <p>Carries both a {@code fieldErrors} entry, so a form can mark the quantity box, and a
+     * {@code nextAction}, so the counter is told what to enter instead of hitting a dead end
+     * (docs/ERROR_ENVELOPE.md).
+     */
+    @ExceptionHandler(FractionalQuantityNotAllowedException.class)
+    public ResponseEntity<ApiError> handleFractionalQuantityNotAllowed(
+            FractionalQuantityNotAllowedException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        ApiError body = new ApiError(
+                "FRACTIONAL_QUANTITY_NOT_ALLOWED",
+                ex.getMessage(),
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                List.of(new ApiError.FieldError(FractionalQuantityNotAllowedException.FIELD, ex.getMessage())),
+                null,
+                ex.getNextAction(),
+                null);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(body, headers, HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
     @ExceptionHandler(IllegalStateException.class)

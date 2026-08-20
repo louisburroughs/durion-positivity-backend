@@ -61,18 +61,21 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
     private final WorkorderPartAdjustmentEventRepository adjustmentEventRepository;
     private final IdempotencyService idempotencyService;
     private final WorkorderFactPublisher workorderFactPublisher;
+    private final PartQuantityDivisibilityService partQuantityDivisibilityService;
 
     public WorkorderPartAdjustmentServiceImpl(
             WorkorderPartRepository workorderPartRepository,
             WorkorderPartAdjustmentEventRepository adjustmentEventRepository,
             IdempotencyService idempotencyService,
             WorkorderFactPublisher workorderFactPublisher,
+            PartQuantityDivisibilityService partQuantityDivisibilityService,
             Clock clock) {
         this.clock = clock;
         this.workorderPartRepository = workorderPartRepository;
         this.adjustmentEventRepository = adjustmentEventRepository;
         this.idempotencyService = idempotencyService;
         this.workorderFactPublisher = workorderFactPublisher;
+        this.partQuantityDivisibilityService = partQuantityDivisibilityService;
     }
 
     /**
@@ -362,6 +365,11 @@ public class WorkorderPartAdjustmentServiceImpl implements WorkorderPartAdjustme
         if (!workorderId.equals(getWorkorderIdForPart(part))) {
             throw new IllegalStateException("Part " + partId + " does not belong to workorder " + workorderId);
         }
+
+        // A correction rewrites the authorized quantity outright, so it is the one path that can
+        // reintroduce a fraction onto a line that was promoted clean (ADR-0055, #1413).
+        partQuantityDivisibilityService.requirePermittedScale(
+                part.getProductEntityId(), part.getDescription(), newQuantity);
 
         // Calculate adjustment
         BigDecimal oldQuantity = part.getQuantity();

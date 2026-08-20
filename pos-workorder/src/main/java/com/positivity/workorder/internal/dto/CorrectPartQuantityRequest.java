@@ -4,9 +4,9 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -39,7 +39,7 @@ public class CorrectPartQuantityRequest {
      * New authorized quantity (must be positive).
      */
     @NotNull(message = "New quantity is required")
-    @Positive(message = "New quantity must be positive")
+    @DecimalMin(value = "0.0001", inclusive = true, message = "New quantity must be positive")
     @Schema(description = "Corrected authorized quantity", example = "2", requiredMode = REQUIRED)
     private BigDecimal newQuantity;
 

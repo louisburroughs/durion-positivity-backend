@@ -139,7 +139,8 @@ class EstimateApprovalLifecycleTest {
                 new ObjectMapper(),
                 customerReferenceService,
                 vehicleReferenceService,
-                estimateFactPublisher);
+                estimateFactPublisher,
+                org.mockito.Mockito.mock(PartQuantityDivisibilityService.class));
 
         when(estimateRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(estimateItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));

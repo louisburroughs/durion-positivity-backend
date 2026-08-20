@@ -16,8 +16,10 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderPartUsageEvent;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.FractionalQuantityNotAllowedException;
 import com.positivity.workorder.internal.exception.InsufficientPartAvailabilityException;
 import com.positivity.workorder.internal.repository.ExtInventoryAvailabilityReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtProductUomReplicaRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartUsageEventRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -83,6 +85,9 @@ class PartIssueAvailabilityGateTest {
     private ExtInventoryAvailabilityReplicaRepository availabilityRepository;
 
     @Mock
+    private ExtProductUomReplicaRepository productUomRepository;
+
+    @Mock
     private InventoryCommandPublisher inventoryCommandPublisher;
 
     @SuppressWarnings("unchecked")
@@ -93,6 +98,10 @@ class PartIssueAvailabilityGateTest {
     @BeforeEach
     void setUp() {
         PartAvailabilityService availability = new PartAvailabilityService(availabilityRepository);
+        // No product declares a unit-of-measure scale: product_uom is unpopulated platform-wide,
+        // so every product here resolves to whole units, which is the real-world default.
+        when(productUomRepository.findBasePrecisionScales(any())).thenReturn(List.of());
+        PartQuantityDivisibilityService divisibility = new PartQuantityDivisibilityService(productUomRepository);
         when(publisherProvider.getIfAvailable()).thenReturn(inventoryCommandPublisher);
         service = new WorkorderPartUsageServiceImpl(
                 workorderRepository,
@@ -101,6 +110,7 @@ class PartIssueAvailabilityGateTest {
                 idempotencyService,
                 workorderFactPublisher,
                 availability,
+                divisibility,
                 workorderStateMachine,
                 publisherProvider,
                 Clock.fixed(NOW, ZoneOffset.UTC));
@@ -176,31 +186,24 @@ class PartIssueAvailabilityGateTest {
         }
 
         @Test
-        @DisplayName("rounds a fractional issue up when reserving, never down to zero")
-        void reservesWholeUnitsForFractionalIssue() {
+        @DisplayName("rejects a fractional issue of a product declared in whole units")
+        void rejectsFractionalIssueOfWholeUnitProduct() {
             WorkorderPart part = part(PART_ID, PRODUCT_ID, "4", "0");
             givenWorkorderAndPart(workorder(WorkorderStatus.WORK_IN_PROGRESS), part);
             givenAtp(PRODUCT_ID, 10);
 
-            service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("0.5"), null);
+            // This used to be rounded up into a reservation of 1, holding half a unit against
+            // demand nobody asked for (#1363). The quantity is now refused at the door instead.
+            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("0.5"), null))
+                    .isInstanceOf(FractionalQuantityNotAllowedException.class)
+                    .hasMessageContaining("Brake pad")
+                    .hasMessageContaining("whole units")
+                    .hasMessageContaining("Enter 1");
 
-            // The reservation contract is integer-only. Truncating would ask for 0, which the
-            // outcome fact rejects as non-positive, leaving the issue permanently unreconciled.
-            assertThat(part.getQuantityIssued()).isEqualByComparingTo("0.5");
-            verify(inventoryCommandPublisher).requestReservation(PART_ID, PRODUCT_ID, 1, SHOP_ID);
-        }
-
-        @Test
-        @DisplayName("rounds a fractional issue up rather than under-reserving")
-        void roundsPartialUnitUp() {
-            WorkorderPart part = part(PART_ID, PRODUCT_ID, "4", "0");
-            givenWorkorderAndPart(workorder(WorkorderStatus.WORK_IN_PROGRESS), part);
-            givenAtp(PRODUCT_ID, 10);
-
-            service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("2.7"), null);
-
-            // 2 would leave 0.7 of a unit handed out and unaccounted for.
-            verify(inventoryCommandPublisher).requestReservation(PART_ID, PRODUCT_ID, 3, SHOP_ID);
+            assertThat(part.getQuantityIssued()).isEqualByComparingTo("0");
+            verify(usageEventRepository, never()).save(any());
+            verify(inventoryCommandPublisher, never())
+                    .requestReservation(any(), any(), org.mockito.ArgumentMatchers.anyInt(), any());
         }
 
         @Test
@@ -241,10 +244,29 @@ class PartIssueAvailabilityGateTest {
             givenWorkorderAndPart(workorder(WorkorderStatus.WORK_IN_PROGRESS), part);
 
             // Labour and shop supplies carry no productEntityId; there is no owned stock to
-            // measure, and blocking them would stop jobs on items inventory never tracked.
-            service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("1"), null);
+            // measure and no catalog declaration to read, so neither gate applies and a fractional
+            // quantity stays legitimate. Blocking them would stop jobs on items inventory never
+            // tracked.
+            service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("0.25"), null);
 
-            assertThat(part.getQuantityIssued()).isEqualByComparingTo("1");
+            assertThat(part.getQuantityIssued()).isEqualByComparingTo("0.25");
+            verify(inventoryCommandPublisher, never())
+                    .requestReservation(any(), any(), org.mockito.ArgumentMatchers.anyInt(), any());
+        }
+
+        @Test
+        @DisplayName("passes a divisible product's quantity but cannot reserve it until #1414")
+        void divisibleProductPassesTheGateButCannotReserveYet() {
+            WorkorderPart part = part(PART_ID, PRODUCT_ID, "4", "0");
+            givenWorkorderAndPart(workorder(WorkorderStatus.WORK_IN_PROGRESS), part);
+            givenAtp(PRODUCT_ID, 10);
+            when(productUomRepository.findBasePrecisionScales(PRODUCT_ID)).thenReturn(List.of(2));
+
+            // The divisibility gate passes, but the reservation contract is still integer-only
+            // until #1414 — so the issue fails loudly here rather than reserving a rounded amount.
+            assertThatThrownBy(() -> service.issuePartQuantity(WORKORDER_ID, PART_ID, new BigDecimal("1.01"), null))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Cannot reserve a fractional quantity");
         }
     }
 

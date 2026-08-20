@@ -100,6 +100,7 @@ class WorkorderPartUsageServiceImplTest {
                 idempotencyService,
                 workorderFactPublisher,
                 partAvailabilityService,
+                org.mockito.Mockito.mock(PartQuantityDivisibilityService.class),
                 workorderStateMachine,
                 inventoryCommandPublisher,
                 Clock.fixed(NOW, ZoneOffset.UTC));

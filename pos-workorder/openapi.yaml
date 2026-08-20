@@ -6892,7 +6892,7 @@ components:
           type: number
           description: Corrected authorized quantity
           example: 2
-          minimum: 0
+          minimum: 0.0001
         reason:
           type: string
           description: Audit reason for correction
