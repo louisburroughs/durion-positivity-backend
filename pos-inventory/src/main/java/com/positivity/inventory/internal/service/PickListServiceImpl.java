@@ -14,6 +14,7 @@ import com.positivity.inventory.internal.repository.PickTaskRepository;
 import com.positivity.inventory.service.PickListService;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -30,17 +31,20 @@ public class PickListServiceImpl implements PickListService {
     private final PickTaskRepository pickTaskRepository;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final @Nullable InventoryLotOutboundService lotOutboundService;
+    private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
 
     @Autowired
     public PickListServiceImpl(
             PickListRepository pickListRepository,
             PickTaskRepository pickTaskRepository,
             InventoryFactPublisher inventoryFactPublisher,
-            InventoryLotOutboundService lotOutboundService) {
+            InventoryLotOutboundService lotOutboundService,
+            BaseUnitOfMeasureResolver baseUnitOfMeasureResolver) {
         this.pickListRepository = pickListRepository;
         this.pickTaskRepository = pickTaskRepository;
         this.inventoryFactPublisher = inventoryFactPublisher;
         this.lotOutboundService = lotOutboundService;
+        this.baseUnitOfMeasureResolver = baseUnitOfMeasureResolver;
     }
 
     /**
@@ -52,8 +56,9 @@ public class PickListServiceImpl implements PickListService {
     public PickListServiceImpl(
             PickListRepository pickListRepository,
             PickTaskRepository pickTaskRepository,
-            InventoryFactPublisher inventoryFactPublisher) {
-        this(pickListRepository, pickTaskRepository, inventoryFactPublisher, null);
+            InventoryFactPublisher inventoryFactPublisher,
+            BaseUnitOfMeasureResolver baseUnitOfMeasureResolver) {
+        this(pickListRepository, pickTaskRepository, inventoryFactPublisher, null, baseUnitOfMeasureResolver);
     }
 
     @Override
@@ -184,8 +189,13 @@ public class PickListServiceImpl implements PickListService {
 
     @Override
     public @NonNull List<PickTaskResponse> getPickTasksForPickList(@NonNull UUID pickListId) {
-        return pickTaskRepository.findByPickList_PickListId(pickListId).stream()
-                .map(this::toTaskResponse)
+        List<PickTaskEntity> tasks = pickTaskRepository.findByPickList_PickListId(pickListId);
+        // One batched IN query for the whole list instead of one BaseUnitOfMeasureResolver round
+        // trip per task.
+        Map<UUID, String> uomByProductId = baseUnitOfMeasureResolver.resolveAll(
+                tasks.stream().map(PickTaskEntity::getProductId).toList());
+        return tasks.stream()
+                .map(task -> toTaskResponse(task, uomByProductId.get(task.getProductId())))
                 .toList();
     }
 
@@ -211,7 +221,13 @@ public class PickListServiceImpl implements PickListService {
                 entity.getUpdatedAt());
     }
 
+    /** Single-row path: resolves the unit of measure itself. See {@link #getPickTasksForPickList}
+     * for the batched multi-row form. */
     private PickTaskResponse toTaskResponse(PickTaskEntity entity) {
+        return toTaskResponse(entity, baseUnitOfMeasureResolver.resolve(entity.getProductId()));
+    }
+
+    private PickTaskResponse toTaskResponse(PickTaskEntity entity, @Nullable String unitOfMeasure) {
         return new PickTaskResponse(
                 entity.getPickTaskId(),
                 entity.getPickList() == null ? null : entity.getPickList().getPickListId(),
@@ -222,6 +238,7 @@ public class PickListServiceImpl implements PickListService {
                 entity.getStatus(),
                 entity.getSortOrder(),
                 entity.getSuggestedLotNumber(),
-                entity.getPickedLotId());
+                entity.getPickedLotId(),
+                unitOfMeasure);
     }
 }

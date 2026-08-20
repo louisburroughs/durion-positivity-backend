@@ -70,6 +70,9 @@ class BackorderServiceImplTest {
     @Mock
     private InventoryFactPublisher inventoryFactPublisher;
 
+    @Mock
+    private BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
+
     private final Clock fixedClock = Clock.fixed(Instant.parse("2026-07-23T00:00:00Z"), ZoneOffset.UTC);
 
     private BackorderServiceImpl service;
@@ -83,7 +86,8 @@ class BackorderServiceImplTest {
                 summaryRepository,
                 ledgerPostingService,
                 inventoryFactPublisher,
-                fixedClock);
+                fixedClock,
+                baseUnitOfMeasureResolver);
         lenient().when(backorderRepository.save(any(BackorderRecord.class))).thenAnswer(invocation -> {
             BackorderRecord record = invocation.getArgument(0);
             if (record.getBackorderId() == null) {

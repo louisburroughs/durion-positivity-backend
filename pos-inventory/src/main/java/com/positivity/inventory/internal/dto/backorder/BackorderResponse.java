@@ -39,6 +39,11 @@ public class BackorderResponse {
     @Schema(description = "Quantity that could not be fulfilled (positive)")
     private BigDecimal quantityShort;
 
+    @Schema(
+            description = "The stock item's base unit of measure, when sku resolves to a catalog product with a"
+                    + " declared UoM; null otherwise")
+    private String unitOfMeasure;
+
     @Schema(description = "Lifecycle status: OPEN, RESOLVED, or CANCELLED")
     private BackorderStatus status;
 

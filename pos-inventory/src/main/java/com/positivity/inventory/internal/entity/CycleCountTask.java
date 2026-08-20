@@ -10,6 +10,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -67,11 +68,15 @@ public class CycleCountTask {
     private String itemDescription;
 
     /**
-     * Expected quantity in the bin (system record).
+     * Expected (book) quantity in the bin (system record), in base UoM.
      * This is NOT shown to the auditor during blind count.
+     *
+     * <p>Decimal since ADR-0055 stage 4 (#1416): a bulk product's book quantity is a fraction of
+     * a unit by nature, and an integral column would have rounded it before the first tolerance
+     * comparison ever ran.
      */
-    @Column(name = "expected_quantity", nullable = false)
-    private Integer expectedQuantity;
+    @Column(name = "expected_quantity", nullable = false, precision = 19, scale = 4)
+    private BigDecimal expectedQuantity;
 
     /**
      * ID of the auditor assigned to this task.

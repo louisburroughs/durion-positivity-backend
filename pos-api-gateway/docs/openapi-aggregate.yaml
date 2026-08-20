@@ -567,6 +567,10 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountSchedules
   /v1/inventory/cycleCountSchedules/{scheduleId}:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountSchedules~1{scheduleId}
+  /v1/inventory/cycleCountTolerances:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountTolerances
+  /v1/inventory/cycleCountTolerances/{toleranceId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1cycleCountTolerances~1{toleranceId}
   /v1/inventory/goods-receipts:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1goods-receipts
   /v1/inventory/goods-receipts/{receiptId}:

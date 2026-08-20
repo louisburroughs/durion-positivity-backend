@@ -190,6 +190,7 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                 .description(part.getDescription())
                 .status(part.getStatus())
                 .quantity(part.getQuantity())
+                .unitOfMeasure(part.getUomCode())
                 .quantityIssued(part.getQuantityIssued())
                 .quantityConsumed(part.getQuantityConsumed())
                 .quantityReturned(part.getQuantityReturned())

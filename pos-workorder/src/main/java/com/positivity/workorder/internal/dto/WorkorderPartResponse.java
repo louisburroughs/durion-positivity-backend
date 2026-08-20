@@ -51,6 +51,13 @@ public class WorkorderPartResponse {
     @Schema(description = "Authorized quantity from estimate", example = "2.00", requiredMode = NOT_REQUIRED)
     private BigDecimal quantity;
 
+    @Schema(
+            description = "Unit the line's quantities are expressed in; null means the product's base UoM"
+                    + " (ADR-0055 stage 3)",
+            example = "QT",
+            requiredMode = NOT_REQUIRED)
+    private String unitOfMeasure;
+
     @Schema(description = "Unit price per part", example = "65.00", requiredMode = NOT_REQUIRED)
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private BigDecimal unitPrice;

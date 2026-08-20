@@ -86,6 +86,7 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
     private final LedgerPostingService ledgerPostingService;
     private final InventoryFactPublisher inventoryFactPublisher;
     private final Clock clock;
+    private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
 
     @Override
     public @NonNull BackorderResponse createBackorder(
@@ -407,6 +408,7 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
                 .sku(backorder.getSku())
                 .locationId(backorder.getLocationId())
                 .quantityShort(backorder.getQuantityShort())
+                .unitOfMeasure(baseUnitOfMeasureResolver.resolve(backorder.getSku()))
                 .status(backorder.getStatus())
                 .resolutionSource(backorder.getResolutionSource())
                 .createdBy(backorder.getCreatedBy())

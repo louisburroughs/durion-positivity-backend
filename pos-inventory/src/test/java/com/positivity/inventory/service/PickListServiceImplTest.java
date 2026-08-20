@@ -65,11 +65,15 @@ class PickListServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.InventoryFactPublisher inventoryFactPublisher;
 
+    @Mock
+    private com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
+
     private PickListServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new PickListServiceImpl(pickListRepository, pickTaskRepository, inventoryFactPublisher);
+        service = new PickListServiceImpl(
+                pickListRepository, pickTaskRepository, inventoryFactPublisher, baseUnitOfMeasureResolver);
     }
 
     // ─── SC1: createPickList — valid request → DRAFT status ─────────────────────
@@ -549,5 +553,49 @@ class PickListServiceImplTest {
         // Assert
         assertThat(result.getStatus()).isEqualTo(PickTaskStatus.PICKED);
         assertThat(pickList.getStatus()).isEqualTo(PickListStatus.COMPLETED);
+    }
+
+    // ─── getPickTasksForPickList: unit of measure resolved batched, not per-row ──
+
+    /**
+     * #1418 review: {@code getPickTasksForPickList} must resolve every task's unit of measure
+     * with one batched call, not one {@code BaseUnitOfMeasureResolver.resolve} round trip per
+     * task.
+     */
+    @Test
+    @DisplayName("getPickTasksForPickList resolves units of measure with a single batched call")
+    void getPickTasksForPickList_resolvesUnitsOfMeasureInOneBatchedCall() {
+        UUID pickListId = UUID.fromString("00000000-0000-0000-0000-000000000040");
+        UUID productA = UUID.fromString("00000000-0000-0000-0000-000000000041");
+        UUID productB = UUID.fromString("00000000-0000-0000-0000-000000000042");
+
+        PickTaskEntity taskA = PickTaskEntity.builder()
+                .pickTaskId(UUID.fromString("00000000-0000-0000-0000-000000000043"))
+                .productId(productA)
+                .sku("SKU-A")
+                .quantityRequired(1)
+                .status(PickTaskStatus.PENDING)
+                .sortOrder(0)
+                .build();
+        PickTaskEntity taskB = PickTaskEntity.builder()
+                .pickTaskId(UUID.fromString("00000000-0000-0000-0000-000000000044"))
+                .productId(productB)
+                .sku("SKU-B")
+                .quantityRequired(1)
+                .status(PickTaskStatus.PENDING)
+                .sortOrder(1)
+                .build();
+
+        when(pickTaskRepository.findByPickList_PickListId(pickListId)).thenReturn(List.of(taskA, taskB));
+        when(baseUnitOfMeasureResolver.resolveAll(any())).thenReturn(java.util.Map.of(productA, "EA", productB, "QT"));
+
+        List<PickTaskResponse> result = service.getPickTasksForPickList(pickListId);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getUnitOfMeasure()).isEqualTo("EA");
+        assertThat(result.get(1).getUnitOfMeasure()).isEqualTo("QT");
+        org.mockito.Mockito.verify(baseUnitOfMeasureResolver).resolveAll(any());
+        org.mockito.Mockito.verify(baseUnitOfMeasureResolver, org.mockito.Mockito.never())
+                .resolve(any(UUID.class));
     }
 }

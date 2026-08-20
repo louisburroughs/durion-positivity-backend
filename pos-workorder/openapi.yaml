@@ -9176,6 +9176,10 @@ components:
           - CANCELLED
           example: OPEN
           type: string
+        unitOfMeasure:
+          description: Unit the line's quantities are expressed in; null means the product's base UoM (ADR-0055 stage 3)
+          example: QT
+          type: string
         unitPrice:
           description: Unit price per part
           example: 65.0

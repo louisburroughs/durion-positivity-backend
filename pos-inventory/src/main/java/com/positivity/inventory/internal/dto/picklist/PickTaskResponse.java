@@ -72,6 +72,13 @@ public class PickTaskResponse {
             requiredMode = NOT_REQUIRED)
     private UUID pickedLotId;
 
+    @Schema(
+            description = "The SKU's base unit of measure, when skuId resolves to a catalog product with a"
+                    + " declared UoM; null otherwise",
+            example = "EA",
+            requiredMode = NOT_REQUIRED)
+    private String unitOfMeasure;
+
     /**
      * Pre-E2 arity kept for existing callers/tests: lot fields default to null (odoo-parity
      * E2, issue #1042).
@@ -95,6 +102,32 @@ public class PickTaskResponse {
                 status,
                 sortOrder,
                 null,
+                null);
+    }
+
+    /** Pre-#1416 arity kept for existing callers/tests: unitOfMeasure defaults to null. */
+    public PickTaskResponse(
+            UUID pickTaskId,
+            UUID pickListId,
+            UUID skuId,
+            UUID locationId,
+            int quantityRequired,
+            int quantityPicked,
+            PickTaskStatus status,
+            int sortOrder,
+            String suggestedLotNumber,
+            UUID pickedLotId) {
+        this(
+                pickTaskId,
+                pickListId,
+                skuId,
+                locationId,
+                quantityRequired,
+                quantityPicked,
+                status,
+                sortOrder,
+                suggestedLotNumber,
+                pickedLotId,
                 null);
     }
 }

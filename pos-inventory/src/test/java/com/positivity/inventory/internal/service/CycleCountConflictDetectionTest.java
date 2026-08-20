@@ -100,7 +100,7 @@ class CycleCountConflictDetectionTest {
                 .binLocation(binLocation)
                 .itemSku(sku)
                 .itemDescription("I2 test item")
-                .expectedQuantity(expectedQuantity)
+                .expectedQuantity(BigDecimal.valueOf(expectedQuantity))
                 .auditorId(AUDITOR)
                 .status(TaskStatus.ASSIGNED)
                 .countEntriesCount(0)
@@ -144,10 +144,39 @@ class CycleCountConflictDetectionTest {
         CountResponse response = cycleCountService.submitCount(SubmitCountRequest.builder()
                 .taskId(task.getTaskId())
                 .auditorId(AUDITOR)
-                .actualQuantity(7)
+                .actualQuantity(BigDecimal.valueOf(7))
                 .build());
 
         assertThat(response.getTaskStatus()).isEqualTo(TaskStatus.CONFLICT);
+        assertThat(taskRepository.findById(task.getTaskId()).orElseThrow().getStatus())
+                .isEqualTo(TaskStatus.CONFLICT);
+    }
+
+    @Test
+    @DisplayName("a conflicted count whose raw variance fits tolerance is still not auto-accepted or"
+            + " reported withinTolerance=true")
+    void conflictWithVarianceWithinTolerance_notAutoAcceptedNorReportedWithinTolerance() {
+        String sku = "SKU-I2-" + UUID.randomUUID();
+        UUID location = UUID.randomUUID();
+        post(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("10"), 10);
+        CycleCountTask task = task(location.toString(), sku, 10);
+        tick();
+        post(sku, location, InventoryLedgerEventType.GOODS_ISSUE, new BigDecimal("-3"), 7);
+
+        // Counted exactly the stale expected quantity (10): the raw variance-vs-tolerance
+        // comparison passes (zero variance against the snapshot), but a movement landed in the
+        // window, so nothing here was actually reconciled -- the CONFLICT must win and
+        // withinTolerance must not claim otherwise (CountResponse doc: "true: reconciled, no
+        // adjustment created").
+        CountResponse response = cycleCountService.submitCount(SubmitCountRequest.builder()
+                .taskId(task.getTaskId())
+                .auditorId(AUDITOR)
+                .actualQuantity(BigDecimal.valueOf(10))
+                .build());
+
+        assertThat(response.getTaskStatus()).isEqualTo(TaskStatus.CONFLICT);
+        assertThat(response.getVariance()).isEqualByComparingTo("0");
+        assertThat(response.isWithinTolerance()).isFalse();
         assertThat(taskRepository.findById(task.getTaskId()).orElseThrow().getStatus())
                 .isEqualTo(TaskStatus.CONFLICT);
     }
@@ -163,11 +192,11 @@ class CycleCountConflictDetectionTest {
         CountResponse response = cycleCountService.submitCount(SubmitCountRequest.builder()
                 .taskId(task.getTaskId())
                 .auditorId(AUDITOR)
-                .actualQuantity(8)
+                .actualQuantity(BigDecimal.valueOf(8))
                 .build());
 
         assertThat(response.getTaskStatus()).isEqualTo(TaskStatus.COUNTED_PENDING_REVIEW);
-        assertThat(response.getVariance()).isEqualTo(-2);
+        assertThat(response.getVariance()).isEqualByComparingTo("-2");
     }
 
     @Test
@@ -183,7 +212,7 @@ class CycleCountConflictDetectionTest {
         cycleCountService.submitCount(SubmitCountRequest.builder()
                 .taskId(task.getTaskId())
                 .auditorId(AUDITOR)
-                .actualQuantity(7)
+                .actualQuantity(BigDecimal.valueOf(7))
                 .build());
         assertThat(taskRepository.findById(task.getTaskId()).orElseThrow().getStatus())
                 .isEqualTo(TaskStatus.CONFLICT);
@@ -191,7 +220,7 @@ class CycleCountConflictDetectionTest {
         CountResponse recount = cycleCountService.submitRecount(SubmitRecountRequest.builder()
                 .taskId(task.getTaskId())
                 .auditorId(AUDITOR)
-                .actualQuantity(7)
+                .actualQuantity(BigDecimal.valueOf(7))
                 .permission("TRIGGER_RECOUNT_SELF")
                 .build());
 
@@ -217,7 +246,7 @@ class CycleCountConflictDetectionTest {
         CountResponse count = cycleCountService.submitCount(SubmitCountRequest.builder()
                 .taskId(task.getTaskId())
                 .auditorId(AUDITOR)
-                .actualQuantity(5)
+                .actualQuantity(BigDecimal.valueOf(5))
                 .build());
         assertThat(count.getTaskStatus()).isEqualTo(TaskStatus.CONFLICT);
 
@@ -263,7 +292,7 @@ class CycleCountConflictDetectionTest {
         CountResponse count = cycleCountService.submitCount(SubmitCountRequest.builder()
                 .taskId(task.getTaskId())
                 .auditorId(AUDITOR)
-                .actualQuantity(8)
+                .actualQuantity(BigDecimal.valueOf(8))
                 .build());
         assertThat(count.getTaskStatus()).isEqualTo(TaskStatus.COUNTED_PENDING_REVIEW);
 

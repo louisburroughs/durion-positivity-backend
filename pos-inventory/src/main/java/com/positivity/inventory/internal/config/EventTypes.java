@@ -125,6 +125,20 @@ public final class EventTypes {
                                 "Deactivate a recurring cycle count schedule")
                         .build(),
 
+                // CycleCountToleranceController - 3 events (ADR-0055 stage 4, #1416)
+                EventTypeRegistration.write(
+                                "INVENTORY_CYCLE_COUNT_TOLERANCE_CREATE",
+                                "Create a cycle count tolerance configuration")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_CYCLE_COUNT_TOLERANCE_UPDATE",
+                                "Update a cycle count tolerance configuration")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_CYCLE_COUNT_TOLERANCE_DELETE",
+                                "Delete a cycle count tolerance configuration")
+                        .build(),
+
                 // InventoryAvailabilityController - 2 events
                 EventTypeRegistration.write(
                                 "INVENTORY_AVAILABILITY_UPDATE", "Update inventory availability for a product")

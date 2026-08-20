@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.ExtProductUomReplica;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -14,6 +15,10 @@ public interface ExtProductUomReplicaRepository extends JpaRepository<ExtProduct
 
     @NonNull
     List<ExtProductUomReplica> findByProductId(@NonNull UUID productId);
+
+    /** Batch read for {@code BaseUnitOfMeasureResolver.resolveAll} — one {@code IN} query for a page of rows. */
+    @NonNull
+    List<ExtProductUomReplica> findByProductIdIn(@NonNull Collection<UUID> productIds);
 
     @Modifying
     void deleteByProductId(@NonNull UUID productId);

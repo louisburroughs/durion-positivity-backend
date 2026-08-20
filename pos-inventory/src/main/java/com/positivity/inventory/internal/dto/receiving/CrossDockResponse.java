@@ -45,6 +45,13 @@ public class CrossDockResponse {
     private BigDecimal crossDockedQuantity;
 
     @Schema(
+            description = "UoM crossDockedQuantity was keyed in when it differed from the product's base UoM; null"
+                    + " means the product's base UoM",
+            example = "CASE",
+            requiredMode = NOT_REQUIRED)
+    private String unitOfMeasure;
+
+    @Schema(
             description = "Identifiers of the inventory ledger entries created by the cross-dock",
             example = "[\"01960003-0000-7000-8000-000000000004\"]",
             requiredMode = NOT_REQUIRED)

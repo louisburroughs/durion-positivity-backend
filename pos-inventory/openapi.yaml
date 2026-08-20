@@ -78,6 +78,8 @@ tags:
   name: Cycle Count Adjustments
 - description: Costing method configuration endpoints (odoo-parity J1)
   name: Valuation Methods
+- description: Configure product/location tolerance bounds for cycle-count reconciliation
+  name: Cycle Count Tolerances
 - description: Receiving session creation, item receiving, and cross-dock execution endpoints
   name: Receiving
 - description: Serial unit master records enumerated on inbound receipts for SERIAL-tracked SKUs
@@ -2285,6 +2287,240 @@ paths:
       - Cycle Count Schedules
       x-required-permissions:
       - inventory:cycle_count:initiate
+  /v1/inventory/cycleCountTolerances:
+    get:
+      description: 'Returns every tolerance configuration, active and inactive, newest first.
+
+        Use this tool to browse or audit configured tolerances; use getCycleCountTolerance instead when the toleranceId is already known.
+
+        Preconditions: none.
+
+        Required inputs: none; there is no paging or filtering.
+
+        No events are emitted; this is a read-only projection.
+
+        Returns 200 with an empty array when none are configured.
+
+        '
+      operationId: listCycleCountTolerances
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/CycleCountToleranceResponse'
+                type: array
+          description: Tolerances retrieved
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:view
+      summary: List all cycle-count tolerance configurations
+      tags:
+      - Cycle Count Tolerances
+      x-required-permissions:
+      - inventory:cycle_count:view
+    post:
+      description: 'Creates a tolerance configuration scoped by product, storage location, both, or neither (the global default), as an absolute quantity bound, a percentage bound, or both.
+
+        Use this tool to configure how much variance a bulk product or location may show before a cycle count is flagged for investigation; do not use this for approval thresholds, which are a separate configuration governing who must sign off on an adjustment once one is created.
+
+        Preconditions: no other active tolerance may already occupy the exact same scope.
+
+        Required inputs: createdBy; productId, storageLocation, absoluteTolerance and percentageTolerance are all optional.
+
+        Emits an INVENTORY_CYCLE_COUNT_TOLERANCE_CREATE event.
+
+        Returns 400 when an active tolerance already exists for this scope.
+
+        '
+      operationId: createCycleCountTolerance
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Product+location tolerance:
+                description: Product+location tolerance
+                value:
+                  absoluteTolerance: 50
+                  createdBy: user-10042
+                  percentageTolerance: 1.5
+                  productId: 01960003-0000-7000-8000-000000000001
+                  storageLocation: TANK-04
+            schema:
+              $ref: '#/components/schemas/CreateCycleCountToleranceRequest'
+        description: Tolerance scope (product, storage location, or both) and its absolute and/or percentage bounds.
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountToleranceResponse'
+          description: Tolerance created
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountToleranceResponse'
+          description: Invalid request or scope already configured
+      security:
+      - bearerAuth:
+        - inventory:cycle_count_tolerance:manage
+      summary: Create a cycle-count tolerance configuration
+      tags:
+      - Cycle Count Tolerances
+      x-required-permissions:
+      - inventory:cycle_count_tolerance:manage
+  /v1/inventory/cycleCountTolerances/{toleranceId}:
+    delete:
+      description: 'Permanently removes a tolerance configuration.
+
+        Use this tool to retire a tolerance no longer wanted; do not use updateCycleCountTolerance with active=false instead unless the row should be kept around for its audit trail — delete removes it outright.
+
+        Preconditions: the tolerance must exist.
+
+        Required inputs: toleranceId (UUID) path parameter; there is no request body.
+
+        Emits an INVENTORY_CYCLE_COUNT_TOLERANCE_DELETE event.
+
+        Returns 404 when no tolerance exists for the supplied id.
+
+        '
+      operationId: deleteCycleCountTolerance
+      parameters:
+      - description: Tolerance ID
+        in: path
+        name: toleranceId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: Tolerance deleted
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Tolerance not found
+      security:
+      - bearerAuth:
+        - inventory:cycle_count_tolerance:manage
+      summary: Delete a cycle-count tolerance configuration
+      tags:
+      - Cycle Count Tolerances
+      x-required-permissions:
+      - inventory:cycle_count_tolerance:manage
+    get:
+      description: 'Returns one tolerance configuration by id.
+
+        Use this tool when the toleranceId is already known; use listCycleCountTolerances instead to browse all configured tolerances.
+
+        Preconditions: the tolerance must exist.
+
+        Required inputs: toleranceId (UUID) path parameter; there is no request body.
+
+        No events are emitted; this is a read-only projection.
+
+        Returns 404 when no tolerance exists for the supplied id.
+
+        '
+      operationId: getCycleCountTolerance
+      parameters:
+      - description: Tolerance ID
+        in: path
+        name: toleranceId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountToleranceResponse'
+          description: Tolerance found
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Tolerance not found
+      security:
+      - bearerAuth:
+        - inventory:cycle_count:view
+      summary: Get a cycle-count tolerance configuration
+      tags:
+      - Cycle Count Tolerances
+      x-required-permissions:
+      - inventory:cycle_count:view
+    put:
+      description: 'Replaces a tolerance configuration''s absolute bound, percentage bound, and active flag; the scope (productId, storageLocation) is immutable — recreate the row to change scope.
+
+        Use this tool to widen, tighten, or deactivate an existing tolerance; do not use this to change scope — create a new tolerance for the new scope instead.
+
+        Preconditions: the tolerance must exist; reactivating (active=false -> true) requires no other active row already occupy the same scope.
+
+        Required inputs: toleranceId (UUID) path parameter, active (boolean); absoluteTolerance and percentageTolerance are set verbatim from the request, null included (PUT semantics).
+
+        Emits an INVENTORY_CYCLE_COUNT_TOLERANCE_UPDATE event.
+
+        Returns 404 when no tolerance exists for the id, 400 when reactivation would collide with an already-active row at the same scope.
+
+        '
+      operationId: updateCycleCountTolerance
+      parameters:
+      - description: Tolerance ID
+        in: path
+        name: toleranceId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Widen the absolute bound:
+                description: Widen the absolute bound
+                value:
+                  absoluteTolerance: 75
+                  active: true
+                  percentageTolerance: 2.0
+            schema:
+              $ref: '#/components/schemas/UpdateCycleCountToleranceRequest'
+        description: Replacement absolute/percentage bounds and active flag, applied verbatim (PUT semantics).
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountToleranceResponse'
+          description: Tolerance updated
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleCountToleranceResponse'
+          description: Reactivation would collide with an existing active scope
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Tolerance not found
+      security:
+      - bearerAuth:
+        - inventory:cycle_count_tolerance:manage
+      summary: Replace a cycle-count tolerance's bounds and active state
+      tags:
+      - Cycle Count Tolerances
+      x-required-permissions:
+      - inventory:cycle_count_tolerance:manage
   /v1/inventory/goods-receipts:
     post:
       description: 'Records a goods receipt against a purchase order, posting GOODS_RECEIPT ledger entries that increase on-hand stock at the receiving location.
@@ -7836,6 +8072,10 @@ components:
           example: 01960003-0000-7000-8000-000000000009
           format: uuid
           type: string
+        unitOfMeasure:
+          description: The stock item's base unit of measure, when stockItemId resolves to a catalog product with a declared UoM; null otherwise
+          example: GAL
+          type: string
         updatedAt:
           description: Timestamp when the adjustment was last updated
           example: 2026-01-15 10:05:00+00:00
@@ -8137,6 +8377,9 @@ components:
           - OPEN
           - RESOLVED
           - CANCELLED
+          type: string
+        unitOfMeasure:
+          description: The stock item's base unit of measure, when sku resolves to a catalog product with a declared UoM; null otherwise
           type: string
         updatedAt:
           description: When the backorder was last updated
@@ -8476,10 +8719,17 @@ components:
       description: A single recorded count entry in a cycle count task's history
       properties:
         actualQuantity:
-          description: Quantity physically counted by the auditor
+          description: Quantity counted, converted to the product's base UoM — what expectedQuantity and variance are computed against
           example: 12
-          format: int32
-          type: integer
+          type: number
+        allowedToleranceAbsolute:
+          description: Resolved absolute-tolerance bound at count time, if configured for this product/location
+          example: 50
+          type: number
+        allowedTolerancePercentage:
+          description: Resolved percentage-tolerance bound at count time, if configured for this product/location
+          example: 1.5
+          type: number
         auditorId:
           description: Identifier of the auditor who recorded the count
           example: auditor-10042
@@ -8490,7 +8740,7 @@ components:
           format: uuid
           type: string
         countedAt:
-          description: Timestamp when the count was recorded
+          description: Measurement timestamp — when the count was physically taken and recorded
           example: 2026-01-15 09:30:00+00:00
           format: date-time
           type: string
@@ -8500,10 +8750,24 @@ components:
           format: uuid
           type: string
         expectedQuantity:
-          description: Quantity expected on hand at the time of the count
+          description: Book (expected) quantity at the time of the count, in base UoM
           example: 15
-          format: int32
-          type: integer
+          type: number
+        measuredQuantity:
+          description: Quantity exactly as measured, in unitOfMeasure. Equal to actualQuantity when unitOfMeasure is null.
+          example: 12
+          type: number
+        measurementMethod:
+          description: How the quantity was obtained
+          enum:
+          - MANUAL_COUNT
+          - DIP
+          - GAUGE
+          - SCALE
+          - METER
+          - SENSOR
+          example: MANUAL_COUNT
+          type: string
         recount:
           description: Whether this entry is a recount of a prior count
           example: false
@@ -8518,11 +8782,26 @@ components:
           example: 1
           format: int32
           type: integer
+        unitOfMeasure:
+          description: Unit the count was physically measured in; null means the product's base UoM
+          example: GAL
+          type: string
         variance:
-          description: Difference between counted and expected quantity (actual minus expected)
+          description: Difference between counted and expected quantity, in base UoM (actual minus expected)
           example: -3
-          format: int32
-          type: integer
+          type: number
+        variancePercentage:
+          description: Absolute variance as a percentage of book quantity; 100 when book quantity is zero
+          example: 20.0
+          type: number
+        varianceReason:
+          description: Reason for the variance, when known. Optional even for an out-of-tolerance count — the eventual adjustment's own reason code is what gates posting.
+          example: Evaporation since last count
+          type: string
+        withinTolerance:
+          description: 'Whether the variance fell within the resolved tolerance. true: reconciled, no adjustment created. false: flagged for investigation and review before an adjustment may be posted.'
+          example: true
+          type: boolean
       required:
       - actualQuantity
       - auditorId
@@ -8530,18 +8809,21 @@ components:
       - countedAt
       - cycleCountTaskId
       - expectedQuantity
+      - measuredQuantity
+      - measurementMethod
       - recount
       - recountSequenceNumber
       - variance
+      - variancePercentage
+      - withinTolerance
       type: object
     CountResponse:
       description: Result of submitting a count or recount for a cycle count task
       properties:
         actualQuantity:
-          description: Quantity physically counted by the auditor
+          description: Quantity counted, converted to the product's base UoM
           example: 12
-          format: int32
-          type: integer
+          type: number
         countEntryId:
           description: Unique identifier of the recorded count entry
           example: 01960003-0000-7000-8000-000000000001
@@ -8553,10 +8835,9 @@ components:
           format: date-time
           type: string
         expectedQuantity:
-          description: Quantity expected on hand at the time of the count
+          description: Book (expected) quantity at the time of the count, in base UoM
           example: 15
-          format: int32
-          type: integer
+          type: number
         limitExceeded:
           description: Whether the maximum allowed number of recounts has been exceeded
           example: false
@@ -8582,15 +8863,19 @@ components:
           - COUNTED_PENDING_REVIEW
           - CONFLICT
           - REQUIRES_INVESTIGATION
+          - ACCEPTED_WITHIN_TOLERANCE
           - APPROVED
           - REJECTED
           example: COUNTED_PENDING_REVIEW
           type: string
         variance:
-          description: Difference between counted and expected quantity (actual minus expected)
+          description: Difference between counted and expected quantity, in base UoM (actual minus expected)
           example: -3
-          format: int32
-          type: integer
+          type: number
+        withinTolerance:
+          description: Whether the variance fell within the resolved tolerance; true means the count was reconciled with no adjustment created
+          example: true
+          type: boolean
       required:
       - actualQuantity
       - countEntryId
@@ -8601,6 +8886,7 @@ components:
       - taskId
       - taskStatus
       - variance
+      - withinTolerance
       type: object
     CreateAdjustmentRequest:
       description: Request to create a new inventory adjustment from a cycle count variance
@@ -8841,6 +9127,36 @@ components:
       - frequencyDays
       - locationId
       - nextDueDate
+      type: object
+    CreateCycleCountToleranceRequest:
+      description: Request to create a tolerance configuration for cycle-count reconciliation
+      properties:
+        absoluteTolerance:
+          description: Maximum acceptable absolute variance, in the product's base UoM
+          example: 50
+          minimum: 0
+          type: number
+        createdBy:
+          description: Identifier of the user creating this configuration
+          example: user-10042
+          minLength: 1
+          type: string
+        percentageTolerance:
+          description: Maximum acceptable variance as a percentage of book quantity (e.g. 1.5 = 1.5%)
+          example: 1.5
+          minimum: 0
+          type: number
+        productId:
+          description: Catalog product this tolerance scopes to. Omit for a product-agnostic (location-only or global) row.
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        storageLocation:
+          description: Storage location this tolerance scopes to, matching the value cycle-count tasks carry as binLocation. Omit for a location-agnostic (product-only or global) row.
+          example: TANK-04
+          type: string
+      required:
+      - createdBy
       type: object
     CreateGoodsReceiptLineRequest:
       description: Request payload describing a single received line item when recording a goods receipt against a purchase order
@@ -9244,6 +9560,10 @@ components:
           description: Status of the receiving session after the cross-dock
           example: COMPLETED
           type: string
+        unitOfMeasure:
+          description: UoM crossDockedQuantity was keyed in when it differed from the product's base UoM; null means the product's base UoM
+          example: CASE
+          type: string
         workorderId:
           description: Identifier of the workorder the stock was cross-docked to
           example: 01960003-0000-7000-8000-000000000002
@@ -9415,10 +9735,9 @@ components:
           format: date-time
           type: string
         expectedQuantity:
-          description: Quantity expected on hand for the item
+          description: Quantity expected on hand for the item, in base UoM
           example: 15
-          format: int32
-          type: integer
+          type: number
         itemDescription:
           description: Human-readable description of the item
           example: Stainless steel water bottle, 750ml
@@ -9439,6 +9758,7 @@ components:
           - COUNTED_PENDING_REVIEW
           - CONFLICT
           - REQUIRES_INVESTIGATION
+          - ACCEPTED_WITHIN_TOLERANCE
           - APPROVED
           - REJECTED
           example: ASSIGNED
@@ -9447,6 +9767,10 @@ components:
           description: Unique identifier of the cycle count task
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
+          type: string
+        unitOfMeasure:
+          description: The item's base unit of measure, when itemSku resolves to a catalog product with a declared UoM; null otherwise
+          example: GAL
           type: string
         updatedAt:
           description: Timestamp when the task was last updated
@@ -9461,6 +9785,56 @@ components:
       - itemSku
       - status
       - taskId
+      - updatedAt
+      type: object
+    CycleCountToleranceResponse:
+      description: A tolerance configuration for cycle-count reconciliation
+      properties:
+        absoluteTolerance:
+          description: Maximum acceptable absolute variance, in the product's base UoM
+          example: 50
+          type: number
+        active:
+          description: Whether this configuration is in effect
+          example: true
+          type: boolean
+        createdAt:
+          description: Timestamp when this configuration was created
+          example: 2026-01-15 09:30:00+00:00
+          format: date-time
+          type: string
+        createdBy:
+          description: Identifier of the user who created this configuration
+          example: user-10042
+          type: string
+        percentageTolerance:
+          description: Maximum acceptable variance as a percentage of book quantity
+          example: 1.5
+          type: number
+        productId:
+          description: Catalog product this tolerance scopes to; null for a product-agnostic row
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        storageLocation:
+          description: Storage location this tolerance scopes to; null for a location-agnostic row
+          example: TANK-04
+          type: string
+        toleranceId:
+          description: Unique identifier of the tolerance configuration
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        updatedAt:
+          description: Timestamp when this configuration was last updated
+          example: 2026-01-15 10:05:00+00:00
+          format: date-time
+          type: string
+      required:
+      - active
+      - createdAt
+      - createdBy
+      - toleranceId
       - updatedAt
       type: object
     DeactivateLocationRequest:
@@ -10039,6 +10413,10 @@ components:
           description: Stock item identifier (product SKU)
           example: MICH-XC2-0001
           type: string
+        unitOfMeasure:
+          description: The stock item's base unit of measure, when stockItemId resolves to a catalog product with a declared UoM; null otherwise
+          example: EA
+          type: string
       required:
       - onHandQuantity
       - stockItemId
@@ -10436,6 +10814,10 @@ components:
         suggestedLotNumber:
           description: Advisory lot suggestion for LOT-tracked SKUs (FIFO by lot receivedAt at the suggested location; FEFO once expiry data exists). Null for untracked SKUs or when no lot has stock
           example: LOT-2026-A
+          type: string
+        unitOfMeasure:
+          description: The SKU's base unit of measure, when skuId resolves to a catalog product with a declared UoM; null otherwise
+          example: EA
           type: string
       required:
       - locationId
@@ -12218,19 +12600,37 @@ components:
       description: Request to submit the initial physical count for a cycle count task
       properties:
         actualQuantity:
-          description: Quantity physically counted by the auditor
+          description: Quantity physically measured, in unitOfMeasure (or the product's base UoM when unitOfMeasure is omitted). Converted to base UoM before variance is computed.
           example: 12
-          format: int32
           minimum: 0
-          type: integer
+          type: number
         auditorId:
           description: Identifier of the auditor submitting the count
           example: auditor-10042
+          type: string
+        measurementMethod:
+          description: How the quantity was obtained. Defaults to MANUAL_COUNT.
+          enum:
+          - MANUAL_COUNT
+          - DIP
+          - GAUGE
+          - SCALE
+          - METER
+          - SENSOR
+          example: MANUAL_COUNT
           type: string
         taskId:
           description: Identifier of the cycle count task being counted
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
+          type: string
+        unitOfMeasure:
+          description: Unit the quantity was physically measured in. Omit for the product's base UoM.
+          example: GAL
+          type: string
+        varianceReason:
+          description: 'Reason for the variance, if already known at submission time. Optional: a count and its eventual adjustment are separate transactions, and the adjustment''s own reason code is what ultimately gates posting an out-of-tolerance variance.'
+          example: Evaporation since last count
           type: string
       required:
       - actualQuantity
@@ -12241,14 +12641,24 @@ components:
       description: Request to submit a recount for a cycle count task, including the caller's permission context
       properties:
         actualQuantity:
-          description: Quantity physically counted by the auditor on the recount
+          description: Quantity physically measured on the recount, in unitOfMeasure (or the product's base UoM when unitOfMeasure is omitted). Converted to base UoM before variance is computed.
           example: 13
-          format: int32
           minimum: 0
-          type: integer
+          type: number
         auditorId:
           description: Identifier of the auditor submitting the recount
           example: auditor-10042
+          type: string
+        measurementMethod:
+          description: How the quantity was obtained. Defaults to MANUAL_COUNT.
+          enum:
+          - MANUAL_COUNT
+          - DIP
+          - GAUGE
+          - SCALE
+          - METER
+          - SENSOR
+          example: MANUAL_COUNT
           type: string
         permission:
           description: Permission context authorizing the recount; one of TRIGGER_RECOUNT_SELF or TRIGGER_RECOUNT_ANY
@@ -12258,6 +12668,14 @@ components:
           description: Identifier of the cycle count task being recounted
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
+          type: string
+        unitOfMeasure:
+          description: Unit the quantity was physically measured in. Omit for the product's base UoM.
+          example: GAL
+          type: string
+        varianceReason:
+          description: Reason for the variance, if already known at submission time. Optional.
+          example: Evaporation since last count
           type: string
       required:
       - actualQuantity
@@ -12769,6 +13187,26 @@ components:
           format: uuid
           type: string
       type: object
+    UpdateCycleCountToleranceRequest:
+      description: Request to update a tolerance configuration's bounds or active state
+      properties:
+        absoluteTolerance:
+          description: Maximum acceptable absolute variance, in the product's base UoM. Null clears it.
+          example: 50
+          minimum: 0
+          type: number
+        active:
+          description: Whether this configuration is in effect
+          example: true
+          type: boolean
+        percentageTolerance:
+          description: Maximum acceptable variance as a percentage of book quantity
+          example: 1.5
+          minimum: 0
+          type: number
+      required:
+      - active
+      type: object
     UpdatePickListStatusRequest:
       description: Request to transition a pick list to a new lifecycle status
       properties:
@@ -12907,6 +13345,10 @@ components:
           description: Quantity actually received on the line
           example: 8
           type: number
+        unitOfMeasure:
+          description: UoM the line was keyed in when it differed from the product's base UoM; null means the product's base UoM
+          example: CASE
+          type: string
         varianceQuantity:
           description: Difference between received and expected quantity for the line
           example: 2

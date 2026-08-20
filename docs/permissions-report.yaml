@@ -1,9 +1,9 @@
-generatedAt: "2026-08-20T09:59:30.890194+00:00"
+generatedAt: "2026-08-20T10:04:14.589172+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 433
-  uniquePermissionCount: 433
+  permissionCount: 434
+  uniquePermissionCount: 434
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -314,7 +314,7 @@ manifests:
     domain: "inventory"
     serviceName: "pos-inventory"
     version: "1.0"
-    permissionCount: 52
+    permissionCount: 53
     permissions:
       - name: "inventory:adjustment:approve"
         description: "Approve and post an adjustment to the ledger (creates ADJUSTMENT_IN/OUT events)"
@@ -336,6 +336,8 @@ manifests:
         description: "Initiate a cycle count for inventory reconciliation"
       - name: "inventory:cycle_count:view"
         description: "View cycle count tasks and results"
+      - name: "inventory:cycle_count_tolerance:manage"
+        description: "Manage cycle count tolerance"
       - name: "inventory:goods_receipt:create"
         description: "Create a goods receipt and trigger GRNI accrual"
       - name: "inventory:goods_receipt:override"
@@ -402,10 +404,10 @@ manifests:
         description: "Resolve a shortage decision for an allocation"
       - name: "inventory:shortage:view"
         description: "View shortage resolution options"
-      - name: "inventory:supplier_stock_hint:view"
-        description: "View vendor-reported availability hints (advisory supplier stock, never owned stock or ATP)"
       - name: "inventory:stock_movement:create"
         description: "Record RECEIVE, PUT_AWAY, PICK, ISSUE, RETURN, or TRANSFER movements directly in the inventory ledger"
+      - name: "inventory:supplier_stock_hint:view"
+        description: "View vendor-reported availability hints (advisory supplier stock, never owned stock or ATP)"
       - name: "inventory:transfer:create"
         description: "Create or cancel a cross-site transfer order (DRAFT; cancel only before dispatch)"
       - name: "inventory:transfer:dispatch"
@@ -1877,6 +1879,12 @@ permissions:
     source: "pos-inventory/src/main/resources/permissions.yaml"
   - name: "inventory:cycle_count:view"
     description: "View cycle count tasks and results"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:cycle_count_tolerance:manage"
+    description: "Manage cycle count tolerance"
     domain: "inventory"
     serviceName: "pos-inventory"
     module: "pos-inventory"

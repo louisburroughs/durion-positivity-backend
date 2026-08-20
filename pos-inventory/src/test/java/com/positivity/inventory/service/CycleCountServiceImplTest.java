@@ -15,12 +15,19 @@ import com.positivity.inventory.internal.dto.cyclecount.SubmitRecountRequest;
 import com.positivity.inventory.internal.entity.CountEntry;
 import com.positivity.inventory.internal.entity.CycleCountTask;
 import com.positivity.inventory.internal.enums.TaskStatus;
+import com.positivity.inventory.internal.exception.FractionalQuantityNotAllowedException;
 import com.positivity.inventory.internal.exception.InsufficientPermissionException;
 import com.positivity.inventory.internal.exception.InvalidCountQuantityException;
 import com.positivity.inventory.internal.exception.RecountLimitExceededException;
 import com.positivity.inventory.internal.repository.CountEntryRepository;
 import com.positivity.inventory.internal.repository.CycleCountTaskRepository;
+import com.positivity.inventory.internal.repository.CycleCountToleranceRepository;
+import com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver;
 import com.positivity.inventory.internal.service.CycleCountServiceImpl;
+import com.positivity.inventory.internal.service.CycleCountToleranceResolver;
+import com.positivity.inventory.internal.service.QuantityScaleGuard;
+import com.positivity.inventory.internal.service.UomConversionService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -31,6 +38,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -54,12 +62,28 @@ class CycleCountServiceImplTest {
     @Mock
     private com.positivity.inventory.internal.service.CycleCountConflictDetector conflictDetector;
 
+    @Mock
+    private CycleCountToleranceRepository toleranceRepository;
+
+    @Mock
+    private UomConversionService uomConversionService;
+
+    @Mock
+    private BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
+
     private CycleCountServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new CycleCountServiceImpl(
-                taskRepository, countEntryRepository, Clock.systemDefaultZone(), conflictDetector);
+                taskRepository,
+                countEntryRepository,
+                Clock.systemDefaultZone(),
+                conflictDetector,
+                new CycleCountToleranceResolver(toleranceRepository),
+                uomConversionService,
+                new QuantityScaleGuard(uomConversionService),
+                baseUnitOfMeasureResolver);
     }
 
     @Test
@@ -69,7 +93,7 @@ class CycleCountServiceImplTest {
         SubmitCountRequest request = SubmitCountRequest.builder()
                 .taskId(taskId)
                 .auditorId("auditor-1")
-                .actualQuantity(8)
+                .actualQuantity(BigDecimal.valueOf(8))
                 .build();
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
@@ -84,9 +108,9 @@ class CycleCountServiceImplTest {
         CountResponse response = service.submitCount(request);
 
         assertThat(response.getTaskId()).isEqualTo(taskId);
-        assertThat(response.getExpectedQuantity()).isEqualTo(10);
-        assertThat(response.getActualQuantity()).isEqualTo(8);
-        assertThat(response.getVariance()).isEqualTo(-2);
+        assertThat(response.getExpectedQuantity()).isEqualByComparingTo("10");
+        assertThat(response.getActualQuantity()).isEqualByComparingTo("8");
+        assertThat(response.getVariance()).isEqualByComparingTo("-2");
         assertThat(response.getTaskStatus()).isEqualTo(TaskStatus.COUNTED_PENDING_REVIEW);
         assertThat(response.isLimitExceeded()).isFalse();
         verify(countEntryRepository).save(any(CountEntry.class));
@@ -98,7 +122,7 @@ class CycleCountServiceImplTest {
         SubmitCountRequest request = SubmitCountRequest.builder()
                 .taskId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .auditorId("auditor-1")
-                .actualQuantity(-1)
+                .actualQuantity(BigDecimal.valueOf(-1))
                 .build();
 
         assertThatThrownBy(() -> service.submitCount(request)).isInstanceOf(InvalidCountQuantityException.class);
@@ -115,7 +139,7 @@ class CycleCountServiceImplTest {
         SubmitCountRequest request = SubmitCountRequest.builder()
                 .taskId(taskId)
                 .auditorId("auditor-1")
-                .actualQuantity(5)
+                .actualQuantity(BigDecimal.valueOf(5))
                 .build();
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
@@ -134,7 +158,7 @@ class CycleCountServiceImplTest {
         SubmitRecountRequest request = SubmitRecountRequest.builder()
                 .taskId(taskId)
                 .auditorId("auditor-1")
-                .actualQuantity(9)
+                .actualQuantity(BigDecimal.valueOf(9))
                 .permission("TRIGGER_RECOUNT_SELF")
                 .build();
 
@@ -156,7 +180,7 @@ class CycleCountServiceImplTest {
         SubmitRecountRequest request = SubmitRecountRequest.builder()
                 .taskId(taskId)
                 .auditorId("auditor-2")
-                .actualQuantity(11)
+                .actualQuantity(BigDecimal.valueOf(11))
                 .permission("TRIGGER_RECOUNT_SELF")
                 .build();
 
@@ -176,7 +200,7 @@ class CycleCountServiceImplTest {
         SubmitRecountRequest request = SubmitRecountRequest.builder()
                 .taskId(taskId)
                 .auditorId("auditor-1")
-                .actualQuantity(11)
+                .actualQuantity(BigDecimal.valueOf(11))
                 .permission("UNSUPPORTED")
                 .build();
 
@@ -197,7 +221,7 @@ class CycleCountServiceImplTest {
         SubmitRecountRequest request = SubmitRecountRequest.builder()
                 .taskId(taskId)
                 .auditorId("manager-1")
-                .actualQuantity(12)
+                .actualQuantity(BigDecimal.valueOf(12))
                 .permission("TRIGGER_RECOUNT_ANY")
                 .build();
 
@@ -278,7 +302,7 @@ class CycleCountServiceImplTest {
         SubmitRecountRequest request = SubmitRecountRequest.builder()
                 .taskId(taskId)
                 .auditorId("manager-1")
-                .actualQuantity(11)
+                .actualQuantity(BigDecimal.valueOf(11))
                 .permission("TRIGGER_RECOUNT_ANY")
                 .build();
 
@@ -299,12 +323,102 @@ class CycleCountServiceImplTest {
         assertThat(task.getCountEntriesCount()).isEqualTo(2);
     }
 
+    // ─── ADR-0055 stage 4 (#1416): scale/UoM at count capture ────────────────
+
+    @Test
+    void submitCount_acceptsFractionalQuantityForScale2Product() {
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
+        UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        CycleCountTask task = assignedTaskForProduct(taskId, productId, "auditor-1", "10.00");
+        when(uomConversionService.declaredBaseScale(productId)).thenReturn(2);
+
+        SubmitCountRequest request = SubmitCountRequest.builder()
+                .taskId(taskId)
+                .auditorId("auditor-1")
+                .actualQuantity(new BigDecimal("10.25"))
+                .build();
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(countEntryRepository.save(any(CountEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(taskRepository.save(any(CycleCountTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CountResponse response = service.submitCount(request);
+
+        assertThat(response.getActualQuantity()).isEqualByComparingTo("10.25");
+        assertThat(response.getVariance()).isEqualByComparingTo("0.25");
+    }
+
+    @Test
+    void submitCount_rejectsFractionalQuantityForScale0Product() {
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-0000000000b2");
+        UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        CycleCountTask task = assignedTaskForProduct(taskId, productId, "auditor-1", "10");
+        // declaredBaseScale left unstubbed: an undeclared product defaults to scale 0 (integral).
+
+        SubmitCountRequest request = SubmitCountRequest.builder()
+                .taskId(taskId)
+                .auditorId("auditor-1")
+                .actualQuantity(new BigDecimal("10.25"))
+                .build();
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+
+        assertThatThrownBy(() -> service.submitCount(request))
+                .isInstanceOf(FractionalQuantityNotAllowedException.class);
+    }
+
+    @Test
+    void submitCount_convertsNonBaseUomBeforeComparingToBook() {
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-0000000000b3");
+        UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        CycleCountTask task = assignedTaskForProduct(taskId, productId, "auditor-1", "18");
+        when(uomConversionService.toBaseQuantity(productId, "GAL", new BigDecimal("5")))
+                .thenReturn(new BigDecimal("20"));
+
+        SubmitCountRequest request = SubmitCountRequest.builder()
+                .taskId(taskId)
+                .auditorId("auditor-1")
+                .actualQuantity(new BigDecimal("5"))
+                .unitOfMeasure("GAL")
+                .build();
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        ArgumentCaptor<CountEntry> captor = ArgumentCaptor.forClass(CountEntry.class);
+        when(countEntryRepository.save(captor.capture())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(taskRepository.save(any(CycleCountTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CountResponse response = service.submitCount(request);
+
+        // Compared and reported in base UoM (20), not the as-measured value (5 GAL).
+        assertThat(response.getActualQuantity()).isEqualByComparingTo("20");
+        assertThat(response.getVariance()).isEqualByComparingTo("2");
+        CountEntry saved = captor.getValue();
+        assertThat(saved.getMeasuredQuantity()).isEqualByComparingTo("5");
+        assertThat(saved.getUomCode()).isEqualTo("GAL");
+        assertThat(saved.getActualQuantity()).isEqualByComparingTo("20");
+    }
+
+    private CycleCountTask assignedTaskForProduct(
+            UUID taskId, UUID productId, String auditorId, String expectedQuantity) {
+        return CycleCountTask.builder()
+                .taskId(taskId)
+                .itemSku(productId.toString())
+                .binLocation("BIN-1")
+                .auditorId(auditorId)
+                .expectedQuantity(new BigDecimal(expectedQuantity))
+                .countEntriesCount(0)
+                .status(TaskStatus.ASSIGNED)
+                .createdAt(TASK_CREATED_AT)
+                .updatedAt(TASK_UPDATED_AT)
+                .build();
+    }
+
     private CycleCountTask assignedTask(
             UUID taskId, String auditorId, int expectedQuantity, int countEntriesCount, UUID latestEntryId) {
         return CycleCountTask.builder()
                 .taskId(taskId)
                 .auditorId(auditorId)
-                .expectedQuantity(expectedQuantity)
+                .expectedQuantity(BigDecimal.valueOf(expectedQuantity))
                 .countEntriesCount(countEntriesCount)
                 .latestCountEntryId(latestEntryId)
                 .status(TaskStatus.ASSIGNED)
@@ -319,9 +433,10 @@ class CycleCountServiceImplTest {
                 .countEntryId(countEntryId)
                 .cycleCountTask(task)
                 .auditorId("auditor-1")
-                .actualQuantity(10)
-                .expectedQuantity(10)
-                .variance(0)
+                .actualQuantity(BigDecimal.valueOf(10))
+                .measuredQuantity(BigDecimal.valueOf(10))
+                .expectedQuantity(BigDecimal.valueOf(10))
+                .variance(BigDecimal.ZERO)
                 .recountSequenceNumber(recountSequence)
                 .countedAt(Instant.now(TEST_CLOCK).minus(5, java.time.temporal.ChronoUnit.MINUTES))
                 .build();

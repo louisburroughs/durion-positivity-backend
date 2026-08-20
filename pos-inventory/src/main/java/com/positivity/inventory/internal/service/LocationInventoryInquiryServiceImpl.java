@@ -10,6 +10,7 @@ import com.positivity.inventory.service.LocationInventoryInquiryService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -29,14 +30,17 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
     private final InventoryStockSummaryRepository stockSummaryRepository;
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
     private final AsOfQueryGuard asOfQueryGuard;
+    private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
 
     public LocationInventoryInquiryServiceImpl(
             InventoryStockSummaryRepository stockSummaryRepository,
             InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
-            AsOfQueryGuard asOfQueryGuard) {
+            AsOfQueryGuard asOfQueryGuard,
+            BaseUnitOfMeasureResolver baseUnitOfMeasureResolver) {
         this.stockSummaryRepository = stockSummaryRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
         this.asOfQueryGuard = asOfQueryGuard;
+        this.baseUnitOfMeasureResolver = baseUnitOfMeasureResolver;
     }
 
     @Override
@@ -67,13 +71,21 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
     @Transactional(readOnly = true)
     @NonNull
     public LocationInventoryItemsResponse listLocationInventoryItems(@NonNull UUID locationId) {
-        List<LocationInventoryItemsResponse.Item> items =
-                stockSummaryRepository.findByLocationIdAndOnHandGreaterThan(locationId, BigDecimal.ZERO).stream()
-                        .map(row -> LocationInventoryItemsResponse.Item.builder()
-                                .stockItemId(row.getStockItemId())
-                                .onHandQuantity(row.getOnHand())
-                                .build())
-                        .toList();
+        List<InventoryStockSummary> rows =
+                stockSummaryRepository.findByLocationIdAndOnHandGreaterThan(locationId, BigDecimal.ZERO);
+        // One batched IN query for the whole page instead of one BaseUnitOfMeasureResolver round
+        // trip per row.
+        Map<UUID, String> uomByProductId = baseUnitOfMeasureResolver.resolveAll(rows.stream()
+                .map(row -> QuantityScaleGuard.productIdOf(row.getStockItemId()))
+                .toList());
+
+        List<LocationInventoryItemsResponse.Item> items = rows.stream()
+                .map(row -> LocationInventoryItemsResponse.Item.builder()
+                        .stockItemId(row.getStockItemId())
+                        .onHandQuantity(row.getOnHand())
+                        .unitOfMeasure(uomByProductId.get(QuantityScaleGuard.productIdOf(row.getStockItemId())))
+                        .build())
+                .toList();
 
         return LocationInventoryItemsResponse.builder()
                 .locationId(locationId)
@@ -109,12 +121,20 @@ public class LocationInventoryInquiryServiceImpl implements LocationInventoryInq
             @NonNull UUID locationId, @NonNull Instant asOf) {
         asOfQueryGuard.check(asOf);
 
-        List<LocationInventoryItemsResponse.Item> items = inventoryLedgerEntryRepository
-                .findPositiveOnHandByLocationAsOf(locationId, InventoryLedgerEventType.onHandAffectingTypes(), asOf)
-                .stream()
+        List<InventoryLedgerEntryRepository.LocationOnHand> rows =
+                inventoryLedgerEntryRepository.findPositiveOnHandByLocationAsOf(
+                        locationId, InventoryLedgerEventType.onHandAffectingTypes(), asOf);
+        // One batched IN query for the whole page instead of one BaseUnitOfMeasureResolver round
+        // trip per row.
+        Map<UUID, String> uomByProductId = baseUnitOfMeasureResolver.resolveAll(rows.stream()
+                .map(row -> QuantityScaleGuard.productIdOf(row.getStockItemId()))
+                .toList());
+
+        List<LocationInventoryItemsResponse.Item> items = rows.stream()
                 .map(row -> LocationInventoryItemsResponse.Item.builder()
                         .stockItemId(row.getStockItemId())
                         .onHandQuantity(row.getOnHandQuantity())
+                        .unitOfMeasure(uomByProductId.get(QuantityScaleGuard.productIdOf(row.getStockItemId())))
                         .build())
                 .toList();
 

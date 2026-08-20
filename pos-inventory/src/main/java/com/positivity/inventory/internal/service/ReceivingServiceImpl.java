@@ -364,6 +364,7 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .workorderId(workorderId)
                 .workorderLineId(request.getWorkorderLineId())
                 .crossDockedQuantity(request.getQuantity())
+                .unitOfMeasure(line.getDocumentUom())
                 .sessionStatus(session.getStatus().name())
                 .lineStatus(line.getStatus().name())
                 .ledgerEntryIds(ledgerEntryIds)
@@ -602,6 +603,10 @@ public class ReceivingServiceImpl implements ReceivingService {
                         .varianceQuantity(variance.getVarianceQuantity())
                         .expectedQuantity(variance.getExpectedQuantity())
                         .receivedQuantity(variance.getReceivedQuantity())
+                        .unitOfMeasure(
+                                variance.getLine() == null
+                                        ? null
+                                        : variance.getLine().getDocumentUom())
                         .build())
                 .toList();
 
