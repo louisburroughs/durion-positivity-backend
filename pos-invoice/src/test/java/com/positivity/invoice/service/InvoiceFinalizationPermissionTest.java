@@ -45,7 +45,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
  * manager code</li>
  * <li>SERVICE_ADVISOR: allowed {@literal >} $500 when a valid manager approval
  * code is present (audited)</li>
- * <li>SHOP_MANAGER: unlimited amount, no approval code required</li>
+ * <li>Holders of {@code invoice:finalize:override}: unlimited amount, no
+ * approval code required</li>
  * <li>Idempotency guard: already-FINALIZED invoice must not be
  * double-finalized</li>
  * </ul>
@@ -118,8 +119,10 @@ class InvoiceFinalizationPermissionTest {
     }
 
     /**
-     * Sets up a manager context holding the {@code invoice:finalize:override} authority
-     * (granted to SHOP_MANAGER/LOCATION_MANAGER/ADMIN) for tests that need it.
+     * Sets up a manager context holding the {@code invoice:finalize:override} authority,
+     * which the baseline seed grants to ADMIN and the manager roles (#1374). The role
+     * name is carried alongside it only to mirror a real token; since #1373 the
+     * authority alone is what grants override capability.
      */
     private void withShopManagerContext() {
         var auth = new UsernamePasswordAuthenticationToken(
@@ -196,18 +199,18 @@ class InvoiceFinalizationPermissionTest {
     }
 
     // -------------------------------------------------------------------------
-    // AC3 — SHOP_MANAGER permission matrix
+    // AC3 — override-authority permission matrix
     // -------------------------------------------------------------------------
 
     /**
-     * AC3: SHOP_MANAGER has unlimited finalization authority — a $10,000 invoice
-     * must be
-     * approved without any manager approval code.
+     * AC3: a holder of {@code invoice:finalize:override} has unlimited finalization
+     * authority — a $10,000 invoice must be approved without any manager approval
+     * code.
      */
     @Test
-    void shopManager_canFinalize_invoiceAboveAnyAmount() {
+    void overrideAuthorityHolder_canFinalize_invoiceAboveAnyAmount() {
         UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        // C1: SHOP_MANAGER role in SecurityContext → bypasses all amount caps
+        // C1: invoice:finalize:override in SecurityContext → bypasses all amount caps
         withShopManagerContext();
         when(invoiceRepository.findById(invoiceId))
                 .thenReturn(Optional.of(draftInvoice(
@@ -221,11 +224,15 @@ class InvoiceFinalizationPermissionTest {
     }
 
     /**
-     * Auto-approval: a logged-in manager holding only the role (no override authority
-     * granted yet) finalizes above the cap without an approval code.
+     * #1373: the bare role name no longer confers override capability. This test
+     * previously asserted the opposite — a SHOP_MANAGER token carrying no authority
+     * auto-approved above the cap — which was a deliberate bridge for the window in
+     * which {@code invoice:finalize:override} existed but nothing granted it. #1374
+     * closed that window by seeding the authority to ADMIN and every manager role,
+     * so the fallback is gone and the token must carry the grant.
      */
     @Test
-    void managerRoleAlone_autoApproves_aboveLimit_withoutAuthorityGrant() {
+    void managerRoleAlone_isSubjectToTheCap_withoutTheOverrideAuthority() {
         UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         var auth = new UsernamePasswordAuthenticationToken(
                 "manager-002", null, List.of(new SimpleGrantedAuthority("ROLE_SHOP_MANAGER")));
@@ -234,12 +241,11 @@ class InvoiceFinalizationPermissionTest {
         when(invoiceRepository.findById(invoiceId))
                 .thenReturn(Optional.of(draftInvoice(
                         UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("9999.00"))));
-        when(invoiceRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         FinalizationRequest request = buildRequest(null);
 
-        InvoiceDetailsResponse response = service.completeInvoice(invoiceId, request);
-
-        assertThat(response.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
+        assertThatThrownBy(() -> service.completeInvoice(invoiceId, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Manager approval code required");
     }
 
     // -------------------------------------------------------------------------

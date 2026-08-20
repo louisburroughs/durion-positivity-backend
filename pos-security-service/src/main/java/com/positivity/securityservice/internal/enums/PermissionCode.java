@@ -617,13 +617,15 @@ public enum PermissionCode {
     SUPPLIER__MKTCAT__IMPORT(465, "supplier:mktcat:import"),
     // ── Workorder (new) ────────────────────────────────────────────────────────
     WORKORDER__FLEET_AUTH__REQUEST(466, "workorder:fleet_auth:request"),
-    WORKORDER__FLEET_AUTH__RESOLVE(467, "workorder:fleet_auth:resolve");
+    WORKORDER__FLEET_AUTH__RESOLVE(467, "workorder:fleet_auth:resolve"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__ADJUSTMENT__OVERRIDE(468, "inventory:adjustment:override");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 56;
+    public static final int CATALOG_VERSION = 57;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

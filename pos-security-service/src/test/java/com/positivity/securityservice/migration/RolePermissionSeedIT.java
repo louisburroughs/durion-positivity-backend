@@ -234,6 +234,53 @@ class RolePermissionSeedIT {
                         roleName);
     }
 
+    @Test
+    @DisplayName("V23 removes the unratified candidate roles V3 created")
+    void unratifiedCandidateRolesAreGoneAfterMigration() {
+        // V3 seeds SECURITY_ADMIN and READ_ONLY_SCHEDULER as "Candidate Roles v0"; #1373
+        // decided they were never ratified and V23 deletes them. V3 is left untouched
+        // (it is applied everywhere, so editing it would break its checksum), which makes
+        // the delete only observable after the full migration chain runs — exactly what
+        // this container gives us. The unit-level baseline test cannot see it: V3 still
+        // lists both names, so they still look creatable from a static parse.
+        assertThat(jdbc().queryForList(
+                                "SELECT name FROM roles WHERE name IN ('SECURITY_ADMIN', 'READ_ONLY_SCHEDULER')",
+                                String.class))
+                .as("V3-seeded candidate roles must not survive V23")
+                .isEmpty();
+
+        // The siblings from the same V3 batch were ratified and must remain.
+        assertThat(jdbc().queryForList(
+                                "SELECT name FROM roles WHERE name IN ('DISPATCHER', 'SHOP_MANAGER')", String.class))
+                .as("the ratified half of the V3 candidate batch")
+                .containsExactlyInAnyOrder("DISPATCHER", "SHOP_MANAGER");
+    }
+
+    @Test
+    @DisplayName("the inventory adjustment roles resolve the capability their javadoc documents")
+    void inventoryAdjustmentRolesResolveTheirCapability() {
+        // #1373: before this, only ADMIN held any inventory:adjustment:* permission, so the
+        // three roles that exist specifically to model adjustment approval could neither
+        // create nor approve one.
+        assertThat(grantedTo("INVENTORY_LEAD"))
+                .as("INVENTORY_LEAD raises adjustment requests but must not approve them")
+                .contains("inventory:adjustment:create", "inventory:adjustment:view")
+                .doesNotContain("inventory:adjustment:approve", "inventory:adjustment:override");
+
+        for (String approver : List.of("INVENTORY_MANAGER", "INVENTORY_CONTROLLER")) {
+            assertThat(grantedTo(approver))
+                    .as("grants for %s", approver)
+                    .contains(
+                            "inventory:adjustment:create", "inventory:adjustment:approve", "inventory:adjustment:view");
+        }
+
+        // The negative-stock escape hatch ScrapServiceImpl enforces: global approvers only.
+        assertThat(grantedTo("INVENTORY_CONTROLLER")).contains("inventory:adjustment:override");
+        assertThat(grantedTo("INVENTORY_MANAGER"))
+                .as("a location-scoped approver must not drive on-hand below zero")
+                .doesNotContain("inventory:adjustment:override");
+    }
+
     private JdbcTemplate jdbc() {
         return new JdbcTemplate(dataSource);
     }

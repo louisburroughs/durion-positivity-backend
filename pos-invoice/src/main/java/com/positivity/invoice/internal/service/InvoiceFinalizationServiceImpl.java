@@ -40,7 +40,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <ul>
  * <li>SERVICE_ADVISOR: ≤ $500 without manager approval; {@literal >} $500
  * requires manager approval code</li>
- * <li>SHOP_MANAGER: unlimited — no approval code required</li>
+ * <li>Holders of {@code invoice:finalize:override}: unlimited — no approval
+ * code required</li>
  * </ul>
  *
  * <p>
@@ -63,15 +64,6 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     static final Duration REVERSION_WINDOW = Duration.ofHours(24);
 
     private static final String OVERRIDE_AUTHORITY = "invoice:finalize:override";
-
-    /**
-     * Roles that grant finalize-override capability. Checked in addition to the
-     * {@link #OVERRIDE_AUTHORITY} so a logged-in manager/admin is auto-approved even
-     * before the (operational) authority grant is applied — the JWT always carries
-     * these roles. The authority remains the forward-compatible, fine-grained path.
-     */
-    private static final java.util.List<String> OVERRIDE_ROLES =
-            java.util.List.of("SHOP_MANAGER", "LOCATION_MANAGER", "ADMIN");
 
     private final InvoiceRepository invoiceRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -347,29 +339,29 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
 
     /**
      * True when the current actor may finalize/revert without a manager approval
-     * token: they hold the {@link #OVERRIDE_AUTHORITY} or one of the
-     * {@link #OVERRIDE_ROLES}. The role fallback keeps manager/admin auto-approval
-     * working independently of the operational authority grant.
+     * token, i.e. they hold {@link #OVERRIDE_AUTHORITY}.
+     *
+     * <p>
+     * This used to also accept the bare role names SHOP_MANAGER, LOCATION_MANAGER
+     * and ADMIN, as a bridge for the window in which the authority existed but
+     * nothing granted it. That window is closed: #1374 seeded
+     * {@code invoice:finalize:override} to ADMIN and every manager role
+     * (ACCOUNT_MANAGER, GENERAL_MANAGER, LOCATION_MANAGER, MANAGER, SHOP_MANAGER),
+     * so the permission is a strict superset of the roles the fallback covered and
+     * #1373 retired it. Override capability is now decided by one grant in
+     * {@code role_permissions} rather than by two rules that could disagree.
      */
     private boolean callerCanOverride() {
-        if (SecurityContextHelper.hasAuthority(OVERRIDE_AUTHORITY)) {
-            return true;
-        }
-        for (String role : OVERRIDE_ROLES) {
-            if (SecurityContextHelper.hasRole(role)) {
-                return true;
-            }
-        }
-        return false;
+        return SecurityContextHelper.hasAuthority(OVERRIDE_AUTHORITY);
     }
 
     /**
      * AC3 permission matrix enforcement.
      *
      * <p>
-     * Role is derived from {@code SecurityContext}. If the current actor does not
-     * have the {@code SHOP_MANAGER} role they are subject to the SERVICE_ADVISOR
-     * $500 cap.
+     * Authority is derived from {@code SecurityContext}. If the current actor does
+     * not hold {@code invoice:finalize:override} they are subject to the
+     * SERVICE_ADVISOR $500 cap.
      *
      * <p>
      * M4: When SERVICE_ADVISOR provides a manager approval code for an invoice
@@ -377,8 +369,8 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
      */
     private void enforcePermissions(
             @NonNull FinalizationRequest request, @NonNull UUID invoiceId, @NonNull BigDecimal invoiceTotal) {
-        // Managers/admins (override authority or role) finalize without an approval
-        // token regardless of amount — auto-approved.
+        // Holders of the override authority finalize without an approval token
+        // regardless of amount — auto-approved.
         if (callerCanOverride()) {
             return;
         }

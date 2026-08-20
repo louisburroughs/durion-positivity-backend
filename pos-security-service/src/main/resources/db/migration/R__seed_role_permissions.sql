@@ -40,8 +40,30 @@
 --   LOCATION_MANAGER, MANAGER and SHOP_MANAGER — per the product decision on
 --   that issue. Do not widen it: the permission exists specifically to cap
 --   what a service advisor can finalize by naming an absent manager.
+-- * The inventory adjustment roles (#1373) carry the model RoleInitializer's
+--   javadoc documents: INVENTORY_LEAD creates and views adjustment requests;
+--   INVENTORY_MANAGER and INVENTORY_CONTROLLER additionally approve them. The two
+--   approver roles hold an identical permission set on purpose — location versus
+--   global reach is a property of role_assignments.scope_type, not of
+--   role_permissions, so it cannot be expressed by granting different rows here.
+--   INVENTORY_CONTROLLER alone also holds inventory:adjustment:override, the
+--   negative-stock escape hatch ScrapServiceImpl checks, because only a
+--   globally scoped approver should drive on-hand below zero.
+-- * SHOP_MANAGER holds the shop surface its V3 description names (locations,
+--   bays, schedules, technicians) plus invoice:finalize:override (#1374). It has
+--   no audit grant because the shop domain defines no audit permission; add one
+--   to pos-shop-manager's manifest first if that capability is wanted.
+-- * SECURITY_ADMIN and READ_ONLY_SCHEDULER are NOT granted here and no longer
+--   exist: V3 created them as unratified "Candidate Roles v0", nothing in the
+--   codebase ever referenced them, and V23 deletes them (#1373).
+--   SECURITY_ADMIN's described scope is covered by SYSTEM_ADMINISTRATOR.
+-- * CUSTOMER and SELF_SERVICE_CUSTOMER hold the assistant entrypoints and nothing
+--   else, confirmed deliberate on #1373. They are external-facing; any domain
+--   grant to them is a new product decision, not a gap to be filled.
 -- * Grants are additive. Nothing here deletes a row, so permissions an operator
---   granted through the role-permission admin API survive re-runs.
+--   granted through the role-permission admin API survive re-runs. Revoking a
+--   grant therefore needs a versioned migration, which is what V23 does for the
+--   two deleted candidate roles.
 --
 -- IDEMPOTENCY
 -- Every statement below is ON CONFLICT DO NOTHING, and role/permission ids are
@@ -201,6 +223,7 @@ FROM (VALUES
     ('documents:render', 'documents', '', 'render', 55),
     ('inventory:adjustment:approve', 'inventory', 'adjustment', 'approve', 57),
     ('inventory:adjustment:create', 'inventory', 'adjustment', 'create', 56),
+    ('inventory:adjustment:override', 'inventory', 'adjustment', 'override', 468),
     ('inventory:adjustment:view', 'inventory', 'adjustment', 'view', 58),
     ('inventory:allocations:reallocate', 'inventory', 'allocations', 'reallocate', 80),
     ('inventory:asn:create', 'inventory', 'asn', 'create', 75),
@@ -613,6 +636,7 @@ FROM (VALUES
     ('ADMIN', 'documents:render'),
     ('ADMIN', 'inventory:adjustment:approve'),
     ('ADMIN', 'inventory:adjustment:create'),
+    ('ADMIN', 'inventory:adjustment:override'),
     ('ADMIN', 'inventory:adjustment:view'),
     ('ADMIN', 'inventory:allocations:reallocate'),
     ('ADMIN', 'inventory:asn:create'),
@@ -885,6 +909,10 @@ FROM (VALUES
     ('GENERAL_MANAGER', 'workorder:timeEntry:reject'),
     ('INVENTORY_CONTROLLER', 'catalog:category:view'),
     ('INVENTORY_CONTROLLER', 'catalog:product:view'),
+    ('INVENTORY_CONTROLLER', 'inventory:adjustment:approve'),
+    ('INVENTORY_CONTROLLER', 'inventory:adjustment:create'),
+    ('INVENTORY_CONTROLLER', 'inventory:adjustment:override'),
+    ('INVENTORY_CONTROLLER', 'inventory:adjustment:view'),
     ('INVENTORY_CONTROLLER', 'mcp:chat:execute'),
     ('INVENTORY_CONTROLLER', 'mcp:chat:stream'),
     ('INVENTORY_CONTROLLER', 'nlti:request:read'),
@@ -894,6 +922,8 @@ FROM (VALUES
     ('INVENTORY_CONTROLLER', 'pricing:rule:view'),
     ('INVENTORY_LEAD', 'catalog:category:view'),
     ('INVENTORY_LEAD', 'catalog:product:view'),
+    ('INVENTORY_LEAD', 'inventory:adjustment:create'),
+    ('INVENTORY_LEAD', 'inventory:adjustment:view'),
     ('INVENTORY_LEAD', 'mcp:chat:execute'),
     ('INVENTORY_LEAD', 'mcp:chat:stream'),
     ('INVENTORY_LEAD', 'nlti:request:read'),
@@ -903,6 +933,9 @@ FROM (VALUES
     ('INVENTORY_LEAD', 'pricing:rule:view'),
     ('INVENTORY_MANAGER', 'catalog:category:view'),
     ('INVENTORY_MANAGER', 'catalog:product:view'),
+    ('INVENTORY_MANAGER', 'inventory:adjustment:approve'),
+    ('INVENTORY_MANAGER', 'inventory:adjustment:create'),
+    ('INVENTORY_MANAGER', 'inventory:adjustment:view'),
     ('INVENTORY_MANAGER', 'mcp:chat:execute'),
     ('INVENTORY_MANAGER', 'mcp:chat:stream'),
     ('INVENTORY_MANAGER', 'nlti:request:read'),
@@ -1019,14 +1052,6 @@ FROM (VALUES
     ('MANAGER', 'security:role:view'),
     ('MANAGER', 'workorder:timeEntry:approve'),
     ('MANAGER', 'workorder:timeEntry:reject'),
-    ('READ_ONLY_SCHEDULER', 'mcp:chat:execute'),
-    ('READ_ONLY_SCHEDULER', 'mcp:chat:stream'),
-    ('READ_ONLY_SCHEDULER', 'nlti:request:read'),
-    ('READ_ONLY_SCHEDULER', 'nlti:request:submit'),
-    ('SECURITY_ADMIN', 'mcp:chat:execute'),
-    ('SECURITY_ADMIN', 'mcp:chat:stream'),
-    ('SECURITY_ADMIN', 'nlti:request:read'),
-    ('SECURITY_ADMIN', 'nlti:request:submit'),
     ('SELF_SERVICE_CUSTOMER', 'mcp:chat:execute'),
     ('SELF_SERVICE_CUSTOMER', 'mcp:chat:stream'),
     ('SELF_SERVICE_CUSTOMER', 'nlti:request:read'),
@@ -1086,6 +1111,12 @@ FROM (VALUES
     ('SHOP_MANAGER', 'mcp:chat:stream'),
     ('SHOP_MANAGER', 'nlti:request:read'),
     ('SHOP_MANAGER', 'nlti:request:submit'),
+    ('SHOP_MANAGER', 'shop:bay:assign'),
+    ('SHOP_MANAGER', 'shop:bay:view'),
+    ('SHOP_MANAGER', 'shop:location:view'),
+    ('SHOP_MANAGER', 'shop:schedule:edit'),
+    ('SHOP_MANAGER', 'shop:schedule:view'),
+    ('SHOP_MANAGER', 'shop:technician:view'),
     ('SYSTEM_ADMINISTRATOR', 'mcp:chat:execute'),
     ('SYSTEM_ADMINISTRATOR', 'mcp:chat:stream'),
     ('SYSTEM_ADMINISTRATOR', 'mcp:document:ingest'),
@@ -1179,8 +1210,6 @@ BEGIN
         ('INVENTORY_MANAGER'),
         ('LOCATION_MANAGER'),
         ('MANAGER'),
-        ('READ_ONLY_SCHEDULER'),
-        ('SECURITY_ADMIN'),
         ('SELF_SERVICE_CUSTOMER'),
         ('SERVICE_ADVISOR'),
         ('SHOP_MANAGER'),
@@ -1302,6 +1331,7 @@ BEGIN
         ('documents:render'),
         ('inventory:adjustment:approve'),
         ('inventory:adjustment:create'),
+        ('inventory:adjustment:override'),
         ('inventory:adjustment:view'),
         ('inventory:allocations:reallocate'),
         ('inventory:asn:create'),
