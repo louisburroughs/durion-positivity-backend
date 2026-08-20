@@ -39,6 +39,9 @@ PERM_CONST_DECL_RE = re.compile(
 # or bare (STOCK_INQUIRE, when the holder is statically imported or the same class).
 CONST_REF_RE = re.compile(r"\b(?:([A-Z][A-Za-z0-9_]*)\.)?([A-Z][A-Z0-9_]{2,})\b")
 ENUM_ENTRY_RE = re.compile(r'\((\d+),\s*"([^"]+)"\)')
+CATALOG_ENTRY_RE = re.compile(r'"PERM_([^"]+)"')
+CATALOG_VERSION_RE = re.compile(r"public static final int CATALOG_VERSION = (\d+);")
+DRY_RUN_PREFIX = "(dry-run) "
 
 PERMISSION_CODE_RELPATH = (
     "pos-security-service/src/main/java/com/positivity/securityservice"
@@ -275,8 +278,8 @@ def discover_modules(root: Path) -> list[Path]:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Catalog sync: keep PermissionCode.java and GatewayPermissionCatalog.java in
-# step with @PreAuthorize annotations without manual bit-index bookkeeping.
+# Catalog sync: keep PermissionCode.java, GatewayPermissionCatalog.java, and
+# DownstreamPermissionCatalog.java in step with @PreAuthorize annotations.
 # ──────────────────────────────────────────────────────────────────────────────
 
 def scan_all_preauthorize(root: Path, const_map: dict[str, str] | None = None) -> set[str]:
@@ -302,6 +305,32 @@ def parse_permission_code_java(root: Path) -> tuple[set[str], int]:
     codes = {code for _, code in entries}
     max_bit = max((int(bit) for bit, _ in entries), default=-1)
     return codes, max_bit
+
+
+def parse_permission_code_catalog(root: Path) -> tuple[list[str], int]:
+    """Return the authoritative ordered permissions and catalog version."""
+    text = (root / PERMISSION_CODE_RELPATH).read_text(encoding="utf-8")
+    indexed_permissions = sorted(
+        (int(bit), permission) for bit, permission in ENUM_ENTRY_RE.findall(text)
+    )
+    actual_bits = [bit for bit, _ in indexed_permissions]
+    expected_bits = list(range(len(indexed_permissions)))
+    if actual_bits != expected_bits:
+        raise ValueError("PermissionCode bit indices must be contiguous from zero")
+
+    version_match = CATALOG_VERSION_RE.search(text)
+    if not version_match:
+        raise ValueError("CATALOG_VERSION constant not found in PermissionCode.java")
+    return [permission for _, permission in indexed_permissions], int(version_match.group(1))
+
+
+def parse_mirror_catalog_java(root: Path, relative_path: str) -> tuple[list[str], int]:
+    """Return ordered permissions and version from a gateway or downstream mirror."""
+    text = (root / relative_path).read_text(encoding="utf-8")
+    version_match = CATALOG_VERSION_RE.search(text)
+    if not version_match:
+        raise ValueError(f"CATALOG_VERSION constant not found in {Path(relative_path).name}")
+    return CATALOG_ENTRY_RE.findall(text), int(version_match.group(1))
 
 
 def perm_to_enum_name(perm: str) -> str:
@@ -380,9 +409,8 @@ def sync_gateway_catalog_java(
     new_lines = [f"\n        // ── New batch (bits {start_bit}–{end_bit}) {bar}"]
     for i, perm in enumerate(sorted_perms):
         bit = start_bit + i
-        pad = " " * max(1, 45 - len(perm))
         comma = "," if i < len(sorted_perms) - 1 else ""
-        new_lines.append(f'        "PERM_{perm}"{comma}{pad}// {bit}')
+        new_lines.append(f'        "PERM_{perm}"{comma} // {bit}')
 
     new_block = "\n".join(new_lines)
 
@@ -427,9 +455,8 @@ def sync_downstream_catalog_java(
     new_lines = [f"\n        // ── New batch (bits {start_bit}–{end_bit}) {bar}"]
     for i, perm in enumerate(sorted_perms):
         bit = start_bit + i
-        pad = " " * max(1, 45 - len(perm))
         comma = "," if i < len(sorted_perms) - 1 else ""
-        new_lines.append(f'        "PERM_{perm}"{comma}{pad}// {bit}')
+        new_lines.append(f'        "PERM_{perm}"{comma} // {bit}')
 
     new_block = "\n".join(new_lines)
 
@@ -459,6 +486,63 @@ def sync_downstream_catalog_java(
         java_path.write_text(new_text, encoding="utf-8")
 
 
+def reconcile_mirror_catalog_java(
+    root: Path,
+    relative_path: str,
+    expected_permissions: list[str],
+    expected_version: int,
+    dry_run: bool,
+    check: bool,
+) -> bool:
+    """Repair suffix/version drift in a mirror and return whether drift was found."""
+    actual_permissions, actual_version = parse_mirror_catalog_java(root, relative_path)
+    if actual_permissions == expected_permissions and actual_version == expected_version:
+        return False
+
+    catalog_name = Path(relative_path).name
+    if check:
+        print(
+            f"ERROR: {catalog_name} is out of sync with PermissionCode.java "
+            f"(entries {len(actual_permissions)}/{len(expected_permissions)}, "
+            f"version {actual_version}/{expected_version})",
+            file=sys.stderr,
+        )
+        return True
+
+    if actual_permissions != expected_permissions[: len(actual_permissions)]:
+        raise ValueError(
+            f"{catalog_name} is not an ordered prefix of PermissionCode.java; "
+            "refusing to reassign permission bits"
+        )
+
+    missing_permissions = expected_permissions[len(actual_permissions) :]
+    if missing_permissions:
+        sync_function = (
+            sync_gateway_catalog_java
+            if relative_path == GATEWAY_CATALOG_RELPATH
+            else sync_downstream_catalog_java
+        )
+        sync_function(
+            root,
+            missing_permissions,
+            len(actual_permissions),
+            expected_version,
+            dry_run,
+        )
+    elif actual_version != expected_version:
+        java_path = root / relative_path
+        text = java_path.read_text(encoding="utf-8")
+        new_text = CATALOG_VERSION_RE.sub(
+            f"public static final int CATALOG_VERSION = {expected_version};", text
+        )
+        if not dry_run:
+            java_path.write_text(new_text, encoding="utf-8")
+
+    prefix = DRY_RUN_PREFIX if dry_run else ""
+    print(f"{prefix}{catalog_name}: repaired")
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Regenerate permissions.yaml from @PreAuthorize annotations"
@@ -477,16 +561,19 @@ def main() -> None:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Exit non-zero if any permissions.yaml would change (CI mode)",
+        help=(
+            "Exit non-zero if any permissions.yaml would change or, with --sync, "
+            "if permission catalogs differ (CI mode)"
+        ),
     )
     parser.add_argument(
         "--sync",
         action="store_true",
         help=(
             "Scan @PreAuthorize annotations, register any unknown permissions in "
-            "PermissionCode.java, GatewayPermissionCatalog.java, and "
-            "DownstreamPermissionCatalog.java, and bump "
-            "CATALOG_VERSION. Runs before permissions.yaml regeneration."
+            "PermissionCode.java, reconcile GatewayPermissionCatalog.java and "
+            "DownstreamPermissionCatalog.java, and bump CATALOG_VERSION. Runs before "
+            "permissions.yaml regeneration."
         ),
     )
     args = parser.parse_args()
@@ -501,12 +588,27 @@ def main() -> None:
     catalog_error = False
 
     if args.sync:
+        expected_permissions, expected_version = parse_permission_code_catalog(root)
+        mirror_drift = False
+        for relative_path in (GATEWAY_CATALOG_RELPATH, DOWNSTREAM_CATALOG_RELPATH):
+            drift = reconcile_mirror_catalog_java(
+                root,
+                relative_path,
+                expected_permissions,
+                expected_version,
+                args.dry_run,
+                args.check,
+            )
+            mirror_drift = mirror_drift or drift
+            if args.check and drift:
+                catalog_error = True
+
         annotated = scan_all_preauthorize(root, const_map)
         registered, max_bit = parse_permission_code_java(root)
         new_perms = sorted(annotated - registered)
 
         if new_perms:
-            prefix = "(dry-run) " if args.dry_run else ""
+            prefix = DRY_RUN_PREFIX if args.dry_run else ""
             if args.check:
                 print(
                     f"\nERROR: {len(new_perms)} permission(s) in @PreAuthorize are not "
@@ -529,7 +631,7 @@ def main() -> None:
                 for i, p in enumerate(new_perms):
                     print(f"  + {p} (bit {next_bit + i})")
                 print(f"  CATALOG_VERSION: {new_version - 1} → {new_version}")
-        else:
+        elif not mirror_drift:
             print("Catalog sync: up-to-date")
 
     if args.modules:
@@ -546,7 +648,7 @@ def main() -> None:
         module_name = result["module"]
         if result["changed"]:
             any_yaml_changed = True
-            prefix = "(dry-run) " if args.dry_run else ""
+            prefix = DRY_RUN_PREFIX if args.dry_run else ""
             print(f"{prefix}{module_name}:")
             for p in result["added"]:
                 print(f"  + {p}")

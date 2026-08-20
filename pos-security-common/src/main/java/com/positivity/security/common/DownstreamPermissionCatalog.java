@@ -594,9 +594,6 @@ public final class DownstreamPermissionCatalog {
         "PERM_workorder:fleet_auth:resolve", // 467
 
         // ── New batch (bits 468–468) ──────────────────────────────────────────
-        // Backfilled: present in GatewayPermissionCatalog since CATALOG_VERSION 57 but missing
-        // here — this file had fallen out of sync, silently misaligning every bit from 468
-        // onward. Fixed alongside the ADR-0055 stage 4 (#1416) addition below.
         "PERM_inventory:adjustment:override", // 468
 
         // ── New batch (bits 469–469) ──────────────────────────────────────────
