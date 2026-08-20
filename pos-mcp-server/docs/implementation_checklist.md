@@ -738,38 +738,38 @@ the Permission lock. So it is specified implementation-ready and verified live t
 
 ### Scope
 
-- [ ] Audited admin endpoints for `mcp_tool_permission` — _ev:_
-- [ ] Dashboards over telemetry — _ev:_
-- [ ] Alerts for safety + quality regressions — _ev:_
-- [ ] Adaptive tuning moved disabled → shadow → controlled-live (post-approval) — _ev:_
-- [ ] Runbooks + docs updated — _ev:_
+- [x] Audited admin endpoints for `mcp_tool_permission` — _ev: admin suite 13:33Z — GET /tools/{tool}/permissions 200 as admin, 403 fail-closed as non-admin; mutations audited via AuditLedgerService (2026-08-19 audit check PASS)_
+- [x] Dashboards over telemetry — _ev: nlti-gate7.json panels verified against live #1408 traffic 2026-08-20 (panel 26: 11 write-records/4 plans; panel 27: confirmed/cancelled mix; panel 25: HTTP corroboration); residual substitute-query areas documented on the panels themselves_
+- [x] Alerts for safety + quality regressions — _ev: PromQL rules have data (pos-mcp-server scrape job live); LogQL rules defined but not evaluating — signed exception, see #1424_
+- [x] Adaptive tuning moved disabled → shadow → controlled-live (post-approval) — _ev: shadow live on alpha (MCP_TUNING_MODE=shadow; 02:00Z cron fired 2026-08-20: "Computed 0 priority proposals ... mode=shadow"); controlled-live deliberately NOT exercised — proposals structurally 0, signed exception #1422_
+- [x] Runbooks + docs updated — _ev: gate-verification-runbook §B.10, dashboards/nlti-overview.md, alerts/nlti-alerts.md, this checklist_
 
 ### Completeness gate
 
-- [ ] Permission mappings curatable at runtime by authorized admins — _ev:_
-- [ ] Admin changes audited — _ev:_
-- [ ] Admin endpoints permission-gated — _ev:_
-- [ ] Dashboard covers: routing, model-tier usage, fallback usage, tool-selection quality, permission rejects, RAG recall, prompt-layer usage, write confirmations/cancellations/expirations/failures, latency p50/p95 — _ev:_
-- [ ] Alerts cover: failed-tool-call spike, permission-reject spike, fallback overuse, write-failure rate, confirmation-mismatch attempt, retrieval regression, latency SLO breach — _ev:_
-- [ ] Adaptive tuning runs in shadow before live promotion — _ev:_
-- [ ] Tuning promotion requires eval improvement or approved neutral — _ev:_
+- [x] Permission mappings curatable at runtime by authorized admins — _ev: tool-perms surface 200 as admin (13:33Z); add/remove mapping + TTL take-effect verified 2026-08-19 (admin suite 5/8 entry)_
+- [x] Admin changes audited — _ev: audit check PASS 2026-08-19 (who/what/old→new/when via AuditLedgerService); ledger queryable by admin 13:33Z (GET /nlt/audit 200)_
+- [x] Admin endpoints permission-gated — _ev: diana-rowe (no admin perms) GET /prompts → 403, 13:33Z_
+- [x] Dashboard covers: routing, model-tier usage, fallback usage, tool-selection quality, permission rejects, RAG recall, prompt-layer usage, write confirmations/cancellations/expirations/failures, latency p50/p95 — _ev: nlti-gate7.json panel set; write-confirmation area live-verified 2026-08-20; areas on substitute queries pending the telemetry-gap family are annotated on the panels_
+- [x] Alerts cover: failed-tool-call spike, permission-reject spike, fallback overuse, write-failure rate, confirmation-mismatch attempt, retrieval regression, latency SLO breach — _ev: rules defined in alerts/nlti-alerts.md; LogQL evaluation blocked on missing loki ruler — signed exception #1424_
+- [x] Adaptive tuning runs in shadow before live promotion — _ev: MCP_TUNING_MODE=shadow live; 02:00Z cron ran in shadow, wrote nothing ("without writing"); live requires the eval gate by code (ToolPriorityTuningService.evalGateAllowsLive)_
+- [x] Tuning promotion requires eval improvement or approved neutral — _ev: eval-gate plumbing verified live (/opt/eval mount present, MCP_TUNING_EVAL_RESULT_PATH + 48h freshness in-container); gate logic covered by 18 tuning unit tests; not exercised live — signed exception #1422_
 
 ### Correctness tests
 
-- [ ] Unauthorized user cannot access admin endpoints — _ev:_
-- [ ] Admin permission changes take effect after cache invalidation/TTL — _ev:_
-- [ ] Audit log records who/what/when — _ev:_
-- [ ] Shadow tuning does not mutate live priority — _ev:_
-- [ ] Live tuning cannot promote if eval thresholds fail — _ev:_
-- [ ] Dashboard numbers reconcile with telemetry events — _ev:_
+- [x] Unauthorized user cannot access admin endpoints — _ev: 403 fail-closed probe PASS, 13:33Z_
+- [x] Admin permission changes take effect after cache invalidation/TTL — _ev: cache-safe check PASS 2026-08-19 admin run_
+- [x] Audit log records who/what/when — _ev: audit check PASS 2026-08-19; #1408 run shows full PLAN→CONFIRMATION→EXECUTION chain with actor + correlationId_
+- [x] Shadow tuning does not mutate live priority — _ev: 02:00Z shadow run logged "without writing"; shadow branch never issues the UPDATE (code + 18 tests); zero mcp_tool.priority drift observed_
+- [x] Live tuning cannot promote if eval thresholds fail — _ev: evalGateAllowsLive fails closed on absent/stale/failed baseline (unit-tested); baseline file deliberately absent on alpha → any live run would downgrade; not exercised live — signed exception #1422_
+- [x] Dashboard numbers reconcile with telemetry events — _ev: 2026-08-20 — panel 27 mix (1 confirmed / 1 cancelled) == harness outcomes; panel 26 count (11) == write.isWrite records; counter series == both outcomes_
 
 ### Drift checks (assert true)
 
-- [ ] Verified: admin endpoints do not bypass audit — _ev:_
-- [ ] Verified: permission edits are TTL/cache-safe — _ev:_
-- [ ] Verified: adaptive tuning cannot silently mutate priorities — _ev:_
-- [ ] Verified: dashboards use structured telemetry, not ad hoc logs — _ev:_
-- [ ] Verified: runbooks present and current — _ev:_
+- [x] Verified: admin endpoints do not bypass audit — _ev: audit check PASS 2026-08-19 (mapping change recorded)_
+- [x] Verified: permission edits are TTL/cache-safe — _ev: cache-safe check PASS 2026-08-19_
+- [x] Verified: adaptive tuning cannot silently mutate priorities — _ev: shadow-only writes nothing (live log line + code path); live path gated on eval file; #1422 keeps proposals at 0 so no mutation is even possible today_
+- [x] Verified: dashboards use structured telemetry, not ad hoc logs — _ev: panels query nlti.request.telemetry JSON via LogQL json parser + Micrometer meters; the one plain-log series (plan-created INFO) is corroborative_
+- [x] Verified: runbooks present and current — _ev: runbook §B.10 + gate-closeout-plan + this checklist current as of 2026-08-20_
 
 ### Cross-phase locks — [x] run & recorded (admin endpoints audited + permission-gated; permission edits TTL/cache-safe; tuning shadow-first, never silent; dashboards from structured telemetry)
 
@@ -777,7 +777,8 @@ the Permission lock. So it is specified implementation-ready and verified live t
 
 ### Gate 7 sign-off
 
-- Metrics filled: [ ] (live dashboard/tuning verification not yet run) · Decision: **HOLD — implementation largely shipped, live verification pending** · Close-out tracked → #1219
+- Metrics filled: [x] · Decision: **PASS with signed exceptions** (approved Louis Burroughs / 2026-08-20; exceptions: (1) adaptive-tuning proposals are structurally 0 — `tool_id` never populated in `mcp_tool_invocation_log`, so shadow proposals and the controlled-live promotion cannot produce evidence until **#1422** ships; live promotion deliberately NOT exercised rather than recording a vacuous "0 tools tuned" pass; retire with one real shadow night + an admin-suite rerun post-#1422. (2) LogQL alert rules do not evaluate — no `ruler:` block in loki-config — owned by **#1424**; PromQL alerts have data.) · Close-out tracked → #1219
+- **2026-08-20 — Gate 7 close-out evidence (signed-exception path).** Admin suite 13:33Z on `sha-b47b223`: 5 PASS / 2 FAIL / 1 SKIP — prompts 200, llm-apis 200, tool-perms 200 (`price_deletepromotioneligibilityrule`), audit 200, fail-closed 403 (diana-rowe); the 2 FAILs are `admin-tuning-shadow`/`admin-tuning-gate`, exactly the #1422 exception pair; `admin-mutation` SKIP (optional probe). Day-1 soak: the 02:00Z cron fired on schedule — `Computed 0 priority proposals without writing (effective mode=shadow)` — proving scheduler + shadow-mode resolution + no-write behavior; 0 proposals is the #1422 structural gap (96/96 `mcp_tool_invocation_log` rows in 7d carry NULL `tool_id`; every `logToolExecution` call site passes null), so soak nights 2-3 and the promotion were cancelled as un-evidencing. Eval-gate plumbing verified in-container (`MCP_TUNING_MODE=shadow`, `MCP_TUNING_EVAL_RESULT_PATH=/opt/eval/baseline-live-python.json`, 48h freshness, mount present, baseline deliberately absent → live would downgrade). Dashboards reconciled against live #1408 traffic (panels 25/26/27). Incident note: the 09:08Z admin run scored 6 FAIL because PR #1410 bumped the permission catalog to 57 in security-service + gateway but not `DownstreamPermissionCatalog` (56) — every domain service failed closed (`X-Perm-Ver 57 does not match local catalog version 56`); fixed and redeployed as `sha-b47b223` the same day. _ev: `nlti-live-verify-20260820T133326Z.{json,md}` on the alpha eval checkout; container log line 02:00:00.022Z; #1422, #1424._
 - **2026-08-19 — Wave 3 shadow soak started; admin flow verified except tuning (soak-dependent).** `MCP_TUNING_MODE=shadow` live in the alpha container (~16:50 UTC; compose passthrough + read-only `/opt/eval` mount for the live-promotion eval gate shipped in PR #1394 — without the mount every live run would have silently downgraded, since `ToolPriorityTuningService` reads `eval-result-path` from the container filesystem). Soak per decision E: 3 nights of 02:00 UTC cron proposals, then one gated `live` promotion against a fresh `eval_live.py` baseline, then revert. Admin suite currently 5/8: prompts / llm-apis / tool-perms (with `--admin-tool-name price_deletepromotioneligibilityrule`) / audit / fail-closed all PASS; `admin-tuning-shadow` + `admin-tuning-gate` expected-red until the soak; `admin-mutation` SKIP (optional probe — the admin persona holds `mcp:system_prompt:create/delete` for a disposable-prompt CRUD). Dashboard caveats stand: 4 of 7 Gate 7 panel areas run on substitute queries pending the telemetry-gap story, and `loki-config.yml` has no `ruler:` block so the LogQL alert rules cannot evaluate yet. _ev: /tmp/nlti-verify4.{json,md} (admin portion) on the alpha host; PR #1394._
 - 2026-08-07: admin `mcp_tool_permission` endpoints delivered (#785 CLOSED; `ToolPermissionController`, perm-bits #809 — see Gate 3 record); adaptive tuning shadow mode + gated live promotion tracked → #1195 (OPEN).
 - 2026-08-08: **tuning mode shipped** — PR #1199 (#1195 CLOSED): `mcp.tuning.mode=off|shadow|live` (legacy `enabled=true` → live + deprecation WARN); shadow computes and logs proposals (dedicated logger + Micrometer counters) without writing; live is gated on a fresh passing eval result file and degrades to shadow otherwise; 18 tuning tests. Remaining: live admin-flow/dashboard/shadow→live verification on alpha (runbook §B.10), then metrics + Pass decision.
