@@ -65,6 +65,12 @@ class RolePermissionBaselineTest {
     private static final Pattern GRANT_ROW =
             Pattern.compile("^\\s*\\('([A-Z][A-Z_]+)', '([a-zA-Z][a-zA-Z0-9_.-]*(?::[a-zA-Z0-9_.-]+)+)'\\),?$");
 
+    /**
+     * {@code ('NAME'),} — a bare single-column row, as used by the section 4
+     * "fail loudly if any baseline name did not resolve" assertion lists.
+     */
+    private static final Pattern ASSERTION_ROW = Pattern.compile("^\\s*\\('([^']+)'\\),?$");
+
     /** Directory holding the Flyway migrations, relative to the module root. */
     private static final Path MIGRATIONS = Path.of("src/main/resources/db/migration");
 
@@ -76,6 +82,31 @@ class RolePermissionBaselineTest {
      */
     private static final Set<String> UNREACHABLE_LEGACY_ROLES =
             Set.of("ACCOUNTANT", "AP_CLERK", "CONTROLLER", "CSR", "FLEET_MANAGER", "GL_ANALYST");
+
+    /**
+     * The two unratified "Candidate Roles v0" that {@code V3__seed_candidate_roles.sql}
+     * created and {@code V23__drop_unratified_candidate_roles.sql} deletes (#1373).
+     * Nothing in the codebase ever referenced either, and SECURITY_ADMIN's described
+     * scope is already held by SYSTEM_ADMINISTRATOR. Granting to a deleted role would
+     * resolve nothing and trip the seed's own assertion at startup, so this must stay
+     * empty of grants — and V3 still creates them, which means
+     * {@link #everyGrantedRoleIsCreatableAtMigrationTime} cannot catch the mistake.
+     */
+    private static final Set<String> DELETED_CANDIDATE_ROLES = Set.of("SECURITY_ADMIN", "READ_ONLY_SCHEDULER");
+
+    /**
+     * Roles that may create an inventory adjustment (#1373), matching the model
+     * {@code RoleInitializer}'s javadoc documents.
+     */
+    private static final Set<String> ADJUSTMENT_CREATORS =
+            Set.of("ADMIN", "INVENTORY_CONTROLLER", "INVENTORY_LEAD", "INVENTORY_MANAGER");
+
+    /**
+     * Roles that may approve an inventory adjustment (#1373). INVENTORY_LEAD is
+     * deliberately absent: it raises requests, it does not approve them.
+     */
+    private static final Set<String> ADJUSTMENT_APPROVERS =
+            Set.of("ADMIN", "INVENTORY_CONTROLLER", "INVENTORY_MANAGER");
 
     /**
      * Conversational entrypoints every role receives. Holding these grants reach to the
@@ -369,6 +400,120 @@ class RolePermissionBaselineTest {
     @DisplayName("does not grant to the legacy roles nothing can ever assign")
     void doesNotGrantToUnreachableLegacyRoles() {
         assertThat(seededGrants.keySet()).doesNotContainAnyElementsOf(UNREACHABLE_LEGACY_ROLES);
+    }
+
+    @Test
+    @DisplayName("the inventory adjustment roles carry the capability their javadoc documents")
+    void inventoryAdjustmentRolesCarryTheirDocumentedCapability() {
+        // Equality, not containment: #1373 decided who may create and who may approve, and
+        // widening either set is as much a regression as losing it. INVENTORY_MANAGER and
+        // INVENTORY_CONTROLLER are permission-identical on purpose — location versus global
+        // approval reach lives on role_assignments.scope_type, not in role_permissions.
+        assertThat(holdersOf("inventory:adjustment:create"))
+                .as("roles that may create an adjustment request")
+                .isEqualTo(new TreeSet<>(ADJUSTMENT_CREATORS));
+        assertThat(holdersOf("inventory:adjustment:approve"))
+                .as("roles that may approve an adjustment")
+                .isEqualTo(new TreeSet<>(ADJUSTMENT_APPROVERS));
+
+        // Everyone who can act on an adjustment can also see one.
+        assertThat(holdersOf("inventory:adjustment:view")).containsAll(ADJUSTMENT_CREATORS);
+    }
+
+    @Test
+    @DisplayName("the negative-stock override is reserved for globally scoped approvers")
+    void adjustmentOverrideIsReservedToGlobalApprovers() {
+        // ScrapServiceImpl enforces this authority when a scrap would drive on-hand below
+        // zero. Until #1373 it had no PermissionCode bit index at all, so it could not
+        // travel in a JWT and the override path was unreachable for every user including
+        // ADMIN. Equality pins the decision that only a global approver may use it.
+        assertThat(holdersOf("inventory:adjustment:override"))
+                .as("roles holding the negative-stock escape hatch")
+                .containsExactly("ADMIN", "INVENTORY_CONTROLLER");
+    }
+
+    @Test
+    @DisplayName("SHOP_MANAGER carries the shop surface its role description names")
+    void shopManagerCarriesTheShopSurface() {
+        assertThat(seededGrants.get("SHOP_MANAGER"))
+                .as("V3 describes SHOP_MANAGER as full shop management: schedules, "
+                        + "assignments and audit review. There is no shop audit permission "
+                        + "in pos-shop-manager's manifest, so audit review is not granted.")
+                .contains(
+                        "shop:location:view",
+                        "shop:bay:view",
+                        "shop:bay:assign",
+                        "shop:schedule:view",
+                        "shop:schedule:edit",
+                        "shop:technician:view");
+    }
+
+    @Test
+    @DisplayName("the customer-facing roles hold the assistant entrypoints and nothing else")
+    void customerFacingRolesHoldOnlyTheAssistantEntrypoints() {
+        // #1373 confirmed zero domain capability as correct for both, rather than inherited.
+        // Equality makes any future domain grant to an external-facing role a deliberate edit.
+        assertThat(seededGrants.get("CUSTOMER")).isEqualTo(new TreeSet<>(ASSISTANT_BASELINE));
+        assertThat(seededGrants.get("SELF_SERVICE_CUSTOMER")).isEqualTo(new TreeSet<>(ASSISTANT_BASELINE));
+    }
+
+    @Test
+    @DisplayName("does not grant to the candidate roles V23 deletes")
+    void doesNotGrantToDeletedCandidateRoles() {
+        assertThat(seededGrants.keySet()).doesNotContainAnyElementsOf(DELETED_CANDIDATE_ROLES);
+    }
+
+    /** Roles holding {@code permission}, sorted, so a failure reads as a set difference. */
+    private static Set<String> holdersOf(String permission) {
+        return seededGrants.entrySet().stream()
+                .filter(entry -> entry.getValue().contains(permission))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toCollection(TreeSet::new));
+    }
+
+    @Test
+    @DisplayName("the resolution assertion lists exactly the roles and permissions the seed grants")
+    void resolutionAssertionMatchesTheGrants() throws IOException {
+        // Section 4 aborts the migration when a baseline name does not resolve, which is what
+        // stops the JOINs above from silently under-granting. It is a hand-maintained copy of
+        // the grant block, so it drifts in both directions and each direction breaks something
+        // different: a name listed there but no longer granted aborts startup outright once the
+        // role or permission goes away (this is what deleting SECURITY_ADMIN and
+        // READ_ONLY_SCHEDULER in #1373 would otherwise have done), while a name granted but not
+        // listed is a grant the assertion no longer covers, which is the failure it exists to
+        // catch. Equality both ways is the only version of this that holds.
+        List<String> lines = readResource(SEED).lines().toList();
+
+        Set<String> assertedRoles = new TreeSet<>();
+        Set<String> assertedPermissions = new TreeSet<>();
+        for (String line : lines) {
+            Matcher row = ASSERTION_ROW.matcher(line);
+            if (!row.matches()) {
+                continue;
+            }
+            String value = row.group(1);
+            // The two lists are distinguishable by shape: permission names are colon-bearing
+            // and lower-case, role names are neither.
+            if (value.contains(":")) {
+                assertedPermissions.add(value);
+            } else if (value.matches("[A-Z][A-Z_]+")) {
+                assertedRoles.add(value);
+            }
+        }
+
+        assertThat(assertedRoles)
+                .as("no role assertion list parsed out of %s", SEED)
+                .isNotEmpty();
+
+        Set<String> grantedPermissions =
+                seededGrants.values().stream().flatMap(Set::stream).collect(Collectors.toCollection(TreeSet::new));
+
+        assertThat(assertedRoles)
+                .as("roles asserted in section 4 vs roles actually granted to")
+                .isEqualTo(new TreeSet<>(seededGrants.keySet()));
+        assertThat(assertedPermissions)
+                .as("permissions asserted in section 4 vs permissions actually granted")
+                .isEqualTo(grantedPermissions);
     }
 
     private static String readResource(String name) throws IOException {

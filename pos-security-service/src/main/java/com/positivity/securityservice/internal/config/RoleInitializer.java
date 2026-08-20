@@ -19,6 +19,14 @@ import org.springframework.stereotype.Component;
  * - INVENTORY_LEAD: Can create adjustment requests
  * - INVENTORY_MANAGER: Can create and approve adjustments (location-scoped)
  * - INVENTORY_CONTROLLER: Can approve adjustments globally
+ *
+ * This class creates the roles only; the grants that make the model above real
+ * live in {@code R__seed_role_permissions.sql} (#1373). Note that the
+ * location-scoped/global split is expressed by
+ * {@code role_assignments.scope_type} at assignment time, not by the roles
+ * holding different permissions — INVENTORY_MANAGER and INVENTORY_CONTROLLER
+ * carry the same adjustment grants, and the latter additionally holds the
+ * negative-stock override.
  */
 @Component
 @RequiredArgsConstructor

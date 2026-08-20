@@ -122,7 +122,10 @@ class InvoiceFinalizationServiceTest {
     }
 
     /**
-     * Sets up a SHOP_MANAGER role in the security context for tests that need it.
+     * Sets up a manager security context holding {@code invoice:finalize:override},
+     * the authority the baseline seed grants to ADMIN and the manager roles (#1374).
+     * The role name rides along only to mirror a real token; since #1373 the
+     * authority alone is what bypasses the SERVICE_ADVISOR cap.
      */
     private void withShopManagerContext() {
         var auth = new UsernamePasswordAuthenticationToken(
@@ -283,7 +286,7 @@ class InvoiceFinalizationServiceTest {
         when(invoiceRepository.findById(invoiceId))
                 .thenReturn(Optional.of(draftInvoice(
                         UUID.fromString("00000000-0000-0000-0000-000000000001"), new BigDecimal("500.01"))));
-        // No approval code, no SHOP_MANAGER role in context → rejected
+        // No approval code, no invoice:finalize:override in context → rejected
         FinalizationRequest request = serviceAdvisorRequest(null);
 
         assertThatThrownBy(() -> service.completeInvoice(invoiceId, request))
@@ -292,12 +295,13 @@ class InvoiceFinalizationServiceTest {
     }
 
     /**
-     * AC3: SHOP_MANAGER is not subject to the $500 cap — $1000 must succeed.
+     * AC3: a holder of {@code invoice:finalize:override} is not subject to the $500
+     * cap — $1000 must succeed.
      */
     @Test
-    void finalize_succeeds_forShopManagerWithAmountAboveLimit() {
+    void finalize_succeeds_forOverrideAuthorityHolderWithAmountAboveLimit() {
         UUID invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        // C1: SHOP_MANAGER role derived from SecurityContext
+        // C1: invoice:finalize:override derived from SecurityContext
         withShopManagerContext();
         when(invoiceRepository.findById(invoiceId))
                 .thenReturn(Optional.of(draftInvoice(
@@ -527,14 +531,13 @@ class InvoiceFinalizationServiceTest {
     }
 
     /**
-     * Builds a {@link FinalizationRequest} for a SHOP_MANAGER actor.
+     * Builds a {@link FinalizationRequest} for an override-authority actor.
      *
      * <p>
-     * Callers must set up the security context with ROLE_SHOP_MANAGER before
-     * invoking
-     * {@code service.finalize()} to exercise the shop-manager code path.
+     * Callers must set up the security context with {@code invoice:finalize:override}
+     * before invoking {@code service.finalize()} to exercise the auto-approved path.
      *
-     * @return empty request (no fields needed for SHOP_MANAGER path)
+     * @return empty request (no fields needed on the override path)
      */
     private FinalizationRequest shopManagerRequest() {
         return new FinalizationRequest();

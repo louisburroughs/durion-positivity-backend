@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 56")
+    @DisplayName("CATALOG_VERSION is 57")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(56);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(57);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 467")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 468")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1332,8 +1332,13 @@ class SecurityGatewayConfigTest {
         // Fleet payment authorization (#1346): requesting one, and resolving a refusal.
         assertThat(GatewayPermissionCatalog.authorityForBit(466)).isEqualTo("PERM_workorder:fleet_auth:request");
         assertThat(GatewayPermissionCatalog.authorityForBit(467)).isEqualTo("PERM_workorder:fleet_auth:resolve");
+        // Negative-stock override (#1373). The permission already existed in pos-inventory's
+        // manifest and ScrapServiceImpl already enforced it, but it had no bit index — so it
+        // could not travel in a JWT and the override path was unreachable for every user,
+        // ADMIN included. Cataloguing it here is what makes the check answerable.
+        assertThat(GatewayPermissionCatalog.authorityForBit(468)).isEqualTo("PERM_inventory:adjustment:override");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(468)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(469)).isNull();
     }
 
     @Test

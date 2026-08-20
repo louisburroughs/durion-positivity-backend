@@ -428,10 +428,11 @@ public class InvoiceServiceImpl implements InvoiceService {
      * <p>This flag mirrors the threshold portion of
      * {@link InvoiceFinalizationServiceImpl#checkEligibility} (role-agnostic): it
      * reflects whether the invoice total is over the limit, NOT the viewing
-     * actor's authority. A SHOP_MANAGER is exempt from the approval code at
-     * finalize time, but the detail response is computed without a role, so the UI
-     * should treat this as "approval may be required" and rely on the finalize
-     * endpoint for the authoritative enforcement.
+     * actor's authority. A holder of {@code invoice:finalize:override} is exempt
+     * from the approval code at finalize time, but the detail response is computed
+     * without consulting authority, so the UI should treat this as "approval may be
+     * required" and rely on the finalize endpoint for the authoritative
+     * enforcement.
      */
     private boolean requiresManagerApproval(@NonNull Invoice invoice) {
         if (invoice.getStatus() != InvoiceStatus.DRAFT) {
