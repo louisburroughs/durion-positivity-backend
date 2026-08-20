@@ -22,6 +22,7 @@ import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
+import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.TierRouting;
@@ -95,6 +96,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private final @Nullable AnswerResolutionLadder answerResolutionLadder;
     private final @Nullable RequestScopedUserContext requestScopedUserContext;
     private final @Nullable RoleDefaultPermissionsClient roleDefaultPermissionsClient;
+    private final @Nullable ToolInvocationRecorder toolInvocationRecorder;
     private final NltiWorkflowStateService workflowStateService;
     private final @Nullable NltiRouter nltiRouter;
     private final @Nullable TieredChatModelResolver tieredChatModelResolver;
@@ -124,6 +126,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             @Nullable AnswerResolutionLadder answerResolutionLadder,
             @Nullable RequestScopedUserContext requestScopedUserContext,
             @Nullable RoleDefaultPermissionsClient roleDefaultPermissionsClient,
+            @Nullable ToolInvocationRecorder toolInvocationRecorder,
             @NonNull NltiWorkflowStateService workflowStateService,
             @Nullable NltiRouter nltiRouter,
             @Nullable TieredChatModelResolver tieredChatModelResolver,
@@ -151,6 +154,7 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
         this.answerResolutionLadder = answerResolutionLadder;
         this.requestScopedUserContext = requestScopedUserContext;
         this.roleDefaultPermissionsClient = roleDefaultPermissionsClient;
+        this.toolInvocationRecorder = toolInvocationRecorder;
         this.workflowStateService = workflowStateService;
         this.nltiRouter = nltiRouter;
         this.tieredChatModelResolver = tieredChatModelResolver;
@@ -397,7 +401,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 resilientContentRetriever,
                 this::chatMemoryFor,
                 openApiToolProvider,
-                answerResolutionLadder);
+                answerResolutionLadder,
+                toolInvocationRecorder);
         LOGGER.debug(
                 "Built MCP role agent role={} promptName={} ragScope={} tier={} toolNames={}",
                 role,

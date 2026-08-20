@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.orchestration;
 
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
+import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -42,10 +43,11 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
             @NonNull List<Object> staticTools,
             @NonNull QueryDocumentRetriever ragRetriever,
             @NonNull Function<String, ChatMemory> chatMemoryProvider,
-            @Nullable OpenApiToolProvider openApiToolProvider) {
+            @Nullable OpenApiToolProvider openApiToolProvider,
+            @Nullable ToolInvocationRecorder invocationRecorder) {
         this.streamingChatModel = streamingChatModel;
         this.systemPromptSupplier = systemPromptSupplier;
-        this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools);
+        this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools, invocationRecorder);
         this.ragRetriever = ragRetriever;
         this.chatMemoryProvider = chatMemoryProvider;
         this.openApiToolProvider = openApiToolProvider;

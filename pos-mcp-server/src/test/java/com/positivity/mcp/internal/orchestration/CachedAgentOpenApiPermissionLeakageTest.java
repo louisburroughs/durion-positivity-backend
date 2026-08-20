@@ -165,7 +165,8 @@ class CachedAgentOpenApiPermissionLeakageTest {
                 proxyFactory,
                 new ObjectMapper(),
                 8,
-                Duration.ofSeconds(30));
+                Duration.ofSeconds(30),
+                null);
 
         // Seeded discovered op (source='openapi'), gated on exactly one permission. The candidate
         // query is fail-closed: it returns the op only when the caller's codes contain that
@@ -302,6 +303,7 @@ class CachedAgentOpenApiPermissionLeakageTest {
                 null, // answerResolutionLadder
                 contextOrNull,
                 null, // roleDefaultPermissionsClient
+                null, // toolInvocationRecorder
                 workflowStateService,
                 null, // nltiRouter
                 null, // tieredChatModelResolver

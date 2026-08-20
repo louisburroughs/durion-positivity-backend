@@ -63,6 +63,14 @@ public interface ToolMetadataRepository {
     @NonNull
     Optional<UUID> findDiscoveredToolIdByName(@NonNull String name);
 
+    /**
+     * #1422: resolves any tool id by its unique name regardless of source — facade rows (PascalCase
+     * class names) and discovered openapi rows alike — so per-execution invocation logging can
+     * attribute a {@code tool_id}. Empty when no tool has the given name.
+     */
+    @NonNull
+    Optional<UUID> findToolIdByName(@NonNull String name);
+
     /** Gate 3 (#785): the permission codes currently granted to a tool, ascending. */
     @NonNull
     List<String> listToolPermissions(@NonNull UUID toolId);

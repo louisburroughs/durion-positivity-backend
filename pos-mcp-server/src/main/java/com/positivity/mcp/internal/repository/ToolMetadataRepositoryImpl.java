@@ -262,6 +262,13 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
     }
 
     @Override
+    public @NonNull Optional<UUID> findToolIdByName(@NonNull String name) {
+        List<UUID> ids = jdbcTemplate.query(
+                "SELECT id FROM mcp_tool WHERE name = ?", (rs, rowNum) -> rs.getObject("id", UUID.class), name);
+        return ids.isEmpty() ? Optional.empty() : Optional.of(ids.get(0));
+    }
+
+    @Override
     public @NonNull Optional<UUID> findDiscoveredToolIdByName(@NonNull String name) {
         List<UUID> ids = jdbcTemplate.query(
                 "SELECT id FROM mcp_tool WHERE name = ? AND source = 'openapi'",

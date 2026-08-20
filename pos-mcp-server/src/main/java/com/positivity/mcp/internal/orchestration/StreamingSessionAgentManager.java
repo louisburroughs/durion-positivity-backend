@@ -19,6 +19,7 @@ import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
+import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.TierRouting;
@@ -97,6 +98,9 @@ public class StreamingSessionAgentManager
     @Nullable
     private final RoleDefaultPermissionsClient roleDefaultPermissionsClient;
 
+    @Nullable
+    private final ToolInvocationRecorder toolInvocationRecorder;
+
     private final NltiWorkflowStateService workflowStateService;
 
     private final @Nullable NltiRouter nltiRouter;
@@ -127,6 +131,7 @@ public class StreamingSessionAgentManager
             @Nullable OpenApiToolProvider openApiToolProvider,
             @Nullable RequestScopedUserContext requestScopedUserContext,
             @Nullable RoleDefaultPermissionsClient roleDefaultPermissionsClient,
+            @Nullable ToolInvocationRecorder toolInvocationRecorder,
             @NonNull NltiWorkflowStateService workflowStateService,
             @Nullable NltiRouter nltiRouter,
             @Nullable TieredChatModelResolver tieredChatModelResolver,
@@ -150,6 +155,7 @@ public class StreamingSessionAgentManager
         this.openApiToolProvider = openApiToolProvider;
         this.requestScopedUserContext = requestScopedUserContext;
         this.roleDefaultPermissionsClient = roleDefaultPermissionsClient;
+        this.toolInvocationRecorder = toolInvocationRecorder;
         this.workflowStateService = workflowStateService;
         this.nltiRouter = nltiRouter;
         this.tieredChatModelResolver = tieredChatModelResolver;
@@ -505,7 +511,8 @@ public class StreamingSessionAgentManager
                 tools,
                 resilientContentRetriever,
                 this::chatMemoryFor,
-                openApiToolProvider);
+                openApiToolProvider,
+                toolInvocationRecorder);
         LOGGER.debug(
                 "Built MCP streaming role agent role={} promptName={} ragScope={} tier={} toolNames={}",
                 role,

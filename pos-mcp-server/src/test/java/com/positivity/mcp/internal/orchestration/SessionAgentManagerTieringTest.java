@@ -287,6 +287,7 @@ class SessionAgentManagerTieringTest {
                 null, // answerResolutionLadder
                 contextOrNull,
                 null, // roleDefaultPermissionsClient
+                null, // toolInvocationRecorder
                 workflowStateService,
                 router,
                 resolver,

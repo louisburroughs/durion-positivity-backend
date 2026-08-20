@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration;
 import com.positivity.mcp.internal.orchestration.rag.QueryDocumentRetriever;
 import com.positivity.mcp.internal.service.AnswerResolutionLadder;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
+import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
@@ -44,10 +45,11 @@ final class SpringAiPosAssistant implements PosAssistant {
             @NonNull QueryDocumentRetriever ragRetriever,
             @NonNull Function<String, ChatMemory> chatMemoryProvider,
             @Nullable OpenApiToolProvider openApiToolProvider,
-            @Nullable AnswerResolutionLadder answerResolutionLadder) {
+            @Nullable AnswerResolutionLadder answerResolutionLadder,
+            @Nullable ToolInvocationRecorder invocationRecorder) {
         this.chatModel = chatModel;
         this.systemPromptSupplier = systemPromptSupplier;
-        this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools);
+        this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools, invocationRecorder);
         this.ragRetriever = ragRetriever;
         this.chatMemoryProvider = chatMemoryProvider;
         this.openApiToolProvider = openApiToolProvider;

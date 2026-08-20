@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -20,6 +21,7 @@ import org.springframework.ai.tool.definition.DefaultToolDefinition;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.metadata.DefaultToolMetadata;
 import org.springframework.ai.tool.metadata.ToolMetadata;
+import org.springframework.util.ClassUtils;
 
 final class SpringAiToolCallbackResolver {
 
@@ -29,15 +31,28 @@ final class SpringAiToolCallbackResolver {
     private SpringAiToolCallbackResolver() {}
 
     static @NonNull List<ToolCallback> fromObjects(@NonNull List<Object> toolObjects) {
+        return fromObjects(toolObjects, null);
+    }
+
+    /**
+     * #1422: when a recorder is supplied, every facade callback is wrapped so each execution logs
+     * an {@code mcp_tool_invocation_log} row. The lookup key is the owning facade's user-class
+     * simple name (e.g. {@code OrderFacadeTool}) — that is how facade rows are keyed in
+     * {@code mcp_tool.name}; the callback's own name is the {@code @Tool} method name.
+     */
+    static @NonNull List<ToolCallback> fromObjects(
+            @NonNull List<Object> toolObjects, @Nullable ToolInvocationRecorder invocationRecorder) {
         List<ToolCallback> callbacks = new ArrayList<>();
         for (Object toolObject : toolObjects) {
-            callbacks.addAll(fromObject(toolObject));
+            callbacks.addAll(fromObject(toolObject, invocationRecorder));
         }
         return List.copyOf(callbacks);
     }
 
-    private static @NonNull List<ToolCallback> fromObject(@NonNull Object toolObject) {
+    private static @NonNull List<ToolCallback> fromObject(
+            @NonNull Object toolObject, @Nullable ToolInvocationRecorder invocationRecorder) {
         List<ToolCallback> callbacks = new ArrayList<>();
+        String facadeName = ClassUtils.getUserClass(toolObject).getSimpleName();
         for (Method method : toolObject.getClass().getMethods()) {
             Tool toolAnnotation = method.getAnnotation(Tool.class);
             if (toolAnnotation == null) {
@@ -47,7 +62,8 @@ final class SpringAiToolCallbackResolver {
             if (description.isBlank()) {
                 description = method.getName();
             }
-            callbacks.add(new ReflectiveToolCallback(toolObject, method, description));
+            ToolCallback callback = new ReflectiveToolCallback(toolObject, method, description);
+            callbacks.add(invocationRecorder != null ? invocationRecorder.wrap(callback, facadeName) : callback);
         }
         return callbacks;
     }
