@@ -1,624 +1,130 @@
 openapi: 3.1.0
 info:
-  title: Vehicle Inventory API
-  description: API for managing vehicle inventory in the POS system
   contact:
-    name: Durion Support Services
     email: platform@durionpos.org
+    name: Durion Support Services
+  description: API for managing vehicle inventory in the POS system
+  title: Vehicle Inventory API
   version: '1.0'
 servers:
-- url: http://localhost:8086
-  description: Generated server url
+- description: Generated server url
+  url: http://localhost:8086
 tags:
-- name: Vehicle Registry API
-  description: Operations for creating and maintaining vehicle registry records
-- name: Vehicle API
-  description: Endpoints for vehicle CRUD and VIN-based operations
-- name: Vehicle Bulk Ingest API
-  description: Bulk import vehicle records
-- name: Vehicle Preferences
-  description: Manage vehicle care preferences with flexible schema support
-- name: Vehicle Search
-  description: Search and discover vehicles with ranking-based results
+- description: Operations for creating and maintaining vehicle registry records
+  name: Vehicle Registry API
+- description: Endpoints for vehicle CRUD and VIN-based operations
+  name: Vehicle API
+- description: Bulk import vehicle records
+  name: Vehicle Bulk Ingest API
+- description: Manage vehicle care preferences with flexible schema support
+  name: Vehicle Preferences
+- description: Search and discover vehicles with ranking-based results
+  name: Vehicle Search
 paths:
-  /v1/vehicles/{vehicleId}/preferences:
-    get:
-      tags:
-      - Vehicle Preferences
-      summary: Get vehicle care preferences
-      description: 'Returns the care-preference document for a vehicle, including the free-form preferences map, the structured service interval in months and any service notes.
+  /v1/vehicle-registry:
+    post:
+      description: 'Creates an active vehicle registry record after validating and normalizing the VIN, which must be globally unique among active vehicles.
 
-        Use this tool to read what a customer wants for vehicle care; do not use getVehicle, which returns the registry record itself and carries no preferences.
+        Use this tool to register a single vehicle whose changes replicate to consumer services; do not use bulkIngestVehicles, which loads batches with per-row results, and do not use createVehicleLegacy, which writes the unreplicated legacy store.
 
-        Preconditions: a preference document must already have been stored for the vehicle, because vehicles start with no preferences.
+        Preconditions: no active vehicle may already hold the same normalized VIN; a deactivated vehicle releases its VIN for reuse.
 
-        Required inputs: vehicleId (UUID) as a path parameter; there is no request body.
+        Required inputs: accountId (UUID) and vin (17 characters after separators are stripped, with letters I, O and Q rejected); unitNumber and description are optional and stored as empty strings when omitted, and licensePlate, licensePlateJurisdiction, year, make, model and trim are optional.
 
-        No events are emitted and no state changes; this is a read-only projection.
+        Emits a VEHICLE_CREATE event and queues a vehicle.vehicle.updated fact on the vehicle.events.v1 outbox for downstream replicas.
 
-        Returns 404 with an empty body when no preference document exists for the vehicle.
+        Returns 201 with the created record, and 400 with a VALIDATION_ERROR ApiError when the VIN is malformed or an active vehicle already holds the same normalized VIN; the duplicate-VIN case is reported as 400, not 409.
 
         '
-      operationId: getVehiclePreferences
-      parameters:
-      - name: vehicleId
-        in: path
-        description: Vehicle ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Preferences found and returned
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
-        '404':
-          description: No preferences found for this vehicle
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
-      security:
-      - bearerAuth: []
-      x-required-permissions:
-      - AUTHENTICATED
-    put:
-      tags:
-      - Vehicle Preferences
-      summary: Create or update vehicle care preferences
-      description: 'Creates or fully replaces the care-preference document for a vehicle, storing the preferences map and the structured service interval.
-
-        Use this tool to set preferences wholesale; use mergeVehiclePreferences instead for partial changes, because this operation replaces the entire map and a null serviceIntervalMonths clears the stored interval override.
-
-        Preconditions: the vehicle must exist in the registry; an existing preference document is replaced and a missing one is created.
-
-        Required inputs: preferences (a map, which may be empty but not null); serviceIntervalMonths is optional and must be between 1 and 120 months, a legacy serviceIntervalMonths key inside the map is promoted into the structured column, and serviceNotes, createdByUserId and updatedByUserId are optional.
-
-        Emits a VEHICLE_PREFERENCES_UPSERT event and queues a vehicle.care-preference.updated fact for CRM consumers.
-
-        Returns 200 with the saved document for both create and replace, 404 with a RESOURCE_NOT_FOUND ApiError when the vehicle does not exist, and 400 with a VALIDATION_ERROR ApiError when serviceIntervalMonths is outside 1 to 120.
-
-        '
-      operationId: upsertVehiclePreferences
-      parameters:
-      - name: vehicleId
-        in: path
-        description: Vehicle ID
-        required: true
-        schema:
-          type: string
-          format: uuid
+      operationId: createVehicle
       requestBody:
-        description: Complete care-preference document that replaces whatever is currently stored for the vehicle.
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/PreferencesUpsertDto'
             examples:
-              Full preference document:
-                description: Full preference document
+              Registry vehicle:
+                description: Registry vehicle
                 value:
-                  preferences:
-                    preferredOil: 5W-30
-                    tireRotationInterval: 5000
-                  serviceIntervalMonths: 6
-                  serviceNotes: Customer prefers synthetic oil only
-                  createdByUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
-                  updatedByUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  accountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  description: 2003 Honda Accord EX Sedan
+                  licensePlate: ABC1234
+                  licensePlateJurisdiction: CA
+                  make: Honda
+                  model: Accord
+                  trim: EX
+                  unitNumber: UNIT-1042
+                  vin: 1HGCM82633A004352
+                  year: 2003
+            schema:
+              $ref: '#/components/schemas/CreateVehicleRequest'
+        description: Registry vehicle to create, owned by one account and identified by a globally unique VIN.
         required: true
       responses:
-        '200':
-          description: Preferences updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
         '201':
-          description: Preferences created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
-        '404':
-          description: Vehicle not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+                $ref: '#/components/schemas/VehicleResponse'
+          description: Vehicle created successfully.
         '400':
-          description: Invalid preference data
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+                $ref: '#/components/schemas/VehicleResponse'
+          description: Invalid vehicle request.
       security:
       - bearerAuth: []
-      x-required-permissions:
-      - AUTHENTICATED
-    delete:
+      summary: Create vehicle
       tags:
-      - Vehicle Preferences
-      summary: Delete vehicle care preferences
-      description: 'Removes the entire care-preference document for a vehicle when one exists.
-
-        Use this tool to clear all stored preferences at once; do not use mergeVehiclePreferences to blank individual keys when the intent is a full reset.
-
-        Preconditions: none; the operation is idempotent and a vehicle without preferences is left untouched.
-
-        Required inputs: vehicleId (UUID) as a path parameter; there is no request body.
-
-        Emits a VEHICLE_PREFERENCES_DELETE event, and queues a vehicle.care-preference.updated tombstone fact for CRM consumers only when a document was actually removed.
-
-        Returns 204 in all cases, including when no preference document exists, because deletion is idempotent.
-
-        '
-      operationId: deleteVehiclePreferences
-      parameters:
-      - name: vehicleId
-        in: path
-        description: Vehicle ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '204':
-          description: Preferences deleted, or no preference document existed (idempotent delete)
-      security:
-      - bearerAuth: []
+      - Vehicle Registry API
       x-required-permissions:
       - AUTHENTICATED
-    patch:
-      tags:
-      - Vehicle Preferences
-      summary: Partially update vehicle care preferences
-      description: 'Merges the supplied preference keys into a vehicle''s existing care-preference document without replacing the rest of the map.
-
-        Use this tool for partial changes such as one key or the interval alone; do not use upsertVehiclePreferences, which replaces the whole map and clears the interval when it is omitted.
-
-        Preconditions: a preference document must already exist for the vehicle, because this operation cannot create one.
-
-        Required inputs: no body field is individually mandatory; partialPreferences keys overwrite matching stored keys, serviceIntervalMonths must be between 1 and 120 months and leaves the stored value unchanged when null, and a legacy serviceIntervalMonths key inside the map is promoted into the structured column rather than kept in the blob.
-
-        Emits a VEHICLE_PREFERENCES_MERGE event and queues a vehicle.care-preference.updated fact for CRM consumers.
-
-        Returns 200 with the merged document, 404 with a RESOURCE_NOT_FOUND ApiError when no preference document exists for the vehicle, and 400 with a VALIDATION_ERROR ApiError when an interval value is out of range or not a whole number.
-
-        '
-      operationId: mergeVehiclePreferences
-      parameters:
-      - name: vehicleId
-        in: path
-        description: Vehicle ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        description: Subset of preference fields to merge into the existing care-preference document.
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PreferencesMergeDto'
-            examples:
-              Partial preference merge:
-                description: Partial preference merge
-                value:
-                  partialPreferences:
-                    tireRotationInterval: 7500
-                  serviceIntervalMonths: 6
-                  updatedByUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
-        required: true
-      responses:
-        '200':
-          description: Preferences merged successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
-        '404':
-          description: No existing preferences to merge into
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
-      security:
-      - bearerAuth: []
-      x-required-permissions:
-      - AUTHENTICATED
-  /v1/vehicles-legacy/{id}:
+  /v1/vehicle-registry/vin/{vin}:
     get:
-      tags:
-      - Vehicle API
-      summary: Get vehicle by ID
-      description: 'Returns a single vehicle from the legacy vehicle store by its UUID primary key.
+      description: 'Returns a single vehicle registry record by VIN, normalizing the supplied value by trimming, uppercasing and stripping separators before the lookup.
 
-        Use this tool when the legacy vehicle id is already known; use getVehicleLegacyByVin instead when only the VIN is known, and do not use getVehicle, which reads the separate registry store.
+        Use this tool when the full 17-character VIN is known; use searchVehicles instead for partial VIN prefixes, and do not use getVehicleLegacyByVin, which reads the legacy store.
 
-        Preconditions: the vehicle must exist in the legacy store; legacy deletes are hard deletes, so a deleted vehicle is gone rather than flagged inactive.
+        Preconditions: a record with the normalized VIN must exist in the registry; active and deactivated vehicles are both returned.
 
-        Required inputs: id (UUID) as a path parameter; there is no request body.
+        Required inputs: vin as a path parameter, exactly 17 characters; there is no request body.
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 with an empty body when no legacy vehicle exists for the supplied id.
+        Returns 404 with an empty body when no registry record carries the normalized VIN, and 400 with a VALIDATION_FAILED ApiError when the path VIN is not exactly 17 characters.
 
         '
-      operationId: getVehicleLegacy
+      operationId: getVehicleByVin
       parameters:
-      - name: id
+      - description: Vehicle VIN
         in: path
-        description: ID of the vehicle to retrieve
+        name: vin
         required: true
         schema:
+          maxLength: 17
+          minLength: 17
           type: string
-          format: uuid
-        example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
       responses:
         '200':
-          description: Vehicle found and returned.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleLegacyResponse'
+                $ref: '#/components/schemas/VehicleResponse'
+          description: Vehicle retrieved successfully.
         '404':
-          description: Vehicle not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleLegacyResponse'
-      security:
-      - bearerAuth: []
-      x-required-permissions:
-      - AUTHENTICATED
-    put:
-      tags:
-      - Vehicle API
-      summary: Update vehicle by ID
-      description: 'Replaces the core fields of an existing legacy vehicle identified by its UUID, applying make, model, year, VIN and vehicleType from the request.
-
-        Use this tool to correct a legacy record by id; use updateVehicleLegacyByVin instead when only the VIN is known, and do not use updateVehicle, which patches registry vehicles field by field.
-
-        Preconditions: the vehicle must already exist in the legacy store; the request is a full replacement of core fields rather than a partial patch.
-
-        Required inputs: id (UUID) as a path parameter plus make, model and year in the body (year between 1886 and the current year plus one); vin and vehicleType are optional.
-
-        Emits a VEHICLE_UPDATE event; no replica fact is published from the legacy surface.
-
-        Returns 404 with an empty body when the id is unknown, and 400 with a VALIDATION_ERROR ApiError when make, model or year is missing or invalid.
-
-        '
-      operationId: updateVehicleLegacy
-      parameters:
-      - name: id
-        in: path
-        description: ID of the vehicle to update
-        required: true
-        schema:
-          type: string
-          format: uuid
-        example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
-      requestBody:
-        description: Full replacement values for the legacy vehicle's core fields.
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VehicleLegacyRequest'
-            examples:
-              Legacy vehicle:
-                description: Legacy vehicle
-                value:
-                  make: Honda
-                  model: Accord
-                  year: 2003
-                  vin: 1HGCM82633A004352
-                  vehicleType: CAR
-        required: true
-      responses:
-        '200':
-          description: Vehicle updated successfully.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleLegacyResponse'
-        '404':
-          description: Vehicle not found.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleLegacyResponse'
-      security:
-      - bearerAuth: []
-      x-required-permissions:
-      - AUTHENTICATED
-    delete:
-      tags:
-      - Vehicle API
-      summary: Delete vehicle by ID
-      description: 'Permanently deletes a vehicle from the legacy vehicle store; the row is removed rather than deactivated.
-
-        Use this tool to purge a legacy record by id; do not use deleteVehicle, which soft-deactivates a registry vehicle and keeps it readable.
-
-        Preconditions: the vehicle must exist in the legacy store; deletion is not recoverable through this API.
-
-        Required inputs: id (UUID) as a path parameter; there is no request body.
-
-        Emits a VEHICLE_DELETE event; no replica fact is published from the legacy surface.
-
-        Returns 204 on successful deletion, and 404 with an empty body when the id is unknown.
-
-        '
-      operationId: deleteVehicleLegacy
-      parameters:
-      - name: id
-        in: path
-        description: ID of the vehicle to delete
-        required: true
-        schema:
-          type: string
-          format: uuid
-        example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
-      responses:
-        '204':
-          description: Vehicle deleted successfully.
-        '404':
+                $ref: '#/components/schemas/VehicleResponse'
           description: Vehicle not found.
       security:
       - bearerAuth: []
-      x-required-permissions:
-      - AUTHENTICATED
-  /v1/vehicles-legacy/vin/{vin}:
-    get:
-      tags:
-      - Vehicle API
       summary: Get vehicle by VIN
-      description: 'Returns a single vehicle from the legacy vehicle store by VIN, trimming the supplied value before the lookup.
-
-        Use this tool when only the VIN of a legacy record is known; use getVehicleLegacy instead when the id is known, and do not use getVehicleByVin, which reads the registry store with normalized VINs.
-
-        Preconditions: the vehicle must exist in the legacy store; the lookup is an exact match on the trimmed VIN, not a normalized or partial match.
-
-        Required inputs: vin as a non-blank path parameter; there is no request body.
-
-        No events are emitted and no state changes; this is a read-only projection.
-
-        Returns 404 with an empty body when no legacy vehicle carries the VIN, and 400 with a VALIDATION_ERROR ApiError when the VIN is blank.
-
-        '
-      operationId: getVehicleLegacyByVin
-      parameters:
-      - name: vin
-        in: path
-        description: VIN of the vehicle to retrieve
-        required: true
-        schema:
-          type: string
-        example: 1HGCM82633A004352
-      responses:
-        '200':
-          description: Vehicle found and returned.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleLegacyResponse'
-        '404':
-          description: Vehicle not found.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleLegacyResponse'
-      security:
-      - bearerAuth: []
-      x-required-permissions:
-      - AUTHENTICATED
-    put:
       tags:
-      - Vehicle API
-      summary: Update vehicle by VIN
-      description: 'Replaces the core fields of an existing legacy vehicle located by VIN, applying make, model, year and vehicleType from the request.
-
-        Use this tool to correct a legacy record when only the VIN is known; use updateVehicleLegacy instead when the id is known, and do not use updateVehicle, which patches registry vehicles.
-
-        Preconditions: a vehicle with the trimmed VIN must already exist in the legacy store; the request fully replaces core fields rather than patching them.
-
-        Required inputs: vin as a path parameter plus make, model and year in the body (year between 1886 and the current year plus one); vehicleType is optional.
-
-        Emits a VEHICLE_UPDATE event; no replica fact is published from the legacy surface.
-
-        Returns 404 with an empty body when no legacy vehicle carries the VIN, and 400 with a VALIDATION_ERROR ApiError when a required body field is missing or invalid.
-
-        '
-      operationId: updateVehicleLegacyByVin
-      parameters:
-      - name: vin
-        in: path
-        description: VIN of the vehicle to update
-        required: true
-        schema:
-          type: string
-        example: 1HGCM82633A004352
-      requestBody:
-        description: Full replacement values for the legacy vehicle's core fields.
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VehicleLegacyRequest'
-            examples:
-              Legacy vehicle:
-                description: Legacy vehicle
-                value:
-                  make: Honda
-                  model: Accord
-                  year: 2003
-                  vin: 1HGCM82633A004352
-                  vehicleType: CAR
-        required: true
-      responses:
-        '200':
-          description: Vehicle updated successfully.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleLegacyResponse'
-        '404':
-          description: Vehicle not found.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleLegacyResponse'
-      security:
-      - bearerAuth: []
-      x-required-permissions:
-      - AUTHENTICATED
-    delete:
-      tags:
-      - Vehicle API
-      summary: Delete vehicle by VIN
-      description: 'Permanently deletes a vehicle from the legacy vehicle store located by VIN; the row is removed rather than deactivated.
-
-        Use this tool to purge a legacy record when only the VIN is known; use deleteVehicleLegacy instead when the id is known, and do not use deleteVehicle, which soft-deactivates registry vehicles.
-
-        Preconditions: a vehicle with the trimmed VIN must exist in the legacy store; deletion is not recoverable through this API.
-
-        Required inputs: vin as a non-blank path parameter; there is no request body.
-
-        Emits a VEHICLE_DELETE event; no replica fact is published from the legacy surface.
-
-        Returns 204 on successful deletion, and 404 with an empty body when no legacy vehicle carries the VIN.
-
-        '
-      operationId: deleteVehicleLegacyByVin
-      parameters:
-      - name: vin
-        in: path
-        description: VIN of the vehicle to delete
-        required: true
-        schema:
-          type: string
-        example: 1HGCM82633A004352
-      responses:
-        '204':
-          description: Vehicle deleted successfully.
-        '404':
-          description: Vehicle not found.
-      security:
-      - bearerAuth: []
+      - Vehicle Registry API
       x-required-permissions:
       - AUTHENTICATED
   /v1/vehicle-registry/{vehicleId}:
-    get:
-      tags:
-      - Vehicle Registry API
-      summary: Get vehicle by ID
-      description: 'Returns a single vehicle registry record by its vehicleId, whether the vehicle is active or deactivated.
-
-        Use this tool when the registry id is already known; use getVehicleByVin instead for VIN lookups, use searchVehicles for free-text discovery, and do not use getVehicleLegacy, which reads the legacy store.
-
-        Preconditions: the record must exist in the registry; deactivated vehicles are still returned, so callers must check the isActive flag.
-
-        Required inputs: vehicleId (UUID) as a path parameter; there is no request body.
-
-        No events are emitted and no state changes; this is a read-only projection.
-
-        Returns 404 with an empty body when no registry record exists for the supplied vehicleId.
-
-        '
-      operationId: getVehicle
-      parameters:
-      - name: vehicleId
-        in: path
-        description: Vehicle UUID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Vehicle retrieved successfully.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleResponse'
-        '404':
-          description: Vehicle not found.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleResponse'
-      security:
-      - bearerAuth: []
-      x-required-permissions:
-      - AUTHENTICATED
-    put:
-      tags:
-      - Vehicle Registry API
-      summary: Update vehicle
-      description: 'Applies a partial update to a vehicle registry record; only fields present in the body are changed, and the VIN itself cannot be modified here.
-
-        Use this tool to correct registry data or transfer ownership, since a new accountId moves the vehicle to that party and consumer replicas move their vehicle-party association from the emitted fact (ADR-0044); do not use updateVehicleLegacy, which fully replaces legacy records.
-
-        Preconditions: the record must exist in the registry; deactivated vehicles can still be updated.
-
-        Required inputs: vehicleId (UUID) as a path parameter and at least one body field among accountId, unitNumber, description, licensePlate, licensePlateJurisdiction, year, make, model and trim; a provided unitNumber or description must be non-blank, and year must be between 1886 and 2100.
-
-        Emits a VEHICLE_UPDATE event and queues a vehicle.vehicle.updated fact on the vehicle.events.v1 outbox for downstream replicas.
-
-        Returns 404 with a RESOURCE_NOT_FOUND ApiError when the vehicleId is unknown, and 400 with a VALIDATION_FAILED ApiError when no field is provided or a provided field violates its constraints.
-
-        '
-      operationId: updateVehicle
-      parameters:
-      - name: vehicleId
-        in: path
-        description: Vehicle UUID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        description: Subset of mutable vehicle fields to change; omitted fields keep their stored values.
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateVehicleRequest'
-            examples:
-              Partial update:
-                description: Partial update
-                value:
-                  description: 2003 Honda Accord EX Sedan, repainted
-                  licensePlate: XYZ7890
-                  licensePlateJurisdiction: TX
-        required: true
-      responses:
-        '200':
-          description: Vehicle updated successfully.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleResponse'
-        '400':
-          description: Invalid vehicle request.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleResponse'
-        '404':
-          description: Vehicle not found.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleResponse'
-      security:
-      - bearerAuth: []
-      x-required-permissions:
-      - AUTHENTICATED
     delete:
-      tags:
-      - Vehicle Registry API
-      summary: Delete vehicle
       description: 'Deactivates a vehicle registry record by setting isActive to false; the row is retained and remains readable by id and by VIN.
 
         Use this tool to retire a registry vehicle while preserving history and releasing its VIN for reuse by a future active vehicle; do not use deleteVehicleLegacy, which hard-deletes from the legacy store.
@@ -634,13 +140,13 @@ paths:
         '
       operationId: deleteVehicle
       parameters:
-      - name: vehicleId
+      - description: Vehicle UUID
         in: path
-        description: Vehicle UUID
+        name: vehicleId
         required: true
         schema:
-          type: string
           format: uuid
+          type: string
       responses:
         '204':
           description: Vehicle deleted successfully.
@@ -648,182 +154,119 @@ paths:
           description: Vehicle not found.
       security:
       - bearerAuth: []
+      summary: Delete vehicle
+      tags:
+      - Vehicle Registry API
       x-required-permissions:
       - AUTHENTICATED
-  /v1/vehicles/search:
     get:
-      tags:
-      - Vehicle Search
-      summary: Search vehicles (query parameter)
-      description: 'Searches vehicle registry records using query parameters, applying the same ranking as searchVehicles with exact matches first, then prefix matches, then optional contains matches.
+      description: 'Returns a single vehicle registry record by its vehicleId, whether the vehicle is active or deactivated.
 
-        Use this tool for browser-friendly or link-style searches; use searchVehicles instead when the client can send a JSON body, and use getVehicleByVin when the full 17-character VIN is already known.
+        Use this tool when the registry id is already known; use getVehicleByVin instead for VIN lookups, use searchVehicles for free-text discovery, and do not use getVehicleLegacy, which reads the legacy store.
 
-        Preconditions: none beyond registry data existing; the match field is inferred from the query shape exactly as in searchVehicles.
+        Preconditions: the record must exist in the registry; deactivated vehicles are still returned, so callers must check the isActive flag.
 
-        Required inputs: q (non-blank, at least 3 characters, or 6 when VIN-shaped); limit defaults to 25 and is capped at 50, and enableContains defaults to false.
+        Required inputs: vehicleId (UUID) as a path parameter; there is no request body.
 
-        Emits a VEHICLE_SEARCH event; no vehicle state changes.
+        No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 200 with ranked results plus totalCount and hasMore, and 400 with a VALIDATION_ERROR ApiError when q is empty or shorter than the minimum for its inferred type.
+        Returns 404 with an empty body when no registry record exists for the supplied vehicleId.
 
         '
-      operationId: searchVehiclesByQuery
+      operationId: getVehicle
       parameters:
-      - name: q
-        in: query
-        description: Search query (VIN, license plate, unit number, or description)
+      - description: Vehicle UUID
+        in: path
+        name: vehicleId
         required: true
         schema:
+          format: uuid
           type: string
-      - name: limit
-        in: query
-        description: Result limit (default 25, max 50)
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 25
-      - name: enableContains
-        in: query
-        description: Enable contains matching (default false)
-        required: false
-        schema:
-          type: boolean
-          default: false
       responses:
         '200':
-          description: Search results returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SearchVehiclesResponse'
-        '400':
-          description: Invalid search query
+                $ref: '#/components/schemas/VehicleResponse'
+          description: Vehicle retrieved successfully.
+        '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SearchVehiclesResponse'
+                $ref: '#/components/schemas/VehicleResponse'
+          description: Vehicle not found.
       security:
       - bearerAuth: []
+      summary: Get vehicle by ID
+      tags:
+      - Vehicle Registry API
       x-required-permissions:
       - AUTHENTICATED
-    post:
-      tags:
-      - Vehicle Search
-      summary: Search vehicles
-      description: 'Searches vehicle registry records with a single free-text query, ranking exact matches ahead of prefix matches ahead of optional contains matches.
+    put:
+      description: 'Applies a partial update to a vehicle registry record; only fields present in the body are changed, and the VIN itself cannot be modified here.
 
-        Use this tool for vehicle discovery from a JSON body; use searchVehiclesByQuery for the query-parameter variant, and use getVehicleByVin instead when the full 17-character VIN is already known.
+        Use this tool to correct registry data or transfer ownership, since a new accountId moves the vehicle to that party and consumer replicas move their vehicle-party association from the emitted fact (ADR-0044); do not use updateVehicleLegacy, which fully replaces legacy records.
 
-        Preconditions: none beyond registry data existing; the match field is inferred from the query shape, with six or more alphanumeric characters searched as a VIN (seventeen as an exact VIN), shorter queries searched against license plates, and the remainder searched against unit number plus description.
+        Preconditions: the record must exist in the registry; deactivated vehicles can still be updated.
 
-        Required inputs: query (non-blank, at least 3 characters, or 6 when VIN-shaped); limit defaults to 25 and is capped at 50, enableContainsMatching defaults to false, and cursor is reserved and currently ignored.
+        Required inputs: vehicleId (UUID) as a path parameter and at least one body field among accountId, unitNumber, description, licensePlate, licensePlateJurisdiction, year, make, model and trim; a provided unitNumber or description must be non-blank, and year must be between 1886 and 2100.
 
-        Emits a VEHICLE_SEARCH event; no vehicle state changes.
+        Emits a VEHICLE_UPDATE event and queues a vehicle.vehicle.updated fact on the vehicle.events.v1 outbox for downstream replicas.
 
-        Returns 200 with ranked results plus totalCount and hasMore, and 400 with a VALIDATION_ERROR ApiError when the query is empty or shorter than the minimum for its inferred type.
+        Returns 404 with a RESOURCE_NOT_FOUND ApiError when the vehicleId is unknown, and 400 with a VALIDATION_FAILED ApiError when no field is provided or a provided field violates its constraints.
 
         '
-      operationId: searchVehicles
+      operationId: updateVehicle
+      parameters:
+      - description: Vehicle UUID
+        in: path
+        name: vehicleId
+        required: true
+        schema:
+          format: uuid
+          type: string
       requestBody:
-        description: Free-text search criteria with an optional result limit and matching strategy flag.
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/SearchVehiclesRequest'
             examples:
-              VIN prefix search:
-                description: VIN prefix search
+              Partial update:
+                description: Partial update
                 value:
-                  query: 1HGCM8
-                  limit: 25
-                  enableContainsMatching: false
+                  description: 2003 Honda Accord EX Sedan, repainted
+                  licensePlate: XYZ7890
+                  licensePlateJurisdiction: TX
+            schema:
+              $ref: '#/components/schemas/UpdateVehicleRequest'
+        description: Subset of mutable vehicle fields to change; omitted fields keep their stored values.
         required: true
       responses:
         '200':
-          description: Search results returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SearchVehiclesResponse'
+                $ref: '#/components/schemas/VehicleResponse'
+          description: Vehicle updated successfully.
         '400':
-          description: Invalid search query
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SearchVehiclesResponse'
+                $ref: '#/components/schemas/VehicleResponse'
+          description: Invalid vehicle request.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleResponse'
+          description: Vehicle not found.
       security:
       - bearerAuth: []
+      summary: Update vehicle
+      tags:
+      - Vehicle Registry API
       x-required-permissions:
       - AUTHENTICATED
-  /v1/vehicles/bulk-ingest:
-    post:
-      tags:
-      - Vehicle Bulk Ingest API
-      summary: Bulk ingest vehicle records
-      description: 'Ingests a batch of vehicle records into the registry, creating each row independently through the same validation as createVehicle and reporting a per-row outcome.
-
-        Use this tool for bulk loads such as fleet imports; do not use createVehicle, which registers one vehicle per call, and do not retry a whole batch blindly, because rows that already succeeded would then fail as duplicate VINs.
-
-        Preconditions: the caller must hold the vehicle-inventory:registry:create authority, and each row''s VIN must be valid and not already held by an active vehicle for that row to succeed.
-
-        Required inputs: jobId (UUID), locationId (UUID) and a non-empty records array whose entries require accountId (UUID), vin (17 characters), unitNumber and description; licensePlate, licensePlateJurisdiction, year, make, model and trim are optional per record, and operatorId is optional on the envelope.
-
-        Emits a VEHICLE_BULK_INGEST event, and every successfully created row also queues a vehicle.vehicle.updated fact on the vehicle.events.v1 outbox for downstream replicas.
-
-        Returns 200 with per-row results even when some rows fail, since row failures carry the VEHICLE_INGEST_FAILED error code instead of an error status, and 400 with a VALIDATION_FAILED ApiError when the envelope is missing jobId or locationId or the records array is empty.
-
-        '
-      operationId: bulkIngestVehicles
-      requestBody:
-        description: Batch envelope carrying the ingest job, target location and the vehicle records to create.
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BulkIngestRequestVehicleBulkIngestRecord'
-            examples:
-              Single-record batch:
-                description: Single-record batch
-                value:
-                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
-                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
-                  operatorId: user-jdoe
-                  records:
-                  - accountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
-                    vin: 1HGCM82633A004352
-                    unitNumber: UNIT-1042
-                    description: 2003 Honda Accord EX Sedan
-                    licensePlate: ABC1234
-                    licensePlateJurisdiction: CA
-                    year: 2003
-                    make: Honda
-                    model: Accord
-                    trim: EX
-        required: true
-      responses:
-        '200':
-          description: Batch processed; check per-record success and failure counts.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
-        '400':
-          description: Invalid request envelope.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
-      security:
-      - bearerAuth:
-        - vehicle-inventory:registry:create
-      x-required-permissions:
-      - vehicle-inventory:registry:create
   /v1/vehicles-legacy:
     get:
-      tags:
-      - Vehicle API
-      summary: Get all vehicles
       description: 'Returns every vehicle in the legacy vehicle store as a flat list with no paging or filtering.
 
         Use this tool to enumerate the legacy store; do not use searchVehicles, which queries the registry store, and prefer getVehicleLegacy when a specific id is already known.
@@ -840,21 +283,21 @@ paths:
       operationId: listVehiclesLegacy
       responses:
         '200':
-          description: List of vehicles returned successfully.
           content:
             application/json:
               schema:
-                type: array
                 items:
                   $ref: '#/components/schemas/VehicleLegacyResponse'
+                type: array
+          description: List of vehicles returned successfully.
       security:
       - bearerAuth: []
+      summary: Get all vehicles
+      tags:
+      - Vehicle API
       x-required-permissions:
       - AUTHENTICATED
     post:
-      tags:
-      - Vehicle API
-      summary: Create a new vehicle
       description: 'Creates a vehicle in the legacy vehicle store, persisting make, model, year and an optional VIN without enforcing VIN uniqueness.
 
         Use this tool only when maintaining the legacy CRUD surface under /v1/vehicles-legacy; do not use it for registry vehicles, which createVehicle owns and which replicate to consumer services.
@@ -870,37 +313,37 @@ paths:
         '
       operationId: createVehicleLegacy
       requestBody:
-        description: Legacy vehicle to store, identified by its core make, model, year and optional VIN fields.
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/VehicleLegacyRequest'
             examples:
               Legacy vehicle:
                 description: Legacy vehicle
                 value:
                   make: Honda
                   model: Accord
-                  year: 2003
-                  vin: 1HGCM82633A004352
                   vehicleType: CAR
+                  vin: 1HGCM82633A004352
+                  year: 2003
+            schema:
+              $ref: '#/components/schemas/VehicleLegacyRequest'
+        description: Legacy vehicle to store, identified by its core make, model, year and optional VIN fields.
         required: true
       responses:
         '200':
-          description: Vehicle created successfully.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/VehicleLegacyResponse'
+          description: Vehicle created successfully.
       security:
       - bearerAuth: []
+      summary: Create a new vehicle
+      tags:
+      - Vehicle API
       x-required-permissions:
       - AUTHENTICATED
   /v1/vehicles-legacy/vin:
     post:
-      tags:
-      - Vehicle API
-      summary: Create vehicle by VIN
       description: 'Creates a vehicle in the legacy vehicle store with the VIN treated as mandatory, trimming the supplied value before storing it.
 
         Use this tool when the VIN is the identifying field for a legacy record; do not use createVehicleLegacy, which accepts a missing VIN, and do not use createVehicle, which writes the registry store.
@@ -916,223 +359,1102 @@ paths:
         '
       operationId: createVehicleLegacyByVin
       requestBody:
-        description: Legacy vehicle to store, with the VIN required as its identifying field.
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/VehicleLegacyRequest'
             examples:
               Legacy vehicle:
                 description: Legacy vehicle
                 value:
                   make: Honda
                   model: Accord
-                  year: 2003
-                  vin: 1HGCM82633A004352
                   vehicleType: CAR
+                  vin: 1HGCM82633A004352
+                  year: 2003
+            schema:
+              $ref: '#/components/schemas/VehicleLegacyRequest'
+        description: Legacy vehicle to store, with the VIN required as its identifying field.
         required: true
       responses:
         '200':
-          description: Vehicle created successfully.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/VehicleLegacyResponse'
-      security:
-      - bearerAuth: []
-      x-required-permissions:
-      - AUTHENTICATED
-  /v1/vehicle-registry:
-    post:
-      tags:
-      - Vehicle Registry API
-      summary: Create vehicle
-      description: 'Creates an active vehicle registry record after validating and normalizing the VIN, which must be globally unique among active vehicles.
-
-        Use this tool to register a single vehicle whose changes replicate to consumer services; do not use bulkIngestVehicles, which loads batches with per-row results, and do not use createVehicleLegacy, which writes the unreplicated legacy store.
-
-        Preconditions: no active vehicle may already hold the same normalized VIN; a deactivated vehicle releases its VIN for reuse.
-
-        Required inputs: accountId (UUID) and vin (17 characters after separators are stripped, with letters I, O and Q rejected); unitNumber and description are optional and stored as empty strings when omitted, and licensePlate, licensePlateJurisdiction, year, make, model and trim are optional.
-
-        Emits a VEHICLE_CREATE event and queues a vehicle.vehicle.updated fact on the vehicle.events.v1 outbox for downstream replicas.
-
-        Returns 201 with the created record, and 400 with a VALIDATION_ERROR ApiError when the VIN is malformed or an active vehicle already holds the same normalized VIN; the duplicate-VIN case is reported as 400, not 409.
-
-        '
-      operationId: createVehicle
-      requestBody:
-        description: Registry vehicle to create, owned by one account and identified by a globally unique VIN.
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateVehicleRequest'
-            examples:
-              Registry vehicle:
-                description: Registry vehicle
-                value:
-                  accountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
-                  vin: 1HGCM82633A004352
-                  unitNumber: UNIT-1042
-                  description: 2003 Honda Accord EX Sedan
-                  licensePlate: ABC1234
-                  licensePlateJurisdiction: CA
-                  year: 2003
-                  make: Honda
-                  model: Accord
-                  trim: EX
-        required: true
-      responses:
-        '201':
           description: Vehicle created successfully.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleResponse'
-        '400':
-          description: Invalid vehicle request.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleResponse'
       security:
       - bearerAuth: []
+      summary: Create vehicle by VIN
+      tags:
+      - Vehicle API
       x-required-permissions:
       - AUTHENTICATED
-  /v1/vehicle-registry/vin/{vin}:
-    get:
-      tags:
-      - Vehicle Registry API
-      summary: Get vehicle by VIN
-      description: 'Returns a single vehicle registry record by VIN, normalizing the supplied value by trimming, uppercasing and stripping separators before the lookup.
+  /v1/vehicles-legacy/vin/{vin}:
+    delete:
+      description: 'Permanently deletes a vehicle from the legacy vehicle store located by VIN; the row is removed rather than deactivated.
 
-        Use this tool when the full 17-character VIN is known; use searchVehicles instead for partial VIN prefixes, and do not use getVehicleLegacyByVin, which reads the legacy store.
+        Use this tool to purge a legacy record when only the VIN is known; use deleteVehicleLegacy instead when the id is known, and do not use deleteVehicle, which soft-deactivates registry vehicles.
 
-        Preconditions: a record with the normalized VIN must exist in the registry; active and deactivated vehicles are both returned.
+        Preconditions: a vehicle with the trimmed VIN must exist in the legacy store; deletion is not recoverable through this API.
 
-        Required inputs: vin as a path parameter, exactly 17 characters; there is no request body.
+        Required inputs: vin as a non-blank path parameter; there is no request body.
 
-        No events are emitted and no state changes; this is a read-only projection.
+        Emits a VEHICLE_DELETE event; no replica fact is published from the legacy surface.
 
-        Returns 404 with an empty body when no registry record carries the normalized VIN, and 400 with a VALIDATION_FAILED ApiError when the path VIN is not exactly 17 characters.
+        Returns 204 on successful deletion, and 404 with an empty body when no legacy vehicle carries the VIN.
 
         '
-      operationId: getVehicleByVin
+      operationId: deleteVehicleLegacyByVin
       parameters:
-      - name: vin
+      - description: VIN of the vehicle to delete
+        example: 1HGCM82633A004352
         in: path
-        description: Vehicle VIN
+        name: vin
         required: true
         schema:
           type: string
-          maxLength: 17
-          minLength: 17
       responses:
-        '200':
-          description: Vehicle retrieved successfully.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VehicleResponse'
+        '204':
+          description: Vehicle deleted successfully.
         '404':
           description: Vehicle not found.
+      security:
+      - bearerAuth: []
+      summary: Delete vehicle by VIN
+      tags:
+      - Vehicle API
+      x-required-permissions:
+      - AUTHENTICATED
+    get:
+      description: 'Returns a single vehicle from the legacy vehicle store by VIN, trimming the supplied value before the lookup.
+
+        Use this tool when only the VIN of a legacy record is known; use getVehicleLegacy instead when the id is known, and do not use getVehicleByVin, which reads the registry store with normalized VINs.
+
+        Preconditions: the vehicle must exist in the legacy store; the lookup is an exact match on the trimmed VIN, not a normalized or partial match.
+
+        Required inputs: vin as a non-blank path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 with an empty body when no legacy vehicle carries the VIN, and 400 with a VALIDATION_ERROR ApiError when the VIN is blank.
+
+        '
+      operationId: getVehicleLegacyByVin
+      parameters:
+      - description: VIN of the vehicle to retrieve
+        example: 1HGCM82633A004352
+        in: path
+        name: vin
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleResponse'
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+          description: Vehicle found and returned.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+          description: Vehicle not found.
       security:
       - bearerAuth: []
+      summary: Get vehicle by VIN
+      tags:
+      - Vehicle API
+      x-required-permissions:
+      - AUTHENTICATED
+    put:
+      description: 'Replaces the core fields of an existing legacy vehicle located by VIN, applying make, model, year and vehicleType from the request.
+
+        Use this tool to correct a legacy record when only the VIN is known; use updateVehicleLegacy instead when the id is known, and do not use updateVehicle, which patches registry vehicles.
+
+        Preconditions: a vehicle with the trimmed VIN must already exist in the legacy store; the request fully replaces core fields rather than patching them.
+
+        Required inputs: vin as a path parameter plus make, model and year in the body (year between 1886 and the current year plus one); vehicleType is optional.
+
+        Emits a VEHICLE_UPDATE event; no replica fact is published from the legacy surface.
+
+        Returns 404 with an empty body when no legacy vehicle carries the VIN, and 400 with a VALIDATION_ERROR ApiError when a required body field is missing or invalid.
+
+        '
+      operationId: updateVehicleLegacyByVin
+      parameters:
+      - description: VIN of the vehicle to update
+        example: 1HGCM82633A004352
+        in: path
+        name: vin
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Legacy vehicle:
+                description: Legacy vehicle
+                value:
+                  make: Honda
+                  model: Accord
+                  vehicleType: CAR
+                  vin: 1HGCM82633A004352
+                  year: 2003
+            schema:
+              $ref: '#/components/schemas/VehicleLegacyRequest'
+        description: Full replacement values for the legacy vehicle's core fields.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+          description: Vehicle updated successfully.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+          description: Vehicle not found.
+      security:
+      - bearerAuth: []
+      summary: Update vehicle by VIN
+      tags:
+      - Vehicle API
+      x-required-permissions:
+      - AUTHENTICATED
+  /v1/vehicles-legacy/{id}:
+    delete:
+      description: 'Permanently deletes a vehicle from the legacy vehicle store; the row is removed rather than deactivated.
+
+        Use this tool to purge a legacy record by id; do not use deleteVehicle, which soft-deactivates a registry vehicle and keeps it readable.
+
+        Preconditions: the vehicle must exist in the legacy store; deletion is not recoverable through this API.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        Emits a VEHICLE_DELETE event; no replica fact is published from the legacy surface.
+
+        Returns 204 on successful deletion, and 404 with an empty body when the id is unknown.
+
+        '
+      operationId: deleteVehicleLegacy
+      parameters:
+      - description: ID of the vehicle to delete
+        example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: Vehicle deleted successfully.
+        '404':
+          description: Vehicle not found.
+      security:
+      - bearerAuth: []
+      summary: Delete vehicle by ID
+      tags:
+      - Vehicle API
+      x-required-permissions:
+      - AUTHENTICATED
+    get:
+      description: 'Returns a single vehicle from the legacy vehicle store by its UUID primary key.
+
+        Use this tool when the legacy vehicle id is already known; use getVehicleLegacyByVin instead when only the VIN is known, and do not use getVehicle, which reads the separate registry store.
+
+        Preconditions: the vehicle must exist in the legacy store; legacy deletes are hard deletes, so a deleted vehicle is gone rather than flagged inactive.
+
+        Required inputs: id (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 with an empty body when no legacy vehicle exists for the supplied id.
+
+        '
+      operationId: getVehicleLegacy
+      parameters:
+      - description: ID of the vehicle to retrieve
+        example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+          description: Vehicle found and returned.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+          description: Vehicle not found.
+      security:
+      - bearerAuth: []
+      summary: Get vehicle by ID
+      tags:
+      - Vehicle API
+      x-required-permissions:
+      - AUTHENTICATED
+    put:
+      description: 'Replaces the core fields of an existing legacy vehicle identified by its UUID, applying make, model, year, VIN and vehicleType from the request.
+
+        Use this tool to correct a legacy record by id; use updateVehicleLegacyByVin instead when only the VIN is known, and do not use updateVehicle, which patches registry vehicles field by field.
+
+        Preconditions: the vehicle must already exist in the legacy store; the request is a full replacement of core fields rather than a partial patch.
+
+        Required inputs: id (UUID) as a path parameter plus make, model and year in the body (year between 1886 and the current year plus one); vin and vehicleType are optional.
+
+        Emits a VEHICLE_UPDATE event; no replica fact is published from the legacy surface.
+
+        Returns 404 with an empty body when the id is unknown, and 400 with a VALIDATION_ERROR ApiError when make, model or year is missing or invalid.
+
+        '
+      operationId: updateVehicleLegacy
+      parameters:
+      - description: ID of the vehicle to update
+        example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+        in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Legacy vehicle:
+                description: Legacy vehicle
+                value:
+                  make: Honda
+                  model: Accord
+                  vehicleType: CAR
+                  vin: 1HGCM82633A004352
+                  year: 2003
+            schema:
+              $ref: '#/components/schemas/VehicleLegacyRequest'
+        description: Full replacement values for the legacy vehicle's core fields.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+          description: Vehicle updated successfully.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleLegacyResponse'
+          description: Vehicle not found.
+      security:
+      - bearerAuth: []
+      summary: Update vehicle by ID
+      tags:
+      - Vehicle API
+      x-required-permissions:
+      - AUTHENTICATED
+  /v1/vehicles/bulk-ingest:
+    post:
+      description: 'Ingests a batch of vehicle records into the registry, creating each row independently through the same validation as createVehicle and reporting a per-row outcome.
+
+        Use this tool for bulk loads such as fleet imports; do not use createVehicle, which registers one vehicle per call, and do not retry a whole batch blindly, because rows that already succeeded would then fail as duplicate VINs.
+
+        Preconditions: the caller must hold the vehicle-inventory:registry:create authority, and each row''s VIN must be valid and not already held by an active vehicle for that row to succeed.
+
+        Required inputs: jobId (UUID), locationId (UUID) and a non-empty records array whose entries require accountId (UUID), vin (17 characters), unitNumber and description; licensePlate, licensePlateJurisdiction, year, make, model and trim are optional per record, and operatorId is optional on the envelope.
+
+        Emits a VEHICLE_BULK_INGEST event, and every successfully created row also queues a vehicle.vehicle.updated fact on the vehicle.events.v1 outbox for downstream replicas.
+
+        Returns 200 with per-row results even when some rows fail, since row failures carry the VEHICLE_INGEST_FAILED error code instead of an error status, and 400 with a VALIDATION_FAILED ApiError when the envelope is missing jobId or locationId or the records array is empty.
+
+        '
+      operationId: bulkIngestVehicles
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Single-record batch:
+                description: Single-record batch
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
+                  operatorId: user-jdoe
+                  records:
+                  - accountId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                    description: 2003 Honda Accord EX Sedan
+                    licensePlate: ABC1234
+                    licensePlateJurisdiction: CA
+                    make: Honda
+                    model: Accord
+                    trim: EX
+                    unitNumber: UNIT-1042
+                    vin: 1HGCM82633A004352
+                    year: 2003
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestVehicleBulkIngestRecord'
+        description: Batch envelope carrying the ingest job, target location and the vehicle records to create.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; check per-record success and failure counts.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Invalid request envelope.
+      security:
+      - bearerAuth:
+        - vehicle-inventory:registry:create
+      summary: Bulk ingest vehicle records
+      tags:
+      - Vehicle Bulk Ingest API
+      x-required-permissions:
+      - vehicle-inventory:registry:create
+  /v1/vehicles/search:
+    get:
+      description: 'Searches vehicle registry records using query parameters, applying the same ranking as searchVehicles with exact matches first, then prefix matches, then optional contains matches.
+
+        Use this tool for browser-friendly or link-style searches; use searchVehicles instead when the client can send a JSON body, and use getVehicleByVin when the full 17-character VIN is already known.
+
+        Preconditions: none beyond registry data existing; the match field is inferred from the query shape exactly as in searchVehicles.
+
+        Required inputs: q (non-blank, at least 3 characters, or 6 when VIN-shaped); limit defaults to 25 and is capped at 50, and enableContains defaults to false.
+
+        Emits a VEHICLE_SEARCH event; no vehicle state changes.
+
+        Returns 200 with ranked results plus totalCount and hasMore, and 400 with a VALIDATION_ERROR ApiError when q is empty or shorter than the minimum for its inferred type.
+
+        '
+      operationId: searchVehiclesByQuery
+      parameters:
+      - description: Search query (VIN, license plate, unit number, or description)
+        in: query
+        name: q
+        required: true
+        schema:
+          type: string
+      - description: Result limit (default 25, max 50)
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 25
+          format: int32
+          type: integer
+      - description: Enable contains matching (default false)
+        in: query
+        name: enableContains
+        required: false
+        schema:
+          default: false
+          type: boolean
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchVehiclesResponse'
+          description: Search results returned
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchVehiclesResponse'
+          description: Invalid search query
+      security:
+      - bearerAuth: []
+      summary: Search vehicles (query parameter)
+      tags:
+      - Vehicle Search
+      x-required-permissions:
+      - AUTHENTICATED
+    post:
+      description: 'Searches vehicle registry records with a single free-text query, ranking exact matches ahead of prefix matches ahead of optional contains matches.
+
+        Use this tool for vehicle discovery from a JSON body; use searchVehiclesByQuery for the query-parameter variant, and use getVehicleByVin instead when the full 17-character VIN is already known.
+
+        Preconditions: none beyond registry data existing; the match field is inferred from the query shape, with six or more alphanumeric characters searched as a VIN (seventeen as an exact VIN), shorter queries searched against license plates, and the remainder searched against unit number plus description.
+
+        Required inputs: query (non-blank, at least 3 characters, or 6 when VIN-shaped); limit defaults to 25 and is capped at 50, enableContainsMatching defaults to false, and cursor is reserved and currently ignored.
+
+        Emits a VEHICLE_SEARCH event; no vehicle state changes.
+
+        Returns 200 with ranked results plus totalCount and hasMore, and 400 with a VALIDATION_ERROR ApiError when the query is empty or shorter than the minimum for its inferred type.
+
+        '
+      operationId: searchVehicles
+      requestBody:
+        content:
+          application/json:
+            examples:
+              VIN prefix search:
+                description: VIN prefix search
+                value:
+                  enableContainsMatching: false
+                  limit: 25
+                  query: 1HGCM8
+            schema:
+              $ref: '#/components/schemas/SearchVehiclesRequest'
+        description: Free-text search criteria with an optional result limit and matching strategy flag.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchVehiclesResponse'
+          description: Search results returned
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchVehiclesResponse'
+          description: Invalid search query
+      security:
+      - bearerAuth: []
+      summary: Search vehicles
+      tags:
+      - Vehicle Search
+      x-required-permissions:
+      - AUTHENTICATED
+  /v1/vehicles/{vehicleId}/preferences:
+    delete:
+      description: 'Removes the entire care-preference document for a vehicle when one exists.
+
+        Use this tool to clear all stored preferences at once; do not use mergeVehiclePreferences to blank individual keys when the intent is a full reset.
+
+        Preconditions: none; the operation is idempotent and a vehicle without preferences is left untouched.
+
+        Required inputs: vehicleId (UUID) as a path parameter; there is no request body.
+
+        Emits a VEHICLE_PREFERENCES_DELETE event, and queues a vehicle.care-preference.updated tombstone fact for CRM consumers only when a document was actually removed.
+
+        Returns 204 in all cases, including when no preference document exists, because deletion is idempotent.
+
+        '
+      operationId: deleteVehiclePreferences
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: vehicleId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: Preferences deleted, or no preference document existed (idempotent delete)
+      security:
+      - bearerAuth: []
+      summary: Delete vehicle care preferences
+      tags:
+      - Vehicle Preferences
+      x-required-permissions:
+      - AUTHENTICATED
+    get:
+      description: 'Returns the care-preference document for a vehicle, including the free-form preferences map, the structured service interval in months and any service notes.
+
+        Use this tool to read what a customer wants for vehicle care; do not use getVehicle, which returns the registry record itself and carries no preferences.
+
+        Preconditions: a preference document must already have been stored for the vehicle, because vehicles start with no preferences.
+
+        Required inputs: vehicleId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 with an empty body when no preference document exists for the vehicle.
+
+        '
+      operationId: getVehiclePreferences
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: vehicleId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+          description: Preferences found and returned
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+          description: No preferences found for this vehicle
+      security:
+      - bearerAuth: []
+      summary: Get vehicle care preferences
+      tags:
+      - Vehicle Preferences
+      x-required-permissions:
+      - AUTHENTICATED
+    patch:
+      description: 'Merges the supplied preference keys into a vehicle''s existing care-preference document without replacing the rest of the map.
+
+        Use this tool for partial changes such as one key or the interval alone; do not use upsertVehiclePreferences, which replaces the whole map and clears the interval when it is omitted.
+
+        Preconditions: a preference document must already exist for the vehicle, because this operation cannot create one.
+
+        Required inputs: no body field is individually mandatory; partialPreferences keys overwrite matching stored keys, serviceIntervalMonths must be between 1 and 120 months and leaves the stored value unchanged when null, and a legacy serviceIntervalMonths key inside the map is promoted into the structured column rather than kept in the blob.
+
+        Emits a VEHICLE_PREFERENCES_MERGE event and queues a vehicle.care-preference.updated fact for CRM consumers.
+
+        Returns 200 with the merged document, 404 with a RESOURCE_NOT_FOUND ApiError when no preference document exists for the vehicle, and 400 with a VALIDATION_ERROR ApiError when an interval value is out of range or not a whole number.
+
+        '
+      operationId: mergeVehiclePreferences
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: vehicleId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Partial preference merge:
+                description: Partial preference merge
+                value:
+                  partialPreferences:
+                    tireRotationInterval: 7500
+                  serviceIntervalMonths: 6
+                  updatedByUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+            schema:
+              $ref: '#/components/schemas/PreferencesMergeDto'
+        description: Subset of preference fields to merge into the existing care-preference document.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+          description: Preferences merged successfully
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+          description: No existing preferences to merge into
+      security:
+      - bearerAuth: []
+      summary: Partially update vehicle care preferences
+      tags:
+      - Vehicle Preferences
+      x-required-permissions:
+      - AUTHENTICATED
+    put:
+      description: 'Creates or fully replaces the care-preference document for a vehicle, storing the preferences map and the structured service interval.
+
+        Use this tool to set preferences wholesale; use mergeVehiclePreferences instead for partial changes, because this operation replaces the entire map and a null serviceIntervalMonths clears the stored interval override.
+
+        Preconditions: the vehicle must exist in the registry; an existing preference document is replaced and a missing one is created.
+
+        Required inputs: preferences (a map, which may be empty but not null); serviceIntervalMonths is optional and must be between 1 and 120 months, a legacy serviceIntervalMonths key inside the map is promoted into the structured column, and serviceNotes, createdByUserId and updatedByUserId are optional.
+
+        Emits a VEHICLE_PREFERENCES_UPSERT event and queues a vehicle.care-preference.updated fact for CRM consumers.
+
+        Returns 200 with the saved document for both create and replace, 404 with a RESOURCE_NOT_FOUND ApiError when the vehicle does not exist, and 400 with a VALIDATION_ERROR ApiError when serviceIntervalMonths is outside 1 to 120.
+
+        '
+      operationId: upsertVehiclePreferences
+      parameters:
+      - description: Vehicle ID
+        in: path
+        name: vehicleId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Full preference document:
+                description: Full preference document
+                value:
+                  createdByUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  preferences:
+                    preferredOil: 5W-30
+                    tireRotationInterval: 5000
+                  serviceIntervalMonths: 6
+                  serviceNotes: Customer prefers synthetic oil only
+                  updatedByUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+            schema:
+              $ref: '#/components/schemas/PreferencesUpsertDto'
+        description: Complete care-preference document that replaces whatever is currently stored for the vehicle.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+          description: Preferences updated successfully
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+          description: Preferences created successfully
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+          description: Invalid preference data
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+          description: Vehicle not found
+      security:
+      - bearerAuth: []
+      summary: Create or update vehicle care preferences
+      tags:
+      - Vehicle Preferences
       x-required-permissions:
       - AUTHENTICATED
 components:
   schemas:
-    PreferencesUpsertDto:
+    BulkIngestRequestVehicleBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/VehicleBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
       type: object
+    BulkIngestResponse:
+      description: 'Summary outcome of a bulk ingest job: per-record results plus aggregate counts'
+      properties:
+        failureCount:
+          description: Number of records that failed ingest
+          example: 2
+          format: int32
+          type: integer
+        results:
+          description: Per-record outcomes in submission order
+          items:
+            $ref: '#/components/schemas/BulkIngestResult'
+          type: array
+        successCount:
+          description: Number of records ingested successfully
+          example: 98
+          format: int32
+          type: integer
+        totalSubmitted:
+          description: Total number of records submitted in the batch
+          example: 100
+          format: int32
+          type: integer
+      required:
+      - failureCount
+      - results
+      - successCount
+      - totalSubmitted
+      type: object
+    BulkIngestResult:
+      description: Per-record outcome of a bulk ingest submission
+      properties:
+        entityId:
+          description: Identifier of the entity created/updated for this record, when successful
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        errorCode:
+          description: Machine-readable error code when the record failed
+          example: VALIDATION_FAILED
+          type: string
+        errorMessage:
+          description: Human-readable error detail when the record failed
+          example: vin must be 17 characters
+          type: string
+        rowIndex:
+          description: Zero-based index of the record within the submitted batch
+          example: 0
+          format: int32
+          type: integer
+        success:
+          description: Whether this record was ingested successfully
+          example: true
+          type: boolean
+      required:
+      - rowIndex
+      - success
+      type: object
+    CreateVehicleRequest:
+      description: Request payload for creating a vehicle record.
+      properties:
+        accountId:
+          description: Owning account identifier.
+          example: 550e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          type: string
+        description:
+          description: Human-readable vehicle description. Optional; stored as empty when omitted.
+          example: 2024 Ford F-150 XL
+          type: string
+        licensePlate:
+          description: License plate value.
+          example: ABC1234
+          type: string
+        licensePlateJurisdiction:
+          description: License plate jurisdiction/state or province.
+          example: CA
+          type: string
+        make:
+          description: Vehicle make.
+          example: Ford
+          type: string
+        model:
+          description: Vehicle model.
+          example: F-150
+          type: string
+        trim:
+          description: Vehicle trim.
+          example: XL
+          type: string
+        unitNumber:
+          description: Fleet/unit number. Optional; stored as empty when omitted.
+          example: UNIT-1024
+          type: string
+        vin:
+          description: Vehicle VIN.
+          example: 1HGCM82633A004352
+          minLength: 1
+          type: string
+        year:
+          description: Model year.
+          example: 2024
+          format: int32
+          type: integer
+      required:
+      - accountId
+      - vin
+      type: object
+    PreferencesMergeDto:
+      description: Request to partially merge fields into existing vehicle care preferences
+      properties:
+        partialPreferences:
+          description: Subset of preference fields to merge into existing preferences
+          example:
+            tireRotationInterval: 7500
+          type: object
+        serviceIntervalMonths:
+          description: Structured service interval in whole months; null leaves the current value unchanged (#1175)
+          example: 6
+          format: int32
+          maximum: 120
+          minimum: 1
+          type: integer
+        updatedByUserId:
+          description: Identifier of the user updating the preferences
+          example: 01960003-0000-7000-8000-000000000011
+          format: uuid
+          type: string
+      type: object
+    PreferencesUpsertDto:
       description: Request to create or fully replace vehicle care preferences
       properties:
+        createdByUserId:
+          description: Identifier of the user creating the preferences
+          example: 01960003-0000-7000-8000-000000000010
+          format: uuid
+          type: string
         preferences:
-          type: object
           description: Complete preference map to store for the vehicle
           example:
             preferredOil: 5W-30
             tireRotationInterval: 5000
+          type: object
         serviceIntervalMonths:
-          type: integer
-          format: int32
           description: Structured service interval in whole months; null clears the per-vehicle override so CRM falls back to its default (#1175)
           example: 6
+          format: int32
           maximum: 120
           minimum: 1
+          type: integer
         serviceNotes:
-          type: string
           description: Optional free-text service notes
           example: Customer prefers synthetic oil only
-        createdByUserId:
           type: string
-          format: uuid
-          description: Identifier of the user creating the preferences
-          example: 01960003-0000-7000-8000-000000000010
         updatedByUserId:
-          type: string
-          format: uuid
           description: Identifier of the user updating the preferences
           example: 01960003-0000-7000-8000-000000000011
+          format: uuid
+          type: string
       required:
       - preferences
-    VehicleCarePreferenceResponse:
       type: object
+    SearchVehiclesRequest:
+      description: Request payload for searching vehicles by free-text query with optional pagination
+      properties:
+        cursor:
+          description: Opaque pagination cursor for retrieving subsequent result pages (reserved for future use)
+          example: eyJvZmZzZXQiOjI1fQ==
+          type: string
+        enableContainsMatching:
+          description: When true, enables substring (contains) matching; defaults to false for strict matching
+          example: false
+          type: boolean
+        limit:
+          description: Maximum number of results to return; defaults to 25 when omitted
+          example: 25
+          format: int32
+          maximum: 50
+          minimum: 1
+          type: integer
+        query:
+          description: Free-text search query matched against VIN, unit number, plate, and description
+          example: 1HGCM82633A004352
+          minLength: 1
+          type: string
+      required:
+      - query
+      type: object
+    SearchVehiclesResponse:
+      description: Paginated vehicle search results
+      properties:
+        hasMore:
+          description: Whether additional result pages are available beyond the current page
+          example: true
+          type: boolean
+        query:
+          description: Echo of the originating search query
+          example: 1HGCM82633A004352
+          type: string
+        results:
+          description: Vehicle summaries matching the search query
+          items:
+            $ref: '#/components/schemas/VehicleSummary'
+          type: array
+        totalCount:
+          description: Total number of vehicles matching the query
+          example: 42
+          format: int32
+          type: integer
+      required:
+      - hasMore
+      - query
+      - results
+      - totalCount
+      type: object
+    UpdateVehicleRequest:
+      description: Request payload for partially updating mutable vehicle fields.
+      properties:
+        accountId:
+          description: Owning party (account) id. Providing a different accountId transfers the vehicle to that party; the vehicle-party association follows via vehicle.events.v1 (ADR-0044 §6).
+          example: 018f6a2b-7c4d-7e3a-9b1c-2d3e4f5a6b7c
+          format: uuid
+          type: string
+        description:
+          description: Human-readable vehicle description.
+          example: 2023 Chevrolet Silverado 1500
+          maxLength: 4000
+          minLength: 0
+          type: string
+        licensePlate:
+          description: License plate value.
+          example: XYZ7890
+          maxLength: 50
+          minLength: 0
+          type: string
+        licensePlateJurisdiction:
+          description: License plate jurisdiction/state or province.
+          example: TX
+          maxLength: 50
+          minLength: 0
+          type: string
+        make:
+          description: Vehicle make.
+          example: Chevrolet
+          maxLength: 255
+          minLength: 0
+          type: string
+        model:
+          description: Vehicle model.
+          example: Silverado 1500
+          maxLength: 255
+          minLength: 0
+          type: string
+        trim:
+          description: Vehicle trim.
+          example: LT
+          maxLength: 255
+          minLength: 0
+          type: string
+        unitNumber:
+          description: Fleet/unit number.
+          example: UNIT-2048
+          maxLength: 255
+          minLength: 0
+          type: string
+        year:
+          description: Model year.
+          example: 2023
+          format: int32
+          maximum: 2100
+          minimum: 1886
+          type: integer
+      type: object
+    VehicleBulkIngestRecord:
+      description: Single vehicle record within a bulk ingest request
+      properties:
+        accountId:
+          description: Identifier of the account that owns the vehicle
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        description:
+          description: Human-readable description of the vehicle
+          example: 2003 Honda Accord EX Sedan
+          minLength: 1
+          type: string
+        licensePlate:
+          description: License plate number
+          example: ABC1234
+          type: string
+        licensePlateJurisdiction:
+          description: Jurisdiction (state/province) that issued the license plate
+          example: CA
+          type: string
+        make:
+          description: Manufacturer of the vehicle
+          example: Honda
+          type: string
+        model:
+          description: Model of the vehicle
+          example: Accord
+          type: string
+        trim:
+          description: Trim level of the vehicle
+          example: EX
+          type: string
+        unitNumber:
+          description: Fleet unit number assigned to the vehicle
+          example: UNIT-1042
+          minLength: 1
+          type: string
+        vin:
+          description: 17-character Vehicle Identification Number
+          example: 1HGCM82633A004352
+          maxLength: 17
+          minLength: 17
+          type: string
+        year:
+          description: Model year of the vehicle
+          example: 2003
+          format: int32
+          type: integer
+      required:
+      - accountId
+      - description
+      - unitNumber
+      - vin
+      type: object
+    VehicleCarePreferenceResponse:
       description: Vehicle care preferences record
       properties:
-        id:
+        createdAt:
+          description: Timestamp when the preference record was created
+          example: 2026-01-15 09:30:00+00:00
+          format: date-time
           type: string
+        createdByUserId:
+          description: User identifier that created the preference record
+          example: 01960003-0000-7000-8000-000000000002
           format: uuid
+          type: string
+        id:
           description: Unique identifier of the preference record
           example: 01960003-0000-7000-8000-000000000010
-        vehicleId:
-          type: string
           format: uuid
-          description: Identifier of the vehicle the preferences apply to
-          example: 01960003-0000-7000-8000-000000000001
+          type: string
         preferences:
-          type: object
           description: Preferences payload stored as flexible key/value JSON
           example:
             oilType: synthetic
             washPreference: hand
+          type: object
         serviceIntervalMonths:
-          type: integer
-          format: int32
           description: Structured service interval in whole months; null means use the CRM default (#1175)
           example: 6
+          format: int32
+          type: integer
         serviceNotes:
-          type: string
           description: Service notes for technicians
           example: Customer prefers synthetic oil only
-        createdByUserId:
           type: string
-          format: uuid
-          description: User identifier that created the preference record
-          example: 01960003-0000-7000-8000-000000000002
-        updatedByUserId:
-          type: string
-          format: uuid
-          description: User identifier that last updated the preference record
-          example: 01960003-0000-7000-8000-000000000003
-        createdAt:
-          type: string
-          format: date-time
-          description: Timestamp when the preference record was created
-          example: 2026-01-15 09:30:00+00:00
         updatedAt:
-          type: string
-          format: date-time
           description: Timestamp when the preference record was last updated
           example: 2026-01-16 14:45:00+00:00
+          format: date-time
+          type: string
+        updatedByUserId:
+          description: User identifier that last updated the preference record
+          example: 01960003-0000-7000-8000-000000000003
+          format: uuid
+          type: string
+        vehicleId:
+          description: Identifier of the vehicle the preferences apply to
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
         version:
-          type: integer
-          format: int64
           description: Optimistic-locking version of the preference record
           example: 1
+          format: int64
+          type: integer
       required:
       - createdAt
       - id
@@ -1140,84 +1462,84 @@ components:
       - updatedAt
       - vehicleId
       - version
-    VehicleLegacyRequest:
       type: object
+    VehicleLegacyRequest:
       description: Legacy request payload for creating or updating a vehicle
       properties:
         id:
-          type: string
-          format: uuid
           description: Identifier of the vehicle to update; omit to create a new vehicle
           example: 01960003-0000-7000-8000-000000000001
-        make:
+          format: uuid
           type: string
+        make:
           description: Manufacturer of the vehicle
           example: Honda
           minLength: 1
-        model:
           type: string
+        model:
           description: Model of the vehicle
           example: Accord
           minLength: 1
-        year:
-          type: integer
-          format: int32
-          description: Model year of the vehicle
-          example: 2003
-        vin:
           type: string
+        vehicleType:
+          description: Vehicle type classification (CAR, VAN, COMMERCIAL_TRUCK, PASSENGER_TRUCK)
+          example: CAR
+          type: string
+        vin:
           description: 17-character Vehicle Identification Number
           example: 1HGCM82633A004352
           maxLength: 17
           minLength: 17
-        vehicleType:
           type: string
-          description: Vehicle type classification (CAR, VAN, COMMERCIAL_TRUCK, PASSENGER_TRUCK)
-          example: CAR
+        year:
+          description: Model year of the vehicle
+          example: 2003
+          format: int32
+          type: integer
       required:
       - make
       - model
       - vin
-    VehicleLegacyResponse:
       type: object
+    VehicleLegacyResponse:
       description: Legacy vehicle representation returned by vehicle endpoints
       properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique identifier of the vehicle
-          example: 01960003-0000-7000-8000-000000000001
-        make:
-          type: string
-          description: Manufacturer of the vehicle
-          example: Honda
-        model:
-          type: string
-          description: Model of the vehicle
-          example: Accord
-        year:
-          type: integer
-          format: int32
-          description: Model year of the vehicle
-          example: 2003
-        vin:
-          type: string
-          description: 17-character Vehicle Identification Number
-          example: 1HGCM82633A004352
-        vehicleType:
-          type: string
-          description: Vehicle type classification (CAR, VAN, COMMERCIAL_TRUCK, PASSENGER_TRUCK)
-          example: CAR
         createdAt:
-          type: string
-          format: date-time
           description: Timestamp when the vehicle record was created
           example: 2026-01-15 09:30:00+00:00
-        updatedAt:
-          type: string
           format: date-time
+          type: string
+        id:
+          description: Unique identifier of the vehicle
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        make:
+          description: Manufacturer of the vehicle
+          example: Honda
+          type: string
+        model:
+          description: Model of the vehicle
+          example: Accord
+          type: string
+        updatedAt:
           description: Timestamp when the vehicle record was last updated
           example: 2026-01-16 14:45:00+00:00
+          format: date-time
+          type: string
+        vehicleType:
+          description: Vehicle type classification (CAR, VAN, COMMERCIAL_TRUCK, PASSENGER_TRUCK)
+          example: CAR
+          type: string
+        vin:
+          description: 17-character Vehicle Identification Number
+          example: 1HGCM82633A004352
+          type: string
+        year:
+          description: Model year of the vehicle
+          example: 2003
+          format: int32
+          type: integer
       required:
       - id
       - make
@@ -1225,158 +1547,100 @@ components:
       - vehicleType
       - vin
       - year
-    UpdateVehicleRequest:
       type: object
-      description: Request payload for partially updating mutable vehicle fields.
-      properties:
-        accountId:
-          type: string
-          format: uuid
-          description: Owning party (account) id. Providing a different accountId transfers the vehicle to that party; the vehicle-party association follows via vehicle.events.v1 (ADR-0044 §6).
-          example: 018f6a2b-7c4d-7e3a-9b1c-2d3e4f5a6b7c
-        unitNumber:
-          type: string
-          description: Fleet/unit number.
-          example: UNIT-2048
-          maxLength: 255
-          minLength: 0
-        description:
-          type: string
-          description: Human-readable vehicle description.
-          example: 2023 Chevrolet Silverado 1500
-          maxLength: 4000
-          minLength: 0
-        licensePlate:
-          type: string
-          description: License plate value.
-          example: XYZ7890
-          maxLength: 50
-          minLength: 0
-        licensePlateJurisdiction:
-          type: string
-          description: License plate jurisdiction/state or province.
-          example: TX
-          maxLength: 50
-          minLength: 0
-        year:
-          type: integer
-          format: int32
-          description: Model year.
-          example: 2023
-          maximum: 2100
-          minimum: 1886
-        make:
-          type: string
-          description: Vehicle make.
-          example: Chevrolet
-          maxLength: 255
-          minLength: 0
-        model:
-          type: string
-          description: Vehicle model.
-          example: Silverado 1500
-          maxLength: 255
-          minLength: 0
-        trim:
-          type: string
-          description: Vehicle trim.
-          example: LT
-          maxLength: 255
-          minLength: 0
     VehicleResponse:
-      type: object
       description: Vehicle response payload.
       properties:
-        vehicleId:
-          type: string
-          format: uuid
-          description: Vehicle identifier.
-          example: 550e8400-e29b-41d4-a716-446655440000
         accountId:
-          type: string
-          format: uuid
           description: Owning account identifier.
           example: 550e8400-e29b-41d4-a716-446655440001
-        vin:
+          format: uuid
           type: string
-          description: Vehicle VIN.
-          example: 1HGCM82633A004352
-        vinNormalized:
+        createdAt:
+          description: Record creation timestamp (UTC).
+          example: 2026-02-27 12:00:00+00:00
+          format: date-time
           type: string
-          description: Normalized VIN used for lookup and uniqueness.
-          example: 1HGCM82633A004352
-        unitNumber:
+        createdBy:
+          description: Username of the actor who created this record.
+          example: jsmith
           type: string
-          description: Fleet/unit number.
-          example: UNIT-1024
         description:
-          type: string
           description: Human-readable vehicle description.
           example: 2024 Ford F-150 XL
-        licensePlate:
           type: string
+        isActive:
+          description: Whether vehicle is active.
+          example: true
+          type: boolean
+        licensePlate:
           description: License plate value.
           example: ABC1234
-        licensePlateJurisdiction:
           type: string
+        licensePlateJurisdiction:
           description: License plate jurisdiction/state or province.
           example: CA
-        year:
-          type: integer
-          format: int32
-          description: Model year.
-          example: 2024
-        make:
           type: string
+        make:
           description: Vehicle make.
           example: Ford
-        model:
           type: string
+        model:
           description: Vehicle model.
           example: F-150
-        trim:
           type: string
-          description: Vehicle trim.
-          example: XL
-        odometerValue:
-          type: integer
-          format: int32
-          description: Last recorded odometer reading value.
-          example: 45210
         odometerUnit:
-          type: string
           description: Unit of the odometer reading (MILES or KILOMETERS).
           enum:
           - MILES
           - KILOMETERS
           example: MILES
-        isActive:
-          type: boolean
-          description: Whether vehicle is active.
-          example: true
-        createdAt:
           type: string
-          format: date-time
-          description: Record creation timestamp (UTC).
-          example: 2026-02-27 12:00:00+00:00
+        odometerValue:
+          description: Last recorded odometer reading value.
+          example: 45210
+          format: int32
+          type: integer
+        trim:
+          description: Vehicle trim.
+          example: XL
+          type: string
+        unitNumber:
+          description: Fleet/unit number.
+          example: UNIT-1024
+          type: string
         updatedAt:
-          type: string
-          format: date-time
           description: Last update timestamp (UTC).
           example: 2026-02-27 13:00:00+00:00
-        createdBy:
+          format: date-time
           type: string
-          description: Username of the actor who created this record.
-          example: jsmith
         updatedBy:
-          type: string
           description: Username of the actor who last modified this record.
           example: jsmith
+          type: string
+        vehicleId:
+          description: Vehicle identifier.
+          example: 550e8400-e29b-41d4-a716-446655440000
+          format: uuid
+          type: string
         version:
-          type: integer
-          format: int64
           description: Optimistic lock version.
           example: 1
+          format: int64
+          type: integer
+        vin:
+          description: Vehicle VIN.
+          example: 1HGCM82633A004352
+          type: string
+        vinNormalized:
+          description: Normalized VIN used for lookup and uniqueness.
+          example: 1HGCM82633A004352
+          type: string
+        year:
+          description: Model year.
+          example: 2024
+          format: int32
+          type: integer
       required:
       - accountId
       - createdAt
@@ -1388,314 +1652,50 @@ components:
       - version
       - vin
       - vinNormalized
-    SearchVehiclesRequest:
       type: object
-      description: Request payload for searching vehicles by free-text query with optional pagination
-      properties:
-        query:
-          type: string
-          description: Free-text search query matched against VIN, unit number, plate, and description
-          example: 1HGCM82633A004352
-          minLength: 1
-        limit:
-          type: integer
-          format: int32
-          description: Maximum number of results to return; defaults to 25 when omitted
-          example: 25
-          maximum: 50
-          minimum: 1
-        cursor:
-          type: string
-          description: Opaque pagination cursor for retrieving subsequent result pages (reserved for future use)
-          example: eyJvZmZzZXQiOjI1fQ==
-        enableContainsMatching:
-          type: boolean
-          description: When true, enables substring (contains) matching; defaults to false for strict matching
-          example: false
-      required:
-      - query
-    SearchVehiclesResponse:
-      type: object
-      description: Paginated vehicle search results
-      properties:
-        results:
-          type: array
-          description: Vehicle summaries matching the search query
-          items:
-            $ref: '#/components/schemas/VehicleSummary'
-        totalCount:
-          type: integer
-          format: int32
-          description: Total number of vehicles matching the query
-          example: 42
-        hasMore:
-          type: boolean
-          description: Whether additional result pages are available beyond the current page
-          example: true
-        query:
-          type: string
-          description: Echo of the originating search query
-          example: 1HGCM82633A004352
-      required:
-      - hasMore
-      - query
-      - results
-      - totalCount
     VehicleSummary:
-      type: object
       description: Condensed vehicle representation returned in search results
       properties:
-        vehicleId:
-          type: string
-          format: uuid
-          description: Unique identifier of the vehicle
-          example: 01960003-0000-7000-8000-000000000001
-        vin:
-          type: string
-          description: 17-character Vehicle Identification Number
-          example: 1HGCM82633A004352
-        unitNumber:
-          type: string
-          description: Fleet unit number assigned to the vehicle
-          example: UNIT-1042
-        licensePlate:
-          type: string
-          description: License plate number
-          example: ABC1234
         description:
-          type: string
           description: Human-readable description of the vehicle
           example: 2003 Honda Accord EX Sedan
-        year:
-          type: integer
-          format: int32
-          description: Model year of the vehicle
-          example: 2003
-        make:
           type: string
+        licensePlate:
+          description: License plate number
+          example: ABC1234
+          type: string
+        make:
           description: Manufacturer of the vehicle
           example: Honda
-        model:
           type: string
+        model:
           description: Model of the vehicle
           example: Accord
+          type: string
+        unitNumber:
+          description: Fleet unit number assigned to the vehicle
+          example: UNIT-1042
+          type: string
+        vehicleId:
+          description: Unique identifier of the vehicle
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        vin:
+          description: 17-character Vehicle Identification Number
+          example: 1HGCM82633A004352
+          type: string
+        year:
+          description: Model year of the vehicle
+          example: 2003
+          format: int32
+          type: integer
       required:
       - vehicleId
       - vin
-    BulkIngestRequestVehicleBulkIngestRecord:
       type: object
-      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
-      properties:
-        jobId:
-          type: string
-          format: uuid
-          description: Identifier of the bulk ingest job
-          example: 01960003-0000-7000-8000-000000000001
-        locationId:
-          type: string
-          format: uuid
-          description: Location the records are ingested for
-          example: 01960003-0000-7000-8000-000000000002
-        records:
-          type: array
-          description: The records to ingest (at least one); shape depends on the target domain
-          items:
-            $ref: '#/components/schemas/VehicleBulkIngestRecord'
-          minItems: 1
-        operatorId:
-          type: string
-          description: Identifier of the operator submitting the batch
-          example: user-jdoe
-      required:
-      - jobId
-      - locationId
-      - records
-    VehicleBulkIngestRecord:
-      type: object
-      description: Single vehicle record within a bulk ingest request
-      properties:
-        accountId:
-          type: string
-          format: uuid
-          description: Identifier of the account that owns the vehicle
-          example: 01960003-0000-7000-8000-000000000001
-        vin:
-          type: string
-          description: 17-character Vehicle Identification Number
-          example: 1HGCM82633A004352
-          maxLength: 17
-          minLength: 17
-        unitNumber:
-          type: string
-          description: Fleet unit number assigned to the vehicle
-          example: UNIT-1042
-          minLength: 1
-        description:
-          type: string
-          description: Human-readable description of the vehicle
-          example: 2003 Honda Accord EX Sedan
-          minLength: 1
-        licensePlate:
-          type: string
-          description: License plate number
-          example: ABC1234
-        licensePlateJurisdiction:
-          type: string
-          description: Jurisdiction (state/province) that issued the license plate
-          example: CA
-        year:
-          type: integer
-          format: int32
-          description: Model year of the vehicle
-          example: 2003
-        make:
-          type: string
-          description: Manufacturer of the vehicle
-          example: Honda
-        model:
-          type: string
-          description: Model of the vehicle
-          example: Accord
-        trim:
-          type: string
-          description: Trim level of the vehicle
-          example: EX
-      required:
-      - accountId
-      - description
-      - unitNumber
-      - vin
-    BulkIngestResponse:
-      type: object
-      description: 'Summary outcome of a bulk ingest job: per-record results plus aggregate counts'
-      properties:
-        totalSubmitted:
-          type: integer
-          format: int32
-          description: Total number of records submitted in the batch
-          example: 100
-        successCount:
-          type: integer
-          format: int32
-          description: Number of records ingested successfully
-          example: 98
-        failureCount:
-          type: integer
-          format: int32
-          description: Number of records that failed ingest
-          example: 2
-        results:
-          type: array
-          description: Per-record outcomes in submission order
-          items:
-            $ref: '#/components/schemas/BulkIngestResult'
-      required:
-      - failureCount
-      - results
-      - successCount
-      - totalSubmitted
-    BulkIngestResult:
-      type: object
-      description: Per-record outcome of a bulk ingest submission
-      properties:
-        rowIndex:
-          type: integer
-          format: int32
-          description: Zero-based index of the record within the submitted batch
-          example: 0
-        entityId:
-          type: string
-          format: uuid
-          description: Identifier of the entity created/updated for this record, when successful
-          example: 01960003-0000-7000-8000-000000000001
-        success:
-          type: boolean
-          description: Whether this record was ingested successfully
-          example: true
-        errorCode:
-          type: string
-          description: Machine-readable error code when the record failed
-          example: VALIDATION_FAILED
-        errorMessage:
-          type: string
-          description: Human-readable error detail when the record failed
-          example: vin must be 17 characters
-      required:
-      - rowIndex
-      - success
-    CreateVehicleRequest:
-      type: object
-      description: Request payload for creating a vehicle record.
-      properties:
-        accountId:
-          type: string
-          format: uuid
-          description: Owning account identifier.
-          example: 550e8400-e29b-41d4-a716-446655440000
-        vin:
-          type: string
-          description: Vehicle VIN.
-          example: 1HGCM82633A004352
-          minLength: 1
-        unitNumber:
-          type: string
-          description: Fleet/unit number. Optional; stored as empty when omitted.
-          example: UNIT-1024
-        description:
-          type: string
-          description: Human-readable vehicle description. Optional; stored as empty when omitted.
-          example: 2024 Ford F-150 XL
-        licensePlate:
-          type: string
-          description: License plate value.
-          example: ABC1234
-        licensePlateJurisdiction:
-          type: string
-          description: License plate jurisdiction/state or province.
-          example: CA
-        year:
-          type: integer
-          format: int32
-          description: Model year.
-          example: 2024
-        make:
-          type: string
-          description: Vehicle make.
-          example: Ford
-        model:
-          type: string
-          description: Vehicle model.
-          example: F-150
-        trim:
-          type: string
-          description: Vehicle trim.
-          example: XL
-      required:
-      - accountId
-      - vin
-    PreferencesMergeDto:
-      type: object
-      description: Request to partially merge fields into existing vehicle care preferences
-      properties:
-        partialPreferences:
-          type: object
-          description: Subset of preference fields to merge into existing preferences
-          example:
-            tireRotationInterval: 7500
-        serviceIntervalMonths:
-          type: integer
-          format: int32
-          description: Structured service interval in whole months; null leaves the current value unchanged (#1175)
-          example: 6
-          maximum: 120
-          minimum: 1
-        updatedByUserId:
-          type: string
-          format: uuid
-          description: Identifier of the user updating the preferences
-          example: 01960003-0000-7000-8000-000000000011
   securitySchemes:
     bearerAuth:
-      type: http
-      scheme: bearer
       bearerFormat: JWT
+      scheme: bearer
+      type: http
