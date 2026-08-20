@@ -39,7 +39,7 @@ public class CorrectPartQuantityRequest {
      * New authorized quantity (must be positive).
      */
     @NotNull(message = "New quantity is required")
-    @DecimalMin(value = "0.0001", message = "newQuantity must be greater than 0")
+    @DecimalMin(value = "0.0001", inclusive = true, message = "New quantity must be positive")
     @Schema(description = "Corrected authorized quantity", example = "2", requiredMode = REQUIRED)
     private BigDecimal newQuantity;
 
