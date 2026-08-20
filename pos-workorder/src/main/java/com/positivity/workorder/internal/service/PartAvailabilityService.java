@@ -49,6 +49,7 @@ public class PartAvailabilityService {
      * @param workorder the job the part belongs to; supplies the servicing site
      * @param part the part line being asked about
      */
+    @NonNull
     public BigDecimal availableFor(@NonNull Workorder workorder, @NonNull WorkorderPart part) {
         UUID locationId = workorder.getShopId();
         UUID stockItemId = part.getProductEntityId();
