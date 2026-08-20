@@ -103,9 +103,9 @@ class ConfirmationOutcomeLookupTest(unittest.TestCase):
         self.assertIsNotNone(found)
         self.assertEqual(verify.tel_confirmation_outcome(found), "confirmed")
 
-    def test_submit_leg_ordered_first_does_not_win(self):
-        # Same as above with the list order reversed, pinning that selection is by content and
-        # not by Loki's return order.
+    def test_selection_is_independent_of_loki_return_order(self):
+        # The case above lists the submit leg first; this one lists it second. Together they pin
+        # that selection is by record content and never by the order Loki happened to return.
         confirm = telemetry_record(CORRELATION, outcome="confirmed", ts_ns=200)
         submit = telemetry_record(CORRELATION, outcome=None, ts_ns=100)
         found = lookup([confirm, submit])
@@ -115,9 +115,14 @@ class ConfirmationOutcomeLookupTest(unittest.TestCase):
     def test_latest_outcome_wins_when_a_plan_was_superseded_first(self):
         # A plan superseded during submit, then a confirm on the replacement: both carry an
         # outcome under the same correlation id, and the terminal one is the later.
+        #
+        # The older record is fed FIRST deliberately. With the newer one first, an implementation
+        # that dropped the timestamp sort and returned hits[0] would still answer "confirmed" and
+        # this test would pass while the behavior was broken. In this order only a real
+        # latest-wins implementation can pass.
         superseded = telemetry_record(CORRELATION, outcome="superseded", ts_ns=100)
         confirmed = telemetry_record(CORRELATION, outcome="confirmed", ts_ns=300)
-        found = lookup([confirmed, superseded])
+        found = lookup([superseded, confirmed])
 
         self.assertEqual(verify.tel_confirmation_outcome(found), "confirmed")
 
