@@ -23,10 +23,15 @@ public class LocationAtCapacityException extends PutawayValidationException {
                 ERROR_CODE,
                 String.format(
                         "Location %s is at full capacity (%s/%s units)",
-                        locationId, currentCapacity.toPlainString(), maxCapacity.toPlainString()));
+                        locationId, plain(currentCapacity), plain(maxCapacity)));
         this.locationId = locationId;
         this.currentCapacity = currentCapacity;
         this.maxCapacity = maxCapacity;
+    }
+
+    // Building the error message must never itself throw and mask the capacity breach being reported.
+    private static String plain(BigDecimal value) {
+        return value == null ? "unknown" : value.toPlainString();
     }
 
     public UUID getLocationId() {

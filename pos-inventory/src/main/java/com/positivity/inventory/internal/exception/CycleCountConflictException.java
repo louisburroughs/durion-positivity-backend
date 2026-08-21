@@ -15,8 +15,13 @@ public class CycleCountConflictException extends RuntimeException {
 
     public CycleCountConflictException(UUID taskId, BigDecimal movementDelta) {
         super("Cycle count task " + taskId + " has interfering stock movements (net on-hand delta "
-                + movementDelta.toPlainString()
+                + plain(movementDelta)
                 + ") since the count snapshot; task flagged CONFLICT. Request a recount, or approve again to accept"
                 + " the variance recomputed against current on-hand.");
+    }
+
+    // Building the error message must never itself throw and mask the conflict being reported.
+    private static String plain(BigDecimal value) {
+        return value == null ? "unknown" : value.toPlainString();
     }
 }

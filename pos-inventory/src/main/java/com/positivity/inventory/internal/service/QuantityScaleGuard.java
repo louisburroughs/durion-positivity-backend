@@ -43,7 +43,8 @@ public class QuantityScaleGuard {
      *     reference resolves to no catalog product, which declares nothing and so is integral
      * @param stockReference the SKU or stock-item id, used to name the product in the error
      * @param fieldName the request field the quantity came from
-     * @param quantity the base-UoM quantity about to be posted
+     * @param quantity the base-UoM quantity about to be posted; {@code null} — a request that
+     *     omitted the field — is rejected here rather than at the first arithmetic on it
      * @throws FractionalQuantityNotAllowedException when the quantity carries more decimal places
      *     than the product declares
      */
@@ -51,7 +52,7 @@ public class QuantityScaleGuard {
             @Nullable UUID productId,
             @NonNull String stockReference,
             @NonNull String fieldName,
-            @NonNull BigDecimal quantity) {
+            @Nullable BigDecimal quantity) {
         if (quantity == null) {
             throw new IllegalArgumentException(fieldName + " is required");
         }

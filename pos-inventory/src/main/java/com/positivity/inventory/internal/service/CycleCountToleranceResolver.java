@@ -97,11 +97,11 @@ public class CycleCountToleranceResolver {
         if (!resolution.isConfigured()) {
             return absVariance.signum() == 0;
         }
-        boolean withinAbsolute =
-                resolution.absoluteTolerance() != null && absVariance.compareTo(resolution.absoluteTolerance()) <= 0;
-        boolean withinPercentage = resolution.percentageTolerance() != null
-                && absVariance.compareTo(allowedQuantityForPercentage(resolution.percentageTolerance(), bookQuantity))
-                        <= 0;
+        BigDecimal absoluteTolerance = resolution.absoluteTolerance();
+        BigDecimal percentageTolerance = resolution.percentageTolerance();
+        boolean withinAbsolute = absoluteTolerance != null && absVariance.compareTo(absoluteTolerance) <= 0;
+        boolean withinPercentage = percentageTolerance != null
+                && absVariance.compareTo(allowedQuantityForPercentage(percentageTolerance, bookQuantity)) <= 0;
         return withinAbsolute || withinPercentage;
     }
 

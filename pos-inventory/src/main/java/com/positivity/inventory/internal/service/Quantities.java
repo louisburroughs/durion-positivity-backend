@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.service;
 
 import java.math.BigDecimal;
+import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -21,7 +22,7 @@ final class Quantities {
 
     /** The value, or {@code ZERO} when absent. An absent quantity has always meant none. */
     static @NonNull BigDecimal nz(@Nullable BigDecimal value) {
-        return value == null ? BigDecimal.ZERO : value;
+        return Objects.requireNonNullElse(value, BigDecimal.ZERO);
     }
 
     /** {@code a > b} by value, ignoring scale. */

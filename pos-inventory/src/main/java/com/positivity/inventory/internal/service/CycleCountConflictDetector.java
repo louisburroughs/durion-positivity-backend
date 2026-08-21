@@ -45,7 +45,7 @@ public class CycleCountConflictDetector {
      * was taken. Non-zero ⇒ the count window was interfered with.
      */
     @Transactional(readOnly = true)
-    public BigDecimal movementDeltaSinceSnapshot(@NonNull CycleCountTask task) {
+    public @NonNull BigDecimal movementDeltaSinceSnapshot(@NonNull CycleCountTask task) {
         Optional<UUID> locationId = locationIdOf(task);
         BigDecimal delta = locationId
                 .map(location -> ledgerRepository.sumChangeForStockItemAtLocationSince(
