@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.SupplierProfileProperties.Accounts;
 import com.positivity.supplier.internal.config.SupplierProfileProperties.AuthSpec;
 import com.positivity.supplier.internal.config.SupplierProfileProperties.Billing;
@@ -56,7 +57,7 @@ import org.springframework.context.annotation.Import;
             "spring.jpa.hibernate.ddl-auto=validate"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(JpaConfig.class)
+@Import({JpaConfig.class, TestClockConfig.class})
 class SupplierYamlBootstrapTest {
 
     private static final UUID LOCATION_A = UUID.fromString("018f0000-0000-7000-8000-0000000000a1");

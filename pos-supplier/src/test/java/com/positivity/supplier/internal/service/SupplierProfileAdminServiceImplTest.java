@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.exception.SupplierConflictException;
@@ -55,6 +56,7 @@ import org.springframework.test.context.event.RecordApplicationEvents;
 @RecordApplicationEvents
 @Import({
     JpaConfig.class,
+    TestClockConfig.class,
     SupplierProfileAdminServiceImpl.class,
     SecretSchemeRegistry.class,
     EnvSecretReferenceResolver.class

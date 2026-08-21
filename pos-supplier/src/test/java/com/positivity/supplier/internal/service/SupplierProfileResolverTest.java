@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
@@ -44,7 +45,7 @@ import org.springframework.context.annotation.Import;
             "spring.jpa.hibernate.ddl-auto=validate"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({JpaConfig.class, SupplierProfileResolver.class})
+@Import({JpaConfig.class, TestClockConfig.class, SupplierProfileResolver.class})
 class SupplierProfileResolverTest {
 
     private static final SupplierRef MICHELIN = new SupplierRef("michelin-eu");

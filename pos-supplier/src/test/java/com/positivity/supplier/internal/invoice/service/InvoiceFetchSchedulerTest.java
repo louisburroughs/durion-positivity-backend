@@ -153,7 +153,7 @@ class InvoiceFetchSchedulerTest {
         // The scheduler never advances the checkpoint itself. It hands the coordinator a page,
         // which advances it in the same transaction as the work — so a failure rolls both back.
         verify(scheduleCoordinator).runPage(eq(BINDING_ID), any(), any());
-        verify(leaseRepository, never()).advanceCheckpoint(any(), any(), any());
+        verify(leaseRepository, never()).advanceCheckpoint(any(), any(), any(), any());
     }
 
     @Test
@@ -175,7 +175,7 @@ class InvoiceFetchSchedulerTest {
         // that the checkpoint was never touched.
         scheduler.runDueFetches();
 
-        verify(leaseRepository, never()).advanceCheckpoint(any(), any(), any());
+        verify(leaseRepository, never()).advanceCheckpoint(any(), any(), any(), any());
     }
 
     @Test
@@ -234,7 +234,7 @@ class InvoiceFetchSchedulerTest {
         // Moving the checkpoint to satisfy an investigation would skip everything between the
         // queried window and where the schedule had actually reached.
         verify(scheduleCoordinator, never()).runPage(any(), any(), any());
-        verify(leaseRepository, never()).advanceCheckpoint(any(), any(), any());
+        verify(leaseRepository, never()).advanceCheckpoint(any(), any(), any(), any());
     }
 
     @Test

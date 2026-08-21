@@ -43,6 +43,8 @@ public class TimeConfig {
 
         @Bean
         public ScaledClock acceleratedClock(AcceleratedTimeProperties properties) {
+            // Any TimeSource read before the binder runs would return wall time; fail instead.
+            TimeSource.requireBoundClock();
             return new ScaledClock(
                     Clock.systemUTC(),
                     properties.zone(),

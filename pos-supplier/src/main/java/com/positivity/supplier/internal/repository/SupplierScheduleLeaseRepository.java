@@ -71,6 +71,16 @@ import org.springframework.data.repository.query.Param;
  * <p>H2 cannot reproduce the underlying hazard — its {@code now()} is statement-scoped, not
  * transaction-scoped — so no behavioural test can demonstrate it. The boundary is pinned structurally
  * instead, by {@code SupplierScheduleCoordinatorTest.leaseLifecycleOperationsRunInTheirOwnTransaction}.
+ *
+ * <p><strong>Two clocks here, deliberately.</strong> {@code leased_until} and
+ * {@code last_heartbeat_at} — and every predicate that compares against them — stay on database
+ * time. Leasing is a real-time liveness question: whether another process is still alive right now.
+ * Accelerating those values would expire live leases in a fraction of their intended duration and
+ * let two runs process the same binding. {@code updated_at} is the opposite kind of value: an audit
+ * timestamp on a business row, which must agree with every other {@code updated_at} in the
+ * deployment, so it is bound from the injected application {@code Clock} as {@code :now} rather than
+ * read from the database. {@code last_run_started_at} stays on database time for the same reason as
+ * the heartbeat — it records when a real process actually began work.
  */
 public interface SupplierScheduleLeaseRepository extends JpaRepository<SupplierScheduleLeaseEntity, UUID> {
 
@@ -90,7 +100,7 @@ public interface SupplierScheduleLeaseRepository extends JpaRepository<SupplierS
     @Query(
             value = "UPDATE supplier_schedule_lease SET owner_token = :ownerToken,"
                     + " leased_until = now() + CAST(:leaseSeconds AS INTEGER) * INTERVAL '1' SECOND,"
-                    + " last_heartbeat_at = now(), last_run_started_at = now(), updated_at = now(),"
+                    + " last_heartbeat_at = now(), last_run_started_at = now(), updated_at = :now,"
                     + " version = version + 1"
                     + " WHERE binding_id = :bindingId"
                     + " AND (leased_until IS NULL OR leased_until < now())",
@@ -98,7 +108,8 @@ public interface SupplierScheduleLeaseRepository extends JpaRepository<SupplierS
     int claim(
             @Param("bindingId") @NonNull UUID bindingId,
             @Param("ownerToken") @NonNull String ownerToken,
-            @Param("leaseSeconds") int leaseSeconds);
+            @Param("leaseSeconds") int leaseSeconds,
+            @Param("now") @NonNull Instant now);
 
     /**
      * Extends the lease, guarded on ownership <em>and</em> on the lease not having already expired.
@@ -113,14 +124,15 @@ public interface SupplierScheduleLeaseRepository extends JpaRepository<SupplierS
     @Query(
             value = "UPDATE supplier_schedule_lease SET"
                     + " leased_until = now() + CAST(:leaseSeconds AS INTEGER) * INTERVAL '1' SECOND,"
-                    + " last_heartbeat_at = now(), updated_at = now(), version = version + 1"
+                    + " last_heartbeat_at = now(), updated_at = :now, version = version + 1"
                     + " WHERE binding_id = :bindingId AND owner_token = :ownerToken"
                     + " AND leased_until > now()",
             nativeQuery = true)
     int heartbeat(
             @Param("bindingId") @NonNull UUID bindingId,
             @Param("ownerToken") @NonNull String ownerToken,
-            @Param("leaseSeconds") int leaseSeconds);
+            @Param("leaseSeconds") int leaseSeconds,
+            @Param("now") @NonNull Instant now);
 
     /**
      * Advances the checkpoint, owner-guarded.
@@ -149,14 +161,15 @@ public interface SupplierScheduleLeaseRepository extends JpaRepository<SupplierS
     @Modifying
     @Query(
             value = "UPDATE supplier_schedule_lease SET checkpoint_at = :checkpointAt,"
-                    + " updated_at = now(), version = version + 1"
+                    + " updated_at = :now, version = version + 1"
                     + " WHERE binding_id = :bindingId AND owner_token = :ownerToken"
                     + " AND leased_until > now()",
             nativeQuery = true)
     int advanceCheckpoint(
             @Param("bindingId") @NonNull UUID bindingId,
             @Param("ownerToken") @NonNull String ownerToken,
-            @Param("checkpointAt") @NonNull Instant checkpointAt);
+            @Param("checkpointAt") @NonNull Instant checkpointAt,
+            @Param("now") @NonNull Instant now);
 
     /**
      * Releases the lease by clearing both the owner and the expiry, owner-guarded so a run that lost
@@ -177,13 +190,14 @@ public interface SupplierScheduleLeaseRepository extends JpaRepository<SupplierS
     @Modifying
     @Query(
             value = "UPDATE supplier_schedule_lease SET owner_token = NULL, leased_until = NULL,"
-                    + " last_run_outcome = :outcome, updated_at = now(), version = version + 1"
+                    + " last_run_outcome = :outcome, updated_at = :now, version = version + 1"
                     + " WHERE binding_id = :bindingId AND owner_token = :ownerToken",
             nativeQuery = true)
     int release(
             @Param("bindingId") @NonNull UUID bindingId,
             @Param("ownerToken") @NonNull String ownerToken,
-            @Param("outcome") @NonNull String outcome);
+            @Param("outcome") @NonNull String outcome,
+            @Param("now") @NonNull Instant now);
 
     /**
      * Whether this run still holds a live lease, decided by database time.

@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
@@ -57,8 +58,11 @@ import org.springframework.orm.jpa.JpaSystemException;
             "spring.datasource.hikari.maximum-pool-size=24"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(JpaConfig.class)
+@Import({JpaConfig.class, TestClockConfig.class})
 class SupplierScheduleLeaseRepositoryTest {
+
+    /** Audit instant the caller binds; lease liveness still comes from database time. */
+    private static final Instant AUDIT_NOW = Instant.parse("2026-08-20T12:00:00Z");
 
     private static final String OWNER_A = "run-A";
     private static final String OWNER_B = "run-B";
@@ -131,32 +135,32 @@ class SupplierScheduleLeaseRepositoryTest {
     void aFreshRowWithNullLeaseIsClaimable() {
         // A null leased_until must read as "unheld", never as "held". Treating it as held in one place
         // and expired in another is how a newly scheduled binding becomes permanently unschedulable.
-        assertThat(leaseRepository.claim(bindingId, OWNER_A, 60)).isEqualTo(1);
+        assertThat(leaseRepository.claim(bindingId, OWNER_A, 60, AUDIT_NOW)).isEqualTo(1);
     }
 
     @Test
     void aHeldLeaseCannotBeClaimedByAnotherRun() {
-        assertThat(leaseRepository.claim(bindingId, OWNER_A, 60)).isEqualTo(1);
+        assertThat(leaseRepository.claim(bindingId, OWNER_A, 60, AUDIT_NOW)).isEqualTo(1);
 
-        assertThat(leaseRepository.claim(bindingId, OWNER_B, 60))
+        assertThat(leaseRepository.claim(bindingId, OWNER_B, 60, AUDIT_NOW))
                 .as("a live lease must be exclusive")
                 .isZero();
     }
 
     @Test
     void anExpiredLeaseIsClaimableByAnotherRun() {
-        leaseRepository.claim(bindingId, OWNER_A, 60);
+        leaseRepository.claim(bindingId, OWNER_A, 60, AUDIT_NOW);
         expireLease();
 
-        assertThat(leaseRepository.claim(bindingId, OWNER_B, 60)).isEqualTo(1);
+        assertThat(leaseRepository.claim(bindingId, OWNER_B, 60, AUDIT_NOW)).isEqualTo(1);
     }
 
     @Test
     void aReleasedLeaseIsImmediatelyClaimable() {
-        leaseRepository.claim(bindingId, OWNER_A, 60);
+        leaseRepository.claim(bindingId, OWNER_A, 60, AUDIT_NOW);
 
-        assertThat(leaseRepository.release(bindingId, OWNER_A, "OK")).isEqualTo(1);
-        assertThat(leaseRepository.claim(bindingId, OWNER_B, 60))
+        assertThat(leaseRepository.release(bindingId, OWNER_A, "OK", AUDIT_NOW)).isEqualTo(1);
+        assertThat(leaseRepository.claim(bindingId, OWNER_B, 60, AUDIT_NOW))
                 .as("release nulls the lease, and a null lease must be claimable")
                 .isEqualTo(1);
     }
@@ -291,19 +295,20 @@ class SupplierScheduleLeaseRepositoryTest {
      */
     @Test
     void aRunWhoseLeaseWasStolenCanNeitherHeartbeatNorCheckpointNorRelease() {
-        assertThat(leaseRepository.claim(bindingId, OWNER_A, 60)).isEqualTo(1);
+        assertThat(leaseRepository.claim(bindingId, OWNER_A, 60, AUDIT_NOW)).isEqualTo(1);
         expireLease();
-        assertThat(leaseRepository.claim(bindingId, OWNER_B, 60))
+        assertThat(leaseRepository.claim(bindingId, OWNER_B, 60, AUDIT_NOW))
                 .as("B takes over the expired lease")
                 .isEqualTo(1);
 
-        assertThat(leaseRepository.heartbeat(bindingId, OWNER_A, 60))
+        assertThat(leaseRepository.heartbeat(bindingId, OWNER_A, 60, AUDIT_NOW))
                 .as("A must not resurrect its claim")
                 .isZero();
-        assertThat(leaseRepository.advanceCheckpoint(bindingId, OWNER_A, Instant.parse("2026-08-11T00:00:00Z")))
+        assertThat(leaseRepository.advanceCheckpoint(
+                        bindingId, OWNER_A, Instant.parse("2026-08-11T00:00:00Z"), AUDIT_NOW))
                 .as("A must not land a checkpoint for a window B now owns")
                 .isZero();
-        assertThat(leaseRepository.release(bindingId, OWNER_A, "OK"))
+        assertThat(leaseRepository.release(bindingId, OWNER_A, "OK", AUDIT_NOW))
                 .as("A must not release B's lease")
                 .isZero();
 
@@ -315,11 +320,11 @@ class SupplierScheduleLeaseRepositoryTest {
 
     @Test
     void aStolenRunSeesItselfAsNoLongerOwningSoItCanAbortBeforeItsNextPage() {
-        leaseRepository.claim(bindingId, OWNER_A, 60);
+        leaseRepository.claim(bindingId, OWNER_A, 60, AUDIT_NOW);
         assertThat(leaseRepository.countLiveOwnership(bindingId, OWNER_A)).isEqualTo(1);
 
         expireLease();
-        leaseRepository.claim(bindingId, OWNER_B, 60);
+        leaseRepository.claim(bindingId, OWNER_B, 60, AUDIT_NOW);
 
         assertThat(leaseRepository.countLiveOwnership(bindingId, OWNER_A))
                 .as("this check is how a running job learns to abort before its next page")
@@ -328,10 +333,10 @@ class SupplierScheduleLeaseRepositoryTest {
 
     @Test
     void aRunThatStalledPastItsOwnLeaseCannotHeartbeatItBack() {
-        leaseRepository.claim(bindingId, OWNER_A, 60);
+        leaseRepository.claim(bindingId, OWNER_A, 60, AUDIT_NOW);
         expireLease();
 
-        assertThat(leaseRepository.heartbeat(bindingId, OWNER_A, 60))
+        assertThat(leaseRepository.heartbeat(bindingId, OWNER_A, 60, AUDIT_NOW))
                 .as("an expired lease is gone even to its former owner: it must be re-claimed, not extended,"
                         + " or a stalled run could revive a claim another run has taken")
                 .isZero();
@@ -341,18 +346,19 @@ class SupplierScheduleLeaseRepositoryTest {
 
     @Test
     void theOwnerCanExtendItsLease() {
-        leaseRepository.claim(bindingId, OWNER_A, 60);
+        leaseRepository.claim(bindingId, OWNER_A, 60, AUDIT_NOW);
 
-        assertThat(leaseRepository.heartbeat(bindingId, OWNER_A, 120)).isEqualTo(1);
+        assertThat(leaseRepository.heartbeat(bindingId, OWNER_A, 120, AUDIT_NOW))
+                .isEqualTo(1);
         assertThat(leaseRepository.countLiveOwnership(bindingId, OWNER_A)).isEqualTo(1);
     }
 
     @Test
     void theOwnerCanAdvanceItsCheckpoint() {
-        leaseRepository.claim(bindingId, OWNER_A, 60);
+        leaseRepository.claim(bindingId, OWNER_A, 60, AUDIT_NOW);
         Instant checkpoint = Instant.parse("2026-08-11T03:00:00Z");
 
-        assertThat(leaseRepository.advanceCheckpoint(bindingId, OWNER_A, checkpoint))
+        assertThat(leaseRepository.advanceCheckpoint(bindingId, OWNER_A, checkpoint, AUDIT_NOW))
                 .isEqualTo(1);
 
         entityManager.clear();
@@ -362,9 +368,10 @@ class SupplierScheduleLeaseRepositoryTest {
 
     @Test
     void aNonOwnerCannotAdvanceTheCheckpoint() {
-        leaseRepository.claim(bindingId, OWNER_A, 60);
+        leaseRepository.claim(bindingId, OWNER_A, 60, AUDIT_NOW);
 
-        assertThat(leaseRepository.advanceCheckpoint(bindingId, OWNER_B, Instant.parse("2026-08-11T03:00:00Z")))
+        assertThat(leaseRepository.advanceCheckpoint(
+                        bindingId, OWNER_B, Instant.parse("2026-08-11T03:00:00Z"), AUDIT_NOW))
                 .isZero();
     }
 
@@ -376,7 +383,7 @@ class SupplierScheduleLeaseRepositoryTest {
      */
     @Test
     void leaseExpiryIsComputedByTheDatabaseNotTheJvm() {
-        leaseRepository.claim(bindingId, OWNER_A, 3600);
+        leaseRepository.claim(bindingId, OWNER_A, 3600, AUDIT_NOW);
         entityManager.clear();
 
         SupplierScheduleLeaseEntity lease = leaseRepository.findById(bindingId).orElseThrow();
@@ -492,9 +499,9 @@ class SupplierScheduleLeaseRepositoryTest {
 
     @Test
     void releaseClearsOwnershipSoNothingElseIsBlocked() {
-        leaseRepository.claim(bindingId, OWNER_A, 60);
+        leaseRepository.claim(bindingId, OWNER_A, 60, AUDIT_NOW);
 
-        leaseRepository.release(bindingId, OWNER_A, "OK");
+        leaseRepository.release(bindingId, OWNER_A, "OK", AUDIT_NOW);
         entityManager.clear();
 
         SupplierScheduleLeaseEntity lease = leaseRepository.findById(bindingId).orElseThrow();

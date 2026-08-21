@@ -1,4 +1,4 @@
-package com.positivity.bulkloader.internal.config;
+package com.positivity.tax.internal.config;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -8,16 +8,17 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.auditing.DateTimeProvider;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
+/**
+ * JPA auditing backed by the injected application {@link Clock} (ADR-0018/0024).
+ *
+ * <p>The provider is what keeps {@code created_at}/{@code updated_at} on application time rather
+ * than wall time: under the accelerated profile the injected clock is the shared converging clock,
+ * and PostgreSQL only stores what Java sends it.
+ */
 @Configuration
 @EnableJpaAuditing(dateTimeProviderRef = "auditingDateTimeProvider")
 public class JpaAuditingConfig {
 
-    /**
-     * Auditing timestamps come from the injected application {@link java.time.Clock}, not the system
-     * clock. Spring Data's default provider reads wall time directly, which would leave this module's
-     * {@code @CreatedDate}/{@code @LastModifiedDate} values on real time while the rest of the
-     * deployment runs on the accelerated clock.
-     */
     @Bean
     public DateTimeProvider auditingDateTimeProvider(Clock clock) {
         return () -> Optional.of(Instant.now(clock));

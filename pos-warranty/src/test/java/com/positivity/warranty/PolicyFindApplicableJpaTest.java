@@ -39,7 +39,7 @@ import org.springframework.context.annotation.Import;
             "spring.jpa.hibernate.ddl-auto=validate"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(JpaConfig.class)
+@Import({JpaConfig.class, TestClockConfig.class})
 class PolicyFindApplicableJpaTest {
 
     private static final UUID PRODUCT_A = UUID.fromString("018f0000-0000-7000-8000-00000000050a");

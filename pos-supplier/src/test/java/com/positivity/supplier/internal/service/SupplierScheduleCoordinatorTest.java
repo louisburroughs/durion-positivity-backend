@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
@@ -46,7 +47,7 @@ import org.springframework.transaction.annotation.Transactional;
             "spring.jpa.hibernate.ddl-auto=validate"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({JpaConfig.class, SupplierScheduleCoordinator.class})
+@Import({JpaConfig.class, TestClockConfig.class, SupplierScheduleCoordinator.class})
 // Test-managed transactions OFF, and this is a requirement of what is under test rather than a preference.
 // The coordinator's claim/heartbeat/stillOwns/release each run REQUIRES_NEW, so inside @DataJpaTest's own
 // uncommitted transaction they would open a separate transaction that CANNOT SEE the lease fixture and would

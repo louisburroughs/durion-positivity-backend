@@ -2,6 +2,7 @@ package com.positivity.supplier.internal.service;
 
 import com.positivity.supplier.internal.audit.SupplierCorrelationContext;
 import com.positivity.supplier.internal.repository.SupplierScheduleLeaseRepository;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -55,12 +56,17 @@ public class SupplierScheduleCoordinator {
     private static final Logger log = LoggerFactory.getLogger(SupplierScheduleCoordinator.class);
 
     private final SupplierScheduleLeaseRepository leaseRepository;
+    private final Clock clock;
     private final int leaseSeconds;
 
     public SupplierScheduleCoordinator(
             @NonNull SupplierScheduleLeaseRepository leaseRepository,
+            @NonNull Clock clock,
             @Value("${pos.supplier.schedule.lease-duration-seconds:600}") int leaseSeconds) {
         this.leaseRepository = Objects.requireNonNull(leaseRepository, "leaseRepository");
+        // Supplies updated_at on lease writes. Lease liveness itself stays on database time; see
+        // SupplierScheduleLeaseRepository for why the two clocks are deliberately different.
+        this.clock = Objects.requireNonNull(clock, "clock");
         if (leaseSeconds <= 0) {
             throw new IllegalStateException(
                     "pos.supplier.schedule.lease-duration-seconds must be positive, was " + leaseSeconds);
@@ -80,7 +86,7 @@ public class SupplierScheduleCoordinator {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean tryClaim(@NonNull UUID bindingId, @NonNull String ownerToken) {
-        boolean claimed = leaseRepository.claim(bindingId, ownerToken, leaseSeconds) == 1;
+        boolean claimed = leaseRepository.claim(bindingId, ownerToken, leaseSeconds, Instant.now(clock)) == 1;
         if (claimed) {
             log.debug("Claimed schedule lease for binding {} as {}", bindingId, ownerToken);
         }
@@ -116,7 +122,8 @@ public class SupplierScheduleCoordinator {
             Instant completedWindowEnd = page.process();
             Objects.requireNonNull(completedWindowEnd, "a page must report the window end it completed");
 
-            int advanced = leaseRepository.advanceCheckpoint(bindingId, ownerToken, completedWindowEnd);
+            int advanced =
+                    leaseRepository.advanceCheckpoint(bindingId, ownerToken, completedWindowEnd, Instant.now(clock));
             if (advanced != 1) {
                 // Raising rolls back the page too, which is the point: the new owner will reprocess this
                 // window from the last committed checkpoint, so the work is done exactly once.
@@ -133,7 +140,7 @@ public class SupplierScheduleCoordinator {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean heartbeat(@NonNull UUID bindingId, @NonNull String ownerToken) {
-        boolean extended = leaseRepository.heartbeat(bindingId, ownerToken, leaseSeconds) == 1;
+        boolean extended = leaseRepository.heartbeat(bindingId, ownerToken, leaseSeconds, Instant.now(clock)) == 1;
         if (!extended) {
             log.warn(
                     "Lost schedule lease for binding {} while running as {}; aborting before the next page",
@@ -162,7 +169,7 @@ public class SupplierScheduleCoordinator {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void release(@NonNull UUID bindingId, @NonNull String ownerToken, @NonNull String outcome) {
-        leaseRepository.release(bindingId, ownerToken, outcome);
+        leaseRepository.release(bindingId, ownerToken, outcome, Instant.now(clock));
     }
 
     /**
