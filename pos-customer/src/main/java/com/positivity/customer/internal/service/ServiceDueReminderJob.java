@@ -79,7 +79,9 @@ public class ServiceDueReminderJob {
      * accelerated profile a catch-up window covering a year of application time lasts only hours, so
      * a daily cron would fire roughly never and no reminder would be generated. The sweep is
      * cutoff-based and idempotent on {@code source_event_id}, so polling it more often only picks up
-     * what has come due.
+     * what has come due. The interval itself is real time, so the accelerated profile overrides the
+     * daily default to a one-minute poll (application.yml); a real day at the default 1000x scale
+     * would leave years of virtual time between passes.
      */
     @Scheduled(
             fixedDelayString = "${pos.customer.crm.service-due-reminder-interval-ms:86400000}",

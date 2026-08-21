@@ -105,7 +105,11 @@ public final class ScaledClock extends Clock {
 
     @Override
     public Clock withZone(ZoneId zone) {
-        return new ScaledClock(baseClock, zone, realStart, virtualStart, scale, converge);
+        ScaledClock copy = new ScaledClock(baseClock, zone, realStart, virtualStart, scale, converge);
+        // Carry the latch: without it a backward step of the base clock could make the copy
+        // recompute the accelerated formula and report virtual time below wall time again.
+        copy.converged = this.converged;
+        return copy;
     }
 
     @Override

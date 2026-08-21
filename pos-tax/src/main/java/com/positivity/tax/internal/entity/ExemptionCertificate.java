@@ -33,11 +33,11 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * claimed
  * exemption is denied and the line taxed anyway (D-T2).
  * <p>
- * Audit timestamps are maintained by JPA lifecycle callbacks so persistence
- * works
- * without Spring Data auditing infrastructure (this is a utility service with
- * no user
- * security context on the calculate path).
+ * Audit timestamps are maintained by Spring Data JPA auditing
+ * ({@code AuditingEntityListener} with {@code @CreatedDate}/{@code @LastModifiedDate}),
+ * fed by the module's {@code JpaAuditingConfig} whose {@code DateTimeProvider} reads the
+ * injected application {@code Clock} (ADR-0024). Only the time source is required; the
+ * calculate path still runs without a user security context.
  */
 @Data
 @Builder

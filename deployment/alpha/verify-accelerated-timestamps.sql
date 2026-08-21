@@ -3,7 +3,10 @@
 -- Run against each service schema after the seeder finishes and the stack has been
 -- redeployed without the accelerated profile:
 --
---   psql -v virtual_start="'2025-08-20T12:00:00Z'" -f verify-accelerated-timestamps.sql
+--   psql -v virtual_start=2025-08-20T12:00:00Z -f verify-accelerated-timestamps.sql
+--
+-- Pass the anchor as the raw ISO value: the script quotes it itself (:'virtual_start'),
+-- so a pre-quoted value would embed apostrophes in the timestamp and fail the cast.
 --
 -- Every row it returns is a defect. An empty result means every audited timestamp
 -- written during the run came from the application clock and landed inside
@@ -39,7 +42,7 @@
 
 \if :{?virtual_start}
 \else
-\echo 'ERROR: pass the run anchor, e.g. -v virtual_start="''2025-08-20T12:00:00Z''"'
+\echo 'ERROR: pass the run anchor as a raw ISO value, e.g. -v virtual_start=2025-08-20T12:00:00Z'
 \quit 1
 \endif
 
@@ -97,13 +100,12 @@ FROM (
                   ELSE 'false' END)
     ) AS v(check_name, predicate)
 ) AS checks
-ORDER BY table_schema, table_name, check_name;
+ORDER BY table_schema, table_name, check_name
+-- The query above emits one SELECT per (table, check); \gexec runs each of them, which
+-- keeps this file schema-agnostic as tables are added. It terminates the generator query,
+-- so no semicolon before it.
+\gexec
 
--- The query above emits one SELECT per (table, check). Run its output with \gexec to
--- execute them, which keeps this file schema-agnostic as tables are added:
---
---   \gexec
---
 -- Spot-check the modules that bypassed auditing before this plan, since they are the
 -- ones whose timestamps were most recently repaired:
 --

@@ -446,12 +446,11 @@ class ArchitectureTests {
                 try (Stream<Path> files = Files.walk(sourceRoot)) {
                     for (Path file : files.filter(path -> path.toString().endsWith(".java"))
                             .toList()) {
-                        if (isAllowlistedSource(file)) {
-                            continue;
-                        }
-                        for (String literal : concatenatedStringLiterals(Files.readString(file))) {
-                            if (writesDatabaseTime(literal)) {
-                                violations.add(repositoryRoot.relativize(file) + ": " + literal.trim());
+                        String source = Files.readString(file);
+                        for (LiteralChain chain : concatenatedStringLiterals(source)) {
+                            if (writesDatabaseTime(chain.value()) && !isAllowlistedLiteral(file, source, chain)) {
+                                violations.add(repositoryRoot.relativize(file) + ": "
+                                        + chain.value().trim());
                             }
                         }
                     }
@@ -473,10 +472,15 @@ class ArchitectureTests {
      * together. Scanned character by character rather than by regex — a literal pattern backtracks
      * catastrophically on large sources, and this also skips comments and handles text blocks.
      */
-    private static List<String> concatenatedStringLiterals(String source) {
-        List<String> chains = new ArrayList<>();
+    /** A flattened literal chain with the source offsets it spans, for method attribution. */
+    private record LiteralChain(String value, int start, int end) {}
+
+    private static List<LiteralChain> concatenatedStringLiterals(String source) {
+        List<LiteralChain> chains = new ArrayList<>();
         StringBuilder chain = new StringBuilder();
         boolean chainOpen = false;
+        int chainStart = 0;
+        int chainEnd = 0;
         int index = 0;
 
         while (index < source.length()) {
@@ -504,10 +508,12 @@ class ArchitectureTests {
                     chain.append(value);
                 } else {
                     if (chain.length() > 0) {
-                        chains.add(chain.toString());
+                        chains.add(new LiteralChain(chain.toString(), chainStart, chainEnd));
                     }
                     chain = new StringBuilder(value);
+                    chainStart = index;
                 }
+                chainEnd = close;
                 index = close;
                 chainOpen = continuesConcatenation(source, index);
                 continue;
@@ -517,7 +523,7 @@ class ArchitectureTests {
         }
 
         if (chain.length() > 0) {
-            chains.add(chain.toString());
+            chains.add(new LiteralChain(chain.toString(), chainStart, chainEnd));
         }
         return chains;
     }
@@ -600,9 +606,88 @@ class ArchitectureTests {
         return false;
     }
 
-    private static boolean isAllowlistedSource(Path file) {
+    /**
+     * Whether this literal chain belongs to a method the allowlist names. The allowlist is
+     * method-keyed, so the exemption must be too: a chain is exempt only when it sits in an
+     * annotation on an allowlisted method's declaration (the declaration text between the chain
+     * and the semicolon or brace that ends it names the method), or inside that method's body. Any
+     * other
+     * database-time write in the same file still fails.
+     */
+    private static boolean isAllowlistedLiteral(Path file, String source, LiteralChain chain) {
         String className = file.getFileName().toString().replace(".java", "");
-        return DATABASE_TIME_WRITE_ALLOWLIST.keySet().stream().anyMatch(entry -> entry.contains("." + className + "."));
+        List<String> methods = DATABASE_TIME_WRITE_ALLOWLIST.keySet().stream()
+                .filter(entry -> entry.contains("." + className + "."))
+                .map(entry -> entry.substring(entry.lastIndexOf('.') + 1))
+                .toList();
+        for (String method : methods) {
+            if (declarationAfter(source, chain.end()).matches("(?s).*\\b" + Pattern.quote(method) + "\\s*\\(.*")
+                    || isWithinMethodBody(source, method, chain.start())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The declaration text from an annotation's literal to the {@code ;} or body that ends it. */
+    private static String declarationAfter(String source, int offset) {
+        for (int cursor = offset; cursor < source.length(); cursor++) {
+            char current = source.charAt(cursor);
+            if (current == ';' || current == '{') {
+                return source.substring(offset, cursor);
+            }
+        }
+        return source.substring(offset);
+    }
+
+    /** Whether the offset lies inside the brace-matched body of a method with this name. */
+    private static boolean isWithinMethodBody(String source, String method, int offset) {
+        Matcher declarations =
+                Pattern.compile("\\b" + Pattern.quote(method) + "\\s*\\(").matcher(source);
+        while (declarations.find()) {
+            int parameters = source.indexOf('(', declarations.start());
+            int close = matchDelimiter(source, parameters, '(', ')');
+            if (close < 0) {
+                continue;
+            }
+            // The next structural token decides: '{' opens a body, ';' is abstract or a call.
+            int bodyStart = -1;
+            for (int cursor = close + 1; cursor < source.length(); cursor++) {
+                char current = source.charAt(cursor);
+                if (current == '{') {
+                    bodyStart = cursor;
+                    break;
+                }
+                if (current == ';' || current == ')' || current == ',') {
+                    break;
+                }
+            }
+            if (bodyStart < 0) {
+                continue;
+            }
+            int bodyEnd = matchDelimiter(source, bodyStart, '{', '}');
+            if (bodyEnd > bodyStart && offset > bodyStart && offset < bodyEnd) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Index of the closing delimiter matching the opener at {@code open}, or -1. */
+    private static int matchDelimiter(String source, int open, char opener, char closer) {
+        int depth = 0;
+        for (int cursor = open; cursor < source.length(); cursor++) {
+            char current = source.charAt(cursor);
+            if (current == opener) {
+                depth++;
+            } else if (current == closer) {
+                depth--;
+                if (depth == 0) {
+                    return cursor;
+                }
+            }
+        }
+        return -1;
     }
 
     private static Path repositoryRoot() {

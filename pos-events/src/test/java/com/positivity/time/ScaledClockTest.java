@@ -318,6 +318,23 @@ class ScaledClockTest {
     }
 
     @Test
+    void withZone_carriesConvergedLatchThroughBackwardBaseClockStep() {
+        MutableClock baseClock = new MutableClock(CONVERGING_REAL_START, ZoneOffset.UTC);
+        ScaledClock clock = convergingClock(baseClock);
+
+        baseClock.setInstant(CONVERGING_REAL_START.plusSeconds(1));
+        assertThat(clock.isConverged()).isTrue();
+
+        // The zoned copy must inherit the latch: after a backward base-clock step the
+        // accelerated formula would otherwise report virtual time below wall time again.
+        Clock changedZone = clock.withZone(NEW_YORK);
+        baseClock.setInstant(CONVERGING_REAL_START.plusMillis(500));
+
+        assertThat(changedZone.instant()).isEqualTo(baseClock.instant());
+        assertThat(((ScaledClock) changedZone).isConverged()).isTrue();
+    }
+
+    @Test
     void equals_returnsFalseWhenConvergenceDiffers() {
         MutableClock baseClock = new MutableClock(CONVERGING_REAL_START, ZoneOffset.UTC);
         ScaledClock converging = convergingClock(baseClock);
