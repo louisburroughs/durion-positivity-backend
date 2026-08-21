@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
@@ -52,7 +53,7 @@ import org.springframework.transaction.support.TransactionTemplate;
             "spring.jpa.hibernate.ddl-auto=validate"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({JpaConfig.class, ExchangeAuditWriter.class, ExchangeAuditObserver.class})
+@Import({JpaConfig.class, TestClockConfig.class, ExchangeAuditWriter.class, ExchangeAuditObserver.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class ExchangeAuditWriterTest {
 

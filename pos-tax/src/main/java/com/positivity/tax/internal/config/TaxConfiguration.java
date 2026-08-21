@@ -3,9 +3,7 @@ package com.positivity.tax.internal.config;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
 import java.util.Base64;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -24,19 +22,6 @@ public class TaxConfiguration {
 
     public TaxConfiguration(TaxProperties properties) {
         this.properties = properties;
-    }
-
-    /**
-     * System UTC clock used for effective-date resolution and {@code calculatedAt}
-     * timestamps. Declared {@link ConditionalOnMissingBean} so a shared library or test
-     * can supply a fixed clock instead.
-     *
-     * @return the system UTC clock
-     */
-    @Bean
-    @ConditionalOnMissingBean
-    Clock clock() {
-        return Clock.systemUTC();
     }
 
     /**

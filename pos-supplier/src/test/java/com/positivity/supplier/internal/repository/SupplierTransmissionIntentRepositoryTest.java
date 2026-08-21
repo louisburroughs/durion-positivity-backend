@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.SupplierPurchaseOrder;
 import com.positivity.supplier.internal.entity.SupplierTransmissionIntentEntity;
@@ -36,7 +37,7 @@ import org.springframework.data.domain.PageRequest;
             "spring.jpa.hibernate.ddl-auto=validate"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(JpaConfig.class)
+@Import({JpaConfig.class, TestClockConfig.class})
 @DisplayName("Transmission ledger persistence (ADR-0052, #1226/#1318)")
 class SupplierTransmissionIntentRepositoryTest {
 

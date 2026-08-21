@@ -5,13 +5,11 @@ import com.positivity.tax.common.enums.ExemptionReasonCode;
 import com.positivity.tax.internal.enums.ExemptionCertificateStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -19,6 +17,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Tax exemption certificate registry entry (story T3, decision D-T1).
@@ -32,17 +33,18 @@ import lombok.NoArgsConstructor;
  * claimed
  * exemption is denied and the line taxed anyway (D-T2).
  * <p>
- * Audit timestamps are maintained by JPA lifecycle callbacks so persistence
- * works
- * without Spring Data auditing infrastructure (this is a utility service with
- * no user
- * security context on the calculate path).
+ * Audit timestamps are maintained by Spring Data JPA auditing
+ * ({@code AuditingEntityListener} with {@code @CreatedDate}/{@code @LastModifiedDate}),
+ * fed by the module's {@code JpaAuditingConfig} whose {@code DateTimeProvider} reads the
+ * injected application {@code Clock} (ADR-0024). Only the time source is required; the
+ * calculate path still runs without a user security context.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "exemption_certificate")
 public class ExemptionCertificate {
 
@@ -90,24 +92,12 @@ public class ExemptionCertificate {
     private ExemptionCertificateStatus status;
 
     /** Creation timestamp (ADR-0018/0024). */
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     /** Last-modification timestamp (ADR-0018/0024). */
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
-
-    @PrePersist
-    void onCreate() {
-        Instant now = Instant.now(Clock.systemUTC());
-        if (createdAt == null) {
-            createdAt = now;
-        }
-        updatedAt = now;
-    }
-
-    @PreUpdate
-    void onUpdate() {
-        updatedAt = Instant.now(Clock.systemUTC());
-    }
 }

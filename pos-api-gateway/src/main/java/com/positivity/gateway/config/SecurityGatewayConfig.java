@@ -67,6 +67,9 @@ public class SecurityGatewayConfig {
     private static final String TEST_SIGNATURE_MARKER = "test-signature";
     private static final String HS256 = "HS256";
     private static final String UNKNOWN_JTI = "unknown";
+    // Accelerated-run startup probe (read-only clock diagnostics). Matched exactly, never as a
+    // prefix: permitting /system/** would make every future system endpoint public by default.
+    private static final String SYSTEM_TIME_PATH = "/system/time";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final Logger LOG = LoggerFactory.getLogger(SecurityGatewayConfig.class);
 
@@ -466,7 +469,8 @@ public class SecurityGatewayConfig {
     }
 
     private boolean isPublicPath(String path) {
-        return path.startsWith("/actuator")
+        return SYSTEM_TIME_PATH.equals(path)
+                || path.startsWith("/actuator")
                 || path.startsWith("/swagger-ui")
                 || path.startsWith("/v3/api-docs")
                 || path.startsWith("/swagger-resources")

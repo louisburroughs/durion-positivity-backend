@@ -2,6 +2,7 @@ package com.positivity.supplier.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
@@ -46,7 +47,7 @@ import org.springframework.context.annotation.Import;
             "spring.jpa.hibernate.ddl-auto=validate"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(JpaConfig.class)
+@Import({JpaConfig.class, TestClockConfig.class})
 class ExchangeAuditObserverTest {
 
     private static final String SECRET = "hunter2-actual-password";

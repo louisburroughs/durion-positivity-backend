@@ -2,7 +2,9 @@ package com.positivity.tax.internal.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.tax.TestClockConfig;
 import com.positivity.tax.common.enums.ExemptionReasonCode;
+import com.positivity.tax.internal.config.JpaAuditingConfig;
 import com.positivity.tax.internal.entity.ExemptionCertificate;
 import com.positivity.tax.internal.enums.ExemptionCertificateStatus;
 import java.time.LocalDate;
@@ -11,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Limit;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -33,6 +36,7 @@ import org.springframework.test.context.ActiveProfiles;
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
+@Import({JpaAuditingConfig.class, TestClockConfig.class})
 class ExemptionCertificateRepositoryTest {
 
     private static final LocalDate TXN = LocalDate.parse("2026-06-01");

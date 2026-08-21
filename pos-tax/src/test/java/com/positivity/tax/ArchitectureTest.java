@@ -3,6 +3,7 @@ package com.positivity.tax;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
 import com.tngtech.archunit.base.DescribedPredicate;
@@ -11,6 +12,7 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
+import java.time.Clock;
 import java.util.UUID;
 
 /**
@@ -18,6 +20,16 @@ import java.util.UUID;
  */
 @AnalyzeClasses(packages = "com.positivity.tax", importOptions = ImportOption.DoNotIncludeTests.class)
 public class ArchitectureTest {
+
+    private static final DescribedPredicate<JavaCall<?>> SYSTEM_CLOCK_CALL =
+            new DescribedPredicate<>("call Clock.systemUTC() or Clock.systemDefaultZone()") {
+
+                @Override
+                public boolean test(JavaCall<?> input) {
+                    return input.getTargetOwner().isEquivalentTo(Clock.class)
+                            && ("systemUTC".equals(input.getName()) || "systemDefaultZone".equals(input.getName()));
+                }
+            };
 
     private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL =
             new DescribedPredicate<>("call UUID.randomUUID()") {
@@ -160,4 +172,21 @@ public class ArchitectureTest {
             .beFreeOfCycles()
             .allowEmptyShould(true)
             .because("internal package cycles make the implementation harder to maintain and evolve");
+
+    @ArchTest
+    static final ArchRule production_code_should_not_read_the_system_clock = noClasses()
+            .should()
+            .callMethodWhere(SYSTEM_CLOCK_CALL)
+            .because("pos-events owns the application Clock; reading the system clock here keeps this module on wall"
+                    + " time while the rest of the deployment runs on the accelerated clock");
+
+    @ArchTest
+    static final ArchRule module_should_not_declare_its_own_clock_bean = noMethods()
+            .that()
+            .areAnnotatedWith("org.springframework.context.annotation.Bean")
+            .should()
+            .haveRawReturnType(Clock.class)
+            .allowEmptyShould(true)
+            .because("a competing Clock bean wins over the accelerated ScaledClock and drags this module's JPA"
+                    + " auditing provider onto wall time");
 }

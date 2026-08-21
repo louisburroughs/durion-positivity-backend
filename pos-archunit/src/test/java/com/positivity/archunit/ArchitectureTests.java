@@ -2,6 +2,7 @@ package com.positivity.archunit;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noFields;
 
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.Dependency;
@@ -15,14 +16,27 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -49,20 +63,57 @@ class ArchitectureTests {
                         return false;
                     }
                     boolean supportedOwner = input.getTargetOwner().isEquivalentTo(Instant.class)
-                            || input.getTargetOwner().isEquivalentTo(LocalDateTime.class);
+                            || input.getTargetOwner().isEquivalentTo(LocalDateTime.class)
+                            || input.getTargetOwner().isEquivalentTo(LocalDate.class)
+                            || input.getTargetOwner().isEquivalentTo(LocalTime.class)
+                            || input.getTargetOwner().isEquivalentTo(OffsetDateTime.class)
+                            || input.getTargetOwner().isEquivalentTo(ZonedDateTime.class);
                     return supportedOwner
                             && input.getTarget().getRawParameterTypes().isEmpty();
                 }
             };
     private static final DescribedPredicate<JavaCall<?>> CLOCK_SYSTEM_UTC_CALLS =
-            new DescribedPredicate<>("call Clock.systemUTC()") {
+            new DescribedPredicate<>("call Clock.systemUTC() or Clock.systemDefaultZone()") {
                 @Override
                 public boolean test(JavaCall<?> input) {
-                    return "systemUTC".equals(input.getName())
+                    return ("systemUTC".equals(input.getName()) || "systemDefaultZone".equals(input.getName()))
                             && input.getTargetOwner().isEquivalentTo(Clock.class)
                             && input.getTarget().getRawParameterTypes().isEmpty();
                 }
             };
+
+    /** Hibernate generates these itself and never consults the Spring {@code Clock} bean. */
+    private static final List<String> HIBERNATE_TIMESTAMP_ANNOTATIONS = List.of(
+            "org.hibernate.annotations.CreationTimestamp",
+            "org.hibernate.annotations.UpdateTimestamp",
+            "org.hibernate.annotations.CurrentTimestamp");
+
+    /** A Java string literal, escapes included. */
+    private static final Pattern STRING_LITERAL = Pattern.compile("\"(?:\\\\.|[^\"\\\\])*\"");
+
+    /**
+     * SQL functions that read the database server's clock rather than the application clock.
+     */
+    private static final Pattern DATABASE_TIME_FUNCTION = Pattern.compile(
+            "\\b(now\\s*\\(|current_timestamp|clock_timestamp\\s*\\(|localtimestamp|current_date)",
+            Pattern.CASE_INSENSITIVE);
+
+    /** Statements that write a value; a WHERE-clause comparison against database time is fine. */
+    private static final Pattern SQL_WRITE_STATEMENT =
+            Pattern.compile("\\b(insert\\s+into|update)\\b", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Write statements allowed to read database time, each with the reason it is deliberate.
+     *
+     * <p>Keyed by fully-qualified method name. An entry with a blank justification fails the test:
+     * an allowlist without a reason is how the rule quietly stops meaning anything.
+     */
+    private static final Map<String, String> DATABASE_TIME_WRITE_ALLOWLIST = Map.of(
+            "com.positivity.supplier.internal.repository.SupplierScheduleLeaseRepository.claim",
+            "leased_until/last_heartbeat_at/last_run_started_at are real-time liveness values;"
+                    + " accelerating them would expire live leases and let two runs share a binding",
+            "com.positivity.supplier.internal.repository.SupplierScheduleLeaseRepository.heartbeat",
+            "leased_until/last_heartbeat_at are real-time liveness values; see claim");
 
     @BeforeAll
     static void setup() {
@@ -177,7 +228,10 @@ class ArchitectureTests {
                 .and()
                 .arePublic()
                 .and()
-                .resideOutsideOfPackages("..internal.service..")
+                // Configuration-properties holders are not service implementations. A nested
+                // binding type such as TaxProperties.ExternalService names the thing it configures,
+                // which is exactly what this rule is not about.
+                .resideOutsideOfPackages("..internal.service..", "..internal.config..")
                 .should()
                 .haveSimpleNameNotEndingWith("Service")
                 .because(
@@ -325,5 +379,325 @@ class ArchitectureTests {
             return remainder;
         }
         return remainder.substring(0, nextDot);
+    }
+
+    @Test
+    void productionCodeShouldNotUseHibernateTimestampGenerators() {
+        for (String annotation : HIBERNATE_TIMESTAMP_ANNOTATIONS) {
+            ArchRule rule = noFields()
+                    .should()
+                    .beAnnotatedWith(annotation)
+                    .because("Hibernate generates " + annotation + " values itself and never consults the Spring"
+                            + " Clock bean, so the field would carry wall time while the rest of the row carries"
+                            + " application time; use @CreatedDate/@LastModifiedDate instead");
+            rule.allowEmptyShould(true).check(allClasses);
+        }
+    }
+
+    /**
+     * The bytecode rules above cannot see SQL written as text. This reads the {@code @Query}
+     * annotation values, which is exactly how the pos-supplier lease writes escaped earlier review.
+     */
+    @Test
+    void queryAnnotationsShouldNotWriteDatabaseTime() {
+        List<String> violations = new ArrayList<>();
+
+        allClasses.forEach(javaClass -> javaClass
+                .getMethods()
+                .forEach(method -> method.getAnnotations().stream()
+                        .filter(annotation -> annotation.getRawType().getName().endsWith("Query"))
+                        .forEach(annotation -> annotation.get("value").ifPresent(value -> {
+                            String sql = String.valueOf(value);
+                            String fullName = javaClass.getName() + "." + method.getName();
+                            if (writesDatabaseTime(sql) && !DATABASE_TIME_WRITE_ALLOWLIST.containsKey(fullName)) {
+                                violations.add(fullName + " writes database time: " + sql);
+                            }
+                        }))));
+
+        Assertions.assertTrue(
+                violations.isEmpty(),
+                "@Query write statements must bind the application clock rather than reading database time."
+                        + " Offenders:\n" + String.join("\n", violations));
+    }
+
+    /**
+     * ArchUnit reads annotation values but not arbitrary string literals, so this walks the source
+     * instead. It is what catches {@code entityManager.createNativeQuery(...)} and SQL assembled from
+     * concatenated constants, which the bytecode rules miss entirely.
+     */
+    /**
+     * ArchUnit reads annotation values but not arbitrary string literals, so this walks the source
+     * instead. It is what catches {@code entityManager.createNativeQuery(...)} and SQL assembled from
+     * concatenated constants, which the bytecode rules miss entirely.
+     */
+    @Test
+    void sourceLevelSqlShouldNotWriteDatabaseTime() throws IOException {
+        Path repositoryRoot = repositoryRoot();
+        List<String> violations = new ArrayList<>();
+
+        try (Stream<Path> modules = Files.list(repositoryRoot)) {
+            List<Path> sourceRoots = modules.filter(
+                            path -> path.getFileName().toString().startsWith("pos-"))
+                    .map(path -> path.resolve("src/main/java"))
+                    .filter(Files::isDirectory)
+                    .toList();
+
+            for (Path sourceRoot : sourceRoots) {
+                try (Stream<Path> files = Files.walk(sourceRoot)) {
+                    for (Path file : files.filter(path -> path.toString().endsWith(".java"))
+                            .toList()) {
+                        String source = Files.readString(file);
+                        for (LiteralChain chain : concatenatedStringLiterals(source)) {
+                            if (writesDatabaseTime(chain.value()) && !isAllowlistedLiteral(file, source, chain)) {
+                                violations.add(repositoryRoot.relativize(file) + ": "
+                                        + chain.value().trim());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Assertions.assertTrue(
+                violations.isEmpty(),
+                "SQL written as string literals must bind the application clock rather than reading database"
+                        + " time. Offenders:\n" + String.join("\n", violations));
+    }
+
+    /**
+     * Every string literal in the source, with {@code +}-joined chains flattened into one value.
+     *
+     * <p>Flattening matters: a multi-line native query keeps its UPDATE keyword in the first literal
+     * and its {@code now()} in a later one, so checking literals individually would see neither
+     * together. Scanned character by character rather than by regex — a literal pattern backtracks
+     * catastrophically on large sources, and this also skips comments and handles text blocks.
+     */
+    /** A flattened literal chain with the source offsets it spans, for method attribution. */
+    private record LiteralChain(String value, int start, int end) {}
+
+    private static List<LiteralChain> concatenatedStringLiterals(String source) {
+        List<LiteralChain> chains = new ArrayList<>();
+        StringBuilder chain = new StringBuilder();
+        boolean chainOpen = false;
+        int chainStart = 0;
+        int chainEnd = 0;
+        int index = 0;
+
+        while (index < source.length()) {
+            char current = source.charAt(index);
+
+            if (current == '/' && index + 1 < source.length()) {
+                char next = source.charAt(index + 1);
+                if (next == '/') {
+                    index = endOfLineComment(source, index);
+                    continue;
+                }
+                if (next == '*') {
+                    index = endOfBlockComment(source, index);
+                    continue;
+                }
+            }
+
+            if (current == '"') {
+                boolean textBlock = source.startsWith("\"\"\"", index);
+                int close = textBlock ? endOfTextBlock(source, index) : endOfStringLiteral(source, index);
+                String value = textBlock
+                        ? source.substring(index + 3, Math.max(index + 3, close - 3))
+                        : source.substring(index + 1, Math.max(index + 1, close - 1));
+                if (chainOpen) {
+                    chain.append(value);
+                } else {
+                    if (chain.length() > 0) {
+                        chains.add(new LiteralChain(chain.toString(), chainStart, chainEnd));
+                    }
+                    chain = new StringBuilder(value);
+                    chainStart = index;
+                }
+                chainEnd = close;
+                index = close;
+                chainOpen = continuesConcatenation(source, index);
+                continue;
+            }
+
+            index++;
+        }
+
+        if (chain.length() > 0) {
+            chains.add(new LiteralChain(chain.toString(), chainStart, chainEnd));
+        }
+        return chains;
+    }
+
+    /** Whether only whitespace and a {@code +} separate this position from the next literal. */
+    private static boolean continuesConcatenation(String source, int index) {
+        int cursor = index;
+        boolean sawPlus = false;
+        while (cursor < source.length()) {
+            char current = source.charAt(cursor);
+            if (Character.isWhitespace(current)) {
+                cursor++;
+            } else if (current == '+' && !sawPlus) {
+                sawPlus = true;
+                cursor++;
+            } else {
+                return sawPlus && current == '"';
+            }
+        }
+        return false;
+    }
+
+    private static int endOfStringLiteral(String source, int start) {
+        int cursor = start + 1;
+        while (cursor < source.length()) {
+            char current = source.charAt(cursor);
+            if (current == '\\') {
+                cursor += 2;
+                continue;
+            }
+            if (current == '"' || current == '\n') {
+                return cursor + 1;
+            }
+            cursor++;
+        }
+        return source.length();
+    }
+
+    private static int endOfTextBlock(String source, int start) {
+        int close = source.indexOf("\"\"\"", start + 3);
+        return close < 0 ? source.length() : close + 3;
+    }
+
+    private static int endOfLineComment(String source, int start) {
+        int newline = source.indexOf('\n', start);
+        return newline < 0 ? source.length() : newline + 1;
+    }
+
+    private static int endOfBlockComment(String source, int start) {
+        int close = source.indexOf("*/", start + 2);
+        return close < 0 ? source.length() : close + 2;
+    }
+
+    @Test
+    void databaseTimeAllowlistEntriesShouldCarryAJustification() {
+        DATABASE_TIME_WRITE_ALLOWLIST.forEach((method, justification) -> Assertions.assertFalse(
+                justification == null || justification.isBlank(),
+                "Allowlist entry " + method + " must record why reading database time is deliberate"));
+    }
+
+    /**
+     * True when the text contains a write statement that also reads database time. A read-side
+     * comparison in a WHERE clause is deliberately allowed: with application time trailing wall time
+     * those filters widen the active set rather than hiding rows.
+     */
+    private static boolean writesDatabaseTime(String sql) {
+        if (!SQL_WRITE_STATEMENT.matcher(sql).find()) {
+            return false;
+        }
+        Matcher matcher = DATABASE_TIME_FUNCTION.matcher(sql);
+        while (matcher.find()) {
+            String preceding = sql.substring(0, matcher.start()).toLowerCase(Locale.ROOT);
+            int lastWrite = Math.max(preceding.lastIndexOf("insert into"), preceding.lastIndexOf("update"));
+            int lastWhere = preceding.lastIndexOf("where");
+            // Only flag a database-time read that belongs to the write half of the statement.
+            if (lastWrite >= 0 && lastWhere < lastWrite) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether this literal chain belongs to a method the allowlist names. The allowlist is
+     * method-keyed, so the exemption must be too: a chain is exempt only when it sits in an
+     * annotation on an allowlisted method's declaration (the declaration text between the chain
+     * and the semicolon or brace that ends it names the method), or inside that method's body. Any
+     * other
+     * database-time write in the same file still fails.
+     */
+    private static boolean isAllowlistedLiteral(Path file, String source, LiteralChain chain) {
+        String className = file.getFileName().toString().replace(".java", "");
+        List<String> methods = DATABASE_TIME_WRITE_ALLOWLIST.keySet().stream()
+                .filter(entry -> entry.contains("." + className + "."))
+                .map(entry -> entry.substring(entry.lastIndexOf('.') + 1))
+                .toList();
+        for (String method : methods) {
+            if (declarationAfter(source, chain.end()).matches("(?s).*\\b" + Pattern.quote(method) + "\\s*\\(.*")
+                    || isWithinMethodBody(source, method, chain.start())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The declaration text from an annotation's literal to the {@code ;} or body that ends it. */
+    private static String declarationAfter(String source, int offset) {
+        for (int cursor = offset; cursor < source.length(); cursor++) {
+            char current = source.charAt(cursor);
+            if (current == ';' || current == '{') {
+                return source.substring(offset, cursor);
+            }
+        }
+        return source.substring(offset);
+    }
+
+    /** Whether the offset lies inside the brace-matched body of a method with this name. */
+    private static boolean isWithinMethodBody(String source, String method, int offset) {
+        Matcher declarations =
+                Pattern.compile("\\b" + Pattern.quote(method) + "\\s*\\(").matcher(source);
+        while (declarations.find()) {
+            int parameters = source.indexOf('(', declarations.start());
+            int close = matchDelimiter(source, parameters, '(', ')');
+            if (close < 0) {
+                continue;
+            }
+            // The next structural token decides: '{' opens a body, ';' is abstract or a call.
+            int bodyStart = -1;
+            for (int cursor = close + 1; cursor < source.length(); cursor++) {
+                char current = source.charAt(cursor);
+                if (current == '{') {
+                    bodyStart = cursor;
+                    break;
+                }
+                if (current == ';' || current == ')' || current == ',') {
+                    break;
+                }
+            }
+            if (bodyStart < 0) {
+                continue;
+            }
+            int bodyEnd = matchDelimiter(source, bodyStart, '{', '}');
+            if (bodyEnd > bodyStart && offset > bodyStart && offset < bodyEnd) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Index of the closing delimiter matching the opener at {@code open}, or -1. */
+    private static int matchDelimiter(String source, int open, char opener, char closer) {
+        int depth = 0;
+        for (int cursor = open; cursor < source.length(); cursor++) {
+            char current = source.charAt(cursor);
+            if (current == opener) {
+                depth++;
+            } else if (current == closer) {
+                depth--;
+                if (depth == 0) {
+                    return cursor;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static Path repositoryRoot() {
+        Path current = Paths.get("").toAbsolutePath();
+        while (current != null && !Files.isDirectory(current.resolve("pos-archunit"))) {
+            current = current.getParent();
+        }
+        Assertions.assertNotNull(
+                current,
+                "could not locate the repository root from " + Paths.get("").toAbsolutePath());
+        return current;
     }
 }

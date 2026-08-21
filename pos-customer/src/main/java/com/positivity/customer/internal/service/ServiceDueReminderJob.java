@@ -73,7 +73,19 @@ public class ServiceDueReminderJob {
     @Value("${pos.customer.crm.service-due-reminder-batch-size:500}")
     private int batchSize = 500;
 
-    @Scheduled(cron = "${pos.customer.crm.service-due-reminder-cron:0 0 5 * * *}")
+    /**
+     * Polls on an interval rather than a daily cron. The due cutoff is computed from the injected
+     * {@code Clock}, while a cron trigger fires against the scheduler's real clock; under the
+     * accelerated profile a catch-up window covering a year of application time lasts only hours, so
+     * a daily cron would fire roughly never and no reminder would be generated. The sweep is
+     * cutoff-based and idempotent on {@code source_event_id}, so polling it more often only picks up
+     * what has come due. The interval itself is real time, so the accelerated profile overrides the
+     * daily default to a one-minute poll (application.yml); a real day at the default 1000x scale
+     * would leave years of virtual time between passes.
+     */
+    @Scheduled(
+            fixedDelayString = "${pos.customer.crm.service-due-reminder-interval-ms:86400000}",
+            initialDelayString = "${pos.customer.crm.service-due-reminder-initial-delay-ms:60000}")
     public void generateReminders() {
         // The SQL cutoff must be loose enough for the tightest interval in effect anywhere, so
         // a vehicle with a shorter care-preference override still surfaces as a candidate; each

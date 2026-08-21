@@ -1,32 +1,20 @@
 package com.positivity.events;
 
+import com.positivity.time.AcceleratedTimeProperties;
 import com.positivity.time.ScaledClock;
 import com.positivity.time.TimeSource;
 import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneId;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.SmartInitializingSingleton;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 
 @AutoConfiguration
 public class TimeConfig {
-
-    @Bean
-    @Profile("accelerated")
-    @ConditionalOnMissingBean(Clock.class)
-    public Clock acceleratedClock(
-            @Value("${pos.time.accelerated.scale:1000.0}") double scale,
-            @Value("${pos.time.accelerated.zone:UTC}") String zone) {
-        Clock baseClock = Clock.systemUTC();
-        Instant now = baseClock.instant();
-        return new ScaledClock(baseClock, ZoneId.of(zone), now, now, scale);
-    }
 
     @Bean
     @Profile("!accelerated")
@@ -36,9 +24,35 @@ public class TimeConfig {
     }
 
     @Bean
-    @ConditionalOnBean(Clock.class)
     public TimeSourceBinder timeSourceBinder(Clock clock) {
         return new TimeSourceBinder(clock);
+    }
+
+    /**
+     * Supplies the single converging {@link ScaledClock} shared by every accelerated JVM.
+     *
+     * <p>The bean deliberately carries no {@code @ConditionalOnMissingBean}: a module that declares
+     * its own {@link Clock} must fail startup with an ambiguous-dependency error rather than
+     * silently disabling acceleration for that module and dragging its JPA auditing provider onto
+     * wall time.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @Profile("accelerated")
+    @EnableConfigurationProperties(AcceleratedTimeProperties.class)
+    public static class AcceleratedTimeConfiguration {
+
+        @Bean
+        public ScaledClock acceleratedClock(AcceleratedTimeProperties properties) {
+            // Any TimeSource read before the binder runs would return wall time; fail instead.
+            TimeSource.requireBoundClock();
+            return new ScaledClock(
+                    Clock.systemUTC(),
+                    properties.zone(),
+                    properties.realStart(),
+                    properties.virtualStart(),
+                    properties.scale(),
+                    properties.converge());
+        }
     }
 
     public static final class TimeSourceBinder implements SmartInitializingSingleton, DisposableBean {
