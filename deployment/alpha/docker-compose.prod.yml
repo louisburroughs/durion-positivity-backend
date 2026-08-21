@@ -155,6 +155,15 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-people:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
+    # ADR-0044 #875: counterpart to pos-people-contact below. Without this the
+    # base compose default (false) leaves every pos.people.kafka component off,
+    # including OutboxPublisher (person upsert commands toward
+    # people-contact.commands.v1) and PeopleContactEventsListener (which fills
+    # the ext_people_contact_person replica). StaffingAssignmentServiceImpl
+    # validates against that replica, so creating a staffing assignment fails
+    # with "Person not found" for a personId the service itself just reported.
+    environment:
+      POS_PEOPLE_KAFKA_ENABLED: "true"
 
   pos-people-contact:
     image: ${ECR_REGISTRY}/durion/pos-people-contact:${BACKEND_TAG}
