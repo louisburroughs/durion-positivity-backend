@@ -1,5 +1,5 @@
 -- Repeatable seed migration for pos-security-service operational users.
--- 16 employees across 7 roles for Durion Positivity (medium truck mechanical repair corporation).
+-- 17 employees across 8 roles for Durion Positivity (medium truck mechanical repair corporation).
 
 SET TIME ZONE 'UTC';
 
@@ -21,7 +21,8 @@ VALUES
     ('01960010-0000-7000-8000-00000000000d', 'tyrone.williams', '$2y$10$r2Vph.8y7daYEIMfBfDp/eGd0sAIwewYL9sBAAN2eonKnAYBJSfc.', true),
     ('01960010-0000-7000-8000-00000000000e', 'olivia.chen',     '$2y$10$r2Vph.8y7daYEIMfBfDp/eGd0sAIwewYL9sBAAN2eonKnAYBJSfc.', true),
     ('01960010-0000-7000-8000-00000000000f', 'harold.sanders',  '$2y$10$r2Vph.8y7daYEIMfBfDp/eGd0sAIwewYL9sBAAN2eonKnAYBJSfc.', true),
-    ('01960010-0000-7000-8000-000000000010', 'irene.torres',    '$2y$10$r2Vph.8y7daYEIMfBfDp/eGd0sAIwewYL9sBAAN2eonKnAYBJSfc.', true)
+    ('01960010-0000-7000-8000-000000000010', 'irene.torres',    '$2y$10$r2Vph.8y7daYEIMfBfDp/eGd0sAIwewYL9sBAAN2eonKnAYBJSfc.', true),
+    ('01960010-0000-7000-8000-000000000011', 'gloria.mendez',   '$2y$10$r2Vph.8y7daYEIMfBfDp/eGd0sAIwewYL9sBAAN2eonKnAYBJSfc.', true)
 ON CONFLICT (username) DO UPDATE SET password = EXCLUDED.password, enabled = EXCLUDED.enabled;
 
 -- Role assignments (resolved by role name to tolerate variable UUIDs from versioned migrations)
@@ -43,7 +44,8 @@ FROM (VALUES
     ('01960010-0000-7000-8000-00000000000d'::uuid, 'SERVICE_ADVISOR'),
     ('01960010-0000-7000-8000-00000000000e'::uuid, 'ACCOUNTING_ASSOCIATE'),
     ('01960010-0000-7000-8000-00000000000f'::uuid, 'ACCOUNTING_ASSOCIATE'),
-    ('01960010-0000-7000-8000-000000000010'::uuid, 'ACCOUNT_MANAGER')
+    ('01960010-0000-7000-8000-000000000010'::uuid, 'ACCOUNT_MANAGER'),
+    ('01960010-0000-7000-8000-000000000011'::uuid, 'INVENTORY_LEAD')
 ) AS a(user_id, role_name)
 JOIN roles r ON r.name = a.role_name
 ON CONFLICT (user_id, role_id) DO NOTHING;

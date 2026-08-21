@@ -166,6 +166,11 @@ class RolePermissionSeedIT {
         assertThat(effectivePermissionsOf("olivia.chen"))
                 .as("olivia.chen is an ACCOUNTING_ASSOCIATE")
                 .contains("accounting:ap:view", "accounting:ap:pay");
+
+        assertThat(effectivePermissionsOf("gloria.mendez"))
+                .as("gloria.mendez is an INVENTORY_LEAD: receiving and PO entry (#1439), no PO approval")
+                .contains("inventory:receiving:create", "inventory:goods_receipt:create", "order:purchase_order:create")
+                .doesNotContain("order:purchase_order:approve", "inventory:goods_receipt:override");
     }
 
     @Test
